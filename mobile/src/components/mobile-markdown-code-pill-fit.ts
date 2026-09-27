@@ -17,7 +17,9 @@ import { codeTextWidth, type CodePillCut } from './mobile-markdown-code-chip-spl
  * Android's lines (FontMetricsUtil.kt, RN 0.86): `text` holds U+FFFC for each
  * inline view, in document order; `width` is getLineWidth, the trailing
  * spaces included, except on a line ending in a newline. That the placeholder
- * is U+FFFC is AttributedString.cpp's AttachmentCharacter.
+ * is U+FFFC is AttributedString.cpp's AttachmentCharacter. Every U+FFFC in a
+ * run is a pill: a figure the phone can draw is a block of its own
+ * (buildProseRuns), never an inline view in a run.
  */
 
 export type PillLayoutLine = { x: number; width: number; text: string }
@@ -32,17 +34,19 @@ export type PillSpanDrawn = {
   glue: number
 }
 
-/** The room a span's first piece is cut to. `below`: the width of a first
- *  piece that was drawn at this room and did not fit, because the phone drew
- *  it wider than estimated; the cut stays under it. */
-export type PillFit = { room: number; below?: number }
+/**
+ * What the layout has taught one span.
+ * - `room`: the room its first piece is cut to.
+ * - `below`: the width of a first piece that was cut for exactly this room
+ *   and still went down a line, because the phone drew it wider; the cut
+ *   stays under it.
+ * - `scale`: how much wider than estimated the phone draws this span's text
+ *   (the system font size, kerning, a fallback font), and `floor`, the most
+ *   it has been seen to be: it never falls below that.
+ */
+export type PillFit = { room?: number; below?: number; scale?: number; floor?: number }
 
-export type TextPillFits = {
-  fits: ReadonlyMap<number, PillFit>
-  /** How much wider than estimated the phone draws a pill (the system font
-   *  size, kerning, a fallback font), read from the layout itself. */
-  scale: number
-}
+export type TextPillFits = { fits: ReadonlyMap<number, PillFit> }
 
 export type PillFitRead =
   /** Lines that cannot be this Text's at this width, or pills that are not
@@ -54,25 +58,34 @@ export type PillFitRead =
    *  mounted; a re-cut moves only what comes after it. */
   | { kind: 'changed'; next: TextPillFits; firstChanged: number }
 
-/** The room a span is cut with, given what the layout has taught it. */
+/** A pill's width as the cutter estimates it, before the phone's scale. */
+export type PillMeasure = {
+  /** The text's width in the pill's face. */
+  textWidth: (piece: string) => number
+  /** Padding and border, both sides: dp, which no font size scales. */
+  insets: number
+}
+
+/** The room a span's first piece is cut with, given what the layout taught it. */
 export function pillFitRoom(fit: PillFit | undefined, lineRoom: number): number {
-  if (!fit) {
-    return lineRoom
-  }
-  return fit.below === undefined ? fit.room : Math.min(fit.room, fit.below)
+  const room = fit?.room ?? lineRoom
+  return fit?.below === undefined ? room : Math.min(room, fit.below)
+}
+
+/** The scale a span's text is cut with. */
+export function pillFitScale(fit: PillFit | undefined): number {
+  return fit?.scale ?? 1
 }
 
 const TOLERANCE = 1
-const OBJECT_REPLACEMENT = '\uFFFC'
+const OBJECT_REPLACEMENT = '￼'
 /** The most a trailing space can add to a line's reported width: Android
  *  counts hanging spaces, a 22 dp heading's space at the largest zoom is 8. */
 const HANGING_SPACE = 8
 /** One unbreakable word holding a single pill, the only thing that can run
  *  past its line: a pill wider than the whole line. */
-const LONE_WORD = /^[^\s\uFFFC]*\uFFFC[^\s\uFFFC]*$/
+const LONE_WORD = /^[^\s￼]*￼[^\s￼]*$/
 const SCALE_LIMITS = [0.5, 2] as const
-/** How much narrower every lone pill must read before the scale comes down. */
-const SCALE_HYSTERESIS = 0.02
 
 function lineEnd(line: PillLayoutLine): number {
   return line.x + line.width
@@ -93,16 +106,23 @@ function placeholders(lines: readonly PillLayoutLine[]): { line: number; col: nu
  * Whether these lines were broken to this width. On a rotation, split screen
  * or pop-up view, Fabric lays the tree out at the new width and reports its
  * lines before the document's onLayout brings that width to a render, so the
- * handler still holds the old one (2026-09-27 review: read at 360, the 700 dp
- * lines made every pill look like it overflowed, and the pills were chopped
- * for the rest of the session). A line whose words run past the width cannot
- * be this Text's; only a lone pill wider than its line can.
+ * handler still holds the old one. Wider lines read at the old width made
+ * every pill look like it overflowed (2026-09-27 review of 216a856f);
+ * narrower ones made a pill with room look like it had gone down a line
+ * anyway, and its first piece was capped, one unit more on every turn (review
+ * of f8c968a1). Two proofs, both only of what greedy breaking cannot do:
+ * words running past the width (only a lone pill wider than its line can),
+ * and a line that would have fitted whole after the line above it.
  */
 function brokenTo(lines: readonly PillLayoutLine[], lineWidth: number): boolean {
-  return lines.every((line) => {
+  return lines.every((line, index) => {
     const hanging = /[ \t]*$/.exec(line.text)![0].length
     const ink = lineEnd(line) - hanging * HANGING_SPACE
-    return ink <= lineWidth + TOLERANCE || LONE_WORD.test(line.text.trimEnd())
+    if (ink > lineWidth + TOLERANCE && !LONE_WORD.test(line.text.trimEnd())) {
+      return false
+    }
+    const above = lines[index - 1]
+    return !(above && !above.text.endsWith('\n') && lineEnd(above) + lineEnd(line) <= lineWidth - TOLERANCE)
   })
 }
 
@@ -117,34 +137,29 @@ function sameCut(cut: CodePillCut, span: PillSpanDrawn): boolean {
   )
 }
 
-/** A pill's width as the cutter estimates it, before the phone's scale. */
-export type PillMeasure = {
-  /** The text's width in the pill's face. */
-  textWidth: (piece: string) => number
-  /** Padding and border, both sides: dp, which no font size scales. */
-  insets: number
-}
-
 /**
- * The phone's scale for a pill's text in this Text, from the current layout.
- * A line that holds one pill and nothing else reports that pill's width as
- * drawn; one that holds a pill and the punctuation glued to it (`\uFFFC.`) does,
- * less that punctuation and any hanging space at the prose size. Such a line
- * that still runs past its edge was cut to fit at the current scale, so the
- * scale rises by at least that much. It falls only on plain evidence: every
- * lone pill drawn clearly narrower, or two pieces of one span side by side on
- * a line (2026-09-27 review, probe C2: "\uFFFC\uFFFC " shared a line), which caps it.
- * Different layouts show different pills, and a scale that followed each one
- * swung between two cuts forever.
+ * A span's scale, from the current layout and what it has seen before. A line
+ * that holds one of its pieces and nothing else reports that piece's width as
+ * drawn; one that holds a piece and the punctuation glued to it (`￼.`)
+ * does, less that punctuation and any hanging space at the prose size. Such a
+ * line that still runs past its edge was cut to fit at the current scale, so
+ * the scale rises by at least that much. The first reading sets it; after
+ * that it only rises, and never falls below the most it has read (`floor`),
+ * save for two of its pieces side by side on a line, which fitted there
+ * together and cap it (2026-09-27 review, probe C2). One scale per Text, set
+ * by whichever lone pill read widest, swung between two cuts forever: a pill
+ * of arrows the estimate underpriced set it for the path beside it (review of
+ * f8c968a1, probe F2).
  */
 function learnScale(
   lines: readonly PillLayoutLine[],
   owners: readonly Owner[],
   measure: PillMeasure,
-  current: number,
+  fit: PillFit | undefined,
   lineWidth: number,
   proseSize: number
-): number {
+): { scale: number; floor: number | undefined } {
+  const current = pillFitScale(fit)
   const ratios: number[] = []
   const caps: number[] = []
   owners.forEach((owner, index) => {
@@ -160,33 +175,40 @@ function learnScale(
         ratios.push((current * (drawn - measure.insets)) / (lineWidth - TOLERANCE - measure.insets))
       }
     }
-    // A run of continuation pieces of one span, side by side.
+    // A run of this span's continuation pieces, side by side.
     const next = owners[index + 1]
     const previous = owners[index - 1]
     const startsRun =
-      owner.piece >= 1 &&
-      next?.span === owner.span &&
-      next.line === owner.line &&
-      !(previous?.span === owner.span && previous.line === owner.line)
+      owner.piece >= 1 && next?.line === owner.line && !(previous?.line === owner.line && previous.piece >= 1)
     if (startsRun) {
       let texts = 0
       let insets = 0
-      for (let at = index; owners[at]?.span === owner.span && owners[at]!.line === owner.line; at += 1) {
+      for (let at = index; owners[at]?.line === owner.line; at += 1) {
         texts += measure.textWidth(owners[at]!.text)
         insets += measure.insets
       }
       caps.push((lineEnd(line) - insets) / texts)
     }
   })
-  let scale = current
-  if (ratios.length > 0) {
-    const measured = Math.max(...ratios)
-    if (measured > current || measured < current * (1 - SCALE_HYSTERESIS)) {
-      scale = measured
+  const read = ratios.length > 0 ? Math.max(...ratios) : undefined
+  const floor = read === undefined ? fit?.floor : Math.max(fit?.floor ?? read, read)
+  let scale = fit?.scale === undefined ? (read ?? 1) : Math.max(current, read ?? current)
+  if (read === undefined && floor === undefined) {
+    // No lone piece yet: the span's first piece, last on a line of plain
+    // words, was drawn as wide as the line less those words at the prose
+    // size. Only a narrower reading is taken, and it sets no floor: a word
+    // set bolder or larger than priced only makes the pill look wider.
+    const first = owners[0]
+    const line = first ? lines[first.line]! : undefined
+    const text = first ? measure.textWidth(first.text) : 0
+    if (line && text > 0 && line.text.split(OBJECT_REPLACEMENT).length === 2 && /￼[^\s￼]*\s*$/.test(line.text)) {
+      const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
+      const soft = (lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize) - measure.insets) / text
+      scale = Math.min(scale, soft)
     }
   }
-  scale = Math.min(scale, ...caps)
-  return Math.min(SCALE_LIMITS[1], Math.max(SCALE_LIMITS[0], scale))
+  scale = Math.max(Math.min(scale, ...caps), floor ?? 0)
+  return { scale: Math.min(SCALE_LIMITS[1], Math.max(SCALE_LIMITS[0], scale)), floor }
 }
 
 /**
@@ -211,64 +233,64 @@ export function readPillFits(args: {
   if (at.length !== drawn || !(lineWidth > 0) || !brokenTo(lines, lineWidth)) {
     return { kind: 'unreadable' }
   }
-  // Which span and piece each placeholder is, in document order.
-  const owners: Owner[] = []
-  spans.forEach((span, ordinal) => {
-    span.pieces.forEach((text, piece) => owners.push({ ...at[owners.length]!, span: ordinal, piece, text }))
-  })
-  const scale = learnScale(lines, owners, measure, current.scale, lineWidth, proseSize)
-  // What failed at another scale says nothing at this one.
-  const rescaled = Math.abs(scale - current.scale) > 0.005
-  const scaled = (piece: string) => measure.textWidth(piece) * scale + measure.insets
   const fits = new Map<number, PillFit>()
   let first = 0
   spans.forEach((span, ordinal) => {
-    const held = current.fits.get(ordinal)
-    const fit = held && rescaled ? { room: held.room } : held
-    if (fit) {
-      fits.set(ordinal, fit)
-    }
-    const start = at[first]
+    const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[first + piece]!, span: ordinal, piece, text }))
     first += span.pieces.length
+    const held = current.fits.get(ordinal)
+    const { scale, floor } = learnScale(lines, owners, measure, held, lineWidth, proseSize)
+    // What failed at another scale says nothing at this one.
+    const rescaled = Math.abs(scale - pillFitScale(held)) > 0.005
+    const fit: PillFit = { room: held?.room, below: rescaled ? undefined : held?.below, scale, floor }
+    fits.set(ordinal, fit)
+    const start = owners[0]
     if (!start) {
       return
     }
+    const scaled = (piece: string) => measure.textWidth(piece) * scale + measure.insets
     const above = lines[start.line - 1]
     if (start.col === 0 && above && !above.text.endsWith('\n')) {
       // It starts a line after a soft wrap: the line above says what it left.
       const room = lineWidth - lineEnd(above)
-      // What failed at another room says nothing about this one.
-      const known = fit !== undefined && Math.abs(fit.room - room) <= TOLERANCE ? fit.below : undefined
-      if (!span.fresh) {
-        // Cut to fit up there and it did not: the phone drew it wider.
-        fits.set(ordinal, { room, below: Math.min(known ?? Infinity, scaled(span.pieces[0]!)) })
-      } else if (room > span.room + TOLERANCE) {
-        // It went down whole, and the line above has since made room.
-        fits.set(ordinal, { room, below: known })
+      const sameRoom = fit.room !== undefined && Math.abs(fit.room - room) <= TOLERANCE
+      if (!span.fresh && sameCut(cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue), span)) {
+        // Cut as it would be for this very room, and it went down: the phone
+        // drew it wider. (Cut for a whole line and landing in a narrower
+        // room proves nothing about the narrower one: review of f8c968a1.)
+        fit.below = Math.min(sameRoom ? (fit.below ?? Infinity) : Infinity, scaled(span.pieces[0]!))
+        fit.room = room
+      } else if (!span.fresh || room > span.room + TOLERANCE) {
+        // Cut for another room (a whole line, or one the span no longer
+        // starts in): now it knows its room, and nothing has failed in it.
+        fit.below = sameRoom ? fit.below : undefined
+        fit.room = room
       }
       return
     }
-    // It starts mid-line or after a hard break. If a later piece wrapped,
-    // the first line held what it drew plus what it left empty. If two
-    // pieces share the line, it was cut for a room it no longer starts in
-    // (a span before it was re-cut) and fits whole or further.
+    // It sat on the line it starts on, so a first piece as wide as it was
+    // drawn fits: a cap under that is wrong.
     let onLine = 1
-    while (onLine < span.pieces.length && at[first - span.pieces.length + onLine]!.line === start.line) {
+    while (onLine < owners.length && owners[onLine]!.line === start.line) {
       onLine += 1
     }
-    if (onLine < span.pieces.length || onLine > 1) {
-      const used = span.pieces.slice(0, onLine).reduce((sum, piece) => sum + scaled(piece), 0)
+    const used = owners.slice(0, onLine).reduce((sum, owner) => sum + scaled(owner.text), 0)
+    if (fit.below !== undefined && fit.below <= used + TOLERANCE) {
+      fit.below = undefined
+    }
+    // If a later piece wrapped, the first line held what it drew plus what it
+    // left empty. If two pieces share the line, it was cut for a room it no
+    // longer starts in (a span before it was re-cut) and fits whole or further.
+    if (onLine < owners.length || onLine > 1) {
       const room = Math.min(lineWidth, used + lineWidth - lineEnd(lines[start.line]!))
       if (room > span.room + TOLERANCE) {
-        // A room that moved by more than a tenth of the line is a new place;
-        // what failed at the old one says nothing here.
-        const moved = fit !== undefined && room - fit.room > lineWidth / 10
-        fits.set(ordinal, { room, below: moved ? undefined : fit?.below })
+        fit.room = room
       }
     }
   })
-  const firstChanged = spans.findIndex(
-    (span, ordinal) => !sameCut(cut(span.code, pillFitRoom(fits.get(ordinal), lineWidth), scale, span.glue), span)
-  )
-  return firstChanged === -1 ? { kind: 'settled' } : { kind: 'changed', next: { fits, scale }, firstChanged }
+  const firstChanged = spans.findIndex((span, ordinal) => {
+    const fit = fits.get(ordinal)
+    return !sameCut(cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit), span.glue), span)
+  })
+  return firstChanged === -1 ? { kind: 'settled' } : { kind: 'changed', next: { fits }, firstChanged }
 }

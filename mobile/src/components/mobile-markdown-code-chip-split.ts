@@ -20,21 +20,12 @@
  * like a word.
  */
 
-/** Instrument Sans Regular advances for U+0020 to U+007E, per 1000 em (hmtx of
- *  the bundled TTF, read 2026-09-26). The pill's text is the paragraph's face. */
-const ASCII_ADVANCE = [
-  200, 273, 384, 716, 608, 786, 755, 232, 406, 406, 408, 531, 255, 506, 255, 443,
-  666, 391, 545, 574, 600, 574, 599, 532, 582, 610, 255, 255, 531, 531, 531, 567,
-  853, 728, 636, 741, 752, 638, 602, 765, 736, 254, 455, 692, 588, 906, 736, 786,
-  656, 787, 656, 608, 648, 712, 728, 1089, 688, 676, 623, 406, 443, 406, 531, 426,
-  354, 533, 606, 533, 606, 564, 354, 606, 599, 240, 240, 535, 240, 922, 599, 584,
-  606, 606, 375, 473, 377, 589, 523, 767, 551, 523, 496, 406, 242, 406, 531
-]
-/** The font's Latin-1 and Latin Extended glyphs average 580. */
-const OTHER_ADVANCE = 600
-/** CJK, Hangul, full-width forms and emoji come from a fallback font at
- *  about a full em. */
+import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './instrument-sans-regular-advances'
+
+/** A character the font does not have comes from a fallback font: CJK,
+ *  Hangul, full-width forms and emoji at about a full em, the rest at 0.6. */
 const WIDE_ADVANCE = 1000
+const OTHER_ADVANCE = 600
 
 function isWide(code: number): boolean {
   return (
@@ -49,18 +40,17 @@ function isWide(code: number): boolean {
   )
 }
 
-/** The painted width of code set in the pill's face, in dp. Kerning is left
- *  out, which only ever errs a little wide. */
+/** The painted width of code set in the pill's face, in dp, from the font's
+ *  own advances (instrument-sans-regular-advances.ts). Kerning is left out;
+ *  the phone's layout tells how much it matters (mobile-markdown-code-pill-fit.ts). */
 export function codeTextWidth(text: string, fontSize: number): number {
   let units = 0
   for (const ch of text) {
     const code = ch.codePointAt(0) ?? 0
     units +=
       code >= 0x20 && code <= 0x7e
-        ? ASCII_ADVANCE[code - 0x20]!
-        : isWide(code)
-          ? WIDE_ADVANCE
-          : OTHER_ADVANCE
+        ? INSTRUMENT_SANS_ASCII_ADVANCE[code - 0x20]!
+        : (INSTRUMENT_SANS_OTHER_ADVANCE[code] ?? (isWide(code) ? WIDE_ADVANCE : OTHER_ADVANCE))
   }
   return (units * fontSize) / 1000
 }

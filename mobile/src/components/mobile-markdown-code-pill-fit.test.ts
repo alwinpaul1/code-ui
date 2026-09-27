@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { codePillWidth, codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
   pillFitRoom,
+  pillFitScale,
   readPillFits,
   type PillFit,
   type PillLayoutLine,
@@ -16,12 +17,12 @@ const cut = (code: string, firstRoom: number, scale: number, glue = 0) =>
   cutCodePills(code, firstRoom, WIDTH, { ...FONT, scale }, glue)
 const PATH = '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows'
 const P = '\uFFFC'
-const NOTHING_LEARNT: TextPillFits = { fits: new Map(), scale: 1 }
+const NOTHING_LEARNT: TextPillFits = { fits: new Map() }
 
-/** A span as the render drew it with this room. */
-function drawn(code: string, fit: PillFit | undefined, scale = 1): PillSpanDrawn {
+/** A span as the render drew it with what it had learnt. */
+function drawn(code: string, fit: PillFit | undefined): PillSpanDrawn {
   const room = pillFitRoom(fit, WIDTH)
-  return { code, room, glue: 0, ...cut(code, room, scale) }
+  return { code, room, glue: 0, ...cut(code, room, pillFitScale(fit)) }
 }
 
 function read(
@@ -39,6 +40,18 @@ function read(
     measure: { textWidth: (piece) => codeTextWidth(piece, 14), insets: 10 },
     proseSize: 15
   })
+}
+
+function readArgs(lines: PillLayoutLine[], spans: PillSpanDrawn[]) {
+  return {
+    lines,
+    spans,
+    lineWidth: WIDTH,
+    current: NOTHING_LEARNT,
+    cut,
+    measure: { textWidth: (piece: string) => codeTextWidth(piece, 14), insets: 10 },
+    proseSize: 15
+  }
 }
 
 function learnt(result: ReturnType<typeof read>): TextPillFits {
@@ -59,16 +72,17 @@ describe("reading a pill's line back from the phone's layout", () => {
       read(
         [
           { x: 0, width: 92.4, text: '•  Worktree: ' },
-          { x: 0, width: 339.2, text: P },
+          // Drawn exactly as estimated.
+          { x: 0, width: width(span.pieces[0]!), text: P },
           { x: 0, width: 150, text: `${P}. Branch ` }
         ],
         [span]
       )
     )
     expect(next.fits.get(0)!.room).toBeCloseTo(WIDTH - 92.4, 6)
-    const recut = drawn(PATH, next.fits.get(0), next.scale)
+    const recut = drawn(PATH, next.fits.get(0))
     expect(recut.fresh).toBe(false)
-    expect(width(recut.pieces[0]!) * next.scale).toBeLessThanOrEqual(WIDTH - 92.4 - 1)
+    expect(width(recut.pieces[0]!)).toBeLessThanOrEqual(WIDTH - 92.4 - 1)
   })
 
   it('shrinks a first piece the phone drew wider than estimated until it fits', () => {
@@ -82,7 +96,7 @@ describe("reading a pill's line back from the phone's layout", () => {
           { x: 0, width: 300, text: `${P}${P}. Branch ` }
         ],
         [span],
-        { fits: new Map([[0, fit]]), scale: 1 }
+        { fits: new Map([[0, fit]]) }
       )
     )
     const shrunk = next.fits.get(0)!
@@ -96,15 +110,12 @@ describe("reading a pill's line back from the phone's layout", () => {
     const span = drawn(PATH, fit)
     expect(span.pieces[0]).toBe('/Users/')
     // The rest of the span, one piece a line after the first.
-    const rest = span.pieces.slice(1).map((_, index, all) => ({
-      x: 0,
-      width: 300,
-      text: index === all.length - 1 ? `${P}. Branch ` : `${P} `
-    }))
+    const rest = span.pieces.slice(1).map((piece, index, all) =>
+      index === all.length - 1 ? { x: 0, width: 300, text: `${P}. Branch ` } : { x: 0, width: width(piece), text: P }
+    )
     const next = learnt(
       read([{ x: 0, width: 92.4 + width('/Users/'), text: `•  Worktree: ${P}` }, ...rest], [span], {
-        fits: new Map([[0, fit]]),
-        scale: 1
+        fits: new Map([[0, fit]])
       })
     )
     // What it drew plus what it left empty: the room after "Worktree:".
@@ -115,10 +126,8 @@ describe("reading a pill's line back from the phone's layout", () => {
     const fit = { room: 60 }
     const span = drawn('fix/chat-rows', fit)
     expect(span.pieces).toEqual(['fix/', 'chat-rows'])
-    const next = learnt(
-      read([{ x: 0, width: 200, text: `Branch ${P}${P}, commits ` }], [span], { fits: new Map([[0, fit]]), scale: 1 })
-    )
-    expect(drawn('fix/chat-rows', next.fits.get(0), next.scale).pieces).toEqual(['fix/chat-rows'])
+    const next = learnt(read([{ x: 0, width: 200, text: `Branch ${P}${P}, commits ` }], [span], { fits: new Map([[0, fit]]) }))
+    expect(drawn('fix/chat-rows', next.fits.get(0)).pieces).toEqual(['fix/chat-rows'])
   })
 })
 
@@ -126,7 +135,12 @@ describe("reading a pill's line back from the phone's layout", () => {
 // minimum that only ever fell, and a rotation's lines read at the old width
 // dropped it for good. The phone's own measure of a pill comes from the
 // layout in hand instead, and it rises as well as falls.
-describe("learning the phone's width for a pill from the layout in hand", () => {
+// 2026-09-27 review: the cut for the lines after a span's first was a running
+// minimum that only ever fell, and a rotation's lines read at the old width
+// dropped it for good. Review of f8c968a1: one scale per Text swung between
+// two cuts when different layouts showed different lone pills. Now each span
+// reads its own, from the layout in hand, and never falls below what it read.
+describe("learning how wide the phone draws a span's pills", () => {
   const solid = 'x'.repeat(90)
 
   /** A piece as the phone draws it: text `scale` times the estimate, then
@@ -142,20 +156,75 @@ describe("learning the phone's width for a pill from the layout in hand", () => 
     })
   }
 
-  it('reads it off a line that holds one pill and nothing else', () => {
+  it('reads it off a line that holds one of its pieces and nothing else', () => {
     const span = drawn(solid, undefined)
     // The phone drew each piece's text 8% wider than estimated.
     const next = learnt(read(drawnAt(span.pieces, 1.08), [span]))
-    expect(next.scale).toBeCloseTo(1.08, 6)
-    for (const piece of drawn(solid, undefined, next.scale).pieces) {
+    expect(next.fits.get(0)!.scale).toBeCloseTo(1.08, 6)
+    for (const piece of drawn(solid, next.fits.get(0)).pieces) {
       expect(codeTextWidth(piece, 14) * 1.08 + 10).toBeLessThanOrEqual(WIDTH)
     }
   })
 
-  it('lets pieces grow again when the phone draws them narrower', () => {
-    const span = drawn(solid, undefined, 1.08)
-    const next = learnt(read(drawnAt(span.pieces, 0.95), [span], { fits: new Map(), scale: 1.08 }))
-    expect(next.scale).toBeCloseTo(0.95, 6)
+  it('takes its first reading narrower too', () => {
+    const span = drawn(solid, undefined)
+    const next = learnt(read(drawnAt(span.pieces, 0.95), [span]))
+    expect(next.fits.get(0)!.scale).toBeCloseTo(0.95, 6)
+  })
+
+  it('never falls below what it has read, so it cannot swing between two cuts', () => {
+    const fit = { scale: 1.08, floor: 1.08 }
+    const span = drawn(solid, fit)
+    const result = read(drawnAt(span.pieces, 0.95), [span], { fits: new Map([[0, fit]]) })
+    expect(result.kind).toBe('settled')
+  })
+
+  it('keeps a pill of arrows from setting the scale of the path beside it', () => {
+    // Review of f8c968a1, probe F2: the estimate priced → at 600 against the
+    // font's 850; now it reads the font, and each span has its own scale.
+    expect(codeTextWidth('→', 1000)).toBe(850)
+    const arrows = 'idle→queued→running→done→archived→idle→queued→running→done→archived→idle→queued'
+    const path = '/Users/alwinpaul/Desktop/Project'
+    const spans = [drawn(arrows, undefined), drawn(path, undefined)]
+    expect(spans.map((span) => span.pieces.length)).toEqual([2, 1])
+    const next = learnt(
+      read(
+        [
+          // The arrows' pieces drawn 30% wider than estimated, each alone.
+          ...spans[0]!.pieces.map((piece) => ({ x: 0, width: codeTextWidth(piece, 14) * 1.3 + 10, text: P })),
+          // The path drawn exactly as estimated, after "and ".
+          { x: 0, width: codeTextWidth('and ', 15) + width(path) + codeTextWidth('.', 15), text: `and ${P}.` }
+        ],
+        spans
+      )
+    )
+    expect(next.fits.get(0)!.scale).toBeCloseTo(1.3, 6)
+    expect(pillFitScale(next.fits.get(1))).toBeCloseTo(1, 6)
+  })
+
+  it('takes a narrower reading from a line of plain words that ends in the pill, and no wider one', () => {
+    // The zoom 0.8 command from the sweep: no piece ever alone on a line, so
+    // no lone reading; drawn 10% narrower, its first line ended early.
+    const path = '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows'
+    const at = (fit: PillFit, scale: number) => {
+      const span = drawn(path, fit)
+      const [first, ...rest] = span.pieces
+      const lines = [
+        { x: 0, width: codeTextWidth('Run ', 15) + codeTextWidth(first!, 14) * scale + 10, text: `Run ${P}` },
+        ...rest.map((piece, index) => ({
+          x: 0,
+          width: codeTextWidth(piece, 14) * scale + 10 + (index === rest.length - 1 ? codeTextWidth(' before it.', 15) : 0),
+          text: index === rest.length - 1 ? `${P} before it.` : `${P} and`
+        }))
+      ]
+      return read(lines, [span], { fits: new Map([[0, fit]]) })
+    }
+    const narrower = at({ room: 320 }, 0.9)
+    expect(learnt(narrower).fits.get(0)!.scale).toBeCloseTo(0.9, 6)
+    expect(learnt(narrower).fits.get(0)!.floor).toBeUndefined()
+    // Bolder or larger words before the pill only make it look wider: not taken.
+    const wider = at({ room: 250 }, 1.1)
+    expect(wider.kind === 'changed' ? pillFitScale(wider.next.fits.get(0)) : 1).toBe(1)
   })
 
   it('reads a lone pill at the end of a paragraph without pricing the newline', () => {
@@ -164,22 +233,8 @@ describe("learning the phone's width for a pill from the layout in hand", () => 
     const token = 'x'.repeat(42)
     const span = drawn(token, undefined)
     expect(span.pieces).toEqual([token])
-    const next = learnt(
-      read([{ x: 0, width: codeTextWidth(token, 14) * 1.1 + 10, text: `${P}\n` }], [span], { fits: new Map(), scale: 1 })
-    )
-    expect(next.scale).toBeCloseTo(1.1, 6)
-  })
-
-  it('does not swing between two scales when a layout shows only a short pill', () => {
-    // A short pill reads the same text scale as a long one, and a reading
-    // within 2% of the scale in hand leaves it where it is.
-    const span = drawn('68a160e5', undefined, 1.08)
-    const result = read(
-      [{ x: 0, width: codeTextWidth('68a160e5', 14) * 1.07 + 10 + codeTextWidth('.', 15), text: `${P}.` }],
-      [span],
-      { fits: new Map(), scale: 1.08 }
-    )
-    expect(result.kind).toBe('settled')
+    const next = learnt(read([{ x: 0, width: codeTextWidth(token, 14) * 1.1 + 10, text: `${P}\n` }], [span]))
+    expect(next.fits.get(0)!.scale).toBeCloseTo(1.1, 6)
   })
 
   it('keeps two continuation pieces of one span off one line', () => {
@@ -189,20 +244,21 @@ describe("learning the phone's width for a pill from the layout in hand", () => 
     const span = drawn(command, { room: 120 })
     expect(span.pieces).toEqual(['cd mobile &&', 'npx tsc --noEmit && npx vitest run && npx oxlint &&', 'ls'])
     const [first, second, third] = span.pieces as [string, string, string]
-    const together = (width(second) + width(third)) * 0.9 + 3
+    const texts = codeTextWidth(second, 14) + codeTextWidth(third, 14)
+    const together = texts * 0.9 + 20 + 3
     const next = learnt(
       read(
         [
-          { x: 0, width: 36 + width(first) * 0.9, text: `Run ${P}` },
+          { x: 0, width: 36 + codeTextWidth(first, 14) * 0.9 + 10, text: `Run ${P}` },
           { x: 0, width: together, text: `${P}${P}.` }
         ],
         [span],
-        { fits: new Map([[0, { room: 120 }]]), scale: 1 }
+        { fits: new Map([[0, { room: 120 }]]) }
       )
     )
-    expect(next.scale).toBeLessThanOrEqual(together / (width(second) + width(third)))
+    expect(next.fits.get(0)!.scale).toBeLessThanOrEqual((together - 20) / texts)
     // Three pieces become two: the last no longer rides beside the one before.
-    const recut = drawn(command, next.fits.get(0), next.scale).pieces
+    const recut = drawn(command, next.fits.get(0)).pieces
     expect(recut).toHaveLength(2)
     expect(recut.join(' ')).toBe(command)
   })
@@ -219,7 +275,7 @@ describe('a layout that settles or cannot be read', () => {
         { x: 0, width: 300, text: `${P}. Branch ` }
       ],
       [span],
-      { fits: new Map([[0, fit]]), scale: 1 }
+      { fits: new Map([[0, fit]]) }
     )
     expect(result.kind).toBe('settled')
   })
@@ -246,9 +302,42 @@ describe('a layout that settles or cannot be read', () => {
         { x: 0, width: 120, text: `${P} and more` }
       ],
       [span],
-      { fits: new Map([[0, fit]]), scale: 1 }
+      { fits: new Map([[0, fit]]) }
     )
     expect(result.kind).toBe('settled')
+  })
+
+  // Review of f8c968a1, probes H2 and H3: a span cut for a whole line went
+  // down, and the room it landed in was taken as the room it had failed at;
+  // its first piece was capped there, and two of its pieces stayed side by
+  // side. A cap is learnt only where a span was cut for the room it failed in.
+  it('does not cap a first piece at a room it was not cut for', () => {
+    const span = drawn('fix/chat-rows', undefined)
+    const next = learnt(
+      read(
+        [
+          { x: 0, width: WIDTH - 93, text: 'a lead-in that fills the line up to the pill, Branch ' },
+          { x: 0, width: 100, text: `${P}, commits` }
+        ],
+        [span]
+      )
+    )
+    expect(next.fits.get(0)).toMatchObject({ room: 93, below: undefined })
+  })
+
+  it('drops a cap the phone has shown to be wrong', () => {
+    // A first piece capped under 60 dp, drawn with the piece after it on the
+    // same line: the line held both, so the cap is wrong, and the span is
+    // whole again.
+    const code = '/Users/alwinpaul/Desktop/Project'
+    const fit = { room: 250, below: 60 }
+    const span = drawn(code, fit)
+    expect(span.pieces).toEqual(['/Users/', 'alwinpaul/Desktop/Project'])
+    const line = 92.4 + width(span.pieces[0]!) + width(span.pieces[1]!)
+    expect(line).toBeLessThan(WIDTH)
+    const next = learnt(read([{ x: 0, width: line, text: `Worktree: ${P}${P}` }], [span], { fits: new Map([[0, fit]]) }))
+    expect(next.fits.get(0)!.below).toBeUndefined()
+    expect(drawn(code, next.fits.get(0)).pieces).toEqual([code])
   })
 
   it('re-cuts from the first span that moved, and says so', () => {
@@ -278,7 +367,17 @@ describe('a layout that settles or cannot be read', () => {
     const span = drawn(PATH, { room: WIDTH - 92.4 })
     // The tree as drawn at 360, laid out at 700 before the render catches up.
     const rotated = [{ x: 0, width: 612.5, text: `Worktree: ${P}${P} today.` }]
-    expect(read(rotated, [span], { fits: new Map([[0, { room: WIDTH - 92.4 }]]), scale: 1 }).kind).toBe('unreadable')
+    expect(read(rotated, [span], { fits: new Map([[0, { room: WIDTH - 92.4 }]]) }).kind).toBe('unreadable')
+    // The tree as drawn at 700, laid out at 360 and read at 700: the pill went
+    // down a line with 610 dp to spare above it, which greedy breaking never
+    // does (review of f8c968a1).
+    const wide = drawn(PATH, { room: 700 - 92.4 })
+    const narrowed = [
+      { x: 0, width: 92.4, text: 'Worktree: ' },
+      { x: 0, width: 520, text: P },
+      { x: 0, width: 45, text: 'today.' }
+    ]
+    expect(readPillFits({ ...readArgs(narrowed, [wide]), lineWidth: 700 }).kind).toBe('unreadable')
     // Trailing spaces hang past the edge on Android; they are not words.
     expect(
       read([{ x: 0, width: WIDTH + 6, text: 'a line of plain words that ends in a space ' }, { x: 0, width: 50, text: `${P}.` }], [

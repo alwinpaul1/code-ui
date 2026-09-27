@@ -308,7 +308,16 @@ function MobileNativeChatMessageImpl({
                     key={index}
                     style={imageLeadsText(groups, index) ? styles.imageLead : null}
                   >
-                    {renderProseGroup(group, { isUser, promptsAsMarkdown, fontScale, onOpenFile, styles })}
+                    {renderProseGroup(group, {
+                      isUser,
+                      promptsAsMarkdown,
+                      fontScale,
+                      onOpenFile,
+                      styles,
+                      // The list recycles a row's cell for other messages;
+                      // this names the block for its markdown.
+                      identity: `${message.id}:${segmentIndex}:${index}`
+                    })}
                   </View>
                 ))}
               </View>

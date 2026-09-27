@@ -1,15 +1,19 @@
 import { createElement } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
-import { cutCodePills } from './mobile-markdown-code-chip-split'
-import { rememberedPillTextCount } from './use-markdown-code-pill-runs'
+import {
+  createPhone,
+  earlyLineEnds,
+  sharedLines,
+  type ModelLine,
+  type PhoneAs
+} from './mobile-markdown-code-pill-phone.test-support'
+import { resetRememberedPillCutsForTests, rememberedPillTextCount } from './use-markdown-code-pill-runs'
 
-/** The system font size (Settings > Display > Font size), as RN reads it. */
-const phone = vi.hoisted(() => ({ fontScale: 1 }))
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
-  PixelRatio: { getFontScale: () => phone.fontScale },
+  PixelRatio: { getFontScale: () => 1 },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -26,282 +30,36 @@ vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram'
 // "Worktree:", jumped whole to the next line, and left that line mostly empty;
 // the same happened to every pill after it.
 //
-// There is no layout engine under vitest, so this file carries a MODEL of the
-// phone: Instrument Sans Regular advances (hmtx of the bundled TTF), greedy
-// breaking after spaces and around an inline view (U+FFFC, class CB), no break
-// before closing punctuation, and `onTextLayout` lines shaped as
-// FontMetricsUtil.kt builds them on Android (RN 0.86): `width` is
-// getLineWidth, trailing spaces included, except on a line that ends in a
-// newline. It is a model, not a capture; what only the device shows is listed
-// in the commit.
-
-const ADVANCE = [
-  200, 273, 384, 716, 608, 786, 755, 232, 406, 406, 408, 531, 255, 506, 255, 443,
-  666, 391, 545, 574, 600, 574, 599, 532, 582, 610, 255, 255, 531, 531, 531, 567,
-  853, 728, 636, 741, 752, 638, 602, 765, 736, 254, 455, 692, 588, 906, 736, 786,
-  656, 787, 656, 608, 648, 712, 728, 1089, 688, 676, 623, 406, 443, 406, 531, 426,
-  354, 533, 606, 533, 606, 564, 354, 606, 599, 240, 240, 535, 240, 922, 599, 584,
-  606, 606, 375, 473, 377, 589, 523, 767, 551, 523, 496, 406, 242, 406, 531
-]
-
-function glyphWidth(ch: string, fontSize: number, family = ''): number {
-  // JetBrains Mono is 600 units a glyph (hmtx of the bundled TTF).
-  if (family.includes('Mono')) {
-    return (600 * fontSize) / 1000
-  }
-  const code = ch.codePointAt(0) ?? 0
-  const units = code >= 0x20 && code <= 0x7e ? ADVANCE[code - 0x20]! : 600
-  return (units * fontSize) / 1000
-}
-
-type Style = Record<string, unknown>
-function flat(style: unknown): Style {
-  if (Array.isArray(style)) {
-    return Object.assign({}, ...style.map(flat))
-  }
-  return style && typeof style === 'object' ? (style as Style) : {}
-}
-
-type Item =
-  | { kind: 'char'; ch: string; width: number }
-  | { kind: 'pill'; text: string; width: number }
-
-/** The phone's view of one Text: characters at their span's size, and each
- *  inline View as one placeholder as wide as the pill it draws. `pillError`
- *  is how much wider the phone draws a pill than the app estimates. */
-function flatten(node: ReactTestInstance, fontSize: number, pillError: number, out: Item[]): Item[] {
-  const size = Number(flat(node.props.style).fontSize ?? fontSize)
-  for (const child of node.children) {
-    if (typeof child === 'string') {
-      for (const ch of Array.from(child)) {
-        out.push({ kind: 'char', ch, width: glyphWidth(ch, size) })
-      }
-    } else if (child.type === ('View' as never)) {
-      const box = flat(child.props.style)
-      const label = child.findByType('Text' as never)
-      const text = label.children.join('')
-      const labelStyle = flat(label.props.style)
-      const labelSize = Number(labelStyle.fontSize)
-      const inset = 2 * (Number(box.paddingHorizontal ?? 0) + Number(box.borderWidth ?? 0))
-      const glyphs = Array.from(text).reduce(
-        (sum, ch) => sum + glyphWidth(ch, labelSize, String(labelStyle.fontFamily ?? '')),
-        0
-      )
-      out.push({ kind: 'pill', text, width: glyphs * pillError + inset })
-    } else {
-      flatten(child, size, pillError, out)
-    }
-  }
-  return out
-}
-
-type Line = { x: number; y: number; width: number; height: number; text: string; items: Item[]; ink: number }
-
-function isSpace(item: Item): boolean {
-  return item.kind === 'char' && item.ch === ' '
-}
-
-/** Greedy lines, as Android's `simple` break strategy lays them out. */
-function layOut(items: Item[], lineWidth: number): Line[] {
-  // Words: a run that cannot break inside, then its trailing spaces.
-  const words: Item[][] = []
-  let word: Item[] = []
-  const flush = () => {
-    if (word.length) {
-      words.push(word)
-    }
-    word = []
-  }
-  for (const item of items) {
-    const prev = word.at(-1)
-    const gluedPunctuation = item.kind === 'char' && /[.,;:!?)\]]/.test(item.ch)
-    if (item.kind === 'char' && item.ch === '\n') {
-      flush()
-      words.push([item])
-      continue
-    }
-    if (prev && ((isSpace(prev) && !isSpace(item)) || (prev.kind === 'pill' && !isSpace(item) && !gluedPunctuation) || (item.kind === 'pill' && !isSpace(prev)))) {
-      flush()
-    }
-    word.push(item)
-  }
-  flush()
-
-  const lines: Line[] = []
-  let current: Item[] = []
-  const widthOf = (list: Item[]) => list.reduce((sum, item) => sum + item.width, 0)
-  const inkOf = (list: Item[]) => {
-    let end = list.length
-    while (end > 0 && isSpace(list[end - 1]!)) {
-      end -= 1
-    }
-    return widthOf(list.slice(0, end))
-  }
-  const push = (endsWithNewline: boolean) => {
-    const text = current.map((item) => (item.kind === 'pill' ? '\uFFFC' : item.ch)).join('')
-    lines.push({
-      x: 0,
-      y: lines.length * 25,
-      height: 25,
-      width: endsWithNewline ? inkOf(current) : widthOf(current),
-      text,
-      items: current,
-      ink: inkOf(current)
-    })
-    current = []
-  }
-  for (const next of words) {
-    if (next.length === 1 && next[0]!.kind === 'char' && next[0]!.ch === '\n') {
-      current.push(next[0]!)
-      push(true)
-      continue
-    }
-    if (current.length && widthOf(current) + inkOf(next) > lineWidth) {
-      push(false)
-    }
-    current.push(...next)
-  }
-  if (current.length) {
-    push(false)
-  }
-  return lines
-}
+// The phone is a model (mobile-markdown-code-pill-phone.test-support.ts):
+// widths from the bundled font, Android's greedy lines, and layout events as
+// Fabric sends them. What only the device shows is listed in the commits.
 
 let renderer: ReactTestRenderer | null = null
+const device = createPhone(() => renderer!)
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
-  phone.fontScale = 1
+  resetRememberedPillCutsForTests()
 })
 
-/** The nearest host ancestor; the pill component sits between a pill's View
- *  and the Text it is drawn in. */
-function hostParent(node: ReactTestInstance): ReactTestInstance | null {
-  let parent = node.parent
-  while (parent && typeof parent.type !== 'string') {
-    parent = parent.parent
-  }
-  return parent
-}
-
-function pills(): ReactTestInstance[] {
-  return renderer!.root.findAll(
-    (node) => node.type === ('View' as never) && hostParent(node)?.type === ('Text' as never)
-  )
-}
-
-function pillTexts(): string[] {
-  return pills().map((pill) => pill.findByType('Text' as never).children.join(''))
-}
-
-/** The prose Text the pills are drawn in: the outermost Text holding one. */
-function measuredText(): ReactTestInstance {
-  let text = hostParent(pills()[0]!)!
-  for (let up = hostParent(text); up?.type === ('Text' as never); up = hostParent(up)) {
-    text = up
-  }
-  return text
-}
-
-/** The width a Text's lines are broken to: the document's, less a quote's
- *  bar and indent, or a table cell's own width less its padding and border. */
-function textWidth(text: ReactTestInstance, documentWidth: number): number {
-  const own = flat(text.props.style)
-  if (typeof own.width === 'number') {
-    return own.width - 2 * Number(own.paddingHorizontal ?? 0) - Number(own.borderRightWidth ?? 0)
-  }
-  const box = hostParent(text)
-  const quote = box ? flat(box.props.style) : {}
-  return documentWidth - Number(quote.borderLeftWidth ?? 0) - Number(quote.paddingLeft ?? 0)
-}
-
-type Phone = { pillError?: number; textScale?: number }
-
-/** The lines the phone reports for the tree as it stands, broken to `documentWidth`. */
-function phoneLines(documentWidth: number, { pillError = 1, textScale = 1 }: Phone = {}) {
-  const text = measuredText()
-  const lineWidth = textWidth(text, documentWidth)
-  const lines = layOut(flatten(text, 15 * textScale, pillError, []), lineWidth)
-  const event = { nativeEvent: { lines: lines.map(({ items: _items, ink: _ink, ...line }) => line) } }
-  return { text, lines, lineWidth, event }
-}
-
-/** The document's own onLayout, as Fabric sends it after a layout. */
-function layOutDocument(documentWidth: number) {
-  const root = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
-  root.props.onLayout({ nativeEvent: { layout: { x: 0, y: 0, width: documentWidth, height: 400 } } })
-}
-
-/** Hand the phone's lines back until nothing moves. */
-function settleMounted(documentWidth: number, phoneAs: Phone = {}): { lines: Line[]; rounds: number; lineWidth: number } {
-  for (let round = 0; round < 12; round += 1) {
-    const { text, lines, lineWidth, event } = phoneLines(documentWidth, phoneAs)
-    if (typeof text.props.onTextLayout !== 'function') {
-      // A Text that does not read its layout is drawn as first cut.
-      return { lines, rounds: round, lineWidth }
-    }
-    const before = pillTexts().join('|')
-    act(() => text.props.onTextLayout(event))
-    if (pillTexts().join('|') === before) {
-      return { lines, rounds: round, lineWidth }
-    }
-  }
-  throw new Error('the pills never settled')
-}
+const pills = () => device.pills()
+const pillTexts = () => device.pillTexts()
+const pillKeys = () => device.pillKeys()
+const measuredText = () => device.measuredText()
+const phoneLines = (documentWidth: number, as: PhoneAs = {}) => device.lines(documentWidth, as)
+const settleMounted = (documentWidth: number, as: PhoneAs = {}) => device.settle(documentWidth, as)
 
 function mount(content: string, documentWidth: number, onOpenFile?: (path: string) => void, textScale = 1) {
   act(() => {
     renderer = create(createElement(MobileMarkdown, { content, onOpenFile, textScale }))
   })
-  act(() => layOutDocument(documentWidth))
+  act(() => device.layOutDocument(documentWidth))
 }
 
-/** Mount, measure, and hand the phone's lines back until nothing moves. */
-function settle(
-  content: string,
-  documentWidth: number,
-  pillError = 1,
-  onOpenFile?: (path: string) => void,
-  textScale = 1
-): { lines: Line[]; rounds: number; lineWidth: number } {
+/** Mount, measure, and lay out until the Text has nothing new to report. */
+function settle(content: string, documentWidth: number, pillError = 1, onOpenFile?: (path: string) => void, textScale = 1) {
   mount(content, documentWidth, onOpenFile, textScale)
   return settleMounted(documentWidth, { pillError, textScale })
-}
-
-/** Nothing on the next line could have fitted at the end of this one. For a
- *  pill that means its first unbreakable piece (up to a slash or a space),
- *  since a pill can be cut there. */
-function earlyLineEnds(lines: Line[], lineWidth: number, scale = 1, pillError = 1): string[] {
-  const found: string[] = []
-  lines.forEach((line, index) => {
-    const next = lines[index + 1]
-    if (!next || line.text.endsWith('\n')) {
-      return
-    }
-    const room = lineWidth - line.width
-    const head = next.items[0]!
-    let need: number
-    if (head.kind === 'pill') {
-      const unit = /^[^/\s]*[/\s]?/.exec(head.text)![0]
-      need = Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError + 10 * scale
-      if (unit.length === head.text.length) {
-        // The whole pill, and the punctuation glued after it, which cannot break away.
-        for (const item of next.items.slice(1)) {
-          if (item.kind !== 'char' || item.ch === ' ') {
-            break
-          }
-          need += item.width
-        }
-      }
-    } else {
-      const word = /^\S+/.exec(next.text)?.[0] ?? ''
-      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, 15 * scale), 0)
-    }
-    if (need <= room - 2) {
-      found.push(`line ${index} "${line.text}" left ${room.toFixed(1)} dp for "${next.text.slice(0, 12)}" (${need.toFixed(1)} dp)`)
-    }
-  })
-  return found
 }
 
 const WORKTREE_ITEM =
@@ -317,7 +75,7 @@ describe('inline code flows with the words around it, as in the Claude app', () 
     const { lines, rounds } = settle(WORKTREE_ITEM, width, error)
     // The pill starts right after the word before it, on the same line.
     expect(lines[0]!.text).toMatch(/Worktree: \uFFFC$/)
-    expect(earlyLineEnds(lines, width)).toEqual([])
+    expect(earlyLineEnds(lines, width, 1, error)).toEqual([])
     // Two pieces of one span never sit on the same line (2026-09-20).
     for (const line of lines) {
       expect(line.text).not.toContain('\uFFFC\uFFFC')
@@ -441,105 +199,9 @@ describe('settling costs a few layouts once, not on every mount', () => {
   })
 })
 
-/** The key React holds each pill by; a changed key is a remount. */
-function pillKeys(): string[] {
-  return pills().map((pill) => String((pill.parent as unknown as { _fiber: { key: string | null } })._fiber.key))
+function noSharedLines(lines: ModelLine[]): void {
+  expect(sharedLines(lines), 'two pieces of one span on one line').toEqual([])
 }
-
-function noSharedLines(lines: Line[]): void {
-  for (const line of lines) {
-    expect(line.text, 'two pieces of one span on one line').not.toContain('\uFFFC\uFFFC')
-  }
-}
-
-// Review of 216a856f, 2026-09-27. On a rotation, split screen or pop-up view,
-// Fabric lays the existing tree out at the new width and reports its lines
-// (ParagraphShadowNode::layout) before the document's onLayout brings the new
-// width to a render. Read against the old width, every line with a pill looked
-// like it ran past the edge, the continuation width dropped from 360 to about
-// 185, and that was kept for the old width, in memory too: back at 360 the
-// pills were chopped ("UI/.claude/worktrees/" then "rotation-probe", two
-// pieces on one line), and still after scrolling away and back.
-describe('a change of window width', () => {
-  // One line at 700 dp, ending on a word: its whole width reads as overflow.
-  const ROTATE = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/rotation-probe` today.'
-
-  function rotateTo(documentWidth: number): void {
-    // One beat: the lines of the tree as drawn, broken to the new width, to
-    // the handler of the last render; then the document's own onLayout.
-    act(() => {
-      const { text, event } = phoneLines(documentWidth)
-      text.props.onTextLayout(event)
-      layOutDocument(documentWidth)
-    })
-  }
-
-  it('keeps the pills it had after turning the phone and back', () => {
-    mount(ROTATE, 360)
-    settleMounted(360)
-    const portrait = pillTexts()
-    rotateTo(700)
-    settleMounted(700)
-    rotateTo(360)
-    const { lines } = settleMounted(360)
-    expect(pillTexts()).toEqual(portrait)
-    noSharedLines(lines)
-  })
-
-  it('draws a message scrolled away and back after a rotation with its pills whole', () => {
-    // Its own document, one line at 700 dp too, so nothing is carried over.
-    const content = ROTATE.replace('rotation-probe', 'remount-probe')
-    mount(content, 360)
-    settleMounted(360)
-    const portrait = pillTexts()
-    rotateTo(700)
-    act(() => renderer?.unmount())
-    renderer = null
-    mount(content, 360)
-    expect(pillTexts()).toEqual(portrait)
-    const { lines } = settleMounted(360)
-    expect(pillTexts()).toEqual(portrait)
-    noSharedLines(lines)
-  })
-})
-
-// Review of 216a856f: the chat list (FlashList 2.3.2, no per-item key in
-// MobileNativeChatView) recycles a cell for another message. The cell's
-// rooms were used for whatever it drew next at the same width, so the next
-// message was first cut with the last one's rooms, not its own settled cut.
-describe('a recycled list cell', () => {
-  it("draws the next message with that message's own settled pills at once", () => {
-    const next = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/recycled-next` for this one.'
-    const previous =
-      'The branch is at `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/recycled-previous-one` for that one.'
-    mount(next, 360)
-    settleMounted(360)
-    const settled = pillTexts()
-    act(() => renderer?.unmount())
-    mount(previous, 360)
-    settleMounted(360)
-    act(() => renderer!.update(createElement(MobileMarkdown, { content: next })))
-    expect(pillTexts()).toEqual(settled)
-  })
-})
-
-describe('a system font size change', () => {
-  it('does not reuse the pills learnt at the old size', () => {
-    const content = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe` here.'
-    mount(content, 360)
-    settleMounted(360)
-    act(() => renderer?.unmount())
-    phone.fontScale = 1.3
-    mount(content, 360)
-    // Nothing learnt at this size: cut to a whole line, as on a first mount.
-    expect(pillTexts()).toEqual(
-      cutCodePills('/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe', 360, 360, {
-        fontSize: 14,
-        insets: 10
-      }).pieces
-    )
-  })
-})
 
 // Review of 216a856f: every settle round remounted every pill in the Text
 // (88 pills for a 52-span message), and a remount drops a selection or a
@@ -595,7 +257,7 @@ describe("a paragraph's line breaking", () => {
         })
       )
     })
-    act(() => layOutDocument(360))
+    act(() => device.layOutDocument(360))
     const document = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
     const runs = document.children.filter(
       (child): child is ReactTestInstance => typeof child !== 'string' && child.type === ('Text' as never)

@@ -60,6 +60,10 @@ type Props = {
    *  host, so it draws as the image. Without it, and for anything the host
    *  cannot give, an image stays the tappable link inside the prose run. */
   resolveImage?: MarkdownImageResolver
+  /** The message this is, where a list recycles one cell for many: what
+   *  code pills learnt about one message is not used for another, and is
+   *  kept while the same one streams in (use-markdown-code-pill-runs.ts). */
+  identity?: string
 }
 
 const MAX_TABLE_ROWS = 40
@@ -162,6 +166,7 @@ function renderInline(
   pills: CodePillRun
 ): ReactNode[] {
   const parts: ReactNode[] = []
+  pills.noteSource(text)
   // Code spans are found by backtick run inside the matcher, not here.
   const pattern = createMarkdownInlineMatcher(
     text,
@@ -291,7 +296,8 @@ function MobileMarkdownInner({
   fallback = '',
   textScale = 1,
   onOpenFile,
-  resolveImage
+  resolveImage,
+  identity
 }: Props) {
   const selectable = useChatTextSelectable()
   const styles = useMarkdownStyles()
@@ -306,7 +312,7 @@ function MobileMarkdownInner({
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
-  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey)
+  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -374,12 +380,13 @@ function MobileMarkdownInner({
             // `simple` is greedy breaking, as the Claude app lays out: a line
             // takes all that fits. Android's default balances lines, which
             // could break before a pill that fits and re-break the lines above
-            // one. Only where there is a pill; plain prose keeps the default.
+            // one. Only where a pill may be (a backtick); plain prose keeps
+            // the default.
             <Text
-              key={index}
+              key={pills.keyFor(index)}
               selectable={selectable}
               style={[styles.paragraph, proseScale]}
-              textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
+              textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
               onTextLayout={pills.layoutReader()}
             >
               {members}
@@ -409,9 +416,10 @@ function MobileMarkdownInner({
           return (
             <View key={index} style={styles.quoteBlock}>
               <Text
+                key={pills.keyFor('quote')}
                 selectable={selectable}
                 style={[styles.quoteText, proseScale]}
-                textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
+                textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}
               >
                 {quoted}
@@ -453,15 +461,15 @@ function MobileMarkdownInner({
             const children = renderInline(styles, source, onOpenFile, pills)
             return (
               <Text
-                key={cellIndex}
+                key={pills.keyFor(cellIndex)}
                 selectable={selectable}
                 style={[
                   styles.tableCell,
                   header ? styles.tableHeader : null,
                   // A pill grows with the zoom and the cell's type does not.
-                  pills.holdsPills() ? { width, paddingBottom: markdownTableCellPillPadding(textScale) } : { width }
+                  pills.mayHoldPills() ? { width, paddingBottom: markdownTableCellPillPadding(textScale) } : { width }
                 ]}
-                textBreakStrategy={pills.holdsPills() ? 'simple' : undefined}
+                textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}
               >
                 {children}

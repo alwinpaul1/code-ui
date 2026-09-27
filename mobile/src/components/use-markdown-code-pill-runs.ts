@@ -3,6 +3,7 @@ import { PixelRatio } from 'react-native'
 import { codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
   pillFitRoom,
+  pillFitScale,
   readPillFits,
   type PillFit,
   type PillLayoutLine,
@@ -24,12 +25,18 @@ const UNMEASURED_LINE_ROOM = 280
 /** Settled cuts kept for Texts that scroll away and back (or come back in a
  *  recycled list cell), so they do not settle all over again. */
 const REMEMBERED_TEXTS = 300
+/** What may follow a span with no break before it, so it is cut with the
+ *  span's end: closing punctuation, quotes, a slash, and a hyphen (after
+ *  which a line may break). A letter may break from the span (U+FFFC is
+ *  class CB), so "`foo`-based" glues the hyphen and not "based". */
+const GLUE = /^[.,;:!?)\]}'"’”…/-]*/
 
 type Entry = TextPillFits & {
-  lineWidth: number
   fontScale: number
-  /** The document these were learnt on. A reply streaming in keeps them as
-   *  it grows; another message drawn in the same list cell does not. */
+  /** The message these were learnt on, when the caller names it, and its
+   *  text. A reply streaming in keeps them as it grows; another message
+   *  drawn in the same list cell does not. */
+  identity: string | undefined
   document: string
   /** Each span's pill version, in its key: bumped for a span when it or a
    *  span before it is re-cut, so only pills that move are remounted. */
@@ -45,6 +52,12 @@ const remembered = new Map<string, Entry>()
 /** How many Texts have a settled cut remembered. */
 export function rememberedPillTextCount(): number {
   return remembered.size
+}
+
+/** For tests only: forget every remembered cut, so one test's cuts cannot
+ *  reach the next. */
+export function resetRememberedPillCutsForTests(): void {
+  remembered.clear()
 }
 
 const NO_FITS: ReadonlyMap<number, PillFit> = new Map()
@@ -66,11 +79,22 @@ export type CodePillTextLayout = { nativeEvent: { lines: readonly PillLayoutLine
 export type CodePillRun = {
   table: boolean
   chipScale: MarkdownChipScale | null
+  /** Tells the run the source of an inline stretch it draws, so it knows
+   *  whether a code span may be in it (a backtick) before one closes. */
+  noteSource: (source: string) => void
   /** The pieces of the next span in this Text, in document order, and the
    *  version its pills are keyed by. `after`: the text that follows it. */
   cut: (code: string, after: string) => { pieces: string[]; version: number }
-  /** Whether this Text holds a pill, asked once its children are drawn. */
-  holdsPills: () => boolean
+  /** Whether this Text may hold a pill, asked once its children are drawn:
+   *  it has a backtick. Decided that early so a streaming paragraph does not
+   *  change how it breaks its lines when its first span closes. */
+  mayHoldPills: () => boolean
+  /** The Text's React key, asked once its children are drawn. It carries
+   *  the width when the width has changed since the Text was first measured:
+   *  a Text laid out at a new width is a new Text, which always reports its
+   *  lines, where the same tree at a new width may report nothing to a
+   *  handler that could read it (2026-09-27 review of f8c968a1, probe B1). */
+  keyFor: (base: string | number) => string
   /** For the Text's `onTextLayout`, asked once its children are drawn:
    *  nothing when it holds no pill or its width is not known yet. */
   layoutReader: () => ((event: CodePillTextLayout) => void) | undefined
@@ -86,6 +110,13 @@ export function markdownDocumentKey(text: string): string {
   return `${text.length}:${(hash >>> 0).toString(36)}`
 }
 
+/** Whether the document now drawn is the one an entry was learnt on, or the
+ *  same one grown or edited: the same message by name, or without a name,
+ *  text that starts with the old. */
+function sameMessage(was: { identity: string | undefined; document: string }, identity: string | undefined, document: string): boolean {
+  return identity !== undefined ? was.identity === identity : document.startsWith(was.document)
+}
+
 /**
  * Cuts inline code into pills that fill the line they start on, from what
  * each Text's own layout reports (mobile-markdown-code-pill-fit.ts).
@@ -93,12 +124,18 @@ export function markdownDocumentKey(text: string): string {
 export function useMarkdownCodePillRuns(
   textScale: number,
   document: string,
-  documentKey: string
+  documentKey: string,
+  /** The message the document is, when the caller has a name for it (a chat
+   *  list recycles one cell for many). */
+  identity: string | undefined
 ): (textKey: string, lineWidth: number, table: boolean) => CodePillRun {
+  // Live cuts per Text and width: a width it comes back to keeps its own.
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(() => new Map())
   // What this instance last remembered for each Text, so a streaming reply
   // replaces its own entry instead of adding one per update.
-  const rememberedHere = useRef(new Map<string, { key: string; document: string }>())
+  const rememberedHere = useRef(new Map<string, { key: string; document: string; identity: string | undefined }>())
+  // The width each Text was first measured at; see keyFor.
+  const firstWidths = useRef(new Map<string, number>())
   const chipScale = markdownChipScale(textScale)
   const factor = chipScale?.factor ?? 1
   const fontScale = systemFontScale()
@@ -109,13 +146,14 @@ export function useMarkdownCodePillRuns(
       insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH)
     }
     const measured = lineWidth > 0
+    const liveKey = `${textKey}|${lineWidth}`
     const rememberKey = `${textKey}|${lineWidth}|${textScale}|${fontScale}|${documentKey}`
-    const live = entries.get(textKey)
+    const live = entries.get(liveKey)
     // A reply streaming in keeps its live cuts as it grows. A list cell
     // recycled for another message takes that message's own, if it has
     // settled before, and otherwise starts clean.
     const entry =
-      live?.lineWidth === lineWidth && live.fontScale === fontScale && document.startsWith(live.document)
+      live && live.fontScale === fontScale && sameMessage(live, identity, document)
         ? live
         : measured
           ? remembered.get(rememberKey)
@@ -123,21 +161,26 @@ export function useMarkdownCodePillRuns(
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
     // A table cell is set at BASE - 2 and does not follow the zoom.
     const proseSize = table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE * textScale
-    const current: TextPillFits = { fits: entry?.fits ?? NO_FITS, scale: entry?.scale ?? 1 }
+    const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     const spans: PillSpanDrawn[] = []
+    let backtick = false
     const cutWith = (code: string, firstRoom: number, scale: number, glue: number) =>
       cutCodePills(code, firstRoom, lineRoom, { ...font, scale }, glue)
+    if (measured && !firstWidths.current.has(textKey)) {
+      firstWidths.current.set(textKey, lineWidth)
+    }
 
     const rememberSettled = () => {
       // Per Text and width: the same message at another width keeps its own.
       const slot = `${textKey}|${lineWidth}|${textScale}|${fontScale}`
       const previous = rememberedHere.current.get(slot)
-      if (previous && previous.document !== document && document.startsWith(previous.document)) {
-        // The same reply, grown: its earlier document is never drawn again.
+      if (previous && previous.document !== document && sameMessage(previous, identity, document)) {
+        // The same message, grown or edited: its earlier text is never
+        // drawn again.
         remembered.delete(previous.key)
         rememberedHere.current.delete(slot)
       }
-      if (!entry || (entry.fits.size === 0 && entry.scale === 1)) {
+      if (!entry || entry.fits.size === 0) {
         return
       }
       remembered.delete(rememberKey)
@@ -145,7 +188,7 @@ export function useMarkdownCodePillRuns(
       if (remembered.size > REMEMBERED_TEXTS) {
         remembered.delete(remembered.keys().next().value!)
       }
-      rememberedHere.current.set(slot, { key: rememberKey, document })
+      rememberedHere.current.set(slot, { key: rememberKey, document, identity })
     }
 
     const read = (event: CodePillTextLayout) => {
@@ -172,17 +215,16 @@ export function useMarkdownCodePillRuns(
         }
       }
       setEntries((prev) => {
-        const was = prev.get(textKey)
-        const rounds =
-          was?.document === document && was.lineWidth === lineWidth ? was.rounds + 1 : 1
+        const was = prev.get(liveKey)
+        const rounds = was?.document === document ? was.rounds + 1 : 1
         if (rounds > 2 * spans.length + 4) {
           return prev
         }
         const epoch = Math.max(was?.epoch ?? 0, entry?.epoch ?? 0) + 1
         const updated: Entry = {
           ...result.next,
-          lineWidth,
           fontScale,
+          identity,
           document,
           versions: spans.map((_, ordinal) =>
             ordinal < result.firstChanged ? (entry?.versions[ordinal] ?? 0) : epoch
@@ -191,7 +233,7 @@ export function useMarkdownCodePillRuns(
           rounds
         }
         const map = new Map(prev)
-        map.set(textKey, updated)
+        map.set(liveKey, updated)
         return map
       })
     }
@@ -199,16 +241,23 @@ export function useMarkdownCodePillRuns(
     return {
       table,
       chipScale,
+      noteSource: (source) => {
+        backtick ||= source.includes('`')
+      },
       cut: (code, after) => {
         const ordinal = spans.length
-        const room = pillFitRoom(current.fits.get(ordinal), lineRoom)
-        // The punctuation after it, up to a space: it cannot break away.
-        const glue = codeTextWidth(/^[^\s`\uFFFC]*/.exec(after)![0], proseSize)
-        const { pieces, fresh } = cutWith(code, room, current.scale, glue)
+        const fit = current.fits.get(ordinal)
+        const room = pillFitRoom(fit, lineRoom)
+        const glue = codeTextWidth(GLUE.exec(after)![0], proseSize)
+        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit), glue)
         spans.push({ code, pieces, room, fresh, glue })
         return { pieces, version: entry?.versions[ordinal] ?? 0 }
       },
-      holdsPills: () => spans.length > 0,
+      mayHoldPills: () => backtick || spans.length > 0,
+      keyFor: (base) => {
+        const first = firstWidths.current.get(textKey)
+        return first === undefined || first === lineWidth || !measured ? String(base) : `${base}@${lineWidth}`
+      },
       layoutReader: () => (measured && spans.length > 0 ? read : undefined)
     }
   }
