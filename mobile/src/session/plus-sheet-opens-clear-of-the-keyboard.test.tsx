@@ -51,7 +51,7 @@ vi.mock('react-native', async () => {
       addListener: () => ({ remove: () => {} })
     },
     Pressable: 'Pressable',
-    ScrollView: ({ children, ...props }: { children?: unknown }) => React.createElement('ScrollView', props, children),
+    ScrollView: ({ children, ...props }: { children?: React.ReactNode }) => React.createElement('ScrollView', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
     TextInput: 'TextInput',
@@ -95,6 +95,11 @@ vi.mock('../components/BottomDrawer', async () => {
 type Scheme = 'light' | 'dark'
 type ComposerProps = ComponentProps<typeof MobileNativeChatComposer>
 
+/** The mocked host tags are plain strings React's element types do not list. */
+function isHost(node: { type: unknown }, tag: string): boolean {
+  return node.type === tag
+}
+
 let renderer: ReactTestRenderer | null = null
 
 beforeEach(() => {
@@ -127,12 +132,12 @@ async function mountComposer(scheme: Scheme, props: Partial<ComposerProps>): Pro
 }
 
 function plus(label: string): ReactTestInstance {
-  return renderer!.root.find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === label)
+  return renderer!.root.find((node) => isHost(node, 'Pressable') && node.props.accessibilityLabel === label)
 }
 
 function sheetIsUp(): boolean {
   return renderer!.root
-    .findAll((node) => node.type === 'BottomDrawer')
+    .findAll((node) => isHost(node, 'BottomDrawer'))
     .some((drawer) => drawer.findAll((node) => node.props.accessibilityLabel === 'Photos').length > 0)
 }
 
@@ -165,7 +170,7 @@ describe.each(['light', 'dark'] as const)('the + in %s mode, with the keyboard u
     await act(async () => (plus('Add to chat').props.onPress as () => void)())
 
     expect(sheetIsUp()).toBe(true)
-    expect(renderer!.root.findAll((node) => node.type === 'BottomDrawer')).toHaveLength(1)
+    expect(renderer!.root.findAll((node) => isHost(node, 'BottomDrawer'))).toHaveLength(1)
   })
 
   it('still opens clear of the keyboard when activated without a touch (TalkBack)', async () => {

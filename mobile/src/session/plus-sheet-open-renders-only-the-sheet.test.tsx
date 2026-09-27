@@ -43,7 +43,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Keyboard: { dismiss: () => {}, isVisible: () => false, addListener: () => ({ remove: () => {} }) },
     Pressable: 'Pressable',
-    ScrollView: ({ children, ...props }: { children?: unknown }) => React.createElement('ScrollView', props, children),
+    ScrollView: ({ children, ...props }: { children?: React.ReactNode }) => React.createElement('ScrollView', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
     TextInput: 'TextInput',
@@ -81,6 +81,11 @@ vi.mock('../components/BottomDrawer', async () => {
   }
 })
 
+/** The mocked host tags are plain strings React's element types do not list. */
+function isHost(node: { type: unknown }, tag: string): boolean {
+  return node.type === tag
+}
+
 let renderer: ReactTestRenderer | null = null
 
 beforeEach(() => {
@@ -117,12 +122,12 @@ async function mountComposer(scheme: 'light' | 'dark', onOpenMode = vi.fn()): Pr
 }
 
 function find(label: string): ReactTestInstance {
-  return renderer!.root.find((node) => node.type === 'Pressable' && node.props.accessibilityLabel === label)
+  return renderer!.root.find((node) => isHost(node, 'Pressable') && node.props.accessibilityLabel === label)
 }
 
 function attachSheet(): ReactTestInstance | undefined {
   return renderer!.root
-    .findAll((node) => node.type === 'BottomDrawer')
+    .findAll((node) => isHost(node, 'BottomDrawer'))
     .find((drawer) => drawer.findAll((node) => node.props.accessibilityLabel === 'Photos').length > 0)
 }
 
@@ -189,7 +194,7 @@ describe.each(['light', 'dark'] as const)('the + sheet in %s mode', (scheme) => 
     await act(async () => (find('Permission mode').props.onPress as () => void)())
 
     expect(attachSheet()).toBeUndefined()
-    const drawers = renderer!.root.findAll((node) => node.type === 'BottomDrawer')
+    const drawers = renderer!.root.findAll((node) => isHost(node, 'BottomDrawer'))
     expect(drawers, 'the permission sheet did not open').toHaveLength(1)
   })
 })
