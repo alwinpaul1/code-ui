@@ -13,6 +13,7 @@ import { RightDrawer } from './RightDrawer'
 import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { useThemedStyles } from '../theme/theme-context'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -22,6 +23,9 @@ type Props = {
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
+  // Shared with the PR sidebar itself (theme-sweep, 2026-09-27): mobile-pr-sidebar-styles now
+  // resolves from the live theme, so this dock column follows the same appearance setting.
+  const prSidebarStyles = useThemedStyles(mobilePrSidebarStyles)
   const [contentRowWidth, setContentRowWidth] = useState(0)
   const canDockSidebar = canDockPrSidebar({
     isWideLayout,
@@ -112,7 +116,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
           ) : null}
         </View>
         {showInlineDock ? (
-          <View style={mobilePrSidebarStyles.dockColumn}>
+          <View style={prSidebarStyles.dockColumn}>
             <MobilePRSidebar
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
