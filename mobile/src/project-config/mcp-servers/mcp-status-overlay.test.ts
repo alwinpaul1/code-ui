@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../transport/rpc-client'
-import { MCP_STATUS_COMMAND_TEXT, canShowMcpStatusOverlay, openMcpStatusOverlay } from './mcp-status-overlay'
+import {
+  MCP_STATUS_COMMAND_TEXT,
+  canShowMcpStatusOverlay,
+  openMcpStatusOverlay,
+  openMcpStatusOverlayUnlessDialog
+} from './mcp-status-overlay'
 
 describe('the "Show status in terminal" MCP button', () => {
   it('is the literal /mcp slash command', () => {
@@ -55,6 +60,17 @@ describe('the "Show status in terminal" MCP button', () => {
     const send = vi.fn()
     const client = { getState: () => 'connecting', sendRequest: send } as unknown as RpcClient
     expect(await openMcpStatusOverlay({ client, terminal: 'term-1', deviceToken: null })).toBe(false)
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  // The screen's own tests (mcp-status-under-dialog.test.tsx) cover the look;
+  // this is the branch ahead of it.
+  it('neither looks nor writes over a link that is down, and names no prompt', async () => {
+    const send = vi.fn()
+    const client = { getState: () => 'connecting', sendRequest: send } as unknown as RpcClient
+    await expect(
+      openMcpStatusOverlayUnlessDialog({ client, terminal: 'term-1', deviceToken: null })
+    ).resolves.toEqual({ opened: false, refusal: null })
     expect(send).not.toHaveBeenCalled()
   })
 })

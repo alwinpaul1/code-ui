@@ -1,5 +1,6 @@
 import type { RpcClient } from '../../transport/rpc-client'
 import { buildTerminalSendParams } from '../../terminal/terminal-send-request'
+import { readSendUnderDialogRefusal } from '../../session/mobile-native-chat-dialog-guard'
 import { mcpStatusOverlayWrite } from './mcp-status-overlay-operations'
 
 /**
@@ -31,8 +32,10 @@ export function canShowMcpStatusOverlay(state: {
   return state.agent === 'claude' && state.status === 'done'
 }
 
-/** Types `/mcp` and submits it. True when the host accepted the write. Never
- *  throws: runs from a tap handler with nowhere for a rejection to go. */
+/** Types `/mcp` and submits it, without looking at the screen: the MCP screen
+ *  goes through `openMcpStatusOverlayUnlessDialog` below. True when the host
+ *  accepted the write. Never throws: runs from a tap handler with nowhere for
+ *  a rejection to go. */
 export async function openMcpStatusOverlay(args: {
   client: RpcClient
   terminal: string
@@ -57,4 +60,29 @@ export async function openMcpStatusOverlay(args: {
   } catch {
     return false
   }
+}
+
+/** What the MCP screen says when the host did not take `/mcp`. */
+export const MCP_STATUS_NOT_SENT = "Couldn't type /mcp into the terminal."
+
+/**
+ * `/mcp` from the MCP screen, only with no dialog on the terminal. The
+ * button's idle gate is one read of the hook status, taken when the screen
+ * opened; the status can miss a prompt (a subagent's, 2026-09-27) and the
+ * screen can stay open while one comes up, and `/mcp` and its Enter would
+ * answer it. Looks the way `/fork` does (claude-fork-session.ts) and fails
+ * open the same way: a screen read that fails lets `/mcp` go. `refusal` is
+ * what to say instead. Never throws.
+ */
+export async function openMcpStatusOverlayUnlessDialog(args: {
+  client: RpcClient
+  terminal: string
+  deviceToken: string | null
+}): Promise<{ opened: boolean; refusal: string | null }> {
+  // No look over a link that is down: the write would not go either.
+  if (args.client.getState() !== 'connected') {
+    return { opened: false, refusal: null }
+  }
+  const refusal = await readSendUnderDialogRefusal({ client: args.client, terminal: args.terminal, agent: 'claude' })
+  return refusal ? { opened: false, refusal } : { opened: await openMcpStatusOverlay(args), refusal: null }
 }
