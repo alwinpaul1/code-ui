@@ -291,7 +291,6 @@ describe('useHostClient', () => {
       loadHosts: async () => [HOST],
       openClient: openBackgroundClient as never,
       subscribeNotifications: () => () => {},
-      peekLiveClient: (hostId) => peekLiveHostClient(hostId),
       log: () => {}
     })
     watcher.setEnabled(true)

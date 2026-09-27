@@ -65,7 +65,15 @@ export async function openHostClientEntry(
   }
   const isCurrent = () => state.pendingOpens.isCurrent(hostId, ticket)
   const isWanted = () => allowUnowned || (state.pendingAcquisitions.get(hostId) ?? 0) > 0
-  let parked = reusableParkedHostClient(peekLiveHostClient(hostId))
+  const registered = peekLiveHostClient(hostId)
+  let parked = reusableParkedHostClient(registered)
+  if (registered && !parked && !state.store.has(hostId)) {
+    // A parked socket that died while no screen held it is not closed: its
+    // reconnect loop and relay supervisor keep running. Dialling beside it
+    // and publishing over it left it running for the life of the process.
+    retireLiveHostClient(hostId, registered)
+    registered.close()
+  }
   const failCurrentOpen = (category: HostOpenFailureCategory) => {
     if (!isCurrent()) {
       return
