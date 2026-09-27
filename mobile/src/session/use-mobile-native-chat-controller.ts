@@ -30,10 +30,7 @@ import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-m
 import { nativeChatHudPhase, useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { reportedModelPair } from './mobile-chat-reported-model'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
-import {
-  withTerminalDialogOptions,
-  resolveObservedPermission
-} from './mobile-terminal-permission-options-merge'
+import { resolveObservedPermission, terminalPromptWait, withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useAgentHudBeacon } from './agent-hud-beacon'
@@ -259,7 +256,8 @@ export function useMobileNativeChatController(
 
   // Echo the draft onto the desktop TUI line while typing. Never while a prompt
   // is up: a permission or question card means the TUI is reading keys as
-  // answers, and mirrored prose could pick one.
+  // answers, and mirrored prose could pick one. A dialog no card shows reads
+  // keys the same way, so its on-screen choices close the mirror too.
   const { settleBeforeSend: settleDraftMirrorBeforeSend } = useMobileNativeChatDraftMirror({
     client, getComposerEditGeneration: getChatComposerEditGeneration,
     // Why not `inputSendable`: the lease is about who owns the input floor and
@@ -272,7 +270,7 @@ export function useMobileNativeChatController(
       connState === 'connected' &&
       legacyNativeChatPermission == null &&
       legacyQuestion == null &&
-      nativeChatAskPrompt == null,
+      nativeChatAskPrompt == null && terminalDialogOptions == null,
     handleRef: activeHandleRef,
     deviceTokenRef,
     text: chatComposerText
@@ -551,6 +549,8 @@ export function useMobileNativeChatController(
       ? structuredNativeChat.permission
       : legacyRenderedPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
+    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
+    openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,
     dismissNativeChatAsk,

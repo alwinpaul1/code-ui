@@ -1,0 +1,48 @@
+# Claude Code 2.1.283, Orca desktop, 2026-09-27: a Bash permission prompt raised by a
+# background general-purpose subagent after the auto-mode classifier had blocked three
+# actions in a row. The phone's chat view showed no card for it, and the subagent sat
+# blocked for about eight hours.
+#
+# Transcribed row for row from the user's terminal-mode screenshot of that moment (the
+# phone's own view of the desktop PTY, 99 columns: the dialog's top rule is 924 px at
+# 9.33 px a cell). Not a tmux capture: agent CLIs were off limits for this fix. The
+# columns were measured on the screenshot and agree with 2.1.283's dialog code (strings
+# of the binary, read 2026-09-27):
+#   - the frame (`Pi`) draws a round top border only, then the title row with paddingX 1:
+#     title, a one-cell gap, a dim "· ", then the request source, here
+#     `from the ${agentName} agent` (`X3`);
+#   - the Bash body is a box with paddingX 2 and paddingY 1, so the command sits at
+#     column 3; a command that needs it gets a left `│` gutter (`Gi`, single border,
+#     paddingLeft 1), which puts its text at column 5; the description follows, dim;
+#   - the decision reason (`kS`) sits at the title's column; a multi-line reason gets
+#     the same `│` gutter. The auto-mode classifier's reads "Auto mode classifier
+#     requires confirmation for this command." and, once the denial limit trips,
+#     "N consecutive actions were blocked. Please review the transcript before
+#     continuing." and "Latest blocked action: <action>";
+#   - the second option's label is `Yes, and don\u2019t ask again for: ${rule}`, with a
+#     typographic apostrophe.
+# The rows above the dialog are the end of the lead's last message, as painted.
+=== screen: subagent bash prompt under the classifier's denial limit ===
+  Save to phone is the only piece still out. The phone still isn't showing up. Plug it in and I'll
+  build and install whatever is on main.
+
+  session:ok
+
+───────────────────────────────────────────────────────────────────────────────────────────────────
+ Bash command · from the general-purpose agent
+
+   │ git -C "/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/save-to-phone" log
+   │ --oneline -1
+   Show the branch's latest commit
+
+ │ Auto mode classifier requires confirmation for this command.
+ │ 3 consecutive actions were blocked. Please review the transcript before continuing.
+ │
+ │ Latest blocked action: [Irreversible Local Destruction]
+
+ Do you want to proceed?
+ ❯ 1. Yes
+   2. Yes, and don’t ask again for: git *
+   3. No
+
+ Esc to cancel · Tab to amend

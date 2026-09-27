@@ -122,7 +122,7 @@ export function MobileNativeChatView({
   onAnswerQuestion,
   permission,
   onRespondPermission,
-  onRespondPermissionWithComment,
+  onRespondPermissionWithComment, terminalWait, onOpenTerminal,
   onCancelQueued,
   onRewindToMessage,
   onOpenFile,
@@ -423,7 +423,7 @@ export function MobileNativeChatView({
         ask={ask} askKey={askKey} onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
-        {...{ permission, onRespondPermission, onRespondPermissionWithComment }}
+        {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}
       />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}

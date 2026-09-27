@@ -3,6 +3,8 @@ import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 import { MobileNativeChatPermission } from './MobileNativeChatPermission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MobileNativeChatQuestion } from './MobileNativeChatQuestion'
+import { MobileNativeChatTerminalWait } from './MobileNativeChatTerminalWait'
+import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 import { mobileChatPermissionKey } from './mobile-native-chat-permission'
 import { mobileChatQuestionKey, type MobileChatQuestion } from './mobile-native-chat-question'
 
@@ -19,10 +21,14 @@ export type MobileNativeChatPromptCardProps = {
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   onRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
+  /** The agent waits on a prompt none of the cards above can show. */
+  terminalWait?: NativeChatTerminalWait | null
+  onOpenTerminal?: () => void
 }
 
 /** The pending agent prompt above the composer: a structured AskUserQuestion
- *  wins, then a heuristic permission, then a heuristic question. The controller
+ *  wins, then a heuristic permission, then a heuristic question, and with none
+ *  of them, a notice that the agent waits in the terminal. The controller
  *  owns dismissal (it must survive this subtree unmounting on a view toggle);
  *  `ask` arrives already nulled while dismissed. */
 export function MobileNativeChatPromptCard({
@@ -36,7 +42,9 @@ export function MobileNativeChatPromptCard({
   onAnswerQuestion,
   permission,
   onRespondPermission,
-  onRespondPermissionWithComment
+  onRespondPermissionWithComment,
+  terminalWait,
+  onOpenTerminal
 }: MobileNativeChatPromptCardProps) {
   if (ask) {
     return (
@@ -85,6 +93,9 @@ export function MobileNativeChatPromptCard({
         onCancel={onCancelPrompt}
       />
     )
+  }
+  if (terminalWait) {
+    return <MobileNativeChatTerminalWait wait={terminalWait} onOpenTerminal={onOpenTerminal} />
   }
   return null
 }
