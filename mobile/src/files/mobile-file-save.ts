@@ -148,8 +148,8 @@ const PROBLEM_NOTICE_MS = 4500
  * One save per file at a time, but only while the user can still see the save they asked for. A
  * second tap on the same screen says it is already going rather than reading the file twice. A save
  * whose screen is gone or covered does not hold the file: a save asked for from the screen in front
- * takes over, and the one it replaces stops reading, never opens the picker, and says nothing more.
- * Why: the runner is shared by the preview and every session's tab menu, so a save the user left
+ * takes over, and the one it replaces stops reading and never opens the picker. On a screen that is
+ * only covered it swaps its "Getting…" for one short line saying so, then says nothing more. Why: the runner is shared by the preview and every session's tab menu, so a save the user left
  * would otherwise answer "Already saving" to the one they asked for next, and neither would open.
  */
 export function createSaveToPhoneRunner(
@@ -175,7 +175,16 @@ export function createSaveToPhoneRunner(
     const stopped = new AbortController()
     const stop = () => stopped.abort()
     signal?.addEventListener('abort', stop)
-    self.replaced.signal.addEventListener('abort', stop)
+    self.replaced.signal.addEventListener('abort', () => {
+      stop()
+      // Its screen is covered, not gone, and still shows "Getting…", a line that runs for a
+      // minute: back on that screen the user read a file on its way that another screen had
+      // already saved. One short line instead, which runs out on its own. A screen that is gone
+      // has no toast left to correct.
+      if (!signal?.aborted) {
+        notify(`Saving ${fileName} from another screen instead`, RESULT_NOTICE_MS)
+      }
+    })
     if (signal?.aborted) {
       stop()
     }

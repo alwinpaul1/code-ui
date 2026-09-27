@@ -42,6 +42,22 @@ function readyDesktop(file: Buffer) {
   return desktop.client
 }
 
+/** A screen's toast on a clock the test moves: one line at a time, each until its duration runs
+ *  out, a later line replacing an earlier one (MacHostToast, FloatingToast). */
+function sessionToast() {
+  let now = 0
+  let shown: { message: string; until: number } | null = null
+  return {
+    notify: (message: string, durationMs = 1200) => {
+      shown = { message, until: now + durationMs }
+    },
+    advance: (ms: number) => {
+      now += ms
+    },
+    visible: () => (shown && now < shown.until ? shown.message : null)
+  }
+}
+
 function phone() {
   let next = 0
   return {
@@ -124,10 +140,51 @@ describe('saving a file again after leaving its first save', () => {
     expect(previewToasts.at(-1)).toBe('Saved report.pdf (3.0 MB)')
     expect(fromPreview).toMatchObject({ status: 'saved' })
     expect(await fromTabMenu).toEqual({ status: 'abandoned', fileName: 'report.pdf' })
-    // The replaced save opens no second picker, even with its session back in front, and says
-    // nothing more into the session: not its progress, not "Not saved".
+    // The replaced save opens no second picker, even with its session back in front. Into the
+    // session it says one short line in place of its minute-long "Getting…", and then nothing:
+    // not its progress, not "Not saved".
     expect(target.createDocument).toHaveBeenCalledTimes(1)
-    expect(sessionToasts).toEqual(['Getting report.pdf from the desktop…'])
+    expect(sessionToasts).toEqual([
+      'Getting report.pdf from the desktop…',
+      'Saving report.pdf from another screen instead'
+    ])
+  })
+
+  it('does not leave the covered session saying it is getting a file another screen saved', async () => {
+    const target = phone()
+    const run = createSaveToPhoneRunner(target)
+    const slow = gatedDesktop(PDF)
+    const toast = sessionToast()
+
+    // Save to Phone from the session's tab menu; the file browser then covers the session.
+    let sessionInFront = true
+    const fromTabMenu = run({
+      client: slow.client,
+      source: report,
+      notify: toast.notify,
+      signal: new AbortController().signal,
+      onScreen: () => sessionInFront
+    })
+    sessionInFront = false
+    toast.advance(3000)
+
+    // The same file's preview, over the session: Save, and it is saved.
+    const fromPreview = await run({
+      client: readyDesktop(PDF),
+      source: report,
+      notify: () => {},
+      signal: new AbortController().signal
+    })
+    expect(fromPreview).toMatchObject({ status: 'saved' })
+
+    // Back to the session ten seconds later, and the tab-menu read comes back.
+    toast.advance(10_000)
+    sessionInFront = true
+    slow.release()
+
+    expect(await fromTabMenu).toEqual({ status: 'abandoned', fileName: 'report.pdf' })
+    // Its "Getting…" line ran for a minute, so it still said the file was on its way.
+    expect(toast.visible()).toBeNull()
   })
 
   it('still refuses a second tap while the save that took over is running', async () => {
