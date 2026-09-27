@@ -226,6 +226,19 @@ describe('a message the person typed, remembered as a witness, on the next launc
     expect(sweepWitnessedEchoes([{ id: 'desk-4111', text: sent, ...base }])).toEqual([])
   })
 
+  // Combined review of fix/prompt-leak, 2026-09-27: counting every line end
+  // as CRLF moved the window down two bytes a line, so a person's prompt of
+  // many short lines, 300 bytes under the cut, was swept.
+  it('is restored when it quotes the wrapper\'s line over many short lines, well under the cut', () => {
+    const lines = Array.from({ length: 172 }, (_, index) => `line ${index}`).join('\n')
+    const text = `<agent-message from="a7a46867b4f497c96">\n${lines}`
+    const written = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
+    // 1,652 bytes as the hook would send it, and 1,996 with every line end counted as CRLF.
+    expect(written).toBe(1652)
+    expect(written + 2 * (text.match(/\n/g)?.length ?? 0)).toBe(1996)
+    expect(sweepWitnessedEchoes([{ id: 'desk-4112', text, ...base }]).map((item) => item.id)).toEqual(['desk-4112'])
+  })
+
   it('is restored when it opens by quoting an <agent-message> tag', () => {
     const stored = [{ id: 'desk-4104', text: '<agent-message from="a1b2c3"> keeps showing in my log, why?', ...base }]
     expect(sweepWitnessedEchoes(stored).map((item) => item.id)).toEqual(['desk-4104'])

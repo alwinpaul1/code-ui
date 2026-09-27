@@ -1,3 +1,5 @@
+import { queueBlockLineIndices } from './mobile-terminal-queue-block'
+
 /**
  * Peer messages Claude Code has painted on its own screen.
  *
@@ -91,11 +93,20 @@ const TAIL = /^(.*?)\s*\(ctrl\+o to expand\)\s*$/
 /** A painted message is a preview; past this many rows it is something else. */
 const MAX_ROWS = 12
 
-/** Every peer-message row on screen, in order, one per row. */
-export function peerNoticesFromScreen(screen: readonly string[]): ScreenPeerRow[] {
+/** Every peer-message row on screen, in order, one per row, less those in
+ *  the agent's queue box: a message waiting there is not in the turn yet, and
+ *  read there it was counted again once Claude took it and painted it in the
+ *  turn (queueBlockLineIndices). `draft`: the composer's text, as the queue
+ *  reader takes it. */
+export function peerNoticesFromScreen(screen: readonly string[], draft?: unknown): ScreenPeerRow[] {
   const found: ScreenPeerRow[] = []
+  const queued = queueBlockLineIndices(screen, draft)
   let index = 0
   while (index < screen.length) {
+    if (queued.has(index)) {
+      index += 1
+      continue
+    }
     const head = HEAD.exec(screen[index] ?? '')
     if (!head?.[1]) {
       index += 1

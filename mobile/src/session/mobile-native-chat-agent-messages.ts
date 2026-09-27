@@ -129,6 +129,8 @@ const HOOK_CUT_BYTES = 2000
 /** Short of the cut by a character the byte cut split, or the lone trailing
  *  backslash of an escape it split, which the beacon drops. */
 const HOOK_CUT_SLACK_BYTES = 8
+/** The most a dropped `\r` per line end may add back: 32 line ends. */
+const CRLF_ALLOWANCE_BYTES = 64
 
 /**
  * Whether a stored text is a subagent message the hook cut: the wrapper's
@@ -137,21 +139,27 @@ const HOOK_CUT_SLACK_BYTES = 8
  *
  * Written back, it comes out short when its lines ended in CRLF: the beacon's
  * unescape drops the `\r` of each `\r\n` (unescapeJsonStringBody), two bytes a
- * line (re-review of 2026-09-27). So it is also a cut when it reaches the cut
- * with every line end counted as a CRLF one, and not past it: a text that
- * was cut cannot be longer. It still comes out short by a byte for each `\b`
- * or `\f` escape, which the unescape turns into letters.
+ * line (re-review of 2026-09-27), and nothing left in the text says whether
+ * it had them. So it is also a cut when it reaches the cut with its line ends
+ * counted as CRLF ones, up to CRLF_ALLOWANCE_BYTES of them, and not past the
+ * cut: a text that was cut cannot be longer. Uncapped, a person's prompt of
+ * many short lines 300 bytes under the cut was swept (combined review of
+ * fix/prompt-leak, 2026-09-27). A CRLF request cut after more line ends than
+ * the allowance covers is not swept, and one still comes out a byte short for
+ * each `\b` or `\f` escape, which the unescape turns into letters.
  *
- * That a person's prompt quoting the wrapper's first line stays short of
- * this is an assumption: one within the few bytes under the cut is swept too,
- * an accepted ambiguity.
+ * So a text is taken as cut when, written back, it is within
+ * HOOK_CUT_SLACK_BYTES + CRLF_ALLOWANCE_BYTES (72) bytes under the cut, the
+ * CRLF part only as far as it has line ends. That a person's prompt quoting
+ * the wrapper's first line stays short of this is an assumption: one in that
+ * window is swept too, an accepted ambiguity.
  */
 export function isCutAtHookLength(text: string): boolean {
   if (parseSubagentMessage(text, { cut: true }) === null || parseSubagentMessage(text) !== null) {
     return false
   }
   const sent = new TextEncoder().encode(JSON.stringify(text).slice(1, -1)).length
-  const asCrlf = sent + 2 * (text.match(/\n/g)?.length ?? 0)
+  const asCrlf = sent + Math.min(2 * (text.match(/\n/g)?.length ?? 0), CRLF_ALLOWANCE_BYTES)
   const reaches = (bytes: number) => bytes >= HOOK_CUT_BYTES - HOOK_CUT_SLACK_BYTES
   return reaches(sent) || (reaches(asCrlf) && asCrlf <= HOOK_CUT_BYTES + HOOK_CUT_SLACK_BYTES)
 }

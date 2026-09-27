@@ -11,9 +11,9 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * One plain sentence for a run of tool calls, the way the Claude app puts it:
  * "Ran 3 commands, read a file", "Ran 12 commands (2 failed), read 6 files",
  * "Ran Fix count wording and append cell diff" for a run of one described command,
- * "Ran skill", "Messaged @agent <summary>", "created a file" for a Write the
- * result is certain is new. Requested on 2026-09-12 in place of "20× Bash
- * cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
+ * "Ran skill", "Messaged @agent <summary or message>", "created a file" for
+ * a Write the result is certain is new. Requested on 2026-09-12 in place of
+ * "20× Bash cd … +17 more", extended 2026-09-24 (docs/claude-app-parity.md items 2–3)
  * to the Claude app's own wording for a single described command, a Skill
  * call, a SendMessage, and a whole-file write. Tool names are grouped by what
  * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
@@ -106,16 +106,75 @@ function soleCallLabel(block: NativeChatBlock): string | null {
   return readFileName(block) ?? commandDescription(block)
 }
 
-/** SendMessage's own `to`/`summary` (verified 2026-09-24 against real
- *  `SendMessage` tool_use records in local Claude Code project transcripts). */
-function sendMessageDetail(block: NativeChatBlock): { to: string; summary: string } | null {
+/** Longest SendMessage preview the row is given. The row draws one line and
+ *  ellipsizes it natively; this only keeps a long message out of text
+ *  layout, and is wide enough to fill a tablet row first. */
+export const SEND_MESSAGE_PREVIEW_MAX = 200
+
+function firstText(input: Record<string, unknown> | null, keys: readonly string[]): string | null {
+  for (const key of keys) {
+    const value = input?.[key]
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value
+    }
+  }
+  return null
+}
+
+/** Who a SendMessage went to, as the agent wrote it: a teammate's name or an
+ *  agent id. `to` first, then `recipient`; the 2026-09-26 call carried both
+ *  with the same id, the 2026-09-24 ones `to` alone. Null when neither names
+ *  anyone. */
+function sendMessageRecipient(input: unknown): string | null {
+  return firstText(record(input), ['to', 'recipient'])?.trim() ?? null
+}
+
+/** How the row and the sheet title name a SendMessage's recipient: "@name"
+ *  for a teammate or an agent id, with one @ however the agent wrote it;
+ *  "everyone" for a broadcast (`*`); "another session" for a message to a
+ *  different Claude Code session's inbox (`uds:<socket path>`), whose path
+ *  would fill the row. Null when the call names no one (review of a91c04d1). */
+export function sendMessageAddressee(input: unknown): string | null {
+  const raw = sendMessageRecipient(input)
+  if (!raw) {
+    return null
+  }
+  if (raw === '*') {
+    return 'everyone'
+  }
+  if (/^uds:/i.test(raw)) {
+    return 'another session'
+  }
+  const name = raw.replace(/^@+/, '').trim()
+  return name ? `@${name}` : null
+}
+
+/** SendMessage's recipient plus a one-line preview: its `summary` when it has
+ *  one (the Claude app's row, 2026-09-24, checked against real `SendMessage`
+ *  tool_use records in local Claude Code transcripts), else the `message`
+ *  itself, else `content`. The 2026-09-26 call, seen in the sheet's Inputs
+ *  list and the Claude app's row, had no summary and a `content` already cut
+ *  ("…read of the fra..."), so the full `message` comes first. */
+function sendMessageDetail(block: NativeChatBlock): { to: string; preview: string | null } | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'message') {
     return null
   }
-  const input = record(block.input)
-  const to = input?.to
-  const summary = input?.summary
-  return typeof to === 'string' && typeof summary === 'string' ? { to, summary } : null
+  const to = sendMessageAddressee(block.input)
+  if (!to) {
+    return null
+  }
+  const text = firstText(record(block.input), ['summary', 'message', 'content'])
+  if (!text) {
+    return { to, preview: null }
+  }
+  // Counted and cut in code points, so the cut never splits an emoji's
+  // surrogate pair into a stray half.
+  const line = Array.from(text.replace(/\s+/g, ' ').trim())
+  const preview =
+    line.length > SEND_MESSAGE_PREVIEW_MAX
+      ? `${line.slice(0, SEND_MESSAGE_PREVIEW_MAX).join('')}…`
+      : line.join('')
+  return { to, preview }
 }
 
 /** True only when a single edit-shaped call's own result is certain the file
@@ -138,14 +197,14 @@ type Group = {
    *  it is still the only call of this kind in the run. */
   label: string | null
   /** The lone call and its result, kept only long enough to ask whether it
-   *  created a file or to read a SendMessage's `to`/`summary` — cleared the
+   *  created a file or to read a SendMessage's recipient and text — cleared the
    *  moment a second call of the same kind arrives, since neither question
    *  has one answer for a group. */
   soleCall: NativeChatToolCallBlock | null
   soleResult: NativeChatToolResultBlock | null
 }
 
-export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
+function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const groups: Group[] = []
   const indexByKind = new Map<Kind, number>()
   const pending: number[] = []
@@ -184,13 +243,90 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
       }
     }
   }
-  const parts: string[] = []
+  return groups
+}
+
+/** How many failed calls `toolRunSentence` states, its "(N failed)" summed
+ *  over every group. */
+export function toolRunSentenceFailures(blocks: readonly NativeChatBlock[]): number {
+  return buildSentence(blocks).failed
+}
+
+/** How far into a run's one-line sentence a "(N failed)" is taken to be seen.
+ *  The Claude app's own row, "Ran 2 commands (1 failed), created a file",
+ *  ends its count at 25; "Ran 12 commands (2 failed)" at 26. 28 characters
+ *  of the row's 13 dp type is about 200 dp, which a phone row keeps beside a
+ *  "+A −R" pill and the chevron. Anything later can sit behind the ellipsis:
+ *  a SendMessage's preview or a command's description comes before its count
+ *  (review of c714c9bc: counts at 230 and 69). */
+export const SENTENCE_FAILURE_VISIBLE_CHARS = 28
+
+/** Whether the run's sentence says every failure where the row surely shows
+ *  it: it states at least `failedCallCount` failures, and its last
+ *  "(N failed)" ends within SENTENCE_FAILURE_VISIBLE_CHARS. When not, the run
+ *  header draws its own "N failed" label, or a failed run would read as a
+ *  clean one. The sentence counts error results; a call known to have failed
+ *  only from its own `failed` state is in `failedCallCount` and not in the
+ *  sentence, so a mixed run is not taken as said (review of c714c9bc). */
+export function toolRunSentenceShowsFailures(
+  blocks: readonly NativeChatBlock[],
+  failedCallCount: number
+): boolean {
+  const { failed, lastFailureEnd } = buildSentence(blocks)
+  return failed > 0 && failed >= failedCallCount && lastFailureEnd <= SENTENCE_FAILURE_VISIBLE_CHARS
+}
+
+export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
+  return buildSentence(blocks).text
+}
+
+/** One stretch of the sentence. `recipient` marks a SendMessage's addressee,
+ *  which the row draws in its own tone so a spaced name ("@team lead") shows
+ *  where it ends and the preview begins (review of a91c04d1). */
+export type ToolRunSentenceSpan = { text: string; recipient?: true }
+
+/** The sentence as spans, in order; their texts join to `toolRunSentence`. */
+export function toolRunSentenceSpans(blocks: readonly NativeChatBlock[]): ToolRunSentenceSpan[] {
+  return buildSentence(blocks).spans
+}
+
+function buildSentence(blocks: readonly NativeChatBlock[]): {
+  text: string
+  spans: ToolRunSentenceSpan[]
+  /** Failures the sentence states, summed over its groups. */
+  failed: number
+  /** Where the last "(N failed)" ends in `text`; 0 when there is none. */
+  lastFailureEnd: number
+} {
+  const groups = runGroups(blocks)
+  const spans: ToolRunSentenceSpan[] = []
+  let failedTotal = 0
+  let lastFailureEnd = 0
+  let offset = 0
+  const push = (part: ToolRunSentenceSpan[], failed: number): void => {
+    if (spans.length > 0) {
+      spans.push({ text: ', ' })
+      offset += 2
+    }
+    for (const span of part) {
+      spans.push(span)
+      offset += span.text.length
+    }
+    if (failed > 0) {
+      failedTotal += failed
+      lastFailureEnd = offset
+    }
+  }
   for (const entry of groups) {
     const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''
     if (entry.kind === 'message' && entry.total === 1 && entry.soleCall) {
       const detail = sendMessageDetail(entry.soleCall)
       if (detail) {
-        parts.push(`messaged @${detail.to} ${detail.summary}${failed}`)
+        const preview = detail.preview ? ` ${detail.preview}` : ''
+        push(
+          [{ text: 'messaged ' }, { text: detail.to, recipient: true }, { text: `${preview}${failed}` }],
+          entry.failed
+        )
         continue
       }
     }
@@ -200,7 +336,7 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
       entry.soleCall &&
       soleCallCreatedFile(entry.soleCall, entry.soleResult)
     ) {
-      parts.push(`created a file${failed}`)
+      push([{ text: `created a file${failed}` }], entry.failed)
       continue
     }
     const noun = NOUN[entry.kind]
@@ -209,11 +345,27 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
     // ran a command", 2026-09-26), described or not.
     const label = entry.kind === 'command' && groups.length > 1 ? null : entry.label
     const amount = entry.total === 1 ? (label ?? noun.one) : `${entry.total} ${noun.many}`
-    parts.push(`${noun.verb} ${amount}${failed}`)
+    push([{ text: `${noun.verb} ${amount}${failed}` }], entry.failed)
   }
-  if (parts.length === 0) {
-    return ''
+  if (spans.length === 0) {
+    return { text: '', spans: [], failed: 0, lastFailureEnd: 0 }
   }
-  const sentence = parts.join(', ')
-  return sentence.charAt(0).toUpperCase() + sentence.slice(1)
+  const first = spans[0]!
+  spans[0] = { ...first, text: first.text.charAt(0).toUpperCase() + first.text.slice(1) }
+  // Neighbouring plain stretches are one: a row with no recipient is one string.
+  const merged: ToolRunSentenceSpan[] = []
+  for (const span of spans) {
+    const last = merged.at(-1)
+    if (last && !last.recipient && !span.recipient) {
+      merged[merged.length - 1] = { text: last.text + span.text }
+    } else if (span.text !== '') {
+      merged.push(span)
+    }
+  }
+  return {
+    text: merged.map((span) => span.text).join(''),
+    spans: merged,
+    failed: failedTotal,
+    lastFailureEnd
+  }
 }

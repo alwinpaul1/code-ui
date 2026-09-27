@@ -120,9 +120,11 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
                   <Text style={styles.copyCommandText}>{copyLabel}</Text>
                 </Pressable>
               </View>
-              <Text selectable style={styles.commandText}>
-                {conflict.mergeabilityRefreshCommands}
-              </Text>
+              {/* Not selectable: in RightDrawer a scroll that starts on it left
+                  the TextView's long-press armed and selected a word
+                  mid-scroll, and no gesture on the text can be cancelled by
+                  that drawer's scroll. The Copy button above copies it. */}
+              <Text style={styles.commandText}>{conflict.mergeabilityRefreshCommands}</Text>
             </View>
           ) : null}
         </View>

@@ -160,7 +160,7 @@ export function useMobileTerminalHudObservation(args: {
         )
         const photos = agent === 'claude' || agent === 'openclaude' ? sentPhotosFromScreen(lines) : []
         setSentPhotos((current) => (JSON.stringify(current) === JSON.stringify(photos) ? current : photos))
-        const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines) : []
+        const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines, terminal.terminal?.draft) : []
         setPeerNotices((current) => (JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
         setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
