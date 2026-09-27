@@ -66,6 +66,7 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors } from '../theme/tokens'
 import type { RpcResponse } from '../transport/types'
+import { loadMobileDiffReviewSnapshot } from './mobile-diff-review-loaders'
 import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
 import { reviewDescriptorFromItem, type ReviewScreenState } from './mobile-diff-review-screen-model'
 import { markMobileDiffReviewFileReviewed } from './mobile-diff-review-state'
@@ -219,12 +220,18 @@ function flat(style: unknown): Record<string, unknown> {
   return Object.assign({}, ...entries)
 }
 
+/** How many times the review has loaded its snapshot, the first load included. */
+function loads(): number {
+  return vi.mocked(loadMobileDiffReviewSnapshot).mock.calls.length
+}
+
 function logged(tag: string): string[] {
   return warn.mock.calls.map((args) => args.map(String).join(' ')).filter((line) => line.startsWith(tag))
 }
 
 beforeEach(() => {
   review.snapshot = reviewedSnapshot(['src/a.ts'])
+  vi.mocked(loadMobileDiffReviewSnapshot).mockClear()
   openedSession = 0
   unhandled = []
   process.on('unhandledRejection', onUnhandled)
@@ -249,9 +256,13 @@ describe('Stage Reviewed Files when the send is lost', () => {
   it('says why the reviewed files were not staged, and frees the buttons', async () => {
     const tab = host({ 'git.stage': lost })
     const rendered = await render(tab)
+    const before = loads()
     await reviewAction(rendered, 'Stage Reviewed Files')
     expect(tab.calls('git.stage')).toHaveLength(1)
     expect(banner(rendered, 'Connection closed')).not.toBeNull()
+    // A lost send is delivery-unknown: the file may have staged, so the
+    // review reloads to show what the desktop now has.
+    expect(loads()).toBe(before + 1)
     expect(controller!.busyAction).toBeNull()
     expect(pressable(rendered, labelled('Stage file')).props.disabled).toBe(false)
     expect(logged('[review-git]')).toEqual([expect.stringContaining('Connection closed')])
@@ -273,10 +284,29 @@ describe('Stage Reviewed Files when the send is lost', () => {
     let sent = 0
     const tab = host({ 'git.stage': () => (++sent === 1 ? ok({ staged: true }) : lost()) })
     const rendered = await render(tab)
+    const before = loads()
     await reviewAction(rendered, 'Stage Reviewed Files')
     expect(tab.calls('git.stage')).toHaveLength(2)
     expect(banner(rendered, '1 staged, then: Connection closed')).not.toBeNull()
+    expect(loads()).toBe(before + 1)
     expect(controller!.busyAction).toBeNull()
+  })
+
+  // Refusals are counted as the loop goes; a loss after some must not drop
+  // them from what the banner says.
+  it('says how many staged and how many were refused before the send was lost', async () => {
+    review.snapshot = reviewedSnapshot(['src/a.ts', 'src/b.ts', 'src/c.ts'])
+    let sent = 0
+    const tab = host({
+      'git.stage': () => {
+        sent += 1
+        return sent === 1 ? ok({ staged: true }) : sent === 2 ? refused('index.lock exists') : lost()
+      }
+    })
+    const rendered = await render(tab)
+    await reviewAction(rendered, 'Stage Reviewed Files')
+    expect(tab.calls('git.stage')).toHaveLength(3)
+    expect(banner(rendered, '1 staged, 1 refused, then: Connection closed')).not.toBeNull()
   })
 
   it.each([
@@ -287,6 +317,20 @@ describe('Stage Reviewed Files when the send is lost', () => {
     const rendered = await render(tab, scheme)
     await reviewAction(rendered, 'Stage Reviewed Files')
     expect(banner(rendered, 'Connection closed')).toEqual({ textColor: colors.text, border: colors.warning })
+  })
+})
+
+// The success path set its count and then reloaded, and a reload clears the
+// banner: "1 reviewed file staged" was gone before anyone could read it.
+describe('Stage Reviewed Files when every send goes', () => {
+  it('says how many files it staged, after the reload', async () => {
+    const tab = host({ 'git.stage': () => ok({ staged: true }) })
+    const rendered = await render(tab)
+    const before = loads()
+    await reviewAction(rendered, 'Stage Reviewed Files')
+    expect(loads()).toBe(before + 1)
+    expect(banner(rendered, '1 reviewed file staged')).not.toBeNull()
+    expect(controller!.busyAction).toBeNull()
   })
 })
 
@@ -371,5 +415,56 @@ describe('a review save that fails', () => {
       expect(controller!.composer).not.toBeNull()
     }
     expect(unhandled).toEqual([])
+  })
+})
+
+// What a save that goes still does, now that a failed one stops the action
+// instead of rejecting out of it.
+describe('a review save that goes', () => {
+  const unreviewed = (paths: string[]) => ({
+    ...reviewedSnapshot(paths),
+    reviewState: { version: 1, files: {} }
+  })
+
+  it('moves Mark Reviewed on to the next unreviewed file', async () => {
+    review.snapshot = unreviewed(['src/a.ts', 'src/b.ts'])
+    const tab = host({ 'worktree.set': () => ok({ ok: true }) })
+    const rendered = await render(tab)
+    expect(controller!.currentIndex).toBe(0)
+    await press(rendered, labelled('Mark file reviewed'))
+    expect(tab.calls('worktree.set')).toHaveLength(1)
+    expect(controller!.currentIndex).toBe(1)
+    expect(controller!.showCompletion).toBe(false)
+  })
+
+  it('shows the review complete once Mark Reviewed marks the last file', async () => {
+    review.snapshot = unreviewed(['src/a.ts'])
+    const tab = host({ 'worktree.set': () => ok({ ok: true }) })
+    const rendered = await render(tab)
+    await press(rendered, labelled('Mark file reviewed'))
+    expect(controller!.showCompletion).toBe(true)
+  })
+
+  it.each([
+    [
+      'Save',
+      () => {
+        controller!.openComposer(4)
+        controller!.setComposerBody('rename this')
+      },
+      () => controller!.saveComposer()
+    ],
+    ['Delete', () => controller!.openEditComposer(NOTE), () => controller!.deleteComment()]
+  ] as const)("closes a note's composer once its %s is saved", async (_name, prepare, run) => {
+    const tab = host({ 'worktree.set': () => ok({ ok: true }) })
+    await render(tab)
+    act(() => prepare())
+    expect(controller!.composer).not.toBeNull()
+    await act(async () => {
+      await run()
+      await settle()
+    })
+    expect(tab.calls('worktree.set')).toHaveLength(1)
+    expect(controller!.composer).toBeNull()
   })
 })

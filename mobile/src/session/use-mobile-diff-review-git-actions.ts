@@ -96,23 +96,29 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
       setBusyAction(null)
     }
     if (lost) {
-      console.warn(`[review-git] stage reviewed files stopped after ${staged} of ${files.length}: ${lost.why}`)
+      console.warn(
+        `[review-git] stage reviewed files stopped after ${staged + failed} of ${files.length} (${staged} staged, ${failed} refused): ${lost.why}`
+      )
       triggerError()
-      // Reloaded first: a reload clears the banner, and the files staged
-      // before the loss should show as staged.
-      if (staged > 0) {
-        await loadReviewData()
-      }
-      setActionError(staged > 0 ? `${staged} staged, then: ${lost.why}` : lost.why)
+    } else {
+      triggerSuccess()
+    }
+    // After any loss too: a lost send is delivery-unknown, and may have
+    // staged. The reload clears the banner, so the banner is set after it;
+    // the success count used to be set first and wiped as it was drawn.
+    await loadReviewData()
+    if (lost) {
+      const counted = [staged > 0 ? `${staged} staged` : null, failed > 0 ? `${failed} refused` : null].filter(
+        (part) => part !== null
+      )
+      setActionError(counted.length > 0 ? `${counted.join(', ')}, then: ${lost.why}` : lost.why)
       return
     }
-    triggerSuccess()
     setActionError(
       failed > 0
         ? `${staged} staged, ${failed} failed`
         : `${mobileReviewCountLabel(staged, 'reviewed file', 'reviewed files')} staged`
     )
-    await loadReviewData()
   }, [client, connState, loadReviewData, queue, setActionError, setBusyAction, worktreeId])
 
   return { runGitMutation, stageReviewedFiles }
