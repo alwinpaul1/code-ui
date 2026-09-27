@@ -98,7 +98,8 @@ describe('the line a pause leaves in the connection log', () => {
   it('names how long nothing ran, since when, and what the app found on waking', () => {
     const entry = appPauseLogEntry(
       { from, to: from + 3 * 60 * 60_000 + 32_000 },
-      { serviceRunning: true, unrestricted: false }
+      { serviceRunning: true, unrestricted: false },
+      null
     )
     expect(entry).toMatchObject({ level: 'warn', code: 'app-paused', message: 'Android paused the app' })
     expect(entry.detail).toBe(
@@ -107,12 +108,46 @@ describe('the line a pause leaves in the connection log', () => {
     )
   })
 
-  it('reads a pause under an hour in minutes, and a stopped service as not running', () => {
+  it('reads a pause under an hour in minutes', () => {
     const entry = appPauseLogEntry(
       { from, to: from + 12 * 60_000 },
-      { serviceRunning: false, unrestricted: true }
+      { serviceRunning: false, unrestricted: true },
+      null
     )
     expect(entry.detail).toContain('Nothing ran for 12m ')
-    expect(entry.detail).toContain('background service not running, battery unrestricted')
+  })
+
+  // The Pixel's night (2026-09-27): eleven hourly lines of "background service
+  // not running" and not one said when it stopped or why.
+  it('names when the background service stopped and why, when it recorded that', () => {
+    const stoppedAt = new Date(2026, 8, 27, 12, 53).getTime()
+    const entry = appPauseLogEntry(
+      { from, to: from + 60 * 60_000 },
+      { serviceRunning: false, unrestricted: true },
+      { at: stoppedAt, cause: 'its task ended' }
+    )
+    expect(entry.detail).toContain(
+      'On waking: background service not running (stopped at 12:53: its task ended), battery unrestricted'
+    )
+  })
+
+  it('says the stop reason is unknown when nothing was recorded', () => {
+    const entry = appPauseLogEntry(
+      { from, to: from + 60 * 60_000 },
+      { serviceRunning: false, unrestricted: true },
+      null
+    )
+    expect(entry.detail).toContain(
+      'On waking: background service not running (stop reason unknown), battery unrestricted'
+    )
+  })
+
+  it('pads a stop just after midnight to the same width', () => {
+    const entry = appPauseLogEntry(
+      { from, to: from + 60 * 60_000 },
+      { serviceRunning: false, unrestricted: false },
+      { at: new Date(2026, 8, 27, 0, 7).getTime(), cause: 'Android stopped it' }
+    )
+    expect(entry.detail).toContain('(stopped at 00:07: Android stopped it), battery optimised')
   })
 })

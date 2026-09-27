@@ -1,5 +1,6 @@
 import { peekLiveHostClient } from '../transport/live-host-clients'
 import { AppState, Platform } from 'react-native'
+import { requireOptionalNativeModule } from 'expo'
 import {
   isBackgroundLinkRunning,
   isBackgroundLinkSupported,
@@ -26,7 +27,7 @@ import { openHostLogicalClient } from '../transport/host-logical-client'
 import { loadHosts } from '../transport/host-store'
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
 import type { RpcClient } from '../transport/rpc-client'
-import type { HostProfile } from '../transport/types'
+import type { ConnectionLogEntry, HostProfile } from '../transport/types'
 import { loadBackgroundDeliveryEnabled } from './background-link-preference'
 import { forwardBackgroundClientRevival } from './background-client-revival'
 import {
@@ -34,8 +35,14 @@ import {
   type BackgroundNotificationWatcher
 } from './background-notification-watcher'
 import { releaseBackgroundLinkTask } from './background-link-task-hold'
-import { AppPauseDetector, appPauseLogEntry } from './app-pause-detector'
+import { AppPauseDetector } from './app-pause-detector'
+import { handleAppPause } from './app-pause-handler'
 import { promptAfterPause } from './background-power-after-pause'
+import {
+  describeBackgroundServiceStop,
+  type BackgroundServiceStop,
+  type BackgroundServiceStopRecord
+} from './background-service-stop'
 import { defaultCancelTimer, defaultScheduleTimer } from '../transport/timer-scheduler'
 
 const SERVICE_TITLE = 'Code UI'
@@ -50,25 +57,36 @@ const pauseDetector = new AppPauseDetector({
   setTimer: defaultScheduleTimer,
   clearTimer: defaultCancelTimer,
   onPause: (pause) => {
-    const background = backgroundDeliveryState()
-    const entry = appPauseLogEntry(pause, background)
     // Say so now, while the cost is concrete; shown when the screen is up.
-    if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: background.unrestricted })) {
+    if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: isBackgroundDeliveryUnrestricted() })) {
       openBackgroundPowerPrompt('paused', pause.to - pause.from)
     }
-    log(entry.message, entry.detail)
-    void loadHosts()
-      .then((hosts) => {
-        for (const host of hosts) {
-          connectionLogStore.append(host.id, entry)
-        }
-      })
-      .catch(() => undefined)
+    void handleAppPause(pause, {
+      now: Date.now,
+      appInForeground: () => AppState.currentState === 'active',
+      backgroundState: backgroundDeliveryState,
+      lastServiceStop: readBackgroundServiceStop,
+      loadDeliveryOn: loadBackgroundDeliveryOn,
+      startService: () => applyBackgroundDelivery(true),
+      record: recordOnEveryHost
+    }).catch(() => undefined)
   }
 })
 
 function log(message: string, detail = ''): void {
   console.log(`[background-link] ${message}`, detail)
+}
+
+/** A line that is not about one host's connection, so every host's log gets it. */
+function recordOnEveryHost(entry: ConnectionLogEntry): void {
+  log(entry.message, entry.detail)
+  void loadHosts()
+    .then((hosts) => {
+      for (const host of hosts) {
+        connectionLogStore.append(host.id, entry)
+      }
+    })
+    .catch(() => undefined)
 }
 
 function openBackgroundClient(host: HostProfile): RpcClient {
@@ -129,6 +147,28 @@ export function backgroundDeliveryState(): { serviceRunning: boolean; unrestrict
   }
 }
 
+// Why the module is looked up here instead of through @codeui/expo-background-link:
+// the copy of that package the app compiles against is a pnpm snapshot under
+// node_modules, refreshed only by `pnpm install`, and a build made from a stale
+// snapshot has no `lastStop`. Checked for, it costs that build its stop reason
+// ("stop reason unknown") instead of throwing inside the pause handler.
+type NativeServiceStopReader = { lastStop?: () => BackgroundServiceStopRecord }
+const nativeStopReader: NativeServiceStopReader | null =
+  Platform.OS === 'android' ? requireOptionalNativeModule<NativeServiceStopReader>('BackgroundLink') : null
+
+/** When and why the background service last stopped, if it said. */
+export function readBackgroundServiceStop(): BackgroundServiceStop | null {
+  try {
+    // Called on the module, not detached from it: a native function may need its receiver.
+    return typeof nativeStopReader?.lastStop === 'function'
+      ? describeBackgroundServiceStop(nativeStopReader.lastStop())
+      : null
+  } catch {
+    // Unreadable preferences cost the line its stop reason, nothing more.
+    return null
+  }
+}
+
 export function isBackgroundDeliveryAvailable(): boolean {
   return Platform.OS === 'android' && isBackgroundLinkSupported
 }
@@ -152,9 +192,12 @@ export function requestBackgroundDeliveryUnrestricted(): boolean {
 
 /**
  * Apply the user's choice: run (or stop) the foreground service and the
- * watcher behind it. Must be called from the foreground — Android refuses to
- * start a foreground service from the background — which is why it runs on
- * launch and on the toggle, never from a background transition.
+ * watcher behind it. Call it from the foreground — Android 12+ refuses to
+ * start a foreground service from the background, by throwing — which is why
+ * it runs on launch and on the toggle, never from a background transition.
+ * The one deliberate exception is the pause handler (app-pause-handler.ts): an
+ * app exempt from battery optimisation IS allowed a background start, so it
+ * tries, and logs the refusal when there is one.
  *
  * "On launch" was this comment's claim long before it was true: the toggle was
  * the ONLY caller, so a killed service stayed dead until somebody found
@@ -177,13 +220,18 @@ export function applyBackgroundDelivery(enabled: boolean): void {
 
 /** Re-derive the running state from stored preferences (launch, headless start). */
 export async function syncBackgroundLinkFromPreferences(): Promise<boolean> {
+  const on = await loadBackgroundDeliveryOn()
+  applyBackgroundDelivery(on)
+  return on
+}
+
+/** Whether the user wants the service running: background delivery and notifications both on. */
+export async function loadBackgroundDeliveryOn(): Promise<boolean> {
   const [delivery, push] = await Promise.all([
     loadBackgroundDeliveryEnabled(),
     loadPushNotificationsEnabled()
   ])
-  const on = delivery && push
-  applyBackgroundDelivery(on)
-  return on
+  return delivery && push
 }
 
 /**

@@ -42,9 +42,12 @@ notifications alone.
      unlike `dataSync`. Android 14+ requires the matching
      `FOREGROUND_SERVICE_REMOTE_MESSAGING` permission, declared in the
      module manifest.
-   - The service is only ever started from the foreground (launch, or the
-     toggle). Android 12+ refuses foreground-service starts from the
-     background.
+   - The service is started from the foreground (launch, a return to the
+     foreground, or the toggle), because Android 12+ refuses
+     foreground-service starts from the background. Two exceptions: the
+     boot receiver, and the pause handler (2026-09-27, below), which both
+     try anyway and swallow or log the refusal. An app with the
+     battery-optimisation exemption is allowed the start.
 2. **`src/background/background-notification-watcher.ts`**, a module-level
    singleton that owns the host connections while the UI is not on screen
    (`enabled && !uiVisible`). It opens one client per paired host with
@@ -112,3 +115,48 @@ To verify: switch the row off/on, grant the dialog, check
 30+ minutes with an agent running and confirm the notification arrives before
 the screen is touched. Samsung "Sleeping apps" is a separate list; the
 exemption normally keeps the app out of it, but check there if it recurs.
+
+## 2026-09-27: the service died seconds after every open
+
+Reported from a Pixel on 0.9.54 (battery unrestricted): every hour overnight
+the connection log said "Android paused the app — Nothing ran for 1h 0m … On
+waking: background service not running".
+
+**Cause.** The hourly wake was the WorkManager update check
+(`background-update-check.ts`). expo-task-manager runs a headless JS task for
+each run of it, and React Native's `HeadlessJsTaskContext.finishTask` reports
+every finished task to every listener. `BackgroundLinkService` cleared its
+`taskStarted` flag for any finished task, so the next open (`heal()`) started a
+second `CodeUIBackgroundLink` task. The second park released the first, the
+first task's `finally` then released whatever was parked (the second), both
+tasks ended, and the service stopped itself with nothing left running. From
+then until the next open, only the hourly check woke the app.
+
+**Fix.**
+- The service starts its own task and keeps the id `startTask` returns, and
+  ignores every other task's finish. It no longer calls the base class's
+  finish handler, whose task set is now empty and would stop the service on
+  any id.
+- Each park hands back its own release, and the task's `finally` ends only its
+  own park.
+- The service writes when and why it stopped (SharedPreferences, from
+  `onDestroy`; the swipe time from `onTaskRemoved`), and `lastStop()` adds the
+  last `ApplicationExitInfo` (Android 11+) for a process killed without
+  `onDestroy`. The pause line now reads "not running (stopped at 12:53: its task
+  ended)" or "(stop reason unknown)".
+- When a pause is noticed with the app in the background, delivery on and the
+  service dead, `app-pause-handler.ts` starts it and logs "Restarted the
+  background service", or "Could not restart the background service" with
+  Android's refusal.
+
+**Known limit.** The restart only happens in a process that lived through the
+pause. A process that was killed and then started fresh by WorkManager has no
+pause to notice, so nothing restarts the service there until the app is
+opened, unless Android restarts it itself (`START_REDELIVER_INTENT`).
+
+**Local builds.** Gradle compiles the pnpm copy of this package under
+`mobile/node_modules/.pnpm`, not `mobile/packages/`, and on 2026-09-27 the two
+were no longer hardlinked. Run `pnpm install --offline` in `mobile/` after
+pulling a Kotlin change, and `cmp` the two copies of `BackgroundLinkService.kt`
+before building. A build without the Kotlin half still looks fixed on a quick
+check, because the JS half alone stops the two tasks ending each other.

@@ -1,5 +1,6 @@
 import type { ScheduleTimer } from '../transport/timer-scheduler'
 import type { ConnectionLogEntry } from '../transport/types'
+import type { BackgroundServiceStop } from './background-service-stop'
 
 /** How often the detector ticks. Cheap: one timer, no I/O. */
 export const APP_PAUSE_TICK_MS = 60_000
@@ -70,10 +71,15 @@ export class AppPauseDetector {
  * merely in the background with nothing keeping it awake; with it running and
  * the battery optimised, Android paused a foreground service anyway. Both are
  * read when the app wakes, not during the pause, and the line says so.
+ *
+ * A service that is not running also says when it stopped and why, or that
+ * nobody knows. "Not running" alone was logged on every hourly wake of a
+ * Pixel's night (2026-09-27), and none of those lines pointed at the cause.
  */
 export function appPauseLogEntry(
   pause: { from: number; to: number },
-  background: { serviceRunning: boolean; unrestricted: boolean }
+  background: { serviceRunning: boolean; unrestricted: boolean },
+  stop: BackgroundServiceStop | null
 ): ConnectionLogEntry {
   return {
     id: `app-paused-${pause.to}`,
@@ -83,9 +89,22 @@ export function appPauseLogEntry(
     message: 'Android paused the app',
     detail:
       `Nothing ran for ${formatPause(pause.to - pause.from)} (since ${new Date(pause.from).toISOString()}): ` +
-      `no reconnects, no notifications. On waking: background service ${background.serviceRunning ? 'running' : 'not running'}, ` +
+      `no reconnects, no notifications. On waking: background service ${serviceState(background.serviceRunning, stop)}, ` +
       `battery ${background.unrestricted ? 'unrestricted' : 'optimised'}`
   }
+}
+
+function serviceState(running: boolean, stop: BackgroundServiceStop | null): string {
+  if (running) {
+    return 'running'
+  }
+  return stop ? `not running (stopped at ${clockTime(stop.at)}: ${stop.cause})` : 'not running (stop reason unknown)'
+}
+
+/** "12:53", on the phone's own clock, the way the log shows its entries. */
+function clockTime(ms: number): string {
+  const date = new Date(ms)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
 function formatPause(ms: number): string {

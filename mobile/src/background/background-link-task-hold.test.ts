@@ -15,7 +15,7 @@ describe('the wake lock the background task holds', () => {
     // off, and its config carries no timeout, so without a way to end it the
     // lock outlives the work.
     let ended = false
-    const parked = parkBackgroundLinkTask().then(() => {
+    const parked = parkBackgroundLinkTask().parked.then(() => {
       ended = true
     })
     expect(isBackgroundLinkTaskParked()).toBe(true)
@@ -38,10 +38,31 @@ describe('the wake lock the background task holds', () => {
     const second = parkBackgroundLinkTask()
 
     // The first must already be settled; only the newest task may hold the lock.
-    await expect(first).resolves.toBeUndefined()
+    await expect(first.parked).resolves.toBeUndefined()
 
     releaseBackgroundLinkTask()
-    await expect(second).resolves.toBeUndefined()
+    await expect(second.parked).resolves.toBeUndefined()
+    expect(isBackgroundLinkTaskParked()).toBe(false)
+  })
+
+  // What the headless task's own cleanup calls. Releasing the park that was
+  // already replaced must not reach the one that replaced it (2026-09-27: it
+  // did, and the service stopped seconds after every open).
+  it('lets a replaced park clean up without ending the park that replaced it', async () => {
+    const first = parkBackgroundLinkTask()
+    const second = parkBackgroundLinkTask()
+    let secondEnded = false
+    void second.parked.then(() => {
+      secondEnded = true
+    })
+
+    first.release()
+    await Promise.resolve()
+
+    expect(secondEnded).toBe(false)
+    expect(isBackgroundLinkTaskParked()).toBe(true)
+    second.release()
+    await second.parked
     expect(isBackgroundLinkTaskParked()).toBe(false)
   })
 })
