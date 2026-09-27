@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { Check, Copy, FileWarning, Sparkles } from 'lucide-react-native'
 import { useClipboardWriter } from '../../platform/clipboard'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import { PRSection } from './PRSection'
 import { resolveConflictDisplay } from './pr-conflict-presentation'
-import { prConflictStyles as styles } from './pr-conflict-styles'
-import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { prConflictStyles } from './pr-conflict-styles'
+import { prAiTriageStyles } from './pr-ai-triage-styles'
 
 // Launches the "Resolve conflicts with AI" agent. Absent for display-only usages.
 export type PrConflictsTriage = {
@@ -31,6 +31,9 @@ type Props = {
 // list is not yet available. Ports the desktop ConflictingFilesSection +
 // MergeConflictNotice into the mobile card shell.
 export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(prConflictStyles)
+  const triageStyles = useThemedStyles(prAiTriageStyles)
   // The seam, not `expo-clipboard`: inside the shell the page's own clipboard needs a secure
   // context, which the iOS custom scheme is not and Android's https is.
   const clipboard = useClipboardWriter()
@@ -113,9 +116,9 @@ export function PRConflictingFilesSection({ pr, isRefreshing = false, triage }: 
                   accessibilityLabel="Copy mergeability refresh commands"
                 >
                   {copyState === 'copied' ? (
-                    <Check size={13} color={colors.textPrimary} strokeWidth={2.2} />
+                    <Check size={13} color={colors.text} strokeWidth={2.2} />
                   ) : (
-                    <Copy size={13} color={colors.textPrimary} strokeWidth={2.2} />
+                    <Copy size={13} color={colors.text} strokeWidth={2.2} />
                   )}
                   <Text style={styles.copyCommandText}>{copyLabel}</Text>
                 </Pressable>

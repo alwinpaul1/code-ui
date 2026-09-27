@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { openExternalLink } from '../../platform/external-link'
 import { ChevronDown, ChevronRight, ExternalLink, RotateCw, Sparkles } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchPRCheckDetails, type GitHubPrRepoSlug } from '../../session/github-pr-rpc'
@@ -20,8 +20,8 @@ import {
 import { statusColor } from './pr-sidebar-status-color'
 import { PRSection } from './PRSection'
 import { PRCheckDetailView, type DetailEntry } from './PRCheckDetail'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
-import { prAiTriageStyles as triageStyles } from './pr-ai-triage-styles'
+import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { prAiTriageStyles } from './pr-ai-triage-styles'
 
 // Launches the "Fix checks with AI" agent. Absent for display-only usages.
 export type PrChecksTriage = {
@@ -54,6 +54,9 @@ export function PRChecksSection({
   actions,
   triage
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
+  const triageStyles = useThemedStyles(prAiTriageStyles)
   const sorted = sortPRChecks(checks)
   const summary = summarizePRChecks(checks)
   const rerunBusy = actions?.isBusy({ kind: 'rerun' }) ?? false
@@ -151,7 +154,7 @@ export function PRChecksSection({
           <Text
             style={[
               styles.summaryLabel,
-              { color: statusColor(checkOutcomeToken(summary.outcome)) }
+              { color: statusColor(checkOutcomeToken(summary.outcome), colors) }
             ]}
           >
             {prChecksSummaryLabel(summary, checksError)}
@@ -220,7 +223,7 @@ export function PRChecksSection({
               accessibilityLabel={`${check.name} check details`}
             >
               <Chevron size={14} color={colors.textSecondary} strokeWidth={2.2} />
-              <View style={[styles.statusDot, { backgroundColor: statusColor(token) }]} />
+              <View style={[styles.statusDot, { backgroundColor: statusColor(token, colors) }]} />
               <View style={styles.rowMain}>
                 <Text style={styles.rowTitle} numberOfLines={1}>
                   {check.name}
@@ -228,7 +231,7 @@ export function PRChecksSection({
               </View>
               {/* Status word + open-on-host icon (desktop ChecksList row), so the
                   outcome reads without expanding. */}
-              <Text style={[styles.rowStatus, { color: statusColor(token) }]} numberOfLines={1}>
+              <Text style={[styles.rowStatus, { color: statusColor(token, colors) }]} numberOfLines={1}>
                 {checkStatusLabel(check)}
               </Text>
               {url ? (
