@@ -5,7 +5,7 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
-import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
+import { MobileBackgroundTasksSheetBody, MobileBackgroundTasksSheetHeader } from './MobileBackgroundTasksSheet'
 import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
@@ -206,6 +206,8 @@ describe('the background tasks sheet', () => {
         createElement(
           ThemeProvider,
           { initialPreference: scheme },
+          // The title the drawer pins above the list, then the list.
+          createElement(MobileBackgroundTasksSheetHeader),
           createElement(MobileBackgroundTasksSheetBody, { messages: messages() })
         )
       )
@@ -602,7 +604,11 @@ describe('tapping a subagent on the roster', () => {
 
   it('closes from the cross in its title bar', async () => {
     const onClose = vi.fn()
-    await renderWith({ agent: 'claude', onClose })
+    await act(async () => {
+      renderer = create(
+        createElement(ThemeProvider, { initialPreference: 'light' }, createElement(MobileBackgroundTasksSheetHeader, { onClose }))
+      )
+    })
     await press(renderer!, 'Close')
     expect(onClose).toHaveBeenCalledTimes(1)
   })

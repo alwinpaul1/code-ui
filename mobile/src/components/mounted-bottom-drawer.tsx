@@ -9,12 +9,10 @@ import {
   Platform
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
+import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  useAnimatedScrollHandler,
-  withSpring,
   withTiming,
   runOnJS,
   interpolate,
@@ -31,15 +29,9 @@ import { useInsideBottomDrawerModalHost } from './bottom-drawer-modal-host'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useExpandableBottomDrawer } from './use-expandable-bottom-drawer'
+import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
 
-const DISMISS_THRESHOLD = 80
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Why: negative translateY (pulling up) is damped with a rubber-band factor
-// so the drawer resists upward dragging — a subtle polish touch that signals
-// the drawer cannot expand further.
-const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
-const TOP_SCROLL_EPSILON = 1
 // Why: a sheet enters from just below its own bottom edge, not from a whole
 // window below. Travelling the window height on an ease-in-out curve left a
 // 280 dp sheet under the edge of a 956 dp window until 111 ms into its 180 ms
@@ -66,6 +58,10 @@ export type MountedBottomDrawerProps = {
   interactive?: boolean
   /** Opens part way and drags up to full screen (bottom-drawer-expandable.ts). */
   expandable?: boolean
+  /** Drawn under the handle and above the content, outside its scroll, so a
+   *  title and its close cross never scroll away. Dragging it moves the sheet,
+   *  as the handle does. */
+  header?: ReactNode
   zIndex?: number
 }
 
@@ -79,17 +75,22 @@ export function MountedBottomDrawer({
   fillAvailable = false,
   interactive = true,
   expandable = false,
+  header,
   zIndex = 1000
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
-  const scrollOffsetY = useSharedValue(0)
   // The sheet's own laid-out height; 0 until its first layout, when the only
   // distance known to be off screen is the whole window.
   const sheetLayoutHeight = useSharedValue(0)
-  const contentDragStartY = useSharedValue(0)
-  const contentDragCanDismiss = useSharedValue(false)
+  // The latest onClose, behind one stable function, so the gestures built
+  // around it survive a parent that passes a new arrow on every render.
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+  const close = useCallback(() => onCloseRef.current(), [])
   // Why: fill mode needs the keyboard inset in React layout (not only the
   // reanimated translate) so height shrinks as the sheet lifts and the top
   // edge stays under the status bar.
@@ -107,7 +108,16 @@ export function MountedBottomDrawer({
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useInsideBottomDrawerModalHost()
-  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, onClose })
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, close })
+  const drag = useBottomDrawerDrag({
+    expandable,
+    hasList: contentScrollable && dragContentToDismiss,
+    screenHeight,
+    translateY,
+    progress,
+    sheet,
+    close
+  })
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
         screenHeight,
@@ -134,15 +144,15 @@ export function MountedBottomDrawer({
     if (!tookWindowBack) {
       return
     }
-    translateY.value = 0
+    translateY.value = sheet.restingOffset
     progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
   useEffect(() => {
     if (visible) {
-      translateY.value = 0
-      scrollOffsetY.value = 0
+      drag.scrollOffsetY.value = 0
+      // Stands the sheet at its rest: 0, or an expandable sheet's opening offset.
       sheet.reset()
       progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     } else {
@@ -235,96 +245,6 @@ export function MountedBottomDrawer({
       : null
   )
 
-  const scrollHandler = useAnimatedScrollHandler((event) => {
-    scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
-  })
-
-  const scrollGesture = Gesture.Native()
-  const handlePanGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => {
-      sheet.begin()
-    })
-    .onUpdate((e) => {
-      if (expandable) {
-        sheet.drag(e.translationY)
-      } else if (e.translationY > 0) {
-        translateY.value = e.translationY
-      } else {
-        translateY.value = e.translationY * RUBBER_BAND_FACTOR
-      }
-    })
-    .onEnd((e) => {
-      if (expandable) {
-        sheet.release(e.velocityY)
-      } else if (e.translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
-        const velocity = Math.max(e.velocityY, 800)
-        const remaining = screenHeight - e.translationY
-        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
-        translateY.value = withTiming(screenHeight, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(onClose)()
-        })
-      } else {
-        translateY.value = withSpring(0, SPRING_CONFIG)
-      }
-    })
-  const contentPanGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => {
-      contentDragStartY.value = 0
-      contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
-      sheet.begin()
-    })
-    .onUpdate((e) => {
-      // Why: action-sheet content can be taller than the drawer; downward drags
-      // should scroll back to the top before they start dismissing the sheet.
-      if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
-        contentDragCanDismiss.value = false
-        contentDragStartY.value = 0
-        if (translateY.value !== 0) {
-          translateY.value = withSpring(0, SPRING_CONFIG)
-        }
-        return
-      }
-
-      if (!contentDragCanDismiss.value) {
-        contentDragCanDismiss.value = true
-        contentDragStartY.value = e.translationY
-      }
-
-      const translationY = e.translationY - contentDragStartY.value
-      if (expandable) {
-        sheet.drag(translationY)
-      } else if (translationY > 0) {
-        translateY.value = translationY
-      } else {
-        translateY.value = translationY * RUBBER_BAND_FACTOR
-      }
-    })
-    .onEnd((e) => {
-      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) {
-        return
-      }
-
-      const translationY = e.translationY - contentDragStartY.value
-      if (expandable) {
-        sheet.release(e.velocityY)
-      } else if (translationY > DISMISS_THRESHOLD || e.velocityY > 500) {
-        const velocity = Math.max(e.velocityY, 800)
-        const remaining = screenHeight - translationY
-        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
-        translateY.value = withTiming(screenHeight, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(onClose)()
-        })
-      } else {
-        translateY.value = withSpring(0, SPRING_CONFIG)
-      }
-    })
-
   const drawerStyle = useAnimatedStyle(() => {
     // Why: fill mode already shrinks height by the keyboard inset and lifts via
     // marginBottom (layout). Also subtracting keyboardOffset here would double-
@@ -334,7 +254,7 @@ export function MountedBottomDrawer({
     // drives its opacity instead, so it fades in place. The drag offset and
     // the keyboard lift still apply: those follow the finger and the keys,
     // not a transition. Only this mapping changes; the effects, durations
-    // and gestures above are untouched.
+    // and gestures are untouched.
     // Once laid out, the sheet travels its own height (plus a margin), so it
     // is on screen from the first frames of its open; before that, a window.
     // The keyboard's lift counts too: a sheet closed while it is up sits that
@@ -342,10 +262,13 @@ export function MountedBottomDrawer({
     // A closed sheet keeps the window as its travel: a fill sheet grows back
     // by the keyboard inset as it closes, a frame before its new height is
     // measured, and would show that much (review of a81dfa20).
+    // An expandable sheet is laid out at full height and stands part way
+    // below it, so only what is above the edge travels.
     const measured = sheetLayoutHeight.value
+    const belowEdge = expandable ? Math.min(Math.max(translateY.value, 0), measured) : 0
     const travel =
       measured > 0 && progress.value > 0
-        ? Math.min(screenHeight, measured + keyboardOffset.value + ENTER_TRAVEL_MARGIN)
+        ? Math.min(screenHeight, measured - belowEdge + keyboardOffset.value + ENTER_TRAVEL_MARGIN)
         : screenHeight
     const enterTravel = reduceMotion
       ? 0
@@ -362,12 +285,15 @@ export function MountedBottomDrawer({
     // The dependency array names every shared value the updater reads: the web bundle is built
     // without Reanimated's Babel plugin, so `__closure` is never written and this list is what the
     // mapper listens to (reanimated-web-mapper-deps.test.ts).
-  }, [progress, translateY, keyboardOffset, sheetLayoutHeight, screenHeight, fillAvailable, reduceMotion])
+  }, [progress, translateY, keyboardOffset, sheetLayoutHeight, screenHeight, fillAvailable, reduceMotion, expandable])
 
+  const openingOffset = sheet.openingOffset
   const backdropStyle = useAnimatedStyle(() => {
-    const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
+    // Fades only as the sheet is dragged below its opening height; an
+    // expandable sheet stands `openingOffset` down at rest.
+    const dragFade = interpolate(translateY.value - openingOffset, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
-  }, [progress, translateY])
+  }, [progress, translateY, openingOffset])
 
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
@@ -375,15 +301,25 @@ export function MountedBottomDrawer({
   // anchors to the scrolled content and clips the sheet. Show/hide is driven by
   // `progress` (animationType "none") so the reanimated exit animation runs before
   // the parent unmounts us.
+  const handleBar = (
+    <Animated.View
+      style={styles.handleHitArea}
+      accessibilityRole="button"
+      accessibilityLabel="Dismiss drawer"
+    >
+      <View style={[styles.handle, { backgroundColor: colors.textMuted }]} />
+    </Animated.View>
+  )
   const handle = (
-    <GestureDetector gesture={handlePanGesture}>
-      <Animated.View
-        style={styles.handleHitArea}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss drawer"
-      >
-        <View style={[styles.handle, { backgroundColor: colors.textMuted }]} />
-      </Animated.View>
+    <GestureDetector gesture={drag.handle}>
+      {header ? (
+        <Animated.View collapsable={false}>
+          {handleBar}
+          {header}
+        </Animated.View>
+      ) : (
+        handleBar
+      )}
     </GestureDetector>
   )
 
@@ -397,15 +333,16 @@ export function MountedBottomDrawer({
   ) : dragContentToDismiss ? (
     <>
       {handle}
-      <GestureDetector gesture={contentPanGesture}>
+      <GestureDetector gesture={drag.content}>
         <Animated.View collapsable={false} style={expandable ? styles.staticContentFill : undefined}>
-          <GestureDetector gesture={scrollGesture}>
+          <GestureDetector gesture={drag.scroll}>
             <Animated.ScrollView
+              ref={drag.scrollRef}
               style={expandable ? styles.staticContentFill : undefined}
               scrollEnabled={!expandable || sheet.expanded}
               bounces={false}
               keyboardShouldPersistTaps="handled"
-              onScroll={scrollHandler}
+              onScroll={drag.scrollHandler}
               scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
             >
@@ -470,14 +407,15 @@ export function MountedBottomDrawer({
                 // Why: fill sheets shrink height AND lift with marginBottom so the
                 // bottom edge sits on the keyboard top (height alone still leaves
                 // the dock in the keyboard’s footprint). Non-fill sheets keep
-                // the legacy translateY keyboard shift instead.
-                height: fillHeight,
+                // the legacy translateY keyboard shift instead. An expandable
+                // sheet is laid out once at full height and only moved, so a
+                // drag costs no layout pass (2026-09-27).
+                height: sheet.fullHeight ?? fillHeight,
                 marginBottom: fillAvailable ? keyboardInset : 0,
                 paddingBottom:
                   fillAvailable && keyboardInset > 0 ? spacing.sm : insets.bottom + spacing.lg
               },
-              drawerStyle,
-              sheet.style
+              drawerStyle
             ]}
           >
             {body}

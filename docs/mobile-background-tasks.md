@@ -16,6 +16,28 @@ agent:
 - A **structured tab** gets the provider's own roster from the host over
   `agentSession.subscribe`, and that is the whole answer for the tab.
 
+## The sheet's drag (2026-09-27)
+
+The sheet is a `BottomDrawer` with `expandable` and `dragContentToDismiss`.
+It is laid out once at full height and only moved (`translateY`): 0 at full,
+the opening offset at its opening height. It used to be resized with the
+finger, and on the phone a drag down from full height scrolled the list up
+under the finger, took the title off the top, and left the sheet at its
+opening height with the list part way down. There the list does not scroll
+and the content's pan waited for the list to reach its top, so nothing on
+the list moved the sheet until the handle was found.
+
+Now: the title and close cross are the drawer's `header`, pinned above the
+list and draggable like the handle. While a drag on the list moves the sheet
+below full height, and while the sheet stands at its opening height, the list
+is held at its top (`scrollTo` from its scroll handler); a fling under a
+handle drag is left alone. At the opening height a drag on the list always
+moves the sheet, and the list is put back at its top when the sheet comes to
+rest there. A drag the sheet followed always ends on a rest, and turning the
+phone moves the sheet onto its new rest. The gestures are built once, so the
+clock's tick and streamed messages do not rebuild them mid-drag
+(`use-bottom-drawer-drag.ts`, `background-tasks-sheet-drag.test.tsx`).
+
 ## The structured lane reads the host's roster
 
 Orca #18757, #18807, #19346 and #19311 put provider-owned background work on
