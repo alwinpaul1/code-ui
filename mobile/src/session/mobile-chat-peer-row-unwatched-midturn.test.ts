@@ -106,14 +106,19 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
   const { show, unmount } = landingHarness(frames)
   afterEach(() => vi.restoreAllMocks())
   /** The harness's clock is a day earlier; move to this day's time first. */
-  async function showAt(clock: string, messages: NativeChatMessage[], peerRows: ReturnType<typeof peerNoticesFromScreen> | null) {
+  async function showAt(
+    clock: string,
+    messages: NativeChatMessage[],
+    peerRows: ReturnType<typeof peerNoticesFromScreen> | null,
+    loading = false
+  ) {
     const delta = at(clock) - Date.now()
     if (delta > 0) {
       await act(async () => {
         vi.advanceTimersByTime(delta)
       })
     }
-    await show('00:00:00.000', { messages, working: true, promptHook: false, peerRows })
+    await show('00:00:00.000', { messages, working: true, promptHook: false, peerRows, loading })
   }
   function placement(): { row: number; committing: number; final: number; rows: number } {
     const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
@@ -141,6 +146,22 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     // Back after the lead answered: the screen is not read yet, then is.
     await showAt('17:40:00.000', ANSWERED, null)
     await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:02.000', ANSWERED, ROWS)
+    const where = placement()
+    expect(where.rows).toBe(1)
+    expect(where.row).toBeGreaterThan(where.committing)
+    expect(where.row).toBeLessThan(where.final)
+  })
+
+  // The overlay hands the reader whether its transcript has settled: the
+  // screen read can come before the transcript does (re-review of 1045e43b).
+  it('keeps it above the lead’s reply when the screen was read before the transcript loaded', async () => {
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    unmount()
+    await showAt('17:40:00.000', [], null, true)
+    await showAt('17:40:01.000', [], ROWS, true)
     await showAt('17:40:02.000', ANSWERED, ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
@@ -254,12 +275,14 @@ describe('rows found on the first screen read, after the review of the first fix
   const A4 = row('a4', 'assistant', 'Running the suite now.', '17:15:30.000')
   const R = [{ sender: 'general-purpose' }]
 
-  type Props = { rows: ReturnType<typeof peerNoticesFromScreen> | null; folded: NativeChatMessage[]; scope: string }
+  /** `settled`: the transcript shown is the host's, read and settled, not the
+   *  copy the last visit cached or an empty list while it loads. */
+  type Props = { rows: ReturnType<typeof peerNoticesFromScreen> | null; folded: NativeChatMessage[]; scope: string; settled?: boolean }
   function chat() {
     let out: NativeChatMessage[] = []
     let renderer: ReactTestRenderer | null = null
     function Chat(props: Props) {
-      out = useScreenPeerNotices(props.rows, props.folded, props.scope, true)
+      out = useScreenPeerNotices(props.rows, props.folded, props.scope, true, undefined, props.settled ?? true)
       return null
     }
     return {
@@ -354,5 +377,47 @@ describe('rows found on the first screen read, after the review of the first fix
       '[peer-row] drawn: the row from @general-purpose was on the screen when the chat first read it, not watched arriving; placed after a1, the last row the chat held when it last read the screen',
       '[peer-row] not drawn: the row from @general-purpose was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by'
     ])
+  })
+  // Re-review of 1045e43b: the placement was decided once, on the first read,
+  // against whatever the chat showed then. Until the host's transcript
+  // settles it shows the copy the last visit cached, or nothing, and the
+  // screen read can come first (a tab switch back, a reconnect).
+  it('does not draw a found row turns early when the first read came while the chat showed the cached transcript', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.unmount()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A', settled: false })
+    view.show({ rows: R, folded: [U1, A1], scope: 'A', settled: false })
+    view.show({ rows: R, folded: [U1, A1, U2, A2, U3, A3, U4, A4], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'u3', 'a3', 'u4', 'a4'])
+  })
+
+  it('still draws the reported row above the answer when the first read came before any transcript was shown', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: BEFORE_COMMIT, scope: 'A' })
+    view.show({ rows: [], folded: BEFORE_COMMIT, scope: 'A' })
+    view.unmount()
+    view.show({ rows: null, folded: [], scope: 'A', settled: false })
+    view.show({ rows: ROWS, folded: [], scope: 'A', settled: false })
+    view.show({ rows: ROWS, folded: ANSWERED, scope: 'A' })
+    const ids = view.ids()
+    expect(ids.filter((id) => id === 'row:general-purpose')).toHaveLength(1)
+    expect(ids.indexOf('row:general-purpose')).toBeGreaterThan(ids.indexOf(COMMITTING))
+    expect(ids.indexOf('row:general-purpose')).toBeLessThan(ids.indexOf(FINAL))
+  })
+
+  it('says so once for each of two rows from one sender found on the same read', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.unmount()
+    view.show({ rows: null, folded: [U1, A1, A1B], scope: 'A' })
+    view.show({ rows: [...R, ...R], folded: [U1, A1, A1B], scope: 'A' })
+    expect(view.ids().filter((id) => id === 'row:general-purpose')).toHaveLength(2)
+    expect(peerLines(info)).toHaveLength(2)
   })
 })

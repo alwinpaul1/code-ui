@@ -116,7 +116,13 @@ export function useScreenPeerNotices(
   /** Draw a subagent's sender-only row (see `withScreenPeerNotices`). */
   subagentRows = false,
   /** Words other sources carried for those rows. */
-  bodies?: readonly ScreenRowBody[]
+  bodies?: readonly ScreenRowBody[],
+  /** Whether `folded` is the host's transcript, read and settled. Until it
+   *  is, the chat shows the copy the last visit cached, or nothing, and a
+   *  first read placed against that was placed for good: turns early, or
+   *  refused for a row that had not loaded yet (re-review of 1045e43b). The
+   *  first read waits for it. */
+  settled = true
 ): NativeChatMessage[] {
   // Whether the screen has been read since the rows were last null. True to
   // start: rows handed on the first render come from a reader that was
@@ -128,6 +134,8 @@ export function useScreenPeerNotices(
   let next = memory
   if (rows === null) {
     reading.current = false
+  } else if (!reading.current && !settled) {
+    // The first read waits for the transcript; the rows stay on the screen.
   } else {
     const first = !reading.current
     reading.current = true
@@ -141,29 +149,32 @@ export function useScreenPeerNotices(
       undefined,
       first ? foundPlacement(memory.lastRead, folded) : undefined
     )
-    const lastRead = tail ? { id: tail.id, at: tail.timestamp ?? 0 } : memory.lastRead
+    const lastRead = settled && tail ? { id: tail.id, at: tail.timestamp ?? 0 } : memory.lastRead
     next = { notices, ...(lastRead ? { lastRead } : {}) }
   }
   keep(scopeKey, next)
   const notices = next.notices
   // One line for each row placed without having been watched arriving, or
   // not drawn: a row in the wrong place otherwise leaves nothing to go by.
-  // Keyed by the line, not the row: one drawn, then found again with nothing
-  // to place it by, must still say it is no longer drawn.
+  // Keyed by the row and whether it is drawn: one drawn, then found again
+  // with nothing to place it by, must still say it is no longer drawn.
   const found = JSON.stringify(
     notices.flatMap((notice) =>
       notice.found === true
         ? [
-            notice.held === true
-              ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and ${notice.why ?? 'nothing places it'}`
-              : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
+            [
+              `${notice.id}\0${notice.held === true ? 'held' : 'drawn'}`,
+              notice.held === true
+                ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and ${notice.why ?? 'nothing places it'}`
+                : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
+            ]
           ]
         : []
     )
   )
   useEffect(() => {
-    for (const line of JSON.parse(found) as string[]) {
-      const key = `${scopeKey ?? ''}\0${line}`
+    for (const [row, line] of JSON.parse(found) as [string, string][]) {
+      const key = `${scopeKey ?? ''}\0${row}`
       if (!loggedFound.has(key)) {
         loggedFound.add(key)
         console.info(line)

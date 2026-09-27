@@ -300,7 +300,10 @@ export function MobileNativeChatOverlay({
     foldedWithAgents,
     controller.nativeChatStreamScopeKey,
     controller.nativeChatPromptHook !== true,
-    screenBodies
+    screenBodies,
+    // The first read of the screen waits for the host's transcript: placed
+    // against the cached copy, a found row was placed for good.
+    session.status === 'ready' && session.baseRetained !== true
   )
   // A photo from the Claude app never reaches the transcript the phone reads;
   // Claude's own `[Image #N]` rows say it was there (2026-09-24).
