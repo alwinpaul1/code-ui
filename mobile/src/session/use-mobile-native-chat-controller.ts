@@ -178,7 +178,7 @@ export function useMobileNativeChatController(
     // its process still paints: the live pair, or nothing.
     live: liveHud,
     refresh: refreshTerminalHud,
-    dialogOptions: terminalDialogOptions,
+    dialogOptions: terminalDialogOptions, dialogOnScreen: terminalDialogOnScreen,
     terminalPermission,
     permissionDismissed,
     queuedMessages: visibleQueuedMessages,
@@ -257,7 +257,8 @@ export function useMobileNativeChatController(
   // Echo the draft onto the desktop TUI line while typing. Never while a prompt
   // is up: a permission or question card means the TUI is reading keys as
   // answers, and mirrored prose could pick one. A dialog no card shows reads
-  // keys the same way, so its on-screen choices close the mirror too.
+  // keys the same way, so one on screen closes the mirror too, by the same
+  // test the sends use (mobile-native-chat-dialog-guard.ts).
   const { settleBeforeSend: settleDraftMirrorBeforeSend } = useMobileNativeChatDraftMirror({
     client, getComposerEditGeneration: getChatComposerEditGeneration,
     // Why not `inputSendable`: the lease is about who owns the input floor and
@@ -270,7 +271,7 @@ export function useMobileNativeChatController(
       connState === 'connected' &&
       legacyNativeChatPermission == null &&
       legacyQuestion == null &&
-      nativeChatAskPrompt == null && terminalDialogOptions == null,
+      nativeChatAskPrompt == null && !terminalDialogOnScreen,
     handleRef: activeHandleRef,
     deviceTokenRef,
     text: chatComposerText
@@ -549,7 +550,7 @@ export function useMobileNativeChatController(
       ? structuredNativeChat.permission
       : legacyRenderedPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
-    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
+    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogOnScreen: terminalDialogOnScreen, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
     openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,

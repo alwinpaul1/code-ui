@@ -38,15 +38,19 @@ export type NativeChatTerminalWait = { source: 'screen'; choices: string[] } | {
  * nothing at all, so a stuck agent looked like a busy one. A prompt the phone
  * cannot read must still be announced, with nothing to tap but the way to it.
  *
- * The screen's numbered Yes…/No… choices are the same "a prompt is on screen"
- * signal the dismissal tracking uses, and they are drawn by every dialog of
- * both agents whatever its title says. The hook's waiting/blocked state speaks
- * for a prompt the screen read has not seen, but not for one the screen saw
- * leave: the hook's row outlives its answer.
+ * The screen's word is `terminalDialogOnScreen`, the one test the sends, the
+ * queue edit and the draft mirror use too: a dialog of either agent, whatever
+ * its title says, counted only with one of its rows selected, so a numbered
+ * Yes/No list in the conversation does not raise the notice. The hook's
+ * waiting/blocked state speaks for a prompt the screen read has not seen, but
+ * not for one the screen saw leave: the hook's row outlives its answer.
  */
 export function terminalPromptWait(input: {
   /** The card the chat shows for a prompt: permission, question or ask. */
   card: unknown
+  /** `terminalDialogOnScreen` over the last screen read. */
+  dialogOnScreen: boolean
+  /** Its numbered choices as drawn, when they read as Yes…/No…. */
   dialogOptions: MobileChatPermission['options'] | null
   /** A dialog was seen on screen and has since left it. */
   dialogLeft: boolean
@@ -55,8 +59,8 @@ export function terminalPromptWait(input: {
   if (input.card != null) {
     return null
   }
-  if (input.dialogOptions != null) {
-    return { source: 'screen', choices: input.dialogOptions.map((option) => option.label) }
+  if (input.dialogOnScreen) {
+    return { source: 'screen', choices: (input.dialogOptions ?? []).map((option) => option.label) }
   }
   const waiting = input.hookState === 'waiting' || input.hookState === 'blocked'
   return waiting && !input.dialogLeft ? { source: 'hook' } : null

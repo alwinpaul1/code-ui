@@ -19,6 +19,7 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import { parseClaudeSpinnerLine, sameSpinner, type ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
+import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
 
 const HUD_POLL_MS = 5_000
 
@@ -62,6 +63,9 @@ export function useMobileTerminalHudObservation(args: {
   refresh: () => Promise<TerminalHudObservation | null>
   /** Claude Code's permission dialog options as drawn on screen, or null. */
   dialogOptions: MobileChatPermission['options'] | null
+  /** A dialog that takes keys as answers is up, by the one test the sends,
+   *  the queue edit, the waiting notice and the draft mirror all use. */
+  dialogOnScreen: boolean
   terminalPermission: MobileChatPermission | null
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
@@ -75,6 +79,7 @@ export function useMobileTerminalHudObservation(args: {
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
+  const [dialogOnScreen, setDialogOnScreen] = useState(false)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
@@ -84,6 +89,7 @@ export function useMobileTerminalHudObservation(args: {
     setObservation(null)
     setSpinner(null)
     setDialogOptions(null)
+    setDialogOnScreen(false)
     setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
       return
@@ -182,6 +188,7 @@ export function useMobileTerminalHudObservation(args: {
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
+        setDialogOnScreen(terminalDialogOnScreen(lines))
         const parsed =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
         const next = parsed
@@ -232,6 +239,7 @@ export function useMobileTerminalHudObservation(args: {
     observation,
     refresh,
     dialogOptions,
+    dialogOnScreen,
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],

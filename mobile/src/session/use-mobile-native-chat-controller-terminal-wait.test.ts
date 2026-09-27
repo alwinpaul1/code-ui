@@ -258,6 +258,24 @@ describe('what the chat says while the agent waits on a prompt', () => {
     expect(controller?.nativeChatTerminalWait).toBeNull()
   })
 
+  // One detector for all four: the notice, the mirror, the send and the queue
+  // edit count a dialog only with one of its rows selected. A numbered Yes/No
+  // list in the lead's last message is not one.
+  it('says nothing for a numbered Yes/No list in the conversation, and echoes the draft', async () => {
+    const at = SUBAGENT_PROMPT.findIndex((row) => row.startsWith('\u2500'))
+    await show([
+      ...SUBAGENT_PROMPT.slice(0, at),
+      '  1. Yes, merge it',
+      '  2. No, keep the branch',
+      '',
+      '\u2500'.repeat(99),
+      '\u276f\u00a0',
+      '\u2500'.repeat(99)
+    ])
+    expect(controller?.nativeChatTerminalWait).toBeNull()
+    expect(mirrorEnabled.at(-1)).toBe(true)
+  })
+
   it('says nothing while nothing waits, and echoes the draft as before', async () => {
     await show(['  session:ok', '', '❯\u00a0'])
     expect(controller?.nativeChatTerminalWait).toBeNull()
