@@ -196,7 +196,9 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         </View>
       )
     },
-    [connected, expanded, filesById, toggleCommit]
+    // colors and styles come from the theme now, not a static import: without them the rows keep
+    // the scheme they were made under after an appearance change.
+    [colors, connected, expanded, filesById, styles, toggleCommit]
   )
 
   const view = resolveMobileHistoryScreenView({ connected, rows, error })
