@@ -18,8 +18,9 @@ import {
 import {
   cancelVideoFrameExtractionFor,
   clearVideoFrameExtractionController,
-  hasVideoFrameExtractionController,
   registerVideoFrameExtractionController,
+  videoFrameExtractionControllerFor,
+  videoFrameExtractionState,
   type NativeChatVideoFrameExtractionState
 } from './mobile-native-chat-image-attachments-store'
 import {
@@ -157,8 +158,28 @@ export function useMobileNativeChatImageUpload(args: {
             setIsAttaching(false)
           }
         }
-        // Whatever the outcome, this attach is no longer reading frames.
-        onVideoFrameExtractionProgress?.(scope, null)
+        // Whatever the outcome, this attach is no longer reading frames —
+        // but only clear the slot if it is still THIS pick's own batch: a
+        // refused video's attachWith reaches this finally too, having
+        // registered nothing, and must not blank a DIFFERENT pick's still-
+        // reading progress chip out from under it (2026-09-27 review).
+        if (videoFrameExtractionState(scope)?.batch === batch) {
+          onVideoFrameExtractionProgress?.(scope, null)
+        }
+      }
+      if (uploadError instanceof VideoFrameExtractionCancelledError || uploadError instanceof VideoFrameExtractionError) {
+        // Reading did not finish normally — record that on every frame this
+        // pick DID manage to upload, so the sent note can say reading
+        // stopped early instead of silently understating the video
+        // (mobile-native-chat-video-frames-attachment.ts). A group short of
+        // its plan for an unrelated reason (the user removed a chip after a
+        // complete read) never touches this and must not say so.
+        for (let i = 0; i < uploadedImages.length; i += 1) {
+          const image = uploadedImages[i]!
+          if (image.videoFrame && !image.videoFrame.stoppedEarly) {
+            uploadedImages[i] = { ...image, videoFrame: { ...image.videoFrame, stoppedEarly: true } }
+          }
+        }
       }
       if (uploadedImages.length > 0) {
         onImagesUploaded(scope, uploadedImages)
@@ -227,53 +248,72 @@ export function useMobileNativeChatImageUpload(args: {
   )
   const attachDocument = useCallback(() => {
     const scope = scopeKey
-    // Only a SECOND VIDEO is refused: this checks whether the scope already
-    // has a registered controller — set only once a video is actually being
-    // read, not "a document attach is in flight" — a PDF picked while
-    // another PDF (or nothing) attaches sails through untouched (2026-09-27
-    // review: the old per-call ref refused ANY second attach, video or not,
-    // the instant this function was even called).
-    if (scope && hasVideoFrameExtractionController(scope)) {
-      showToast('Already reading a video — wait for it to finish', 1500)
-      return Promise.resolve()
-    }
+    // No pre-pick gate here at all: what this pick holds — a video, a PDF, a
+    // mix, nothing over the cap — is not knowable until the picker has
+    // actually run, so nothing about the SCOPE'S CURRENT STATE can decide
+    // whether this attach is allowed before that (2026-09-27 review: a
+    // top-level check here used to refuse a pick outright whenever some
+    // OTHER pick's video was still reading, even one holding nothing but a
+    // PDF, since the check ran before the picker even opened and could not
+    // yet know that). The one thing worth refusing — a SECOND video reading
+    // at once — is decided per video, in `onStart` below, once the picker
+    // has actually found one.
     const controller = new AbortController()
     const batch = nextNativeChatUploadBatch()
     return attachWith(
       () =>
         pickMobileDocuments(undefined, undefined, {
           signal: controller.signal,
-          // The controller is registered here, not unconditionally at the top
-          // of this callback: a pick that turns out to hold no video (only a
-          // PDF, say) never claims the scope's slot at all, so it can never
-          // block a real video attach that follows it.
+          // Fired once a specific asset turns out to be an over-cap video,
+          // never merely because this function was called. Registers this
+          // pick's controller if the scope's slot is free OR already this
+          // same pick's own (a second video within ONE pick shares the first
+          // one's controller rather than refusing itself) — otherwise
+          // refuses just this video, returning `false` so `pickVideoFrames`
+          // yields nothing for it without throwing: anything else in this
+          // same pick (a PDF, another file) still attaches (2026-09-27
+          // review).
           onStart: () => {
-            if (scope) {
-              registerVideoFrameExtractionController(scope, controller)
-              // Something to show for the whole ready-wait (up to
-              // VIDEO_FRAME_READY_TIMEOUT_MS), not just from the first frame:
-              // a send tapped during that wait used to see nothing set at all
-              // (2026-09-27 review).
-              onVideoFrameExtractionProgress?.(scope, { batch, done: 0, total: null })
+            if (!scope) {
+              return true
             }
+            const existing = videoFrameExtractionControllerFor(scope)
+            if (existing && existing !== controller) {
+              showToast('Already reading a video — wait for it to finish', 1500)
+              return false
+            }
+            registerVideoFrameExtractionController(scope, controller)
+            // Something to show for the whole ready-wait (up to
+            // VIDEO_FRAME_READY_TIMEOUT_MS), not just from the first frame
+            // (2026-09-27 review).
+            onVideoFrameExtractionProgress?.(scope, { batch, done: 0, total: null })
+            return true
           },
           onProgress: (progress) => {
             if (!scope) {
               return
             }
             onVideoFrameExtractionProgress?.(scope, { batch, ...progress })
-            // The chip clears the moment reading finishes, not once the last
-            // frame's own upload also finishes — those are two different
-            // things once frames upload one at a time as they are read
-            // (2026-09-27 review).
+            // The chip — and the controller a second attach's guard reads —
+            // clear the moment reading finishes, not once the last frame's
+            // own upload also finishes: those are two different things once
+            // frames upload one at a time as they are read, and holding the
+            // controller past reading's own end refused a second attach with
+            // no video chip left on screen to explain why (2026-09-27
+            // review).
             if (progress.done === progress.total) {
               onVideoFrameExtractionProgress?.(scope, null)
+              clearVideoFrameExtractionController(scope, controller)
             }
           }
         }),
       'files',
       batch
     ).finally(() => {
+      // A fallback for the path `onProgress`'s own clear above never reaches
+      // — a cancel or a failure midway, where reading never reports
+      // done === total at all. Idempotent: a no-op if the clear above (or a
+      // later pick's own registration) already took this entry.
       if (scope) {
         clearVideoFrameExtractionController(scope, controller)
       }

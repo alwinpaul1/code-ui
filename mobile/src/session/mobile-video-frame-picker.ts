@@ -60,15 +60,23 @@ export function isVideoOverUploadCap(sizeBytes: number | null): boolean {
 let videoFrameGroupCounter = 0
 
 export type PickVideoFramesRuntimeOptions = {
-  /** Fired once, synchronously, the moment this video is recognized and about
-   *  to be read — before the player has even reported its duration, let alone
-   *  a first frame. Lets a caller show *something* ("reading a video…") and
-   *  register a cancel handle for the whole up-to-`VIDEO_FRAME_READY_TIMEOUT_MS`
-   *  wait, not just from the first `onProgress` (2026-09-27 review: a send
-   *  tapped during that wait had no visible sign a video was even being read,
-   *  and a concurrent-attach guard keyed off an unconditional per-call ref
-   *  had nothing scoped to "a video really is being read" to check instead). */
-  readonly onStart?: () => void
+  /** Fired once, synchronously, the moment this video is recognized — before
+   *  the player has even reported its duration, let alone a first frame —
+   *  so a caller can show *something* ("reading a video…") for the whole
+   *  up-to-`VIDEO_FRAME_READY_TIMEOUT_MS` ready-wait, not just from the first
+   *  `onProgress`.
+   *
+   *  Its return decides whether THIS video may be read at all: only one
+   *  video reads at a time per scope, and a caller whose scope is already
+   *  reading a DIFFERENT one returns `false` to refuse just this video —
+   *  `pickVideoFrames` then yields nothing for it, silently, rather than
+   *  throwing (a thrown error would abort this whole document pick's
+   *  generator, taking down every item picked alongside it — a PDF, another
+   *  file — with it). `true`, or omitting `onStart` altogether, proceeds as
+   *  normal (2026-09-27 review: the refusal used to be an unconditional
+   *  check before the picker even opened, so it refused a pick that turned
+   *  out to hold no video at all). */
+  readonly onStart?: () => boolean
   readonly onProgress?: (progress: VideoFrameExtractionProgress) => void
   readonly signal?: AbortSignal
 }
@@ -133,7 +141,12 @@ export async function* pickVideoFrames(
   const sourceName = asset.name || asset.uri.split('/').pop() || 'video'
   videoFrameGroupCounter += 1
   const groupId = `video-frames-${videoFrameGroupCounter}`
-  deps?.onStart?.()
+  if (deps?.onStart && !deps.onStart()) {
+    // Refused (a different video is already being read in this scope): yield
+    // nothing for THIS one, but don't throw — the caller's pick continues to
+    // whatever comes after it.
+    return
+  }
   let meta: VideoFrameExtractionMeta | null = null
   try {
     for await (const event of extract(asset.uri, { onProgress: deps?.onProgress, signal: deps?.signal })) {
@@ -154,7 +167,11 @@ export async function* pickVideoFrames(
         durationLabel: formatVideoFrameDurationLabel(meta.durationMs),
         intervalLabel: formatVideoFrameIntervalLabel(meta.intervalMs),
         intervalMs: meta.intervalMs,
-        sourceSizeLabel: formatVideoFrameSizeLabel(sourceSizeBytes)
+        sourceSizeLabel: formatVideoFrameSizeLabel(sourceSizeBytes),
+        // Patched to true on the frames already uploaded if this read is
+        // later cut short (use-mobile-native-chat-image-upload.ts) — not
+        // known yet at the moment a frame is yielded.
+        stoppedEarly: false
       }
       yield {
         base64: event.frame.base64,

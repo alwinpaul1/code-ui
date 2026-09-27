@@ -7,10 +7,15 @@ import type { MobileNativeChatImagesByScope } from './mobile-native-chat-image-s
  *  send was about to put back, so one X took both away (2026-09-26 review). */
 export const nativeChatChipIdCounter = { current: 0 }
 
-/** A send waiting for an upload before it writes, and the text and chips it was tapped with. */
+/** A send waiting for an upload before it writes, and the text and chips it was tapped with.
+ *  `batches` is every distinct `.batch` among the chips it was tapped with —
+ *  a later tap whose only "new" chips are more of the SAME batch (a video's
+ *  next frames landing) still counts as the same send, not a different one
+ *  needing its own chip (2026-09-27 review). */
 export type NativeChatWaitingSend = {
   readonly text: string
   readonly ids: readonly string[]
+  readonly batches: ReadonlySet<string>
   readonly whole: Promise<boolean>
 }
 
@@ -41,10 +46,16 @@ export const nativeChatAttachmentsResets = { current: 0 }
  *  this extraction can find every chip this SAME pick produces, including one
  *  that lands after the send started waiting (`use-mobile-native-chat-send-chips.ts`).
  *  `total` is `null` for the stretch between a video being recognized and its
- *  duration actually being read (up to `VIDEO_FRAME_READY_TIMEOUT_MS`) — there
- *  is something to show ("reading a video…") well before there is a count
- *  (2026-09-27 review: a send tapped during that wait used to see nothing set
- *  at all, since the slot used to start at the first frame's own progress). */
+ *  duration actually being read (up to `VIDEO_FRAME_READY_TIMEOUT_MS`). The
+ *  slot is set THIS early — at `pickVideoFrames`'s `onStart`, not its first
+ *  `onProgress` — because that is also the moment the concurrent-video guard
+ *  is decided (`use-mobile-native-chat-image-upload.ts`'s `onStart` registers
+ *  its controller there, or refuses); a send watching this scope seeing
+ *  something to show ("reading a video…") that early is a side effect of that
+ *  timing, not the reason the field exists (2026-09-27 review: an earlier
+ *  version of this comment credited the field to the send alone, when
+ *  onStart's own gating decision is what actually forced the slot to be set
+ *  this early). */
 export type NativeChatVideoFrameExtractionState = {
   readonly batch: string
   readonly done: number
@@ -88,16 +99,17 @@ export function cancelVideoFrameExtractionFor(scope: string): void {
   videoFrameExtractionControllers.get(scope)?.abort()
 }
 
-/** Whether `scope` currently has a registered video-frame-read controller —
- *  set the moment extraction starts (`onStart`) and cleared once the whole
- *  attach settles, independent of the REACTIVE progress slice below (which a
- *  caller populates through its own `onVideoFrameExtractionProgress`
- *  callback — optional, and not every caller wires one up). The
- *  concurrent-attach guard (`use-mobile-native-chat-image-upload.ts`) reads
- *  this, not `isVideoFrameExtractionActive`, so it engages whether or not
- *  anything is listening for progress at all. */
-export function hasVideoFrameExtractionController(scope: string): boolean {
-  return videoFrameExtractionControllers.has(scope)
+/** `scope`'s currently registered video-frame-read controller, or null —
+ *  set the moment a specific video's read starts (`onStart`), independent of
+ *  the REACTIVE progress slice below (which a caller populates through its
+ *  own `onVideoFrameExtractionProgress` callback — optional, and not every
+ *  caller wires one up). The concurrent-video guard
+ *  (`use-mobile-native-chat-image-upload.ts`'s `onStart`) reads this, by
+ *  IDENTITY (is the existing one this same pick's own, or someone else's),
+ *  not a plain boolean: two videos in the SAME pick share one controller and
+ *  must not refuse each other, only a genuinely different pick's video does. */
+export function videoFrameExtractionControllerFor(scope: string): AbortController | null {
+  return videoFrameExtractionControllers.get(scope) ?? null
 }
 
 /** Pending composer images by tab scope, kept outside the session screen so
@@ -136,14 +148,4 @@ export const useNativeChatImageAttachmentsStore = create<{
 /** `scope`'s current video-frame extraction record, or null while none is running. */
 export function videoFrameExtractionState(scope: string): NativeChatVideoFrameExtractionState | null {
   return useNativeChatImageAttachmentsStore.getState().videoFrameExtractionByScope[scope] ?? null
-}
-
-/** Whether `scope`'s document attach is still reading a video's frames — for
- *  `batch` given, specifically THAT pick's, not merely some pick or other. */
-export function isVideoFrameExtractionActive(scope: string, batch?: string): boolean {
-  const active = videoFrameExtractionState(scope)
-  if (!active) {
-    return false
-  }
-  return batch === undefined || active.batch === batch
 }
