@@ -1,6 +1,6 @@
 // Pure: no React Native or Expo imports, so vitest can run it unmocked.
 import { pickedDocumentName } from './android-picked-document-name'
-import { withPickerGate } from './mobile-picker-gate'
+import { PickerGateAbandonedError, withPickerGate, type PickerGateWaiter } from './mobile-picker-gate'
 
 export type MobilePdfDownloadDeps = {
   /** Ask the OS where to save; resolves the writable target URI, or null when
@@ -49,16 +49,20 @@ export function suggestedPdfFileName(fileName: string): string {
  */
 export async function downloadMobilePdf(
   input: { uri: string; fileName: string },
-  deps: MobilePdfDownloadDeps
+  deps: MobilePdfDownloadDeps,
+  waiter: PickerGateWaiter = {}
 ): Promise<MobilePdfDownloadOutcome> {
   const offeredName = suggestedPdfFileName(input.fileName)
   let target: string | null = null
   try {
     // Shared with the file save's runner (mobile-file-save.ts): Android's create-document picker
-    // keeps one pending Activity result at a time, so a save reached from another tab or the
-    // session's own file could otherwise collide with this one. `withPickerGate` serializes every
-    // request, from whichever caller it comes from, so this waits its turn instead.
-    target = await withPickerGate(() => deps.createDocument(offeredName))
+    // keeps one pending Activity result at a time. If another picker -- a different file's save,
+    // or another Download -- is still open when this one is ready to ask for its own, opening a
+    // second would collide with it. `withPickerGate` serializes every request, from whichever
+    // caller it comes from, so this one waits its turn instead. `waiter` is the viewer's own
+    // mount state: queued behind another picker, a Download whose screen has gone away drops out
+    // rather than opening one later over whatever the user moved to (mobile-pdf-download-device.ts).
+    target = await withPickerGate(() => deps.createDocument(offeredName), waiter)
     if (!target) {
       return { status: 'cancelled' }
     }
@@ -67,7 +71,11 @@ export async function downloadMobilePdf(
       : await deps.readBase64(input.uri)
     await deps.writeBase64(target, base64)
     return { status: 'saved' }
-  } catch {
+  } catch (error) {
+    if (error instanceof PickerGateAbandonedError) {
+      // Nothing was ever asked of the OS; closest existing outcome to "we stopped waiting".
+      return { status: 'cancelled' }
+    }
     if (target) {
       try {
         await deps.remove(target)

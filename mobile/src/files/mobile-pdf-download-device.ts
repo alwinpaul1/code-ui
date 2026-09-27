@@ -11,6 +11,7 @@ import {
   deleteAndroidDocument,
   writeAndroidDocumentBase64
 } from './android-create-document'
+import type { PickerGateWaiter } from './mobile-picker-gate'
 
 const deviceDeps: MobilePdfDownloadDeps = {
   createDocument: async (suggestedName) =>
@@ -28,13 +29,23 @@ export async function shareMobilePdf(uri: string, fileName: string): Promise<voi
 
 export const isMobilePdfDownloadSupported = Platform.OS === 'android'
 
-/** Android: the system "save as" picker. Elsewhere: the share sheet. */
-export async function savePreviewedPdf(input: {
-  uri: string
-  fileName: string
-}): Promise<MobilePdfDownloadOutcome> {
+/**
+ * Android: the system "save as" picker. Elsewhere: the share sheet.
+ *
+ * `waiter` is the viewer's own mount state (unused on the share-sheet path, which never reaches
+ * the picker gate): a Download whose picker call is still queued behind another one -- a file
+ * save, or a second Download -- drops out instead of opening its picker later, over whatever
+ * screen the user moved to once this one was gone (mobile-pdf-download.ts, mobile-picker-gate.ts).
+ */
+export async function savePreviewedPdf(
+  input: {
+    uri: string
+    fileName: string
+  },
+  waiter: PickerGateWaiter = {}
+): Promise<MobilePdfDownloadOutcome> {
   if (isMobilePdfDownloadSupported) {
-    return downloadMobilePdf(input, deviceDeps)
+    return downloadMobilePdf(input, deviceDeps, waiter)
   }
   try {
     await shareMobilePdf(input.uri, input.fileName)
