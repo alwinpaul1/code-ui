@@ -84,8 +84,9 @@ export async function saveDesktopFileToPhone(
   let uri: string | null
   try {
     // Shared with the PDF viewer's Download (mobile-pdf-download.ts): Android's create-document
-    // picker keeps one pending Activity result at a time, so a second one opened while this file's
-    // read was still out would collide with it. `withPickerGate` serializes every request, from
+    // picker keeps one pending Activity result at a time. If another picker -- a different file's
+    // save, or a Download -- is still open by the time THIS file's read finishes, opening this
+    // one's own picker now would collide with it. `withPickerGate` serializes every request, from
     // whichever caller it comes from, so this waits its turn instead. The `onScreen`/`signal` recheck
     // below is inside the gate, not before it, because time genuinely passes while queued: the
     // screen this save was asked from can go away, or take-over can abort it, before its turn comes.
