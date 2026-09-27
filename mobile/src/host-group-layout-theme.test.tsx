@@ -42,7 +42,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(style) ? style.flat(Infinity) : [style]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -57,19 +59,22 @@ describe('the host group layout', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('paints the split row, sidebar divider and screen canvas from the %s theme', async (scheme, palette) => {
-    await act(async () => {
-      renderer = create(
-        <ThemeProvider initialPreference={scheme}>
-          <HostGroupLayout />
-        </ThemeProvider>
-      )
-    })
-    const root = renderer!.root
-    const [row, sidebar] = root.findAll((node) => String(node.type) === 'View')
-    expect(flat(row!.props.style).backgroundColor).toBe(palette.bg)
-    expect(flat(sidebar!.props.style).borderRightColor).toBe(palette.border)
-    const stack = root.find((node) => String(node.type) === 'Stack')
-    expect(stack.props.screenOptions.contentStyle.backgroundColor).toBe(palette.bg)
-  })
+  ] as const)(
+    'paints the split row, sidebar divider and screen canvas from the %s theme',
+    async (scheme, palette) => {
+      await act(async () => {
+        renderer = create(
+          <ThemeProvider initialPreference={scheme}>
+            <HostGroupLayout />
+          </ThemeProvider>
+        )
+      })
+      const root = renderer!.root
+      const [row, sidebar] = root.findAll((node) => String(node.type) === 'View')
+      expect(flat(row!.props.style).backgroundColor).toBe(palette.bg)
+      expect(flat(sidebar!.props.style).borderRightColor).toBe(palette.border)
+      const stack = root.find((node) => String(node.type) === 'Stack')
+      expect(stack.props.screenOptions.contentStyle.backgroundColor).toBe(palette.bg)
+    }
+  )
 })

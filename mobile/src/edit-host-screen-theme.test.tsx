@@ -52,7 +52,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(raw) ? raw.flat(Infinity) : [raw]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -67,35 +69,44 @@ describe('the Edit host screen', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('paints its canvas, Save button and form from the %s theme', async (scheme, palette) => {
-    await act(async () => {
-      renderer = create(
-        <ThemeProvider initialPreference={scheme}>
-          <EditHostScreen />
-        </ThemeProvider>
+  ] as const)(
+    'paints its canvas, Save button and form from the %s theme',
+    async (scheme, palette) => {
+      await act(async () => {
+        renderer = create(
+          <ThemeProvider initialPreference={scheme}>
+            <EditHostScreen />
+          </ThemeProvider>
+        )
+      })
+      const root = renderer!.root
+      const text = (children: string): ReactTestInstance =>
+        root.find((node) => String(node.type) === 'Text' && node.props.children === children)
+
+      expect(
+        flat(root.findAll((node) => String(node.type) === 'View')[0]!.props.style).backgroundColor
+      ).toBe(palette.bg)
+      expect(flat(text('Edit host').props.style).color).toBe(palette.text)
+      expect(root.find((node) => String(node.type) === 'ChevronLeft').props.color).toBe(
+        palette.textSecondary
       )
-    })
-    const root = renderer!.root
-    const text = (children: string): ReactTestInstance =>
-      root.find((node) => String(node.type) === 'Text' && node.props.children === children)
 
-    expect(flat(root.findAll((node) => String(node.type) === 'View')[0]!.props.style).backgroundColor).toBe(
-      palette.bg
-    )
-    expect(flat(text('Edit host').props.style).color).toBe(palette.text)
-    expect(root.find((node) => String(node.type) === 'ChevronLeft').props.color).toBe(palette.textSecondary)
+      const save = root.find(
+        (node) => node.props.accessibilityLabel === 'Save host' && String(node.type) === 'Pressable'
+      )
+      expect(flat(save.props.style).backgroundColor).toBe(palette.text)
+      expect(flat(text('Save').props.style).color).toBe(palette.textInverse)
 
-    const save = root.find((node) => node.props.accessibilityLabel === 'Save host' && String(node.type) === 'Pressable')
-    expect(flat(save.props.style).backgroundColor).toBe(palette.text)
-    expect(flat(text('Save').props.style).color).toBe(palette.textInverse)
-
-    expect(flat(text('Name').props.style).color).toBe(palette.textSecondary)
-    const nameInput = root.find((node) => String(node.type) === 'TextInput' && node.props.accessibilityLabel === 'Name')
-    expect(flat(nameInput.props.style)).toMatchObject({
-      backgroundColor: palette.bgPanel,
-      borderColor: palette.border,
-      color: palette.text
-    })
-    expect(nameInput.props.placeholderTextColor).toBe(palette.textMuted)
-  })
+      expect(flat(text('Name').props.style).color).toBe(palette.textSecondary)
+      const nameInput = root.find(
+        (node) => String(node.type) === 'TextInput' && node.props.accessibilityLabel === 'Name'
+      )
+      expect(flat(nameInput.props.style)).toMatchObject({
+        backgroundColor: palette.bgPanel,
+        borderColor: palette.border,
+        color: palette.text
+      })
+      expect(nameInput.props.placeholderTextColor).toBe(palette.textMuted)
+    }
+  )
 })

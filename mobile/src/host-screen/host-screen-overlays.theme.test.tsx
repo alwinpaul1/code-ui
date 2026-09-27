@@ -31,7 +31,9 @@ vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
     visible ? createElement('BottomDrawer', null, children) : null
 }))
-vi.mock('../components/NewWorktreeModalController', () => ({ NewWorktreeModalController: () => null }))
+vi.mock('../components/NewWorktreeModalController', () => ({
+  NewWorktreeModalController: () => null
+}))
 vi.mock('../agent-history/MobileAgentSessionHistoryIcon', () => ({
   MobileAgentSessionHistoryIcon: 'MobileAgentSessionHistoryIcon'
 }))
@@ -103,7 +105,12 @@ function controllerFor(open: OverlayState): HostScreenController {
       setShowGroupPicker: noop,
       showFilterModal: open.showFilterModal ?? false,
       setShowFilterModal: noop,
-      filters: { hideSleeping: true, hideDefaultBranch: false, showArchived: false, filterRepoIds: new Set() },
+      filters: {
+        hideSleeping: true,
+        hideDefaultBranch: false,
+        showArchived: false,
+        filterRepoIds: new Set()
+      },
       actionTarget: open.actionTarget ?? null,
       setActionTarget: noop,
       confirmDelete: open.confirmDelete ?? null,
@@ -125,7 +132,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(raw) ? raw.flat(Infinity) : [raw]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -148,7 +157,9 @@ function render(scheme: 'light' | 'dark', open: OverlayState): ReactTestInstance
 
 /** The Text node drawing exactly `children` (a Txt renders one host Text). */
 const text = (root: ReactTestInstance, children: string): ReactTestInstance =>
-  root.findAll((node) => String(node.type) === 'Text' && [node.props.children].flat().join('') === children)[0]!
+  root.findAll(
+    (node) => String(node.type) === 'Text' && [node.props.children].flat().join('') === children
+  )[0]!
 
 describe.each([
   ['light', lightColors],

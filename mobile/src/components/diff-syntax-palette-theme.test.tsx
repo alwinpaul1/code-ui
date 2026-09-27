@@ -24,16 +24,19 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ MessageSquare: 'Icon', Plus: 'Icon', X: 'Icon' }))
 vi.mock('./BottomDrawer', () => ({
-  BottomDrawer: ({ children }: { children: unknown }) => createElement('BottomDrawer', null, children as never)
+  BottomDrawer: ({ children }: { children: unknown }) =>
+    createElement('BottomDrawer', null, children as never)
 }))
 // The tasks barrel re-exports half the app; the PR diff needs only these.
 vi.mock('../tasks/mobile-tasks-dependencies', async () => {
   const react = await vi.importActual<typeof import('react')>('react')
-  const theme = await vi.importActual<typeof import('../theme/mobile-theme')>('../theme/mobile-theme')
+  const theme =
+    await vi.importActual<typeof import('../theme/mobile-theme')>('../theme/mobile-theme')
   const syntax = await vi.importActual<typeof import('../session/mobile-file-syntax')>(
     '../session/mobile-file-syntax'
   )
-  const segments = await vi.importActual<typeof import('./MobileSyntaxSegments')>('./MobileSyntaxSegments')
+  const segments =
+    await vi.importActual<typeof import('./MobileSyntaxSegments')>('./MobileSyntaxSegments')
   const prDiff = await vi.importActual<typeof import('../tasks/github-pr-file-diff')>(
     '../tasks/github-pr-file-diff'
   )
@@ -65,7 +68,13 @@ const SEGMENTS = [
   { text: ' a = ', kind: 'plain' as const },
   { text: "'b'", kind: 'string' as const }
 ]
-const LINE = { kind: 'add' as const, text: "const a = 'b'", newLineNumber: 3, segments: SEGMENTS, highlighted: true }
+const LINE = {
+  kind: 'add' as const,
+  text: "const a = 'b'",
+  newLineNumber: 3,
+  segments: SEGMENTS,
+  highlighted: true
+}
 
 const sessionRowProps = {
   line: LINE,
@@ -132,7 +141,9 @@ afterEach(() => {
 })
 
 function colourOf(root: ReactTestInstance, text: string): unknown {
-  const span = root.findAll((node) => String(node.type) === 'Text' && node.props.children === text)[0]
+  const span = root.findAll(
+    (node) => String(node.type) === 'Text' && node.props.children === text
+  )[0]
   expect(span, `a span reading ${JSON.stringify(text)}`).toBeDefined()
   const style = span!.props.style as { color?: unknown } | undefined
   return style?.color
@@ -141,14 +152,17 @@ function colourOf(root: ReactTestInstance, text: string): unknown {
 describe.each([
   ['light', lightSyntaxPalette],
   ['dark', darkSyntaxPalette]
-] as [string, SyntaxPalette][])('syntax colours on a diff row in a %s session', (scheme, palette) => {
-  it.each(ROWS)('colour the code on %s from the theme', (_name, element) => {
-    act(() => {
-      renderer = create(
-        <ThemeProvider initialPreference={scheme as 'light' | 'dark'}>{element()}</ThemeProvider>
-      )
+] as [string, SyntaxPalette][])(
+  'syntax colours on a diff row in a %s session',
+  (scheme, palette) => {
+    it.each(ROWS)('colour the code on %s from the theme', (_name, element) => {
+      act(() => {
+        renderer = create(
+          <ThemeProvider initialPreference={scheme as 'light' | 'dark'}>{element()}</ThemeProvider>
+        )
+      })
+      expect(colourOf(renderer!.root, 'const')).toBe(palette.keyword)
+      expect(colourOf(renderer!.root, "'b'")).toBe(palette.string)
     })
-    expect(colourOf(renderer!.root, 'const')).toBe(palette.keyword)
-    expect(colourOf(renderer!.root, "'b'")).toBe(palette.string)
-  })
-})
+  }
+)

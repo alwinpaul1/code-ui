@@ -41,7 +41,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(raw) ? raw.flat(Infinity) : [raw]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -90,7 +92,9 @@ describe('the Quick Command editor', () => {
 
     // The Action toggle: "Terminal Command" is selected, "Agent Prompt" rests.
     expect(flat(text('Terminal Command').props.style).color).toBe(palette.text)
-    expect(flat(text('Terminal Command').parent!.props.style).backgroundColor).toBe(palette.bgRaised)
+    expect(flat(text('Terminal Command').parent!.props.style).backgroundColor).toBe(
+      palette.bgRaised
+    )
     expect(flat(text('Agent Prompt').props.style).color).toBe(palette.textSecondary)
     expect(flat(text('Agent Prompt').parent!.props.style).backgroundColor).toBe(palette.bgPanel)
 

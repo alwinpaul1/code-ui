@@ -50,7 +50,10 @@ afterEach(() => {
   renderer = null
 })
 
-function render(scheme: 'light' | 'dark', element: ReturnType<typeof createElement>): ReactTestInstance {
+function render(
+  scheme: 'light' | 'dark',
+  element: ReturnType<typeof createElement>
+): ReactTestInstance {
   act(() => {
     renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
   })
@@ -61,12 +64,16 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(style) ? style.flat(Infinity) : [style]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
 const textNode = (root: ReactTestInstance, text: string) =>
-  root.find((node) => String(node.type) === 'Text' && [node.props.children].flat().join('') === text)
+  root.find(
+    (node) => String(node.type) === 'Text' && [node.props.children].flat().join('') === text
+  )
 
 function row(state: string): WorktreeListRowItem {
   return {
@@ -103,7 +110,9 @@ describe.each([
         onPress: () => undefined
       })
     )
-    expect(root.find((node) => String(node.type) === 'GitPullRequest').props.color).toBe(palette[token])
+    expect(root.find((node) => String(node.type) === 'GitPullRequest').props.color).toBe(
+      palette[token]
+    )
     expect(flat(textNode(root, '#123').props.style).color).toBe(palette[token])
   })
 

@@ -57,8 +57,12 @@ export function MobileSourceControlPrChip({ summary, onPress }: Props) {
       ) : (
         <>
           <Text style={hubStyles.chipNumber}>#{summary.number}</Text>
-          <View style={[hubStyles.statePill, { borderColor: statusColor(summary.stateToken, colors) }]}>
-            <Text style={[hubStyles.statePillText, { color: statusColor(summary.stateToken, colors) }]}>
+          <View
+            style={[hubStyles.statePill, { borderColor: statusColor(summary.stateToken, colors) }]}
+          >
+            <Text
+              style={[hubStyles.statePillText, { color: statusColor(summary.stateToken, colors) }]}
+            >
               {summary.stateLabel}
             </Text>
           </View>

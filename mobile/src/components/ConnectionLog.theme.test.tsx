@@ -21,7 +21,13 @@ import type { ConnectionLogEntry } from '../transport/types'
 import { ConnectionLog } from './ConnectionLog'
 
 const ENTRIES: ConnectionLogEntry[] = [
-  { id: 'a', ts: 1_000, level: 'info', message: 'Opening WebSocket', detail: 'ws://192.168.1.10:6768' },
+  {
+    id: 'a',
+    ts: 1_000,
+    level: 'info',
+    message: 'Opening WebSocket',
+    detail: 'ws://192.168.1.10:6768'
+  },
   { id: 'b', ts: 1_250, level: 'success', message: 'Connected' },
   { id: 'c', ts: 1_400, level: 'warn', message: 'Relay slow' },
   { id: 'd', ts: 1_500, level: 'error', message: 'Handshake failed' }
@@ -31,7 +37,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(style) ? style.flat(Infinity) : [style]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -46,29 +54,32 @@ describe('the connection log', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('draws its card, heading, timestamps and levels from the %s theme', (scheme, palette) => {
-    act(() => {
-      renderer = create(
-        <ThemeProvider initialPreference={scheme}>
-          <ConnectionLog entries={ENTRIES} title="Pairing" />
-        </ThemeProvider>
-      )
-    })
-    const root = renderer!.root
-    const text = (children: string): ReactTestInstance =>
-      root.find((node) => String(node.type) === 'Text' && node.props.children === children)
+  ] as const)(
+    'draws its card, heading, timestamps and levels from the %s theme',
+    (scheme, palette) => {
+      act(() => {
+        renderer = create(
+          <ThemeProvider initialPreference={scheme}>
+            <ConnectionLog entries={ENTRIES} title="Pairing" />
+          </ThemeProvider>
+        )
+      })
+      const root = renderer!.root
+      const text = (children: string): ReactTestInstance =>
+        root.find((node) => String(node.type) === 'Text' && node.props.children === children)
 
-    const card = root.findAll((node) => String(node.type) === 'View')[0]!
-    expect(flat(card.props.style)).toMatchObject({
-      backgroundColor: palette.bgPanel,
-      borderColor: palette.border
-    })
-    expect(flat(text('Pairing').props.style).color).toBe(palette.textMuted)
-    expect(flat(text('+0.00s').props.style).color).toBe(palette.textMuted)
-    expect(flat(text('ws://192.168.1.10:6768').props.style).color).toBe(palette.textMuted)
-    expect(flat(text('Opening WebSocket').props.style).color).toBe(palette.textSecondary)
-    expect(flat(text('Connected').props.style).color).toBe(palette.success)
-    expect(flat(text('Relay slow').props.style).color).toBe(palette.warning)
-    expect(flat(text('Handshake failed').props.style).color).toBe(palette.danger)
-  })
+      const card = root.findAll((node) => String(node.type) === 'View')[0]!
+      expect(flat(card.props.style)).toMatchObject({
+        backgroundColor: palette.bgPanel,
+        borderColor: palette.border
+      })
+      expect(flat(text('Pairing').props.style).color).toBe(palette.textMuted)
+      expect(flat(text('+0.00s').props.style).color).toBe(palette.textMuted)
+      expect(flat(text('ws://192.168.1.10:6768').props.style).color).toBe(palette.textMuted)
+      expect(flat(text('Opening WebSocket').props.style).color).toBe(palette.textSecondary)
+      expect(flat(text('Connected').props.style).color).toBe(palette.success)
+      expect(flat(text('Relay slow').props.style).color).toBe(palette.warning)
+      expect(flat(text('Handshake failed').props.style).color).toBe(palette.danger)
+    }
+  )
 })

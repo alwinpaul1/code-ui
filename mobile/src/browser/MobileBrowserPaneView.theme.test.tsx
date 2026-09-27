@@ -155,10 +155,13 @@ describe('the in-app browser toolbar', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('shows a readable spinner on the %s canvas before the first frame', (scheme, palette) => {
-    const root = render(scheme, { renderedFrameSource: null })
-    const spinner = root.findByType('ActivityIndicator' as never)
-    expect(styleOf(spinner.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
-    expect(spinner.props.color).toBe(palette.textSecondary)
-  })
+  ] as const)(
+    'shows a readable spinner on the %s canvas before the first frame',
+    (scheme, palette) => {
+      const root = render(scheme, { renderedFrameSource: null })
+      const spinner = root.findByType('ActivityIndicator' as never)
+      expect(styleOf(spinner.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
+      expect(spinner.props.color).toBe(palette.textSecondary)
+    }
+  )
 })

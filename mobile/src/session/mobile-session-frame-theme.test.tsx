@@ -46,7 +46,9 @@ vi.mock('../transport/host-mobile-capabilities', () => ({ useHostMobileCapabilit
 vi.mock('./use-mobile-native-chat-created-file-counts', () => ({
   useMobileNativeChatCreatedFileCounts: () => new Map()
 }))
-vi.mock('../files/markdown-image-resolver', () => ({ createMarkdownImageResolver: () => undefined }))
+vi.mock('../files/markdown-image-resolver', () => ({
+  createMarkdownImageResolver: () => undefined
+}))
 vi.mock('../ui/Button', () => ({ Button: () => null }))
 vi.mock('../ui/IconButton', () => ({ IconButton: () => null }))
 // The code viewer and the hooks around it (MobileSessionFileSource).
@@ -77,7 +79,9 @@ function flat(style: unknown): Record<string, unknown> {
   const list = Array.isArray(style) ? style.flat(Infinity) : [style]
   return Object.assign(
     {},
-    ...list.filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    ...list.filter(
+      (entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object'
+    )
   )
 }
 
@@ -121,7 +125,12 @@ const FILE_TAB = {
   language: 'plaintext'
 }
 
-const BROWSER_TAB = { type: 'browser', id: 'browser-1', browserPageId: 'page-1', url: 'https://example.com/' }
+const BROWSER_TAB = {
+  type: 'browser',
+  id: 'browser-1',
+  browserPageId: 'page-1',
+  url: 'https://example.com/'
+}
 
 let renderer: ReactTestRenderer | null = null
 afterEach(() => {
@@ -129,7 +138,10 @@ afterEach(() => {
   renderer = null
 })
 
-function render(scheme: 'light' | 'dark', element: ReturnType<typeof createElement>): ReactTestInstance {
+function render(
+  scheme: 'light' | 'dark',
+  element: ReturnType<typeof createElement>
+): ReactTestInstance {
   act(() => {
     renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
   })
@@ -164,7 +176,9 @@ describe.each([
       })
     )
     expect(flat(hosts(root, 'View')[0]!.props.style).backgroundColor).toBe(palette.bg)
-    const toast = root.find((node) => String(node.type) === 'Text' && node.props.children === 'Copied 3 lines')
+    const toast = root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === 'Copied 3 lines'
+    )
     expect(flat(toast.props.style)).toMatchObject({
       color: palette.text,
       backgroundColor: palette.bgRaised,
