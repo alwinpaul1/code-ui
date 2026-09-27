@@ -408,7 +408,13 @@ export function readPillFits(args: {
       // shows at least that much narrower than the room. Drawn within that
       // of the room or past it, it went down because it is wider.
       const proven = drawnFirst !== undefined && drawnFirst.width > room - FIT_ROOM
-      if (!span.fresh && proven && sameCut(cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined), span)) {
+      // Cut for this very room: its pieces are the ones drawn. A span cut
+      // fresh for a room that fitted nothing, then cut for this one into the
+      // same whole pill, is that too: the tree is the same, Fabric lays
+      // nothing out again, and what is drawn is how that cut falls (review
+      // of 63858e9e: `git push` stayed down with 102 dp left above it).
+      const forRoom = cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined)
+      if (proven && !forRoom.fresh && sameCut({ ...forRoom, fresh: span.fresh }, span)) {
         // Capped at once to what fits drawn as this one was: a unit at a
         // time stalled, because a break moved inside two pieces that still
         // share their line lays the line out as before, and Fabric sends no

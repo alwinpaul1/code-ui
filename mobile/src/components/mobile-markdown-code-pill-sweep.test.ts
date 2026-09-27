@@ -381,6 +381,26 @@ describe("pills at a system font size, with the room RN reserves for them", () =
   /** The curve's dp for 15 sp and 14 sp at each scale (the AOSP tables). */
   const CURVE: Readonly<Record<string, readonly [number, number]>> = { '1.3': [19.5, 18.8], '2': [27, 26] }
 
+  // A span first cut fresh (nothing fitted the room it had), then given more
+  // room, was cut the same whole pill again, only not fresh: the same tree,
+  // which Fabric does not lay out again, so the pill stayed down with 102 dp
+  // left above it for its first 43.
+  it('moves a pill up when more room comes and it is cut the same', () => {
+    system.api = 33
+    system.fontScale = 1.3
+    const as = { fontScale: 1.3, pillError: 1.03, placeholder: { system: 1.3, curve: false } }
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: 'I checked this again after Run `pnpm install` and `pnpm test` then `git push` to finish.'
+        })
+      )
+    })
+    act(() => device.layOutDocument(400))
+    const { lines, lineWidth } = device.settle(400, as)
+    expect([...sharedLines(lines), ...earlyLineEnds(lines, lineWidth, 1, as.pillError, as.fontScale, as.placeholder)]).toEqual([])
+  })
+
   it.each([
     ['Android 13', 33, 1.15, 1],
     ['Android 13', 33, 1.3, 1],
