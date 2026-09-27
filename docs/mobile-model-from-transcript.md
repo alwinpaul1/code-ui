@@ -29,8 +29,8 @@ and origin/main. Each row's `model` is the `message.model` of the LAST assistant
 record in that session's own file (`session-scanner-primary-parsers.ts:159-168`).
 Subagent transcripts are separate files that this list does not include. Orca
 lists them on demand through `listAiVaultSubagentSessionsInBackground`, so a
-session's row reads its main file. The phone already received this field on the history screen,
-through a loose reader, and read nothing from it.
+session's row reads its main file. The phone already received this field on
+the history screen, through a loose reader, and read nothing from it.
 
 The call is expensive. Once the host's 60 s cache has lapsed, it scans every
 agent's session store on the machine, WSL homes included on Windows. The host
@@ -44,7 +44,8 @@ under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
   connection), when the user opens the model sheet, and at the end of the
   first turn that began after the phone itself changed the model. It never
   asks on every turn end.
-- **Budget:** at most one attempt per host per five minutes. It sends
+- **Budget:** at most one attempt per host per five minutes, except the one
+  retry after a failure (below). It sends
   `limit: 20` and the history screen's own workspace `scopePaths`, so the two
   share the host's cache. Every call uses `force: false` except the one that
   confirms a model switch. That call is forced, because an answer the host
@@ -53,12 +54,13 @@ under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
   a chat for that host is on screen. An unforced reading counts as fresh only
   from one host-cache minute before it was asked for.
 - **Matching:** it reads only the row for this tab's exact session id. It skips
-  subagent rows and other agents' rows. It drops `<synthetic>` (the model Claude
+  other agents' rows, and any subagent row that ever appears. It drops `<synthetic>` (the model Claude
   Code records on a reply it wrote itself, such as an API error) and any id that
   is not a Claude id.
 - **Display:** only the name ("Opus 5.5"). The transcript records no effort and
   no window size. A Claude id with a family the table does not know shows as
-  the raw id.
+  the raw id. The drawer checks the row that the id matches through
+  `matchClaudeCatalogModelId`, as it now does for the beacon's full ids too.
 - **Priority:** the beacon or the badge always wins. After the phone's own
   `/model`, the fallback shows NOTHING. It never shows the pick, which is the
   phone's record and not the agent's word (the "Fable Medium" on an Opus
