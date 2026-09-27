@@ -36,6 +36,12 @@ class BackgroundLinkModule : Module() {
 
   private fun stopService() {
     val context = requireContext()
+    // Named for the service's stop record. Only while it runs: stopping a
+    // stopped service never reaches onDestroy, and a cause left set would
+    // be pinned on the next stop instead.
+    if (BackgroundLinkService.isRunning) {
+      BackgroundLinkService.requestedStopCause = BackgroundLinkService.STOP_JS
+    }
     context.stopService(Intent(context, BackgroundLinkService::class.java))
   }
 
@@ -106,6 +112,10 @@ class BackgroundLinkModule : Module() {
 
     Function("isRunning") {
       BackgroundLinkService.isRunning
+    }
+
+    Function("lastStop") {
+      BackgroundLinkService.lastStop(requireContext())
     }
 
     Function("isIgnoringBatteryOptimizations") {

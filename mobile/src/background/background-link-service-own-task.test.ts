@@ -62,6 +62,68 @@ describe("the background service outlives other modules' headless tasks", () => 
   })
 })
 
+/**
+ * Rule 9. The same night's log said "background service not running" eleven
+ * times and never once why: nothing logged when the service stopped, and the
+ * pause line read the state only on waking. So the service writes down when
+ * and why it stopped, and the pause line reads it back.
+ */
+describe('the background service leaves behind when and why it stopped', () => {
+  const module = kotlinCode(readFileSync(join(SOURCE_DIR, 'BackgroundLinkModule.kt'), 'utf8'))
+
+  it('records a stop every time it is destroyed, whoever stopped it', () => {
+    const onDestroy = functionBody(service, /override fun onDestroy\(\)/)
+    // JS's request outranks the task ending: switching delivery off does both,
+    // in either order, and "its task ended" would hide that the user did it.
+    expect(onDestroy).toMatch(
+      /recordStop\(\s*this,\s*requestedStopCause \?: stopCause \?: if \(taskRemoved\) STOP_TASK_REMOVED else STOP_EXTERNAL\s*\)/
+    )
+  })
+
+  it('names its own task ending as the cause before it stops itself', () => {
+    const onFinish = functionBody(service, /override fun onHeadlessJsTaskFinish\(\s*taskId: Int\s*\)/)
+    expect(onFinish).toMatch(/stopCause = STOP_TASK_ENDED[\s\S]*stopSelf\(\)/)
+  })
+
+  it('names a stop JS asked for, and only while there is a service to stop', () => {
+    const stop = functionBody(module, /private fun stopService\(\)/)
+    expect(stop).toMatch(
+      /if \(BackgroundLinkService\.isRunning\) \{?\s*BackgroundLinkService\.requestedStopCause = BackgroundLinkService\.STOP_JS[\s\S]*context\.stopService\(/
+    )
+  })
+
+  it('names a foreground-service timeout, and stops as Android requires', () => {
+    const onTimeout = functionBody(service, /override fun onTimeout\(\s*startId: Int,\s*fgsType: Int\s*\)/)
+    expect(onTimeout).toMatch(/stopCause = STOP_TIMEOUT[\s\S]*stopSelf\(\)/)
+  })
+
+  it('remembers being swiped out of Recents, and keeps running', () => {
+    const onTaskRemoved = functionBody(service, /override fun onTaskRemoved\(\s*rootIntent: Intent\?\s*\)/)
+    expect(onTaskRemoved).toMatch(/\btaskRemoved = true\b/)
+    expect(onTaskRemoved).toMatch(/recordTaskRemoved\(this\)/)
+    expect(onTaskRemoved).not.toMatch(/stopSelf/)
+  })
+
+  it('starts each run with no cause left over from an earlier one', () => {
+    const onStart = functionBody(service, /override fun onStartCommand\(/)
+    const freshRun = onStart.slice(onStart.indexOf('taskStarted = true'))
+    expect(freshRun).toMatch(/\bstopCause = null\b/)
+    expect(freshRun).toMatch(/\brequestedStopCause = null\b/)
+    expect(freshRun).toMatch(/\btaskRemoved = false\b/)
+    expect(freshRun).toMatch(/recordStart\(this\)/)
+  })
+
+  it('reads the last process exit only on Android versions that have the API', () => {
+    expect(service).toMatch(
+      /if \(Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.R\) \{[^}]*getHistoricalProcessExitReasons\(/
+    )
+  })
+
+  it('hands the record to JS', () => {
+    expect(module).toMatch(/Function\("lastStop"\) \{\s*BackgroundLinkService\.lastStop\(requireContext\(\)\)/)
+  })
+})
+
 /** Kotlin source with every comment removed and string literals left in place. */
 function kotlinCode(source: string): string {
   let out = ''
@@ -69,7 +131,9 @@ function kotlinCode(source: string): string {
   while (i < source.length) {
     const two = source.slice(i, i + 2)
     if (two === '//') {
-      while (i < source.length && source[i] !== '\n') i += 1
+      while (i < source.length && source[i] !== '\n') {
+        i += 1
+      }
     } else if (two === '/*') {
       const end = source.indexOf('*/', i + 2)
       i = end === -1 ? source.length : end + 2

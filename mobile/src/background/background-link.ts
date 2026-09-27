@@ -1,5 +1,6 @@
 import { peekLiveHostClient } from '../transport/live-host-clients'
 import { AppState, Platform } from 'react-native'
+import { requireOptionalNativeModule } from 'expo'
 import {
   isBackgroundLinkRunning,
   isBackgroundLinkSupported,
@@ -36,6 +37,11 @@ import {
 import { releaseBackgroundLinkTask } from './background-link-task-hold'
 import { AppPauseDetector, appPauseLogEntry } from './app-pause-detector'
 import { promptAfterPause } from './background-power-after-pause'
+import {
+  describeBackgroundServiceStop,
+  type BackgroundServiceStop,
+  type BackgroundServiceStopRecord
+} from './background-service-stop'
 import { defaultCancelTimer, defaultScheduleTimer } from '../transport/timer-scheduler'
 
 const SERVICE_TITLE = 'Code UI'
@@ -51,7 +57,8 @@ const pauseDetector = new AppPauseDetector({
   clearTimer: defaultCancelTimer,
   onPause: (pause) => {
     const background = backgroundDeliveryState()
-    const entry = appPauseLogEntry(pause, background)
+    const stop = background.serviceRunning ? null : readBackgroundServiceStop()
+    const entry = appPauseLogEntry(pause, background, stop)
     // Say so now, while the cost is concrete; shown when the screen is up.
     if (promptAfterPause({ pausedMs: pause.to - pause.from, unrestricted: background.unrestricted })) {
       openBackgroundPowerPrompt('paused', pause.to - pause.from)
@@ -126,6 +133,28 @@ export function backgroundDeliveryState(): { serviceRunning: boolean; unrestrict
   return {
     serviceRunning: isBackgroundLinkRunning(),
     unrestricted: isBackgroundDeliveryUnrestricted()
+  }
+}
+
+// Why the module is looked up here instead of through @codeui/expo-background-link:
+// the copy of that package the app compiles against is a pnpm snapshot under
+// node_modules, refreshed only by `pnpm install`, and a build made from a stale
+// snapshot has no `lastStop`. Checked for, it costs that build its stop reason
+// ("stop reason unknown") instead of throwing inside the pause handler.
+type NativeServiceStopReader = { lastStop?: () => BackgroundServiceStopRecord }
+const nativeStopReader: NativeServiceStopReader | null =
+  Platform.OS === 'android' ? requireOptionalNativeModule<NativeServiceStopReader>('BackgroundLink') : null
+
+/** When and why the background service last stopped, if it said. */
+export function readBackgroundServiceStop(): BackgroundServiceStop | null {
+  try {
+    // Called on the module, not detached from it: a native function may need its receiver.
+    return typeof nativeStopReader?.lastStop === 'function'
+      ? describeBackgroundServiceStop(nativeStopReader.lastStop())
+      : null
+  } catch {
+    // Unreadable preferences cost the line its stop reason, nothing more.
+    return null
   }
 }
 
