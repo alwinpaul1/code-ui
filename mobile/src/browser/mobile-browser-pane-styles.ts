@@ -151,7 +151,7 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
       fontWeight: '600'
     },
     dialogButtonPrimaryText: {
-      // On surfaceBright (an inverse fill: near-white in dark, near-black in light), so the label
+      // On an inverse fill (`colors.text`: near-white in dark, near-black in light), so the label
       // takes the inverse text colour, not the page's own.
       color: colors.textInverse
     },

@@ -12,7 +12,7 @@ import { useThemedStyles, type Theme } from '../theme/theme-context'
  * Drawn from the theme, where upstream draws it from the static dark palette: the screen behind
  * it is a native one that follows the appearance setting, and a fixed colour flashed a dark frame
  * before every light screen. `HostProtocolGate`'s pending state, the surface above every switch,
- * is still the static palette.
+ * draws from the theme too.
  */
 export function ShellSwitchPendingScreen() {
   const themed = useThemedStyles(pendingStyles)

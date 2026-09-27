@@ -1,18 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '../test/contrast'
-import { colors } from './mobile-theme'
 import { darkColors, lightColors, type ThemeColors } from './tokens'
 
+// These two cases measured the static dark palette in mobile-theme.ts until it was deleted
+// (2026-09-27). Its values were the dark scheme's, so the dark rows below are the same numbers;
+// the light rows are the half it never measured.
 describe('mobile text contrast', () => {
-  it('keeps muted text readable on every standard dark surface', () => {
-    for (const surface of [colors.bgBase, colors.bgPanel, colors.bgRaised]) {
-      expect(contrastRatio(colors.textMuted, surface)).toBeGreaterThanOrEqual(4.5)
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: keeps muted text readable on every standard surface', (scheme, palette) => {
+    for (const surface of [palette.bg, palette.bgPanel, palette.bgRaised]) {
+      expect(
+        contrastRatio(palette.textMuted, surface),
+        `${scheme}: muted ${palette.textMuted} on ${surface}`
+      ).toBeGreaterThanOrEqual(4.5)
     }
   })
 
-  it('keeps secondary text more prominent than muted text', () => {
-    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThan(
-      contrastRatio(colors.textMuted, colors.bgPanel)
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: keeps secondary text more prominent than muted text', (_scheme, palette) => {
+    expect(contrastRatio(palette.textSecondary, palette.bgPanel)).toBeGreaterThan(
+      contrastRatio(palette.textMuted, palette.bgPanel)
     )
   })
 })

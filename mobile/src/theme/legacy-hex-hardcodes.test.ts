@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { colors } from './mobile-theme'
+import { describe, expect, it, vi } from 'vitest'
+
+// The host screen's style module builds its sheets with react-native's StyleSheet, whose real
+// entry Node cannot parse; the label constant is all this file reads from it.
+vi.mock('react-native', () => ({ StyleSheet: { create: (s: unknown) => s, hairlineWidth: 1 } }))
+
+import { ON_DESTRUCTIVE_FILL } from '../host-screen/host-screen-secondary-styles'
+import { darkColors, lightColors } from './tokens'
 
 const SRC = join(import.meta.dirname, '..')
 
@@ -60,14 +66,24 @@ function contrastRatio(foreground: string, background: string): number {
   return (lighter + 0.05) / (darker + 0.05)
 }
 
-// The host list's Delete confirmation paints its own statusRed in both
-// schemes, so its label is measured against that fill, not the page.
+// The host list's Delete confirmation paints the theme's `danger` fill, so
+// its label is measured against that fill, not the page. Until 2026-09-27
+// this read the static palette's `onStatusRed` / `statusRed`, which were the
+// dark scheme's values; the light fill is the half it never measured.
 describe('the destructive confirmation label', () => {
-  it('is drawn in the palette’s on-red token, and that token is white on red like the platform’s own', () => {
-    expect(colors.onStatusRed).toBe('#ffffff')
+  it('is white on red like the platform’s own, in both schemes', () => {
+    expect(ON_DESTRUCTIVE_FILL).toBe('#ffffff')
   })
 
-  it('clears the 3:1 floor for a bold label on its fill (it does not reach 4.5:1; white on this red is 3.3:1, and iOS ships 3.0:1 for the same control)', () => {
-    expect(contrastRatio(colors.onStatusRed, colors.statusRed)).toBeGreaterThanOrEqual(3)
-  })
+  it.each([
+    ['light', lightColors, 5.4],
+    ['dark', darkColors, 3.2]
+  ] as const)(
+    '%s: clears the 3:1 floor for a bold label on its fill (dark does not reach 4.5:1; white on that red is 3.25:1, and iOS ships 3.0:1 for the same control)',
+    (_scheme, palette, measured) => {
+      const ratio = contrastRatio(ON_DESTRUCTIVE_FILL, palette.danger)
+      expect(ratio).toBeGreaterThanOrEqual(3)
+      expect(ratio).toBeGreaterThanOrEqual(measured)
+    }
+  )
 })

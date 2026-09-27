@@ -1,61 +1,11 @@
-// LEGACY static palette (dark only). Kept so screens not yet converted keep
-// compiling; values are the Code UI warm-dark tokens so they blend with the
-// themed screens in dark mode. New code must use `useTheme()` from
-// theme-context instead — this object cannot follow the appearance setting.
-
-export const colors = {
-  bgBase: '#1A1917',
-  bgPanel: '#211F1C',
-  bgRaised: '#2B2925',
-  borderSubtle: '#332F2A',
-  editorSurface: '#1E1C19',
-
-  textPrimary: '#ECE9E2',
-  textSecondary: '#B8B4AB',
-  textMuted: '#9A968D',
-
-  // Crisp near-white surface for the single primary action on a screen (the
-  // worktree FAB). Brighter than textPrimary so it reads as a solid button, not
-  // disabled chrome, while staying monochrome (STYLEGUIDE: color is for state).
-  surfaceBright: '#F3F1EA',
-
-  accentBlue: '#D9825F',
-  // Text/icon color on a filled accent (accentBlue) button, where the muted
-  // textPrimary would lack contrast against the saturated fill.
-  onAccent: '#1A1917',
-
-  statusGreen: '#5FB57F',
-  statusAmber: '#D9A441',
-  statusRed: '#E06C5B',
-  // Merge CTA fill + its on-fill text, mirroring the desktop ChecksPanel's
-  // bg-green-600 "Squash and merge" button (green-600 / white).
-  mergeGreen: '#16a34a',
-  onMergeGreen: '#ffffff',
-  // Label on a statusRed fill (the host list's Delete confirmation). White,
-  // as the platform draws its own destructive buttons; 3.3:1 on this red,
-  // which clears the 3:1 floor for a bold label and not the 4.5:1 body
-  // target. Ink (#1A1917) would reach 5.4:1 and change what a destructive
-  // button looks like; that is a product call, not a token's.
-  onStatusRed: '#ffffff',
-  // Merged-PR purple, mirroring the desktop ReviewIcon's purple-400/70 tone.
-  statusPurple: '#a78bfa',
-  gitDecorationAdded: '#81b88b',
-  gitDecorationDeleted: '#c74e39',
-  diffAddedBg: 'rgba(129, 184, 139, 0.1)',
-  diffDeletedBg: 'rgba(199, 78, 57, 0.11)',
-
-  syntaxComment: '#6a9955',
-  syntaxKeyword: '#569cd6',
-  syntaxString: '#ce9178',
-  syntaxNumber: '#b5cea8',
-  syntaxType: '#4ec9b0',
-  syntaxFunction: '#dcdcaa',
-  syntaxVariable: '#9cdcfe',
-  syntaxMeta: '#c586c0',
-
-  // Terminal WebView background (Tokyonight) — separate from app chrome
-  terminalBg: '#1a1b26'
-} as const
+// Scheme-independent layout constants: spacing, corner radii and type sizes.
+//
+// There are no colours here. A static `colors` palette (dark only) lived in
+// this file until 2026-09-27, and every screen that imported it drew dark in a
+// light session while types, tests and the render all passed. Colours come
+// from the live theme: `useTheme().colors` / `useThemedStyles(factory)` from
+// theme-context, over `lightColors` / `darkColors` in tokens.ts. With the
+// export gone, an import of `colors` from this module fails typecheck.
 
 export const spacing = {
   xs: 4,
