@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, type RefObject } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { FlashListRef } from '@shopify/flash-list'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
+import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
 
 /** Inside this many px of the live edge the list counts as at the tail.
  *
@@ -83,8 +84,10 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  What this fork keeps that upstream has no counterpart for: the reader's hold
  *  and long-press ownership and the text-selection flag that rides with it (see
  *  `use-mobile-chat-following.ts`), the new-data-only follow gate (see
- *  `mobile-chat-follow-gate.ts`), and a jump-to-latest control that rises the
- *  instant a drag starts rather than waiting for the list to leave the tail. */
+ *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises the
+ *  instant a drag starts rather than waiting for the list to leave the tail,
+ *  and putting the view back where FlashList drew once a pushed route stops
+ *  covering the screen (`onScreenFocus` below). */
 export function useMobileNativeChatTailFollow<TItem>(input: {
   /** The list's rows. Their identity arms the follow gate; their emptiness
    *  guards every pin, as upstream's `hasItems` does. */
@@ -354,6 +357,52 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     },
     [detachFromTail]
   )
+
+  // A pushed route (the Files explorer, a file preview, Settings) took this
+  // screen out of the window, and the reader was up in history. On Android
+  // FlashList keeps their place THROUGH the native scroll view: it moves an
+  // invisible anchor row and the native `maintainVisibleContentPosition`
+  // scrolls the view by as much (FlashList `ScrollAnchor.tsx`,
+  // `supportsOffsetCorrection` in `PlatformHelper.android.ts`). Out of the
+  // window that native helper is stopped (react-native-screens
+  // `ScreenStack.onUpdate` removes the covered fragment;
+  // `ReactScrollView.onDetachedFromWindow` stops the helper), but FlashList is
+  // not told: each row the agent added still moved its own idea of the offset
+  // on (`applyOffsetCorrection`) while the view stayed put. Back on top it drew
+  // rows for a place the viewport was not at: a blank list under a ↓, until a
+  // scroll reported the real offset (2026-09-27, Galaxy S23 Ultra, the Files
+  // explorer opened mid-turn). So put the view where FlashList drew, which is
+  // also where it kept the reader's place; if the two already agree, nothing
+  // moves. Refs only: a new callback would make the focus hook report a blur
+  // and a focus again.
+  //
+  // Not guarded on `holding` or `dragging` as `pinToTail` is: no finger can be
+  // on a list its screen covered, so either flag set here is a touch end the
+  // push swallowed, and obeying it brought the blank back.
+  const coveredRef = useRef(false)
+  const onScreenFocus = useCallback(
+    (focused: boolean) => {
+      if (!focused) {
+        coveredRef.current = true
+        return
+      }
+      if (!coveredRef.current) {
+        return
+      }
+      coveredRef.current = false
+      // At the live edge the tail pin owns the list.
+      if (followingRef.current) {
+        return
+      }
+      const list = listRef.current
+      if (!list) {
+        return
+      }
+      list.scrollToOffset({ offset: list.getAbsoluteLastScrollOffset(), animated: false })
+    },
+    [followingRef]
+  )
+  useNativeChatScreenFocus(onScreenFocus)
 
   return {
     listRef,

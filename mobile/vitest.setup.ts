@@ -42,8 +42,9 @@ vi.mock('@react-native-async-storage/async-storage', () => {
 // Why: the chat list reads its screen's navigation focus through expo-router's
 // useFocusEffect (use-native-chat-screen-focus.ts), and expo-router has no Node
 // entry: every test that draws the chat would fail at import. Stubbed, the list
-// hears no focus report and its running rows keep sweeping, which is the hook's
-// fail-open answer. Its own test unmocks it; a local mock takes priority.
+// hears no focus report, so its running rows keep sweeping and nothing moves
+// the list on a focus, which is the hook's fail-open answer. Its own test
+// and MobileNativeChatView-covered.test.ts unmock it; a local mock takes priority.
 vi.mock('./src/session/use-native-chat-screen-focus', () => ({
   useNativeChatScreenFocus: () => undefined
 }))
