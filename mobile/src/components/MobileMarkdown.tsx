@@ -10,8 +10,10 @@ import { openExternalLink } from '../platform/external-link'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import {
   MARKDOWN_BASE_SIZE,
+  markdownHeadingStyle,
   useMarkdownStyles,
-  type MarkdownStyles
+  type MarkdownStyles,
+  type MarkdownWords
 } from './mobile-markdown-styles'
 import {
   detectFilePathSegments,
@@ -95,15 +97,6 @@ function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void)
   }
 }
 
-/** A heading's style over its level, with its size and line height at the
- *  reader's zoom. */
-function headingStyle(styles: MarkdownStyles, level: number, textScale: number) {
-  const scale =
-    level <= 1 ? styles.headingLevel1 : level === 2 ? styles.headingLevel2 : level === 3 ? styles.headingLevel3 : null
-  const line = { ...styles.heading, ...scale }
-  return [styles.heading, scale, markdownZoomedLine(line.fontSize, line.lineHeight, textScale)]
-}
-
 /** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
  *  a box for a task item whichever list it sits in. */
 function listMarker(item: MobileMarkdownListItem): string {
@@ -159,7 +152,9 @@ function renderInline(
   onOpenFile: ((pathText: string) => void) | undefined,
   /** How the Text this lands in cuts its code spans into pills, from its own
    *  measured lines (use-markdown-code-pill-runs.ts). */
-  pills: CodePillRun
+  pills: CodePillRun,
+  /** The words these are set in, at the reader's zoom. */
+  words: MarkdownWords
 ): ReactNode[] {
   const parts: ReactNode[] = []
   pills.noteSource(text)
@@ -222,7 +217,7 @@ function renderInline(
           : undefined
       if (isInlineCodeChip(code)) {
         // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
-        const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex))
+        const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex), words.fontSize)
         pieces.forEach((piece, pieceIndex) => {
           parts.push(
             <MobileMarkdownCodeChip
@@ -243,7 +238,7 @@ function renderInline(
               piece={piece}
               styles={styles}
               chipScale={pills.chipScale}
-              table={pills.table}
+              words={words}
               onPress={openFile}
             />
           )
@@ -263,19 +258,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, words)}
         </Text>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, words)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile, pills)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile, pills, words)}
         </Text>
       )
     }
@@ -307,12 +302,15 @@ function MobileMarkdownInner({
   // why the line height is not simply `(size + 8) * scale`.
   const scaled = (size: number) => markdownProseScale(size, textScale)
   const proseScale = scaled(MARKDOWN_BASE_SIZE)
+  // The prose's words at the zoom, which its code pills are set from.
+  const proseWords: MarkdownWords = proseScale ?? styles.paragraph
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
   const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity)
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
   const mermaidSourceOccurrences = new Map<string, number>()
+  const heading = (level: number) => markdownHeadingStyle(styles, level, textScale)
 
   // See mobile-markdown-prose-runs.ts for why the blocks group as they do.
   const runs = buildProseRuns(
@@ -346,8 +344,8 @@ function MobileMarkdownInner({
               <Fragment key={memberIndex}>
                 {memberIndex > 0 ? '\n' : null}
                 {member.type === 'heading' ? (
-                  <Text style={headingStyle(styles, member.level, textScale)}>
-                    {renderInline(styles, member.text, onOpenFile, pills)}
+                  <Text style={heading(member.level).style}>
+                    {renderInline(styles, member.text, onOpenFile, pills, heading(member.level).words)}
                     {end}
                   </Text>
                 ) : member.type === 'rule' ? (
@@ -362,7 +360,7 @@ function MobileMarkdownInner({
                         {marker ? (
                           <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
                         ) : null}
-                        {renderInline(styles, item.text, onOpenFile, pills)}
+                        {renderInline(styles, item.text, onOpenFile, pills, proseWords)}
                       </Fragment>
                     )
                   })
@@ -381,7 +379,7 @@ function MobileMarkdownInner({
                   // next as literal asterisks on the phone (reported from the
                   // device); the parser has already reflowed soft wraps, so
                   // any newline left here is a deliberate hard break.
-                  renderInline(styles, member.text, onOpenFile, pills)
+                  renderInline(styles, member.text, onOpenFile, pills, proseWords)
                 )}
                 {member.type === 'heading' ? null : end}
               </Fragment>
@@ -423,7 +421,7 @@ function MobileMarkdownInner({
           // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
           const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
           const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
-          const quoted = renderInline(styles, block.text, onOpenFile, pills)
+          const quoted = renderInline(styles, block.text, onOpenFile, pills, proseScale ?? styles.quoteText)
           return (
             <View key={index} style={styles.quoteBlock}>
               <Text
@@ -469,7 +467,8 @@ function MobileMarkdownInner({
             const width = columnWidths[cellIndex] ?? 0
             const inner = width - 2 * styles.tableCell.paddingHorizontal - styles.tableCell.borderRightWidth
             const pills = pillRuns(`table:${index}:${rowKey}:${cellIndex}`, inner, true)
-            const children = renderInline(styles, source, onOpenFile, pills)
+            const cellLine = markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, textScale)
+            const children = renderInline(styles, source, onOpenFile, pills, cellLine ?? styles.tableCell)
             return (
               // No width in a cell's key: its width moves only with the zoom,
               // which changes its pills' style too, so Fabric lays it out
@@ -485,7 +484,7 @@ function MobileMarkdownInner({
                   { width },
                   // The cell's text follows the zoom, as its column already
                   // does (computeTableColumnWidths) and its pills do.
-                  markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, textScale)
+                  cellLine
                 ]}
                 textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}

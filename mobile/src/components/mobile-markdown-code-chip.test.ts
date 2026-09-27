@@ -42,6 +42,11 @@ describe('inline code chips', () => {
 
   it('splits a long path into pills that wrap, cut after the slash like the Claude app', () => {
     const root = render('APK at `~/Desktop/code-ui-android-v0.5.17-139.apk` for you.')
+    // A 260 dp line: the pill's text is set from the words' size now (0.9
+    // of it, 2026-09-28), and at the 280 dp a Text is cut to before it is
+    // measured this path fits whole.
+    const document = root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
+    act(() => document.props.onLayout({ nativeEvent: { layout: { width: 260, height: 40, x: 0, y: 0 } } }))
     const chips = root.findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
     expect(chips.map((chip) => chip.findByType('Text' as never).children.join(''))).toEqual([
       '~/Desktop/',
@@ -163,7 +168,9 @@ describe('a path that fits the measured line', () => {
     renderer = null
   })
   it('is one pill once the width is known, two before', () => {
-    const path = '.claude/worktrees/agent-a1922af126912f522'
+    // Longer than the 2026-09-20 path, which fits the 280 dp a Text is cut to
+    // before it is measured now that a pill's text is 0.9 of its words'.
+    const path = '.claude/worktrees/agent-a1922af126912f522-review-pass'
     act(() => {
       renderer = create(createElement(MobileMarkdown, { content: `at \`${path}\` still` }))
     })
@@ -171,7 +178,7 @@ describe('a path that fits the measured line', () => {
       renderer!.root
         .findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
         .map((chip) => chip.findByType('Text' as never).children.join(''))
-    expect(chips()).toEqual(['.claude/worktrees/', 'agent-a1922af126912f522'])
+    expect(chips()).toEqual(['.claude/worktrees/', 'agent-a1922af126912f522-review-pass'])
     const root = renderer!.root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
     act(() => root.props.onLayout({ nativeEvent: { layout: { width: 372, height: 40, x: 0, y: 0 } } }))
     expect(chips()).toEqual([path])

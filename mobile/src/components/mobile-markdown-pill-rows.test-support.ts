@@ -83,6 +83,9 @@ export type RowLine = {
   /** The largest type size of the words on it, in sp and in dp. */
   wordsSize: number
   wordsSizeDp: number
+  /** Where its baseline would be with no pill on it: a line of its words,
+   *  or of its paragraph's type when it holds nothing but pills. */
+  plainAbove: number
 }
 
 export type PillRow = {
@@ -208,14 +211,19 @@ export function pillRows(text: ReactTestInstance, lineWidth: number, as: PhoneAs
     return mine
   })
   const heights: { drawn: number; placed: number }[] = []
+  const faces: Face[] = []
   let paragraphStart = 0
   lineCells.forEach((mine, index) => {
     const last = mine.at(-1)
     if (index === lineCells.length - 1 || (last?.kind === 'char' && last.ch === '\n')) {
       const paragraph = lineCells.slice(paragraphStart, index + 1)
       const resolved = paragraphLineHeights(paragraph.flat(), priorityOf)
+      // The paragraph's words, past a list marker's mono.
+      const chars = paragraph.flat().filter((cell) => cell.kind === 'char')
+      const face = chars.find((cell) => !cell.face.mono && cell.ch.trim() !== '') ?? chars[0]
       for (let line = paragraphStart; line <= index; line += 1) {
         heights[line] = resolved
+        faces[line] = face?.kind === 'char' ? face.face : { size: Number(root.fontSize), lineHeight: Number(root.lineHeight), mono: false }
       }
       paragraphStart = index + 1
     }
@@ -227,6 +235,7 @@ export function pillRows(text: ReactTestInstance, lineWidth: number, as: PhoneAs
       let ascent = 0
       let descent = 0
       let wordsAscent = 0
+      let wordsDescent = 0
       let wordsSize = 0
       let wordsSizeDp = 0
       for (const cell of mine) {
@@ -238,6 +247,7 @@ export function pillRows(text: ReactTestInstance, lineWidth: number, as: PhoneAs
           ascent = Math.max(ascent, metrics.ascent * size)
           descent = Math.max(descent, metrics.descent * size)
           wordsAscent = Math.max(wordsAscent, metrics.ascent * size)
+          wordsDescent = Math.max(wordsDescent, metrics.descent * size)
           if (!cell.face.mono && cell.ch.trim() !== '') {
             wordsSize = Math.max(wordsSize, cell.face.size)
             wordsSizeDp = Math.max(wordsSizeDp, size)
@@ -245,6 +255,13 @@ export function pillRows(text: ReactTestInstance, lineWidth: number, as: PhoneAs
         }
       }
       const height = dp(heights[index]![which])
+      let [plainAscent, plainDescent] = [wordsAscent, wordsDescent]
+      if (wordsAscent === 0) {
+        const face = faces[index]!
+        const metrics = face.mono ? MONO : INSTRUMENT
+        plainAscent = metrics.ascent * dp(face.size)
+        plainDescent = metrics.descent * dp(face.size)
+      }
       const line: RowLine = {
         text: broken[index]!.text,
         top,
@@ -252,7 +269,8 @@ export function pillRows(text: ReactTestInstance, lineWidth: number, as: PhoneAs
         above: ascent + (height - ascent - descent) / 2,
         wordsAscent,
         wordsSize,
-        wordsSizeDp
+        wordsSizeDp,
+        plainAbove: plainAscent + (height - plainAscent - plainDescent) / 2
       }
       top += height
       return line
