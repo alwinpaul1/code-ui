@@ -82,7 +82,7 @@ function fiberOf(node: ReactTestInstance): { key: string | null; stateNode: unkn
 
 /** The phone's view of one Text: characters at their span's size, and each
  *  inline View as one placeholder as wide as the pill it draws. */
-function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[]): ModelItem[] {
+export function flattenForPhone(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[]): ModelItem[] {
   const size = Number(flatStyle(node.props.style).fontSize ?? fontSize)
   const system = as.fontScale ?? 1
   for (const child of node.children) {
@@ -91,7 +91,11 @@ function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: Mo
         out.push({ kind: 'char', ch, width: glyphWidth(ch, size) * system })
       }
     } else if (child.type === ('View' as never)) {
-      const box = flatStyle(child.props.style)
+      // The bordered box may sit inside the View the Text holds.
+      const bordered = [child, ...child.findAll((node) => node !== child && node.type === ('View' as never))].find(
+        (view) => flatStyle(view.props.style).borderWidth !== undefined
+      )
+      const box = flatStyle((bordered ?? child).props.style)
       const label = child.findByType('Text' as never)
       const text = label.children.join('')
       const labelStyle = flatStyle(label.props.style)
@@ -104,7 +108,7 @@ function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: Mo
         (kern * labelSize) / 1000
       out.push({ kind: 'pill', text, width: placeholderWidth(glyphs * (as.pillError ?? 1) * system + inset, as.placeholder) })
     } else {
-      flatten(child, size, as, out)
+      flattenForPhone(child, size, as, out)
     }
   }
   return out
@@ -234,7 +238,7 @@ export function createPhone(current: () => ReactTestRenderer) {
   const lines = (documentWidth: number, as: PhoneAs = {}) => {
     const text = measuredText()
     const lineWidth = textWidth(text, documentWidth)
-    const laid = layOut(flatten(text, 15 * (as.textScale ?? 1), as, []), lineWidth)
+    const laid = layOut(flattenForPhone(text, 15 * (as.textScale ?? 1), as, []), lineWidth)
     const event = { nativeEvent: { lines: laid.map(({ items: _items, ink: _ink, ...line }) => line) } }
     return { text, lines: laid, lineWidth, event }
   }

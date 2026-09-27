@@ -106,7 +106,8 @@ describe('heading levels on a narrow screen', () => {
     const tree = render('# One\n\n## Two\n\n### Three\n\n#### Four')
     const sizes = new Map<string, number>()
     for (const node of tree.root.findAllByType('Text' as never)) {
-      const text = flatten(node)
+      // A heading holds the newline that ends it (MobileMarkdown.tsx).
+      const text = flatten(node).trimEnd()
       if (['One', 'Two', 'Three', 'Four'].includes(text)) {
         sizes.set(text, flattenStyle(node.props.style).fontSize as number)
       }

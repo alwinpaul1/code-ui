@@ -330,48 +330,63 @@ function MobileMarkdownInner({
         const block = run.blocks[0]!
         if (run.prose) {
           const pills = pillRuns(`run:${index}`, contentWidth, false)
-          const members = run.prose.map((member, memberIndex) => (
-            <Fragment key={memberIndex}>
-              {memberIndex > 0 ? '\n\n' : null}
-              {member.type === 'heading' ? (
-                <Text style={headingStyle(styles, member.level, textScale)}>
-                  {renderInline(styles, member.text, onOpenFile, pills)}
-                </Text>
-              ) : member.type === 'rule' ? (
-                <Text style={styles.ruleText}>{RULE_TEXT}</Text>
-              ) : member.type === 'list' ? (
-                member.items.map((item, itemIndex) => {
-                  const marker = listMarker(item)
-                  return (
-                    <Fragment key={itemIndex}>
-                      {itemIndex > 0 ? '\n' : null}
-                      {LIST_INDENT_TEXT.repeat(item.depth)}
-                      {marker ? (
-                        <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
-                      ) : null}
-                      {renderInline(styles, item.text, onOpenFile, pills)}
-                    </Fragment>
-                  )
-                })
-              ) : member.type === 'image' ? (
-                <MobileMarkdownImage
-                  alt={member.alt}
-                  url={member.url}
-                  width={contentWidth}
-                  resolve={resolveImage}
-                  onOpen={() => openMarkdownHref(member.url, onOpenFile)}
-                  styles={styles}
-                />
-              ) : (
-                // One inline pass over the WHOLE paragraph. Matching line by
-                // line left `**bold` on one source line and `text**` on the
-                // next as literal asterisks on the phone (reported from the
-                // device); the parser has already reflowed soft wraps, so
-                // any newline left here is a deliberate hard break.
-                renderInline(styles, member.text, onOpenFile, pills)
-              )}
-            </Fragment>
-          ))
+          const lastMember = run.prose.length - 1
+          const members = run.prose.map((member, memberIndex) => {
+            // The newline that ends a member is the member's own, set in its
+            // line height; the blank line after it is the prose's. Android
+            // lays a paragraph out at every line height its spans carry, and
+            // RN places a pill from a layout that reads them in another order
+            // than the one the words are drawn from, deep in a long Text
+            // (mobile-markdown-pill-rows.test-support.ts). A heading ended by
+            // the prose's newline was drawn at its own height and placed at
+            // the prose's, and every pill below it rose by the difference,
+            // half a line by the third heading (2026-09-28, HANDOVER.md).
+            const end = memberIndex < lastMember ? '\n' : null
+            return (
+              <Fragment key={memberIndex}>
+                {memberIndex > 0 ? '\n' : null}
+                {member.type === 'heading' ? (
+                  <Text style={headingStyle(styles, member.level, textScale)}>
+                    {renderInline(styles, member.text, onOpenFile, pills)}
+                    {end}
+                  </Text>
+                ) : member.type === 'rule' ? (
+                  <Text style={styles.ruleText}>{RULE_TEXT}</Text>
+                ) : member.type === 'list' ? (
+                  member.items.map((item, itemIndex) => {
+                    const marker = listMarker(item)
+                    return (
+                      <Fragment key={itemIndex}>
+                        {itemIndex > 0 ? '\n' : null}
+                        {LIST_INDENT_TEXT.repeat(item.depth)}
+                        {marker ? (
+                          <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
+                        ) : null}
+                        {renderInline(styles, item.text, onOpenFile, pills)}
+                      </Fragment>
+                    )
+                  })
+                ) : member.type === 'image' ? (
+                  <MobileMarkdownImage
+                    alt={member.alt}
+                    url={member.url}
+                    width={contentWidth}
+                    resolve={resolveImage}
+                    onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+                    styles={styles}
+                  />
+                ) : (
+                  // One inline pass over the WHOLE paragraph. Matching line by
+                  // line left `**bold` on one source line and `text**` on the
+                  // next as literal asterisks on the phone (reported from the
+                  // device); the parser has already reflowed soft wraps, so
+                  // any newline left here is a deliberate hard break.
+                  renderInline(styles, member.text, onOpenFile, pills)
+                )}
+                {member.type === 'heading' ? null : end}
+              </Fragment>
+            )
+          })
           return (
             // `simple` is greedy breaking, as the Claude app lays out: a line
             // takes all that fits. Android's default balances lines, which
