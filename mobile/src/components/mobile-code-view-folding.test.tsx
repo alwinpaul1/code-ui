@@ -194,16 +194,31 @@ describe.each(['dark', 'light'] as const)('folding a block of code (%s)', (curre
 })
 
 describe('a fold toggle', () => {
-  it('can be hit anywhere in 48 by 48 points, though the row is 20 tall', () => {
+  it('reaches no further than its own row and the gap after the line number', () => {
+    // A reach into the rows above and below took their taps (review,
+    // 2026-09-27); the model of how Android picks a view is
+    // mobile-code-fold-toggle-reach.test.
     const doc = buildMobileCodeDocument(PYTHON, 'python')
     const r = mount(doc)
     const button = toggle(row(r, 0), 'Fold lines 1–5')
     const slop = button.props.hitSlop as { top: number; bottom: number; left: number; right: number }
     const metrics = codeViewMetrics({ lineCount: doc.lines.length, maxColumns: doc.maxColumns, fontScale: 1, foldable: true })
-    expect(metrics.foldWidth + slop.left + slop.right).toBeGreaterThanOrEqual(48)
-    expect(metrics.rowHeight + slop.top + slop.bottom).toBeGreaterThanOrEqual(48)
-    // The slop is only reach: the column itself stays its width.
+    expect(slop.top).toBe(0)
+    expect(slop.bottom).toBe(0)
+    expect(slop.right).toBe(0)
+    // The number's own padding: its digits end before the reach begins.
+    expect(slop.left).toBeLessThanOrEqual(metrics.numberWidth - metrics.gutterDigits * metrics.cellWidth)
     expect(flat(button.props.style).width).toBe(metrics.foldWidth)
+  })
+
+  it('does not fold at a long-press, which folded on release', () => {
+    const r = mount(buildMobileCodeDocument(PYTHON, 'python'))
+    const button = toggle(row(r, 0), 'Fold lines 1–5')
+    expect(typeof button.props.onLongPress).toBe('function')
+    act(() => {
+      button.props.onLongPress()
+    })
+    expect(numbers(r)).toHaveLength(8)
   })
 })
 

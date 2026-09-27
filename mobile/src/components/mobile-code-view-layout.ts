@@ -86,17 +86,18 @@ export function codeViewMetrics({
 
 export const CODE_VIEW_PADDING_START = PADDING_START
 
-/** Android's smallest comfortable touch target, in points. */
-const MIN_TOUCH_TARGET = 48
-
-/** How far a fold toggle's touch reaches past its column and row, so it can
- *  be hit in 48 by 48 points: the toggle is 18 by 20 on its own (26 by 32
- *  with the old slop, review 2026-09-27). Reach only; the layout is as is. */
-export function codeViewFoldHitSlop(metrics: CodeViewMetrics): { top: number; bottom: number; left: number; right: number } {
-  const across = Math.max(0, Math.ceil((MIN_TOUCH_TARGET - metrics.foldWidth) / 2))
-  const down = Math.max(0, Math.ceil((MIN_TOUCH_TARGET - metrics.rowHeight) / 2))
-  return { top: down, bottom: down, left: across, right: across }
-}
+/**
+ * How far a fold toggle's touch reaches past its column: into the gap
+ * after the line number, and no further. Not up or down: FlatList cells are
+ * siblings tried from the last, and a hitSlop grows its row's overflow, so
+ * a toggle reaching 14 points up took the line above's taps, its number's
+ * long-press and its first characters, and a 15-point reach to the left
+ * took its own number's ones digit (review, 2026-09-27: the 48-point target
+ * of 646eebfb). A row cannot hold a target taller than itself without
+ * stealing from its neighbour. Not right either: the code is tried first
+ * and owns all of it.
+ */
+export const CODE_VIEW_FOLD_HIT_SLOP = { top: 0, bottom: 0, left: NUMBER_GAP, right: 0 } as const
 
 /** Wrapping is off, as on the desktop, unless a line is too long to draw
  *  unwrapped. The reader can turn it on or off either way. */

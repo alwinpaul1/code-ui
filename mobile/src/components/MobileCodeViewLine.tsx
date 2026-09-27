@@ -26,6 +26,8 @@ export type MobileCodeLineFold = { folded: boolean; label: string; onToggle: () 
  * that unfolds it too. The guides come before the text in the tree, so the
  * text paints over them without a z-index.
  */
+function ignoreLongPress(): void {}
+
 export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   number,
   segments,
@@ -59,8 +61,8 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   numberOfLines: 1 | undefined
   /** The file has blocks to fold: every row keeps the toggles' column. */
   foldColumn: boolean
-  /** How far the toggle's touch reaches (codeViewFoldHitSlop). */
-  foldHitSlop?: { top: number; bottom: number; left: number; right: number }
+  /** How far the toggle's touch reaches (CODE_VIEW_FOLD_HIT_SLOP). */
+  foldHitSlop?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number }
   fold?: MobileCodeLineFold
 }) {
   return (
@@ -77,6 +79,10 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
         <Pressable
           style={styles.foldToggle}
           onPress={fold.onToggle}
+          // A long-press here selects the line, as on its number; with no
+          // line selection it does nothing. Unhandled, a long-press folded
+          // on release.
+          onLongPress={onLongPress ?? ignoreLongPress}
           accessibilityRole="button"
           accessibilityLabel={fold.label}
           accessibilityState={{ expanded: !fold.folded }}

@@ -172,6 +172,23 @@ describe.each(['dark', 'light'] as const)('selecting across a folded block (%s)'
     expect(clipboard.writeText).toHaveBeenCalledWith(LINES.slice(0, 5).join('\n'))
   })
 
+  it('selects a header\'s line at a long-press on its fold toggle, as on its number, without folding it', async () => {
+    openInExplorer()
+    let drawn: ReactTestRenderer | null = null
+    act(() => {
+      drawn = create(rowElement(1))
+    })
+    rows.push(drawn!)
+    const toggle = drawn!.root.find((node) => node.props.accessibilityLabel === 'Fold lines 2–3' && typeof node.props.onPress === 'function')
+    act(() => {
+      toggle.props.onLongPress()
+    })
+    expect(rowProps(1).highlighted).toBe(true)
+    expect(rowProps(2).highlighted).toBe(false)
+    await press('Copy line 2')
+    expect(clipboard.writeText).toHaveBeenCalledWith(LINES[1])
+  })
+
   it('moves a selection inside a block the reader folds up to the block\'s header', async () => {
     // Folded away, the selected line had no row to show it, and the bar
     // still offered "Copy line 3" (review, 2026-09-27).
