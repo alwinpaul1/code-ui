@@ -14,17 +14,22 @@ import {
 } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme } from '../src/theme/theme-context'
+import { useRpcClientContext } from '../src/transport/client-context'
 import { loadHosts } from '../src/transport/host-store'
-import { readMobileLocalAddress } from '../src/transport/mobile-network-type'
+import { readMobileLocalAddress, readMobileNetworkType } from '../src/transport/mobile-network-type'
 import {
   startDiagnosticFetchTimeout,
   type DiagnosticFetchTimeout
 } from '../src/diagnostics/diagnostic-fetch-timeout'
+import { testHostReachability } from '../src/diagnostics/host-reachability'
+import { phoneVpnNativeModule } from '../src/diagnostics/phone-vpn-native'
+import { readPhoneVpnStatus } from '../src/diagnostics/phone-vpn-status'
 import {
-  formatEndpoint,
-  testHostReachability,
-  unreachableHostDetail
-} from '../src/diagnostics/host-reachability'
+  phoneOnWifiFromNetworkType,
+  readHostLiveConnection,
+  troubleshootHostCheck,
+  type TroubleshootCheck
+} from '../src/diagnostics/troubleshoot-host-check'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
 import { useTroubleshootScreenStyles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
@@ -43,11 +48,7 @@ const isDevelopmentBuild = typeof __DEV__ !== 'undefined' && __DEV__
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
-type CheckResult = {
-  label: string
-  status: 'pass' | 'fail' | 'warn'
-  detail: string
-}
+type CheckResult = TroubleshootCheck
 
 function StatusIcon({ status }: { status: CheckResult['status'] }) {
   const { colors } = useTheme()
@@ -57,13 +58,18 @@ function StatusIcon({ status }: { status: CheckResult['status'] }) {
     case 'fail':
       return <XCircle size={14} color={colors.danger} />
     case 'warn':
-      return <AlertTriangle size={14} color={colors.textMuted} />
+      return <AlertTriangle size={14} color={colors.warning} />
+    default: {
+      const unhandled: never = status
+      return unhandled
+    }
   }
 }
 
 export default function TroubleshootScreen() {
   const styles = useTroubleshootScreenStyles()
   const { colors } = useTheme()
+  const clientContext = useRpcClientContext()
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -149,22 +155,34 @@ export default function TroubleshootScreen() {
     setChecks([...results])
 
     try {
-      const [hosts, localAddress] = await Promise.all([loadHosts(), readMobileLocalAddress()])
+      const [hosts, localAddress, networkType] = await Promise.all([
+        loadHosts(),
+        readMobileLocalAddress(),
+        readMobileNetworkType()
+      ])
       for (const host of hosts) {
         if (!isCurrentRun()) {
           return
         }
-        const reachable = await testHostReachability(host.endpoint)
+        // The probe dials the saved direct endpoint only; the VPN check needs that address too.
+        const [reachable, phoneVpn] = await Promise.all([
+          testHostReachability(host.endpoint),
+          readPhoneVpnStatus(host.endpoint, phoneVpnNativeModule())
+        ])
         if (!isCurrentRun()) {
           return
         }
-        results.push({
-          label: host.name,
-          status: reachable ? 'pass' : 'fail',
-          detail: reachable
-            ? `Reachable at ${formatEndpoint(host.endpoint)}`
-            : unreachableHostDetail(host.endpoint, localAddress)
-        })
+        // Read after the probe, so the row judges the connection as it stands when it is drawn.
+        results.push(
+          troubleshootHostCheck({
+            host,
+            reachable,
+            live: readHostLiveConnection(clientContext, host.id),
+            localAddress,
+            phoneOnWifi: phoneOnWifiFromNetworkType(networkType),
+            phoneVpn
+          })
+        )
         setChecks([...results])
       }
     } catch {
@@ -183,7 +201,7 @@ export default function TroubleshootScreen() {
 
     setChecks([...results])
     setDiagnosticStatus('done')
-  }, [])
+  }, [clientContext])
 
   return (
     <View

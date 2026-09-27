@@ -238,4 +238,42 @@ describe('buildConnectionDiagnosticsReport', () => {
       expect(buildConnectionDiagnosticsReport(base)).not.toContain('Background:')
     })
   })
+
+  // 2026-09-27: a friend's Pixel showed a VPN key in its status bar, and nothing in the copied
+  // report could say so; expo-network calls a VPN over Wi-Fi plain WIFI.
+  describe("the phone's own VPN", () => {
+    const base = {
+      hostName: 'Host 1',
+      endpoint: 'ws://192.168.137.1:6768',
+      state: 'connected' as const,
+      reconnectAttempts: 0,
+      lastConnectedAt: NOW - 60_000,
+      platform: 'android 37',
+      appVersion: '0.9.54',
+      entries: [],
+      nowMs: NOW
+    }
+
+    it('says a VPN is up, whether it carries the app, and whether it routes the endpoint', () => {
+      expect(
+        buildConnectionDiagnosticsReport({
+          ...base,
+          phoneVpn: { kind: 'known', active: true, carriesAppTraffic: true, routesEndpoint: true }
+        })
+      ).toContain('Phone VPN: active · carries this app · routes 192.168.137.1')
+    })
+
+    it('says why the answer is unknown when the check could not run', () => {
+      expect(
+        buildConnectionDiagnosticsReport({
+          ...base,
+          phoneVpn: { kind: 'unknown', reason: 'check unavailable on this build' }
+        })
+      ).toContain('Phone VPN: unknown (check unavailable on this build)')
+    })
+
+    it('prints no VPN line when the caller did not look', () => {
+      expect(buildConnectionDiagnosticsReport(base)).not.toContain('Phone VPN:')
+    })
+  })
 })

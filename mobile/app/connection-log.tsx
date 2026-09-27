@@ -6,13 +6,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+import { spacing, typography } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../src/theme/theme-context'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
 import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
 import {
   useConnectionPathStatus,
+  useLastConnectedAt,
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
@@ -21,6 +22,14 @@ import {
   isBackgroundDeliveryAvailable
 } from '../src/background/background-link'
 import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
+import { describeAppPauses } from '../src/diagnostics/connection-diagnostics-pauses'
+import {
+  buildConnectionTimeline,
+  liveConnectionRow
+} from '../src/diagnostics/connection-diagnostics-timeline'
+import { ConnectionDiagnosticsTimeline } from '../src/diagnostics/connection-diagnostics-timeline-view'
+import { phoneVpnNativeModule } from '../src/diagnostics/phone-vpn-native'
+import { readPhoneVpnStatus } from '../src/diagnostics/phone-vpn-status'
 import {
   readHydratedConnectionLog,
   readConnectionDiagnosticsSnapshot,
@@ -30,6 +39,7 @@ import {
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
+import { useNow } from '../src/hooks/use-now'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
 // Why: getSnapshot must be referentially stable when there's no data —
@@ -40,6 +50,8 @@ const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 // screen also *acquires* the host client — opening it kicks a dial and the
 // log fills live instead of showing a stale tail.
 export default function ConnectionLogScreen() {
+  const styles = useThemedStyles(connectionLogScreenStyles)
+  const { colors } = useTheme()
   const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
@@ -72,6 +84,9 @@ export default function ConnectionLogScreen() {
   })
   const reconnectAttempts = useReconnectAttempt(selected?.id)
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
+  const lastConnectedAt = useLastConnectedAt(selected?.id)
+  // "Of the last N hours" ends now; a minute's tick keeps it honest while the screen stays open.
+  const now = useNow(60_000)
 
   useEffect(() => {
     if (selectedId) {
@@ -92,6 +107,11 @@ export default function ConnectionLogScreen() {
   const diagnosis = selected
     ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries })
     : null
+  // Said even while connected: a connected state says nothing about the hours Android kept the
+  // app frozen (2026-09-27).
+  const pauses = selected ? describeAppPauses(entries, now) : null
+  const live = liveConnectionRow({ state, activePath, lastConnectedAt, entries, nowMs: now })
+  const timeline = useMemo(() => buildConnectionTimeline(entries), [entries])
   const copied = copiedHostId === selectedId
 
   const copyDiagnostics = useCallback(async () => {
@@ -99,11 +119,10 @@ export default function ConnectionLogScreen() {
       return
     }
     const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
-    const snapshot = await readConnectionDiagnosticsSnapshot(
-      clientContext,
-      connectionLogStore,
-      selected.id
-    )
+    const [snapshot, phoneVpn] = await Promise.all([
+      readConnectionDiagnosticsSnapshot(clientContext, connectionLogStore, selected.id),
+      readPhoneVpnStatus(selected.endpoint, phoneVpnNativeModule())
+    ])
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
@@ -116,7 +135,8 @@ export default function ConnectionLogScreen() {
       entries: snapshot.entries,
       activePath: snapshot.activePath,
       pendingPath: snapshot.pendingPath,
-      background: isBackgroundDeliveryAvailable() ? backgroundDeliveryState() : null
+      background: isBackgroundDeliveryAvailable() ? backgroundDeliveryState() : null,
+      phoneVpn
     })
     await Clipboard.setStringAsync(report)
     setCopiedHostId(selected.id)
@@ -166,7 +186,7 @@ export default function ConnectionLogScreen() {
             </Text>
             <Pressable style={styles.copyButton} onPress={() => void copyDiagnostics()}>
               {copied ? (
-                <Check size={14} color={colors.statusGreen} />
+                <Check size={14} color={colors.success} />
               ) : (
                 <Copy size={14} color={colors.textSecondary} />
               )}
@@ -178,15 +198,16 @@ export default function ConnectionLogScreen() {
               <Text style={styles.diagnosisHeading}>What this suggests</Text>
               <Text style={styles.diagnosisText}>{diagnosis.likelyCause}</Text>
               <Text style={styles.diagnosisNext}>{diagnosis.nextStep}</Text>
+              {pauses !== null ? <Text style={styles.diagnosisPauses}>{pauses}</Text> : null}
             </View>
           )}
-          {entries.length > 0 ? (
-            <ConnectionLog entries={[...entries]} title={selected.name} fillAvailableHeight />
-          ) : (
-            <Text style={styles.emptyText}>
-              No connection events yet. Events appear as the app dials this host.
-            </Text>
-          )}
+          {/* Keyed by host: another host's log starts with its folds closed and scrolled to its end. */}
+          <ConnectionDiagnosticsTimeline
+            key={selected.id}
+            title={selected.name}
+            live={live}
+            rows={timeline}
+          />
         </>
       ) : (
         <Text style={styles.emptyText}>No paired hosts.</Text>
@@ -195,108 +216,118 @@ export default function ConnectionLogScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  hostPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  hostChip: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.bgRaised
-  },
-  hostChipActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostChipText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    maxWidth: 160
-  },
-  hostChipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  statusText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  diagnosisCard: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: 10,
-    padding: spacing.md,
-    marginBottom: spacing.md
-  },
-  diagnosisHeading: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
-    marginBottom: spacing.xs
-  },
-  diagnosisText: {
-    fontSize: typography.metaSize,
-    color: colors.textPrimary,
-    lineHeight: 18
-  },
-  diagnosisNext: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    lineHeight: 18,
-    marginTop: spacing.xs
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  emptyText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})
+/** From the live theme. The screen was one static sheet on the legacy dark palette, so it stayed
+ *  dark in light mode (2026-09-27). Layout still reads the legacy spacing and type scale. */
+function connectionLogScreenStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      padding: spacing.lg
+    },
+    topRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: spacing.lg
+    },
+    backButton: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: spacing.sm
+    },
+    heading: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.text
+    },
+    hostPicker: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: spacing.sm,
+      marginBottom: spacing.md
+    },
+    hostChip: {
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md,
+      borderRadius: 16,
+      backgroundColor: colors.bgRaised
+    },
+    hostChipActive: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    hostChipText: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary,
+      maxWidth: 160
+    },
+    hostChipTextActive: {
+      color: colors.text,
+      fontWeight: '600'
+    },
+    statusRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: spacing.sm
+    },
+    statusText: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary
+    },
+    diagnosisCard: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: 10,
+      padding: spacing.md,
+      marginBottom: spacing.md
+    },
+    diagnosisHeading: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: spacing.xs
+    },
+    diagnosisText: {
+      fontSize: typography.metaSize,
+      color: colors.text,
+      lineHeight: 18
+    },
+    diagnosisNext: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary,
+      lineHeight: 18,
+      marginTop: spacing.xs
+    },
+    diagnosisPauses: {
+      fontSize: typography.metaSize,
+      color: colors.text,
+      lineHeight: 18,
+      marginTop: spacing.xs
+    },
+    copyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs + 2,
+      paddingVertical: spacing.xs + 2,
+      paddingHorizontal: spacing.md,
+      borderRadius: 8,
+      backgroundColor: colors.bgRaised
+    },
+    copyButtonText: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.text
+    },
+    emptyText: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      lineHeight: 18
+    }
+  })
+}
