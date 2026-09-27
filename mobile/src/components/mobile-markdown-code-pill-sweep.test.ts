@@ -170,3 +170,56 @@ describe('the phone model swept', () => {
     expect(found).toEqual([])
   })
 })
+
+// Review of 12e3b98e (probe R4-FE): on a fresh phone at one width, pills the
+// phone draws wider than the estimate (a larger system font size, a fallback
+// font, hinting) settled with a span's first two pieces side by side on the
+// line below the one they were cut to fill, 14 of 648 runs at 3% wider, 40
+// at 10% and 61 at 30%, widths from 300 to 820 dp. Every line end counts
+// here, not only those more than 4 dp early.
+describe('pills drawn wider than estimated, on a fresh phone', () => {
+  const PARAGRAPHS = [
+    'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.',
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+
+  it.each([
+    ['I checked this the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.'],
+    ['I checked this again after the last review and Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.']
+  ])('keeps a span off the line below its first piece, drawn 3 per cent wider at 800 dp: %s', (content) => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content }))
+    })
+    act(() => device.layOutDocument(800))
+    const { lines, lineWidth } = device.settle(800, { pillError: 1.03 })
+    expect([...sharedLines(lines), ...earlyLineEnds(lines, lineWidth, 1, 1.03)]).toEqual([])
+  })
+
+  it.each([1.03, 1.05, 1.1, 1.15, 1.3])('settles whole, drawn x%s, at every width', (pillError) => {
+    const found: string[] = []
+    PARAGRAPHS.forEach((base, index) => {
+      for (let n = 0; n <= LEAD.length; n += 3) {
+        const content = `${LEAD.slice(0, n).join(' ')}${n ? ' ' : ''}${base}`
+        for (let width = 300; width <= 820; width += 20) {
+          act(() => {
+            renderer = create(createElement(MobileMarkdown, { content }))
+          })
+          act(() => device.layOutDocument(width))
+          const { lines, lineWidth } = device.settle(width, { pillError })
+          const problems = [
+            ...sharedLines(lines).map((text) => `shared "${text}"`),
+            ...overflowingLines(lines, lineWidth),
+            ...earlyLineEnds(lines, lineWidth, 1, pillError)
+          ]
+          found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
+          act(() => renderer?.unmount())
+          renderer = null
+          resetRememberedPillCutsForTests()
+        }
+      }
+    })
+    expect(found).toEqual([])
+  })
+})

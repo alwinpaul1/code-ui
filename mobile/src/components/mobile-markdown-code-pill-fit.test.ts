@@ -139,6 +139,77 @@ describe("reading a pill's line back from the phone's layout", () => {
     expect(result.kind === 'changed' ? result.next.fits.get(1)?.below : undefined).toBeUndefined()
   })
 
+  // Review of 12e3b98e (probe R4-E): the usual shape of a first piece drawn
+  // wider than its room is that it goes down a line with its own second
+  // piece beside it. A line with another pill on it was not read at all, so
+  // the two halves settled side by side, and the line above ended early.
+  describe('a first piece drawn wider, gone down beside its own second piece', () => {
+    const WIDE = 800
+    const cutWide = (code: string, firstRoom: number, scale: number, glue = 0, guessed = false) =>
+      cutCodePills(code, firstRoom, WIDE, { ...FONT, scale }, glue, guessed)
+    const text = (piece: string) => codeTextWidth(piece, 14)
+    const one: PillSpanDrawn = { code: 'mobile/src/components/use-markdown-code-pill-runs.ts', room: WIDE, glue: 0, pieces: ['mobile/src/components/use-markdown-code-pill-runs.ts'], fresh: false }
+    const code = 'mobile/src/components/mobile-markdown-code-pill-fit.ts'
+    // "I checked this the fix lives in [one] and " ends at 624.5 dp.
+    const room = 175.5
+    const readAt = (pieces: string[], drawnAs: number, fit: PillFit) =>
+      readPillFits({
+        ...readArgs(
+          [
+            { x: 0, width: WIDE - room, text: `I checked this the fix lives in ${P} and ` },
+            {
+              x: 0,
+              width: pieces.reduce((sum, piece) => sum + text(piece) * drawnAs + 10, 0) + codeTextWidth(', both of them.', 15),
+              text: `${pieces.map(() => P).join('')}, both of them.`
+            }
+          ],
+          [one, { code, room: pillFitRoom(fit, WIDE), glue: codeTextWidth(',', 15), pieces, fresh: false }]
+        ),
+        lineWidth: WIDE,
+        current: { fits: new Map([[1, fit]]) },
+        cut: cutWide
+      })
+
+    it('cuts the first piece, at once, to what fits the room drawn as wide as it was', () => {
+      const pieces = cutWide(code, room, 1, codeTextWidth(',', 15)).pieces
+      expect(pieces).toEqual(['mobile/src/components/', 'mobile-markdown-code-pill-fit.ts'])
+      // Drawn 3% wider it does not fit the room, and its second piece
+      // follows it down.
+      expect(text(pieces[0]!) * 1.03 + 10).toBeGreaterThan(room)
+      const result = readAt(pieces, 1.03, { room })
+      expect(result.kind).toBe('changed')
+      const fit = result.kind === 'changed' ? result.next.fits.get(1)! : {}
+      const recut = cutWide(code, pillFitRoom(fit, WIDE), pillFitScale(fit), codeTextWidth(',', 15))
+      // One step: moved inside the pair, a break that still left both on the
+      // line would lay the line out as before, and Fabric would send nothing.
+      expect(recut.pieces[0]).not.toBe(pieces[0])
+      expect(text(recut.pieces[0]!) * 1.03 + 10).toBeLessThanOrEqual(room - 1)
+    })
+
+    it('does the same when the line holds nothing but the two', () => {
+      const pieces = cutWide(code, room, 1, codeTextWidth(',', 15)).pieces
+      const result = readPillFits({
+        ...readArgs(
+          [
+            { x: 0, width: WIDE - room, text: `I checked this the fix lives in ${P} and ` },
+            { x: 0, width: pieces.reduce((sum, piece) => sum + text(piece) * 1.03 + 10, 0), text: `${P}${P}` }
+          ],
+          [one, { code, room, glue: 0, pieces, fresh: false }]
+        ),
+        lineWidth: WIDE,
+        current: { fits: new Map([[1, { room }]]) },
+        cut: cutWide
+      })
+      expect(result.kind === 'changed' ? result.next.fits.get(1)!.below : undefined).toBeLessThan(width(pieces[0]!))
+    })
+
+    it('leaves it alone drawn as estimated, as a layout broken narrower draws it', () => {
+      const pieces = cutWide(code, room, 1, codeTextWidth(',', 15)).pieces
+      const result = readAt(pieces, 1, { room })
+      expect(result.kind === 'changed' ? result.next.fits.get(1)?.below : undefined).toBeUndefined()
+    })
+  })
+
   it('refuses lines where a first piece went down a line with room for it above', () => {
     const span = drawn('mobile/src/components/', { room: 284 })
     const lone = width(span.pieces[0]!)
@@ -396,6 +467,30 @@ describe('a layout that settles or cannot be read', () => {
     const next = learnt(read([{ x: 0, width: line, text: `Worktree: ${P}${P}` }], [span], { fits: new Map([[0, fit]]) }))
     expect(next.fits.get(0)!.below).toBeUndefined()
     expect(drawn(code, next.fits.get(0)).pieces).toEqual([code])
+  })
+
+  it('drops a cap learnt in a smaller room once the span starts further left', () => {
+    // Capped at 147 dp in a 188 dp room; a span before it was cut shorter,
+    // and now it starts after words that leave it 300 dp.
+    const code = 'mobile/src/components/mobile-markdown-code-pill-fit.ts'
+    const fit = { room: 188, below: 147 }
+    const span = drawn(code, fit)
+    const first = width(span.pieces[0]!)
+    const next = learnt(
+      read(
+        [
+          { x: 0, width: WIDTH - 300 + first, text: `words ${P}` },
+          ...span.pieces.slice(1).map((piece, index, all) =>
+            index === all.length - 1
+              ? { x: 0, width: width(piece) + codeTextWidth(' end.', 15), text: `${P} end.` }
+              : { x: 0, width: width(piece), text: P }
+          )
+        ],
+        [span],
+        { fits: new Map([[0, fit]]) }
+      )
+    )
+    expect(next.fits.get(0)).toMatchObject({ room: 300, below: undefined })
   })
 
   it('re-cuts from the first span that moved, and says so', () => {
