@@ -61,9 +61,13 @@ export const hasControlCharacters = (text: string) =>
       (char.charCodeAt(0) < 32 && char !== '\n' && char !== '\t') || char.charCodeAt(0) === 127
   )
 
-// Any dialog that reads keys as answers, not only the one each reader names:
-// an Edit prompt's keys are answers too (2026-09-27).
-export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen) {
+// Any live dialog that reads keys as answers, not only the one each reader
+// names: an Edit prompt's keys are answers too (2026-09-27). `recalled` is set
+// once a key has taken the message out of the queue: nothing can type past a
+// real prompt to finish the edit or to put it back, so the refusal says where
+// the message is. The live-bottom test keeps a message that merely answers by
+// number from reading as a prompt (independent review, 2026-09-27).
+export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen, recalled = false) {
   if (
     screen.source !== 'screen' ||
     (agent === 'codex'
@@ -71,7 +75,11 @@ export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen) {
       : claudePermissionFromScreen(screen.lines)) ||
     terminalDialogOnScreen(screen.lines)
   ) {
-    throw new Error('The agent input is unavailable. Try again when its dialog closes.')
+    throw new Error(
+      recalled
+        ? 'A prompt came up on the desktop. The message is in the agent input, unsent.'
+        : 'The agent input is unavailable. Try again when its dialog closes.'
+    )
   }
 }
 export function queueFromScreen(agent: QueueEditorAgent, screen: QueueScreen) {
@@ -153,7 +161,7 @@ export async function clearInput(
     await io.write(burst)
     await io.pause()
     const cleared = await io.read()
-    checkScreen(agent, cleared)
+    checkScreen(agent, cleared, true)
     if (draftOf(cleared).length > remaining.length) {
       throw new Error('The input changed while clearing. It has not been submitted.')
     }
@@ -224,7 +232,7 @@ export async function typeAndSubmit(
   for (let attempt = 0; attempt < 25 && (attempt === 0 || Date.now() < submitBy); attempt++) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen)
+    checkScreen(agent, screen, true)
     if (landed(screen)) {
       return
     }
@@ -236,7 +244,7 @@ export async function typeAndSubmit(
     if (!probed && !resent && attempt >= 2 && draftOf(screen) === text) {
       probed = true
       const still = await io.read()
-      checkScreen(agent, still)
+      checkScreen(agent, still, true)
       if (landed(still)) {
         return
       }
@@ -271,7 +279,7 @@ export async function typeInput(
   for (let attempt = 0; attempt < 20; attempt++) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen)
+    checkScreen(agent, screen, true)
     if (draftOf(screen) === text) {
       onReplaced?.(text)
       return
@@ -292,7 +300,7 @@ export async function submitInput(
   // pass Orca's host-side sendable guard; a stale screen cannot steer a new turn.
   if (!confirmed) {
     const ready = await io.read()
-    checkScreen(agent, ready)
+    checkScreen(agent, ready, true)
     if (draftOf(ready) !== text) {
       throw new Error('The draft changed on desktop before submission.')
     }
@@ -304,7 +312,7 @@ export async function submitInput(
     const screen = await io.read()
     // An unchecked screen can be a permission dialog or a stream fallback, both
     // of which read as an empty draft and would report an unsent edit as saved.
-    checkScreen(agent, screen)
+    checkScreen(agent, screen, true)
     if (queueFromScreen(agent, screen).some((entry) => sameText(entry, text)) || !draftOf(screen)) {
       return
     }

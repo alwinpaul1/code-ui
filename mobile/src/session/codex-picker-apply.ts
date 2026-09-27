@@ -200,13 +200,13 @@ export async function applyCodexPickerSelection(
   target: CodexPickerTarget
 ): Promise<CodexPickerApplyResult> {
   const before = await io.readScreen()
-  // Any dialog, not only the command approval its reader names: an apply-patch
-  // approval takes `/model` and its Enter as an answer too (2026-09-27).
-  if (terminalDialogOnScreen(before)) {
-    return { ok: false, reason: 'busy' }
-  }
+  // A picker left open is this flow's own to close. Any other dialog, not only
+  // the command approval its reader names, would take `/model` and its Enter
+  // as an answer (2026-09-27).
   if (parseCodexPickerScreen(before)) {
     await escapeCodexPicker(io)
+  } else if (terminalDialogOnScreen(before)) {
+    return { ok: false, reason: 'busy' }
   }
   if (!(await io.typeCommand('/model'))) {
     return { ok: false, reason: 'send-failed' }

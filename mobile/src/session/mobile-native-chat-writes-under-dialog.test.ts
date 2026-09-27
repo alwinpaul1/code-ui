@@ -23,6 +23,8 @@ function readScreen(name: string): string[] {
 // Claude Code 2.1.283, 2026-09-27: a subagent's Bash prompt with "Yes"
 // highlighted. Anything the chat types into it is an answer, and an Enter
 // approves the command.
+// (A transcription of the user's screenshot, not a tmux capture; see the
+// fixture's header for the bytes it cannot vouch for.)
 const SUBAGENT_PROMPT = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
 const DIALOG_AT = SUBAGENT_PROMPT.findIndex((row) => row.startsWith('─'))
 const NO_DIALOG = [...SUBAGENT_PROMPT.slice(0, DIALOG_AT), '─'.repeat(99), '❯ ', '─'.repeat(99)]
@@ -232,6 +234,37 @@ describe("Codex's model picker while a prompt waits", () => {
     })
     expect(io.typeCommand).not.toHaveBeenCalled()
     expect(io.sendKey).not.toHaveBeenCalled()
+  })
+})
+
+describe("Codex's model picker left open", () => {
+  // Codex 0.153.4's picker, `orca terminal read --screen` (codex-picker-screen.test.ts).
+  const PICKER = [
+    '  Select Model and Effort',
+    '  Access legacy models by running codex -m <model_name> or in your config.toml',
+    '  1. gpt-6-astra (default)  Our most capable model for complex, demanding work.',
+    '› 2. gpt-5.6-sol (current)  Reliable agentic workhorse for everyday tasks.',
+    '  Press enter to confirm or esc to go back'
+  ]
+
+  // A live menu counts as a dialog for every other write (its Enter picks a
+  // model), but the picker's own flow closes a leftover picker first.
+  it('closes it and carries on, rather than calling it an approval', async () => {
+    const screens = [PICKER, PICKER, ['• ok', '› Ask Codex to do anything', '  gpt-5.6-sol xhigh · ~/Project']]
+    let clock = 0
+    const io: CodexPickerIo = {
+      readScreen: async () => screens.shift() ?? screens.at(-1) ?? [],
+      sendKey: vi.fn(async () => true),
+      typeCommand: vi.fn(async () => false),
+      sleep: async () => {},
+      now: () => (clock += 1_000)
+    }
+    await expect(applyCodexPickerSelection(io, { model: 'gpt-6' })).resolves.toEqual({
+      ok: false,
+      reason: 'send-failed'
+    })
+    expect(io.sendKey).toHaveBeenCalledWith('\u001b')
+    expect(io.typeCommand).toHaveBeenCalledWith('/model')
   })
 })
 

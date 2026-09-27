@@ -137,7 +137,7 @@ export async function recallNativeQueue(
   for (let attempt = 0; attempt < 20; attempt++) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen)
+    checkScreen(agent, screen, true)
     const draft = draftOf(screen)
     if (!draft || draft === before.draft) {
       continue
@@ -177,7 +177,7 @@ export async function finishNativeQueueEdit(
   onReplaced?: (text: string) => void
 ): Promise<void> {
   const before = await io.read()
-  checkScreen(agent, before)
+  checkScreen(agent, before, true)
   if (draftOf(before) !== edit.draft) {
     throw new Error('The draft changed on desktop. Reopen the editor before saving.')
   }
@@ -238,7 +238,7 @@ async function confirmRemoved(
   for (let attempt = 0; attempt < 6 && Date.now() < deadline; attempt += 1) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen)
+    checkScreen(agent, screen, true)
     if (!queueFromScreen(agent, screen).some((entry) => queueRowIsPendingSend(removed, entry))) {
       return
     }

@@ -44,6 +44,8 @@ function readScreen(name: string): string[] {
 // Claude Code 2.1.283, 2026-09-27: a subagent's Bash prompt with "Yes"
 // highlighted. A message sent meanwhile would type into it, and its Enter
 // would approve the command.
+// (A transcription of the user's screenshot, not a tmux capture; see the
+// fixture's header for the bytes it cannot vouch for.)
 const SUBAGENT_PROMPT = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
 const DIALOG_AT = SUBAGENT_PROMPT.findIndex((row) => row.startsWith('─'))
 /** The same moment with the dialog gone: the lead's last message and its prompt. */
@@ -196,6 +198,21 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     expect(args.baseSend).toHaveBeenCalledTimes(1)
   })
 
+  // A draft the mirror typed into Codex's composer, answering by number, is
+  // the chat's own text, not a dialog: before 2026-09-27's review it could
+  // never be sent.
+  it('lets the chat send its own draft once the mirror typed it into Codex', async () => {
+    const draft = '1. Yes, use postgres\n2. No caching for now'
+    const { args } = setUp(() =>
+      read(['• ok', '› 1. Yes, use postgres', '  2. No caching for now', '  gpt-5.6-sol xhigh · ~/Project'])
+    )
+    await act(async () => {
+      await hook!.sendNativeChat(draft)
+    })
+    expect(args.baseSend).toHaveBeenCalledWith(draft, undefined, expect.any(Number))
+    expect(args.onSendError).not.toHaveBeenCalled()
+  })
+
   it('does not look on a structured session, which has no terminal dialog', async () => {
     const { client, args } = setUp(() => read(SUBAGENT_PROMPT), { structuredNativeChat: true })
     await act(async () => {
@@ -207,7 +224,46 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
 })
 
 describe('a queue edit while a prompt waits on screen', () => {
-  const screen = (lines: string[]): QueueScreen => ({ source: 'screen', draft: '', lines })
+  const screen = (lines: string[], draft = ''): QueueScreen => ({ source: 'screen', draft, lines })
+
+  // Alt+Up has already taken the message out of Codex's queue when the screen
+  // is read again; a refusal there left it unsent in the desktop input.
+  it('recalls a queued Codex message that answers by number', async () => {
+    const text = '1. Yes, use postgres\n2. No caching for now'
+    const reads = [
+      screen([
+        '• Queued follow-up inputs',
+        '  ↳ 1. Yes, use postgres',
+        '    ⌥ + ↑ edit last queued message',
+        '',
+        '› Ask Codex to do anything',
+        '  gpt-5.6-sol xhigh · ~/Project'
+      ]),
+      screen(['› 1. Yes, use postgres', '  2. No caching for now', '  gpt-5.6-sol xhigh · ~/Project'], text)
+    ]
+    const write = vi.fn()
+    const edit = await recallNativeQueue(
+      { read: async () => reads.shift() ?? reads[0]!, write, pause: async () => {} },
+      'codex'
+    )
+    expect(write).toHaveBeenCalledExactlyOnceWith('\x1b[1;3A')
+    expect(edit.text).toBe(text)
+  })
+
+  // A real prompt that comes up once the message has left the queue cannot be
+  // typed past, and nothing can put the message back through it. Say where
+  // the message is instead of only that the input is unavailable.
+  it('says where the recalled message is when a prompt comes up after the recall', async () => {
+    const reads = [
+      screen(['• Queued follow-up inputs', '  ↳ push it', '    ⌥ + ↑ edit last queued message', '', '› Ask Codex to do anything']),
+      screen(CODEX_PROMPT)
+    ]
+    const write = vi.fn()
+    await expect(
+      recallNativeQueue({ read: async () => reads.shift() ?? reads[0]!, write, pause: async () => {} }, 'codex')
+    ).rejects.toThrow('The message is in the agent input, unsent.')
+    expect(write).toHaveBeenCalledExactlyOnceWith('\x1b[1;3A')
+  })
 
   it.each([
     ['claude', 'the subagent Bash prompt', SUBAGENT_PROMPT],
