@@ -18,6 +18,11 @@ export const MOBILE_FILE_CHUNK_PARALLELISM = 4
 
 type Chunk = { contentBase64?: string; bytesRead?: number; eof?: boolean }
 
+/** Thrown when the chunks disagree about where the file ends. Worded for the user: the save and the
+ *  PDF viewer both show it as the reason. */
+export const MOBILE_FILE_CHANGED_DURING_READ =
+  'the file changed on the desktop while it was being read; try again'
+
 /**
  * Read a worktree file as base64 via `files.readChunk` until EOF.
  *
@@ -26,6 +31,14 @@ type Chunk = { contentBase64?: string; bytesRead?: number; eof?: boolean }
  * viewer pages the bytes over instead. No `files.stat` first: the host's mobile
  * allowlist has `readChunk` but not `stat`, so the size is learned from `eof`.
  * Chunks are requested a few at a time and stitched in offset order.
+ *
+ * The host stats the file on every call and sets `eof = offset + bytesRead >= size`
+ * (readFileExplorerChunk, orca-runtime-files.ts). So on a file that does not change, the
+ * last chunk with bytes says eof, a chunk shorter than asked says eof, and nothing lies past
+ * an eof. A read that sees otherwise stitched two versions of the file together, and throws
+ * MOBILE_FILE_CHANGED_DURING_READ rather than hand them back as one: a save would write
+ * them as the file and the PDF cache would keep them for ten minutes. A file rewritten to
+ * the same size between two chunks is not caught; there is no stat to compare against.
  */
 export async function readMobileFileBase64Chunked(
   client: ChunkedReadClient,
@@ -36,6 +49,10 @@ export async function readMobileFileBase64Chunked(
     chunkBytes?: number
     parallelism?: number
     onProgress?: (bytesSoFar: number) => void
+    /** A zero-byte file is a real file to a save; to a viewer it is nothing to show. */
+    allowEmpty?: boolean
+    /** Aborted: no further wave is asked for. The one in flight still lands. */
+    signal?: AbortSignal
   } = {}
 ): Promise<{ base64: string; byteLength: number }> {
   const maxBytes = options.maxBytes ?? MOBILE_CHUNKED_READ_MAX_BYTES
@@ -63,8 +80,11 @@ export async function readMobileFileBase64Chunked(
   let total = 0
   let nextOffset = 0
   let ended = false
-  // A wave is `parallelism` consecutive chunks; a short or eof chunk ends the read.
+  // A wave is `parallelism` consecutive chunks; the eof chunk ends the read.
   while (!ended) {
+    if (options.signal?.aborted) {
+      throw new Error('aborted')
+    }
     const offsets: number[] = []
     for (let i = 0; i < parallelism; i++) {
       offsets.push(nextOffset)
@@ -73,6 +93,13 @@ export async function readMobileFileBase64Chunked(
     const chunks = await Promise.all(offsets.map(readAt))
     for (const chunk of chunks) {
       const bytesRead = chunk.bytesRead ?? 0
+      if (ended) {
+        // Past the end an earlier chunk of this wave reported: the file grew under the read.
+        if (bytesRead > 0) {
+          throw new Error(MOBILE_FILE_CHANGED_DURING_READ)
+        }
+        continue
+      }
       if (bytesRead > 0) {
         parts.push(chunk.contentBase64 as string)
         total += bytesRead
@@ -81,13 +108,20 @@ export async function readMobileFileBase64Chunked(
       if (total > maxBytes) {
         throw new Error('file_too_large')
       }
-      if (chunk.eof || bytesRead < chunkBytes) {
+      if (chunk.eof) {
+        // Only an empty file ends on a chunk with no bytes. After bytes, it means the chunk
+        // before said "more" and this one found the file already over: it shrank.
+        if (bytesRead === 0 && total > 0) {
+          throw new Error(MOBILE_FILE_CHANGED_DURING_READ)
+        }
         ended = true
-        break
+      } else if (bytesRead < chunkBytes) {
+        // Short of what was asked with more to come: cut between the host's stat and its read.
+        throw new Error(MOBILE_FILE_CHANGED_DURING_READ)
       }
     }
   }
-  if (total === 0) {
+  if (total === 0 && !options.allowEmpty) {
     throw new Error('binary_file')
   }
   return { base64: parts.join(''), byteLength: total }

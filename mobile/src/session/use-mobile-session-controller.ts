@@ -21,6 +21,7 @@ import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
 import { useMobileSessionTerminalSendActions } from './use-mobile-session-terminal-send-actions'
 import { useMobileSessionFileActions } from './use-mobile-session-file-actions'
+import { useMobileSessionSaveToPhonePresence } from './use-mobile-session-save-to-phone-presence'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 import { useMobileSessionAccessorySelection } from './use-mobile-session-accessory-selection'
 import { useMobileSessionAttachments } from './use-mobile-session-attachments'
@@ -90,7 +91,8 @@ export function useMobileSessionController() {
   )
   const fileActions = Object.assign(
     terminalSendActions,
-    useMobileSessionFileActions(terminalSendActions)
+    useMobileSessionFileActions(terminalSendActions),
+    useMobileSessionSaveToPhonePresence()
   )
   const terminalInput = Object.assign(fileActions, useMobileSessionTerminalInput(fileActions))
   const accessorySelection = Object.assign(

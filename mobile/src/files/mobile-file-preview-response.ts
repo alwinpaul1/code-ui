@@ -100,6 +100,15 @@ export function previewError(message: string): MobileFilePreviewResult {
   }
 }
 
+/**
+ * How much of a text file `files.read` sends before it cuts it and says `truncated`: 512 KiB
+ * (MOBILE_FILE_READ_MAX_BYTES, Orca's src/main/runtime/orca-runtime-files.ts at ac675ded6e). The
+ * figure is the desktop's, so the copy names it. Never a cut file's size: the reply's `byteLength`
+ * is the length of what the host READ (512 KiB and a byte, truncateMobileFilePreview), and the
+ * desktop sends the phone nothing else about the file's size on this path.
+ */
+export const DESKTOP_TEXT_READ_CAP = '512 KB'
+
 export function formatPreviewByteLength(byteLength: number): string {
   if (!Number.isFinite(byteLength) || byteLength < 0) {
     return 'unknown size'

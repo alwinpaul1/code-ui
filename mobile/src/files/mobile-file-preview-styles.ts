@@ -1,133 +1,92 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import type { Theme } from '../theme/theme-context'
 
-export const filePreviewStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  /** The code viewer and its line bar, which floats over its foot. No
-   *  colour of its own: the viewer paints the theme's code surface. */
-  sourceArea: {
-    flex: 1,
-    minHeight: 0
-  },
-  header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
-  },
-  meta: {
-    marginTop: 2,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  state: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    padding: spacing.xl
-  },
-  stateText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize,
-    textAlign: 'center'
-  },
-  retryButton: {
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.lg
-  },
-  retryText: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
-  },
-  saveButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  saveButtonDisabled: {
-    opacity: 0.42
-  },
-  // The source view's scroller and its one-Text body (scroll, textContent,
-  // textPreview) went with that view: text files draw in MobileCodeView.
-  // The markdown preview's own chrome — container, toolbar, the two mode
-  // toggles, the content padding — used to live here, on the static dark
-  // palette. It moved into MobileFileMarkdownPreview.tsx as a themed factory so
-  // the preview follows light mode; these copies were left behind with no
-  // reader. Anything that needs them again should take the themed ones.
-  truncatedNote: {
-    marginBottom: spacing.md,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize
-  },
-  imageContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface
-  },
-  imageScrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.md
-  },
-  editContainer: {
-    flex: 1,
-    backgroundColor: colors.editorSurface,
-    padding: spacing.md
-  },
-  saveErrorText: {
-    marginBottom: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.metaSize
-  },
-  editInput: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 13,
-    lineHeight: 19,
-    padding: 0
-  }
-})
+/**
+ * The file preview's page and body, from the live theme: the screen's canvas, the loading and error
+ * states, the source text, the image surface and the artifact editor. They sat on the static dark
+ * palette, so once the header was themed (mobile-file-preview-header-styles.ts, 2026-09-26) light
+ * mode showed a light header over a dark page. Sizes are the ones they always had; only the colours
+ * moved. The editor surface was a shade of its own (#1E1C19) that no theme token has; it is the
+ * page colour now in both schemes, four steps darker in dark.
+ */
+export function filePreviewStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg
+    },
+    /** The code viewer and its line bar, which floats over its foot. No
+     *  colour of its own: the viewer paints the theme's code surface. */
+    sourceArea: {
+      flex: 1,
+      minHeight: 0
+    },
+    state: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.md,
+      padding: spacing.xl
+    },
+    stateText: {
+      color: colors.textSecondary,
+      fontSize: typography.bodySize,
+      textAlign: 'center'
+    },
+    errorText: {
+      color: colors.danger,
+      fontSize: typography.bodySize,
+      textAlign: 'center'
+    },
+    retryButton: {
+      minHeight: 36,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.lg
+    },
+    retryText: {
+      color: colors.text,
+      fontSize: typography.bodySize,
+      fontWeight: '600'
+    },
+    // The source view's scroller and its one-Text body (scroll, textContent,
+    // textPreview) went with that view: text files draw in MobileCodeView.
+    truncatedNote: {
+      marginBottom: spacing.md,
+      color: colors.textSecondary,
+      fontSize: typography.metaSize
+    },
+    imageContainer: {
+      flex: 1,
+      backgroundColor: colors.bg
+    },
+    imageScrollContent: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.md
+    },
+    editContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      padding: spacing.md
+    },
+    saveErrorText: {
+      marginBottom: spacing.sm,
+      color: colors.danger,
+      fontSize: typography.metaSize
+    },
+    editInput: {
+      flex: 1,
+      color: colors.text,
+      fontFamily: typography.monoFamily,
+      fontSize: 13,
+      lineHeight: 19,
+      padding: 0
+    }
+  })
+}

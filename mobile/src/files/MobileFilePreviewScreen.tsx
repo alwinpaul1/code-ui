@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View, useWindowDimensions } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { ChevronLeft, Save } from 'lucide-react-native'
+import { ChevronLeft, Download, Save } from 'lucide-react-native'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { FloatingToast } from '../ui/FloatingToast'
 import { useForceReconnect, useHostClient } from '../transport/client-context'
 import { connectionRetryAction } from '../transport/connection-retry-action'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
@@ -32,7 +34,9 @@ import {
   isEditableMobileTerminalArtifactPreview,
   shouldKeepDirtyDraftOnPreviewLoadResult
 } from './mobile-file-preview-editability'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStyles } from './mobile-file-preview-styles'
+import { filePreviewHeaderStyles } from './mobile-file-preview-header-styles'
+import { useMobileFileSaveToPhone } from './use-mobile-file-save-to-phone'
 import { readingPositionKey } from '../storage/reading-positions'
 import { createMarkdownImageResolver } from './markdown-image-resolver'
 import { useMobileFilePreviewBack } from './use-mobile-file-preview-back'
@@ -57,6 +61,10 @@ export function MobileFilePreviewScreen({ route }: Props) {
   const savedContentRef = useRef(savedContent)
   const draftSourceKeyRef = useRef<string | null>(null)
   const { width, height } = useWindowDimensions()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
+  const headerStyles = useThemedStyles(filePreviewHeaderStyles)
+  const saveToPhone = useMobileFileSaveToPhone()
   const routePreviewSource = useMemo(
     () => (previewParams ? previewSourceFromRoute(previewParams) : null),
     [previewParams]
@@ -264,12 +272,29 @@ export function MobileFilePreviewScreen({ route }: Props) {
     leave
   })
 
+  // The desktop's copy, whatever the preview could show of it: an image, text past the preview
+  // cap, a binary with no preview at all (mobile-file-save.ts). A PDF on screen already has the
+  // viewer's own Download, which saves the copy it holds; a second button would do the same.
+  const offerSaveToPhone =
+    saveToPhone.supported &&
+    previewSource !== null &&
+    !(preview.status === 'ready' && preview.kind === 'pdf')
+  const saveToPhoneDisabled = !client || connState !== 'connected' || saveToPhone.saving
+  const saveFileToPhone = () => {
+    if (client && previewSource && !saveToPhoneDisabled) {
+      void saveToPhone.save(client, previewSource)
+    }
+  }
+
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.topBar}>
+      <SafeAreaView style={headerStyles.header} edges={['top']}>
+        <View style={headerStyles.topBar}>
           <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            style={({ pressed }) => [
+              headerStyles.backButton,
+              pressed && headerStyles.backButtonPressed
+            ]}
             onPress={requestBack}
             hitSlop={8}
             accessibilityRole="button"
@@ -277,22 +302,40 @@ export function MobileFilePreviewScreen({ route }: Props) {
           >
             <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
           </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
+          <View style={headerStyles.titleBlock}>
+            <Text style={headerStyles.title} numberOfLines={1}>
               {title || 'Preview'}
             </Text>
-            <Text style={styles.meta} numberOfLines={1}>
+            <Text style={headerStyles.meta} numberOfLines={1}>
               {meta}
             </Text>
           </View>
+          {offerSaveToPhone ? (
+            <Pressable
+              style={[
+                headerStyles.actionButton,
+                saveToPhoneDisabled && headerStyles.actionButtonDisabled
+              ]}
+              onPress={saveFileToPhone}
+              disabled={saveToPhoneDisabled}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Save to phone"
+            >
+              <Download size={18} color={colors.text} strokeWidth={2.2} />
+            </Pressable>
+          ) : null}
           {isEditableTerminalArtifact ? (
             <Pressable
-              style={[styles.saveButton, (!canSaveArtifact || saving) && styles.saveButtonDisabled]}
+              style={[
+                headerStyles.actionButton,
+                (!canSaveArtifact || saving) && headerStyles.actionButtonDisabled
+              ]}
               onPress={() => void saveArtifact()}
               disabled={!canSaveArtifact || saving}
               accessibilityLabel="Save terminal artifact"
             >
-              <Save size={18} color={colors.textPrimary} strokeWidth={2.2} />
+              <Save size={18} color={colors.text} strokeWidth={2.2} />
             </Pressable>
           ) : null}
         </View>
@@ -319,6 +362,7 @@ export function MobileFilePreviewScreen({ route }: Props) {
         }
         onRetry={retry}
       />
+      <FloatingToast message={saveToPhone.notice} />
       <ConfirmModal
         visible={confirmingDiscard}
         title="Discard changes?"

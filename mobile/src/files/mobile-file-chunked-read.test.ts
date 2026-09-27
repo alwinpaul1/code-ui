@@ -60,4 +60,13 @@ describe('readMobileFileBase64Chunked', () => {
       readMobileFileBase64Chunked({ sendRequest } as never, 'id:w', 'empty.pdf')
     ).rejects.toThrow('binary_file')
   })
+
+  it('reads an empty file as zero bytes for a caller that saves it rather than shows it', async () => {
+    const sendRequest = chunkServer(Buffer.alloc(0))
+    await expect(
+      readMobileFileBase64Chunked({ sendRequest } as never, 'id:w', '.gitkeep', {
+        allowEmpty: true
+      })
+    ).resolves.toEqual({ base64: '', byteLength: 0 })
+  })
 })

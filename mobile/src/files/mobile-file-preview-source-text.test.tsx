@@ -25,13 +25,16 @@ vi.mock('../theme/theme-context', async () => {
   const palettes = await vi.importActual<typeof import('../theme/syntax-palette')>(
     '../theme/syntax-palette'
   )
+  const useTheme = () => ({
+    colors: tokens.colorsForScheme(scheme),
+    syntax: palettes.syntaxPaletteForScheme(scheme),
+    fonts: tokens.fontFamily,
+    isDark: scheme === 'dark'
+  })
   return {
-    useTheme: () => ({
-      colors: tokens.colorsForScheme(scheme),
-      syntax: palettes.syntaxPaletteForScheme(scheme),
-      fonts: tokens.fontFamily,
-      isDark: scheme === 'dark'
-    })
+    useTheme,
+    // The file preview's styles are a factory of the live theme (mobile-file-preview-styles.ts).
+    useThemedStyles: <T,>(factory: (theme: ReturnType<typeof useTheme>) => T) => factory(useTheme())
   }
 })
 
@@ -92,9 +95,12 @@ describe('opening a code file from the file explorer', () => {
     expect(list(mount({ initialLine: 3 })).props.initialScrollIndex).toBe(2)
   })
 
-  it('says when the host sent only part of the file', () => {
-    const r = mount({ truncated: true, byteLength: 3 * 1024 * 1024 })
-    expect(texts(r).some((text) => text.startsWith('Preview truncated. File size:'))).toBe(true)
+  it('says when the host sent only part of the file, and names what it shows, not a size', () => {
+    // Orca's files.read never tells the phone a cut file's size: its byteLength is what it read,
+    // 524289 for any file over the cap, so "File size: 512 KB" was said of a 5 MB log.
+    const r = mount({ truncated: true })
+    const notes = texts(r).filter((text) => text.startsWith('Preview truncated'))
+    expect(notes).toEqual(['Preview truncated: showing the first 512 KB of the file.'])
   })
 
   it('pretty-prints a minified JSON file and says so', () => {

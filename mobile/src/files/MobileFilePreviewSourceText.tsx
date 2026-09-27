@@ -12,7 +12,8 @@ import {
   fileLinesText
 } from '../session/mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from '../session/MobileSessionFileReaderLineActionBar'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStyles } from './mobile-file-preview-styles'
+import { useThemedStyles } from '../theme/theme-context'
 
 /**
  * A text file opened from the explorer, in the code viewer: numbered lines,
@@ -27,15 +28,14 @@ export function MobileFilePreviewSourceText({
   relativePath,
   content,
   truncated,
-  byteLength,
   initialLine
 }: {
   relativePath: string
   content: string
   truncated?: boolean
-  byteLength?: number
   initialLine?: number
 }) {
+  const styles = useThemedStyles(filePreviewStyles)
   const language = useMobileSyntaxLanguage(relativePath, content)
   const document = useMemo(() => buildMobileCodeDocument(content, language), [content, language])
   const folding = useCodeFolding(document)
@@ -55,7 +55,7 @@ export function MobileFilePreviewSourceText({
   const notice = linesCopy.error
     ? copyFailedNotice(linesCopy.error)
     : truncated
-      ? previewTruncatedText(byteLength ?? content.length)
+      ? previewTruncatedText()
       : document.reformatted
         ? REFORMATTED_JSON_NOTICE
         : null
@@ -91,17 +91,17 @@ export function MobileFilePreviewSourceText({
   )
 }
 
+/** Over a Markdown file the desktop cut. It names what the preview shows, not the file's size:
+ *  the phone is never told that (previewTruncatedText), and the reply's byteLength made every
+ *  file over the cap "File size: 512 KB". */
 export function MobileFilePreviewTruncatedNote({
-  byteLength,
   // Why: the markdown preview draws this note over a themed surface, so it
   // hands in its own colour. It layers over the shared one rather than
   // replacing it, so a field added below still reaches every caller.
   style
 }: {
-  byteLength: number
   style?: StyleProp<TextStyle>
 }) {
-  return (
-    <Text style={[styles.truncatedNote, style]}>{previewTruncatedText(byteLength)}</Text>
-  )
+  const styles = useThemedStyles(filePreviewStyles)
+  return <Text style={[styles.truncatedNote, style]}>{previewTruncatedText()}</Text>
 }

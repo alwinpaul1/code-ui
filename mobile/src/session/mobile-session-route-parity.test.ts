@@ -106,7 +106,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // 302 since 2026-09-25 (Orca #22362): the Markdown actions' useBackClaim, the page's claim on
 // Back while a draft is dirty. Upstream's count held because its claim replaced a native
 // BackHandler effect; this fork never had that effect, so here it is +1.
-const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e129dc711bcc117d00'
+// 303 since 2026-09-26: useMobileSessionSaveToPhonePresence in the controller, which tells a
+// tab-menu Save to Phone whether the user is still in the session. Not expanded here: its own
+// refs, focus effect and memo stay inside it, so the callback, effect and JSX pins held.
+const HEAD_MAIN_HOOK_SHA256 = 'cd8240c0471804bae7d54d452d06191f4ac0a0462a9de578ce06456406394451'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -114,7 +117,8 @@ const HEAD_MAIN_HOOK_SHA256 = 'a7bc9077ee19ca04437a3306ed2d04dfb1a9330897b147e12
 // 2026-09-25: hasDirtyDraft binds for the Markdown actions' page Back claim (Orca #22362).
 // 2026-09-25 (later): the file actions also take fileTapMatchPicker out of
 // useMobileFileTapHandlers, the drawer for a bare chat name found in several folders.
-const HEAD_HOOK_BINDING_SHA256 = 'cbcf879f60bbe699a6c3a437c4643e08750e61936f1b7d254e516ab393c506b9'
+// 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
+const HEAD_HOOK_BINDING_SHA256 = 'be919c549cf9f0dd18137f8e4dd89e21e9bae17fedfc49eaaf36d6dc476631c7'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -447,16 +451,31 @@ const HEAD_HOST_JSX_SHA256 = 'ff5cde7d96e6e239172814c5770f2e3cd4dee6dd446137901f
 // 2026-09-26: the chat overlay is handed `createdFileCounts` beside
 // `onRevertHunk`, the store that reads back a created file the wire cut for its
 // line count. Same record count; only the overlay's record moved.
+// 2026-09-26 (later): MobileSessionSheets' Markdown and file tab
+// <ActionSheetModal actions={[…]} /> each gained a
+// `...saveToPhoneSheetActions(controller, target, dismiss)` spread, "Save to
+// Phone" for the tab's file. Its label, hint and toasts live in
+// mobile-session-save-to-phone-action.ts, outside this family, so the string
+// pin did not move. Same record count; only those two records moved.
 // 73 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
 // (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
 // MobileSyntaxLine and the line action bar left; MobileSessionFileSource came in.
+// 2026-09-26 (later still): FileReader's <MobileFileMarkdownPreview> call no
+// longer hands it `byteLength`. On a cut read that is what the host read, not
+// the file's size, and the truncated note called every file over the cap
+// 512 KB; the note now names the cap instead. Same record count (73); only
+// that record moved.
 // 2026-09-27: the file tab tells its source view the file was truncated
 // (review should-fix: it copied partial text as "Copy file", with no notice).
 // Same record count; two records moved, checked by dumping the facts before
 // and after: MobileSessionFileSource gains `truncated` and `byteLength`, and
 // the markdown preview's renderSource passes doc.truncated and
 // doc.byteLength. Every other fact set is unchanged.
-const HEAD_LEAF_JSX_SHA256 = 'f86aa7b9d0410f8b26fca25f7025a27116c4d348cb4d0c46cfc98b973b593d11'
+// 2026-09-27 (merging main into fix/save-to-phone): those two records lose
+// `byteLength` again, for the same reason as the preview's note above: the
+// file tab's notice (previewTruncatedText) names the cap, not a size the
+// phone is never told. Same record count (73); only those two records moved.
+const HEAD_LEAF_JSX_SHA256 = '54fee1a9c5707c1263d0d2cac63c3b95330376b915696279a4b32a074a436efa'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -883,7 +902,8 @@ describe('mobile session route extraction parity', () => {
     // 301 since 2026-09-25: the terminal fields' submit seam — submitLiveInput (useCallback) and
     // one useTerminalTextFieldSubmitBinding per field in the send actions (Orca #22300).
     // 302 since 2026-09-25: the Markdown actions' page Back claim (Orca #22362).
-    expect(main.hooks).toHaveLength(302)
+    // 303 since 2026-09-26: useMobileSessionSaveToPhonePresence (the tab menu's Save to Phone).
+    expect(main.hooks).toHaveLength(303)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
