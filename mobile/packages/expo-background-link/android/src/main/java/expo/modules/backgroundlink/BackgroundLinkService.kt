@@ -75,9 +75,10 @@ class BackgroundLinkService : HeadlessJsTaskService() {
       return START_STICKY
     }
     taskStarted = true
-    stopCause = null
-    requestedStopCause = null
-    taskRemoved = false
+    // No cause is cleared here. A start can land on this instance after its
+    // task ended and stopSelf() ran but before onDestroy, and stopSelf() still
+    // destroys it; clearing would record "Android stopped it" for that stop. A
+    // new instance starts with none, and onDestroy clears JS's request.
     recordStart(this)
     startOwnTask(getTaskConfig(intent))
     // What the base class returned for a started task: after a process death

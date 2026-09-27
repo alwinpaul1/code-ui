@@ -104,13 +104,20 @@ describe('the background service leaves behind when and why it stopped', () => {
     expect(onTaskRemoved).not.toMatch(/stopSelf/)
   })
 
-  it('starts each run with no cause left over from an earlier one', () => {
+  it('records when each run starts', () => {
     const onStart = functionBody(service, /override fun onStartCommand\(/)
-    const freshRun = onStart.slice(onStart.indexOf('taskStarted = true'))
-    expect(freshRun).toMatch(/\bstopCause = null\b/)
-    expect(freshRun).toMatch(/\brequestedStopCause = null\b/)
-    expect(freshRun).toMatch(/\btaskRemoved = false\b/)
-    expect(freshRun).toMatch(/recordStart\(this\)/)
+    expect(onStart.slice(onStart.indexOf('taskStarted = true'))).toMatch(/recordStart\(this\)/)
+  })
+
+  // A start can land on this instance after its own task ended and stopSelf()
+  // ran, but before onDestroy: stopSelf() still destroys it. A start that
+  // cleared the cause then made onDestroy record "Android stopped it" for a
+  // stop the service (or JS) had asked for. A new instance starts clear anyway.
+  it('keeps the cause of a stop already under way when a start lands before onDestroy', () => {
+    const onStart = functionBody(service, /override fun onStartCommand\(/)
+    expect(onStart).not.toMatch(/\bstopCause =/)
+    expect(onStart).not.toMatch(/\brequestedStopCause =/)
+    expect(onStart).not.toMatch(/\btaskRemoved =/)
   })
 
   it('reads the last process exit only on Android versions that have the API', () => {
