@@ -11,7 +11,7 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
 import { MobileBrowserKeyRow } from './MobileBrowserKeyRow'
 import {
@@ -21,7 +21,7 @@ import {
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import { buttonColor, type FrameLayer } from './mobile-browser-frame-state'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 import type {
   BrowserFrameGeometry,
   BrowserTouchLayout,
@@ -119,29 +119,31 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
     togglePointerModifier,
     zoom
   } = props
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileBrowserPaneStyles)
   return (
     <View ref={setRootViewRef} style={styles.root}>
-      <View style={styles.toolbar}>
+      <View testID="mobile-browser-toolbar" style={styles.toolbar}>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoBack}
           label="Back"
           onPress={goBack}
         >
-          <ChevronLeft size={15} color={buttonColor(!controlsDisabled && tab.canGoBack)} />
+          <ChevronLeft size={15} color={buttonColor(colors, !controlsDisabled && tab.canGoBack)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled || !tab.canGoForward}
           label="Forward"
           onPress={goForward}
         >
-          <ChevronRight size={15} color={buttonColor(!controlsDisabled && tab.canGoForward)} />
+          <ChevronRight size={15} color={buttonColor(colors, !controlsDisabled && tab.canGoForward)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserToolbarIconButton
           disabled={controlsDisabled}
           label="Reload"
           onPress={reloadPage}
         >
-          <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
+          <RefreshCw size={15} color={buttonColor(colors, !controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
         <MobileBrowserAddressField
           value={addressValue}
@@ -329,7 +331,7 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             onPress={() => void sendKeyboardText()}
             accessibilityLabel="Send text to browser"
           >
-            <ArrowUp size={18} color={buttonColor(!controlsDisabled && !!keyboardValue)} />
+            <ArrowUp size={18} color={buttonColor(colors, !controlsDisabled && !!keyboardValue)} />
           </Pressable>
         </View>
       </View>

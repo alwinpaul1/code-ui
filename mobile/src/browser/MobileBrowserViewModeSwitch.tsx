@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { Monitor, Smartphone, type LucideIcon } from 'lucide-react-native'
-import { colors, radii } from '../theme/mobile-theme'
+import { radii } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
 
 type Props = {
@@ -20,6 +21,7 @@ export function MobileBrowserViewModeSwitch({
   value,
   onChange
 }: Props): React.JSX.Element {
+  const styles = useThemedStyles(viewModeSwitchStyles)
   return (
     <View style={styles.switch}>
       {VIEW_MODES.map((mode) => (
@@ -49,6 +51,8 @@ function ViewModeButton({
   onPress: () => void
   selected: boolean
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(viewModeSwitchStyles)
   return (
     <Pressable
       // A segmented control: the buttons abut, so there is no room for
@@ -66,34 +70,36 @@ function ViewModeButton({
       accessibilityState={{ selected, disabled }}
       accessibilityLabel={`Show ${label.toLowerCase()} website view`}
     >
-      <Icon size={14} color={selected ? colors.bgBase : colors.textSecondary} />
+      <Icon size={14} color={selected ? colors.textInverse : colors.textSecondary} />
     </Pressable>
   )
 }
 
-const styles = StyleSheet.create({
-  switch: {
-    minHeight: 28,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    padding: 2
-  },
-  button: {
-    minHeight: 24,
-    width: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  buttonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  buttonSelected: {
-    backgroundColor: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.35
-  }
-})
+function viewModeSwitchStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    switch: {
+      minHeight: 28,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised,
+      padding: 2
+    },
+    button: {
+      minHeight: 24,
+      width: 32,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button
+    },
+    buttonPressed: {
+      backgroundColor: colors.border
+    },
+    buttonSelected: {
+      backgroundColor: colors.text
+    },
+    disabled: {
+      opacity: 0.35
+    }
+  })
+}

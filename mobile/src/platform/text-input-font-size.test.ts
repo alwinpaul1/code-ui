@@ -18,11 +18,30 @@ import { mobileDiffReviewControlStyles } from '../components/mobile-diff-review-
 import { customKeyModalStyles } from '../components/CustomKeyModal.styles'
 import { mobileSessionCommandInputStyles } from '../session/mobile-session-command-input-styles'
 import { typography } from '../theme/mobile-theme'
+import { syntaxPaletteForScheme } from '../theme/syntax-palette'
+import { colorsForScheme, fontFamily, radius, space, type } from '../theme/tokens'
+import type { Theme } from '../theme/theme-context'
 import { TEXT_INPUT_FONT_SIZE } from './text-input-font-size'
 import {
   TEXT_INPUT_FONT_SIZE_FLOOR,
   TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE
 } from './text-input-font-size.web'
+
+// A few of the modules below moved from a static dark-only StyleSheet to a factory of the live
+// theme (the 2026-09-27 theme sweep); this file only reads their font size, which does not vary
+// by scheme, so one fixed theme stands in for the live one here.
+const TEST_THEME: Theme = {
+  scheme: 'dark',
+  preference: 'dark',
+  setPreference: () => undefined,
+  colors: colorsForScheme('dark'),
+  syntax: syntaxPaletteForScheme('dark'),
+  space,
+  radius,
+  type,
+  fonts: fontFamily,
+  isDark: true
+}
 
 /**
  * The size every page-served text input carries, on each platform.
@@ -87,17 +106,19 @@ describe('the font size the page-served text inputs carry', () => {
     expect(TEXT_INPUT_FONT_SIZE).toBe(typography.bodySize)
     expect(listStyles.commitInput.fontSize).toBe(typography.bodySize)
     expect(mobileDiffReviewControlStyles.composerInput.fontSize).toBe(typography.bodySize)
-    expect(mobileBrowserPaneStyles.keyboardInput.fontSize).toBe(typography.bodySize)
+    expect(mobileBrowserPaneStyles(TEST_THEME).keyboardInput.fontSize).toBe(typography.bodySize)
     expect(customKeyModalStyles.fieldInput.fontSize).toBe(typography.bodySize)
     // The capture field beside it, which is the one input on this screen no seam touches.
     expect(customKeyModalStyles.keyInput.fontSize).toBe(22)
     expect(customKeyModalStyles.keyInput.fontSize).toBeGreaterThanOrEqual(
       TEXT_INPUT_FONT_SIZE_FLOOR
     )
-    expect(mobileSessionCommandInputStyles.textInput.fontSize).toBe(typography.bodySize)
+    expect(mobileSessionCommandInputStyles(TEST_THEME).textInput.fontSize).toBe(
+      typography.bodySize
+    )
     // The pane's address bar is the one that is split: it keeps the compact size natively, so the
     // seam reaches it through the `.web.ts` sibling rather than through this constant.
-    expect(browserAddressFieldStyles.input.fontSize).toBe(typography.metaSize)
+    expect(browserAddressFieldStyles(TEST_THEME).input.fontSize).toBe(typography.metaSize)
   })
 
   it('takes that size from the seam in every style, which is what the web build swaps', () => {

@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import type { ReactNode } from 'react'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { useThemedStyles, type Theme } from '../theme/theme-context'
 
 type Props = {
   children: ReactNode
@@ -18,6 +19,7 @@ export function MobileBrowserToolbarIconButton({
   onPress,
   style
 }: Props): React.JSX.Element {
+  const styles = useThemedStyles(toolbarIconButtonStyles)
   return (
     <Pressable
       // The toolbar sets `gap: spacing.xs`, so the slop stops halfway across it:
@@ -39,18 +41,20 @@ export function MobileBrowserToolbarIconButton({
   )
 }
 
-const styles = StyleSheet.create({
-  button: {
-    width: 26,
-    height: 26,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  buttonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  disabled: {
-    opacity: 0.35
-  }
-})
+function toolbarIconButtonStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    button: {
+      width: 26,
+      height: 26,
+      borderRadius: radii.button,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    buttonPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    disabled: {
+      opacity: 0.35
+    }
+  })
+}
