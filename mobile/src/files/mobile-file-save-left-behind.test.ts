@@ -187,6 +187,103 @@ describe('saving a file again after leaving its first save', () => {
     expect(toast.visible()).toBeNull()
   })
 
+  it('saves a file once when the preview asks while the session save is writing it, and says on the screen in front what it left', async () => {
+    // The session save has its document (the picker has closed) and is writing a big file when the
+    // file browser covers the session and the same file's preview asks for it. Taking over there
+    // opened a second picker, so the file was saved twice, and muted the first save: when its write
+    // then failed and the half-written copy could not be deleted, the warning reached no screen.
+    let failWrite!: (error: Error) => void
+    const heldWrite = new Promise<void>((_resolve, reject) => {
+      failWrite = reject
+    })
+    let writes = 0
+    const target = {
+      ...phone(),
+      // The first write (the session's) is held; any later one lands at once.
+      writeBase64: vi.fn(async () => {
+        writes += 1
+        if (writes === 1) {
+          await heldWrite
+        }
+      }),
+      remove: vi.fn(async () => {
+        throw new Error('EACCES')
+      })
+    } satisfies MobileFileSaveTarget
+    const run = createSaveToPhoneRunner(target)
+
+    let sessionInFront = true
+    const seen: string[] = []
+    const fromTabMenu = run({
+      client: readyDesktop(PDF),
+      source: report,
+      // The session's toast shows only while the session is the screen in front.
+      notify: (message) => {
+        if (sessionInFront) {
+          seen.push(message)
+        }
+      },
+      signal: new AbortController().signal,
+      onScreen: () => sessionInFront
+    })
+    await vi.waitFor(() => expect(target.writeBase64).toHaveBeenCalledTimes(1))
+    sessionInFront = false
+
+    const fromPreview = await run({
+      client: readyDesktop(PDF),
+      source: report,
+      notify: (message) => seen.push(message),
+      signal: new AbortController().signal
+    })
+    failWrite(new Error('EIO'))
+    const outcome = await fromTabMenu
+
+    expect(fromPreview).toEqual({ status: 'busy', fileName: 'report.pdf' })
+    expect(target.createDocument).toHaveBeenCalledTimes(1)
+    expect(outcome).toMatchObject({ status: 'failed' })
+    expect(seen).toContain('Already saving report.pdf')
+    expect(seen.at(-1)).toBe(
+      "Couldn't save report.pdf: the phone could not write it (EIO). " +
+        'An incomplete report.pdf is left where you chose to save it; delete it there'
+    )
+  })
+
+  it('tells a screen that asked while the picker was open nothing more once that screen is gone', async () => {
+    let finishWrite!: () => void
+    const heldWrite = new Promise<void>((resolve) => {
+      finishWrite = resolve
+    })
+    const target = { ...phone(), writeBase64: vi.fn(() => heldWrite) } satisfies MobileFileSaveTarget
+    const run = createSaveToPhoneRunner(target)
+
+    let sessionInFront = true
+    const fromTabMenu = run({
+      client: readyDesktop(PDF),
+      source: report,
+      notify: () => {},
+      signal: new AbortController().signal,
+      onScreen: () => sessionInFront
+    })
+    await vi.waitFor(() => expect(target.writeBase64).toHaveBeenCalledTimes(1))
+    sessionInFront = false
+
+    // The preview asks, is told the file is already being saved, and is closed.
+    const leftPreview = new AbortController()
+    const previewToasts: string[] = []
+    const fromPreview = await run({
+      client: readyDesktop(PDF),
+      source: report,
+      notify: (message) => previewToasts.push(message),
+      signal: leftPreview.signal
+    })
+    leftPreview.abort()
+    finishWrite()
+
+    expect(fromPreview).toEqual({ status: 'busy', fileName: 'report.pdf' })
+    expect(await fromTabMenu).toMatchObject({ status: 'saved' })
+    expect(previewToasts).toEqual(['Already saving report.pdf'])
+  })
+
   it('still refuses a second tap while the save that took over is running', async () => {
     const target = phone()
     const run = createSaveToPhoneRunner(target)

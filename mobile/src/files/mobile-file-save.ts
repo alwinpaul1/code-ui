@@ -58,7 +58,12 @@ export async function saveDesktopFileToPhone(
   client: MobileFilePreviewRpcSender,
   request: MobileFileSaveRequest,
   target: MobileFileSaveTarget,
-  options: WholeDesktopFileReadOptions & Pick<SaveToPhonePresence, 'onScreen'> = {}
+  options: WholeDesktopFileReadOptions &
+    Pick<SaveToPhonePresence, 'onScreen'> & {
+      /** Called as the picker opens. From here the save is the file's until it ends: the picker
+       *  makes the document the user names, and the write into it cannot be called back. */
+      onPickerOpening?: () => void
+    } = {}
 ): Promise<MobileFileSaveOutcome> {
   const fileName = suggestedSaveFileName(request.fileName ?? sourcePath(request.source))
   const read = await readWholeDesktopFile(client, request.source, options)
@@ -74,6 +79,7 @@ export async function saveDesktopFileToPhone(
   if (options.onScreen?.() === false) {
     return { status: 'abandoned', fileName }
   }
+  options.onPickerOpening?.()
   let uri: string | null
   try {
     uri = await target.createDocument(fileName, saveMimeTypeFor(fileName))
@@ -149,8 +155,14 @@ const PROBLEM_NOTICE_MS = 4500
  * second tap on the same screen says it is already going rather than reading the file twice. A save
  * whose screen is gone or covered does not hold the file: a save asked for from the screen in front
  * takes over, and the one it replaces stops reading and never opens the picker. On a screen that is
- * only covered it swaps its "Getting…" for one short line saying so, then says nothing more. Why: the runner is shared by the preview and every session's tab menu, so a save the user left
- * would otherwise answer "Already saving" to the one they asked for next, and neither would open.
+ * only covered it swaps its "Getting…" for one short line saying so, then says nothing more. Why:
+ * the runner is shared by the preview and every session's tab menu, so a save the user left would
+ * otherwise answer "Already saving" to the one they asked for next, and neither would open.
+ *
+ * Once its picker has opened a save is never taken over, wherever its screen is: the picker has
+ * made the document, so a second save would ask for the file again, and the save taken over could
+ * no longer say what its write left behind. Another screen that asks then is told "Already saving"
+ * and, while it is still there, hears how the save ended.
  */
 export function createSaveToPhoneRunner(
   target: MobileFileSaveTarget,
@@ -164,12 +176,26 @@ export function createSaveToPhoneRunner(
     const fileName = suggestedSaveFileName(requestedName ?? sourcePath(source))
     const key = `${source.worktreeId}\n${sourcePath(source)}`
     const holder = inFlight.get(key)
-    if (holder && !holder.signal?.aborted && holder.onScreen?.() !== false) {
+    if (
+      holder &&
+      (holder.pickerOpened || (!holder.signal?.aborted && holder.onScreen?.() !== false))
+    ) {
       notify(`Already saving ${fileName}`, RESULT_NOTICE_MS)
+      // Asked from another screen, which may be the one in front when the save ends: it hears how.
+      if (notify !== holder.notify) {
+        holder.waiting.set(notify, signal)
+      }
       return { status: 'busy', fileName }
     }
     holder?.replaced.abort()
-    const self: InFlightSave = { signal, onScreen, replaced: new AbortController() }
+    const self: InFlightSave = {
+      signal,
+      onScreen,
+      notify,
+      replaced: new AbortController(),
+      pickerOpened: false,
+      waiting: new Map()
+    }
     inFlight.set(key, self)
     // Ended by the user leaving (their signal) or by a save that took over (`replaced`).
     const stopped = new AbortController()
@@ -201,6 +227,9 @@ export function createSaveToPhoneRunner(
         ...(options.chunkBytes ? { chunkBytes: options.chunkBytes } : {}),
         signal: stopped.signal,
         onScreen: () => !self.replaced.signal.aborted && onScreen?.() !== false,
+        onPickerOpening: () => {
+          self.pickerOpened = true
+        },
         onProgress: (bytes) => {
           const step = Math.floor(bytes / PROGRESS_STEP_BYTES)
           if (step > lastStep) {
@@ -221,14 +250,21 @@ export function createSaveToPhoneRunner(
       } else if (outcome.status !== 'cancelled' && outcome.status !== 'abandoned') {
         options.onProblem?.()
       }
-      say(
-        saveOutcomeMessage(outcome),
+      const message = saveOutcomeMessage(outcome)
+      const durationMs =
         outcome.status === 'saved' ||
-          outcome.status === 'cancelled' ||
-          outcome.status === 'abandoned'
+        outcome.status === 'cancelled' ||
+        outcome.status === 'abandoned'
           ? RESULT_NOTICE_MS
           : PROBLEM_NOTICE_MS
-      )
+      say(message, durationMs)
+      if (!self.replaced.signal.aborted) {
+        for (const [tell, theirSignal] of self.waiting) {
+          if (!theirSignal?.aborted) {
+            tell(message, durationMs)
+          }
+        }
+      }
       return outcome
     } finally {
       signal?.removeEventListener('abort', stop)
@@ -241,7 +277,15 @@ export function createSaveToPhoneRunner(
 }
 
 /** The save holding a file's slot: whose screen it answers to, and how to end it. */
-type InFlightSave = SaveToPhonePresence & { replaced: AbortController }
+type InFlightSave = SaveToPhonePresence & {
+  notify: SaveToPhoneRun['notify']
+  replaced: AbortController
+  /** Set as the picker opens. Such a save is never taken over: the file would be saved twice,
+   *  and the one taken over could no longer say what its write left behind. */
+  pickerOpened: boolean
+  /** Other screens told "Already saving", and whether each is still there; they hear the end. */
+  waiting: Map<SaveToPhoneRun['notify'], AbortSignal | undefined>
+}
 
 /** `docs/out/Report.PDF` → `Report.PDF`. */
 export function suggestedSaveFileName(path: string): string {
