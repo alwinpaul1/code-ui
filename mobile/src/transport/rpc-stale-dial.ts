@@ -1,4 +1,4 @@
-import type { ConnectionState } from './types'
+import type { ConnectionState, ForegroundNudgeReason } from './types'
 
 // Why: a dial older than this predates the revival signal, so it was opened over a
 // network path that may no longer exist. Younger dials belong to the current
@@ -13,4 +13,24 @@ const STALE_DIAL_AGE_MS = 2_000
 // delay — up to a further 60s of "Connecting…" against an answering desktop.
 export function isStaleForegroundDial(state: ConnectionState, dialAgeMs: number): boolean {
   return (state === 'connecting' || state === 'handshaking') && dialAgeMs >= STALE_DIAL_AGE_MS
+}
+
+/** Which nudge made the phone abandon its own dial, for the close line: it
+ *  logged "Close code unavailable" on every resume (Pixel, 2026-09-27). */
+export function staleDialOccasion(reason: ForegroundNudgeReason | undefined): string {
+  switch (reason) {
+    case undefined:
+    case 'app-resume':
+      return 'after resume'
+    case 'network-change':
+      return 'after a network change'
+    case 'focus':
+      return 'on a foreground nudge'
+    case 'user-send':
+      return 'on send'
+    default: {
+      const unhandled: never = reason
+      return unhandled
+    }
+  }
 }

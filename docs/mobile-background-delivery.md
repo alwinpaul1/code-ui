@@ -50,12 +50,27 @@ notifications alone.
      battery-optimisation exemption is allowed the start.
 2. **`src/background/background-notification-watcher.ts`**, a module-level
    singleton that owns the host connections while the UI is not on screen
-   (`enabled && !uiVisible`). It opens one client per paired host with
+   (`enabled && !uiVisible`). A host has exactly one client. The watcher
+   borrows the one the screen holds (or the one parked when Recents destroyed
+   the screen), whatever its state, and nudges it when it is not connected
+   instead of dialling beside it. Only a host with no client, or with a dead
+   parked one that nobody holds (closed first), gets a client of the
+   watcher's own, opened with
    `openHostLogicalClient(host, log, { backgroundLink: true })` — a mode that
-   never suspends the relay and never probes for a direct return — and
-   subscribes to desktop notifications once connected. When the UI comes
-   back it closes everything; the UI's own reconnect catch-up covers the
-   seam.
+   never suspends the relay and never probes for a direct return. It
+   subscribes to desktop notifications once connected. If the client it
+   borrowed is closed or replaced by its holder (a Recents swipe closes an
+   entry that is down rather than parking it), `live-host-clients` says so
+   and the watcher listens on whatever the host has next, dialling its own
+   when there is nothing. When the UI comes
+   back, a borrowed client is only unsubscribed. An own client that is still
+   alive is parked in `live-host-clients` for the screen to take back, unless
+   the screen already holds a client for that host, in which case it is
+   closed; a dead one is closed. (Publishing it regardless, as the watcher
+   did until 2026-09-27, orphaned one client per hide/show while the screen's
+   client was reconnecting: three clients, three reconnect loops and three
+   "Authenticated" lines for one desktop on a Pixel.) Switching delivery off
+   closes every client the watcher owns.
 3. **`index.ts`** is the app entry (`main` in `package.json`). It registers
    the headless task before `expo-router/entry`, because in a headless start
    nothing under `app/` is rendered and a registration in a route module

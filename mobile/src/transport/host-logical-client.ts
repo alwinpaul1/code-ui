@@ -12,11 +12,24 @@ export type OpenHostLogicalClientOptions = {
   backgroundLink?: boolean
 }
 
+const clientGenerationByHost = new Map<string, number>()
+
+/** 1 for the first client opened for a host in this process, then 2, 3… */
+function nextClientGeneration(hostId: string): number {
+  const generation = (clientGenerationByHost.get(hostId) ?? 0) + 1
+  clientGenerationByHost.set(hostId, generation)
+  return generation
+}
+
 export function openHostLogicalClient(
   host: HostProfile,
-  onLog: ConnectionLogSink,
+  hostLog: ConnectionLogSink,
   options: OpenHostLogicalClientOptions = {}
 ): RpcClient {
+  // Stamped here, once, so the socket, the relay supervisor and every probe
+  // and relay session they open write the same generation.
+  const clientGeneration = nextClientGeneration(host.id)
+  const onLog: ConnectionLogSink = (entry) => hostLog({ ...entry, clientGeneration })
   // Why: the stable facade owns app-visible RPC/subscription state while the
   // direct socket remains a replaceable first physical generation.
   const logical = createStableLogicalRpcClient(

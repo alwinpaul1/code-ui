@@ -1,4 +1,3 @@
-import { peekLiveHostClient } from '../transport/live-host-clients'
 import { AppState, Platform } from 'react-native'
 import { requireOptionalNativeModule } from 'expo'
 import {
@@ -117,7 +116,6 @@ export function getBackgroundLinkWatcher(): BackgroundNotificationWatcher {
   watcher = createBackgroundNotificationWatcher({
     loadHosts,
     openClient: openBackgroundClient,
-    peekLiveClient: peekLiveHostClient,
     subscribeNotifications: subscribeToDesktopNotifications,
     log
   })

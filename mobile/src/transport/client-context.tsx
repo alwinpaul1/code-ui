@@ -2,6 +2,7 @@
 // Design: docs/mobile-shared-client-per-host.md.
 import { isBackgroundRelayListening } from '../background/background-notification-watcher'
 import {
+  parkLiveHostClient,
   peekLiveHostClient,
   retireLiveHostClient,
   reusableParkedHostClient
@@ -359,6 +360,9 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
           entry.unsubConnectionPath()
           entry.unsubLivenessProbing()
           store.delete(hostId)
+          // No screen holds it now, so the background watcher may hand a
+          // client of its own back in its place if this one dies meanwhile.
+          parkLiveHostClient(hostId, entry.client)
           continue
         }
         closeEntry(hostId, { forgetPrimedHost: true, preserveAcquisitions: false })

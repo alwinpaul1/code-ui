@@ -34,15 +34,17 @@ export class RpcClientSocketCloseController {
 
   constructor(private readonly options: SocketCloseControllerOptions) {}
 
-  forceClose(session: RpcClientSocketSession): void {
+  /** `reason` names a close the phone made itself, so the log line says who
+   *  closed the socket instead of "Close code unavailable". */
+  forceClose(session: RpcClientSocketSession, reason?: string): void {
     session.close()
     if (this.options.getCurrentSession() === session) {
       this.synthesizedCloses.remember(session.socket, this.options.getAuthenticationGeneration())
-      this.handle(session)
+      this.handle(session, undefined, reason)
     }
   }
 
-  handle(session: RpcClientSocketSession, closeCode?: number): void {
+  handle(session: RpcClientSocketSession, closeCode?: number, reason?: string): void {
     if (this.options.getCurrentSession() !== session) {
       if (
         this.synthesizedCloses.takeUnauthorized(
@@ -85,7 +87,8 @@ export class RpcClientSocketCloseController {
       streamCount: this.options.streams.size(),
       attempt: this.options.reconnect.getAttempt()
     })
-    const closeDetail = closeCode == null ? 'Close code unavailable' : `Close code ${closeCode}`
+    const closeDetail =
+      reason ?? (closeCode == null ? 'Close code unavailable' : `Close code ${closeCode}`)
     this.options.emitWarning(
       'WebSocket closed',
       this.options.reconnect.willRetry()

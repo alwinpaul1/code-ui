@@ -78,6 +78,12 @@ export type ConnectionLogEntry = {
   path?: MobileConnectionDiagnosticPath
   // The relay close code behind a relay-dial-failed entry, so diagnostics need not read it out of `detail`.
   relayCloseCode?: number
+  // Which client for this host wrote the entry: 1 for the first opened in this
+  // process, 2 for the next. Two clients for one desktop logged every event
+  // twice with nothing to tell them apart (Pixel, 2026-09-27). Absent on
+  // entries not written by a client (app pause, revival, host open) and on
+  // entries saved before the field existed.
+  clientGeneration?: number
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void

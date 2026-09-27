@@ -21,6 +21,34 @@ type RotationResult = {
   relay: MobileRelayEndpoint
 }
 
+const rotationsInFlight = new Map<string, Promise<RotationResult>>()
+
+/**
+ * One credential rotation per host at a time, whichever client asks for it.
+ *
+ * Each rotation writes its own pending material, provisions a new credential
+ * and demotes the previous one to a short grace. Two clients for one desktop
+ * rotating together (a leaked second client did, 2026-09-27) provisioned twice
+ * and left one of them holding a copy the relay would soon refuse. A client
+ * that asks while a rotation is in flight gets that rotation's result.
+ */
+export function rotateMobileRelayCredentialOncePerHost(
+  hostId: string,
+  rotate: () => Promise<RotationResult>
+): Promise<RotationResult> {
+  const inFlight = rotationsInFlight.get(hostId)
+  if (inFlight) {
+    return inFlight
+  }
+  const started = rotate().finally(() => {
+    if (rotationsInFlight.get(hostId) === started) {
+      rotationsInFlight.delete(hostId)
+    }
+  })
+  rotationsInFlight.set(hostId, started)
+  return started
+}
+
 export async function rotateMobileRelayCredential(args: {
   client: RpcClient
   bundle: MobileRelayCredentialBundle

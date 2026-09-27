@@ -1,6 +1,13 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, HostProfile } from '../transport/types'
-import { publishLiveHostClient, reusableParkedHostClient } from '../transport/live-host-clients'
+import type { ConnectionState, ForegroundNudgeReason, HostProfile } from '../transport/types'
+import {
+  handBackLiveHostClient,
+  isLiveHostClientHeldByScreen,
+  peekLiveHostClient,
+  retireLiveHostClient,
+  reusableParkedHostClient,
+  subscribeLiveHostClientRetired
+} from '../transport/live-host-clients'
 
 /**
  * Owns the host connections while the UI is not on screen.
@@ -12,11 +19,15 @@ import { publishLiveHostClient, reusableParkedHostClient } from '../transport/li
  * This watcher is a module-level singleton driven from the foreground
  * service's headless task, so it survives both.
  *
- * Hand-over rule: it listens only while `enabled && !uiVisible`. When the UI
- * comes back, a live relay is handed over still open — closing it made the
- * screen dial again and show Reconnecting. A dead one is closed. A network
- * change while this watcher is listening replaces that relay here, so the
- * screen opens already connected.
+ * Hand-over rule: it listens only while `enabled && !uiVisible`, and a host
+ * has ONE client. The watcher borrows whatever client the host already has,
+ * connected or not, and nudges it rather than dialling beside it. It dials its
+ * own only when there is none, or when the one there is a dead parked socket
+ * nobody holds. When the UI comes back, its own live client is parked for the
+ * screen to take back — closing it made the screen dial again and show
+ * Reconnecting — unless the screen already holds one, in which case it is
+ * closed. A dead one is closed. A network change while this watcher is
+ * listening replaces that relay here, so the screen opens already connected.
  */
 export type BackgroundNotificationWatcher = {
   setEnabled(enabled: boolean): void
@@ -37,9 +48,6 @@ type BackgroundNotificationWatcherDependencies = {
   loadHosts: () => Promise<HostProfile[]>
   openClient: (host: HostProfile) => RpcClient
   subscribeNotifications: (client: RpcClient, hostId: string) => () => void
-  /** The UI's live client for a host, if it holds one. Borrowing it instead of
-   *  dialling beside it spares a redundant, billed relay session per background. */
-  peekLiveClient?: (hostId: string) => RpcClient | null
   log: (message: string, detail?: string) => void
 }
 
@@ -52,7 +60,9 @@ export function isBackgroundRelayListening(): boolean {
 
 type HostLink = {
   client: RpcClient
-  /** False for a client borrowed from the UI: unsubscribe on hand-back, never close. */
+  /** False for the host's one client, borrowed from the screen or the parked
+   *  registry: unsubscribe on hand-back. Closed only when it is a parked one
+   *  that was rejected, since nothing else holds it. */
   owned: boolean
   /** One replace per drop. State events during that replace must not queue another. */
   replacing: boolean
@@ -71,6 +81,22 @@ export function createBackgroundNotificationWatcher(
 
   const shouldListen = (): boolean => enabled && !uiVisible
 
+  // The holder closed or replaced a client this watcher borrowed: drop that
+  // link and listen on whatever the host has now, or dial.
+  subscribeLiveHostClientRetired((hostId, client) => {
+    const link = links.get(hostId)
+    if (!link || link.owned || link.client !== client) {
+      return
+    }
+    link.unsubscribeNotifications?.()
+    link.unsubscribeState()
+    links.delete(hostId)
+    noteListening()
+    if (shouldListen()) {
+      void open()
+    }
+  })
+
   function noteListening(): void {
     backgroundRelayListening = shouldListen() && links.size > 0
   }
@@ -83,7 +109,14 @@ export function createBackgroundNotificationWatcher(
       unsubscribeState: () => {},
       unsubscribeNotifications: null
     }
-    const onState = (state: ConnectionState): void => {
+    // A drop while borrowed is nudged as a network change: replace the relay
+    // make-before-break. A client already down when borrowed is nudged as a
+    // foreground nudge: nothing changed, and 'network-change' forgets the
+    // direct verdict, so every background restarted the wait on a dead LAN.
+    const onState = (
+      state: ConnectionState,
+      nudge: ForegroundNudgeReason = 'network-change'
+    ): void => {
       if (state === 'connected') {
         link.replacing = false
         link.unsubscribeNotifications ??= deps.subscribeNotifications(client, host.id)
@@ -93,11 +126,18 @@ export function createBackgroundNotificationWatcher(
       link.unsubscribeNotifications = null
       // The screen still holds this socket. Dialling a second one left the
       // row on the dead socket while the new one connected in the background
-      // (device, 2026-09-22). Ask this socket to replace itself. A rejected
-      // login cannot, so that one gets a link of its own.
-      if (!owned && links.get(host.id) === link && state === 'auth-failed') {
+      // (device, 2026-09-22), and the second one was never closed. Ask this
+      // socket to replace itself. A rejected login cannot, so a PARKED one
+      // that nobody holds is closed and replaced by a link of this watcher's.
+      if (
+        !owned &&
+        links.get(host.id) === link &&
+        state === 'auth-failed' &&
+        !isLiveHostClientHeldByScreen(host.id)
+      ) {
         link.unsubscribeState()
         links.delete(host.id)
+        closeParkedClient(host.id, client)
         noteListening()
         if (shouldListen()) {
           void open()
@@ -106,12 +146,12 @@ export function createBackgroundNotificationWatcher(
       }
       if (!owned && links.get(host.id) === link && !link.replacing) {
         link.replacing = true
-        client.notifyForeground('network-change')
+        client.notifyForeground(nudge)
       }
     }
-    link.unsubscribeState = client.onStateChange(onState)
+    link.unsubscribeState = client.onStateChange((state) => onState(state))
     links.set(host.id, link)
-    onState(client.getState())
+    onState(client.getState(), 'focus')
   }
 
   async function open(): Promise<void> {
@@ -140,11 +180,17 @@ export function createBackgroundNotificationWatcher(
       }
       // Measured: dialling a second session beside the UI's retained relay was a
       // billed 2.3–2.8 s relay splice on every background, for a link the UI
-      // already held. Ride the UI's connection whenever it has one up.
-      const live = deps.peekLiveClient?.(host.id) ?? null
-      if (live && live.getState() === 'connected') {
+      // already held. Ride the host's one client whatever its state: a
+      // reconnecting one is nudged, and a second dial beside it was orphaned
+      // on hand-back (three clients for one desktop, Pixel, 2026-09-27).
+      const live = peekLiveHostClient(host.id)
+      const borrowable = isLiveHostClientHeldByScreen(host.id) || reusableParkedHostClient(live)
+      if (live && borrowable) {
         wire(host, live, false)
         continue
+      }
+      if (live) {
+        closeParkedClient(host.id, live)
       }
       try {
         wire(host, deps.openClient(host), true)
@@ -154,6 +200,14 @@ export function createBackgroundNotificationWatcher(
     }
     deps.log('background link: listening', `${links.size} host${links.size === 1 ? '' : 's'}`)
     noteListening()
+  }
+
+  /** A dead parked client: nothing holds it, so nothing else will close it. */
+  function closeParkedClient(hostId: string, client: RpcClient): void {
+    if (peekLiveHostClient(hostId) === client) {
+      retireLiveHostClient(hostId, client)
+    }
+    client.close()
   }
 
   function closeAll(): void {
@@ -169,9 +223,14 @@ export function createBackgroundNotificationWatcher(
       if (!link.owned) {
         continue
       }
-      // The screen adopts this socket. Closing it started a second dial.
-      if (handOver && reusableParkedHostClient(link.client)) {
-        publishLiveHostClient(hostId, link.client)
+      // Parked for the screen to take back: closing it started a second dial.
+      // Refused when the screen already holds a client for this host, and
+      // then closed, so the host is left with one.
+      if (
+        handOver &&
+        reusableParkedHostClient(link.client) &&
+        handBackLiveHostClient(hostId, link.client)
+      ) {
         continue
       }
       link.client.close()

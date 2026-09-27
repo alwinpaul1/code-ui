@@ -17,7 +17,7 @@ import {
   type RpcStreamSubscribeOptions
 } from './rpc-client-stream-registry'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
-import { isStaleForegroundDial } from './rpc-stale-dial'
+import { isStaleForegroundDial, staleDialOccasion } from './rpc-stale-dial'
 import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 import { negotiateMobileRuntimeCapabilities } from './mobile-runtime-capability-negotiation'
 
@@ -172,7 +172,7 @@ export class DirectRpcClient implements RpcClient {
     return this.connectionState.addListener(listener)
   }
 
-  notifyForeground(_reason?: ForegroundNudgeReason): void {
+  notifyForeground(reason?: ForegroundNudgeReason): void {
     if (this.intentionallyClosed) {
       return
     }
@@ -191,7 +191,7 @@ export class DirectRpcClient implements RpcClient {
         state: this.getState(),
         dialAgeMs
       })
-      this.socketClose.forceClose(dialing)
+      this.socketClose.forceClose(dialing, `abandoned a stale dial ${staleDialOccasion(reason)}`)
       abandoned = true
     }
     if (this.getState() === 'reconnecting') {
