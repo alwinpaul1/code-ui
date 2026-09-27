@@ -7,13 +7,13 @@ import type {
   GitHubReactionContent,
   PRComment
 } from '../../../../src/shared/github/comment-types'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
 import { formatPrCommentRelativeTime } from '../../../../src/shared/pr-comment-time'
-import { prCommentsStyles as styles } from './pr-comments-styles'
+import { prCommentsStyles } from './pr-comments-styles'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }
 
@@ -44,6 +44,7 @@ const REACTION_EMOJI: Record<GitHubReactionContent, string> = {
 }
 
 function Reactions({ reactions }: { reactions?: GitHubReaction[] }) {
+  const styles = useThemedStyles(prCommentsStyles)
   const visible = (reactions ?? []).filter((r) => r.count > 0)
   if (visible.length === 0) {
     return null
@@ -75,6 +76,8 @@ export const PRCommentCard = memo(function PRCommentCard({
   actions?: PRCommentCardActions
   now: number
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(prCommentsStyles)
   const [replyOpen, setReplyOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
