@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import type { RpcClient } from '../transport/rpc-client'
 import { createQueueEditorIo } from './mobile-native-chat-queue-editor-io'
 import { sendClaudeQueueNow } from './claude-send-queue-now'
+import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   clearMobileNativeChatInputResidue,
   markMobileNativeChatInputResidue
@@ -273,6 +274,12 @@ export function useMobileNativeChatQueueEditor(args: {
       current.onError(
         `Queued messages not sent (${current.client && current.enabled ? 'terminal not ready' : 'disconnected'})`
       )
+      return false
+    }
+    // The key is for the chat; a dialog on screen would take it (2026-09-27).
+    const refusal = await readSendUnderDialogRefusal({ client: current.client, terminal: handle })
+    if (refusal) {
+      current.onError(refusal)
       return false
     }
     const accepted = await sendClaudeQueueNow({

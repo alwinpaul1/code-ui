@@ -39,7 +39,7 @@ export function terminalDialogOnScreen(lines: readonly string[]): boolean {
 }
 
 /**
- * Why a composer send must not write now, or null. Read fresh, not from the
+ * Why a write from the chat must not go now, or null. Read fresh, not from the
  * chat's last poll, which can be seconds old. Fails open: a read that fails,
  * times out or comes from the stream instead of the screen lets the send go,
  * as every send went before this look existed.
@@ -47,7 +47,8 @@ export function terminalDialogOnScreen(lines: readonly string[]): boolean {
 export async function readSendUnderDialogRefusal(args: {
   client: Parameters<typeof terminalScreenLinesRead.request>[0]
   terminal: string
-  deadline: number
+  /** The action's own budget, when it has one; the look never takes longer. */
+  deadline?: number
 }): Promise<string | null> {
   try {
     const lines = terminalScreenLinesRead.interpret(
@@ -55,7 +56,7 @@ export async function readSendUnderDialogRefusal(args: {
         args.client,
         { terminal: args.terminal, screen: true },
         {
-          timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, args.deadline - Date.now())),
+          timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
           budgetSpansConnect: true
         }
       )
@@ -64,4 +65,18 @@ export async function readSendUnderDialogRefusal(args: {
   } catch {
     return null
   }
+}
+
+/** Runs `look`, says its refusal through `report`, and answers whether the
+ *  write must stop. */
+export async function refusedUnderDialog(
+  look: typeof readSendUnderDialogRefusal,
+  args: Parameters<typeof readSendUnderDialogRefusal>[0],
+  report: (message: string) => void
+): Promise<boolean> {
+  const refusal = await look(args)
+  if (refusal) {
+    report(refusal)
+  }
+  return refusal !== null
 }

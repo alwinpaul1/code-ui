@@ -7,7 +7,6 @@
 // → Enter → wait for the picker to close and the footer to name the pair.
 // Every wait is bounded; on any miss the picker is escaped — but never while a
 // turn is running, because Esc there interrupts the agent.
-import { codexPermissionFromScreen } from './codex-terminal-permission'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
@@ -19,6 +18,7 @@ import {
   parseCodexPickerScreen,
   type CodexPickerScreen
 } from './codex-picker-screen'
+import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
 
 const KEY_UP = '\x1b[A'
 const KEY_DOWN = '\x1b[B'
@@ -200,7 +200,9 @@ export async function applyCodexPickerSelection(
   target: CodexPickerTarget
 ): Promise<CodexPickerApplyResult> {
   const before = await io.readScreen()
-  if (codexPermissionFromScreen(before)) {
+  // Any dialog, not only the command approval its reader names: an apply-patch
+  // approval takes `/model` and its Enter as an answer too (2026-09-27).
+  if (terminalDialogOnScreen(before)) {
     return { ok: false, reason: 'busy' }
   }
   if (parseCodexPickerScreen(before)) {
