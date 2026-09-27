@@ -1,14 +1,16 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileCreatePrAction } from './mobile-create-pr-action'
-import { styles } from './mobile-source-control-styles'
+import { sourceControlStyles } from './mobile-source-control-styles'
 
 type Props = {
   action: MobileCreatePrAction
 }
 
 export function MobileSourceControlCreatePrEntry({ action }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sourceControlStyles)
   if (!action.visible) {
     return null
   }
@@ -29,11 +31,11 @@ export function MobileSourceControlCreatePrEntry({ action }: Props) {
         accessibilityHint={action.hint}
       >
         {action.loading ? (
-          <ActivityIndicator size="small" color={enabled ? colors.bgBase : colors.textSecondary} />
+          <ActivityIndicator size="small" color={enabled ? colors.bg : colors.textSecondary} />
         ) : (
           <GitPullRequestArrow
             size={16}
-            color={enabled ? colors.bgBase : colors.textSecondary}
+            color={enabled ? colors.bg : colors.textSecondary}
             strokeWidth={2.2}
           />
         )}

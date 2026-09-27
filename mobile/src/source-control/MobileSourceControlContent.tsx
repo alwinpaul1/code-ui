@@ -9,15 +9,16 @@ import {
   View
 } from 'react-native'
 import { Minus, MoreHorizontal, Plus, Sparkles } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileSourceControlCreatePrEntry } from './MobileSourceControlCreatePrEntry'
 import { MobileCommitFailurePanel } from './MobileCommitFailurePanel'
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from './mobile-source-control-screen-state'
 import { makeRenderFileRow, BranchCompareFooter } from './MobileSourceControlFileRows'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import type { MobilePullToRefresh } from './mobile-pull-to-refresh'
-import { styles } from './mobile-source-control-styles'
-import { hubStyles } from './mobile-source-control-hub-styles'
+import { sourceControlStyles } from './mobile-source-control-styles'
+import { hubStyles as hubStylesFactory } from './mobile-source-control-hub-styles'
 
 type Props = {
   state: MobileSourceControlState
@@ -27,6 +28,9 @@ type Props = {
 // Changes tab: local file changes only — uncommitted (staged/unstaged) plus
 // committed-on-branch vs base. PR conflicts and push status live elsewhere.
 export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sourceControlStyles)
+  const hubStyles = useThemedStyles(hubStylesFactory)
   const {
     insets,
     connState,
@@ -92,7 +96,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
         // desktop link is down, so taps appear to do nothing (STA-1511).
         // Surface the reconnect state where the user is looking.
         <View style={styles.reconnectBanner}>
-          <ActivityIndicator size="small" color={colors.statusAmber} />
+          <ActivityIndicator size="small" color={colors.warning} />
           <Text style={styles.reconnectBannerText}>Reconnecting to desktop...</Text>
         </View>
       ) : null}
@@ -121,9 +125,9 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             disabled={ioBusy || stageablePaths.length === 0}
           >
             {busyAction === 'stage-all' ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.text} />
             ) : (
-              <Plus size={15} color={colors.textPrimary} strokeWidth={2.2} />
+              <Plus size={15} color={colors.text} strokeWidth={2.2} />
             )}
             <Text style={styles.bulkButtonText}>Stage All</Text>
           </Pressable>
@@ -137,9 +141,9 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             disabled={ioBusy || unstageablePaths.length === 0}
           >
             {busyAction === 'unstage-all' ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
+              <ActivityIndicator size="small" color={colors.text} />
             ) : (
-              <Minus size={15} color={colors.textPrimary} strokeWidth={2.2} />
+              <Minus size={15} color={colors.text} strokeWidth={2.2} />
             )}
             <Text style={styles.bulkButtonText}>Unstage All</Text>
           </Pressable>
@@ -154,7 +158,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             hitSlop={8}
             accessibilityLabel="Open source control actions"
           >
-            <MoreHorizontal size={18} color={colors.textPrimary} strokeWidth={2.1} />
+            <MoreHorizontal size={18} color={colors.text} strokeWidth={2.1} />
           </Pressable>
         </View>
       </View>
@@ -194,7 +198,9 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             openingBranchPath,
             openFile,
             runGitAction,
-            setDiscardTarget
+            setDiscardTarget,
+            colors,
+            styles
           })}
           keyExtractor={(item) => `${item.area}:${item.path}:${item.oldPath ?? ''}`}
           renderSectionHeader={({ section }) => (
@@ -281,7 +287,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
             {primaryAction.loading ? (
               <ActivityIndicator
                 size="small"
-                color={createPrHeroActive ? colors.textPrimary : colors.bgBase}
+                color={createPrHeroActive ? colors.text : colors.bg}
               />
             ) : (
               <Text

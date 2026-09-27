@@ -1,12 +1,13 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronRight, FileText, Minus, Plus, Trash2 } from 'lucide-react-native'
 import type { SectionListRenderItem } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 import { MOBILE_GIT_STATUS_LABELS, type MobileSourceControlSection } from './mobile-git-status'
 import { formatMobileBranchEntryMeta } from './mobile-branch-entry-format'
 import { statusColor, type MobileGitStatusEntryView } from './mobile-source-control-screen-state'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
-import { styles } from './mobile-source-control-styles'
+import { sourceControlStyles } from './mobile-source-control-styles'
 
 type RowState = Pick<
   MobileSourceControlState,
@@ -16,7 +17,10 @@ type RowState = Pick<
   | 'openFile'
   | 'runGitAction'
   | 'setDiscardTarget'
->
+> & {
+  colors: Theme['colors']
+  styles: ReturnType<typeof sourceControlStyles>
+}
 
 export function makeRenderFileRow(
   state: RowState
@@ -24,8 +28,16 @@ export function makeRenderFileRow(
   MobileGitStatusEntryView,
   MobileSourceControlSection<MobileGitStatusEntryView>
 > {
-  const { busyAction, openingPath, openingBranchPath, openFile, runGitAction, setDiscardTarget } =
-    state
+  const {
+    busyAction,
+    openingPath,
+    openingBranchPath,
+    openFile,
+    runGitAction,
+    setDiscardTarget,
+    colors,
+    styles
+  } = state
   return function FileRow({ item }) {
     const rowBusy =
       busyAction === item.stageActionId ||
@@ -48,7 +60,7 @@ export function makeRenderFileRow(
         accessibilityLabel={`Open changed file ${item.path}`}
       >
         <View style={styles.statusBadge}>
-          <Text style={[styles.statusBadgeText, { color: statusColor(item.status) }]}>
+          <Text style={[styles.statusBadgeText, { color: statusColor(item.status, colors) }]}>
             {MOBILE_GIT_STATUS_LABELS[item.status]}
           </Text>
         </View>
@@ -123,7 +135,7 @@ export function makeRenderFileRow(
                 hitSlop={8}
                 accessibilityLabel={`Discard ${item.path}`}
               >
-                <Trash2 size={16} color={colors.statusRed} strokeWidth={2.1} />
+                <Trash2 size={16} color={colors.danger} strokeWidth={2.1} />
               </Pressable>
             ) : null}
           </View>
@@ -161,6 +173,8 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
     openingBranchPath,
     openingPath
   } = state
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sourceControlStyles)
   if (!shouldShowBranchCompareSection) {
     return null
   }
@@ -216,7 +230,7 @@ export function BranchCompareFooter({ state }: { state: FooterState }) {
               accessibilityLabel={`Open committed change ${entry.path}`}
             >
               <View style={styles.statusBadge}>
-                <Text style={[styles.statusBadgeText, { color: statusColor(entry.status) }]}>
+                <Text style={[styles.statusBadgeText, { color: statusColor(entry.status, colors) }]}>
                   {MOBILE_GIT_STATUS_LABELS[entry.status]}
                 </Text>
               </View>
