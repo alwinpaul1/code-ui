@@ -63,6 +63,12 @@ export const bottomDrawerStyles = StyleSheet.create({
   staticContentFill: {
     flex: 1
   },
+  bottomStrip: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0
+  },
   bottomExtension: {
     position: 'absolute',
     bottom: -500,

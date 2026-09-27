@@ -33,7 +33,8 @@ vi.mock('react-native-gesture-handler', () => {
     'simultaneousWithExternalGesture',
     'onBegin',
     'onUpdate',
-    'onEnd'
+    'onEnd',
+    'onFinalize'
   ]) {
     chain[method] = () => chain
   }
@@ -62,6 +63,9 @@ vi.mock('react-native-reanimated', () => {
     useSharedValue: (initial: number) => makeShared(`shared-${sharedIndex++}`, initial),
     useAnimatedStyle: () => ({}),
     useAnimatedScrollHandler: () => () => {},
+    // The drawer holds its list at its top while the sheet is dragged (use-bottom-drawer-drag.ts).
+    useAnimatedRef: () => ({ current: null }),
+    scrollTo: () => {},
     withSpring: (to: number) => to,
     withTiming: (to: number, config?: { duration?: number }) => {
       withTimingCalls.push({ to, duration: config?.duration })

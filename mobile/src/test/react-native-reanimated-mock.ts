@@ -21,6 +21,8 @@ export default Animated
 export const useSharedValue = <T,>(initial: T) => ({ value: initial })
 export const useAnimatedStyle = <T,>(factory: () => T) => factory()
 export const useAnimatedScrollHandler = () => () => undefined
+export const useAnimatedRef = <T,>() => ({ current: null as T | null })
+export const scrollTo = () => undefined
 export const useAnimatedReaction = () => undefined
 export const useDerivedValue = <T,>(factory: () => T) => ({ value: factory() })
 export const withSpring = <T,>(value: T) => value
