@@ -138,6 +138,8 @@ function triggersFor(profile: LexProfile): Set<string> {
 
 function scanLine(line: string, profile: LexProfile, state: BracketScanState): void {
   const triggers = triggersFor(profile)
+  // Found on the first slash that may open a regex, then kept for the line.
+  let lastSlash = -2
   let at = 0
   while (at < line.length) {
     if (state.closing !== null) {
@@ -175,7 +177,10 @@ function scanLine(line: string, profile: LexProfile, state: BracketScanState): v
       continue
     }
     if (char === '/' && profile.script && opensRegex(line, at)) {
-      at = skipRegex(line, at)
+      if (lastSlash === -2) {
+        lastSlash = line.lastIndexOf('/')
+      }
+      at = skipRegex(line, at, lastSlash)
       continue
     }
     if (char === '`' && profile.script) {
@@ -239,9 +244,6 @@ const BEFORE_REGEX = new Set('(,=:[!&|?{};+-*%>~^'.split(''))
 const REGEX_KEYWORDS = new Set(['return', 'typeof', 'case', 'do', 'else', 'in', 'of', 'void', 'yield', 'await', 'delete', 'throw', 'new'])
 /** No keyword above is longer; a longer word is a value, so a `/` divides. */
 const LONGEST_REGEX_KEYWORD = 6
-/** A regex literal longer than this is not looked for: an unclosed "regex"
- *  would otherwise send the scan to the line's end at every slash. */
-const MAX_REGEX_CHARS = 1_000
 
 /**
  * Whether a `/` here starts a regex rather than dividing: nothing before it
@@ -291,14 +293,23 @@ function isWordCode(code: number): boolean {
   )
 }
 
-/** Past a regex literal: a `/` inside `[…]` or after a backslash does not
- *  end it. One that does not close within the line (or MAX_REGEX_CHARS) was
- *  a division after all. */
-function skipRegex(line: string, at: number): number {
+/**
+ * Past a regex literal: a `/` inside `[…]` or after a backslash does not end
+ * it. `lastSlash` is the line's last `/`: with none after this one there is
+ * no end to find, so it was a division, decided at once. A regex that does
+ * not close before the last slash is opaque up to it, never read again as
+ * code: read as code, a 1,919-character regex in highlight.js opened strings
+ * at its quotes, and a backtick in another opened a template that never
+ * closed (review, 2026-09-27). Every call reads only what it skips, so a
+ * line is read once, however its slashes fall.
+ */
+function skipRegex(line: string, at: number, lastSlash: number): number {
+  if (lastSlash <= at) {
+    return at + 1
+  }
   let inClass = false
   let index = at + 1
-  const limit = Math.min(line.length, at + MAX_REGEX_CHARS)
-  while (index < limit) {
+  while (index < lastSlash) {
     const char = line[index]!
     if (char === '\\') {
       index += 2
@@ -313,7 +324,9 @@ function skipRegex(line: string, at: number): number {
     }
     index += 1
   }
-  return at + 1
+  // It did not close before the last slash: that slash ends it, unless it
+  // sits in a class or after a backslash; either way the body is not code.
+  return lastSlash + 1
 }
 
 /** Past a quoted string, escapes included; the line's end closes one left open. */

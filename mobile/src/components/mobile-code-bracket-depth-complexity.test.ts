@@ -116,3 +116,61 @@ describe('finding the bracket depth of a long minified line without freezing', (
     expect(depth('typeof /(/')).toBe(0)
   })
 })
+
+/** highlight.js 11.11.1, lib/languages/xquery.js line 226 (BSD-3-Clause): a
+ *  regex literal of 1919 characters whose first class holds ' and ". */
+const XQUERY_LINE_226 = "      { begin: /[^</$:'\"-]\\b(?:abs|accumulator-(?:after|before)|adjust-(?:date(?:Time)?|time)-to-timezone|analyze-string|apply|available-(?:environment-variables|system-properties)|avg|base-uri|boolean|ceiling|codepoints?-(?:equal|to-string)|collation-key|collection|compare|concat|contains(?:-token)?|copy-of|count|current(?:-)?(?:date(?:Time)?|time|group(?:ing-key)?|output-uri|merge-(?:group|key))?data|dateTime|days?-from-(?:date(?:Time)?|duration)|deep-equal|default-(?:collation|language)|distinct-values|document(?:-uri)?|doc(?:-available)?|element-(?:available|with-id)|empty|encode-for-uri|ends-with|environment-variable|error|escape-html-uri|exactly-one|exists|false|filter|floor|fold-(?:left|right)|for-each(?:-pair)?|format-(?:date(?:Time)?|time|integer|number)|function-(?:arity|available|lookup|name)|generate-id|has-children|head|hours-from-(?:dateTime|duration|time)|id(?:ref)?|implicit-timezone|in-scope-prefixes|index-of|innermost|insert-before|iri-to-uri|json-(?:doc|to-xml)|key|lang|last|load-xquery-module|local-name(?:-from-QName)?|(?:lower|upper)-case|matches|max|minutes-from-(?:dateTime|duration|time)|min|months?-from-(?:date(?:Time)?|duration)|name(?:space-uri-?(?:for-prefix|from-QName)?)?|nilled|node-name|normalize-(?:space|unicode)|not|number|one-or-more|outermost|parse-(?:ietf-date|json)|path|position|(?:prefix-from-)?QName|random-number-generator|regex-group|remove|replace|resolve-(?:QName|uri)|reverse|root|round(?:-half-to-even)?|seconds-from-(?:dateTime|duration|time)|snapshot|sort|starts-with|static-base-uri|stream-available|string-?(?:join|length|to-codepoints)?|subsequence|substring-?(?:after|before)?|sum|system-property|tail|timezone-from-(?:date(?:Time)?|time)|tokenize|trace|trans(?:form|late)|true|type-available|unordered|unparsed-(?:entity|text)?-?(?:public-id|uri|available|lines)?|uri-collection|xml-to-json|years?-from-(?:date(?:Time)?|duration)|zero-or-one)\\b/ },"
+
+/** Counts every `line[i]` read a scan makes: a String object behind a proxy
+ *  (string methods still run on the string itself). */
+function countedLine(text: string, reads: { count: number }): string {
+  const target = new String(text)
+  return new Proxy(target, {
+    get(object, key) {
+      if (typeof key === 'string' && key.length > 0 && key.charCodeAt(0) >= 48 && key.charCodeAt(0) <= 57) {
+        reads.count += 1
+      }
+      const value = Reflect.get(object, key, object)
+      return typeof value === 'function' ? value.bind(object) : value
+    }
+  }) as unknown as string
+}
+
+describe('a regex literal the scan cannot close within its reach', () => {
+  const depthsOf = (lines: string[]) => {
+    let state = startBracketScan()
+    return lines.map((_, index) => {
+      state = scanBracketDepth(lines, index, index + 1, 'javascript', state)
+      return state.depth
+    })
+  }
+
+  it('does not read a 1,919-character regex from highlight.js as code', () => {
+    // Past a 1,000-character cap the body was scanned as code: its quotes
+    // opened strings, its brackets counted, and 136 lines below it went a
+    // colour off (review, 2026-09-27).
+    const lines = ['    contains: [', XQUERY_LINE_226, '      {', '        begin: /\\blocal:/,', '      }', '    ]']
+    expect(depthsOf(lines)).toEqual([1, 1, 2, 2, 1, 0])
+    expect(scanBracketDepth(lines, 0, lines.length, 'javascript', startBracketScan()).closing).toBeNull()
+  })
+
+  it('does not open a template at a backtick inside a regex longer than 1,000 characters', () => {
+    const words = Array.from({ length: 150 }, (_, i) => `word${i}`).join('|')
+    const lines = [`const KEYWORDS = /\\b(?:${words})\\b|\`/g`, 'function f(a) {', '  return g(a)', '}', 'const x = [1, 2]']
+    expect(lines[0]!.length).toBeGreaterThan(1_000)
+    expect(depthsOf(lines)).toEqual([0, 1, 1, 0, 0])
+    expect(scanBracketDepth(lines, 0, lines.length, 'javascript', startBracketScan()).closing).toBeNull()
+  })
+
+  it.each([',/[', '}/[', 'a=(/[x'])('reads a line of %s no more than a few times over', (unit) => {
+    // Each slash opened a regex whose class never closed, and scanned 1,000
+    // characters for its end: 5.0 s for a 325 KB line on Hermes.
+    const text = line(unit)
+    const reads = { count: 0 }
+    const counted = countedLine(text, reads)
+    const work = stringWork(() => {
+      scanBracketDepth([counted], 0, 1, 'javascript', startBracketScan())
+    })
+    expect(reads.count + work).toBeLessThan(text.length * 20)
+  })
+})
