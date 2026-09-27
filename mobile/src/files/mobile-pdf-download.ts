@@ -1,5 +1,6 @@
 // Pure: no React Native or Expo imports, so vitest can run it unmocked.
 import { pickedDocumentName } from './android-picked-document-name'
+import { withPickerGate } from './mobile-picker-gate'
 
 export type MobilePdfDownloadDeps = {
   /** Ask the OS where to save; resolves the writable target URI, or null when
@@ -53,7 +54,11 @@ export async function downloadMobilePdf(
   const offeredName = suggestedPdfFileName(input.fileName)
   let target: string | null = null
   try {
-    target = await deps.createDocument(offeredName)
+    // Shared with the file save's runner (mobile-file-save.ts): Android's create-document picker
+    // keeps one pending Activity result at a time, so a save reached from another tab or the
+    // session's own file could otherwise collide with this one. `withPickerGate` serializes every
+    // request, from whichever caller it comes from, so this waits its turn instead.
+    target = await withPickerGate(() => deps.createDocument(offeredName))
     if (!target) {
       return { status: 'cancelled' }
     }

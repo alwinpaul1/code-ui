@@ -3,6 +3,7 @@
 import { pickedDocumentName } from './android-picked-document-name'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
+import { PickerGateAbandonedError, withPickerGate } from './mobile-picker-gate'
 import {
   readWholeDesktopFile,
   sourcePath,
@@ -80,11 +81,25 @@ export async function saveDesktopFileToPhone(
   if (options.onScreen?.() === false) {
     return { status: 'abandoned', fileName }
   }
-  options.onPickerOpening?.()
   let uri: string | null
   try {
-    uri = await target.createDocument(fileName, saveMimeTypeFor(fileName))
+    // Shared with the PDF viewer's Download (mobile-pdf-download.ts): Android's create-document
+    // picker keeps one pending Activity result at a time, so a second one opened while this file's
+    // read was still out would collide with it. `withPickerGate` serializes every request, from
+    // whichever caller it comes from, so this waits its turn instead. The `onScreen`/`signal` recheck
+    // below is inside the gate, not before it, because time genuinely passes while queued: the
+    // screen this save was asked from can go away, or take-over can abort it, before its turn comes.
+    uri = await withPickerGate(
+      () => {
+        options.onPickerOpening?.()
+        return target.createDocument(fileName, saveMimeTypeFor(fileName))
+      },
+      { signal: options.signal, isStillWanted: options.onScreen }
+    )
   } catch (error) {
+    if (error instanceof PickerGateAbandonedError) {
+      return { status: 'abandoned', fileName }
+    }
     return {
       status: 'failed',
       fileName,
