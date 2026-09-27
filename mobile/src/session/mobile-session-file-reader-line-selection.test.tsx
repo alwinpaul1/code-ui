@@ -11,19 +11,24 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View',
   Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
-  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 1 }
+  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 1 },
+  useWindowDimensions: () => ({ width: 390, height: 844, fontScale: 1, scale: 3 })
 }))
 // Why: lucide, the WebView preview, the PDF view and the highlighter all reach
 // for React Native internals the host-tag mock above removed — matches
-// mobile-session-file-reader-markdown.test.tsx. MobileSyntaxLine is mocked so
-// renderItem's returned element's props (onLongPress, highlighted, …) can be
-// read directly without needing a second render pass.
+// mobile-session-file-reader-markdown.test.tsx. renderItem's returned
+// element's props (onLongPress, highlighted, …) are read directly, without a
+// second render pass.
 vi.mock('lucide-react-native', () => ({
+  Check: 'Check',
   Copy: 'Copy',
   MessageSquare: 'MessageSquare',
   Send: 'Send',
+  WrapText: 'WrapText',
   X: 'X'
 }))
+// The code viewer's Copy button writes through this; expo-clipboard cannot load here.
+vi.mock('../platform/clipboard', () => ({ useClipboardWriter: () => ({ writeText: vi.fn() }) }))
 vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: 'MobileHtmlPreview' }))
 vi.mock('../files/MobileFilePdfPreview', () => ({ MobileFilePdfPreview: 'MobileFilePdfPreview' }))
 vi.mock('../components/MobileSyntaxSegments', () => ({
@@ -34,9 +39,11 @@ vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
 vi.mock('./mobile-session-styles', () => ({ styles: {} }))
 vi.mock('./mobile-file-syntax', () => ({
   buildPlainMobileDiffSyntaxLines: () => [],
+  canHighlightMobileLanguage: () => false,
   highlightMobileCode: () => ({ segments: [] }),
   highlightMobileDiffLines: () => [],
-  resolveMobileSyntaxLanguage: () => 'plaintext'
+  resolveMobileSyntaxLanguage: () => 'plaintext',
+  resolveMobileSyntaxLanguageForContent: () => 'plaintext'
 }))
 vi.mock('../files/MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
@@ -63,6 +70,8 @@ const THEME_COLORS = {
 vi.mock('../theme/theme-context', () => ({
   useTheme: () => ({
     colors: THEME_COLORS[scheme],
+    syntax: scheme === 'dark' ? darkSyntaxPalette : lightSyntaxPalette,
+    fonts: fontFamily,
     space: { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 },
     radius: { xl: 24 },
     type: { label: { size: 13 } },
@@ -71,6 +80,8 @@ vi.mock('../theme/theme-context', () => ({
 }))
 
 import { FileReader } from './MobileSessionFileReader'
+import { darkSyntaxPalette, lightSyntaxPalette } from '../theme/syntax-palette'
+import { fontFamily } from '../theme/tokens'
 
 const THREE_LINES = 'line one\nline two\nline three'
 
@@ -279,23 +290,26 @@ describe('selecting lines in the file reader to ask about them', () => {
     act(() => noHandlerRenderer?.unmount())
   })
 
-  it('paints the selection highlight with the light-mode accent-soft token', () => {
+  // The fill is the code palette's, not accentSoft: on accentSoft the dark
+  // comment green and the line numbers fell under 4.5:1
+  // (mobile-session-file-reader-selected-line-contrast.test.tsx).
+  it('paints the selection highlight with the light code palette\'s selection fill', () => {
     scheme = 'light'
     ;({ renderer } = renderFile(THREE_LINES))
     act(() => {
       lineElement(renderer!, 0).props.onLongPress()
     })
     const highlighted = lineElement(renderer!, 0)
-    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: THEME_COLORS.light.accentSoft })
+    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: lightSyntaxPalette.selection })
   })
 
-  it('paints the selection highlight with the dark-mode accent-soft token', () => {
+  it('paints the selection highlight with the dark code palette\'s selection fill', () => {
     scheme = 'dark'
     ;({ renderer } = renderFile(THREE_LINES))
     act(() => {
       lineElement(renderer!, 0).props.onLongPress()
     })
     const highlighted = lineElement(renderer!, 0)
-    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: THEME_COLORS.dark.accentSoft })
+    expect(highlighted.props.highlightStyle).toEqual({ backgroundColor: darkSyntaxPalette.selection })
   })
 })

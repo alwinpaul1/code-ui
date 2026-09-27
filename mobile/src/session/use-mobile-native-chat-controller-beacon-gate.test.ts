@@ -180,7 +180,9 @@ describe('what the controller takes from a beacon on the active terminal', () =>
     // tail's prompts merged with the beacon's, and the tail is idle here.
     expect(draftsArgs.at(-1)?.beaconPromptReceipts).toEqual([])
     beacon(`hk=1 sid=${OWN} up=42:typed%20on%20the%20desk`)
-    expect(controller?.nativeChatDesktopPrompts).toEqual([{ nonce: '42', text: 'typed on the desk', cut: false }])
+    // With when the phone received it (seenAt), which tells it from a copy
+    // found long after (use-desktop-prompt-echoes.ts).
+    expect(controller?.nativeChatDesktopPrompts).toEqual([{ nonce: '42', text: 'typed on the desk', cut: false, seenAt: expect.any(Number) }])
     expect(controller?.nativeChatPromptHook).toBe(true)
     expect(draftsArgs.at(-1)?.beaconPromptReceipts?.map((r) => r.nonce)).toEqual(['42'])
   })

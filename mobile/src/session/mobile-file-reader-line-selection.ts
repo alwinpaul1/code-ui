@@ -55,3 +55,35 @@ export function fileReaderLineSelectionLabel(range: FileReaderLineRange): string
     ? `Ask about line ${range.start}`
     : `Ask about lines ${range.start}–${range.end}`
 }
+
+/** The copy action for the current range: "Copy line 10", "Copy lines 10–20". */
+export function fileReaderLineCopyLabel(range: FileReaderLineRange): string {
+  return range.start === range.end ? `Copy line ${range.start}` : `Copy lines ${range.start}–${range.end}`
+}
+
+/**
+ * The selected lines as the file holds them: cut out of its own text, so
+ * each line keeps its own break, CRLF or LF (a CRLF file's lines copied
+ * with LF broke on paste into Windows tools, and one CRLF line made a mixed
+ * file's every line CRLF). Lines are counted at `\n`, as the viewer splits
+ * them; the last one's break is left off.
+ */
+export function fileLinesText(content: string, range: FileReaderLineRange): string {
+  let start = 0
+  for (let line = 1; line < range.start; line += 1) {
+    const next = content.indexOf('\n', start)
+    if (next === -1) {
+      return ''
+    }
+    start = next + 1
+  }
+  let end = start
+  for (let line = range.start; line <= range.end; line += 1) {
+    const next = content.indexOf('\n', end)
+    if (next === -1) {
+      return content.slice(start)
+    }
+    end = line === range.end ? next : next + 1
+  }
+  return content.slice(start, end > start && content[end - 1] === '\r' ? end - 1 : end)
+}

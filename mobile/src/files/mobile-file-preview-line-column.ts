@@ -3,8 +3,6 @@ export type MobileFilePreviewLineColumn = {
   column: number | null
 }
 
-const MOBILE_FILE_PREVIEW_TEXT_LINE_HEIGHT = 19
-
 export function normalizeMobileFilePreviewLineColumn(
   line: string | undefined,
   column: string | undefined
@@ -36,10 +34,6 @@ export function textOffsetForLineColumn(
   const cappedLineEnd = lineEnd === -1 ? content.length : lineEnd
   const columnOffset = Math.max(0, (target.column ?? 1) - 1)
   return Math.min(cappedLineEnd, lineStart + columnOffset)
-}
-
-export function scrollOffsetForPreviewLine(line: number): number {
-  return Math.max(0, line - 1) * MOBILE_FILE_PREVIEW_TEXT_LINE_HEIGHT
 }
 
 function parsePositiveInteger(value: string | undefined): number | null {

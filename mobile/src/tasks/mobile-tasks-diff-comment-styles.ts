@@ -46,6 +46,11 @@ export const mobileTasksDiffCommentStyles = StyleSheet.create({
     lineHeight: 16,
     color: colors.textSecondary
   },
+  /** The +/- before a line's code: a nested span, so it names the code face
+   *  (a span with no face draws the UI face and shifts the code after it). */
+  diffLinePrefix: {
+    fontFamily: typography.monoFamily
+  },
   diffCodeAdded: {
     color: colors.statusGreen
   },

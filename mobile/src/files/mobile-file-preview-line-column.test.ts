@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeMobileFilePreviewLineColumn,
-  scrollOffsetForPreviewLine,
   textOffsetForLineColumn
 } from './mobile-file-preview-line-column'
 
@@ -30,10 +29,5 @@ describe('mobile-file-preview-line-column', () => {
 
     expect(textOffsetForLineColumn(content, { line: 99, column: 1 })).toBe(content.length)
     expect(textOffsetForLineColumn(content, { line: 1, column: 99 })).toBe(5)
-  })
-
-  it('maps line numbers to the mono preview scroll offset', () => {
-    expect(scrollOffsetForPreviewLine(1)).toBe(0)
-    expect(scrollOffsetForPreviewLine(4)).toBe(57)
   })
 })

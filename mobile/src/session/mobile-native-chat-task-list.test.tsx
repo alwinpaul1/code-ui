@@ -282,7 +282,9 @@ describe('an agent plan in the chat transcript', () => {
   it('keeps the provider error one tap away when the plan call failed', () => {
     const { texts, tasks } = render(FAILED_PLAN)
     expect(tasks).toEqual([])
-    expect(texts).toContain('1 failed')
+    // Said once, in the sentence, as the Claude app's row says it (2026-09-26).
+    expect(texts).toContain('Used a tool (1 failed)')
+    expect(texts).not.toContain('1 failed')
     act(() => renderer!.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
     const shown = renderer!.root
       .findAllByType('Text')

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
-import { colors } from '../theme/mobile-theme'
+import { darkSyntaxPalette, SYNTAX_TOKEN_ROLES, type SyntaxPalette } from '../theme/syntax-palette'
+import { fontFamily } from '../theme/tokens'
 
 /** One numbered source line: the gutter in its own column, then the line's
  *  coloured segments beside it. A row, not one Text with the number as a span:
@@ -17,11 +18,14 @@ export function MobileSyntaxLine({
   selectable = true,
   highlighted = false,
   highlightStyle,
+  palette,
   onLongPress,
   onPress
 }: {
   number: number
   segments: MobileSyntaxSegment[]
+  /** The code colours; `useTheme().syntax` on a themed surface. */
+  palette?: SyntaxPalette
   gutterWidth: number
   /** False while a list is scrolling: a selectable Text under a finger that
    *  stops a fling arms a long-press the reader did not ask for, which
@@ -60,7 +64,7 @@ export function MobileSyntaxLine({
         onLongPress={onLongPress}
         onPress={onPress}
       >
-        <MobileSyntaxSegments segments={segments} />
+        <MobileSyntaxSegments segments={segments} palette={palette} />
       </Text>
     </View>
   )
@@ -82,11 +86,20 @@ const lineStyles = StyleSheet.create({
   }
 })
 
-export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegment[] }) {
+export function MobileSyntaxSegments({
+  segments,
+  palette = darkSyntaxPalette
+}: {
+  segments: MobileSyntaxSegment[]
+  /** Defaults to Dark+ for the surfaces still painted from the static dark
+   *  palette (the diff rows). A themed surface passes `useTheme().syntax`. */
+  palette?: SyntaxPalette
+}) {
+  const styles = syntaxSpanStyles(palette)
   return (
     <>
       {segments.map((segment, index) => (
-        <Text key={`${index}:${segment.kind}`} style={syntaxTokenStyles[segment.kind]}>
+        <Text key={`${index}:${segment.kind}`} style={styles[segment.kind]}>
           {segment.text}
         </Text>
       ))}
@@ -94,32 +107,24 @@ export function MobileSyntaxSegments({ segments }: { segments: MobileSyntaxSegme
   )
 }
 
-const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = StyleSheet.create({
-  plain: {
-    color: colors.textPrimary
-  },
-  comment: {
-    color: colors.syntaxComment
-  },
-  keyword: {
-    color: colors.syntaxKeyword
-  },
-  string: {
-    color: colors.syntaxString
-  },
-  number: {
-    color: colors.syntaxNumber
-  },
-  type: {
-    color: colors.syntaxType
-  },
-  function: {
-    color: colors.syntaxFunction
-  },
-  variable: {
-    color: colors.syntaxVariable
-  },
-  meta: {
-    color: colors.syntaxMeta
+const spanStylesByPalette = new WeakMap<SyntaxPalette, Record<MobileSyntaxTokenKind, TextStyle>>()
+
+/** One style per role, each naming the code face. Why the face on every span:
+ *  the React Native patch gives any Text that names no face Instrument Sans
+ *  (instrument-sans-text.ts), and a nested span is a Text, so a span with only
+ *  a colour drew the UI face inside a monospace line. That was the
+ *  proportional code in the 2026-09-19 and 2026-09-26 screenshots, not the
+ *  Samsung font swap. */
+export function syntaxSpanStyles(palette: SyntaxPalette): Record<MobileSyntaxTokenKind, TextStyle> {
+  const cached = spanStylesByPalette.get(palette)
+  if (cached) {
+    return cached
   }
-})
+  const styles = StyleSheet.create(
+    Object.fromEntries(
+      SYNTAX_TOKEN_ROLES.map((role) => [role, { color: palette[role], fontFamily: fontFamily.mono }])
+    ) as Record<MobileSyntaxTokenKind, TextStyle>
+  )
+  spanStylesByPalette.set(palette, styles)
+  return styles
+}

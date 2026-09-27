@@ -38,6 +38,7 @@ import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task
 import { useActiveTabTaskReport } from './use-active-tab-task-report'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { useAgentStatusPrompts } from './use-agent-status-prompts'
+import { useBeaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
 
@@ -122,11 +123,12 @@ export function useMobileNativeChatController(
   // or the Claude app, mid-turn or not — Orca's own hooks put on the tab
   // status as `agentStatus.prompt`, and the phone reads it there
   // (agent-status-prompts.ts, 2026-09-19).
-  const tailPrompts = useAgentStatusPrompts(
+  const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
     showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
     nativeChatStatus,
-    hudBeacon?.desktopPrompts
+    hudBeacon?.desktopPrompts, connState === 'connected'
   )
+  const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
   const {
     composerText: chatComposerText,
     setComposerText: setChatComposerText, appendComposerMention,
@@ -575,7 +577,7 @@ export function useMobileNativeChatController(
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
-    nativeChatDesktopPrompts: tailPrompts,
+    nativeChatDesktopPrompts: tailPrompts, nativeChatAgentMessages: agentMessages, nativeChatStatusAgentMessages: statusAgentMessages,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,

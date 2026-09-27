@@ -40,12 +40,13 @@ describe('a desk photo of no words taken mid-turn', () => {
   it('is drawn once while the phone watches it arrive', async () => {
     const running = [...before, agentRow('080e05a3', 'Working on it.', '07:01:05.000')]
     let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: 'fix the build',
       updatedAt: at('07:01:00.000'),
       stateStartedAt: at('07:01:00.000')
     })
     await show('07:01:10.000', { messages: running, working: true, prompts: [...state.prompts] })
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '[Image #72]', updatedAt: at('07:02:00.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #72]', updatedAt: at('07:02:00.000') })
     await show('07:02:00.500', { messages: running, working: true, prompts: [...state.prompts] })
     await show('07:02:01.000', { messages: running, working: true, prompts: [...state.prompts] })
     const later = [...running, agentRow('33806c18', 'I see the screenshot.', '07:02:20.000')]
@@ -57,6 +58,7 @@ describe('a desk photo of no words taken mid-turn', () => {
   it('is drawn once when the chat is opened after it', async () => {
     const running = [...before, agentRow('080e05a3', 'Working on it.', '07:01:05.000')]
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: '[Image #72]',
       updatedAt: at('07:03:10.000'),
       stateStartedAt: at('07:01:00.100')

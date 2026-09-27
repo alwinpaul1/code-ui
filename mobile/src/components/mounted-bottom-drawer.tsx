@@ -40,6 +40,18 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 const RUBBER_BAND_FACTOR = 0.25
 const SHOW_DURATION = 180
 const TOP_SCROLL_EPSILON = 1
+// Why: a sheet enters from just below its own bottom edge, not from a whole
+// window below. Travelling the window height on an ease-in-out curve left a
+// 280 dp sheet under the edge of a 956 dp window until 111 ms into its 180 ms
+// open, so the + sheet looked slow to open (reported 2026-09-26). The margin
+// keeps the Android elevation shadow out of sight at the start.
+const ENTER_TRAVEL_MARGIN = 24
+/** Decelerating: most of the travel happens in the first frames, the way an
+ *  entering sheet should move, instead of Reanimated's default ease-in-out. */
+function enterEasing(t: number): number {
+  'worklet'
+  return 1 - (1 - t) ** 3
+}
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -73,6 +85,9 @@ export function MountedBottomDrawer({
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
   const scrollOffsetY = useSharedValue(0)
+  // The sheet's own laid-out height; 0 until its first layout, when the only
+  // distance known to be off screen is the whole window.
+  const sheetLayoutHeight = useSharedValue(0)
   const contentDragStartY = useSharedValue(0)
   const contentDragCanDismiss = useSharedValue(false)
   // Why: fill mode needs the keyboard inset in React layout (not only the
@@ -120,7 +135,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: SHOW_DURATION })
+    progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -129,7 +144,7 @@ export function MountedBottomDrawer({
       translateY.value = 0
       scrollOffsetY.value = 0
       sheet.reset()
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
@@ -320,9 +335,21 @@ export function MountedBottomDrawer({
     // the keyboard lift still apply: those follow the finger and the keys,
     // not a transition. Only this mapping changes; the effects, durations
     // and gestures above are untouched.
+    // Once laid out, the sheet travels its own height (plus a margin), so it
+    // is on screen from the first frames of its open; before that, a window.
+    // The keyboard's lift counts too: a sheet closed while it is up sits that
+    // much higher, and fell short of the edge by it (review of a81dfa20).
+    // A closed sheet keeps the window as its travel: a fill sheet grows back
+    // by the keyboard inset as it closes, a frame before its new height is
+    // measured, and would show that much (review of a81dfa20).
+    const measured = sheetLayoutHeight.value
+    const travel =
+      measured > 0 && progress.value > 0
+        ? Math.min(screenHeight, measured + keyboardOffset.value + ENTER_TRAVEL_MARGIN)
+        : screenHeight
     const enterTravel = reduceMotion
       ? 0
-      : interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP)
+      : interpolate(progress.value, [0, 1], [travel, 0], Extrapolation.CLAMP)
     // Why `opacity` is ALWAYS returned, even at a constant 1: Reanimated writes
     // only the keys a worklet returns and never clears one that disappears
     // (useAnimatedStyle's styleUpdater loops `for (const key in newValues)` with
@@ -335,7 +362,7 @@ export function MountedBottomDrawer({
     // The dependency array names every shared value the updater reads: the web bundle is built
     // without Reanimated's Babel plugin, so `__closure` is never written and this list is what the
     // mapper listens to (reanimated-web-mapper-deps.test.ts).
-  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable, reduceMotion])
+  }, [progress, translateY, keyboardOffset, sheetLayoutHeight, screenHeight, fillAvailable, reduceMotion])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
@@ -427,6 +454,9 @@ export function MountedBottomDrawer({
             key={windowEpoch}
             // The sheet names itself so a check can find it without reading its styling.
             testID="bottom-drawer-sheet"
+            onLayout={(event) => {
+              sheetLayoutHeight.value = event.nativeEvent.layout.height
+            }}
             style={[
               styles.drawer,
               fillAvailable || expandable ? styles.drawerFill : null,

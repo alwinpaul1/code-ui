@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useStableEchoes } from './use-stable-echoes'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -7,6 +8,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
+import { teammateTask } from './mobile-native-chat-peer-messages'
 
 
 /**
@@ -131,10 +133,26 @@ export function useDesktopPromptEchoes(
    *  bubble to place: it shows when the page that holds it loads, and the
    *  hook copy retires against it (device, 2026-09-20: a 2,858-character
    *  prompt drawn as its 200-character hook cut, under the tool fold). */
-  hasEarlier = false
+  hasEarlier = false,
+  /** Whether the chat's read of this session has settled. Before it does,
+   *  `hasEarlier` is false and no row is held, which says nothing about a
+   *  row being missing (sixth review of this rule, 2026-09-27). */
+  readSettled = true
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
+  const refused: DesktopPrompt[] = []
   for (const prompt of prompts) {
+    // A status copy held back for want of a time pairs with the phone's sends
+    // and is never drawn (agent-status-prompts.ts, 2026-09-26).
+    if (prompt.heldBack === true) {
+      continue
+    }
+    if (foundWithoutItsRow(prompt, rawMessages)) {
+      if (!hasEarlier && readSettled) {
+        refused.push(prompt)
+      }
+      continue
+    }
     if (
       hasEarlier &&
       rememberedAnchor(prompt.nonce) === undefined &&
@@ -246,7 +264,60 @@ export function useDesktopPromptEchoes(
       baselineResolved: true
     })
   }
+  // With every row loaded, a copy still held names a row the transcript does
+  // not have (a tool call Orca never projects): it will not be drawn, and the
+  // log says so once (2026-09-27).
+  const refusals = JSON.stringify(
+    refused.map((prompt) => [
+      prompt.nonce,
+      `[desk-prompt] not drawn: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" was found long after it arrived, and the row it was typed after (${prompt.anchorId}) is not in the transcript`
+    ])
+  )
+  useEffect(() => {
+    for (const [nonce, line] of JSON.parse(refusals) as [string, string][]) {
+      if (!loggedRefusals.has(nonce)) {
+        loggedRefusals.add(nonce)
+        console.warn(line)
+      }
+    }
+  }, [refusals])
   return useStableEchoes(echoes)
+}
+
+/** The refusals already logged, so each says so once. */
+const loggedRefusals = new Set<string>()
+
+/**
+ * Whether a beacon copy is one the chat found long after it arrived, with the
+ * row it was typed after not held. The beacon names that row and gives no
+ * time, so while the row is on a page not loaded there is nowhere to draw it:
+ * waiting for it drew the copy at the tail, and after the wait it stayed there
+ * for good (2026-09-27, the beacon's side of session 76ba8f2f's 13:20 prompt;
+ * a relaunch restores 40 such copies). It is drawn once the row loads. A row
+ * Orca never projects (a tool call) never loads, and such a copy is never
+ * drawn; with every row loaded the chat logs that once.
+ *
+ * Only a copy no chat has placed or waited on this run, and that arrived more
+ * than TIMED_ANCHOR_OPEN_MS before this reading. One that arrived just before
+ * the chat opened (the tab showed its terminal) is the live case the wait is
+ * for, and still waits at the tail.
+ */
+function foundWithoutItsRow(prompt: DesktopPrompt, rawMessages: readonly NativeChatMessage[]): boolean {
+  return (
+    prompt.anchorId !== undefined &&
+    prompt.at === undefined &&
+    arrivedLongAgo(prompt.seenAt) &&
+    !anchorByNonce.has(prompt.nonce) &&
+    !provisionalByNonce.has(prompt.nonce) &&
+    !waitsByNonce.has(prompt.nonce) &&
+    !rawMessages.some((message) => message.id === prompt.anchorId)
+  )
+}
+
+/** Whether a beacon copy arrived more than TIMED_ANCHOR_OPEN_MS before now:
+ *  found then, not seen arrive, and the tail is no place for it. */
+export function arrivedLongAgo(seenAt: number | undefined): boolean {
+  return typeof seenAt === 'number' && Date.now() - seenAt > TIMED_ANCHOR_OPEN_MS
 }
 
 /** The bubble id of a hook prompt's echo. */
@@ -335,7 +406,11 @@ function markersOf(text: string): string {
 
 /** The key a hook prompt is retired on. Painted, because `alsoShown` can hold
  *  a restored screen reading (no backticks); short-token, because the surfaced
- *  row of a plugin skill is `/name`, not `/plugin:name`. */
+ *  row of a plugin skill is `/name`, not `/plugin:name`; a lead's message in a
+ *  teammate session by its words, because its row is surfaced as them and
+ *  the hook's copy kept the wrapper, so the copy never retired and the
+ *  follow-up drew twice (teammateTask; review of 2026-09-27). */
 function landedKey(text: string): string {
-  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(text))))
+  const words = teammateTask(text)?.text ?? text
+  return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(words))))
 }

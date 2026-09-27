@@ -7,6 +7,7 @@ vi.mock('react-native', () => ({
 }))
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
 import type { Theme } from '../theme/theme-context'
+import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 import { makeMarkdownStyles } from './mobile-markdown-styles'
 
 function themeFor(scheme: 'light' | 'dark'): Theme {
@@ -15,6 +16,7 @@ function themeFor(scheme: 'light' | 'dark'): Theme {
     preference: scheme,
     setPreference: () => undefined,
     colors: scheme === 'dark' ? darkColors : lightColors,
+    syntax: syntaxPaletteForScheme(scheme),
     space,
     radius,
     type,

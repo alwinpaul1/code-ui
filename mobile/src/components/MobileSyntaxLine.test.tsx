@@ -2,12 +2,27 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSyntaxLine } from './MobileSyntaxSegments'
+import { instrumentSansTextStyle } from '../theme/instrument-sans-text'
+import { fontFamily } from '../theme/tokens'
 
-vi.mock('react-native', () => ({
-  Text: 'Text',
-  View: 'View',
-  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s }
-}))
+vi.mock('react-native', () => {
+  // A real flatten: the Instrument Sans hook reads the flattened style to
+  // decide whether a Text already names its face.
+  function flatten(style: unknown): Record<string, unknown> | undefined {
+    if (style == null || style === false) {
+      return undefined
+    }
+    if (Array.isArray(style)) {
+      return Object.assign({}, ...style.map((item) => flatten(item) ?? {}))
+    }
+    return typeof style === 'object' ? { ...(style as Record<string, unknown>) } : undefined
+  }
+  return {
+    Text: 'Text',
+    View: 'View',
+    StyleSheet: { create: (s: unknown) => s, flatten }
+  }
+})
 
 let renderer: ReactTestRenderer | null = null
 
@@ -72,6 +87,29 @@ describe('a numbered source line', () => {
       .findAllByType('Text' as never)
       .find((node) => node.children.some((child) => typeof child === 'string' && child.includes('7')))
     expect(gutter!.children[0]).toBe('  7')
+  })
+
+  it('draws every coloured span in the code face, so the app-wide UI face cannot replace it', () => {
+    // Why: reported 2026-09-26 with a screenshot of lever_energy.py — the
+    // line numbers were monospace and the code beside them was not. The line
+    // Text named JetBrains Mono, but each coloured span is a nested Text with
+    // only a colour, and the React Native patch gives every Text that names no
+    // face Instrument Sans (instrumentSansTextStyle). A nested span does not
+    // inherit around that: it names the UI face itself. So each span must name
+    // the code face, and this runs the real hook over each one to prove it.
+    const r = render()
+    const texts = r.root.findAllByType('Text' as never)
+    const code = texts.find((node) => node.findAllByType('Text' as never).length > 1)!
+    const spans = code.findAllByType('Text' as never).filter((node) => node !== code)
+    expect(spans.map((node) => node.children.join(''))).toEqual([
+      'import ',
+      '{ createElement } from ',
+      "'react'"
+    ])
+    for (const span of spans) {
+      const drawn = instrumentSansTextStyle(span.props.style)
+      expect(flatStyle({ props: { style: drawn } } as never).fontFamily).toBe(fontFamily.mono)
+    }
   })
 
   it('paints a selected line across the whole row', () => {

@@ -1,16 +1,14 @@
-import { common, createLowlight } from 'lowlight'
-import { detectMobileFileLanguage } from './mobile-file-language'
+import { all, createLowlight } from 'lowlight'
+import { VENDORED_GRAMMARS } from '../components/syntax-grammars'
+import { detectMobileFileLanguage, isUnknownMobileFileName } from './mobile-file-language'
+import {
+  kindsForText,
+  scopeForClasses,
+  type MobileSyntaxScope,
+  type MobileSyntaxTokenKind
+} from './mobile-syntax-token-kinds'
 
-export type MobileSyntaxTokenKind =
-  | 'plain'
-  | 'comment'
-  | 'keyword'
-  | 'string'
-  | 'number'
-  | 'type'
-  | 'function'
-  | 'variable'
-  | 'meta'
+export type { MobileSyntaxTokenKind } from './mobile-syntax-token-kinds'
 
 export type MobileSyntaxSegment = {
   text: string
@@ -31,7 +29,26 @@ type LowlightNode = {
   children?: LowlightNode[]
 }
 
-const lowlight = createLowlight(common)
+type Lowlight = ReturnType<typeof createLowlight>
+
+let lowlightInstance: Lowlight | null = null
+
+/**
+ * Every grammar highlight.js ships (lowlight's `all`, 192) and the five it
+ * does not (syntax-grammars/), so a file in any of them is coloured, not
+ * only the 37 of `common` (reported 2026-09-26: .tex, Dockerfile and .toml
+ * drew plain). Their code was in the bundle already: lowlight's one entry
+ * re-exports `all`, and Metro does not tree-shake. Registering them all is
+ * what costs, 25 ms cold under Node against 11 for `common`, so it is paid on
+ * the first highlight rather than at app start.
+ */
+function highlighter(): Lowlight {
+  if (!lowlightInstance) {
+    lowlightInstance = createLowlight(all)
+    lowlightInstance.register(VENDORED_GRAMMARS)
+  }
+  return lowlightInstance
+}
 const MAX_FILE_HIGHLIGHT_CHARS = 48_000
 const MAX_FILE_HIGHLIGHT_SEGMENTS = 3_000
 const MAX_DIFF_HIGHLIGHT_CHARS = 24_000
@@ -54,7 +71,149 @@ const LANGUAGE_ALIASES: Record<string, string> = {
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {
   const detected = detectMobileFileLanguage(filePath, preferredLanguage)
   const normalized = LANGUAGE_ALIASES[detected] ?? detected
-  return lowlight.registered(normalized) ? normalized : 'plaintext'
+  return highlighter().registered(normalized) ? normalized : 'plaintext'
+}
+
+/**
+ * Extensions several languages share, with the marks each leaves at the top
+ * of its files, tried in order. A file with none stays plain (review,
+ * 2026-09-27: mapping each to one language coloured a GLSL shader as F# and
+ * an Apex class as LaTeX).
+ */
+const SHARED_EXTENSIONS: Record<string, readonly (readonly [RegExp, string])[]> = {
+  '.m': [
+    [/^\s*(?:#import|#include|@interface|@implementation|@protocol)\b/m, 'objectivec'],
+    [/^\s*(?:function\b|%|end\s*$)/m, 'matlab']
+  ],
+  '.cls': [[/^\s*(?:%|\\(?:NeedsTeXFormat|ProvidesClass|LoadClass|DeclareOption|RequirePackage)\b)/m, 'latex']],
+  '.fs': [
+    [/^\s*#version\b|\bgl_(?:FragColor|Position|FragCoord)\b|^\s*precision\s+\w+p\s+float\b/m, 'glsl'],
+    [/^\s*(?:module|namespace|open)\s+[\w.]+\s*$|^\s*let\s+(?:rec\s+)?\w+[^=\n]*=/m, 'fsharp']
+  ],
+  '.v': [
+    [/^\s*(?:Theorem|Lemma|Require\s+Import|Inductive|Fixpoint|Proof\.)/m, 'coq'],
+    [/^\s*module\s+\w+\s*(?:#\s*)?\(|^\s*endmodule\b/m, 'verilog']
+  ],
+  '.d': [
+    [/^[^\s:#]+\.o\s*:/m, 'makefile'],
+    [/^\s*(?:module|import)\s+[\w.]+\s*;/m, 'd']
+  ]
+}
+
+function extensionOf(filePath: string): string {
+  const name = filePath.slice(Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\')) + 1)
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot).toLowerCase() : ''
+}
+
+/** JSON is recognised by parsing it whole; past this it is left plain. */
+const MAX_JSON_DETECT_CHARS = 2_000_000
+/** Commands that run another program named after them: `npx tsx`,
+ *  `pnpm dlx tsx`, `bunx ts-node`. */
+const RUNNERS = new Set(['npx', 'bunx', 'pnpx', 'pnpm', 'yarn', 'dlx', 'exec', 'run'])
+
+/**
+ * The language a `#!` line runs: the interpreter's name, past `env`, its
+ * flags (`-S`) and variables (`NODE_OPTIONS=…`), and past a package runner
+ * (`npx tsx` runs tsx). `#!/usr/bin/env -S uv run --script` is Python.
+ * Null for an interpreter it does not know.
+ */
+function shebangLanguage(firstLine: string): string | null {
+  const words = firstLine.slice(2).trim().split(/\s+/)
+  let at = 0
+  const basename = (word: string) => word.slice(word.lastIndexOf('/') + 1)
+  if (basename(words[0] ?? '') === 'env') {
+    at = 1
+  }
+  while (at < words.length) {
+    const word = basename(words[at]!)
+    if (word.startsWith('-') || word.includes('=') || RUNNERS.has(word)) {
+      at += 1
+      continue
+    }
+    // python3.11 runs python; an own entry only, so `constructor` is not one.
+    const name = [word.replace(/[\d.]+$/, ''), word].find((key) => Object.hasOwn(SHEBANG_LANGUAGES, key))
+    return name ? SHEBANG_LANGUAGES[name]! : null
+  }
+  return null
+}
+
+/** Interpreters named on a `#!` line, by the language they run. */
+const SHEBANG_LANGUAGES: Record<string, string> = {
+  sh: 'bash', bash: 'bash', zsh: 'bash', dash: 'bash', ksh: 'bash', fish: 'bash',
+  python: 'python', python2: 'python', python3: 'python',
+  node: 'javascript', nodejs: 'javascript',
+  deno: 'typescript', bun: 'typescript', tsx: 'typescript', 'ts-node': 'typescript',
+  ruby: 'ruby', perl: 'perl', php: 'php', lua: 'lua', Rscript: 'r',
+  pwsh: 'powershell', powershell: 'powershell', make: 'makefile', awk: 'awk',
+  gawk: 'awk', tclsh: 'tcl', osascript: 'applescript', groovy: 'groovy',
+  julia: 'julia', elixir: 'elixir', escript: 'erlang', runhaskell: 'haskell',
+  scala: 'scala', crystal: 'crystal', swift: 'swift',
+  // `uv run` runs a Python script.
+  uv: 'python'
+}
+
+/**
+ * A language for text whose name says nothing (`bin/deploy`, `run.xyz`, a
+ * `.m` that may be Objective-C or MATLAB), read from what the text itself
+ * declares: its `#!` line, JSON that parses, an XML or HTML prolog, the
+ * marks of a `.m`. Null otherwise, so the file stays plain rather than
+ * coloured as the wrong language. highlight.js's relevance is not asked:
+ * on real files it was confidently wrong (review, 2026-09-27): lcov.info
+ * scored 301 as a Makefile, 4x its runner-up, TokenizeUtil.js.flow 90 as
+ * Rust, Paper.idl 96 as ini, while a YAML workflow's right answer scored
+ * 138 at 1.8x, and 173 characters of notes came out SQL.
+ */
+export function detectMobileSyntaxLanguage(content: string, filePath = ''): string | null {
+  const text = content.replace(/^\uFEFF/, '')
+  const lineEnd = text.indexOf('\n')
+  const firstLine = lineEnd === -1 ? text : text.slice(0, lineEnd)
+  if (firstLine.startsWith('#!')) {
+    return shebangLanguage(firstLine)
+  }
+  // The marks below sit at the top of a file; look no further than 4 KB.
+  const head = text.length > 4_096 ? text.slice(0, 4_096) : text
+  const shared = SHARED_EXTENSIONS[extensionOf(filePath)]
+  if (shared) {
+    return shared.find(([marks]) => marks.test(head))?.[1] ?? null
+  }
+  const opening = head.trimStart()[0]
+  if ((opening === '{' || opening === '[') && text.length <= MAX_JSON_DETECT_CHARS && parsesAsJson(text)) {
+    return 'json'
+  }
+  if (/^\s*<(?:\?xml|!DOCTYPE|html|svg)\b/i.test(head)) {
+    return 'xml'
+  }
+  return null
+}
+
+function parsesAsJson(text: string): boolean {
+  try {
+    JSON.parse(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** The highlighter's language for a file, by its name, and by what its
+ *  text declares when the name says nothing. */
+export function resolveMobileSyntaxLanguageForContent(
+  filePath: string,
+  content: string,
+  preferredLanguage?: string
+): string {
+  const byName = resolveMobileSyntaxLanguage(filePath, preferredLanguage)
+  if (byName !== 'plaintext' || !isUnknownMobileFileName(filePath)) {
+    return byName
+  }
+  return detectMobileSyntaxLanguage(content, filePath) ?? 'plaintext'
+}
+
+/** Whether `language` is one the highlighter colours. */
+export function canHighlightMobileLanguage(language: string): boolean {
+  const normalized = LANGUAGE_ALIASES[language] ?? language
+  return normalized !== 'plaintext' && highlighter().registered(normalized)
 }
 
 export function highlightMobileCode(
@@ -68,14 +227,14 @@ export function highlightMobileCode(
   }
 
   const normalizedLanguage = LANGUAGE_ALIASES[language] ?? language
-  if (!lowlight.registered(normalizedLanguage) || normalizedLanguage === 'plaintext') {
+  if (!highlighter().registered(normalizedLanguage) || normalizedLanguage === 'plaintext') {
     return { segments: [{ text: code, kind: 'plain' }], highlighted: false }
   }
 
   const highlightLength = getHighlightBoundary(code, maxHighlightChars)
   const highlightedCode = code.slice(0, highlightLength)
   try {
-    const tree = lowlight.highlight(normalizedLanguage, highlightedCode) as LowlightNode
+    const tree = highlighter().highlight(normalizedLanguage, highlightedCode) as LowlightNode
     const segments = mergeAdjacentSegments(flattenLowlightNodes(tree.children ?? [], 'plain'))
     if (segments.length > maxHighlightSegments) {
       return { segments: [{ text: code, kind: 'plain' }], highlighted: false }
@@ -148,62 +307,25 @@ function getHighlightBoundary(code: string, maxHighlightChars: number): number {
 
 function flattenLowlightNodes(
   nodes: LowlightNode[],
-  inheritedKind: MobileSyntaxTokenKind
+  inheritedScope: MobileSyntaxScope
 ): MobileSyntaxSegment[] {
   const segments: MobileSyntaxSegment[] = []
   for (const node of nodes) {
     if (node.type === 'text') {
-      appendSegment(segments, { text: node.value ?? '', kind: inheritedKind })
+      for (const piece of kindsForText(node.value ?? '', inheritedScope)) {
+        appendSegment(segments, piece)
+      }
       continue
     }
     if (node.type !== 'element') {
       continue
     }
-    const kind = tokenKindForClasses(node.properties?.className) ?? inheritedKind
-    for (const segment of flattenLowlightNodes(node.children ?? [], kind)) {
+    const scope = scopeForClasses(node.properties?.className, inheritedScope) ?? inheritedScope
+    for (const segment of flattenLowlightNodes(node.children ?? [], scope)) {
       appendSegment(segments, segment)
     }
   }
   return segments
-}
-
-function tokenKindForClasses(className: unknown): MobileSyntaxTokenKind | null {
-  const classes = Array.isArray(className)
-    ? className.filter((value): value is string => typeof value === 'string')
-    : typeof className === 'string'
-      ? className.split(/\s+/)
-      : []
-
-  const tokens = new Set(classes.map((value) => value.replace(/^hljs-/, '')))
-  if (hasAny(tokens, ['comment', 'quote'])) {
-    return 'comment'
-  }
-  if (hasAny(tokens, ['keyword', 'selector-tag', 'tag', 'name'])) {
-    return 'keyword'
-  }
-  if (hasAny(tokens, ['string', 'regexp', 'symbol', 'bullet'])) {
-    return 'string'
-  }
-  if (hasAny(tokens, ['number', 'literal'])) {
-    return 'number'
-  }
-  if (hasAny(tokens, ['type', 'built_in', 'class', 'title.class'])) {
-    return 'type'
-  }
-  if (hasAny(tokens, ['title.function', 'function', 'title'])) {
-    return 'function'
-  }
-  if (hasAny(tokens, ['attr', 'attribute', 'property', 'variable', 'params'])) {
-    return 'variable'
-  }
-  if (hasAny(tokens, ['meta', 'doctag', 'subst', 'section'])) {
-    return 'meta'
-  }
-  return null
-}
-
-function hasAny(values: Set<string>, candidates: string[]): boolean {
-  return candidates.some((candidate) => values.has(candidate))
 }
 
 function mergeAdjacentSegments(segments: MobileSyntaxSegment[]): MobileSyntaxSegment[] {

@@ -78,8 +78,8 @@ function claudeScreen(queued: readonly string[]): string[] {
 function hookCopies(...submissions: [clock: string, text: string][]): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
   for (const [clock, text] of submissions) {
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at(clock) })
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: text, updatedAt: at(clock) })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: text, updatedAt: at(clock) })
   }
   return [...state.prompts]
 }

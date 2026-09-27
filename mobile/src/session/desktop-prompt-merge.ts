@@ -1,4 +1,7 @@
+import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
+import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 
 /**
  * The tab status's prompts and the beacon's, as one list for the chat.
@@ -9,17 +12,78 @@ import type { DesktopPrompt } from './agent-hud-beacon'
  * the prompt was taken, which the chat anchors on — and the beacon's copy
  * is dropped when its text matches one. A beacon prompt with no status twin
  * (a host that publishes no status) still shows.
+ *
+ * A subagent's message is dropped from the beacon: Claude Code fires the same
+ * hook for its `<agent-message …>`, each desktop prompt is drawn as the user's
+ * own bubble, and the message is drawn from the beacon as its own row instead
+ * (mobile-native-chat-agent-messages.ts). Only that exact wrapper, never the
+ * shared harness classifier: this is the one path a prompt typed mid-turn
+ * reaches the phone by, and that classifier matches by a leading word or tag
+ * ("A message arrived from …", a quoted `<system-reminder>`), so a person's
+ * prompt that starts that way was drawn nowhere (review of 2026-09-26).
+ * Another session's message is dropped too, told by the harness's opener line
+ * and the `<cross-session-message>` envelope under it: the screen draws it as
+ * the peer bubble, and the beacon's copy drew a raw XML bubble over it (review
+ * of 2026-09-27). A lead's `<teammate-message>` in a teammate session stays a
+ * desktop prompt, the user's bubble a landed one gets (teammateTask).
  */
 export function mergeDesktopPrompts(
   status: readonly DesktopPrompt[],
   beacon: readonly DesktopPrompt[]
 ): DesktopPrompt[] {
   const merged: DesktopPrompt[] = [...status]
+  // The two copies of one message are told by the status's own folding: it
+  // keeps a prompt on one line and cuts it at 200 characters
+  // (normalizePromptField), while the beacon keeps the words as typed, up to
+  // 2,000 bytes. Matched on exact text, a multi-line or long prompt kept both
+  // and was drawn twice (pre-merge review of 06911823). A folded match stands
+  // for ONE beacon copy, the one the phone read nearest it: two long messages
+  // that agree for 200 characters fold to one status text, and dropping every
+  // copy that folded to it hid the second, which as a mid-turn message has no
+  // row (review of 004ce958). A status copy held back (`heldBack`,
+  // agent-status-prompts.ts) drops its twin the same way, a desk resend's own
+  // copy included, whose anchor could place it (combined review of 30c94116):
+  // the held copy can be placed later, once the rows show a harness message
+  // carried it (desk-prompt-harness-turns.ts, after this merge), and a twin
+  // let through would then draw the message twice.
   const seen = new Set(status.map((prompt) => prompt.text))
+  const twins = foldedTwins(status, beacon)
   for (const prompt of beacon) {
-    if (!seen.has(prompt.text)) {
+    const twin = seen.has(prompt.text) || twins.has(prompt)
+    if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
       merged.push(prompt)
     }
   }
   return merged
+}
+
+/**
+ * The beacon copies a status copy stands for by the status's folding, one
+ * each, nearest pair first by when the phone read them. Taken from the beacon
+ * side in list order, an older message of the same first 200 characters took
+ * the status copy after a remount, and the message the status carried was
+ * kept beside it, drawn twice (review of 08813139).
+ */
+function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopPrompt[]): Set<DesktopPrompt> {
+  const pairs: { copy: DesktopPrompt; prompt: DesktopPrompt; distance: number; order: number }[] = []
+  beacon.forEach((prompt, index) => {
+    const folded = normalizePromptField(prompt.text)
+    for (const copy of status) {
+      if (copy.text === folded && folded !== prompt.text) {
+        const distance =
+          typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
+        pairs.push({ copy, prompt, distance, order: index })
+      }
+    }
+  })
+  pairs.sort((a, b) => a.distance - b.distance || a.order - b.order)
+  const paired = new Set<DesktopPrompt>()
+  const twins = new Set<DesktopPrompt>()
+  for (const { copy, prompt } of pairs) {
+    if (!paired.has(copy) && !twins.has(prompt)) {
+      paired.add(copy)
+      twins.add(prompt)
+    }
+  }
+  return twins
 }

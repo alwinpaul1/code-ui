@@ -35,6 +35,8 @@ vi.mock('react-native', async () => {
       timing: () => ({ start: vi.fn(), stop: vi.fn() })
     },
     Image: 'Image',
+    // Android 14, the user's S23: a running row's shimmer asks (MobileNativeChatShimmerText).
+    Platform: { OS: 'android', Version: 34 },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('ScrollView', props, children),
