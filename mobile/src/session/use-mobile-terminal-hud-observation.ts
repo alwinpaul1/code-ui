@@ -194,7 +194,7 @@ export function useMobileTerminalHudObservation(args: {
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
-        setDialogKind(terminalDialogKind(lines))
+        setDialogKind(terminalDialogKind(lines, agent))
         const parsed =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
         const next = parsed

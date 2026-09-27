@@ -208,10 +208,10 @@ export async function applyCodexPickerSelection(
     await escapeCodexPicker(io)
     // The escape gives up without a word (a turn running, or three tries), so
     // look again: `/model` and its Enter would pick a row in a picker still up.
-    if (terminalDialogOnScreen(await io.readScreen())) {
+    if (terminalDialogOnScreen(await io.readScreen(), 'codex')) {
       return { ok: false, reason: 'menu-open' }
     }
-  } else if (terminalDialogOnScreen(before)) {
+  } else if (terminalDialogOnScreen(before, 'codex')) {
     return { ok: false, reason: 'busy' }
   }
   if (!(await io.typeCommand('/model'))) {

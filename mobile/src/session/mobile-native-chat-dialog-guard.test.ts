@@ -256,3 +256,81 @@ describe('what kind of dialog is up', () => {
     expect(terminalDialogKind([...lines])).toBe(kind)
   })
 })
+
+// A final check (2026-09-27) found the input-row rule matched `❯` rows at any
+// indent, so a live dialog with one anywhere on screen read as clear and a
+// chat send's Enter would pick "Yes". Claude draws its own input row at
+// column 0; a `❯` anywhere else is somebody's text.
+describe('a live dialog with a ❯ row somewhere else on screen', () => {
+  const subagent = SUBAGENT_PROMPT!.lines
+  const ruleAt = subagent.findIndex((row) => row.startsWith('\u2500'))
+
+  it('sees the subagent prompt under Bash output that printed a Claude screen', () => {
+    const lines = [
+      '⏺ Bash(tmux capture-pane -p -t probe)',
+      '  ⎿  ────────────────────────────────────────',
+      '     ❯\u00a0',
+      '     ────────────────────────────────────────',
+      '',
+      ...subagent.slice(ruleAt)
+    ]
+    expect(terminalDialogOnScreen(lines, 'claude')).toBe(true)
+  })
+
+  it('sees a Codex approval under command output that printed a ❯ prompt', () => {
+    const lines = ['• Ran starship prompt', '❯', '', ...CODEX_APPROVAL]
+    expect(terminalDialogOnScreen(lines, 'codex')).toBe(true)
+  })
+
+  it('sees a Bash prompt whose heredoc command has a ❯ row', () => {
+    const at = BASH_DIALOG_276.indexOf('   echo world >> note.txt && cat note.txt')
+    const lines = [
+      ...BASH_DIALOG_276.slice(0, at),
+      "   cat <<'EOF' > prompt.txt",
+      '   ❯',
+      '   EOF',
+      ...BASH_DIALOG_276.slice(at + 1)
+    ]
+    expect(terminalDialogOnScreen(lines, 'claude')).toBe(true)
+  })
+
+  it("sees a plan review whose plan quotes Claude's input row", () => {
+    const lines = [
+      '   ## Plan',
+      '   The composer row reads:',
+      '   ❯\u00a0',
+      '',
+      ...PLAN_REVIEW_276.slice(1)
+    ]
+    expect(terminalDialogOnScreen(lines, 'claude')).toBe(true)
+  })
+
+  it('sees a plan review whose plan has a bare ❯ line in a code block', () => {
+    const lines = ['   ```', '     ❯', '   ```', '', ...PLAN_REVIEW_276.slice(1)]
+    expect(terminalDialogOnScreen(lines, 'claude')).toBe(true)
+  })
+})
+
+describe('a Codex approval quoted right above its input', () => {
+  // The quoted hint runs straight into Codex's `› ` input with no blank row
+  // between: the input ends the hint's tail.
+  it('lets a send go past it', () => {
+    const lines = [...CODEX_APPROVAL, '› Ask Codex to do anything', '  gpt-5.6-sol xhigh · ~/Project']
+    expect(terminalDialogOnScreen(lines, 'codex')).toBe(false)
+  })
+})
+
+describe('the notice words an ask and a plan review by what they are', () => {
+  it('calls a 2.1.282 ask with Yes/No options a menu', () => {
+    expect(terminalDialogKind(byName(SINGLE_282, 'ask'), 'claude')).toBe('menu')
+  })
+
+  // 2.1.276 (claude-plan-feedback-send.ts, fact 4): typing on the feedback row
+  // replaces its label in place.
+  it('calls a plan review with feedback typed into its third row an approval', () => {
+    const lines = PLAN_REVIEW_276.map((row) =>
+      row === '     3. Tell Claude what to change' ? '   ❯ 3. keep the old parser' : row.replace('   ❯ 1.', '     1.')
+    )
+    expect(terminalDialogKind(lines, 'claude')).toBe('approval')
+  })
+})

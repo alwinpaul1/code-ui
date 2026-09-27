@@ -148,7 +148,7 @@ export function useMobileNativeChatMessageSend(args: {
       // An answer or a pick types text and an Enter, which a dialog on screen
       // takes as its answer (2026-09-27). A composer send looked already,
       // before its paste (use-mobile-native-chat-image-attachments.ts).
-      if (!syncComposer && (await refusedUnderDialog(refuseUnderDialog, { client, terminal: handle, deadline }, report))) {
+      if (!syncComposer && (await refusedUnderDialog(refuseUnderDialog, { client, terminal: handle, deadline, agent }, report))) {
         return 'rejected'
       }
       if (syncComposer && beforeSend) {
@@ -362,7 +362,7 @@ export function useMobileNativeChatMessageSend(args: {
           // A command does not wait for the link: what it types was chosen
           // against a screen the phone has not seen since it dropped.
           const client = sendGate.now('Command', report)
-          if (!client || (await refusedUnderDialog(refuseUnderDialog, { client, terminal }, report))) {
+          if (!client || (await refusedUnderDialog(refuseUnderDialog, { client, terminal, agent: 'codex' }, report))) {
             return 'rejected'
           }
           return await typeCodexChatCommand({

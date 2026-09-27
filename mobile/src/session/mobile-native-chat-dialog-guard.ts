@@ -15,9 +15,16 @@ const OPTION = /^(\s*)(?:([❯›>]) )?(\d+)[.)] (\S.*?)\s*$/
  *  feedback". */
 const HINT = /^\s*(?:press\s+)?(?:esc|enter|tab|shift\+tab|ctrl\+\S+|⏎)\s+to\s\S/i
 const RULE = /^\s*[─━═]+…?\s*$/
-/** Claude's own input row: `❯` then a no-break space (2.1.270 and later), or
- *  a bare `❯` once a reader trims that space. A sent prompt takes a plain one. */
-const CLAUDE_INPUT = /^\s*❯(?:\u00a0|$)/
+/** Claude's own input row, at column 0 (COMPOSER_ROW in
+ *  mobile-terminal-sent-prompts.ts): `❯` then a no-break space (2.1.270 and
+ *  later), or a bare `❯` once a reader trims that space. A sent prompt takes a
+ *  plain one. Anchored: a final check (2026-09-27) found an unanchored rule
+ *  cleared a live dialog over any indented `❯` in tool output, a heredoc or a
+ *  plan. */
+const CLAUDE_INPUT = /^❯(?:\u00a0|\s*$)/
+/** Codex's own input row: `› ` at column 0. Under a menu it can only be the
+ *  input, since the menu's options all sit above. */
+const CODEX_INPUT = /^› /
 
 const indentOf = (row: string): number => row.length - row.trimStart().length
 const blankOrRule = (row: string): boolean => !row.trim() || RULE.test(row)
@@ -62,8 +69,12 @@ export type TerminalDialogKind = 'approval' | 'menu'
  * Verified against every capture under fixtures/ and the 2.1.276, 2026-09-05
  * and Codex 0.153.4 captures in mobile-native-chat-dialog-guard.test.ts.
  */
-export function terminalDialogKind(lines: readonly string[]): TerminalDialogKind | null {
-  if (lines.some((row) => CLAUDE_INPUT.test(row))) {
+export function terminalDialogKind(
+  lines: readonly string[],
+  /** The tab's agent. Claude's input-row rule is Claude's only. */
+  agent?: string | null
+): TerminalDialogKind | null {
+  if (agent !== 'codex' && lines.some((row) => CLAUDE_INPUT.test(row))) {
     return null
   }
   let last: OptionRow | null = null
@@ -74,20 +85,24 @@ export function terminalDialogKind(lines: readonly string[]): TerminalDialogKind
     return null
   }
   // Under the menu, top down: a hint's wrapped tail runs on from it to the
-  // next blank row or rule.
-  let hinted = false
+  // next blank row, rule or Codex input row.
+  const hints: string[] = []
   let inHint = false
   let underIsItsOwn = true
   for (let at = last.index + 1; at < lines.length; at++) {
     const row = lines[at]!
     if (blankOrRule(row)) {
       inHint = false
+    } else if (CODEX_INPUT.test(row)) {
+      inHint = underIsItsOwn = false
     } else if (HINT.test(row)) {
-      hinted = inHint = true
+      hints.push(row)
+      inHint = true
     } else if (!inHint && indentOf(row) <= last.column) {
       underIsItsOwn = false
     }
   }
+  const hinted = hints.length > 0
   const options = [last]
   for (let at = last.index - 1; at >= 0 && options[0]!.number > 1; at--) {
     const option = optionRow(lines, at)
@@ -106,20 +121,25 @@ export function terminalDialogKind(lines: readonly string[]): TerminalDialogKind
     return null
   }
   const labels = options.map((option) => option.label)
-  const planReview = labels.some(isClaudePlanFeedbackOptionLabel)
+  // Typing on the plan review's feedback row replaces that label in place
+  // (claude-plan-feedback-send.ts, fact 4), so its second choice names it too.
+  const planReview = labels.some(
+    (label) => isClaudePlanFeedbackOptionLabel(label) || /^Yes, manually approve edits\b/i.test(label)
+  )
   if (!planReview) {
     const question = lines.slice(0, options[0]!.index).findLast((row) => row.trim())
     if (!underIsItsOwn || (!hinted && !(question !== undefined && /\?\s*$/.test(question)))) {
       return null
     }
   }
-  const approval =
-    planReview || (labels.some((label) => /^yes\b/i.test(label)) && labels.some((label) => /^no\b/i.test(label)))
-  return approval ? 'approval' : 'menu'
+  // An ask ("Enter to select · …") is a menu whatever its options say.
+  const ask = hints.some((hint) => /^\s*Enter to select\b/i.test(hint))
+  const yesNo = labels.some((label) => /^yes\b/i.test(label)) && labels.some((label) => /^no\b/i.test(label))
+  return planReview || (yesNo && !ask) ? 'approval' : 'menu'
 }
 
-export function terminalDialogOnScreen(lines: readonly string[]): boolean {
-  return terminalDialogKind(lines) !== null
+export function terminalDialogOnScreen(lines: readonly string[], agent?: string | null): boolean {
+  return terminalDialogKind(lines, agent) !== null
 }
 
 /**
@@ -131,6 +151,8 @@ export function terminalDialogOnScreen(lines: readonly string[]): boolean {
 export async function readSendUnderDialogRefusal(args: {
   client: Parameters<typeof terminalScreenLinesRead.request>[0]
   terminal: string
+  /** The tab's agent, for the rules that are one agent's only. */
+  agent?: string | null
   /** The action's own budget, when it has one; the look never takes longer. */
   deadline?: number
 }): Promise<string | null> {
@@ -145,7 +167,7 @@ export async function readSendUnderDialogRefusal(args: {
         }
       )
     )
-    return lines && terminalDialogOnScreen(lines) ? SEND_UNDER_DIALOG_REFUSAL : null
+    return lines && terminalDialogOnScreen(lines, args.agent) ? SEND_UNDER_DIALOG_REFUSAL : null
   } catch {
     return null
   }

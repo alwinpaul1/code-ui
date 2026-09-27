@@ -72,6 +72,6 @@ export async function forkClaudeSessionUnlessDialog(args: {
   terminal: string
   deviceToken: string | null
 }): Promise<{ forked: boolean; refusal: string | null }> {
-  const refusal = await readSendUnderDialogRefusal({ client: args.client, terminal: args.terminal })
+  const refusal = await readSendUnderDialogRefusal({ client: args.client, terminal: args.terminal, agent: 'claude' })
   return refusal ? { forked: false, refusal } : { forked: await forkClaudeSession(args), refusal: null }
 }

@@ -84,7 +84,7 @@ export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen, moment
     (agent === 'codex'
       ? codexPermissionFromScreen(screen.lines)
       : claudePermissionFromScreen(screen.lines)) ||
-    terminalDialogOnScreen(screen.lines)
+    terminalDialogOnScreen(screen.lines, agent)
   ) {
     throw new Error(PROMPT_REFUSAL[moment])
   }

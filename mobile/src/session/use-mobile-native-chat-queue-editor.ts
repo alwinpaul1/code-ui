@@ -277,7 +277,7 @@ export function useMobileNativeChatQueueEditor(args: {
       return false
     }
     // The key is for the chat; a dialog on screen would take it (2026-09-27).
-    const refusal = await readSendUnderDialogRefusal({ client: current.client, terminal: handle })
+    const refusal = await readSendUnderDialogRefusal({ client: current.client, terminal: handle, agent: current.agent })
     if (refusal) {
       current.onError(refusal)
       return false

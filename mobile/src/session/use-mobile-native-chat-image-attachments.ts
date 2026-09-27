@@ -223,7 +223,7 @@ export function useMobileNativeChatImageAttachments({
           // refusal leaves the draft and its chips where they are.
           if (!structuredNativeChat && operationTerminal) {
             const screenClient = await sendGate.wait(deadline, () => activeHandleRef.current !== operationTerminal)
-            const refusal = screenClient && (await refuseUnderDialog({ client: screenClient, terminal: operationTerminal, deadline }))
+            const refusal = screenClient && (await refuseUnderDialog({ client: screenClient, terminal: operationTerminal, deadline, agent }))
             if (!screenClient || refusal) {
               if (refusal) {
                 onError?.()
