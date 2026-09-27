@@ -334,11 +334,41 @@ describe("learning how wide the phone draws a span's pills", () => {
       return read(lines, [span], { fits: new Map([[0, fit]]) })
     }
     const narrower = at({ room: 320 }, 0.9)
-    expect(learnt(narrower).fits.get(0)!.scale).toBeCloseTo(0.9, 6)
+    // Read with the words priced 2% narrow: never narrower than it is.
+    expect(learnt(narrower).fits.get(0)!.scale).toBeGreaterThanOrEqual(0.9)
+    expect(learnt(narrower).fits.get(0)!.scale).toBeLessThan(0.905)
     expect(learnt(narrower).fits.get(0)!.floor).toBeUndefined()
     // Bolder or larger words before the pill only make it look wider: not taken.
     const wider = at({ room: 250 }, 1.1)
     expect(wider.kind === 'changed' ? pillFitScale(wider.next.fits.get(0)) : 1).toBe(1)
+  })
+
+  // Review of 63858e9e (F1): at 200% on Android 14 the words were priced
+  // linearly, 11% wider than drawn, so a pill at the end of a line of them
+  // read 6% narrower than it was, the scale fell with no floor under it, and
+  // the pill was cut too long for its room.
+  it('does not read a pill narrower than it is off words drawn a little narrower than priced', () => {
+    const path = '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows'
+    const fit = { room: 250 }
+    const span = drawn(path, fit)
+    const [first, ...rest] = span.pieces
+    const words = 'Worktree: '
+    const result = read(
+      [
+        // The pill drawn exactly as estimated, the words before it 2% narrower.
+        { x: 0, width: codeTextWidth(words, 15) * 0.98 + width(first!), text: `${words}${P}` },
+        ...rest.map((piece, index) => ({
+          x: 0,
+          width: width(piece) + (index === rest.length - 1 ? codeTextWidth(' today.', 15) : 0),
+          text: index === rest.length - 1 ? `${P} today.` : P
+        }))
+      ],
+      [span],
+      { fits: new Map([[0, fit]]) }
+    )
+    // Changed for its room, which grew; its scale is not read below 1.
+    expect(result.kind).toBe('changed')
+    expect(pillFitScale(learnt(result).fits.get(0))).toBeGreaterThan(1 - 1e-9)
   })
 
   it('cuts a span that has never been alone on a line as the others in its Text read', () => {

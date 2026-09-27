@@ -83,17 +83,18 @@ export function pillFitScale(fit: PillFit | undefined, textScale = 1): number {
  * the Text has read. The system font size scales every pill alike, so a
  * short span that has never been alone on a line is cut as the long one
  * beside it reads; with every advance read from the font, what differs
- * between spans is kerning, which only makes this cut a little short. Until
- * anything is read, `guess`: the system font size (use-markdown-code-pill-runs.ts).
+ * between spans is kerning, which only makes this cut a little short. 1
+ * until anything is read: the estimate is priced at the size the text is
+ * drawn at, the system font size included (use-markdown-code-pill-runs.ts).
  */
-export function textPillScale(fits: ReadonlyMap<number, PillFit>, guess = 1): number {
+export function textPillScale(fits: ReadonlyMap<number, PillFit>): number {
   let most: number | undefined
   for (const fit of fits.values()) {
     if (fit.floor !== undefined) {
       most = Math.max(most ?? fit.floor, fit.floor)
     }
   }
-  return most ?? guess
+  return most ?? 1
 }
 
 const TOLERANCE = 1
@@ -108,6 +109,13 @@ const HANGING_SPACE = 8
  *  past its line: a pill wider than the whole line. */
 const LONE_WORD = /^[^\s\uFFFC]*\uFFFC[^\s\uFFFC]*$/
 const SCALE_LIMITS = [0.5, 2] as const
+/** How much narrower than the prose face's advances the words beside a pill
+ *  may be drawn. The one reading that lowers a pill's scale, off a line of
+ *  words that ends in it, prices them this much narrower, so it never reads
+ *  the pill narrower than it is: words drawn 11% narrower than priced (at
+ *  200% on Android 14, before the curve was modelled) read a pill 6% narrow,
+ *  set no floor, and cut it too long (review of 63858e9e). */
+const SOFT_MARGIN = 0.02
 
 function lineEnd(line: PillLayoutLine): number {
   return line.x + line.width
@@ -257,7 +265,8 @@ function learnScale(
     const text = first ? measure.textWidth(first.text) : 0
     if (line && text > 0 && line.text.split(OBJECT_REPLACEMENT).length === 2 && /\uFFFC[^\s\uFFFC]*\s*$/.test(line.text)) {
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
-      const soft = (lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize) - measure.insets) / text
+      const words = codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize * (1 - SOFT_MARGIN))
+      const soft = (lineEnd(line) - words - measure.insets) / text
       if (soft < (scale ?? textScale)) {
         scale = soft
       }
@@ -291,10 +300,8 @@ export function readPillFits(args: {
   measure: PillMeasure
   /** The Text's own type size, for the punctuation beside a pill. */
   proseSize: number
-  /** The scale a span is cut with before anything is read (textPillScale). */
-  guess?: number
 }): PillFitRead {
-  const { lines, spans, lineWidth, current, cut, measure, proseSize, guess = 1 } = args
+  const { lines, spans, lineWidth, current, cut, measure, proseSize } = args
   const at = placeholders(lines)
   const drawn = spans.reduce((sum, span) => sum + span.pieces.length, 0)
   if (at.length !== drawn || !(lineWidth > 0)) {
@@ -305,7 +312,7 @@ export function readPillFits(args: {
   let stale = false
   // Each span's pieces, and what its own lines read of its scale; then the
   // Text's scale from all of them, for the spans with none.
-  const heldTextScale = textPillScale(current.fits, guess)
+  const heldTextScale = textPillScale(current.fits)
   let offset = 0
   const learnt = spans.map((span, ordinal) => {
     const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[offset + piece]!, span: ordinal, piece, text }))
@@ -313,7 +320,7 @@ export function readPillFits(args: {
     const held = current.fits.get(ordinal)
     return { owners, held, ...learnScale(lines, owners, measure, held, proseSize, heldTextScale) }
   })
-  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])), guess)
+  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])))
   const allOwners = learnt.flatMap(({ owners }) => owners)
   // What each span read of its scale, and nothing of its room: all a layout
   // broken to another width can say (see the end).

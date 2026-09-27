@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
-import { PixelRatio } from 'react-native'
+import { PixelRatio, Platform } from 'react-native'
+import { androidSpScale } from './android-font-scale'
 import { codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
   pillFitRoom,
@@ -68,17 +69,30 @@ export function resetRememberedPillCutsForTests(): void {
 
 const NO_FITS: ReadonlyMap<number, PillFit> = new Map()
 
-/** The system font size (Settings > Display > Font size). All type is drawn
- *  that much larger, a pill's text and the words beside it, and its padding
- *  and border are not, so cuts learnt at one size are not another's; before
- *  anything is read, a pill is cut at it (review of 12e3b98e: cut at 1 and
- *  left to learn, every first layout at 130% ran its pills past the edge or
- *  down a line). 1 where the platform does not say. */
+/** The system font size (Settings > Display > Font size). A pill's text
+ *  and the words beside it are drawn larger by it, through Android 14's
+ *  curve where it has one (android-font-scale.ts), and its padding and
+ *  border are not, so cuts learnt at one size are not another's; a pill is
+ *  cut at it from the first layout (review of 12e3b98e: cut at 1 and left
+ *  to learn, every first layout at 130% ran its pills past the edge or down
+ *  a line; review of 63858e9e: priced linearly, at 200% on Android 14 the
+ *  words read 11% wider than drawn and a path pill went down a line with
+ *  700 dp left above it). 1 where the platform does not say. */
 function systemFontScale(): number {
   try {
     return PixelRatio.getFontScale()
   } catch {
     return 1
+  }
+}
+
+/** The Android API level, which decides whether sp scale on a curve; 0
+ *  where the platform does not say (linear). */
+function androidApiLevel(): number {
+  try {
+    return Platform.OS === 'android' ? Number(Platform.Version) || 0 : 0
+  } catch {
+    return 0
   }
 }
 
@@ -155,10 +169,12 @@ export function useMarkdownCodePillRuns(
   const chipScale = markdownChipScale(textScale)
   const factor = chipScale?.factor ?? 1
   const fontScale = systemFontScale()
+  const sp = androidSpScale(fontScale, androidApiLevel())
 
   return (textKey, lineWidth, table) => {
     const font: CodePillFont = {
-      fontSize: (table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor,
+      // A pill's text size in sp, drawn in dp at the system font size.
+      fontSize: sp.toDp((table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor),
       insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH)
     }
     const measured = lineWidth > 0
@@ -177,10 +193,10 @@ export function useMarkdownCodePillRuns(
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
     // A table cell is set at BASE - 2; both follow the zoom and the system
     // font size.
-    const proseSize = (table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale * fontScale
+    const proseSize = sp.toDp((table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale)
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
-    const textScaleNow = textPillScale(current.fits, fontScale)
+    const textScaleNow = textPillScale(current.fits)
     const spans: PillSpanDrawn[] = []
     let backtick = false
     const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) =>
@@ -223,8 +239,7 @@ export function useMarkdownCodePillRuns(
         current,
         cut: cutWith,
         measure: { textWidth: (piece) => codeTextWidth(piece, font.fontSize), insets: font.insets },
-        proseSize,
-        guess: fontScale
+        proseSize
       })
       switch (result.kind) {
         case 'unreadable':
