@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as HostReachability from './host-reachability'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
 import type { MobileWebBundleProbeState } from './use-mobile-web-bundle-probe'
 
@@ -57,13 +58,23 @@ vi.mock('../transport/host-store', () => ({
   ]
 }))
 vi.mock('../transport/mobile-network-type', () => ({
-  readMobileLocalAddress: async () => '192.168.1.40'
+  readMobileLocalAddress: async () => '192.168.1.40',
+  readMobileNetworkType: async () => 'WIFI'
 }))
-vi.mock('./host-reachability', () => ({
-  formatEndpoint: (endpoint: string) => endpoint,
-  testHostReachability: async () => false,
-  unreachableHostDetail: () => 'Not answering'
+vi.mock('./host-reachability', async (importOriginal) => ({
+  ...(await importOriginal<typeof HostReachability>()),
+  testHostReachability: async () => false
 }))
+// Why: the host row reads the live client and the phone's VPN; neither exists in Node. No live
+// client and no native check leave the row red, so the failed-detail colour is still on screen.
+vi.mock('../transport/client-context', () => ({
+  useRpcClientContext: () => ({
+    getAllClients: () => [],
+    getKnownState: () => null,
+    getActivePath: () => 'lan'
+  })
+}))
+vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }))
 vi.mock('../storage/preferences', () => ({
   mobileWebShellFlagCanBeOn: () => true,
   loadMobileWebShellEnabled: async () => true,

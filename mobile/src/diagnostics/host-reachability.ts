@@ -77,6 +77,38 @@ function ipv4Slash24(address: string): string | null {
   return octets.slice(0, 3).join('.')
 }
 
+/**
+ * What the phone knows about its own VPN when a host does not answer. Every field may be null or
+ * absent: the native check is missing on an older build or another platform, or it failed, and
+ * then the copy falls back to what it said before the check existed.
+ */
+export type UnreachableHostContext = {
+  /** A VPN is up on this phone (Android's TRANSPORT_VPN on the active network or any network). */
+  phoneVpnActive?: boolean | null
+  /** Whether that VPN's routes cover the endpoint's address. */
+  phoneVpnRoutesEndpoint?: boolean | null
+  /**
+   * Whether the phone is on Wi-Fi, from its network type. Without it, a readable Wi-Fi address is
+   * the evidence: the phone's address is WifiInfo's, which reads as none off Wi-Fi.
+   */
+  phoneOnWifi?: boolean | null
+}
+
+/** Why a direct endpoint does not answer, as far as the phone can tell, and a hint about the
+ *  network it sits on. Either may be null. `host` is the endpoint as printable text. */
+export type UnreachableHostExplanation = {
+  host: string
+  reason: string | null
+  hint: string | null
+}
+
+const PHONE_VPN_REASON =
+  'a VPN on this phone is routing local traffic away from your desktop; allow LAN access in the VPN app or pause it'
+const DESKTOP_DROPPING_REASON =
+  'the phone is on that network, so the desktop is dropping LAN traffic (a full-tunnel VPN or Wi-Fi client isolation)'
+const VPN_LEAVES_LAN_REASON =
+  "the phone is on that network and its VPN leaves local traffic alone; check the desktop's firewall and any VPN there, and Wi-Fi client isolation"
+
 // Why: an unreachable 100.x/*.ts.net host almost always means the phone's
 // Tailscale tunnel is down or wedged (known iOS failure mode, fixed by
 // toggling the VPN) — point at that instead of a bare "Cannot reach".
@@ -87,23 +119,76 @@ function ipv4Slash24(address: string): string | null {
 // LocalLanAccess forced false). A bare "Cannot reach" sent the user hunting
 // through the phone's Wi-Fi settings. When the phone is demonstrably ON the
 // endpoint's network, the phone is not the suspect — the desktop is.
-export function unreachableHostDetail(endpoint: string, localAddress?: string | null): string {
+//
+// Why the phone's VPN comes first: on 2026-09-27 a friend's Pixel had a VPN key
+// in its status bar and sat on the desktop's own hotspot, and this said "the
+// desktop is dropping LAN traffic". The subnet match alone cannot tell a VPN on
+// the phone from one on the desktop, and expo-network reports a VPN over Wi-Fi
+// as plain WIFI, so the phone's own VPN was invisible. With one up, it is the
+// first suspect, unless its routes are known to leave the endpoint alone.
+export function explainUnreachableHost(
+  endpoint: string,
+  localAddress?: string | null,
+  context: UnreachableHostContext = {}
+): UnreachableHostExplanation {
   const host = formatEndpoint(endpoint)
   if (isTailscaleEndpoint(endpoint)) {
-    return `Cannot reach ${host} — check Tailscale`
+    return { host, reason: 'check Tailscale', hint: null }
   }
-  if (localAddress != null && localAddress !== '') {
-    let endpointHost: string
-    try {
-      endpointHost = new URL(endpoint).hostname
-    } catch {
-      return `Cannot reach ${host}`
-    }
-    const endpointNetwork = ipv4Slash24(endpointHost)
-    const localNetwork = ipv4Slash24(localAddress)
-    if (endpointNetwork != null && endpointNetwork === localNetwork) {
-      return `Cannot reach ${host} — the phone is on that network, so the desktop is dropping LAN traffic (a full-tunnel VPN or Wi-Fi client isolation)`
-    }
+  let url: URL
+  try {
+    url = new URL(endpoint)
+  } catch {
+    return { host, reason: null, hint: null }
   }
-  return `Cannot reach ${host}`
+  const hint = windowsHotspotHint(url)
+  const endpointNetwork = ipv4Slash24(url.hostname)
+  const localNetwork =
+    localAddress != null && localAddress !== '' ? ipv4Slash24(localAddress) : null
+  const sameNetwork = endpointNetwork != null && endpointNetwork === localNetwork
+  // The VPN is the suspect only for a phone on Wi-Fi and not provably on another /24. Off Wi-Fi
+  // (an always-on VPN over mobile data) no LAN is in reach whatever the VPN does, and a Wi-Fi
+  // address on another /24 means the phone is not on the desktop's network at all.
+  const onWifi = context.phoneOnWifi ?? localNetwork != null
+  const onAnotherNetwork =
+    endpointNetwork != null && localNetwork != null && endpointNetwork !== localNetwork
+  if (
+    context.phoneVpnActive === true &&
+    context.phoneVpnRoutesEndpoint !== false &&
+    onWifi &&
+    !onAnotherNetwork
+  ) {
+    return { host, reason: PHONE_VPN_REASON, hint }
+  }
+  if (!sameNetwork) {
+    return { host, reason: null, hint }
+  }
+  return {
+    host,
+    reason: context.phoneVpnActive === true ? VPN_LEAVES_LAN_REASON : DESKTOP_DROPPING_REASON,
+    hint
+  }
+}
+
+export function unreachableHostDetail(
+  endpoint: string,
+  localAddress?: string | null,
+  context?: UnreachableHostContext
+): string {
+  const { host, reason, hint } = explainUnreachableHost(endpoint, localAddress, context)
+  return `Cannot reach ${host}${reason ? ` — ${reason}` : ''}${hint ? `. ${hint}` : ''}`
+}
+
+/**
+ * 192.168.137.0/24 is the network Windows hands out from Mobile Hotspot (Internet Connection
+ * Sharing), with the PC itself on .1. Windows Firewall often files that adapter under the Public
+ * profile, and Public blocks an inbound port nobody allowed there.
+ */
+function windowsHotspotHint(url: URL): string | null {
+  if (ipv4Slash24(url.hostname) !== '192.168.137') {
+    return null
+  }
+  // A URL with no port uses its scheme's default, which is what the socket dialled.
+  const port = url.port !== '' ? url.port : url.protocol === 'wss:' ? '443' : '80'
+  return `192.168.137.x is Windows' Mobile Hotspot network, where Windows Firewall often treats the adapter as Public and blocks port ${port}`
 }

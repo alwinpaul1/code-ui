@@ -8,6 +8,8 @@ import type {
 import { normalizeHostAppVersion } from '../transport/host-app-version'
 import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
+import { describeAppPauses } from './connection-diagnostics-pauses'
+import { describePhoneVpn, type PhoneVpnStatus } from './phone-vpn-status'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
 
 const MAX_EVENT_LINE_BYTES = 2 * 1024
@@ -30,6 +32,8 @@ export function buildConnectionDiagnosticsReport(args: {
   pendingPath?: MobileConnectionDiagnosticPath | null
   /** Android only: what keeps the app running with the screen off. */
   background?: { serviceRunning: boolean; unrestricted: boolean } | null
+  /** The phone's own VPN, when the caller looked. expo-network reports one over Wi-Fi as WIFI. */
+  phoneVpn?: PhoneVpnStatus | null
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -66,6 +70,9 @@ export function buildConnectionDiagnosticsReport(args: {
       }`
     )
   }
+  if (args.phoneVpn) {
+    lines.push(`Phone VPN: ${describePhoneVpn(args.phoneVpn, args.endpoint)}`)
+  }
   lines.push(
     args.lastConnectedAt == null
       ? 'Last connected: never this session'
@@ -74,6 +81,10 @@ export function buildConnectionDiagnosticsReport(args: {
   lines.push('')
   lines.push(`Likely cause: ${diagnosis.likelyCause}`)
   lines.push(`Next step: ${diagnosis.nextStep}`)
+  const pauses = describeAppPauses(entries, now)
+  if (pauses !== null) {
+    lines.push(pauses)
+  }
   lines.push('')
   if (entries.length === 0) {
     lines.push('No connection events recorded.')
