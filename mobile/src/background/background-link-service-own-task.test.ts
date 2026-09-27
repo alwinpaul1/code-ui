@@ -55,6 +55,33 @@ describe("the background service outlives other modules' headless tasks", () => 
     expect(service).not.toMatch(/super\.onStartCommand\(/)
   })
 
+  // Everything below was the base class's job while it started the task. The
+  // service does it itself now, so each one is pinned where it lives.
+  describe('does what the base class did when it started the task', () => {
+    const startOwnTask = functionBody(service, /private fun startOwnTask\(\s*config: HeadlessJsTaskConfig\s*\)/)
+    const onStart = functionBody(service, /override fun onStartCommand\(/)
+
+    it('takes the wake lock before the task starts', () => {
+      expect(startOwnTask).toMatch(/^\s*HeadlessJsTaskService\.acquireWakeLockNow\(this\)/)
+    })
+
+    it('starts React when there is no context yet, and runs the task once it is up', () => {
+      expect(startOwnTask).toMatch(
+        /host\.addReactInstanceEventListener\([\s\S]*onReactContextInitialized[\s\S]*runOwnTask\(context, config\)[\s\S]*\)\s*host\.start\(\)/
+      )
+    })
+
+    it('asks Android to redeliver the start after a process death, as the base class did', () => {
+      expect(onStart).toMatch(/startOwnTask\(getTaskConfig\(intent\)\)\s*return START_REDELIVER_INTENT\s*$/)
+    })
+
+    // The base class's onDestroy removes the task listener and releases the
+    // wake lock. Without it the phone holds a partial wake lock forever.
+    it('lets the base class release the wake lock when it is destroyed', () => {
+      expect(functionBody(service, /override fun onDestroy\(\)/)).toMatch(/\bsuper\.onDestroy\(\)/)
+    })
+  })
+
   it('forgets its task when it is destroyed, so the next start runs a fresh one', () => {
     const onDestroy = functionBody(service, /override fun onDestroy\(\)/)
     expect(onDestroy).toMatch(/\btaskStarted = false\b/)
