@@ -16,11 +16,17 @@ import {
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
 import {
+  cancelVideoFrameExtractionFor,
+  clearVideoFrameExtractionController,
+  hasVideoFrameExtractionController,
+  registerVideoFrameExtractionController,
+  type NativeChatVideoFrameExtractionState
+} from './mobile-native-chat-image-attachments-store'
+import {
   describeVideoFrameExtractionFailure,
   VideoFrameExtractionCancelledError,
   VideoFrameExtractionError
 } from './mobile-video-frame-extractor'
-import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -32,6 +38,16 @@ type ShowToast = (message: string, durationMs?: number) => void
 // the earlier mount's sweep took a photo the new one was still uploading
 // (2026-09-26 review).
 let nativeChatUploadBatches = 0
+
+/** Exposed so `attachDocument` can learn its own selection's batch tag
+ *  BEFORE `attachWith` runs — it needs to stamp the same tag onto the
+ *  extraction-progress slot a video pick starts writing before `attachWith`
+ *  (which generates its own batch internally for every other attach path)
+ *  ever gets called (2026-09-27 review). */
+function nextNativeChatUploadBatch(): string {
+  nativeChatUploadBatches += 1
+  return `batch-${nativeChatUploadBatches}`
+}
 
 export function useMobileNativeChatImageUpload(args: {
   client: RpcClient | null
@@ -49,7 +65,10 @@ export function useMobileNativeChatImageUpload(args: {
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
    *  `null` once the attach settles, extracted or not. */
-  onVideoFrameExtractionProgress?: (scope: string, progress: VideoFrameExtractionProgress | null) => void
+  onVideoFrameExtractionProgress?: (
+    scope: string,
+    progress: NativeChatVideoFrameExtractionState | null
+  ) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
@@ -80,18 +99,28 @@ export function useMobileNativeChatImageUpload(args: {
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
   const connStateRef = useRef(connState)
-  const videoFrameExtractionAbortRef = useRef<AbortController | null>(null)
   useLayoutEffect(() => {
     connStateRef.current = connState
   }, [connState])
+  // Reads the store's own scope-keyed map, not a `useRef` on this instance:
+  // a composer remount mid-read gets a fresh hook instance (and would get a
+  // fresh, empty ref), but the read itself — and its controller — belong to
+  // the store, which outlives any one mount (2026-09-27 review).
   const cancelVideoFrameExtraction = useCallback(() => {
-    videoFrameExtractionAbortRef.current?.abort()
-  }, [])
+    if (scopeKey) {
+      cancelVideoFrameExtractionFor(scopeKey)
+    }
+  }, [scopeKey])
 
   const attachWith = useCallback(
     async (
       pickImages: Parameters<typeof uploadMobileNativeChatImages>[1]['pickImages'],
-      source: MobileImageSource
+      source: MobileImageSource,
+      /** Stamped on every chip this selection produces. Generated here unless
+       *  the caller already needed it earlier — `attachDocument` learns its
+       *  own batch before this runs, to tag the extraction-progress slot a
+       *  video pick starts writing with the SAME value (2026-09-27 review). */
+      batchOverride?: string
     ): Promise<void> => {
       const scope = scopeKey
       if (
@@ -103,8 +132,7 @@ export function useMobileNativeChatImageUpload(args: {
         return
       }
       let started = false
-      nativeChatUploadBatches += 1
-      const batch = `batch-${nativeChatUploadBatches}`
+      const batch = batchOverride ?? nextNativeChatUploadBatch()
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
       try {
@@ -198,26 +226,42 @@ export function useMobileNativeChatImageUpload(args: {
     [attachWith]
   )
   const attachDocument = useCallback(() => {
-    // A second video attach while one is still reading frames would overwrite
-    // this ref (so cancel could only ever reach the newer one) and both would
-    // write the same scope's single progress slot (2026-09-27 review) —
-    // refuse rather than let either happen.
-    if (videoFrameExtractionAbortRef.current) {
+    const scope = scopeKey
+    // Only a SECOND VIDEO is refused: this checks whether the scope already
+    // has a registered controller — set only once a video is actually being
+    // read, not "a document attach is in flight" — a PDF picked while
+    // another PDF (or nothing) attaches sails through untouched (2026-09-27
+    // review: the old per-call ref refused ANY second attach, video or not,
+    // the instant this function was even called).
+    if (scope && hasVideoFrameExtractionController(scope)) {
       showToast('Already reading a video — wait for it to finish', 1500)
       return Promise.resolve()
     }
     const controller = new AbortController()
-    videoFrameExtractionAbortRef.current = controller
+    const batch = nextNativeChatUploadBatch()
     return attachWith(
       () =>
         pickMobileDocuments(undefined, undefined, {
           signal: controller.signal,
+          // The controller is registered here, not unconditionally at the top
+          // of this callback: a pick that turns out to hold no video (only a
+          // PDF, say) never claims the scope's slot at all, so it can never
+          // block a real video attach that follows it.
+          onStart: () => {
+            if (scope) {
+              registerVideoFrameExtractionController(scope, controller)
+              // Something to show for the whole ready-wait (up to
+              // VIDEO_FRAME_READY_TIMEOUT_MS), not just from the first frame:
+              // a send tapped during that wait used to see nothing set at all
+              // (2026-09-27 review).
+              onVideoFrameExtractionProgress?.(scope, { batch, done: 0, total: null })
+            }
+          },
           onProgress: (progress) => {
-            const scope = scopeKey
             if (!scope) {
               return
             }
-            onVideoFrameExtractionProgress?.(scope, progress)
+            onVideoFrameExtractionProgress?.(scope, { batch, ...progress })
             // The chip clears the moment reading finishes, not once the last
             // frame's own upload also finishes — those are two different
             // things once frames upload one at a time as they are read
@@ -227,9 +271,12 @@ export function useMobileNativeChatImageUpload(args: {
             }
           }
         }),
-      'files'
+      'files',
+      batch
     ).finally(() => {
-      videoFrameExtractionAbortRef.current = null
+      if (scope) {
+        clearVideoFrameExtractionController(scope, controller)
+      }
     })
   }, [attachWith, onVideoFrameExtractionProgress, scopeKey, showToast])
 

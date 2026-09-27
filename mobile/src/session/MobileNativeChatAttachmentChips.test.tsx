@@ -224,6 +224,34 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
   })
 
+  // 2026-09-27 review: a video frame's preview is a small copy kept only for
+  // the chip strip — the pencil's re-upload (replaceAttachment) would
+  // silently replace the real, full-size frame already on the desktop with
+  // that small copy. No pencil at all on a frame chip, uploaded or not.
+  it('offers no pencil on a video-frame chip, even with an editor to hand', () => {
+    const onEditAttachment = vi.fn()
+    const frame: PendingNativeChatImage = {
+      id: 'frame-1',
+      path: '/tmp/frame-1.png',
+      previewUri: 'data:image/jpeg;base64,f1',
+      videoFrame: {
+        groupId: 'g1',
+        index: 1,
+        total: 3,
+        sourceName: 'clip.mp4',
+        durationLabel: '10 s',
+        intervalLabel: 'every 3.3 s',
+        intervalMs: 3300,
+        sourceSizeLabel: '30 MB'
+      }
+    }
+    const screenNow = draw('light', { attachments: [frame], onEditAttachment })
+    tap(thumbnails(screenNow)[0])
+    expect(pictureInViewer(screenNow)).toBe('data:image/jpeg;base64,f1')
+    expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
+    expect(onEditAttachment).not.toHaveBeenCalled()
+  })
+
   it('gives a document chip nothing to open and nothing to draw on', () => {
     const screenNow = draw('light', {
       attachments: [{ id: 'doc-1', path: '/tmp/a.pdf', previewUri: 'file:///a.pdf', kind: 'file', name: 'a.pdf' }],
@@ -371,7 +399,7 @@ describe('the video-frame extraction progress chip', () => {
   it.each(SCHEMES)('shows how many frames are in, in the reader\'s own theme (%s)', (scheme) => {
     const screenNow = draw(scheme, {
       attachments: [],
-      videoFrameExtraction: { done: 5, total: 20 }
+      videoFrameExtraction: { batch: 'batch-1', done: 5, total: 20 }
     })
     const text = screenNow.root.findAll(
       (node) => String(node.type) === 'Txt' || String(node.type) === 'Text'
@@ -387,7 +415,10 @@ describe('the video-frame extraction progress chip', () => {
   })
 
   it('draws the strip for the progress chip alone, with no other attachments yet', () => {
-    const screenNow = draw('light', { attachments: [], videoFrameExtraction: { done: 0, total: 20 } })
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 0, total: 20 }
+    })
     expect(screenNow.root.findAll((node) => String(node.type) === 'ScrollView')).toHaveLength(1)
   })
 
@@ -396,10 +427,27 @@ describe('the video-frame extraction progress chip', () => {
     expect(screenNow.root.findAll((node) => String(node.type) === 'ScrollView')).toHaveLength(0)
   })
 
+  // 2026-09-27 review: the slot is now set the moment a video is recognized,
+  // well before its duration (let alone a frame count) is known — a send
+  // tapped during that stretch used to see no sign a video was even being
+  // read. `total: null` is that stretch; the chip has something to say
+  // regardless.
+  it('says a video is being read, with no count yet, before the first frame\'s own metadata arrives', () => {
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 0, total: null }
+    })
+    const text = screenNow.root.findAll(
+      (node) => String(node.type) === 'Txt' || String(node.type) === 'Text'
+    )
+    expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading a video…'))).toBe(true)
+    expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading frames'))).toBe(false)
+  })
+
   it('puts the progress chip ahead of any already-finished frame chips', () => {
     const screenNow = draw('light', {
       attachments: [PHOTO],
-      videoFrameExtraction: { done: 1, total: 20 }
+      videoFrameExtraction: { batch: 'batch-1', done: 1, total: 20 }
     })
     // Both chip shapes are a 60-tall View; the progress chip is the wide one
     // (maxWidth 210, like a file chip), the photo the square one (width 60).
@@ -417,7 +465,7 @@ describe('the video-frame extraction progress chip', () => {
     const onCancelVideoFrameExtraction = vi.fn()
     const screenNow = draw('light', {
       attachments: [],
-      videoFrameExtraction: { done: 3, total: 20 },
+      videoFrameExtraction: { batch: 'batch-1', done: 3, total: 20 },
       onCancelVideoFrameExtraction
     })
     tap(pressables(screenNow, 'Cancel reading frames')[0])
@@ -425,7 +473,10 @@ describe('the video-frame extraction progress chip', () => {
   })
 
   it('offers no cancel button when the caller gave it nothing to call', () => {
-    const screenNow = draw('light', { attachments: [], videoFrameExtraction: { done: 3, total: 20 } })
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 3, total: 20 }
+    })
     expect(pressables(screenNow, 'Cancel reading frames')).toHaveLength(0)
   })
 })

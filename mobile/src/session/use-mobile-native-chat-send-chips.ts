@@ -3,10 +3,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { draftWasSent } from './mobile-native-chat-draft-reconcile'
 import {
-  isVideoFrameExtractionActive,
   nativeChatAttachmentsResets,
   nativeChatWaitingSends,
-  useNativeChatImageAttachmentsStore
+  useNativeChatImageAttachmentsStore,
+  videoFrameExtractionState
 } from './mobile-native-chat-image-attachments-store'
 import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import {
@@ -62,6 +62,14 @@ export async function settleMobileNativeChatSendChips(args: {
   readonly scope: string
   /** The chips in the strip at the tap. One picked during the wait stays for the next send. */
   readonly ids: readonly string[]
+  /** The batch a video is being read into, but ONLY when the tap's own chips
+   *  already held one of that batch's frames — null otherwise. A send with
+   *  nothing to do with whatever video happens to be reading must not wait on
+   *  it, and once it IS waited on, every frame that batch produces (including
+   *  one that lands after this call started, past the original `ids`) rides
+   *  with it (2026-09-27 review: this used to gather only the ids the tap
+   *  already knew, dropping every frame that arrived during the wait). */
+  readonly readingBatch: string | null
   readonly deadline: number
   /** True once the send's tab or terminal has gone, or the store was reset. */
   readonly abandoned: () => boolean
@@ -82,18 +90,34 @@ export async function settleMobileNativeChatSendChips(args: {
     // same way a send tapped beside an uploading chip already waits
     // (2026-09-27 review — a send tapped mid-extraction used to go out with
     // no frames at all, since `chips.some((chip) => chip.uploading)` saw
-    // nothing to wait for).
-    if (isVideoFrameExtractionActive(args.scope)) {
-      const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
-      if (remainingMs <= 0) {
-        return { reason: 'extracting', chip: null }
+    // nothing to wait for). Gated on `readingBatch`: a send whose own chips
+    // have nothing to do with whatever is reading must not wait on it.
+    if (args.readingBatch !== null) {
+      const state = videoFrameExtractionState(args.scope)
+      if (state && state.batch === args.readingBatch) {
+        const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
+        if (remainingMs <= 0) {
+          return { reason: 'extracting', chip: null }
+        }
+        await nextChipChange(Math.min(MOBILE_NATIVE_CHAT_SEND_CHIPS_POLL_MS, remainingMs))
+        continue
       }
-      await nextChipChange(Math.min(MOBILE_NATIVE_CHAT_SEND_CHIPS_POLL_MS, remainingMs))
-      continue
     }
-    const byId = new Map(chipsIn(args.scope).map((chip) => [chip.id, chip]))
+    const currentChips = chipsIn(args.scope)
+    const byId = new Map(currentChips.map((chip) => [chip.id, chip]))
+    // Every chip named at tap time, plus every chip the reading batch has
+    // produced so far — a frame that lands mid-wait has an id the tap never
+    // saw, and would otherwise be silently left out of the send.
+    const watchedIds = new Set(args.ids)
+    if (args.readingBatch !== null) {
+      for (const chip of currentChips) {
+        if (chip.batch === args.readingBatch) {
+          watchedIds.add(chip.id)
+        }
+      }
+    }
     let waiting: PendingNativeChatImage | null = null
-    for (const id of args.ids) {
+    for (const id of watchedIds) {
       const chip = byId.get(id)
       const drawn = uploading.get(id)
       if (chip?.uploading) {
@@ -107,7 +131,7 @@ export async function settleMobileNativeChatSendChips(args: {
     }
     if (!waiting) {
       // A chip the user took out during the wait is not sent.
-      return args.ids.flatMap((id) => byId.get(id) ?? [])
+      return currentChips.filter((chip) => watchedIds.has(chip.id))
     }
     // The same reserve the link's wait keeps, so the paste and the text still fit.
     const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
@@ -224,7 +248,13 @@ export function useMobileNativeChatSendChips(args: {
             refuse({ reason: 'busy', chip: chips.find((chip) => chip.uploading) ?? null })
           )
     }
-    if (!scope || (!chips.some((chip) => chip.uploading) && !isVideoFrameExtractionActive(scope))) {
+    // The batch a video is being read into, but only when this tap's own
+    // chips already hold one of its frames — a send with nothing to do with
+    // whatever happens to be reading must not wait on it (2026-09-27 review).
+    const activeBatch = scope ? videoFrameExtractionState(scope)?.batch ?? null : null
+    const readingBatch =
+      activeBatch !== null && chips.some((chip) => chip.batch === activeBatch) ? activeBatch : null
+    if (!scope || (!chips.some((chip) => chip.uploading) && readingBatch === null)) {
       return send([...chips])
     }
     const resets = nativeChatAttachmentsResets.current
@@ -232,6 +262,7 @@ export function useMobileNativeChatSendChips(args: {
     const waited = settleMobileNativeChatSendChips({
       scope,
       ids,
+      readingBatch,
       deadline,
       abandoned: () =>
         nativeChatAttachmentsResets.current !== resets ||

@@ -191,8 +191,8 @@ describe('encodeNativeVideoFrame', () => {
     fixtures.nextRenderedResults = [{ base64: 'FULL' }, { base64: 'PREVIEW' }]
     await encodeNativeVideoFrame({ width: 1280, height: 640, release: vi.fn() }, 0.6)
     expect(fixtures.contexts[0]!.resize).not.toHaveBeenCalled()
-    // 1280x640 fit within 160 -> longest edge (1280) scales to 160, height halves to 80.
-    expect(fixtures.contexts[1]!.resize).toHaveBeenCalledWith({ width: 160, height: 80 })
+    // 1280x640 fit within 640 -> longest edge (1280) scales to 640, height halves to 320.
+    expect(fixtures.contexts[1]!.resize).toHaveBeenCalledWith({ width: 640, height: 320 })
   })
 
   it('releases every context and every rendered image, full render and preview alike', async () => {

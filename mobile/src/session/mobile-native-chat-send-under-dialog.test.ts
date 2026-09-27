@@ -180,6 +180,12 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
           id: 'img-1',
           path: '/tmp/f1.png',
           previewUri: 'data:image/jpeg;base64,p1',
+          // The same batch the extraction record below names: this is what
+          // ties this already-landed chip to the read still in progress, so
+          // the send recognizes it has a stake in waiting for it
+          // (2026-09-27 review — settleMobileNativeChatSendChips's
+          // readingBatch gate reads `chip.batch`, not `chip.videoFrame`).
+          batch: 'batch-1',
           videoFrame: {
             groupId: 'g1',
             index: 1,
@@ -195,7 +201,7 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     }))
     useNativeChatImageAttachmentsStore
       .getState()
-      .updateVideoFrameExtraction((prev) => ({ ...prev, [SCOPE_A]: { done: 1, total: 2 } }))
+      .updateVideoFrameExtraction((prev) => ({ ...prev, [SCOPE_A]: { batch: 'batch-1', done: 1, total: 2 } }))
 
     let sending: Promise<boolean> = Promise.resolve(true)
     act(() => {

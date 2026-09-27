@@ -22,8 +22,11 @@ export const VIDEO_FRAME_JPEG_QUALITY = 0.6
  *  60×60 chip never needed the full upload-quality frame, and holding all 20
  *  of those (up to ~1 MB of base64 each) in the attachment store for the
  *  whole time the user is composing was the actual memory cost
- *  (2026-09-27 review). */
-export const VIDEO_FRAME_PREVIEW_MAX_EDGE = 160
+ *  (2026-09-27 review). Raised from 160 to 640 in the very next review: this
+ *  copy is also the ONLY picture a video-frame chip has — its markup pencil
+ *  is hidden (`MobileNativeChatAttachmentChips.tsx`), so this is what a tap
+ *  opens full-screen too, and 160px read as legibly blurry blown up that far. */
+export const VIDEO_FRAME_PREVIEW_MAX_EDGE = 640
 export const VIDEO_FRAME_PREVIEW_QUALITY = 0.5
 /** `waitUntilReady` past this long fails loudly instead of leaking the player
  *  forever — nothing native ever promised the `readyToPlay` status arrives. */

@@ -17,7 +17,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-data'
@@ -120,7 +120,7 @@ export type MobileNativeChatViewProps = {
    *  2026-09-24). */
   onEditAttachment?: (id: string, uri: string) => void
   /** A document attach is reading an over-the-cap video's frames. */
-  videoFrameExtraction?: VideoFrameExtractionProgress | null
+  videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
   onCancelVideoFrameExtraction?: () => void
   isAttaching?: boolean
   onMicPress?: () => void

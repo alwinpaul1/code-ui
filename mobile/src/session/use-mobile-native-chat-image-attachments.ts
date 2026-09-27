@@ -36,7 +36,7 @@ import { isPendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
-import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 
 type CurrentRef<T> = { readonly current: T }
@@ -109,7 +109,7 @@ export type MobileNativeChatImageAttachments = {
   readonly sendNativeChat: (text: string) => Promise<boolean>
   /** A document attach is reading an over-the-cap video's frames, for the
    *  active scope only — null once it settles, extracted or not. */
-  readonly videoFrameExtraction: VideoFrameExtractionProgress | null
+  readonly videoFrameExtraction: NativeChatVideoFrameExtractionState | null
   /** Stops that extraction; a no-op once it has already settled. */
   readonly cancelVideoFrameExtraction: () => void
 }

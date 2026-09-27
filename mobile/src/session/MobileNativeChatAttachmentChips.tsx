@@ -3,7 +3,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-nat
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { openImagePreview } from './image-preview-store'
 
 /** The strip above the composer text: image thumbnails and named document
@@ -27,7 +27,7 @@ export function MobileNativeChatAttachmentChips({
    *  5/20…", cancellable. Not one of `attachments`: it is drawn beside them
    *  so it can never be mistaken for a chip a send is waiting on
    *  (`mobile-native-chat-image-attachments-store.ts`). */
-  videoFrameExtraction?: VideoFrameExtractionProgress | null
+  videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
   onCancelVideoFrameExtraction?: () => void
 }) {
   const { colors, radius, space } = useTheme()
@@ -69,7 +69,9 @@ export function MobileNativeChatAttachmentChips({
           >
             <Film size={20} color={colors.textSecondary} strokeWidth={1.8} />
             <Txt variant="caption" weight="medium" numberOfLines={2} style={{ maxWidth: 140 }}>
-              {`Reading frames ${videoFrameExtraction.done}/${videoFrameExtraction.total}…`}
+              {videoFrameExtraction.total === null
+                ? 'Reading a video…'
+                : `Reading frames ${videoFrameExtraction.done}/${videoFrameExtraction.total}…`}
             </Txt>
           </View>
           {onCancelVideoFrameExtraction ? (
@@ -127,7 +129,11 @@ export function MobileNativeChatAttachmentChips({
               // A tap opens the photo full-screen, the way the Claude app does,
               // and markup is the pencil there (2026-09-26; from 360ef269 a tap
               // went straight into markup). No pencil while an upload has not
-              // settled, or with no editor to hand.
+              // settled, with no editor to hand, or on a video frame: its
+              // preview is a small copy kept only for the chip strip, and the
+              // pencil's re-upload would silently replace the real, full-size
+              // frame the desktop already has with that small copy
+              // (2026-09-27 review).
               <Pressable
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
@@ -137,7 +143,7 @@ export function MobileNativeChatAttachmentChips({
                     attachment.previewUri,
                     attachment.name ?? 'Image',
                     0,
-                    onEditAttachment && !attachment.uploading
+                    onEditAttachment && !attachment.uploading && !attachment.videoFrame
                       ? () => onEditAttachment(attachment.id, attachment.previewUri)
                       : undefined
                   )

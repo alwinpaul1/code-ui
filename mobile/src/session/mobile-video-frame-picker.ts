@@ -60,6 +60,15 @@ export function isVideoOverUploadCap(sizeBytes: number | null): boolean {
 let videoFrameGroupCounter = 0
 
 export type PickVideoFramesRuntimeOptions = {
+  /** Fired once, synchronously, the moment this video is recognized and about
+   *  to be read — before the player has even reported its duration, let alone
+   *  a first frame. Lets a caller show *something* ("reading a video…") and
+   *  register a cancel handle for the whole up-to-`VIDEO_FRAME_READY_TIMEOUT_MS`
+   *  wait, not just from the first `onProgress` (2026-09-27 review: a send
+   *  tapped during that wait had no visible sign a video was even being read,
+   *  and a concurrent-attach guard keyed off an unconditional per-call ref
+   *  had nothing scoped to "a video really is being read" to check instead). */
+  readonly onStart?: () => void
   readonly onProgress?: (progress: VideoFrameExtractionProgress) => void
   readonly signal?: AbortSignal
 }
@@ -124,6 +133,7 @@ export async function* pickVideoFrames(
   const sourceName = asset.name || asset.uri.split('/').pop() || 'video'
   videoFrameGroupCounter += 1
   const groupId = `video-frames-${videoFrameGroupCounter}`
+  deps?.onStart?.()
   let meta: VideoFrameExtractionMeta | null = null
   try {
     for await (const event of extract(asset.uri, { onProgress: deps?.onProgress, signal: deps?.signal })) {

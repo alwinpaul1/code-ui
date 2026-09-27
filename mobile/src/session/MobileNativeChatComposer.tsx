@@ -12,7 +12,7 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
-import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { useRichPasteInput } from './use-rich-paste-input'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
@@ -73,7 +73,7 @@ type Props = {
    *  2026-09-24). */
   onEditAttachment?: (id: string, uri: string) => void
   /** A document attach is reading an over-the-cap video's frames. */
-  videoFrameExtraction?: VideoFrameExtractionProgress | null
+  videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
   onCancelVideoFrameExtraction?: () => void
   isAttaching?: boolean
   onMicPress?: () => void

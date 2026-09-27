@@ -6,10 +6,11 @@ import {
 } from './use-mobile-native-chat-send-chips'
 
 const SCOPE = 'h\0w\0tab'
+const BATCH = 'batch-1'
 
-function setExtracting(active: boolean): void {
+function setExtracting(active: boolean, total: number | null = 20): void {
   useNativeChatImageAttachmentsStore.getState().updateVideoFrameExtraction((prev) =>
-    active ? { ...prev, [SCOPE]: { done: 1, total: 20 } } : (() => {
+    active ? { ...prev, [SCOPE]: { batch: BATCH, done: 1, total } } : (() => {
       const next = { ...prev }
       delete next[SCOPE]
       return next
@@ -22,7 +23,9 @@ function setExtracting(active: boolean): void {
 // while that runs, so a send tapped mid-extraction used to go out with none
 // of the frames at all. `settleMobileNativeChatSendChips` (and the fast-path
 // check in `useMobileNativeChatSendChips`) now wait on the extraction store
-// slice too, the same way they already wait on an uploading chip.
+// slice too, the same way they already wait on an uploading chip — but only
+// when the tap's own `readingBatch` names that same extraction; a send with
+// nothing to do with it (`readingBatch: null`) must never wait on it.
 describe('settleMobileNativeChatSendChips and a video still being read', () => {
   afterEach(() => {
     useNativeChatImageAttachmentsStore.getState().reset()
@@ -33,6 +36,7 @@ describe('settleMobileNativeChatSendChips and a video still being read', () => {
     const settled = settleMobileNativeChatSendChips({
       scope: SCOPE,
       ids: [],
+      readingBatch: BATCH,
       deadline: Date.now() + 5000,
       abandoned: () => false
     })
@@ -54,6 +58,7 @@ describe('settleMobileNativeChatSendChips and a video still being read', () => {
     const result = await settleMobileNativeChatSendChips({
       scope: SCOPE,
       ids: [],
+      readingBatch: BATCH,
       deadline: Date.now() - 1,
       abandoned: () => false
     })
@@ -65,6 +70,7 @@ describe('settleMobileNativeChatSendChips and a video still being read', () => {
     const result = await settleMobileNativeChatSendChips({
       scope: SCOPE,
       ids: [],
+      readingBatch: BATCH,
       deadline: Date.now() + 5000,
       abandoned: () => true
     })
@@ -76,10 +82,60 @@ describe('settleMobileNativeChatSendChips and a video still being read', () => {
     const result = await settleMobileNativeChatSendChips({
       scope: SCOPE,
       ids: [],
+      readingBatch: BATCH,
       deadline: Date.now() + 5000,
       abandoned: () => false
     })
     expect(result).toEqual([])
+  })
+
+  // 2026-09-27 review: this send's own tap-time chips had nothing to do with
+  // whatever is reading — a video attached moments later, say — so it must
+  // not wait on it, even while it is genuinely active.
+  it('does not wait on an extraction the tap had nothing to do with', async () => {
+    setExtracting(true)
+    const result = await settleMobileNativeChatSendChips({
+      scope: SCOPE,
+      ids: [],
+      readingBatch: null,
+      deadline: Date.now() - 1,
+      abandoned: () => false
+    })
+    expect(result).toEqual([])
+  })
+
+  // 2026-09-27 review: this was the actual reported bug — a send tapped
+  // beside frame img-1 waited correctly, but img-2 and img-3, which landed
+  // DURING the wait, still had ids the tap never knew, and used to be
+  // dropped from the gathered result outright.
+  it('gathers every frame the reading batch produces, not just the ids the tap already knew', async () => {
+    setExtracting(true)
+    useNativeChatImageAttachmentsStore.getState().update(() => ({
+      [SCOPE]: [{ id: 'img-1', path: '/tmp/f1.png', previewUri: 'p1', batch: BATCH }]
+    }))
+    const settled = settleMobileNativeChatSendChips({
+      scope: SCOPE,
+      ids: ['img-1'],
+      readingBatch: BATCH,
+      deadline: Date.now() + 5000,
+      abandoned: () => false
+    })
+
+    // Two more frames of the SAME batch land while the send waits.
+    await Promise.resolve()
+    useNativeChatImageAttachmentsStore.getState().update((prev) => ({
+      ...prev,
+      [SCOPE]: [
+        ...(prev[SCOPE] ?? []),
+        { id: 'img-2', path: '/tmp/f2.png', previewUri: 'p2', batch: BATCH },
+        { id: 'img-3', path: '/tmp/f3.png', previewUri: 'p3', batch: BATCH }
+      ]
+    }))
+    setExtracting(false)
+
+    const result = await settled
+    expect(Array.isArray(result)).toBe(true)
+    expect((result as { id: string }[]).map((chip) => chip.id)).toEqual(['img-1', 'img-2', 'img-3'])
   })
 
   it('has its own one-line refusal message, distinct from "was still uploading"', () => {
