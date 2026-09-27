@@ -13,7 +13,7 @@ type Props = {
 }
 
 export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Props) {
-  const { colors } = useTheme()
+  const { colors, syntax } = useTheme()
   const styles = useThemedStyles(sourceControlStyles)
   if (!branchDiffPreview) {
     return null
@@ -72,7 +72,7 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
               <Text style={styles.diffLineNumber}>{mobileDiffLineNumber(line)}</Text>
               <Text style={styles.diffLinePrefix}>{mobileDiffLinePrefix(line.kind)}</Text>
               <Text style={styles.diffLineText}>
-                {line.text ? <MobileSyntaxSegments segments={line.segments} /> : ' '}
+                {line.text ? <MobileSyntaxSegments segments={line.segments} palette={syntax} /> : ' '}
               </Text>
             </View>
           ))}

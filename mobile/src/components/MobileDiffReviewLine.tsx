@@ -37,7 +37,7 @@ export function MobileDiffReviewLine({
   onAddNote,
   onEditNote
 }: Props) {
-  const { colors } = useTheme()
+  const { colors, syntax } = useTheme()
   const styles = useThemedStyles(diffReviewLineStyles)
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
@@ -71,7 +71,7 @@ export function MobileDiffReviewLine({
         }
       >
         <Text style={styles.codeText}>
-          <MobileSyntaxSegments segments={line.segments} />
+          <MobileSyntaxSegments segments={line.segments} palette={syntax} />
         </Text>
       </Pressable>
       {comments.length > 0 ? (

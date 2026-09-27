@@ -55,7 +55,9 @@ const hash = (parts: string[] | string): string =>
 // `'VIEWED'`, `'UNVIEWED'`, `'status'`), checked against the pre-port tree; the render-token hash
 // does not move. The hooks hash is upstream's own value once more.
 const PROVIDER_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
-const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
+// 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
+// had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
+const PRE_REFACTOR_DIFF_HOOKS = '9fcd9d08e466c9c1112ee1583e100104063a81ea145c56e7074bf2ed429895e0'
 // 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
 // `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
 // is now drawn. That is a behaviour change, not a refactor, and the pins below moved with it:
@@ -98,7 +100,9 @@ const PROVIDER_RPC_STATEMENTS = '1a4b59ae77b80dfea9e39844fb514e3c90751a0f2d8bda9
 // (that `jsx:Text:` host signature becomes `jsx:Text:style`, 3,271 lines still) and the
 // StyleSheets (the one `diffLinePrefix` key). Hooks, statements and the render tree hold;
 // diff-line-prefix-face.test.tsx guards the face.
-const PRESS_FEEDBACK_DECLARATIONS = 'a5328ba9b4ac87ec1cf56f3b7e31f0fdc7afe014d56a5c6550aca37f10dd7ba7'
+// 2026-09-27 (theme pass 2): GitHubPrFileDiff's declaration gains the `useTheme()` line and the
+// `palette={syntax}` attribute on its <MobileSyntaxSegments>. 194 declarations still.
+const PRESS_FEEDBACK_DECLARATIONS = '4b0a921135b1bc5bc28c09bbac718e6e2ab3cc264323f2c45038c2de341ab598'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -109,7 +113,9 @@ const PRESS_FEEDBACK_DECLARATIONS = 'a5328ba9b4ac87ec1cf56f3b7e31f0fdc7afe014d56
 // arrive); the render-token stream gains the eight tokens the two attributes are, 35,291 -> 35,299.
 // Hooks, statements, declarations and styles do not move.
 // 2026-09-26: the PR diff prefix's style attribute; see the declarations pin above.
-const A11Y_BACK_SEMANTICS = '9513e373cecf94e9b7d77e1e8ca3946490e4819f313dbbf43c46360fb0cabf93'
+// 2026-09-27 (theme pass 2): that diff's `jsx:MobileSyntaxSegments:segments` host signature
+// becomes `…:segments,palette`. 3,271 lines still.
+const A11Y_BACK_SEMANTICS = 'b03b95820cbf2e78e9c3472ca9424152d96b6dedaeb19d9cf5e7f8c4e1818372'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 const PRE_REFACTOR_STYLES = '3e7b8b7caf018e9442c52c60b73317fe61c984fee249a07b3ac7a2f4f0777f40'
 const A11Y_BACK_RENDER_TREE = '71d021c1f5be406513850a3a32f8487dc352edbc017a2e7c37b5c1a5da131369'
@@ -121,7 +127,7 @@ describe('Mobile Tasks refactor parity', () => {
     expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
-    expect(diffHooks).toHaveLength(3)
+    expect(diffHooks).toHaveLength(4)
     expect(hash(diffHooks)).toBe(PRE_REFACTOR_DIFF_HOOKS)
   })
 
