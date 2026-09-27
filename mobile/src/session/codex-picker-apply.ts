@@ -48,6 +48,7 @@ export type CodexPickerApplyResult =
       ok: false
       reason:
         | 'busy'
+        | 'menu-open'
         | 'no-picker'
         | 'model-unavailable'
         | 'effort-unavailable'
@@ -205,6 +206,11 @@ export async function applyCodexPickerSelection(
   // as an answer (2026-09-27).
   if (parseCodexPickerScreen(before)) {
     await escapeCodexPicker(io)
+    // The escape gives up without a word (a turn running, or three tries), so
+    // look again: `/model` and its Enter would pick a row in a picker still up.
+    if (terminalDialogOnScreen(await io.readScreen())) {
+      return { ok: false, reason: 'menu-open' }
+    }
   } else if (terminalDialogOnScreen(before)) {
     return { ok: false, reason: 'busy' }
   }

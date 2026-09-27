@@ -268,6 +268,32 @@ describe("Codex's model picker left open", () => {
   })
 })
 
+describe("Codex's model picker that will not close", () => {
+  // Escape gave up (three tries, or a turn running) and the picker is still
+  // up: `/model` and its Enter would pick a row in it.
+  it('refuses when the picker it closed is still up, and says a menu is open', async () => {
+    const picker = [
+      '  Select Model and Effort',
+      '  1. gpt-6-astra (default)  Our most capable model for complex, demanding work.',
+      '› 2. gpt-5.6-sol (current)  Reliable agentic workhorse for everyday tasks.',
+      '  Press enter to confirm or esc to go back'
+    ]
+    let clock = 0
+    const io: CodexPickerIo = {
+      readScreen: async () => picker,
+      sendKey: vi.fn(async () => true),
+      typeCommand: vi.fn(async () => true),
+      sleep: async () => {},
+      now: () => (clock += 1_000)
+    }
+    await expect(applyCodexPickerSelection(io, { model: 'gpt-6' })).resolves.toEqual({
+      ok: false,
+      reason: 'menu-open'
+    })
+    expect(io.typeCommand).not.toHaveBeenCalled()
+  })
+})
+
 // The way out of a dialog is never refused: Stop is Escape (Ctrl+C on Grok).
 describe('Stop while a prompt waits', () => {
   let renderer: ReactTestRenderer | null = null

@@ -207,11 +207,13 @@ export function useCodexNativeChatOptions(args: {
       say(
         result.reason === 'busy'
           ? 'Respond to the active Codex approval first'
-          : result.reason === 'model-unavailable'
-            ? "That model isn't in this account's picker"
-            : result.reason === 'effort-unavailable'
-              ? "That effort isn't offered for this model"
-              : "Couldn't apply it through the Codex picker"
+          : result.reason === 'menu-open'
+            ? 'A menu is open in the Codex terminal. Close it there first'
+            : result.reason === 'model-unavailable'
+              ? "That model isn't in this account's picker"
+              : result.reason === 'effort-unavailable'
+                ? "That effort isn't offered for this model"
+                : "Couldn't apply it through the Codex picker"
       )
       return false
     },
