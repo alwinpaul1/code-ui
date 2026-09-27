@@ -1,9 +1,11 @@
-import { memo, useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import type { Theme } from '../../theme/theme-context'
 // The native component's own prop type, so a change to it fails here rather than drifting.
 import type { MermaidDiagramProps } from './MermaidDiagram'
-import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
+import { mermaidDiagramConfig } from './mermaid-diagram-config'
 import { loadPageMermaid } from './mermaid-page-engine'
 
 /**
@@ -28,6 +30,8 @@ import { loadPageMermaid } from './mermaid-page-engine'
  * already inside the generation the phone downloaded.
  */
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+  const { colors, scheme } = useTheme()
+  const styles = useThemedStyles(mermaidDiagramWebStyles)
   const hostRef = useRef<View>(null)
   // The source that failed, rather than a flag: a flag would need clearing from the effect that
   // renders the next one, and a render the component has already failed is the only thing the
@@ -38,6 +42,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   const suffix = useId().replace(/[^\w-]/g, '')
   const id = `orca-mermaid-${suffix}`
   const failed = failedSource === source
+  const config = useMemo(() => mermaidDiagramConfig(scheme, colors), [scheme, colors])
 
   useEffect(() => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: react-native-web renders View as a div and forwards the ref to it; this module only ever runs in that build.
@@ -49,7 +54,7 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
     void (async () => {
       try {
         const mermaid = await loadPageMermaid()
-        mermaid.initialize(MERMAID_DIAGRAM_CONFIG)
+        mermaid.initialize(config)
         const { svg } = await mermaid.render(id, source)
         if (disposed) {
           return
@@ -69,11 +74,11 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
       // previous diagram when the source changes.
       host.replaceChildren()
     }
-  }, [id, source])
+  }, [id, source, config])
 
   if (failed) {
     return (
-      <MermaidFrame>
+      <MermaidFrame styles={styles}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -87,14 +92,20 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   }
 
   return (
-    <MermaidFrame>
+    <MermaidFrame styles={styles}>
       <View ref={hostRef} style={styles.host} />
     </MermaidFrame>
   )
 })
 
 /** The native component's frame and label, so a diagram and its fallback sit in the same box. */
-function MermaidFrame({ children }: { children: ReactNode }) {
+function MermaidFrame({
+  children,
+  styles
+}: {
+  children: ReactNode
+  styles: ReturnType<typeof mermaidDiagramWebStyles>
+}) {
   return (
     <View style={styles.frame} testID="mermaid-diagram">
       <View style={styles.label}>
@@ -108,28 +119,30 @@ function MermaidFrame({ children }: { children: ReactNode }) {
 // The native component's own styles, so the page's diagram sits in the box that component draws.
 // No rule reaches the SVG: mermaid emits it with `width="100%"` and its own natural `max-width`,
 // and a rule of ours on the element would be a byte the native document's render does not have.
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  label: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  labelText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
-  },
-  host: { padding: spacing.sm },
-  fallbackScroll: { padding: spacing.sm },
-  fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+function mermaidDiagramWebStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    label: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.bgPanel
+    },
+    labelText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.monoFamily
+    },
+    host: { padding: spacing.sm },
+    fallbackScroll: { padding: spacing.sm },
+    fallbackText: { color: colors.text, fontFamily: typography.monoFamily }
+  })
+}

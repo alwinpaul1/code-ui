@@ -1,8 +1,10 @@
 import { memo, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
-import { MERMAID_DIAGRAM_CONFIG } from './mermaid-diagram-config'
+import { radii, spacing, typography } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
+import type { Theme } from '../../theme/theme-context'
+import { mermaidDiagramConfig, type MermaidDiagramConfig } from './mermaid-diagram-config'
 import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
 
 export type MermaidDiagramProps = {
@@ -12,20 +14,23 @@ export type MermaidDiagramProps = {
 
 // Renders a ```mermaid fence as a diagram via a sandboxed WebView (mermaid has no
 // native RN renderer). Mermaid ships inside the app as a generated bundle embedded
-// in the WebView HTML — no network — the SVG is themed dark to match the sidebar,
-// and the WebView posts back its rendered height so we can size to content. On any
-// failure (parse error, render error) we fall back to the raw source in a labeled
-// mono code box.
+// in the WebView HTML — no network — the SVG is themed to match the sidebar's
+// current light/dark scheme, and the WebView posts back its rendered height so we
+// can size to content. On any failure (parse error, render error) we fall back to
+// the raw source in a labeled mono code box.
 // memo: both props are primitives; without it every mounted diagram re-renders
 // per frame during pinch-to-zoom (textScale updates), marshalling the full HTML
 // string across the Fabric boundary each time.
 export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: MermaidDiagramProps) {
+  const { colors, scheme } = useTheme()
+  const styles = useThemedStyles(mermaidDiagramStyles)
   const [height, setHeight] = useState(0)
   const [failed, setFailed] = useState(false)
-  const html = useMemo(() => buildHtml(source), [source])
+  const config = useMemo(() => mermaidDiagramConfig(scheme, colors), [scheme, colors])
+  const html = useMemo(() => buildHtml(source, config), [source, config])
 
   if (failed) {
-    return <MermaidFallback source={source} base={base} />
+    return <MermaidFallback source={source} base={base} styles={styles} />
   }
 
   return (
@@ -66,7 +71,11 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   )
 })
 
-function MermaidFallback({ source, base }: MermaidDiagramProps) {
+function MermaidFallback({
+  source,
+  base,
+  styles
+}: MermaidDiagramProps & { styles: ReturnType<typeof mermaidDiagramStyles> }) {
   return (
     <View style={styles.frame}>
       <View style={styles.label}>
@@ -99,13 +108,14 @@ function encodeSourceForScript(source: string): string {
 
 // The config is not untrusted, but it is not a closed set of hex colours either: a
 // themeCSS or a font stack is free text, and it goes into the same script element.
-function encodeConfigForScript(): string {
-  return encodeJsonForScript(JSON.stringify(MERMAID_DIAGRAM_CONFIG))
+function encodeConfigForScript(config: unknown): string {
+  return encodeJsonForScript(JSON.stringify(config))
 }
 
 // Self-contained HTML: embedded mermaid bundle, render the graph, post the body
-// height (or "error") back to RN. The configuration is the one the page runs too.
-export function buildHtml(source: string): string {
+// height (or "error") back to RN. `config` is the caller's resolved theme config
+// (the page runs the same one, built from the same live theme).
+export function buildHtml(source: string, config: MermaidDiagramConfig): string {
   const encoded = encodeSourceForScript(source)
   return `<!DOCTYPE html>
 <html>
@@ -113,7 +123,7 @@ export function buildHtml(source: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; base-uri 'none'; form-action 'none'" />
 <style>
-  html, body { margin: 0; padding: 0; background: ${colors.bgRaised}; }
+  html, body { margin: 0; padding: 0; background: ${config.themeVariables.background}; }
   #c { padding: 8px; }
   #c svg { max-width: 100%; height: auto; }
 </style>
@@ -130,7 +140,7 @@ export function buildHtml(source: string): string {
   }
   try {
     document.querySelector('.mermaid').textContent = ${encoded};
-    mermaid.initialize(${encodeConfigForScript()});
+    mermaid.initialize(${encodeConfigForScript(config)});
     mermaid.run({ querySelector: '.mermaid' })
       .then(function () { reportHeight(); })
       .catch(function () { post('error'); });
@@ -142,28 +152,30 @@ export function buildHtml(source: string): string {
 </html>`
 }
 
-const styles = StyleSheet.create({
-  frame: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
-    marginBottom: spacing.sm,
-    overflow: 'hidden',
-    backgroundColor: colors.bgRaised
-  },
-  label: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  labelText: {
-    color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: typography.monoFamily
-  },
-  webview: { backgroundColor: colors.bgRaised },
-  fallbackScroll: { padding: spacing.sm },
-  fallbackText: { color: colors.textPrimary, fontFamily: typography.monoFamily }
-})
+function mermaidDiagramStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    frame: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radii.row,
+      marginBottom: spacing.sm,
+      overflow: 'hidden',
+      backgroundColor: colors.bgRaised
+    },
+    label: {
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.bgPanel
+    },
+    labelText: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      fontFamily: typography.monoFamily
+    },
+    webview: { backgroundColor: colors.bgRaised },
+    fallbackScroll: { padding: spacing.sm },
+    fallbackText: { color: colors.text, fontFamily: typography.monoFamily }
+  })
+}
