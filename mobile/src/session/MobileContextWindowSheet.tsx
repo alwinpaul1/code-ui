@@ -71,7 +71,7 @@ export function MobileContextWindowSheet({
   const planType = context?.planType
   const pct = context ? Math.max(0, Math.min(100, context.usedPercent)) : 0
   return (
-    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss>
+    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss dismissKeyboardOnOpen>
       <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.sm }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
           <Txt variant="body" weight="medium" style={{ flex: 1 }}>

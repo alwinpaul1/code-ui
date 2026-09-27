@@ -21,6 +21,11 @@ type Props = {
   /** Pinned above the content, outside its scroll: a title that never scrolls away. */
   header?: ReactNode
   zIndex?: number
+  /** For a sheet with nothing to type: sends the keyboard away as the sheet
+   *  opens, instead of leaving the sheet under it until its window takes
+   *  focus (use-keyboard-dismissed-on-open.ts). Never for a sheet that
+   *  focuses a field of its own. */
+  dismissKeyboardOnOpen?: boolean
 }
 
 export function BottomDrawer({
@@ -34,7 +39,8 @@ export function BottomDrawer({
   interactive = true,
   expandable = false,
   header,
-  zIndex
+  zIndex,
+  dismissKeyboardOnOpen = false
 }: Props) {
   const [mounted, setMounted] = useState(visible)
   const onAfterCloseRef = useRef(onAfterClose)
@@ -94,6 +100,7 @@ export function BottomDrawer({
       expandable={expandable}
       header={header}
       zIndex={zIndex}
+      dismissKeyboardOnOpen={dismissKeyboardOnOpen}
     >
       {children}
     </MountedBottomDrawer>
