@@ -519,11 +519,13 @@ describe("two messages from one subagent, each side missing a different one", ()
     expect(first).toEqual({ id: 'peer-notice:probe:1', sender: 'probe', body: '' })
   })
 
-  // Review of 9f9aa4a0..a6857609, item 3: the text above a message taken
-  // mid-turn is usually tool output, which 159e20db did not read as evidence,
-  // so the second row was never drawn (the rule before it drew it). The
-  // second row opens to its own words: the status's copy was read with it.
-  it('draws the second row, painted under tool output, with its own words', async () => {
+  // The trade, taken on purpose (final pre-merge review, 2026-09-27): on a tab
+  // with no prompt hook the count rule does not draw the second message once
+  // the first has scrolled off, one row on screen against one known. Each rule
+  // that tried to tell it by what was painted above it (159e20db, 3672cb4c,
+  // 0ab87379) drew one message twice somewhere else. The first row keeps no
+  // words: the status's copy is the second message's.
+  it('does not draw the second row once the first has scrolled off, and gives the first none of its words: the documented refusal', async () => {
     await show('12:40:30.000', { messages: [PROMPT, OPENING, ...launched], working: true, promptHook: false, peerRows: peerNoticesFromScreen(screen1) })
     const statusCopies = status(['ok, run it', `<agent-message from="${AGENT_ID}"> ${SECOND} </agent-message>`], ['12:41:30.000', '12:42:30.000'])
     await show('12:42:30.000', {
@@ -533,10 +535,7 @@ describe("two messages from one subagent, each side missing a different one", ()
       peerRows: peerNoticesFromScreen(screen2),
       statusAgentMessages: statusCopies
     })
-    expect(rowsOf()).toEqual([
-      { id: 'peer-notice:probe:1', sender: 'probe', body: '' },
-      { id: 'peer-notice:probe:2', sender: 'probe', body: SECOND }
-    ])
+    expect(rowsOf()).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', body: '' }])
   })
 })
 
@@ -631,6 +630,69 @@ describe('a peer message that waited in the queue box, once Claude takes it', ()
   ]
   const LATER = agentRow('a3', 'The suite is green; reading the dump for the render counts now.', '12:40:35.000')
   const drawnIds = () => ((frames.at(-1)!.folded as NativeChatMessage[]) ?? []).flatMap((row) => (row.id.startsWith('peer-notice:') ? [row.id] : []))
+
+  // Final pre-merge review, 2026-09-27: queued ALONE, a peer message gets
+  // neither the send-now row nor the "Press up" footer (Claude Code 2.1.283
+  // draws those only for a queued command a person could edit), so no queue
+  // box bounds it and its row is read where it waits. Repainted in the turn
+  // under new text once Claude takes it, it was counted as a second message.
+  const queuedAlone = (row: string) => [
+    '⏺ Reconnected. Opening Thesis main and scrolling to lever_energy.py.',
+    '',
+    '● Running 1 shell command · 14s…',
+    '',
+    row,
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '',
+    RULE,
+    '❯ ',
+    RULE
+  ]
+
+  it.each([
+    ['with no prompt hook', MIDTURN_HANDBACK_ROW, false, `peer-notice:${MIDTURN_HANDBACK_FROM}:1`],
+    ['with the prompt hook', '› Cross-session message from @code-ui-6f: reply with received (ctrl+o to expand)', true, 'peer-notice:code-ui-6f:1']
+  ] as const)('is drawn once when it waited alone in the queue, %s', async (_label, row, promptHook, id) => {
+    const messages = [PROMPT, OPENING, ...LAUNCH]
+    await show('12:40:30.000', { messages, working: true, promptHook, queued: queuedMessagesFromScreen(queuedAlone(row)), peerRows: peerNoticesFromScreen(queuedAlone(row)) })
+    await show('12:40:40.000', {
+      messages: [...messages, LATER],
+      working: true,
+      promptHook,
+      queued: queuedMessagesFromScreen(taken(row)),
+      peerRows: peerNoticesFromScreen(taken(row))
+    })
+    expect(drawnIds()).toEqual([id])
+  })
+
+  // Why the queue box is still left out under the count rule: a message is
+  // first seen where Claude paints it in the turn when it takes it, so its row
+  // is drawn there, and the status's copy, read as Claude takes it, pairs with
+  // it. Read where it waited a minute earlier, the row was anchored at the
+  // queue and the copy was too far off to pair.
+  it('is drawn where Claude took it, with the words the status carried then', async () => {
+    const ROW = `› Message from @${AGENT_ID} (ctrl+o to expand)`
+    const waiting = ['⏺ Reconnected. Opening Thesis main and scrolling to lever_energy.py.', '', '● Running 1 shell command · 14s…', '', ROW, '❯ and check the queue too', '  ctrl+x ctrl+s to send now', '', '✻ Incubating… (31m 27s · ↓ 67.8k tokens)', '', RULE, '❯ Press up to edit queued messages', RULE]
+    const messages = [PROMPT, OPENING, ...LAUNCH]
+    await show('12:40:30.000', { messages, working: true, promptHook: false, queued: queuedMessagesFromScreen(waiting), peerRows: peerNoticesFromScreen(waiting) })
+    vi.setSystemTime(at('12:41:30.000'))
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:00.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { prompt: `<agent-message from="${AGENT_ID}"> ready for the probe </agent-message>`, updatedAt: at('12:41:30.000') })
+    await show('12:41:30.000', {
+      messages: [...messages, LATER],
+      working: true,
+      promptHook: false,
+      queued: queuedMessagesFromScreen(taken(ROW)),
+      peerRows: peerNoticesFromScreen(taken(ROW)),
+      statusAgentMessages: state.agentMessages ?? []
+    })
+    const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
+    const at3 = folded.findIndex((row) => row.id === 'a3')
+    const drawn = folded.findIndex((row) => row.id === `peer-notice:${AGENT_ID}:1`)
+    expect(drawn).toBeGreaterThan(at3)
+    expect(agentMessageOf(folded[drawn]!)?.body).toBe('ready for the probe')
+  })
 
   it('is drawn once as "Message from", on a tab with no prompt hook', async () => {
     const messages = [PROMPT, OPENING, ...LAUNCH]

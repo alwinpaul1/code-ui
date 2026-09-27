@@ -37,43 +37,6 @@ export type ScreenPeerRow = {
   /** The message as painted, when the row carried it; absent for the
    *  subagent form. */
   body?: string
-  /** The last ABOVE_CHARACTERS characters painted above the row, with every
-   *  space and line break taken out so a rewrap at another width reads the
-   *  same. A subagent's row names only its sender, so this is what tells a
-   *  second message from the same agent from the first once that one has
-   *  scrolled off (screen-peer-notices.ts). Absent for a row too near the top
-   *  of the screen to have that much above it. */
-  above?: string
-  /** The nearest line above the row with something on it, with its spaces
-   *  and the TUI's own marks (the `⏺`, `⎿` gutter and box drawing) taken
-   *  out: the end of what was painted just before the row, often a tool's
-   *  output. Absent for a row with no such line above it on screen. */
-  lastLine?: string
-}
-
-/** The TUI's own marks: a line's gutter glyphs and box drawing. */
-const TUI_MARKS = /[\u2500-\u259F⏺⎿●✻✳✽✶✢·›❯]/g
-
-function lastLineAbove(screen: readonly string[], row: number): string | undefined {
-  for (let line = row - 1; line >= 0; line -= 1) {
-    const text = (screen[line] ?? '').replaceAll(TUI_MARKS, '').replaceAll(/\s+/g, '')
-    if (text.length > 0) {
-      return text
-    }
-  }
-  return undefined
-}
-
-/** Enough of what came before a row to tell it from another row of the same
- *  sender: at 46 columns, the last line or two above it. */
-export const ABOVE_CHARACTERS = 48
-
-function paintedAbove(screen: readonly string[], row: number): string | undefined {
-  let text = ''
-  for (let line = row - 1; line >= 0 && text.length < ABOVE_CHARACTERS; line -= 1) {
-    text = (screen[line] ?? '').replaceAll(/\s+/g, '') + text
-  }
-  return text.length >= ABOVE_CHARACTERS ? text.slice(-ABOVE_CHARACTERS) : undefined
 }
 
 /** The marker Claude paints for these rows is `›` (U+203A), not the `❯` of a
@@ -113,11 +76,8 @@ export function peerNoticesFromScreen(screen: readonly string[], draft?: unknown
       continue
     }
     const sender = head[1]
-    const above = paintedAbove(screen, index)
-    const lastLine = lastLineAbove(screen, index)
-    const context = { ...(above === undefined ? {} : { above }), ...(lastLine === undefined ? {} : { lastLine }) }
     if (head[3]) {
-      found.push({ sender, ...context })
+      found.push({ sender })
       index += 1
       continue
     }
@@ -136,7 +96,7 @@ export function peerNoticesFromScreen(screen: readonly string[], draft?: unknown
     }
     if (closed) {
       const body = (closed[1] ?? '').replaceAll(/\s+/g, ' ').trim()
-      found.push(body.length > 0 ? { sender, body, ...context } : { sender, ...context })
+      found.push(body.length > 0 ? { sender, body } : { sender })
       index = end + 1
     } else {
       index += 1

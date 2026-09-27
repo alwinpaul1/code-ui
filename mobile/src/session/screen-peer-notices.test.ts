@@ -4,12 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { PEER_BOILERPLATE_PRESENTATION, PEER_BOILERPLATE_TEXT } from './mobile-native-chat-peer-messages'
 import { observeScreenPeerNotices, ROW_WORDS_WINDOW_MS, withScreenPeerNotices, type ScreenPeerNotice } from './screen-peer-notices'
-import { paintedIn } from './use-screen-peer-notices'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { screenRowBodies } from './mobile-native-chat-agent-messages'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
-import { peerNoticesFromScreen, type ScreenPeerRow } from './mobile-terminal-peer-notices'
+import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 
 function row(id: string, role: NativeChatMessage['role'], text: string, presentation?: string): NativeChatMessage {
   return { id, role, timestamp: 10, source: 'transcript', blocks: [{ type: 'text', text, ...(presentation ? { presentation } : {}) }] }
@@ -22,7 +21,7 @@ describe('peer message rows read off the screen, placed into the chat', () => {
   const folded = [row('u1', 'user', 'start'), row('a1', 'assistant', 'working'), row('a2', 'assistant', 'done')]
 
   it('records a sighting once, anchored at the tail of that moment, and keeps it across polls', () => {
-    const first = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5, undefined, undefined, 1000)
+    const first = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a1', 5, undefined, 1000)
     expect(first).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: 'a1', sightedAt: 5, seenAt: 1000 }])
     expect(observeScreenPeerNotices(first, [{ sender: 'probe' }], 'a2', 6)).toBe(first)
     expect(observeScreenPeerNotices(first, [], 'a2', 6)).toBe(first)
@@ -339,27 +338,23 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     row('a2', 'assistant', 'received\n\nsession:ok'),
     row('a3', 'assistant', 'The probe agent has finished and gone idle.\nNothing further to do.\n\nsession:ok')
   ]
-  /** What the chat reads above a row: its own transcript after the notice's anchor. */
-  /** The rows after a1 reached the phone after the first row was seen. */
-  const evidence = (_notice: ScreenPeerNotice, row: ScreenPeerRow) => paintedIn(folded.slice(1), row)
   const observe = (previous: readonly ScreenPeerNotice[], screen: readonly string[], tail: string, now: number) =>
-    observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, now, undefined, evidence)
+    observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, now)
   const drawn = (rows: readonly NativeChatMessage[]) =>
     rows.map((message) => (agentMessageOf(message) ? `from ${agentMessageOf(message)!.sender}` : message.id))
 
-  it('is drawn as a second row once the first has scrolled off', () => {
+  // The trade, taken on purpose (final pre-merge review, 2026-09-27): the
+  // count rule cannot see a second message once the first has scrolled off,
+  // one row on screen against one known. Every rule that tried to tell it by
+  // what was painted above the row drew one message twice somewhere else. A
+  // tab launched with the prompt hook draws each message from the hook's list.
+  it('is not drawn once the first has scrolled off, on a tab with no prompt hook: the documented refusal', () => {
     // The first row and the reply above it are off this screen.
     expect(later.filter((line) => line === ROW)).toHaveLength(1)
     expect(later).not.toContain('  its message arrives.')
     const first = observe([], capture, 'a1', 5)
-    const second = observe(first, later, 'a3', 9)
-    expect(drawn(withScreenPeerNotices(folded, second, { subagentRows: true }))).toEqual([
-      'a1',
-      'from probe',
-      'a2',
-      'a3',
-      'from probe'
-    ])
+    expect(observe(first, later, 'a3', 9)).toBe(first)
+    expect(drawn(withScreenPeerNotices(folded, first, { subagentRows: true }))).toEqual(['a1', 'from probe', 'a2', 'a3'])
   })
 
   it('is not drawn again while the first is still on screen, however far the screen scrolled', () => {
@@ -370,10 +365,9 @@ describe('a second message from the same subagent on a tab with no prompt hook',
     expect(observe(both, later, 'a3', 10)).toBe(both)
   })
 
-  it('is refused while its row is too near the top of the screen to read what is above it', () => {
+  it('is refused while its row sits near the top of the screen', () => {
     const first = observe([], capture, 'a1', 5)
     const top = later.slice(later.indexOf(ROW) - 1)
-    expect(peerNoticesFromScreen(top)[0]?.above).toBeUndefined()
     expect(observe(first, top, 'a3', 9)).toBe(first)
   })
 
@@ -390,9 +384,8 @@ describe('a second message from the same subagent on a tab with no prompt hook',
   it('is still one message when a table above its row is repainted narrower', () => {
     const wide = ['⏺ Done. The two runs:', '  ┌──────────────────────┬────────────┐', '  │ run                  │ result     │', '  └──────────────────────┴────────────┘', '', ROW]
     const narrow = ['⏺ Done. The two runs:', '  ┌──────────────┬──────────┐', '  │ run          │ result   │', '  └──────────────┴──────────┘', '', ROW]
-    const tables = [row('a1', 'assistant', 'Done. The two runs:\n\n| run | result |\n|---|---|')]
     const seen = (previous: readonly ScreenPeerNotice[], screen: readonly string[]) =>
-      observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), 'a1', 5, undefined, (_notice, row) => paintedIn(tables, row))
+      observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), 'a1', 5)
     const first = seen([], wide)
     expect(seen(first, narrow)).toBe(first)
     expect(seen(seen(first, narrow), wide)).toBe(first)
@@ -409,7 +402,7 @@ describe("the words of a subagent's sender-only row", () => {
   const probe = { senders: ['a7a46867b4f497c96', 'probe'], body: 'hello from probe', cut: false, seenAt: 100_000 }
   /** Rows first seen on the screen at `seenAt`. */
   const seen = (senders: readonly string[], seenAt: number) =>
-    observeScreenPeerNotices([], senders.map((sender) => ({ sender })), 'a1', 5, undefined, undefined, seenAt)
+    observeScreenPeerNotices([], senders.map((sender) => ({ sender })), 'a1', 5, undefined, seenAt)
 
   it('are the copy from that sender the phone first read within seconds of the row, by its id or its name', () => {
     const byName = seen(['probe'], 102_000)
@@ -448,11 +441,10 @@ describe("the words of a subagent's sender-only row", () => {
 
 // Re-review of a6857609..235dfa20 (blocker): 3672cb4c drew a new "Message
 // from" row on every screen read while one row sat near the top of the screen
-// under tool output. Its evidence searched the transcript after the notice's
-// anchor, and the anchor is the folded tail, whose id is the first record of
-// a run the fold merged the later tool records into; and a line of tool
-// output counted even where too little was painted above the row to tell it
-// from the known one.
+// under tool output (its evidence read tool records the fold had merged into
+// the notice's anchor as painted after it). The evidence path is gone since
+// (final pre-merge review, 2026-09-27); these stay as the duplicate cases the
+// count rule must keep at one.
 describe('one subagent row under tool output of the same turn', () => {
   const ROW = '› Message from @probe (ctrl+o to expand)'
   const raw: NativeChatMessage[] = [
@@ -464,10 +456,8 @@ describe('one subagent row under tool output of the same turn', () => {
     { id: 'b4', role: 'tool', timestamp: 6, source: 'transcript', blocks: [{ type: 'tool-result', output: 'On branch main' }] }
   ]
   const tail = foldMobileNativeChatMessages(raw).at(-1)!.id
-  /** Every record here was held before the row was first seen. */
-  const nothingNew = () => false
-  const poll = (previous: readonly ScreenPeerNotice[], screen: readonly string[], evidence: (notice: ScreenPeerNotice, row: ScreenPeerRow) => boolean = nothingNew) =>
-    observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, 10, undefined, evidence, 1000)
+  const poll = (previous: readonly ScreenPeerNotice[], screen: readonly string[]) =>
+    observeScreenPeerNotices(previous, peerNoticesFromScreen(screen), tail, 10, undefined, 1000)
   const TOP = ['     Tests  340 passed (340)', '', ROW, '', '⏺ Bash(git status)', '  ⎿  On branch main']
   const BOTTOM = [
     '⏺ Running the tests.',
@@ -478,63 +468,51 @@ describe('one subagent row under tool output of the same turn', () => {
     '',
     ROW
   ]
-  /** What 3672cb4c took as evidence: anything in the transcript after the anchor. */
-  const afterTheAnchor = (_notice: ScreenPeerNotice, row: ScreenPeerRow) => paintedIn(raw.slice(raw.findIndex((m) => m.id === tail) + 1), row)
 
   it('is the fold\'s first record, with the tool records after it', () => {
     expect(tail).toBe('a1')
   })
 
   it('stays one row across reads while it sits near the top of the screen', () => {
-    expect(peerNoticesFromScreen(TOP)).toEqual([{ sender: 'probe', lastLine: 'Tests340passed(340)' }])
-    let notices = poll([], TOP, afterTheAnchor)
+    expect(peerNoticesFromScreen(TOP)).toEqual([{ sender: 'probe' }])
+    let notices = poll([], TOP)
     for (let read = 0; read < 4; read += 1) {
-      notices = poll(notices, TOP, afterTheAnchor)
+      notices = poll(notices, TOP)
     }
     expect(notices.map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
   })
 
   it('stays one row when it scrolls from the bottom of the screen to the top', () => {
-    const first = poll([], BOTTOM, afterTheAnchor)
-    expect(first[0]?.above).toBeDefined()
-    expect(poll(first, BOTTOM, afterTheAnchor)).toBe(first)
-    expect(poll(first, TOP, afterTheAnchor).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
+    const first = poll([], BOTTOM)
+    expect(poll(first, BOTTOM)).toBe(first)
+    expect(poll(first, TOP).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
   })
 
   it('stays one bubble for another session\'s row in the same place', () => {
     const bodied = ['     Tests  340 passed (340)', '', '› Message from @code-ui-6f: ping from the other session (ctrl+o to expand)', '', '⏺ Bash(git status)']
-    let notices = poll([], bodied, afterTheAnchor)
-    notices = poll(notices, bodied, afterTheAnchor)
-    notices = poll(notices, bodied, afterTheAnchor)
+    let notices = poll([], bodied)
+    notices = poll(notices, bodied)
+    notices = poll(notices, bodied)
     expect(notices.map((notice) => notice.id)).toEqual(['peer-notice:code-ui-6f:1'])
   })
 
-  // The screen can run ahead of the transcript: the reply painted above the
-  // row reached the phone after the row was first seen. A resize rewraps that
-  // reply, so the line right above the row changes, and near the top of the
-  // screen there is too little above it to see it is the same row.
-  it('stays one row near the top of the screen after a rewrap, when the reply above it arrived late', () => {
+  // A resize rewraps the reply above the row, so what is painted above it
+  // changes, and near the top of the screen little of it shows.
+  it('stays one row near the top of the screen after a rewrap', () => {
     const seen = ['⏺ The probe agent is running. I will reply once its message', '  arrives.', '', ROW]
     const rewrapped = ['  I will reply once its message arrives.', '', ROW]
-    const late: NativeChatMessage[] = [
-      { id: 'a9', role: 'assistant', timestamp: 7, source: 'transcript', blocks: [{ type: 'text', text: 'The probe agent is running. I will reply once its message arrives.' }] }
-    ]
     const first = poll([], seen)
-    expect(peerNoticesFromScreen(rewrapped)[0]).toEqual({ sender: 'probe', lastLine: 'Iwillreplyonceitsmessagearrives.' })
-    expect(poll(first, rewrapped, (_notice, row) => paintedIn(late, row)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
+    expect(poll(first, rewrapped).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
   })
 
   it('stays one row when the line above it is output printed again later in the turn', () => {
     // Seen under git's "nothing to commit"; Claude runs git status again and
-    // the same line reaches the phone after the row was first seen.
+    // the same line is painted again.
     const screen = ['⏺ Committing next.', '  ⎿  On branch main', '     nothing to commit, working tree clean', '', ROW]
-    const again: NativeChatMessage[] = [
-      { id: 'r3', role: 'tool', timestamp: 5, source: 'transcript', blocks: [{ type: 'tool-result', output: 'On branch main\nnothing to commit, working tree clean' }] }
-    ]
     const first = poll([], screen)
     const repainted = ['⏺ Bash(git status)', '  ⎿  On branch main', '     nothing to commit, working tree clean', '', ROW]
-    expect(poll(first, repainted, (_notice, row) => paintedIn(again, row)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
-    expect(poll(first, screen.slice(3), (_notice, row) => paintedIn(again, row)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
+    expect(poll(first, repainted).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
+    expect(poll(first, screen.slice(3)).map((notice) => notice.id)).toEqual(['peer-notice:probe:1'])
   })
 })
 
