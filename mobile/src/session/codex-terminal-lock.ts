@@ -21,6 +21,13 @@ export function withCodexTerminalLock<T>(handle: string, run: () => Promise<T>):
   return settled
 }
 
+/** A driver holds or waits on this terminal: the screen it is reading and
+ *  typing into is its own work in progress (a picker it opened), not state the
+ *  chat should report. */
+export function isCodexTerminalLocked(handle: string): boolean {
+  return tails.has(handle)
+}
+
 export function resetCodexTerminalLockForTests(): void {
   tails.clear()
 }

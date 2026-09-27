@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
+import { terminalDialogKind, terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
 
 type Screen = { name: string; lines: string[] }
 
@@ -193,5 +193,66 @@ describe('nothing in the conversation reads as a dialog', () => {
     ['a blank screen', ['', '', '']] as const
   ])('sees none on %s', (_name, lines) => {
     expect(terminalDialogOnScreen([...lines])).toBe(false)
+  })
+})
+
+// Simulated, not captured: no capture of a pane this narrow exists. Ink wraps
+// a hint row inside its own box, so the tail starts again at the box's left
+// edge, the hint's column, which is at or left of the menu's digits.
+describe('a live dialog whose key hint wrapped', () => {
+  it('sees a plan review whose ctrl+g hint wrapped in a narrower pane', () => {
+    const lines = [
+      ...PLAN_REVIEW_276.slice(0, -1),
+      '   ctrl+g to edit in VS Code ·',
+      '   ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md'
+    ]
+    expect(terminalDialogOnScreen(lines)).toBe(true)
+  })
+
+  it('sees the 2.1.282 ask whose key hint wrapped (pane under 50 columns)', () => {
+    const ask = byName(SINGLE_282, 'ask')
+    const hint = ask.findLastIndex((row) => row.startsWith('Enter to select'))
+    const lines = [...ask.slice(0, hint), 'Enter to select · ↑/↓ to navigate · Esc', 'to cancel', ...ask.slice(hint + 1)]
+    expect(terminalDialogOnScreen(lines)).toBe(true)
+  })
+
+  // Its own label names the plan review at any width, whatever is drawn under it.
+  it('sees a plan review whose footer is no key hint at all', () => {
+    const lines = [...PLAN_REVIEW_276.slice(0, -1), '   Plan: ~/.claude/plans/write-a-one-sentence-plan-expressive-possum.md']
+    expect(terminalDialogOnScreen(lines)).toBe(true)
+  })
+
+  it('still lets a send go past a plan review Claude quoted above the composer', () => {
+    expect(terminalDialogOnScreen(withAboveComposer(['⏺ It asked:', ...PLAN_REVIEW_276.slice(1), '']))).toBe(false)
+  })
+})
+
+describe("the chat's own draft in Claude's input box", () => {
+  // No status line under the box, as for a user without one: the draft's
+  // quoted list is the last numbered block on screen, and its `>` marks read
+  // as selected rows.
+  it('lets a Claude draft that quotes a numbered list go', () => {
+    const top = TASKS.findIndex((row) => row.startsWith('❯\u00a0')) - 1
+    const lines = [
+      ...TASKS.slice(0, top + 1),
+      '❯\u00a0Which of these did you mean?',
+      '  > 1. Rewrite the parser',
+      '  > 2. Patch the caller',
+      TASKS[top]!
+    ]
+    expect(terminalDialogOnScreen(lines)).toBe(false)
+  })
+})
+
+describe('what kind of dialog is up', () => {
+  it.each([
+    ['the 2.1.283 subagent Bash prompt (transcribed)', 'approval', SUBAGENT_PROMPT!.lines],
+    ['a 2.1.276 plan review', 'approval', PLAN_REVIEW_276],
+    ['a Codex command approval', 'approval', CODEX_APPROVAL],
+    ["Codex's open model picker", 'menu', CODEX_MODEL_PICKER],
+    ['a 2.1.282 multi-select ask', 'menu', byName(MULTI, 'ask')],
+    ['an idle Codex screen', null, CODEX_IDLE]
+  ] as const)('calls %s: %s', (_name, kind, lines) => {
+    expect(terminalDialogKind([...lines])).toBe(kind)
   })
 })

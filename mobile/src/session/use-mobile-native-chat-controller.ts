@@ -178,7 +178,7 @@ export function useMobileNativeChatController(
     // its process still paints: the live pair, or nothing.
     live: liveHud,
     refresh: refreshTerminalHud,
-    dialogOptions: terminalDialogOptions, dialogOnScreen: terminalDialogOnScreen,
+    dialogOptions: terminalDialogOptions, dialogKind: terminalDialogKind,
     terminalPermission,
     permissionDismissed,
     queuedMessages: visibleQueuedMessages,
@@ -271,7 +271,7 @@ export function useMobileNativeChatController(
       connState === 'connected' &&
       legacyNativeChatPermission == null &&
       legacyQuestion == null &&
-      nativeChatAskPrompt == null && !terminalDialogOnScreen,
+      nativeChatAskPrompt == null && terminalDialogKind === null,
     handleRef: activeHandleRef,
     deviceTokenRef,
     text: chatComposerText
@@ -550,7 +550,7 @@ export function useMobileNativeChatController(
       ? structuredNativeChat.permission
       : legacyRenderedPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
-    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogOnScreen: terminalDialogOnScreen, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
+    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogKind: terminalDialogKind, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
     openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey,

@@ -81,6 +81,7 @@ vi.mock('./use-mobile-native-chat-file-search', () => ({
   useMobileNativeChatFileSearch: () => ({ nativeChatFilePaths: [], loadNativeChatFiles: vi.fn() })
 }))
 
+import { withCodexTerminalLock } from './codex-terminal-lock'
 import {
   useMobileNativeChatController,
   type MobileNativeChatController
@@ -205,7 +206,7 @@ describe('what the chat says while the agent waits on a prompt', () => {
     // next build's decoration would be: nothing on it is proven, so no card.
     await show(SUBAGENT_PROMPT.map((row) => (row === SUBAGENT_TITLE ? `${row} · queued` : row)))
     expect(controller?.nativeChatPermission).toBeNull()
-    expect(controller?.nativeChatTerminalWait).toEqual({ source: 'screen', choices: ['Yes', 'Yes, and don\u2019t ask again for: git *', 'No'] })
+    expect(controller?.nativeChatTerminalWait).toEqual({ source: 'screen', kind: 'approval', choices: ['Yes', 'Yes, and don\u2019t ask again for: git *', 'No'] })
     act(() => controller?.openNativeChatTerminal())
     expect(peekTerminalTab).toHaveBeenCalledWith('tab-1')
   })
@@ -222,7 +223,7 @@ describe('what the chat says while the agent waits on a prompt', () => {
   it('says a Codex prompt it cannot read is waiting in the terminal', async () => {
     await show(CODEX_UNREAD, 'codex')
     expect(controller?.nativeChatPermission).toBeNull()
-    expect(controller?.nativeChatTerminalWait).toEqual({ source: 'screen', choices: CODEX_UNREAD.slice(4, 7).map((row) => row.replace(/^\W*\d\. /, '')) })
+    expect(controller?.nativeChatTerminalWait).toEqual({ source: 'screen', kind: 'approval', choices: CODEX_UNREAD.slice(4, 7).map((row) => row.replace(/^\W*\d\. /, '')) })
   })
 
   // The prompts the hook does carry a card for keep it: an Edit approval's
@@ -239,6 +240,37 @@ describe('what the chat says while the agent waits on a prompt', () => {
       ]
     })
     expect(controller?.nativeChatTerminalWait).toBeNull()
+  })
+
+  // Codex 0.153.4's model picker (codex-picker-screen.test.ts), open on the desktop.
+  const PICKER = [
+    '• ok',
+    '  Select Model and Effort',
+    '  1. gpt-6-astra (default)  Our most capable model for complex, demanding work.',
+    '› 2. gpt-5.6-sol (current)  Reliable agentic workhorse for everyday tasks.',
+    '  Press enter to confirm or esc to go back'
+  ]
+
+  it('says a menu is open, not that approval waits, for a picker left open', async () => {
+    await show(PICKER, 'codex')
+    expect(controller?.nativeChatTerminalWait).toMatchObject({ source: 'screen', kind: 'menu' })
+  })
+
+  // The phone's own Codex pick opens that picker; the chat must not flash a
+  // notice about its own menu while it drives it.
+  it("raises nothing while the phone's own Codex pick holds the terminal", async () => {
+    let finish!: () => void
+    const pick = withCodexTerminalLock('term-1', () => new Promise<void>((resolve) => (finish = resolve)))
+    await show(PICKER, 'codex')
+    expect(controller?.nativeChatTerminalWait).toBeNull()
+    await act(async () => {
+      finish()
+      await pick
+    })
+    await act(async () => {
+      await controller?.refreshNativeChatHud()
+    })
+    expect(controller?.nativeChatTerminalWait).toMatchObject({ source: 'screen', kind: 'menu' })
   })
 
   it.each(['waiting', 'blocked'])(
@@ -261,8 +293,9 @@ describe('what the chat says while the agent waits on a prompt', () => {
   })
 
   // One detector for all four: the notice, the mirror, the send and the queue
-  // edit count a dialog only with one of its rows selected. A numbered Yes/No
-  // list in the lead's last message is not one.
+  // edit count a dialog only as a menu at the live bottom of the screen, with
+  // one of its own rows selected. A numbered Yes/No list in the lead's last
+  // message, above Claude's input box, is not one.
   it('says nothing for a numbered Yes/No list in the conversation, and echoes the draft', async () => {
     const at = SUBAGENT_PROMPT.findIndex((row) => row.startsWith('\u2500'))
     await show([

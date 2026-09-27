@@ -19,7 +19,8 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 import { parseClaudeSpinnerLine, sameSpinner, type ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
-import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
+import { terminalDialogKind, type TerminalDialogKind } from './mobile-native-chat-dialog-guard'
+import { isCodexTerminalLocked } from './codex-terminal-lock'
 
 const HUD_POLL_MS = 5_000
 
@@ -63,9 +64,10 @@ export function useMobileTerminalHudObservation(args: {
   refresh: () => Promise<TerminalHudObservation | null>
   /** Claude Code's permission dialog options as drawn on screen, or null. */
   dialogOptions: MobileChatPermission['options'] | null
-  /** A dialog that takes keys as answers is up, by the one test the sends,
-   *  the queue edit, the waiting notice and the draft mirror all use. */
-  dialogOnScreen: boolean
+  /** A dialog that takes keys as answers is up, and what it asks for, by the
+   *  one test the sends, the queue edit, the waiting notice and the draft
+   *  mirror all use. */
+  dialogKind: TerminalDialogKind | null
   terminalPermission: MobileChatPermission | null
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
@@ -79,7 +81,7 @@ export function useMobileTerminalHudObservation(args: {
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
-  const [dialogOnScreen, setDialogOnScreen] = useState(false)
+  const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
@@ -89,7 +91,7 @@ export function useMobileTerminalHudObservation(args: {
     setObservation(null)
     setSpinner(null)
     setDialogOptions(null)
-    setDialogOnScreen(false)
+    setDialogKind(null)
     setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
       return
@@ -106,7 +108,11 @@ export function useMobileTerminalHudObservation(args: {
       // screen as fast as the link allows. A poll on top of it competes for the
       // connection and slows the save it is trying to watch. Only while it is
       // actually driving the terminal, never while its sheet merely sits open.
-      if (isMobileNativeChatTerminalBurstActive(handle)) {
+      // Nor while one of the phone's own Codex drivers (a model or effort pick,
+      // the /status poll) holds the terminal: the picker it opens is its own
+      // work in progress, and read here it raised a notice about the phone's
+      // own menu (independent review, 2026-09-27).
+      if (isMobileNativeChatTerminalBurstActive(handle) || isCodexTerminalLocked(handle)) {
         return null
       }
       inFlight = true
@@ -188,7 +194,7 @@ export function useMobileTerminalHudObservation(args: {
         setDialogOptions((current) =>
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
-        setDialogOnScreen(terminalDialogOnScreen(lines))
+        setDialogKind(terminalDialogKind(lines))
         const parsed =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
         const next = parsed
@@ -239,7 +245,7 @@ export function useMobileTerminalHudObservation(args: {
     observation,
     refresh,
     dialogOptions,
-    dialogOnScreen,
+    dialogKind,
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],

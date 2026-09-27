@@ -23,12 +23,19 @@ vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'Questi
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'Ask' }))
 
 import { MobileNativeChatPromptCard, type MobileNativeChatPromptCardProps } from './MobileNativeChatPromptCard'
-import { TERMINAL_WAIT_BODY, TERMINAL_WAIT_TITLE } from './MobileNativeChatTerminalWait'
+import { TERMINAL_MENU_TITLE, TERMINAL_WAIT_BODY, TERMINAL_WAIT_TITLE } from './MobileNativeChatTerminalWait'
 import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 
 const SCREEN_WAIT: NativeChatTerminalWait = {
   source: 'screen',
+  kind: 'approval',
   choices: ['Yes', 'Yes, and don\u2019t ask again for: git *', 'No']
+}
+// Codex 0.153.4's model picker, open on the desktop (codex-picker-screen.test.ts).
+const MENU_WAIT: NativeChatTerminalWait = {
+  source: 'screen',
+  kind: 'menu',
+  choices: ['gpt-6-astra (default)  Our most capable model for complex, demanding work.']
 }
 
 // 2026-09-27: a background subagent's Bash prompt waited eight hours behind a
@@ -95,8 +102,21 @@ describe('the dock while the agent waits on a prompt the chat cannot show', () =
     )
     const said = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[permission]'))
     expect(said).toEqual([
-      '[permission] no card for the dialog on screen (Yes | Yes, and don\u2019t ask again for: git * | No); the chat points to the terminal'
+      '[permission] no card for the approval on screen (Yes | Yes, and don\u2019t ask again for: git * | No); the chat points to the terminal'
     ])
+  })
+
+  // A picker is not an approval: "Waiting for approval" sent the user looking
+  // for a prompt that was never there (independent review, 2026-09-27).
+  it.each(['light', 'dark'] as const)('says a menu is open in the terminal for an open picker, in %s', (scheme) => {
+    const colors = scheme === 'dark' ? darkColors : lightColors
+    const root = render(scheme, { terminalWait: MENU_WAIT, onOpenTerminal: vi.fn() }).root
+    const texts = JSON.stringify(root.findAll((node) => String(node.type) === 'Text').map((node) => node.props.children))
+    expect(texts).toContain(TERMINAL_MENU_TITLE)
+    expect(texts).not.toContain(TERMINAL_WAIT_TITLE)
+    expect(root.findByProps({ testID: 'native-chat-terminal-wait' }).props.style).toMatchObject({
+      backgroundColor: colors.bgPanel
+    })
   })
 
   it('says so from the hook alone, the same way', () => {

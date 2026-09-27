@@ -7,6 +7,8 @@ import { Txt } from '../ui/Txt'
 import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 
 export const TERMINAL_WAIT_TITLE = 'Waiting for approval in the terminal'
+/** For a menu (an ask, a picker): nothing is asking for approval. */
+export const TERMINAL_MENU_TITLE = 'A menu is open in the terminal'
 export const TERMINAL_WAIT_BODY = "This chat can't show the prompt. Answer it in the terminal."
 
 /**
@@ -51,7 +53,7 @@ export function MobileNativeChatTerminalWait({
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <SquareTerminal size={15} color={colors.accentText} strokeWidth={2.2} />
         <Txt variant="label" weight="semibold" style={{ flex: 1 }}>
-          {TERMINAL_WAIT_TITLE}
+          {wait.source === 'screen' && wait.kind === 'menu' ? TERMINAL_MENU_TITLE : TERMINAL_WAIT_TITLE}
         </Txt>
       </View>
       <Txt variant="caption" tone="secondary">
@@ -85,6 +87,6 @@ export function MobileNativeChatTerminalWait({
 
 export function terminalWaitLogLine(wait: NativeChatTerminalWait): string {
   return wait.source === 'screen'
-    ? `[permission] no card for the dialog on screen (${wait.choices.join(' | ')}); the chat points to the terminal`
+    ? `[permission] no card for the ${wait.kind} on screen (${wait.choices.join(' | ')}); the chat points to the terminal`
     : '[permission] the hook says the agent waits, with no card to show; the chat points to the terminal'
 }
