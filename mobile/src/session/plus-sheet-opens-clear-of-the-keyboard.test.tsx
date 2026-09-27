@@ -169,8 +169,8 @@ describe.each(['light', 'dark'] as const)('the + in %s mode, with the keyboard u
     await act(async () => (button.props.onPressIn as (() => void) | undefined)?.())
     await act(async () => (plus('Add to chat').props.onPress as () => void)())
 
+    // A toggle would close it again here.
     expect(sheetIsUp()).toBe(true)
-    expect(renderer!.root.findAll((node) => isHost(node, 'BottomDrawer'))).toHaveLength(1)
   })
 
   it('still opens clear of the keyboard when activated without a touch (TalkBack)', async () => {

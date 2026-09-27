@@ -14,6 +14,11 @@ import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 //
 // The chip strip stands in for "the rest of the composer": it is a plain
 // function component that renders whenever the composer does.
+//
+// Not covered here: with the keyboard up, the + blurs the text field, and
+// the field's onBlur re-renders the composer once for its focus border. That
+// render comes back from the native side after the sheet's commit, not in
+// front of it, and main paid it too (the drawer's close blurred the field).
 
 const chipRenders = vi.hoisted(() => ({ count: 0 }))
 
