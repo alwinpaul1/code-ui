@@ -59,6 +59,7 @@ export function useCodexStatusPoll(args: {
       if (!active || !handle) {
         return
       }
+      let refreshAfter = false
       void withCodexTerminalLock(handle, async () => {
         if (!active || !acquireMobileNativeChatTerminalWrite(handle)) {
           return
@@ -106,9 +107,10 @@ export function useCodexStatusPoll(args: {
               return
             }
           }
-          if (active) {
-            await refreshHud()
-          }
+          // Asked for once the lock is let go: the chat's screen read stands
+          // aside while a Codex driver holds the terminal, so a refresh from
+          // in here read nothing (2026-09-27).
+          refreshAfter = active
         } finally {
           releaseMobileNativeChatTerminalWrite(handle)
         }
@@ -118,6 +120,9 @@ export function useCodexStatusPoll(args: {
           // the terminal lock. Never leave an unhandled rejection in the effect.
         })
         .finally(() => {
+          if (refreshAfter && active) {
+            void refreshHud()
+          }
           if (
             active &&
             !hasScrapedCodexVisibleModels(visibleKey) &&

@@ -8,16 +8,16 @@ const tails = new Map<string, Promise<void>>()
 export function withCodexTerminalLock<T>(handle: string, run: () => Promise<T>): Promise<T> {
   const previous = tails.get(handle) ?? Promise.resolve()
   const settled = previous.then(run, run)
-  const tail = settled.then(
-    () => undefined,
-    () => undefined
-  )
-  tails.set(handle, tail)
-  void tail.then(() => {
+  // Let go in the first reaction to the run settling, ahead of anything the
+  // caller chains on it, so a refresh the caller asks for once the lock is
+  // released finds it released (isCodexTerminalLocked).
+  const release = (): void => {
     if (tails.get(handle) === tail) {
       tails.delete(handle)
     }
-  })
+  }
+  const tail: Promise<void> = settled.then(release, release)
+  tails.set(handle, tail)
   return settled
 }
 
