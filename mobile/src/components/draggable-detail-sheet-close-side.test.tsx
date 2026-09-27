@@ -5,6 +5,8 @@ const seam = vi.hoisted(() => ({ scheme: 'light' as 'light' | 'dark' }))
 
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('react-native', () => ({
+  // DraggableDetailSheet and the image viewers send the keyboard away as they open.
+  Keyboard: { dismiss: () => {} },
   Modal: 'Modal',
   Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android },
   Pressable: 'Pressable',

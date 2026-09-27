@@ -30,6 +30,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useExpandableBottomDrawer } from './use-expandable-bottom-drawer'
 import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
+import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
 const SHOW_DURATION = 180
 // Why: a sheet enters from just below its own bottom edge, not from a whole
@@ -63,6 +64,8 @@ export type MountedBottomDrawerProps = {
    *  as the handle does. */
   header?: ReactNode
   zIndex?: number
+  /** Sends the keyboard away as the sheet opens (BottomDrawer's prop). */
+  dismissKeyboardOnOpen?: boolean
 }
 
 export function MountedBottomDrawer({
@@ -76,7 +79,8 @@ export function MountedBottomDrawer({
   interactive = true,
   expandable = false,
   header,
-  zIndex = 1000
+  zIndex = 1000,
+  dismissKeyboardOnOpen = false
 }: MountedBottomDrawerProps) {
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
@@ -91,6 +95,7 @@ export function MountedBottomDrawer({
     onCloseRef.current = onClose
   }, [onClose])
   const close = useCallback(() => onCloseRef.current(), [])
+  useKeyboardDismissedOnOpen(visible && dismissKeyboardOnOpen)
   // Why: fill mode needs the keyboard inset in React layout (not only the
   // reanimated translate) so height shrinks as the sheet lifts and the top
   // edge stays under the status bar.

@@ -216,6 +216,7 @@ export function ActionSheetModal({
     <BottomDrawer
       visible={visible}
       onClose={onClose}
+      dismissKeyboardOnOpen
       onAfterClose={() => {
         // Why: iOS cannot present a second native modal until the action
         // sheet's native window has fully unmounted.

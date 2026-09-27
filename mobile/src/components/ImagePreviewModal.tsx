@@ -12,6 +12,7 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { svgAspectRatio } from './markdown-image-source'
 import { ZoomableImage } from './ZoomableImage'
+import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
 /** Full-screen viewer for an image the app already holds (a phone upload's
  *  local file, a host thumbnail already fetched, a markdown figure read off
@@ -26,6 +27,9 @@ export function ImagePreviewModal(): React.JSX.Element | null {
   const [zoomed, setZoomed] = useState(false)
   const aspectRatios = useAspectRatios(preview?.sources ?? NO_SOURCES)
   const onZoomedChange = useCallback((value: boolean) => setZoomed(value), [])
+  // A photo chip sits right above the composer: opened with its keyboard up,
+  // the viewer's window would otherwise sit under the keyboard until it took focus.
+  useKeyboardDismissedOnOpen(preview !== null)
   if (!preview) {
     return null
   }

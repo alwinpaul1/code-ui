@@ -82,6 +82,7 @@ export function MobileBackgroundTasksSheet({
       visible={visible}
       onClose={onClose}
       dragContentToDismiss
+      dismissKeyboardOnOpen
       expandable
       header={<MobileBackgroundTasksSheetHeader onClose={onClose} stopFailure={failure.shown} />}
     >

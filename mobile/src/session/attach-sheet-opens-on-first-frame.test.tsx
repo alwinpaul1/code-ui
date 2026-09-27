@@ -167,7 +167,7 @@ function onScreenHeight(): number {
   return Math.max(0, SHEET_HEIGHT - translateY)
 }
 
-/** The + tap: the composer flips `showAttachSheet`, and the sheet lays itself out. */
+/** The + tap: MobileNativeChatAttachButton flips its `sheetOpen`, and the sheet lays itself out. */
 async function tapPlus(scheme: 'light' | 'dark'): Promise<void> {
   await act(async () => {
     renderer = create(sheetIn(scheme, false))

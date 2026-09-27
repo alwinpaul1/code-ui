@@ -27,7 +27,7 @@ export function ConfirmModal({
 }: Props) {
   const { space } = useTheme()
   return (
-    <BottomDrawer visible={visible} onClose={onCancel}>
+    <BottomDrawer visible={visible} onClose={onCancel} dismissKeyboardOnOpen>
       <View style={{ paddingBottom: space.lg, paddingHorizontal: space.xs }}>
         <Txt variant="heading" weight="semibold">
           {title}

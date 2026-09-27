@@ -34,6 +34,7 @@ import { containedSize } from './zoomable-image-math'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { ConfirmModal } from './ConfirmModal'
+import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
 /** The pen is deliberately theme-invariant — a red pen, like the real Claude
  *  app's markup tool, on a light or a dark canvas alike. Every other colour
@@ -145,6 +146,8 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       runOnJS(endDraftStroke)()
     })
 
+  // The pencil on a photo chip, right above the composer's keyboard.
+  useKeyboardDismissedOnOpen(session !== null)
   if (!session) {
     return null
   }

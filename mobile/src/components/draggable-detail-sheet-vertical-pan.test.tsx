@@ -35,6 +35,8 @@ vi.mock('react-native-gesture-handler', () => {
 })
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('react-native', () => ({
+  // DraggableDetailSheet and the image viewers send the keyboard away as they open.
+  Keyboard: { dismiss: () => {} },
   Modal: 'Modal',
   Platform: { OS: 'android', select: (options: Record<string, unknown>) => options.android },
   Pressable: 'Pressable',

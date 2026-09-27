@@ -122,7 +122,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   )
 
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} dismissKeyboardOnOpen>
       {/* Why: BottomDrawer already scrolls its children in a keyboard-aware container;
           a nested capped ScrollView cut off the lower controls. */}
       <View>
