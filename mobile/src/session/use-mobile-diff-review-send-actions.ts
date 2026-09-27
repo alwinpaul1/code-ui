@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -31,8 +31,8 @@ type SendActionsInput = {
   worktreeId: string
   screenState: ReviewScreenState
   setActionError: Dispatch<SetStateAction<string | null>>
-  /** The sheet as last drawn, for a send that fails after it closed. */
-  sendSheet: SendSheetState | null
+  /** Written only through this hook (`writeSheet`), which keeps its own copy
+   *  of the sheet in step with every write. */
   setSendSheet: Dispatch<SetStateAction<SendSheetState | null>>
   saveCommentsAndReviewState: (
     comments: DiffComment[],
@@ -50,18 +50,28 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     worktreeId,
     screenState,
     setActionError,
-    sendSheet,
     setSendSheet,
     saveCommentsAndReviewState
   } = input
   const [notesSending, setNotesSending] = useState<NotesSendTarget | null>(null)
   const sendingRef = useRef(false)
-  // Read when a send settles, which can be seconds after the tap: the sheet
-  // may have closed, or closed and reopened, since.
-  const sheetRef = useRef(sendSheet)
-  useEffect(() => {
-    sheetRef.current = sendSheet
-  }, [sendSheet])
+  // The sheet as last written, read when a send or a list settles, which can
+  // be seconds after the tap: the sheet may have closed, or closed and
+  // reopened, since. Set at the write, with the state, not synced from it in
+  // an effect: an effect runs a commit behind, and a failure landing in the
+  // same batch as the close read the sheet as still open (and a reopen as
+  // still closed).
+  const sheetRef = useRef<SendSheetState | null>(null)
+  const writeSheet = useCallback(
+    (next: SendSheetState | null) => {
+      sheetRef.current = next
+      setSendSheet(next)
+    },
+    [setSendSheet]
+  )
+
+  /** The sheet's own close (a drag, a tap outside it). */
+  const closeSendSheet = useCallback(() => writeSheet(null), [writeSheet])
 
   const copyNotes = useCallback(async () => {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
@@ -137,14 +147,14 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         setActionError(
           `Review notes sent, but not marked sent: ${(err instanceof Error && err.message) || 'Failed to save review'}`
         )
-        setSendSheet(null)
+        writeSheet(null)
         return
       }
       triggerSuccess()
       setActionError('Review notes sent')
-      setSendSheet(null)
+      writeSheet(null)
     },
-    [markNotesSent, setActionError, setSendSheet]
+    [markNotesSent, setActionError, writeSheet]
   )
 
   /**
@@ -215,27 +225,24 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       } catch (err) {
         const message = err instanceof Error && err.message ? err.message : 'Failed to send notes'
         console.warn(`[review-send] notes not sent to ${target.terminal ?? 'a new agent session'}: ${message}`)
-        if (sheetRef.current === null) {
+        const sheet = sheetRef.current
+        if (sheet === null) {
           // Closed while the send ran. Reopening it on the failure drew an
           // error sheet with no terminals in it; the review banner says why.
           setActionError(message)
+        } else if (sheet.kind === 'loading') {
+          // Reopened since and still loading: the reason waits for the list,
+          // which would otherwise overwrite it.
+          writeSheet({ kind: 'loading', reason: message })
         } else {
-          // A sheet reopened since and still loading keeps the reason for its
-          // list, which would otherwise overwrite it.
-          setSendSheet((sheet) =>
-            sheet === null
-              ? null
-              : sheet.kind === 'loading'
-                ? { kind: 'loading', reason: message }
-                : { kind: 'error', message, terminals: sheet.terminals }
-          )
+          writeSheet({ kind: 'error', message, terminals: sheet.terminals })
         }
       } finally {
         sendingRef.current = false
         setNotesSending(null)
       }
     },
-    [setActionError, setSendSheet]
+    [setActionError, writeSheet]
   )
 
   const sendNotesToTerminal = useCallback(
@@ -255,7 +262,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       setActionError('Waiting for desktop...')
       return
     }
-    setSendSheet({ kind: 'loading' })
+    writeSheet({ kind: 'loading' })
     try {
       const response = await reviewTerminalListRead.request(client, {
         worktree: `id:${worktreeId}`
@@ -267,21 +274,28 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       )
       // A list that lands after the user closed the sheet leaves it closed,
       // and one a failed send is waiting on shows that send's reason.
-      setSendSheet((sheet) =>
-        sheet === null
-          ? null
-          : sheet.kind === 'loading' && sheet.reason
+      const sheet = sheetRef.current
+      if (sheet !== null) {
+        writeSheet(
+          sheet.kind === 'loading' && sheet.reason
             ? { kind: 'error', message: sheet.reason, terminals }
             : { kind: 'ready', terminals }
-      )
+        )
+      }
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
-      setSendSheet((sheet) => (sheet === null ? null : { kind: 'error', message, terminals: [] }))
+      if (sheetRef.current !== null) {
+        writeSheet({
+          kind: 'error',
+          message: err instanceof Error ? err.message : 'Unable to load agent sessions',
+          terminals: []
+        })
+      }
     }
-  }, [client, connState, setActionError, setSendSheet, worktreeId])
+  }, [client, connState, setActionError, worktreeId, writeSheet])
 
   return {
     clearSentNotes,
+    closeSendSheet,
     copyNotes,
     createTerminalAndSend,
     notesSending,

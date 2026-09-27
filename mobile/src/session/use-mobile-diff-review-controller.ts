@@ -68,6 +68,9 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [discardTarget, setDiscardTarget] = useState<MobileDiffReviewQueueItem | null>(null)
   const [showOverflow, setShowOverflow] = useState(false)
+  // Written only by the send actions hook (openSendSheet, closeSendSheet and
+  // the sends), which keeps its own copy in step for a send that settles after
+  // the sheet closed or reopened. Not returned, so nothing writes around it.
   const [sendSheet, setSendSheet] = useState<SendSheetState | null>(null)
   const [showCompletion, setShowCompletion] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
@@ -248,7 +251,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     setComposerBody,
     setActionError,
     setBusyAction,
-    sendSheet,
     setSendSheet,
     setShowCompletion,
     loadReviewData,
@@ -287,7 +289,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     sendSheet,
     setComposerBody,
     setDiscardTarget,
-    setSendSheet,
     setShowCompletion,
     setShowOverflow,
     showCompletion,

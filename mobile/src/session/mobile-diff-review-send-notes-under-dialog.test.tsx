@@ -256,6 +256,18 @@ function sheetRow(rendered: ReactTestRenderer, label: string): ReactTestInstance
   return row
 }
 
+/** Closes the Send Notes sheet through its own onClose, the drag or tap
+ *  outside the drawer. */
+function closeSheet(rendered: ReactTestRenderer): void {
+  const [sheet] = rendered.root.findAll(
+    (node) => node.props.title === 'Send Notes' && typeof node.props.onClose === 'function'
+  )
+  if (!sheet) {
+    throw new Error('the review draws no Send Notes sheet')
+  }
+  sheet.props.onClose()
+}
+
 async function tap(rendered: ReactTestRenderer, label: string): Promise<void> {
   await act(async () => {
     sheetRow(rendered, label).props.onPress()
@@ -502,7 +514,7 @@ describe('a Send Notes failure that lands after the sheet moved on', () => {
     const tab = host({ screen: () => look.promise })
     const rendered = await openSheet(tab)
     await tap(rendered, TERMINAL_ROW)
-    act(() => controller!.setSendSheet(null))
+    act(() => closeSheet(tree!))
     await act(async () => {
       look.resolve([...PERMISSION_PROMPT_283])
       await settle()
@@ -527,7 +539,7 @@ describe('a Send Notes failure that lands after the sheet moved on', () => {
     })
     const rendered = await openSheet(tab)
     await tap(rendered, TERMINAL_ROW)
-    act(() => controller!.setSendSheet(null))
+    act(() => closeSheet(tree!))
     listing = deferred<RpcResponse>()
     await act(async () => {
       void controller!.openSendSheet()
@@ -547,6 +559,50 @@ describe('a Send Notes failure that lands after the sheet moved on', () => {
     expect(sheetRow(rendered, TERMINAL_ROW).props.disabled).toBe(false)
   })
 
+  // The close and the failure in one batch: the failure lands before the
+  // closing render commits, which is where a sheet tracked by an effect is
+  // one commit behind and still reads as open.
+  it('says why on the review banner when the failure lands in the same moment the sheet closes', async () => {
+    const look = deferred<string[]>()
+    const tab = host({ screen: () => look.promise })
+    const rendered = await openSheet(tab)
+    await tap(rendered, TERMINAL_ROW)
+    await act(async () => {
+      closeSheet(rendered)
+      look.resolve([...PERMISSION_PROMPT_283])
+      await settle()
+    })
+    expect(controller!.sendSheet).toBeNull()
+    expect(controller!.actionError).toBe(SEND_UNDER_DIALOG_REFUSAL)
+    expect(sendLog()).toEqual([expect.stringContaining(SEND_UNDER_DIALOG_REFUSAL)])
+  })
+
+  it('keeps the reason for the list when the failure lands in the same moment the sheet reopens', async () => {
+    const look = deferred<string[]>()
+    let listing: ReturnType<typeof deferred<RpcResponse>> | null = null
+    const tab = host({
+      screen: () => look.promise,
+      list: () => (listing ? listing.promise : ok({ tabs: [CLAUDE_TAB] }))
+    })
+    const rendered = await openSheet(tab)
+    await tap(rendered, TERMINAL_ROW)
+    act(() => closeSheet(rendered))
+    listing = deferred<RpcResponse>()
+    await act(async () => {
+      void controller!.openSendSheet()
+      look.resolve([...PERMISSION_PROMPT_283])
+      await settle()
+    })
+    await act(async () => {
+      listing!.resolve(ok({ tabs: [CLAUDE_TAB] }))
+      await settle()
+    })
+    expect(controller!.sendSheet).toMatchObject({ kind: 'error', message: SEND_UNDER_DIALOG_REFUSAL })
+    expect(textNodes(rendered, SEND_UNDER_DIALOG_REFUSAL)).toHaveLength(1)
+    // Said on the sheet it belongs to, not on the banner under it.
+    expect(controller!.actionError).toBeNull()
+  })
+
   // The same late write from the other side: a list that arrives after the
   // user closed the sheet opened it again.
   it('does not reopen a sheet the user closed while its list was loading', async () => {
@@ -564,7 +620,7 @@ describe('a Send Notes failure that lands after the sheet moved on', () => {
       void controller!.openSendSheet()
       await settle()
     })
-    act(() => controller!.setSendSheet(null))
+    act(() => closeSheet(tree!))
     await act(async () => {
       listing.resolve(ok({ tabs: [CLAUDE_TAB] }))
       await settle()

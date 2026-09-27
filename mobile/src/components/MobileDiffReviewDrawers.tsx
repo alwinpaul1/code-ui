@@ -38,7 +38,7 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
         message={sendSheetMessage(controller)}
         messageTone={controller.sendSheet?.kind === 'error' ? 'danger' : undefined}
         actions={sendActions}
-        onClose={() => controller.setSendSheet(null)}
+        onClose={controller.closeSendSheet}
       />
       <ConfirmModal
         visible={controller.discardTarget !== null}

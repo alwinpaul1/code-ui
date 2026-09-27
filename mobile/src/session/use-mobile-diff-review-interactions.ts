@@ -46,7 +46,6 @@ type InteractionInput = {
   setComposerBody: Dispatch<SetStateAction<string>>
   setActionError: Dispatch<SetStateAction<string | null>>
   setBusyAction: Dispatch<SetStateAction<string | null>>
-  sendSheet: SendSheetState | null
   setSendSheet: Dispatch<SetStateAction<SendSheetState | null>>
   setShowCompletion: Dispatch<SetStateAction<boolean>>
   loadReviewData: () => Promise<void>
@@ -79,7 +78,6 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     setComposerBody,
     setActionError,
     setBusyAction,
-    sendSheet,
     setSendSheet,
     setShowCompletion,
     loadReviewData,
@@ -128,6 +126,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
 
   const {
     clearSentNotes,
+    closeSendSheet,
     copyNotes,
     createTerminalAndSend,
     notesSending,
@@ -141,7 +140,6 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     worktreeId,
     screenState,
     setActionError,
-    sendSheet,
     setSendSheet,
     saveCommentsAndReviewState
   })
@@ -149,6 +147,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
   return {
     clearSentNotes,
     closeComposer,
+    closeSendSheet,
     copyNotes,
     createTerminalAndSend,
     deleteComment,

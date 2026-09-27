@@ -98,7 +98,6 @@ describe('useMobileDiffReviewSendActions', () => {
       worktreeId: 'wt-1',
       screenState: READY,
       setActionError,
-      sendSheet: null,
       setSendSheet,
       saveCommentsAndReviewState
     })
