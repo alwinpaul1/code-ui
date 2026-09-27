@@ -547,6 +547,28 @@ describe('a layout that settles or cannot be read', () => {
     ).not.toBe('unreadable')
   })
 
+  // Review of 12e3b98e: a prompt bubble as wide as `pnpm install` drawn 10%
+  // narrower than estimated (82 dp) cut it in two, and RN laid the two out
+  // side by side as wide as they wanted (AT_MOST, 89 dp). Those lines were
+  // refused as broken to another width, the bubble grew, the span fitted
+  // whole, the bubble shrank, and so on.
+  it('still reads how wide its pills are drawn off lines broken to another width, and nothing else', () => {
+    const code = 'pnpm install'
+    const line = Math.ceil(codeTextWidth(code, 14) * 0.9 + 10)
+    const cutAt = (c: string, firstRoom: number, scale: number, glue = 0, guessed = false) =>
+      cutCodePills(c, firstRoom, line, { ...FONT, scale }, glue, guessed)
+    const span: PillSpanDrawn = { code, room: line, glue: 0, ...cutAt(code, line, 1, 0, true) }
+    expect(span.pieces).toEqual(['pnpm', 'install'])
+    const pair = span.pieces.reduce((sum, piece) => sum + codeTextWidth(piece, 14) * 0.9 + 10, 0)
+    expect(pair).toBeGreaterThan(line + 1)
+    const result = readPillFits({ ...readArgs([{ x: 0, width: pair, text: `${P}${P}` }], [span]), lineWidth: line, cut: cutAt })
+    expect(result.kind).toBe('changed')
+    const fit = result.kind === 'changed' ? result.next.fits.get(0)! : {}
+    expect(fit.scale).toBeCloseTo(0.9, 6)
+    expect(fit.room).toBeUndefined()
+    expect(cutAt(code, pillFitRoom(fit, line), pillFitScale(fit), 0, fit.floor === undefined).pieces).toEqual([code])
+  })
+
   it('reads nothing before the width is known, and nothing for a Text with no pill', () => {
     const span = drawn(PATH, undefined)
     expect(read([{ x: 0, width: 92.4, text: 'Worktree: ' }, { x: 0, width: 300, text: P }], [span], undefined, 0).kind).toBe(

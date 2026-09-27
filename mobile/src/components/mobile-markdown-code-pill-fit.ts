@@ -49,8 +49,8 @@ export type PillFit = { room?: number; below?: number; scale?: number; floor?: n
 export type TextPillFits = { fits: ReadonlyMap<number, PillFit> }
 
 export type PillFitRead =
-  /** Lines that cannot be this Text's at this width, or pills that are not
-   *  the ones drawn: nothing is learnt from them. */
+  /** Pills that are not the ones drawn, or lines broken to another width
+   *  that change nothing of how the pills are drawn: nothing is learnt. */
   | { kind: 'unreadable' }
   /** Every pill fills what it should: what was drawn is the answer. */
   | { kind: 'settled' }
@@ -275,8 +275,9 @@ function learnScale(
 
 /**
  * What the next layout should cut with. A layout whose placeholders do not
- * match the pills drawn (a stale event, or U+FFFC typed in the prose), or
- * whose lines were broken to another width, is not read at all.
+ * match the pills drawn (a stale event, or U+FFFC typed in the prose) is not
+ * read at all; one whose lines were broken to another width is read for how
+ * wide its pills are drawn and nothing else.
  */
 export function readPillFits(args: {
   lines: readonly PillLayoutLine[]
@@ -296,9 +297,10 @@ export function readPillFits(args: {
   const { lines, spans, lineWidth, current, cut, measure, proseSize, guess = 1 } = args
   const at = placeholders(lines)
   const drawn = spans.reduce((sum, span) => sum + span.pieces.length, 0)
-  if (at.length !== drawn || !(lineWidth > 0) || !brokenTo(lines, lineWidth)) {
+  if (at.length !== drawn || !(lineWidth > 0)) {
     return { kind: 'unreadable' }
   }
+  const broken = brokenTo(lines, lineWidth)
   const fits = new Map<number, PillFit>()
   let stale = false
   // Each span's pieces, and what its own lines read of its scale; then the
@@ -313,7 +315,18 @@ export function readPillFits(args: {
   })
   const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])), guess)
   const allOwners = learnt.flatMap(({ owners }) => owners)
+  // What each span read of its scale, and nothing of its room: all a layout
+  // broken to another width can say (see the end).
+  const scalesOnly = new Map<number, PillFit>()
+  spans.forEach((_, ordinal) => {
+    const { held, floor, scale } = learnt[ordinal]!
+    const rescaled = Math.abs((scale ?? textScale) - pillFitScale(held, heldTextScale)) > 0.005
+    scalesOnly.set(ordinal, { room: held?.room, below: rescaled ? undefined : held?.below, scale, floor })
+  })
   spans.forEach((span, ordinal) => {
+    if (!broken) {
+      return
+    }
     const { owners, held, floor } = learnt[ordinal]!
     const scale = learnt[ordinal]!.scale ?? textScale
     // What failed at another scale says nothing at this one.
@@ -401,15 +414,24 @@ export function readPillFits(args: {
       }
     }
   })
-  if (stale) {
-    return { kind: 'unreadable' }
-  }
+  // Lines broken to another width say nothing of where a pill starts or what
+  // room it had, but each pill is drawn there as wide as ever, so its scale
+  // still reads. A bubble as wide as a lone pill drawn 10% narrower than
+  // estimated cut it in two, grew to hold the two side by side (AT_MOST
+  // lays a Text out as wide as it wants), and that layout, wider than the
+  // bubble had been, was refused; whole again, the bubble shrank, and it
+  // swung between the two widths (review of 12e3b98e).
+  const readable = broken && !stale
+  const next = readable ? fits : scalesOnly
   const firstChanged = spans.findIndex((span, ordinal) => {
-    const fit = fits.get(ordinal)
+    const fit = next.get(ordinal)
     return !sameCut(
       cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit, textScale), span.glue, fit?.floor === undefined),
       span
     )
   })
-  return firstChanged === -1 ? { kind: 'settled' } : { kind: 'changed', next: { fits }, firstChanged }
+  if (firstChanged === -1) {
+    return { kind: readable ? 'settled' : 'unreadable' }
+  }
+  return { kind: 'changed', next: { fits: next }, firstChanged }
 }

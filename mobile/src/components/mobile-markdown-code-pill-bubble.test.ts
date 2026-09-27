@@ -102,6 +102,10 @@ describe('a prompt bubble as wide as its one line', () => {
     ['`pnpm install`', 1],
     ['`pnpm install`', 0.97],
     ['`pnpm install`', 1.03],
+    // Kerned: HarfBuzz draws some spans 8% narrower than the advances sum.
+    ['`pnpm install`', 0.92],
+    ['`pnpm install`', 0.9],
+    ['`AVATAR_TYPE_WAVY`', 0.92],
     ['`x`', 1],
     ['Run `pnpm install` now.', 1],
     ['Run `pnpm install` now.', 0.97],
