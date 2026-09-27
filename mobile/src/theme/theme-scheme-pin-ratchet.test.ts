@@ -57,6 +57,14 @@ function sourceFiles(dir: string, into: string[] = []): string[] {
   return into
 }
 
+/** The called function's own name: `f` for `f(…)` and for `ns.f(…)`. */
+function calleeName(expression: ts.Expression): string | null {
+  if (ts.isIdentifier(expression)) {
+    return expression.text
+  }
+  return ts.isPropertyAccessExpression(expression) ? expression.name.text : null
+}
+
 /** Every place `source` pins a scheme, as `line: what`. Syntax only: comments and strings never match. */
 function schemePins(fileName: string, source: string): string[] {
   const file = ts.createSourceFile(
@@ -73,19 +81,33 @@ function schemePins(fileName: string, source: string): string[] {
     if (ts.isIdentifier(node) && PINNED_PALETTES.has(node.text)) {
       at(node, node.text)
     } else if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      SCHEME_LOOKUPS.has(node.expression.text) &&
-      node.arguments[0] !== undefined &&
-      ts.isStringLiteralLike(node.arguments[0])
+      ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      PINNED_PALETTES.has(node.argumentExpression.text)
     ) {
-      at(node, `${node.expression.text}('${node.arguments[0].text}')`)
+      // `tokens['lightColors']`: the palette named as a string key.
+      at(node, `['${node.argumentExpression.text}']`)
+    } else if (
+      ts.isCallExpression(node) &&
+      node.arguments[0] !== undefined &&
+      ts.isStringLiteralLike(node.arguments[0]) &&
+      SCHEME_LOOKUPS.has(calleeName(node.expression) ?? '')
+    ) {
+      // `colorsForScheme('dark')`, also through a namespace: `tokens.colorsForScheme('dark')`.
+      at(node, `${calleeName(node.expression)}('${node.arguments[0].text}')`)
     } else if (
       ts.isJsxAttribute(node) &&
       node.name.getText(file) === 'initialPreference' &&
       node.initializer !== undefined
     ) {
       at(node, `initialPreference=${node.initializer.getText(file)}`)
+    } else if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(file) === 'initialPreference' &&
+      ts.isStringLiteralLike(node.initializer)
+    ) {
+      // `createElement(ThemeProvider, { initialPreference: 'dark' })`.
+      at(node, `initialPreference: ${node.initializer.getText(file)}`)
     }
     ts.forEachChild(node, visit)
   }
@@ -130,9 +152,21 @@ describe('no app code pins a palette to one scheme', () => {
           'export const f = (colors = darkColors) => colors',
           "const t = colorsForScheme('dark')",
           'const u = colorsForScheme(scheme)',
-          'const el = <ThemeProvider initialPreference="dark" />'
+          'const el = <ThemeProvider initialPreference="dark" />',
+          // The forms review of fix/theme-pass-2 found it missing (2026-09-27).
+          "const v = tokens.colorsForScheme('light')",
+          "const w = createElement(ThemeProvider, { initialPreference: 'dark' })",
+          "const x = tokens['lightColors']",
+          'const y = { initialPreference }'
         ].join('\n')
       )
-    ).toEqual(['3: darkColors', "4: colorsForScheme('dark')", '6: initialPreference="dark"'])
+    ).toEqual([
+      '3: darkColors',
+      "4: colorsForScheme('dark')",
+      '6: initialPreference="dark"',
+      "7: colorsForScheme('light')",
+      "8: initialPreference: 'dark'",
+      "9: ['lightColors']"
+    ])
   })
 })
