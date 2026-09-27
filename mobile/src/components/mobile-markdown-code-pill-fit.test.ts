@@ -7,6 +7,7 @@ import {
   textPillScale,
   type PillFit,
   type PillLayoutLine,
+  type PillMeasure,
   type PillSpanDrawn,
   type TextPillFits
 } from './mobile-markdown-code-pill-fit'
@@ -278,6 +279,25 @@ describe("learning how wide the phone draws a span's pills", () => {
     for (const piece of drawn(solid, next.fits.get(0)).pieces) {
       expect(codeTextWidth(piece, 14) * 1.08 + 10).toBeLessThanOrEqual(WIDTH)
     }
+  })
+
+  // Review of 63858e9e (F3): at a system font size RN reserves more room for
+  // a pill than it draws (toPixelFromSP of its frame): 30% more at 130% up
+  // to Android 13. Read as if the room were the pill, a lone pill drawn
+  // exactly as estimated read 1.3 times too wide, padding and border too.
+  it('reads it through the room RN reserves for a pill at a system font size', () => {
+    const at130: PillMeasure = {
+      textWidth: (piece) => codeTextWidth(piece, 14 * 1.3),
+      insets: 10,
+      reserve: (frame) => frame * 1.3,
+      frame: (room) => room / 1.3
+    }
+    const cut130 = (code: string, firstRoom: number, scale: number, glue = 0, guessed = false) =>
+      cutCodePills(code, firstRoom, WIDTH, { fontSize: 14 * 1.3, insets: 10, scale, reserve: (frame) => frame * 1.3 }, glue, guessed)
+    const span: PillSpanDrawn = { code: solid, room: WIDTH, glue: 0, ...cut130(solid, WIDTH, 1) }
+    const lines = span.pieces.map((piece) => ({ x: 0, width: (at130.textWidth(piece) * 0.97 + 10) * 1.3, text: P }))
+    const result = readPillFits({ ...readArgs(lines, [span]), cut: cut130, measure: at130 })
+    expect(learnt(result).fits.get(0)!.scale).toBeCloseTo(0.97, 6)
   })
 
   it('takes its first reading narrower too', () => {

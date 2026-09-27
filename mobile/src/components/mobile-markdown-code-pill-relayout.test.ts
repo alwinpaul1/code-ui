@@ -411,13 +411,13 @@ describe('a system font size change', () => {
     system.fontScale = 1.3
     mount(content, 360)
     // Nothing learnt at this size: cut to a whole line at it, as on a first
-    // mount.
+    // mount, the text 30% larger and the room RN reserves for it 30% more.
     expect(device.pillTexts()).toEqual(
       cutCodePills(
         '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe',
         360,
         360,
-        { fontSize: 14, insets: 10, scale: 1.3 },
+        { fontSize: 14 * 1.3, insets: 10, reserve: (frame) => frame * 1.3 },
         0,
         true
       ).pieces

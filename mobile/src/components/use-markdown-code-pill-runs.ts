@@ -170,12 +170,20 @@ export function useMarkdownCodePillRuns(
   const factor = chipScale?.factor ?? 1
   const fontScale = systemFontScale()
   const sp = androidSpScale(fontScale, androidApiLevel())
+  // RN sizes an inline view's placeholder with toPixelFromSP of its frame
+  // (TextLayoutManager.kt), so at a system font size a pill takes more room
+  // on its line than it draws: the frame through the same conversion as
+  // text, linear up to Android 13 (30% more at 130%), and on Android 14's
+  // curve more for a short pill and none from 100 dp on (review of
+  // 63858e9e, which found the comment saying so gone).
+  const reserve = fontScale === 1 ? undefined : sp
 
   return (textKey, lineWidth, table) => {
     const font: CodePillFont = {
       // A pill's text size in sp, drawn in dp at the system font size.
       fontSize: sp.toDp((table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor),
-      insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH)
+      insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH),
+      reserve: reserve?.toDp
     }
     const measured = lineWidth > 0
     const liveKey = `${textKey}|${lineWidth}`
@@ -238,7 +246,12 @@ export function useMarkdownCodePillRuns(
         lineWidth,
         current,
         cut: cutWith,
-        measure: { textWidth: (piece) => codeTextWidth(piece, font.fontSize), insets: font.insets },
+        measure: {
+          textWidth: (piece) => codeTextWidth(piece, font.fontSize),
+          insets: font.insets,
+          reserve: reserve?.toDp,
+          frame: reserve?.toSp
+        },
         proseSize
       })
       switch (result.kind) {

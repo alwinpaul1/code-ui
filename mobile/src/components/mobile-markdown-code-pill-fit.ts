@@ -64,6 +64,46 @@ export type PillMeasure = {
   textWidth: (piece: string) => number
   /** Padding and border, both sides: dp, which no font size scales. */
   insets: number
+  /** The room a pill with a frame this wide takes on its line, and back: RN
+   *  sizes an inline view's placeholder with toPixelFromSP of its frame
+   *  (TextLayoutManager.kt), so a system font size scales the room again,
+   *  though not the view. Left out, the room is the frame. */
+  reserve?: (frame: number) => number
+  frame?: (room: number) => number
+}
+
+/** The room a pill with this frame takes on its line. */
+function taken(measure: PillMeasure, frame: number): number {
+  return measure.reserve ? measure.reserve(frame) : frame
+}
+
+/**
+ * The scale at which pills with these text widths take `room` on their line
+ * together; NaN for no text. The room is not linear in the frame on Android
+ * 14's curve, so more than one pill is solved for by halving.
+ */
+function scaleTaking(texts: readonly number[], room: number, measure: PillMeasure): number {
+  const total = texts.reduce((sum, text) => sum + text, 0)
+  if (!(total > 0)) {
+    return Number.NaN
+  }
+  if (texts.length === 1) {
+    return ((measure.frame ? measure.frame(room) : room) - measure.insets) / total
+  }
+  if (!measure.reserve) {
+    return (room - texts.length * measure.insets) / total
+  }
+  const roomAt = (scale: number) => texts.reduce((sum, text) => sum + taken(measure, text * scale + measure.insets), 0)
+  let [low, high] = [0, SCALE_LIMITS[1] * 2]
+  for (let step = 0; step < 40; step += 1) {
+    const middle = (low + high) / 2
+    if (roomAt(middle) > room) {
+      high = middle
+    } else {
+      low = middle
+    }
+  }
+  return (low + high) / 2
 }
 
 /** The room a span's first piece is cut with, given what the layout taught it. */
@@ -171,19 +211,22 @@ type Owner = { line: number; col: number; span: number; piece: number; text: str
  */
 function firstPieceDrawn(
   line: PillLayoutLine,
-  texts: { first: number; all: number; count: number },
+  texts: { first: number; each: readonly number[] },
   measure: PillMeasure,
   proseSize: number
 ): { width: number; glue: number; exact: boolean } | undefined {
   const text = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
-  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || !(texts.all > 0)) {
+  const drawnAs = scaleTaking(texts.each, lineEnd(line) - codeTextWidth(text.replaceAll(OBJECT_REPLACEMENT, ''), proseSize), measure)
+  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || Number.isNaN(drawnAs)) {
     return undefined
   }
   const word = /^\uFFFC[^\s\uFFFC]*/.exec(text)![0]
   const glue = codeTextWidth(word.slice(1), proseSize)
-  const pills = lineEnd(line) - codeTextWidth(text.replaceAll(OBJECT_REPLACEMENT, ''), proseSize)
-  const drawnAs = (pills - texts.count * measure.insets) / texts.all
-  return { width: drawnAs * texts.first + measure.insets + glue, glue, exact: text.slice(word.length).trim() === '' }
+  return {
+    width: taken(measure, drawnAs * texts.first + measure.insets) + glue,
+    glue,
+    exact: text.slice(word.length).trim() === ''
+  }
 }
 
 function sameCut(cut: CodePillCut, span: PillSpanDrawn): boolean {
@@ -229,7 +272,7 @@ function learnScale(
       // spaces; a soft-wrapped one counts them.
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
       const drawn = lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize)
-      ratios.push((drawn - measure.insets) / text)
+      ratios.push(scaleTaking([text], drawn, measure))
     }
     // A run of this span's pieces side by side that starts its line: its
     // continuation pieces, or its first piece and the next when both went
@@ -242,13 +285,11 @@ function learnScale(
       next?.line === owner.line &&
       !(previous?.line === owner.line && (previous.piece >= 1 || previous.col === 0))
     if (startsRun) {
-      let texts = 0
-      let insets = 0
+      const texts: number[] = []
       for (let at = index; owners[at]?.line === owner.line; at += 1) {
-        texts += measure.textWidth(owners[at]!.text)
-        insets += measure.insets
+        texts.push(measure.textWidth(owners[at]!.text))
       }
-      caps.push((lineEnd(line) - insets) / texts)
+      caps.push(scaleTaking(texts, lineEnd(line), measure))
     }
   })
   const read = ratios.length > 0 ? Math.max(...ratios) : undefined
@@ -266,7 +307,7 @@ function learnScale(
     if (line && text > 0 && line.text.split(OBJECT_REPLACEMENT).length === 2 && /\uFFFC[^\s\uFFFC]*\s*$/.test(line.text)) {
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
       const words = codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize * (1 - SOFT_MARGIN))
-      const soft = (lineEnd(line) - words - measure.insets) / text
+      const soft = scaleTaking([text], lineEnd(line) - words, measure)
       if (soft < (scale ?? textScale)) {
         scale = soft
       }
@@ -344,23 +385,15 @@ export function readPillFits(args: {
     if (!start) {
       return
     }
-    const scaled = (piece: string) => measure.textWidth(piece) * scale + measure.insets
+    const scaled = (piece: string) => taken(measure, measure.textWidth(piece) * scale + measure.insets)
     const above = lines[start.line - 1]
     if (start.col === 0 && above && !above.text.endsWith('\n')) {
       // It starts a line after a soft wrap: the line above says what it left.
       const room = lineWidth - lineEnd(above)
       const sameRoom = fit.room !== undefined && Math.abs(fit.room - room) <= TOLERANCE
       const onLine = allOwners.filter((owner) => owner.line === start.line)
-      const drawnFirst = firstPieceDrawn(
-        lines[start.line]!,
-        {
-          first: measure.textWidth(start.text),
-          all: onLine.reduce((sum, owner) => sum + measure.textWidth(owner.text), 0),
-          count: onLine.length
-        },
-        measure,
-        proseSize
-      )
+      const texts = { first: measure.textWidth(start.text), each: onLine.map((owner) => measure.textWidth(owner.text)) }
+      const drawnFirst = firstPieceDrawn(lines[start.line]!, texts, measure, proseSize)
       if (drawnFirst?.exact && drawnFirst.width <= room - TOLERANCE) {
         // It went down a line with room for it above: greedy breaking never
         // does that, so these lines were broken to another, narrower width.
@@ -381,10 +414,11 @@ export function readPillFits(args: {
         // share their line lays the line out as before, and Fabric sends no
         // lines it has sent (review of 12e3b98e).
         const text = measure.textWidth(span.pieces[0]!)
-        const drawnAs = (drawnFirst.width - drawnFirst.glue - measure.insets) / text
+        const drawnAs = scaleTaking([text], drawnFirst.width - drawnFirst.glue, measure)
+        const roomFrame = measure.frame ? measure.frame(room - FIT_ROOM) : room - FIT_ROOM
         const fitsDrawn =
-          text > 0 && drawnAs > 0
-            ? (scale * (room - FIT_ROOM - measure.insets)) / drawnAs + measure.insets + FIT_ROOM
+          drawnAs > 0
+            ? taken(measure, (scale * (roomFrame - measure.insets)) / drawnAs + measure.insets) + FIT_ROOM
             : Infinity
         fit.below = Math.min(sameRoom ? (fit.below ?? Infinity) : Infinity, scaled(span.pieces[0]!), fitsDrawn)
         fit.room = room
