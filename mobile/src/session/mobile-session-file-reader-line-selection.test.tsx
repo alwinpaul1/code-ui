@@ -36,7 +36,7 @@ vi.mock('../components/MobileSyntaxSegments', () => ({
   MobileSyntaxSegments: 'MobileSyntaxSegments'
 }))
 vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
-vi.mock('./mobile-session-styles', () => ({ styles: {}, sessionStyles: () => ({}) }))
+vi.mock('./mobile-session-styles', () => ({ sessionStyles: () => ({}) }))
 vi.mock('./mobile-file-syntax', () => ({
   buildPlainMobileDiffSyntaxLines: () => [],
   canHighlightMobileLanguage: () => false,

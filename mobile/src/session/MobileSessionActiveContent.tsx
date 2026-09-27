@@ -8,10 +8,10 @@ import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
 import { useHostMobileCapability } from '../transport/host-mobile-capabilities'
-import { useTheme } from '../theme/theme-context'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
-import { styles } from './mobile-session-styles'
+import { sessionStyles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
@@ -29,6 +29,7 @@ export function MobileSessionActiveContent({
 }) {
   const terminalEngine = useTerminalEngine()
   const { colors, space } = useTheme()
+  const styles = useThemedStyles(sessionStyles)
   // The host's mobile-scope RPC gate, probed once per connection: "Rewind to
   // here" is offered only on a host that lets a phone call agentSession.rewind.
   const hostAllowsRewind = useHostMobileCapability(controller.hostId, 'agentSession.rewind')

@@ -2,16 +2,17 @@ import { View } from 'react-native'
 import { AlertTriangle, X } from 'lucide-react-native'
 import { SessionDockColumn } from './SessionDockColumn'
 import { dismissMobileSessionCreateWarningState } from './mobile-session-create-warning-state'
-import { useTheme } from '../theme/theme-context'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { IconButton } from '../ui/IconButton'
 import { Txt } from '../ui/Txt'
-import { styles } from './mobile-session-styles'
+import { sessionStyles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 
 export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   const { colors, space } = useTheme()
+  const styles = useThemedStyles(sessionStyles)
   const {
     hostId,
     worktreeId,

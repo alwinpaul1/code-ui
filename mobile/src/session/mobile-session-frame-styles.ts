@@ -172,11 +172,9 @@ export function mobileSessionFrameStyles({ colors }: Theme) {
     markdownEditor: {
       flex: 1,
       position: 'relative',
-      // The reader's own opaque page: the file tab's frame around it
-      // (MobileSessionActiveContent.tsx) is still on the legacy static
-      // palette, so a transparent reader would show correct text over a
-      // frame that stays dark in light mode. Painting the surface here
-      // means every reader gets it for free, converted or not.
+      // The reader's own opaque page, the same colour as the file tab's
+      // frame around it (`markdownFrame`), so a reader never depends on
+      // what the frame paints behind it.
       backgroundColor: colors.bg
     },
     markdownState: {
