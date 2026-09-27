@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import { draftWasSent } from './mobile-native-chat-draft-reconcile'
 import {
+  isVideoFrameExtractionActive,
   nativeChatAttachmentsResets,
   nativeChatWaitingSends,
   useNativeChatImageAttachmentsStore
@@ -15,9 +16,11 @@ import {
 
 type CurrentRef<T> = { readonly current: T }
 
-/** Why a send tapped beside a chip still uploading wrote nothing, and the chip it waited on. */
+/** Why a send tapped beside a chip still uploading (or a video still being
+ *  read) wrote nothing, and the chip it waited on — `null` for `extracting`,
+ *  which has no chip yet to name. */
 export type MobileNativeChatSendChipsRefusal = {
-  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy'
+  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy' | 'extracting'
   readonly chip: PendingNativeChatImage | null
 }
 
@@ -74,6 +77,20 @@ export async function settleMobileNativeChatSendChips(args: {
     if (args.abandoned()) {
       return { reason: 'session', chip: null }
     }
+    // A video's frames are read one at a time, ahead of any chip: nothing
+    // named in `args.ids` exists yet to wait on, so wait on this instead, the
+    // same way a send tapped beside an uploading chip already waits
+    // (2026-09-27 review — a send tapped mid-extraction used to go out with
+    // no frames at all, since `chips.some((chip) => chip.uploading)` saw
+    // nothing to wait for).
+    if (isVideoFrameExtractionActive(args.scope)) {
+      const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
+      if (remainingMs <= 0) {
+        return { reason: 'extracting', chip: null }
+      }
+      await nextChipChange(Math.min(MOBILE_NATIVE_CHAT_SEND_CHIPS_POLL_MS, remainingMs))
+      continue
+    }
     const byId = new Map(chipsIn(args.scope).map((chip) => [chip.id, chip]))
     let waiting: PendingNativeChatImage | null = null
     for (const id of args.ids) {
@@ -125,6 +142,8 @@ export function mobileNativeChatSendChipsRefusalMessage({
       // waits: it cannot go first, and going after would send the same
       // photos twice (2026-09-26 reviews).
       return `Message not sent: the last message is still waiting for ${chipNoun(chip)}`
+    case 'extracting':
+      return 'Message not sent: a video is still being read'
     default: {
       const exhaustive: never = reason
       return exhaustive
@@ -205,7 +224,7 @@ export function useMobileNativeChatSendChips(args: {
             refuse({ reason: 'busy', chip: chips.find((chip) => chip.uploading) ?? null })
           )
     }
-    if (!scope || !chips.some((chip) => chip.uploading)) {
+    if (!scope || (!chips.some((chip) => chip.uploading) && !isVideoFrameExtractionActive(scope))) {
       return send([...chips])
     }
     const resets = nativeChatAttachmentsResets.current

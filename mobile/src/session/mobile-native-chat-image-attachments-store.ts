@@ -26,23 +26,25 @@ export const nativeChatWaitingSends = new Map<string, NativeChatWaitingSend>()
  *  photo to reuse its chip's id for its own (2026-09-26 review). */
 export const nativeChatAttachmentsResets = { current: 0 }
 
-/** Pending composer images by tab scope, kept outside the session screen so
- *  leaving it (source control, another worktree) and coming back still shows
- *  the chips (2026-09-13: the text draft survived that trip from disk, the
- *  images did not). Never written to disk: the files live in the app cache
- *  and would not outlive the process anyway. */
 /** A video's frames are read one at a time, which can take a while — the
  *  extraction progress a still-reading pick shows lives here, NOT in
  *  `byScope`, so it can never be seen by the send-chip settlement in
- *  `use-mobile-native-chat-send-chips.ts` (which reads only `byScope`). A
- *  chip a send is watching must never disappear from that array; extraction
+ *  `use-mobile-native-chat-send-chips.ts` reading `byScope` alone. A chip a
+ *  send is watching must never disappear from that array; extraction
  *  progress is drawn beside the chips, not as one of them, so nothing there
- *  ever needs to be added and later removed. */
+ *  ever needs to be added and later removed. `use-mobile-native-chat-send-chips.ts`
+ *  does read this one too, though: a send tapped mid-extraction waits for it
+ *  the same way it waits for a chip still uploading (2026-09-27 review). */
 export type MobileNativeChatVideoFrameExtractionByScope = Record<
   string,
   VideoFrameExtractionProgress | undefined
 >
 
+/** Pending composer images by tab scope, kept outside the session screen so
+ *  leaving it (source control, another worktree) and coming back still shows
+ *  the chips (2026-09-13: the text draft survived that trip from disk, the
+ *  images did not). Never written to disk: the files live in the app cache
+ *  and would not outlive the process anyway. */
 export const useNativeChatImageAttachmentsStore = create<{
   byScope: MobileNativeChatImagesByScope
   videoFrameExtractionByScope: MobileNativeChatVideoFrameExtractionByScope
@@ -66,3 +68,8 @@ export const useNativeChatImageAttachmentsStore = create<{
     set({ byScope: {}, videoFrameExtractionByScope: {} })
   }
 }))
+
+/** Whether `scope`'s document attach is still reading a video's frames. */
+export function isVideoFrameExtractionActive(scope: string): boolean {
+  return useNativeChatImageAttachmentsStore.getState().videoFrameExtractionByScope[scope] !== undefined
+}
