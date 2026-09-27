@@ -32,7 +32,9 @@ export function tableColumnCount(headers: readonly string[], rows: readonly (rea
  *  short by a quarter (`git.generateCommitMessage`, 2026-09-21). */
 const PILL_INSETS = 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL + MARKDOWN_CHIP_BORDER_WIDTH)
 /** The cell's 1 dp right border and the cut's 1 dp of slack, so a cell sized
- *  for one pill holds it as one (mobile-markdown-code-chip-split.ts). */
+ *  for one pill holds it as one (mobile-markdown-code-chip-split.ts). A pill
+ *  that starts the cell's line needs no slack since 1f405729; one after words
+ *  still does. */
 const PILL_CELL_EDGE = 2
 const CODE_SPAN = /`([^`]+)`/g
 
