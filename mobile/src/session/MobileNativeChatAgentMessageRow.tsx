@@ -52,7 +52,9 @@ export function MobileNativeChatAgentMessageRow({
         accessibilityLabel={title}
         accessibilityState={{ expanded: open }}
       >
-        <Text style={styles.toolRunLabel} numberOfLines={1}>
+        {/* Hugs its words, as a finished run's sentence does, so the chevron
+            follows them rather than sitting at the far end of the row. */}
+        <Text style={[styles.toolRunLabel, styles.toolRunSentence]} numberOfLines={1}>
           {title}
         </Text>
         {open ? (

@@ -137,6 +137,24 @@ describe("a subagent's message in the chat", () => {
     expect(colorOf(note.props.style)).toBe(palette.textMuted)
   })
 
+  // Combined review of fix/prompt-leak, 2026-09-27: main's finished runs hug
+  // their words (`toolRunSentence`, flex 0) so the chevron follows them; this
+  // row's title took the rest of the line, and its chevron sat at the far right.
+  it.each([
+    ['light', 'light'],
+    ['dark', 'dark']
+  ] as const)('keeps its chevron right after the title, as a finished run does, in the %s theme', (_label, scheme) => {
+    const root = render(BODY, scheme)
+    const title = root.find((node) => (node.type as unknown) === 'Text' && [node.props.children].flat().join('') === 'Message from general-purpose')
+    const flex = [title.props.style].flat(Infinity).reduce<number | undefined>(
+      (last, entry) => (entry && typeof entry === 'object' && typeof (entry as { flex?: unknown }).flex === 'number' ? (entry as { flex: number }).flex : last),
+      undefined
+    )
+    expect(flex).toBe(0)
+    const shrink = [title.props.style].flat(Infinity).some((entry) => entry && typeof entry === 'object' && (entry as { flexShrink?: unknown }).flexShrink === 1)
+    expect(shrink).toBe(true)
+  })
+
   it('is never a bubble: no copy control and nothing to rewind', () => {
     const root = render(BODY)
     expect(root.findAll((node) => node.props.accessibilityLabel === 'Copy message')).toHaveLength(0)
