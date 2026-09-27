@@ -96,11 +96,11 @@ function reviewedSnapshot(paths: string[]): ReviewScreenState {
   }
   return {
     kind: 'ready',
-    status: { entries, conflictOperation: 'none' },
+    status: { entries, conflictOperation: undefined, branch: undefined, head: undefined, upstreamStatus: undefined },
     branchCompare: null,
     comments: [NOTE],
     reviewState
-  } as ReviewScreenState
+  }
 }
 
 /** A lost send whose error carries no message, the recorder's
