@@ -95,23 +95,13 @@ function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void)
   }
 }
 
-/** A heading's size and line height at the reader's zoom, over its level. */
-function headingZoom(styles: MarkdownStyles, level: number, textScale: number) {
-  const line = { ...styles.heading, ...headingScale(styles, level) }
-  return markdownZoomedLine(line.fontSize, line.lineHeight, textScale)
-}
-
-function headingScale(styles: MarkdownStyles, level: number): MarkdownStyles[keyof MarkdownStyles] | null {
-  if (level <= 1) {
-    return styles.headingLevel1
-  }
-  if (level === 2) {
-    return styles.headingLevel2
-  }
-  if (level === 3) {
-    return styles.headingLevel3
-  }
-  return null
+/** A heading's style over its level, with its size and line height at the
+ *  reader's zoom. */
+function headingStyle(styles: MarkdownStyles, level: number, textScale: number) {
+  const scale =
+    level <= 1 ? styles.headingLevel1 : level === 2 ? styles.headingLevel2 : level === 3 ? styles.headingLevel3 : null
+  const line = { ...styles.heading, ...scale }
+  return [styles.heading, scale, markdownZoomedLine(line.fontSize, line.lineHeight, textScale)]
 }
 
 /** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
@@ -344,7 +334,7 @@ function MobileMarkdownInner({
             <Fragment key={memberIndex}>
               {memberIndex > 0 ? '\n\n' : null}
               {member.type === 'heading' ? (
-                <Text style={[styles.heading, headingScale(styles, member.level), headingZoom(styles, member.level, textScale)]}>
+                <Text style={headingStyle(styles, member.level, textScale)}>
                   {renderInline(styles, member.text, onOpenFile, pills)}
                 </Text>
               ) : member.type === 'rule' ? (

@@ -159,7 +159,7 @@ type Owner = { line: number; col: number; span: number; piece: number; text: str
  */
 function firstPieceDrawn(line: PillLayoutLine, proseSize: number): { width: number; exact: boolean } | undefined {
   const text = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
-  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || text.indexOf(OBJECT_REPLACEMENT, 1) !== -1) {
+  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || text.includes(OBJECT_REPLACEMENT, 1)) {
     return undefined
   }
   const word = /^\uFFFC[^\s]*/.exec(text)![0]
