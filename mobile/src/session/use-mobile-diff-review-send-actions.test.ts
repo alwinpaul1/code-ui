@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +11,7 @@ import {
   markMobileNativeChatInputStale,
   resetMobileNativeChatStaleInputForTests
 } from './mobile-native-chat-stale-input'
-import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
+import { STALE_INPUT_NOT_CLEARED, useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 
 type SendActions = ReturnType<typeof useMobileDiffReviewSendActions>
 
@@ -26,6 +28,26 @@ function sendResponse(accepted: boolean) {
     result: { send: { accepted } },
     _meta: { runtimeId: 'runtime' }
   }
+}
+
+// Claude Code 2.1.281, `tmux capture-pane -p`: idle, nothing asking. A send
+// looks at the screen first (mobile-diff-review-send-notes-under-dialog.test.tsx
+// covers what it does when something is); these cases are about what it
+// writes once it may.
+const IDLE_SCREEN = readFileSync(
+  fileURLToPath(new URL('./fixtures/claude-screen-sent-photos-2.1.281.txt', import.meta.url)),
+  'utf8'
+)
+  .split('\n')
+  .filter((row) => !row.startsWith('# '))
+
+/** A host whose terminal shows `IDLE_SCREEN`, answering every write with `writes`. */
+function idleTerminal(writes: ReturnType<typeof vi.fn>): RpcClient {
+  const sendRequest = async (method: string, ...rest: unknown[]) =>
+    method === 'terminal.read'
+      ? { ok: true, result: { terminal: { lines: IDLE_SCREEN, source: 'screen' } } }
+      : Reflect.apply(writes, undefined, [method, ...rest])
+  return { sendRequest } as unknown as RpcClient
 }
 
 const COMMENT: DiffComment = {
@@ -119,7 +141,7 @@ describe('useMobileDiffReviewSendActions', () => {
 
   it('heals a marked terminal BEFORE submitting the notes', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
     markMobileNativeChatInputStale('terminal-1')
 
     await act(async () => {
@@ -143,7 +165,7 @@ describe('useMobileDiffReviewSendActions', () => {
 
   it('does not submit when the heal reports the line is not safe', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(false))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
     markMobileNativeChatInputStale('terminal-1')
 
     let error: unknown
@@ -152,7 +174,7 @@ describe('useMobileDiffReviewSendActions', () => {
     })
 
     expect(error).toBeInstanceOf(Error)
-    expect((error as Error).message).toBe('Failed to send notes')
+    expect((error as Error).message).toBe(STALE_INPUT_NOT_CLEARED)
     // Only the failed clear — never the notes.
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(sendRequest.mock.calls[0]?.[1]).toMatchObject({ text: '\x15', enter: false })
@@ -165,7 +187,7 @@ describe('useMobileDiffReviewSendActions', () => {
 
   it('keeps the marker and skips the notes when the clear throws', async () => {
     const sendRequest = vi.fn().mockRejectedValue(new Error('offline'))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
     markMobileNativeChatInputStale('terminal-1')
 
     let error: unknown
@@ -173,15 +195,15 @@ describe('useMobileDiffReviewSendActions', () => {
       error = await actions?.sendPromptToTerminal('terminal-1', [COMMENT]).catch((err) => err)
     })
 
-    expect((error as Error).message).toBe('Failed to send notes')
+    expect((error as Error).message).toBe(STALE_INPUT_NOT_CLEARED)
     expect(sendRequest).toHaveBeenCalledTimes(1)
     expect(saveCommentsAndReviewState).not.toHaveBeenCalled()
     expect(isMobileNativeChatInputStale('terminal-1')).toBe(true)
   })
 
-  it('sends an unmarked terminal with no extra RPC', async () => {
+  it('sends an unmarked terminal with no extra write', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
 
     await act(async () => {
       await actions?.sendPromptToTerminal('terminal-1', [COMMENT])
@@ -197,7 +219,7 @@ describe('useMobileDiffReviewSendActions', () => {
 
   it('only heals the terminal that was marked', async () => {
     const sendRequest = vi.fn().mockResolvedValue(sendResponse(true))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
     markMobileNativeChatInputStale('terminal-other')
 
     await act(async () => {
@@ -213,7 +235,7 @@ describe('useMobileDiffReviewSendActions', () => {
       .fn()
       .mockResolvedValueOnce(sendResponse(true))
       .mockResolvedValueOnce(sendResponse(false))
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
     markMobileNativeChatInputStale('terminal-1')
 
     let error: unknown
@@ -229,7 +251,7 @@ describe('useMobileDiffReviewSendActions', () => {
     const sendRequest = vi
       .fn()
       .mockResolvedValue({ id: 'send', ok: false, error: { message: 'pane gone' } })
-    await mount({ sendRequest } as unknown as RpcClient)
+    await mount(idleTerminal(sendRequest))
 
     let error: unknown
     await act(async () => {

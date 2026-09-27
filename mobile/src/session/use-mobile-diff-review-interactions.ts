@@ -124,16 +124,24 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     loadReviewData
   })
 
-  const { clearSentNotes, copyNotes, createTerminalAndSend, openSendSheet, sendPromptToTerminal } =
-    useMobileDiffReviewSendActions({
-      client,
-      connState,
-      worktreeId,
-      screenState,
-      setActionError,
-      setSendSheet,
-      saveCommentsAndReviewState
-    })
+  const {
+    clearSentNotes,
+    copyNotes,
+    createTerminalAndSend,
+    notesSending,
+    openSendSheet,
+    sendNotesToNewSession,
+    sendNotesToTerminal,
+    sendPromptToTerminal
+  } = useMobileDiffReviewSendActions({
+    client,
+    connState,
+    worktreeId,
+    screenState,
+    setActionError,
+    setSendSheet,
+    saveCommentsAndReviewState
+  })
 
   return {
     clearSentNotes,
@@ -179,6 +187,7 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
             : index - 1
       )
     },
+    notesSending,
     openComposer,
     openEditComposer,
     openInSession: async () => {
@@ -211,6 +220,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       setFilter(nextFilter)
       setCurrentIndex(0)
     },
+    sendNotesToNewSession,
+    sendNotesToTerminal,
     sendPromptToTerminal,
     stageReviewedFiles
   }

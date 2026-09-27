@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -13,7 +13,16 @@ import {
 } from './mobile-review-terminal-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
+import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+
+/** Why the notes did not go when the terminal's leftover input could not be
+ *  cleared first (a paste native chat left there, #10228). */
+export const STALE_INPUT_NOT_CLEARED = "Not sent: couldn't clear the terminal's unsent input first."
+
+/** The row a sheet send is running from: a listed terminal, or null for a
+ *  New Agent Session. */
+export type NotesSendTarget = { terminal: string | null }
 
 type SendActionsInput = {
   client: RpcClient | null
@@ -41,6 +50,8 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     setSendSheet,
     saveCommentsAndReviewState
   } = input
+  const [notesSending, setNotesSending] = useState<NotesSendTarget | null>(null)
+  const sendingRef = useRef(false)
 
   const copyNotes = useCallback(async () => {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
@@ -81,17 +92,16 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     [saveCommentsAndReviewState, screenState]
   )
 
-  const sendPromptToTerminal = useCallback(
-    async (terminal: string, comments: readonly DiffComment[]) => {
-      if (!client || connState !== 'connected') {
-        throw new Error('Waiting for desktop...')
-      }
+  /** Clears a stale input, then types the notes and their Enter. No look at
+   *  the screen: the caller has looked, or made the terminal a moment ago. */
+  const deliverNotes = useCallback(
+    async (liveClient: RpcClient, terminal: string, comments: readonly DiffComment[]) => {
       // Marked by terminal handle, not by surface, so a paste orphaned here by native
       // chat would ride along with these notes (#10228). Diff review carries no device token.
-      if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
-        throw new Error('Failed to send notes')
+      if (!(await healMobileNativeChatStaleInput({ client: liveClient, terminal, deviceToken: null }))) {
+        throw new Error(STALE_INPUT_NOT_CLEARED)
       }
-      const response = await reviewTerminalSendRun.request(client, {
+      const response = await reviewTerminalSendRun.request(liveClient, {
         terminal,
         text: formatMobileDiffReviewPrompt(comments),
         enter: true
@@ -104,12 +114,50 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       if (!accepted) {
         throw new Error('Terminal input is locked')
       }
-      await markNotesSent(comments)
+      try {
+        await markNotesSent(comments)
+      } catch (err) {
+        // The terminal has the notes; only recording that failed. Not a failed
+        // send: the sheet closes rather than offer the same notes again.
+        setActionError(
+          `Review notes sent, but not marked sent: ${err instanceof Error ? err.message : 'Failed to save review'}`
+        )
+        setSendSheet(null)
+        return
+      }
       triggerSuccess()
       setActionError('Review notes sent')
       setSendSheet(null)
     },
-    [client, connState, markNotesSent, setActionError, setSendSheet]
+    [markNotesSent, setActionError, setSendSheet]
+  )
+
+  /**
+   * The notes into a terminal the sheet listed, only with no dialog on its
+   * screen: text and an Enter answer a permission prompt or pick from a menu
+   * (a subagent's prompt sat for eight hours on 2026-09-27). The look comes
+   * before the stale-input heal, as in the chat's send, because the heal is a
+   * write too: its Ctrl+U would reach the prompt instead of the input line,
+   * using up the marker without clearing the paste
+   * (mobile-native-chat-stale-input.ts), and the next send would carry it.
+   * Fails open like every other caller: a read that fails lets the notes go.
+   */
+  const sendPromptToTerminal = useCallback(
+    async (terminal: string, comments: readonly DiffComment[]) => {
+      if (!client || connState !== 'connected') {
+        throw new Error('Waiting for desktop...')
+      }
+      // The listed tabs carry no agent, so the look runs without one. Claude's
+      // input-row rule then applies to a Codex tab too, which misses a Codex
+      // prompt only when a row on screen reads like Claude's input (a bare `❯`,
+      // or `❯` and a no-break space, at column 0).
+      const refusal = await readSendUnderDialogRefusal({ client, terminal })
+      if (refusal) {
+        throw new Error(refusal)
+      }
+      await deliverNotes(client, terminal, comments)
+    },
+    [client, connState, deliverNotes]
   )
 
   const createTerminalAndSend = useCallback(
@@ -128,9 +176,53 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         () => reviewTerminalCreateRun.interpret(response),
         'Failed to create terminal'
       )
-      await sendPromptToTerminal(created.terminal, comments)
+      // Created a moment ago, so nothing is asking on it yet: no look.
+      await deliverNotes(client, created.terminal, comments)
     },
-    [client, connState, sendPromptToTerminal, worktreeId]
+    [client, connState, deliverNotes, worktreeId]
+  )
+
+  /**
+   * What the sheet's rows run. A row runs from a tap with nowhere for a
+   * rejection to go, so a send that fails, a refusal included, is drawn on
+   * the sheet (its rows kept for a retry) and logged. One at a time: the look
+   * takes up to 2 s, and a second tap meanwhile would type the notes twice.
+   */
+  const sendFromSheet = useCallback(
+    async (target: NotesSendTarget, send: () => Promise<void>) => {
+      if (sendingRef.current) {
+        return
+      }
+      sendingRef.current = true
+      setNotesSending(target)
+      try {
+        await send()
+      } catch (err) {
+        const message = err instanceof Error && err.message ? err.message : 'Failed to send notes'
+        console.warn(`[review-send] notes not sent to ${target.terminal ?? 'a new agent session'}: ${message}`)
+        setSendSheet((sheet) => ({
+          kind: 'error',
+          message,
+          terminals: sheet && sheet.kind !== 'loading' ? sheet.terminals : []
+        }))
+      } finally {
+        sendingRef.current = false
+        setNotesSending(null)
+      }
+    },
+    [setSendSheet]
+  )
+
+  const sendNotesToTerminal = useCallback(
+    (terminal: string, comments: readonly DiffComment[]) =>
+      sendFromSheet({ terminal }, () => sendPromptToTerminal(terminal, comments)),
+    [sendFromSheet, sendPromptToTerminal]
+  )
+
+  const sendNotesToNewSession = useCallback(
+    (comments: readonly DiffComment[]) =>
+      sendFromSheet({ terminal: null }, () => createTerminalAndSend(comments)),
+    [createTerminalAndSend, sendFromSheet]
   )
 
   const openSendSheet = useCallback(async () => {
@@ -162,7 +254,10 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     clearSentNotes,
     copyNotes,
     createTerminalAndSend,
+    notesSending,
     openSendSheet,
+    sendNotesToNewSession,
+    sendNotesToTerminal,
     sendPromptToTerminal
   }
 }

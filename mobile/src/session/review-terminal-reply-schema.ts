@@ -29,10 +29,10 @@ const reviewTerminalTabSchema = z
 /**
  * The agent terminals the send sheet lists.
  *
- * `tabs` is required: use-mobile-diff-review-send-actions.ts:141 renders the list it returns, and
- * main answered a snapshot with no array with an empty sheet that read as "this worktree has no
- * agent sessions". A salvaging array, so a single unreadable row drops the way a non-terminal tab
- * already does instead of emptying the sheet.
+ * `tabs` is required: `openSendSheet` in use-mobile-diff-review-send-actions.ts renders the list
+ * it returns, and main answered a snapshot with no array with an empty sheet that read as "this
+ * worktree has no agent sessions". A salvaging array, so a single unreadable row drops the way a
+ * non-terminal tab already does instead of emptying the sheet.
  */
 export const reviewTerminalTabsSchema = z
   .looseObject({ tabs: salvagingArray(reviewTerminalTabSchema) })
