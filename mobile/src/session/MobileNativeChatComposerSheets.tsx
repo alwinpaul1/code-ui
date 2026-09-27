@@ -1,4 +1,3 @@
-import { MobileNativeChatAttachSheet } from './MobileNativeChatAttachSheet'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 import { MobileAgentModeSheet } from './MobileAgentModeSheet'
@@ -8,7 +7,9 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 
-/** The composer's three bottom sheets: mode picker, context window, add-to-chat. */
+/** The composer's mode picker and context window sheets. The add-to-chat
+ *  sheet belongs to the + (MobileNativeChatAttachButton), which keeps its
+ *  open flag out of the composer's state. */
 export function MobileNativeChatComposerSheets({
   showModeSheet,
   onCloseModeSheet,
@@ -18,13 +19,7 @@ export function MobileNativeChatComposerSheets({
   onSelectAgentMode,
   showContextSheet,
   onCloseContextSheet,
-  contextWindow,
-  showAttachSheet,
-  onCloseAttachSheet,
-  onCaptureImage,
-  onAttachImage,
-  onAttachFile,
-  onOpenPermission
+  contextWindow
 }: {
   showModeSheet: boolean
   onCloseModeSheet: () => void
@@ -35,13 +30,6 @@ export function MobileNativeChatComposerSheets({
   showContextSheet: boolean
   onCloseContextSheet: () => void
   contextWindow: TerminalHudContextWindow | null
-  showAttachSheet: boolean
-  onCloseAttachSheet: () => void
-  onCaptureImage?: () => void
-  onAttachImage?: () => void
-  onAttachFile?: () => void
-  /** Opens the permission-mode sheet from the attach sheet's permission row. */
-  onOpenPermission?: () => void
 }) {
   return (
     <>
@@ -71,17 +59,6 @@ export function MobileNativeChatComposerSheets({
         context={contextWindow}
         onClose={onCloseContextSheet}
       />
-      {onAttachImage && onAttachFile ? (
-        <MobileNativeChatAttachSheet
-          visible={showAttachSheet}
-          onClose={onCloseAttachSheet}
-          onCaptureImage={onCaptureImage}
-          onAttachImage={onAttachImage}
-          onAttachFile={onAttachFile}
-          permissionMode={permissionMode}
-          onOpenPermission={onOpenPermission}
-        />
-      ) : null}
     </>
   )
 }

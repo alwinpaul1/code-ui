@@ -3,9 +3,10 @@ import { Pressable, TextInput, View } from 'react-native'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { DictationComposerPaint } from './DictationComposerPaint'
 import { ContextWindowRing } from '../components/ContextWindowRing'
-import { ArrowUp, Mic, Plus, Square } from 'lucide-react-native'
+import { ArrowUp, Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
+import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
 import type {
   TerminalAgentMode,
   TerminalHudContextWindow,
@@ -205,7 +206,6 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
-  const [showAttachSheet, setShowAttachSheet] = useState(false)
   const [showContextSheet, setShowContextSheet] = useState(false)
   const [showModeSheet, setShowModeSheet] = useState(false)
   const trimmed = value.trim()
@@ -412,21 +412,21 @@ export function MobileNativeChatComposer({
             testID="native-chat-composer-actions"
           >
             {onAttachImage ? (
-              <Pressable focusable={false}
-                accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
-                style={({ pressed }) => [
-                  iconButton,
-                  { backgroundColor: pressed ? colors.bgRaised : 'transparent' }
-                ]}
-                // Why: with a file option the "+" opens a small chooser (Claude's
-                // "Add to Chat" sheet); without one it keeps opening Photos directly.
-                onPress={
-                  onAttachFile || onCaptureImage ? () => setShowAttachSheet(true) : onAttachImage
-                }
+              // Owns the Add context sheet and its open flag, so opening it
+              // does not re-render this composer.
+              <MobileNativeChatAttachButton
+                iconButtonStyle={iconButton}
                 disabled={disabled}
-              >
-                <Plus size={20} color={colors.textSecondary} strokeWidth={2} />
-              </Pressable>
+                onCaptureImage={onCaptureImage}
+                onAttachImage={onAttachImage}
+                onAttachFile={onAttachFile}
+                permissionMode={permissionMode}
+                onOpenPermission={
+                  (agentMode ? onSelectAgentMode : onSelectPermissionMode)
+                    ? () => setShowModeSheet(true)
+                    : undefined
+                }
+              />
             ) : null}
             {sessionOptions ? (
               <MobileNativeChatSessionOptionPickers
@@ -497,19 +497,6 @@ export function MobileNativeChatComposer({
         showContextSheet={showContextSheet}
         onCloseContextSheet={() => setShowContextSheet(false)}
         contextWindow={contextWindow}
-        showAttachSheet={showAttachSheet}
-        onCloseAttachSheet={() => setShowAttachSheet(false)}
-        onCaptureImage={onCaptureImage}
-        onAttachImage={onAttachImage}
-        onAttachFile={onAttachFile}
-        onOpenPermission={
-          (agentMode ? onSelectAgentMode : onSelectPermissionMode)
-            ? () => {
-                setShowAttachSheet(false)
-                setShowModeSheet(true)
-              }
-            : undefined
-        }
       />
     </View>
   )
