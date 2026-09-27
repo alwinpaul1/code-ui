@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Code, Eye } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 import { htmlPreviewWithInertLinks } from './html-preview-inert-links'
 import { useHtmlPreviewLinkGrant } from './use-html-preview-link-grant'
 // The native component's own prop type, so a change to it fails here rather than drifting.
@@ -69,6 +71,8 @@ export const MOBILE_HTML_PREVIEW_SEALED_SANDBOX = ''
  * frame's image despite the attribute, where Chromium sends none.
  */
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileHtmlPreviewWebStyles)
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
   // The shell's answer for this session, asked once: the page mounts after `init` and a session's
   // grants do not change for the life of the document.
@@ -113,7 +117,11 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
       {/* The Source tab shows what the author wrote, never the rewrite: the rewrite is a rendering
           decision about this shell, and a reader who flipped to Source to read the markup would
           otherwise be shown markup that was never in the artifact. */}
-      {mode === 'preview' ? <PreviewFrame html={rendered} linksOpen={linksOpen} /> : renderSource()}
+      {mode === 'preview' ? (
+        <PreviewFrame html={rendered} linksOpen={linksOpen} styles={styles} />
+      ) : (
+        renderSource()
+      )}
     </View>
   )
 }
@@ -125,7 +133,15 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
  * for it, and `srcdoc` is set as an attribute so React never has to be told the content is trusted:
  * the browser parses it inside a frame that can run nothing.
  */
-function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean }) {
+function PreviewFrame({
+  html,
+  linksOpen,
+  styles
+}: {
+  html: string
+  linksOpen: boolean
+  styles: ReturnType<typeof mobileHtmlPreviewWebStyles>
+}) {
   return (
     <View style={styles.frame}>
       <iframe
@@ -143,6 +159,13 @@ function PreviewFrame({ html, linksOpen }: { html: string; linksOpen: boolean })
   )
 }
 
+/** An HTML document's own default canvas, not a theme colour — same reasoning as the native
+ *  sibling's `HTML_DOCUMENT_CANVAS`: the artifact assumes a white page, and a themed dark
+ *  background behind an unset page would put the page's default black text on dark. Shared by
+ *  the `iframe`'s own DOM style and the `frame` View around it, since the frame is only ever
+ *  visible for the one paint before the iframe's document covers it. */
+const HTML_DOCUMENT_CANVAS = '#ffffff'
+
 /** A DOM style, not a `StyleSheet` entry: this element is an `iframe` and not a react-native view. */
 const IFRAME_STYLE = {
   border: 'none',
@@ -150,34 +173,36 @@ const IFRAME_STYLE = {
   height: '100%',
   // The artifact decides its own background; white is what the native preview shows behind one that
   // sets none, and an unset background here would show the panel through it.
-  backgroundColor: '#ffffff'
+  backgroundColor: HTML_DOCUMENT_CANVAS
 } as const
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
-  },
-  toggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
-  // The native component's own frame, so the preview sits where the preview sat.
-  frame: { flex: 1, backgroundColor: '#ffffff' }
-})
+function mobileHtmlPreviewWebStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    toolbar: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    toggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised
+    },
+    toggleActive: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
+    // The native component's own frame, so the preview sits where the preview sat.
+    frame: { flex: 1, backgroundColor: HTML_DOCUMENT_CANVAS }
+  })
+}

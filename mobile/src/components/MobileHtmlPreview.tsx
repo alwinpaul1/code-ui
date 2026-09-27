@@ -3,7 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { WebView } from 'react-native-webview'
 import { Code, Eye } from 'lucide-react-native'
 import { openExternalLink } from '../platform/external-link'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 
 export type MobileHtmlPreviewProps = {
   html: string
@@ -16,6 +18,8 @@ export type MobileHtmlPreviewProps = {
 // loads in-place; any link tap opens externally so a page can't hijack the
 // review surface.
 export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileHtmlPreviewStyles)
   const [mode, setMode] = useState<'preview' | 'source'>('preview')
 
   return (
@@ -83,30 +87,32 @@ export function MobileHtmlPreview({ html, renderSource }: MobileHtmlPreviewProps
  *  agent-authored HTML and is its own pass. */
 const HTML_DOCUMENT_CANVAS = '#ffffff'
 
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  toolbar: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  toggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised
-  },
-  toggleActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
-  webview: { flex: 1, backgroundColor: HTML_DOCUMENT_CANVAS }
-})
+function mobileHtmlPreviewStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: { flex: 1 },
+    toolbar: {
+      flexDirection: 'row',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border
+    },
+    toggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 4,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised
+    },
+    toggleActive: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    toggleText: { color: colors.textSecondary, fontSize: typography.metaSize },
+    webview: { flex: 1, backgroundColor: HTML_DOCUMENT_CANVAS }
+  })
+}
