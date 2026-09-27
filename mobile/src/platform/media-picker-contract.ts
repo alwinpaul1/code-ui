@@ -33,7 +33,8 @@ export type VideoFrameAttachmentMeta = {
   readonly total: number
   readonly sourceName: string
   readonly durationLabel: string
-  readonly intervalLabel: string
+  /** `null` for a single-frame group, which has no cadence to state. */
+  readonly intervalLabel: string | null
   readonly sourceSizeLabel: string
 }
 

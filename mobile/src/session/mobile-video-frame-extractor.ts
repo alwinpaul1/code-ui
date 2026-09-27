@@ -14,10 +14,20 @@
 
 /** The frame count never goes past this many, however long the video is. */
 export const VIDEO_FRAME_MAX_COUNT = 20
-/** Longest edge a frame is decoded and encoded at. */
+/** Longest edge a frame is decoded and encoded at, for the upload itself. */
 export const VIDEO_FRAME_MAX_EDGE = 1280
 /** JPEG quality for a frame — comfortably under 1 MB at `VIDEO_FRAME_MAX_EDGE`. */
 export const VIDEO_FRAME_JPEG_QUALITY = 0.6
+/** Longest edge of the SEPARATE small copy kept as the chip's preview — a
+ *  60×60 chip never needed the full upload-quality frame, and holding all 20
+ *  of those (up to ~1 MB of base64 each) in the attachment store for the
+ *  whole time the user is composing was the actual memory cost
+ *  (2026-09-27 review). */
+export const VIDEO_FRAME_PREVIEW_MAX_EDGE = 160
+export const VIDEO_FRAME_PREVIEW_QUALITY = 0.5
+/** `waitUntilReady` past this long fails loudly instead of leaking the player
+ *  forever — nothing native ever promised the `readyToPlay` status arrives. */
+export const VIDEO_FRAME_READY_TIMEOUT_MS = 10_000
 
 export class VideoFrameExtractionError extends Error {
   constructor(message: string) {
@@ -33,10 +43,13 @@ export class VideoFrameExtractionCancelledError extends Error {
   }
 }
 
-/** An opaque native image reference (a `SharedRef<'image'>` from `expo-video`,
- *  in production) — this module never looks inside one, only passes it to
- *  `VideoFrameEncoder` and releases it afterwards. */
+/** A native image reference (a `SharedRef<'image'>` from `expo-video`, in
+ *  production) — this module never decodes it itself, only reads its
+ *  dimensions (to size the chip preview) and passes it to `VideoFrameEncoder`
+ *  before releasing it. */
 export type VideoFrameThumbnail = {
+  readonly width: number
+  readonly height: number
   release(): void
 }
 
@@ -48,7 +61,8 @@ export type VideoFramePlayer = {
   /** Resolves once the player has read the source's metadata (duration,
    *  tracks), or rejects with a `VideoFrameExtractionError` describing why —
    *  a codec the phone cannot decode, a DRM file, or anything else the
-   *  native player reports as its error status. */
+   *  native player reports as its error status. Never guaranteed to settle
+   *  on its own; callers race it against a timeout. */
   waitUntilReady(): Promise<void>
   /** One frame at `timeSec`, its longest edge capped at `maxEdge` (aspect
    *  preserved). Empty/short result reads as "could not read a frame". */
@@ -56,10 +70,16 @@ export type VideoFramePlayer = {
   release(): void
 }
 
+export type EncodedVideoFrame = {
+  readonly base64: string
+  /** A separate, much smaller copy of the same frame, for the chip strip. */
+  readonly previewBase64: string
+}
+
 export type VideoFrameEncoder = (
   thumbnail: VideoFrameThumbnail,
   quality: number
-) => Promise<{ base64: string }>
+) => Promise<EncodedVideoFrame>
 
 export type VideoFrameExtractionProgress = {
   readonly done: number
@@ -74,21 +94,30 @@ export type VideoFrameExtractionDeps = {
   readonly maxFrames?: number
   readonly maxEdge?: number
   readonly quality?: number
+  readonly readyTimeoutMs?: number
 }
 
-export type ExtractedVideoFrame = {
-  readonly base64: string
+export type ExtractedVideoFrame = EncodedVideoFrame & {
   /** 1-based. */
   readonly index: number
 }
 
-export type VideoFrameExtractionResult = {
-  readonly frames: readonly ExtractedVideoFrame[]
+export type VideoFrameExtractionMeta = {
+  readonly total: number
   readonly durationMs: number
-  /** The nominal cadence used in the note ("every 6.7 s"): `durationMs / total`,
-   *  not the literal gap between the last two samples. */
-  readonly intervalMs: number
+  /** The average gap between consecutive sampled instants — `null` for a
+   *  single-frame group, which has no gap to report. Computed from the real
+   *  timestamps, not a nominal duration/count guess, so the note never
+   *  states a cadence the frames were not actually pulled at. */
+  readonly intervalMs: number | null
 }
+
+/** The first thing `extractVideoFrames` yields, once the duration is known
+ *  and frame timestamps are chosen, before any frame is pulled — so a caller
+ *  building per-frame metadata has it for every frame, including the first. */
+export type VideoFrameExtractionEvent =
+  | ({ readonly kind: 'meta' } & VideoFrameExtractionMeta)
+  | { readonly kind: 'frame'; readonly frame: ExtractedVideoFrame }
 
 /**
  * The timestamps (ms, ascending, first is 0) to pull frames at.
@@ -118,6 +147,18 @@ export function computeVideoFrameTimestampsMs(
   return timestamps
 }
 
+/** The average gap between the timestamps `computeVideoFrameTimestampsMs`
+ *  actually chose — `(last - first) / (count - 1)`, i.e. real gaps, not the
+ *  count itself; a single timestamp has no gap and reads as `null`. */
+export function videoFrameSampledIntervalMs(timestampsMs: readonly number[]): number | null {
+  if (timestampsMs.length <= 1) {
+    return null
+  }
+  const first = timestampsMs[0] as number
+  const last = timestampsMs[timestampsMs.length - 1] as number
+  return Math.round((last - first) / (timestampsMs.length - 1))
+}
+
 /** "2 min 14 s", or "14 s" under a minute. */
 export function formatVideoFrameDurationLabel(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1000))
@@ -126,8 +167,13 @@ export function formatVideoFrameDurationLabel(durationMs: number): string {
   return minutes > 0 ? `${minutes} min ${seconds} s` : `${seconds} s`
 }
 
-/** "every 6.7 s" — one decimal place, dropped when it is a whole number. */
-export function formatVideoFrameIntervalLabel(intervalMs: number): string {
+/** "every 6.7 s" — one decimal place, dropped when it is a whole number.
+ *  `null` (a single-frame group has no cadence) reads as `null`, not a
+ *  fabricated "every 0 s". */
+export function formatVideoFrameIntervalLabel(intervalMs: number | null): string | null {
+  if (intervalMs === null) {
+    return null
+  }
   const seconds = Math.round((intervalMs / 1000) * 10) / 10
   const rounded = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1)
   return `every ${rounded} s`
@@ -143,52 +189,117 @@ export function formatVideoFrameSizeLabel(bytes: number | null): string {
   return `${Math.round(bytes / (1024 * 1024))} MB`
 }
 
+/** A short, human reason out of whatever `VideoFrameExtractionError` carries
+ *  — including a raw native exception string this module never wrote itself
+ *  (Kotlin/Swift text has no place in a toast). Recognizes this module's own
+ *  messages exactly; anything else is "could not read this video". */
+export function describeVideoFrameExtractionFailure(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  const lower = message.toLowerCase()
+  if (lower.includes('timed out')) {
+    return 'took too long to load'
+  }
+  if (lower.includes('no readable duration')) {
+    return 'has no readable length'
+  }
+  if (lower.includes('could not read a frame')) {
+    return 'could not be read at one of its frames'
+  }
+  if (lower.includes('could not encode')) {
+    return 'could not be processed into images'
+  }
+  if (lower.includes('could not be read')) {
+    return 'could not be read — the format may not be supported'
+  }
+  return 'could not be read'
+}
+
 function checkCancelled(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
     throw new VideoFrameExtractionCancelledError()
   }
 }
 
+/** Resolves once `player` reports `readyToPlay`, rejects on its own `error`
+ *  status, on `signal` aborting, or after `timeoutMs` with no answer at all
+ *  — the case nothing else here catches, since `waitUntilReady` has no
+ *  contract that it ever settles by itself. */
+function waitUntilReadyOrTimeout(
+  player: VideoFramePlayer,
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false
+    const finish = (run: () => void): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      run()
+    }
+    const timer = setTimeout(() => {
+      finish(() => reject(new VideoFrameExtractionError('Timed out waiting for the video to load')))
+    }, timeoutMs)
+    const onAbort = (): void => {
+      finish(() => reject(new VideoFrameExtractionCancelledError()))
+    }
+    signal?.addEventListener('abort', onAbort)
+    player.waitUntilReady().then(
+      () => finish(resolve),
+      (error: unknown) => finish(() => reject(error))
+    )
+  })
+}
+
 /**
  * Reads `uri`'s duration, picks frame timestamps, and pulls + encodes each
- * one in turn — never all at once, so `onProgress` (and a cancel through
- * `signal`) lands between frames rather than after the whole video.
+ * one in turn, yielding it immediately — never holding more than one frame's
+ * bytes at a time, and never extracting the next frame until the caller has
+ * taken (and can start uploading) the one just yielded. A cancel through
+ * `signal` is checked before each frame and stops the loop there; nothing
+ * after the cut is ever pulled.
  */
-export async function extractVideoFrames(
+export async function* extractVideoFrames(
   uri: string,
   deps: VideoFrameExtractionDeps
-): Promise<VideoFrameExtractionResult> {
+): AsyncGenerator<VideoFrameExtractionEvent, void, void> {
   const maxFrames = deps.maxFrames ?? VIDEO_FRAME_MAX_COUNT
   const maxEdge = deps.maxEdge ?? VIDEO_FRAME_MAX_EDGE
   const quality = deps.quality ?? VIDEO_FRAME_JPEG_QUALITY
+  const readyTimeoutMs = deps.readyTimeoutMs ?? VIDEO_FRAME_READY_TIMEOUT_MS
   const player = deps.createPlayer(uri)
   try {
     checkCancelled(deps.signal)
-    await player.waitUntilReady()
+    await waitUntilReadyOrTimeout(player, deps.signal, readyTimeoutMs)
     checkCancelled(deps.signal)
     const durationMs = Math.round(player.duration * 1000)
     const timestampsMs = computeVideoFrameTimestampsMs(durationMs, maxFrames)
     const total = timestampsMs.length
-    const frames: ExtractedVideoFrame[] = []
+    const intervalMs = videoFrameSampledIntervalMs(timestampsMs)
     deps.onProgress?.({ done: 0, total })
+    yield { kind: 'meta', total, durationMs, intervalMs }
     for (let i = 0; i < timestampsMs.length; i += 1) {
       checkCancelled(deps.signal)
       const timeSec = (timestampsMs[i] as number) / 1000
       const thumbnails = await player.generateThumbnails([timeSec], maxEdge)
-      checkCancelled(deps.signal)
       const thumbnail = thumbnails[0]
       if (!thumbnail) {
         throw new VideoFrameExtractionError('Could not read a frame from this video')
       }
       try {
+        // Inside the try: a cancel seen right here still releases the
+        // thumbnail below, instead of throwing past it unreleased.
+        checkCancelled(deps.signal)
         const encoded = await deps.encodeFrame(thumbnail, quality)
-        frames.push({ base64: encoded.base64, index: i + 1 })
+        deps.onProgress?.({ done: i + 1, total })
+        yield { kind: 'frame', frame: { ...encoded, index: i + 1 } }
       } finally {
         thumbnail.release()
       }
-      deps.onProgress?.({ done: i + 1, total })
     }
-    return { frames, durationMs, intervalMs: Math.round(durationMs / total) }
   } finally {
     player.release()
   }
