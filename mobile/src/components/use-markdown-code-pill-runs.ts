@@ -132,12 +132,7 @@ export function useMarkdownCodePillRuns(
   documentKey: string,
   /** The message the document is, when the caller has a name for it (a chat
    *  list recycles one cell for many). */
-  identity: string | undefined,
-  /** The document is as wide as its widest line, so its width follows its
-   *  text and a new width comes with a new layout of its own: no Text is
-   *  keyed by width (a bubble remounted at every step as it narrowed to its
-   *  widest line, review of c3e62696). */
-  shrinkWrapped = false
+  identity: string | undefined
 ): (textKey: string, lineWidth: number, table: boolean) => CodePillRun {
   // Live cuts per Text and width: a width it comes back to keeps its own.
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(() => new Map())
@@ -268,9 +263,7 @@ export function useMarkdownCodePillRuns(
       mayHoldPills: () => backtick || spans.length > 0,
       keyFor: (base) => {
         const first = firstWidths.current.get(textKey)
-        return shrinkWrapped || first === undefined || first === lineWidth || !measured
-          ? String(base)
-          : `${base}@${lineWidth}`
+        return first === undefined || first === lineWidth || !measured ? String(base) : `${base}@${lineWidth}`
       },
       layoutReader: () => (measured && spans.length > 0 ? read : undefined)
     }

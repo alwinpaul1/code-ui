@@ -483,14 +483,6 @@ describe('MobileNativeChatMessage', () => {
     expect(recycled.every((name) => name.startsWith('a2:'))).toBe(true)
   })
 
-  it('draws a prompt as Markdown in a bubble as shrink-wrapped, and an agent reply as not', () => {
-    const prompt = render(userMessage([{ type: 'text', text: 'Use `pnpm install`.' }]), { promptsAsMarkdown: true })
-    expect(prompt.root.findAllByType('MobileMarkdown' as never).map((node) => node.props.shrinkWrapped)).toEqual([true])
-    act(() => renderer?.unmount())
-    const reply = render(toolMessage([{ type: 'text', text: 'Ran `pnpm install`.' }]))
-    expect(reply.root.findAllByType('MobileMarkdown' as never).map((node) => Boolean(node.props.shrinkWrapped))).toEqual([false])
-  })
-
   it('draws Markdown in a bubble in the bubble\'s own text colour, in light and dark', () => {
     // MobileMarkdown writes in the theme's text colour; inside a bubble that
     // is only right while the two are the same colour, so pin it.

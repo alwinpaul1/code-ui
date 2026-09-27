@@ -279,7 +279,40 @@ export function createPhone(current: () => ReactTestRenderer) {
     })
   }
 
-  return { pills, pillTexts, pillKeys, measuredText, lines, layOutDocument, pass, settle, rotateTo }
+  /**
+   * How wide RN Android makes a Text that is as wide as its content, up to
+   * `max` (a prompt bubble): TextLayoutManager.createLayout (RN 0.86) lays it
+   * out AT_MOST, at min(desiredWidth, floor(max)), where desiredWidth is its
+   * widest paragraph on one line, rounded up (Layout.getDesiredWidth), and
+   * reports layout.width. So a Text that wraps is always as wide as the max,
+   * and one that does not is as wide as its one line.
+   */
+  const atMost = (max: number, as: PhoneAs = {}): number => {
+    const { lines: unwrapped } = lines(100_000, as)
+    return Math.min(Math.ceil(Math.max(...unwrapped.map((line) => line.width))), Math.floor(max))
+  }
+
+  /** A bubble at `max` settling: Fabric lays the Text out at the width its
+   *  content gives it and reports its lines, the document's onLayout brings
+   *  that width, and so on until the width holds. Returns the width, or -1
+   *  when it never holds. */
+  const settleBubble = (max: number, as: PhoneAs = {}): { width: number; widths: number[] } => {
+    let width = atMost(max, as)
+    const widths = [width]
+    for (let step = 0; step < 12; step += 1) {
+      rotateTo(width, as)
+      settle(width, as)
+      const next = atMost(max, as)
+      if (next === width) {
+        return { width, widths }
+      }
+      width = next
+      widths.push(width)
+    }
+    return { width: -1, widths }
+  }
+
+  return { pills, pillTexts, pillKeys, measuredText, lines, layOutDocument, pass, settle, rotateTo, atMost, settleBubble }
 }
 
 /** Nothing on the next line could have fitted at the end of this one. For a
