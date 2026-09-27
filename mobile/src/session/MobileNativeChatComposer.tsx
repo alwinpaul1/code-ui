@@ -437,6 +437,10 @@ export function MobileNativeChatComposer({
             {contextWindow ? (
               <ContextWindowRing
                 usedPercent={contextWindow.usedPercent}
+                // On touch-down, as the + does: the ring sits in the dock,
+                // outside the chat list's scroll, so no scroll can claim the
+                // touch afterwards. onPress stays for a screen reader's click.
+                onPressIn={() => setShowContextSheet(true)}
                 onPress={() => setShowContextSheet(true)}
               />
             ) : null}
