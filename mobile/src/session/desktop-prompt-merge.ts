@@ -36,16 +36,32 @@ export function mergeDesktopPrompts(
   // keeps a prompt on one line and cuts it at 200 characters
   // (normalizePromptField), while the beacon keeps the words as typed, up to
   // 2,000 bytes. Matched on exact text, a multi-line or long prompt kept both
-  // and was drawn twice (pre-merge review of 06911823). A status copy held
-  // back (`heldBack`, agent-status-prompts.ts) drops its twin the same way,
-  // a desk resend's own copy included, whose anchor could place it (combined
-  // review of 30c94116): the held copy can be placed later, once the rows show
-  // a harness message carried it (desk-prompt-harness-turns.ts, after this
-  // merge), and a twin let through would then draw the message twice. Two
-  // messages whose first 200 folded characters agree also count as one here.
+  // and was drawn twice (pre-merge review of 06911823). A folded match stands
+  // for ONE beacon copy, the one the phone read nearest it: two long messages
+  // that agree for 200 characters fold to one status text, and dropping every
+  // copy that folded to it hid the second, which as a mid-turn message has no
+  // row (review of 004ce958). A status copy held back (`heldBack`,
+  // agent-status-prompts.ts) drops its twin the same way, a desk resend's own
+  // copy included, whose anchor could place it (combined review of 30c94116):
+  // the held copy can be placed later, once the rows show a harness message
+  // carried it (desk-prompt-harness-turns.ts, after this merge), and a twin
+  // let through would then draw the message twice.
   const seen = new Set(status.map((prompt) => prompt.text))
+  const paired = new Set<DesktopPrompt>()
+  const foldedTwin = (prompt: DesktopPrompt): boolean => {
+    const folded = normalizePromptField(prompt.text)
+    const distance = (copy: DesktopPrompt) =>
+      typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
+    const nearest = status
+      .filter((copy) => copy.text === folded && !paired.has(copy))
+      .reduce<DesktopPrompt | undefined>((best, copy) => (best === undefined || distance(copy) < distance(best) ? copy : best), undefined)
+    if (nearest !== undefined) {
+      paired.add(nearest)
+    }
+    return nearest !== undefined
+  }
   for (const prompt of beacon) {
-    const twin = seen.has(prompt.text) || seen.has(normalizePromptField(prompt.text))
+    const twin = seen.has(prompt.text) || foldedTwin(prompt)
     if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
       merged.push(prompt)
     }

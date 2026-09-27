@@ -53,3 +53,24 @@ describe("a subagent's message the prompt hook beaconed", () => {
     expect(mergeDesktopPrompts([], [{ nonce: '1', text }])).toEqual([{ nonce: '1', text }])
   })
 })
+
+// Review of 004ce958: the status cuts a prompt at 200 characters, so two desk
+// messages that agree that far fold to one status text. The first was watched
+// (its status copy, and its beacon copy in full); the second, typed mid-turn,
+// got no status copy (the same text as the last) and only the beacon's. Every
+// beacon copy that folded to a status text was dropped, so the second was
+// listed nowhere, and as a mid-turn message it has no row either.
+describe('two long desk messages that agree for their first 200 characters', () => {
+  const head = 'check the fold on every screen size we ship and write down each one that clips, '.repeat(3)
+  const first = `${head}then fix the worst`
+  const second = `${head}then leave them for tomorrow`
+  const statusFirst: DesktopPrompt = { nonce: 'status:s:1000:0', text: first.slice(0, 200).trimEnd(), cut: true, at: 1000, seenAt: 1000 }
+
+  it('keeps the second from the beacon: a status copy stands for one beacon copy, its nearest', () => {
+    const beacon: DesktopPrompt[] = [
+      { nonce: '9001', text: first, anchorId: 'a1', seenAt: 1000 },
+      { nonce: '9002', text: second, anchorId: 'a2', seenAt: 5000 }
+    ]
+    expect(mergeDesktopPrompts([statusFirst], beacon).map((prompt) => prompt.nonce)).toEqual(['status:s:1000:0', '9002'])
+  })
+})
