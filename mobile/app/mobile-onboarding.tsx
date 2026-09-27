@@ -3,7 +3,7 @@ import { Animated, BackHandler, Text, useWindowDimensions, View } from 'react-na
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { AppLogo } from '../src/components/AppLogo'
-import { useTheme } from '../src/theme/theme-context'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { ensureNotificationPermissions } from '../src/notifications/mobile-notifications'
 import {
   MobileOnboardingPage,
@@ -12,7 +12,7 @@ import {
 } from '../src/onboarding/MobileOnboardingPage'
 import { parseMobileOnboardingSteps } from '../src/onboarding/mobile-onboarding-plan'
 import { useReducedMotion } from '../src/ui/use-reduced-motion'
-import { mobileOnboardingStyles as styles } from '../src/onboarding/mobile-onboarding-styles'
+import { mobileOnboardingStyles } from '../src/onboarding/mobile-onboarding-styles'
 import {
   saveDefaultSessionView,
   type MobileSessionView
@@ -135,6 +135,7 @@ function MobileOnboardingFlow({
 
   const translateX = useMemo(() => Animated.multiply(slideProgress, -width), [slideProgress, width])
   const { colors, fonts } = useTheme()
+  const styles = useThemedStyles(mobileOnboardingStyles)
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.bg }]}>

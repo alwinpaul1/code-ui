@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { colors } from '../theme/mobile-theme'
+import { darkColors, lightColors } from '../theme/tokens'
 
 /**
  * What the WebView paints before its document does, read off both shells.
@@ -35,10 +35,13 @@ describe('what a mounted view paints before the page does', () => {
     expect(swift).toContain('webView.scrollView.backgroundColor = .clear')
   })
 
-  it('leaves the app surface as the one colour behind a page, and it is not black', () => {
-    // What shows through both: the screen's own root, which is where the token is read.
+  it('leaves the app surface as the live theme’s colour behind a page, and it is not black', () => {
+    // What shows through both: the screen's own root, which is where the token is read. Themed
+    // (theme-settings sweep) rather than the static dark-only palette, so this checks the shape
+    // that replaced it and both schemes it can now paint.
     const screen = readFileSync(join(import.meta.dirname, 'MobileWebShellScreen.tsx'), 'utf8')
-    expect(screen).toContain('backgroundColor: colors.bgBase')
-    expect(colors.bgBase).not.toBe('#000000')
+    expect(screen).toContain('backgroundColor: colors.bg')
+    expect(lightColors.bg).not.toBe('#000000')
+    expect(darkColors.bg).not.toBe('#000000')
   })
 })

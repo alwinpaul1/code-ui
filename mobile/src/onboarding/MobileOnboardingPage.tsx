@@ -1,10 +1,10 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { MessageSquare } from 'lucide-react-native'
 import type { MobileOnboardingStep } from './mobile-onboarding-plan'
-import { mobileOnboardingStyles as styles } from './mobile-onboarding-styles'
+import { mobileOnboardingStyles } from './mobile-onboarding-styles'
 import { NotificationOnboardingPreview } from './NotificationOnboardingPreview'
 import type { MobileSessionView } from '../storage/session-view-preferences'
-import { useTheme } from '../theme/theme-context'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 
 export type NotificationOnboardingChoice = 'enable' | 'skip'
 export type MobileOnboardingBusyChoice = MobileSessionView | NotificationOnboardingChoice | null
@@ -31,6 +31,7 @@ export function MobileOnboardingPage({
   // The shell paints its background from this palette; drawing the page from
   // the legacy static one left near-white text on the light background.
   const { colors } = useTheme()
+  const styles = useThemedStyles(mobileOnboardingStyles)
   const busy = busyChoice !== null
   const isSessionView = step === 'session-view'
 
@@ -168,6 +169,7 @@ function ChoiceButton({
   onPress: () => void
 }) {
   const { colors } = useTheme()
+  const styles = useThemedStyles(mobileOnboardingStyles)
   return (
     <Pressable
       accessibilityRole="button"
