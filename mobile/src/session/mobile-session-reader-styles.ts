@@ -1,135 +1,138 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { spacing, radii, typography } from '../theme/mobile-theme'
+import type { Theme } from '../theme/theme-context'
 
-export const mobileSessionReaderStyles = StyleSheet.create({
-  markdownTextInput: {
-    flex: 1,
-    minHeight: 0,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl * 3,
-    fontSize: typography.bodySize,
-    lineHeight: 22,
-    fontFamily: typography.monoFamily
-  },
-  filePreviewScroll: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.editorSurface
-  },
-  filePreviewContent: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl
-  },
-  imagePreviewContainer: {
-    flex: 1,
-    minHeight: 0,
-    backgroundColor: colors.editorSurface
-  },
-  imagePreviewScroll: {
-    flex: 1
-  },
-  imagePreviewContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg
-  },
-  imagePreview: {
-    width: '100%',
-    height: '100%',
-    minHeight: 200
-  },
-  diffNotesToolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  diffNotesTitleRow: {
-    minWidth: 0,
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  diffNotesTitle: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  diffNotesActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  diffNotesActionButton: {
-    minHeight: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.bgRaised
-  },
-  diffNotesActionText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  // Rows run edge to edge with no gap or rail between them, the way the
-  // desktop draws a diff (2026-09-13: a margin plus a coloured left rail read
-  // as "each line in its own block" on the phone).
-  diffLineBlock: {},
-  diffLine: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    paddingRight: spacing.sm
-  },
-  diffLineAdded: {
-    backgroundColor: colors.diffAddedBg
-  },
-  diffLineDeleted: {
-    backgroundColor: colors.diffDeletedBg
-  },
-  diffGutter: {
-    width: 40,
-    paddingRight: spacing.xs,
-    textAlign: 'right',
-    color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 19,
-    fontFamily: typography.monoFamily
-  },
-  diffText: {
-    flex: 1,
-    color: colors.textPrimary,
-    fontSize: 12,
-    lineHeight: 19,
-    fontFamily: typography.monoFamily
-  },
-  // A nested span in the line above, so it names the code face itself: the
-  // app's default gives a Text with no face Instrument Sans, and "+ ", "- "
-  // and "  " differ in width there, which shifts the code row to row.
-  diffPrefix: {
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily
-  },
-  diffPrefixAdded: {
-    color: colors.gitDecorationAdded
-  },
-  diffPrefixDeleted: {
-    color: colors.gitDecorationDeleted
-  }
-})
+export function mobileSessionReaderStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    markdownTextInput: {
+      flex: 1,
+      minHeight: 0,
+      color: colors.text,
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.xl * 3,
+      fontSize: typography.bodySize,
+      lineHeight: 22,
+      fontFamily: typography.monoFamily
+    },
+    filePreviewScroll: {
+      flex: 1,
+      minHeight: 0,
+      backgroundColor: colors.codeBg
+    },
+    filePreviewContent: {
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+      paddingBottom: spacing.xl
+    },
+    imagePreviewContainer: {
+      flex: 1,
+      minHeight: 0,
+      backgroundColor: colors.codeBg
+    },
+    imagePreviewScroll: {
+      flex: 1
+    },
+    imagePreviewContent: {
+      flexGrow: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: spacing.lg
+    },
+    imagePreview: {
+      width: '100%',
+      height: '100%',
+      minHeight: 200
+    },
+    diffNotesToolbar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      backgroundColor: colors.bgPanel
+    },
+    diffNotesTitleRow: {
+      minWidth: 0,
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs
+    },
+    diffNotesTitle: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    diffNotesActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs
+    },
+    diffNotesActionButton: {
+      minHeight: 30,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.button,
+      paddingHorizontal: spacing.sm,
+      backgroundColor: colors.bgRaised
+    },
+    diffNotesActionText: {
+      color: colors.textSecondary,
+      fontSize: typography.metaSize,
+      fontWeight: '600'
+    },
+    // Rows run edge to edge with no gap or rail between them, the way the
+    // desktop draws a diff (2026-09-13: a margin plus a coloured left rail read
+    // as "each line in its own block" on the phone).
+    diffLineBlock: {},
+    diffLine: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      paddingRight: spacing.sm
+    },
+    diffLineAdded: {
+      backgroundColor: colors.diffAddBg
+    },
+    diffLineDeleted: {
+      backgroundColor: colors.diffDelBg
+    },
+    diffGutter: {
+      width: 40,
+      paddingRight: spacing.xs,
+      textAlign: 'right',
+      color: colors.textMuted,
+      fontSize: 11,
+      lineHeight: 19,
+      fontFamily: typography.monoFamily
+    },
+    diffText: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 12,
+      lineHeight: 19,
+      fontFamily: typography.monoFamily
+    },
+    // A nested span in the line above, so it names the code face itself: the
+    // app's default gives a Text with no face Instrument Sans, and "+ ", "- "
+    // and "  " differ in width there, which shifts the code row to row.
+    diffPrefix: {
+      color: colors.textMuted,
+      fontFamily: typography.monoFamily
+    },
+    diffPrefixAdded: {
+      color: colors.diffAddText
+    },
+    diffPrefixDeleted: {
+      color: colors.diffDelText
+    }
+  })
+}
