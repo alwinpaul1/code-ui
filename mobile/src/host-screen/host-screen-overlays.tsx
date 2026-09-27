@@ -7,6 +7,10 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { PickerModal } from '../components/PickerModal'
 import { colors } from '../theme/mobile-theme'
+// Why not the static `colors` import above: `buildWorktreeNavigationActions` now takes a themed
+// `ThemeColors` (theme-settings sweep), which the legacy palette above is not shape-compatible
+// with. This file otherwise still draws from the static palette — out of scope here.
+import { useTheme } from '../theme/theme-context'
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
@@ -30,6 +34,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
     state
   } = controller
   const actionTarget = state.actionTarget
+  const { colors: themeColors } = useTheme()
 
   return (
     <>
@@ -167,7 +172,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       worktreeName: actionTarget.displayName || actionTarget.repo,
                       hostCapabilities,
                       navigate: actions.navigateFromHostList,
-                      onDone: () => state.setActionTarget(null)
+                      onDone: () => state.setActionTarget(null),
+                      colors: themeColors
                     }),
                     {
                       label: 'Sleep',

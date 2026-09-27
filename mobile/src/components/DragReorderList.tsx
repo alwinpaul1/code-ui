@@ -13,7 +13,8 @@ import Animated, {
   type AnimatedRef,
   type SharedValue
 } from 'react-native-reanimated'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
 import { springFromAppleParams } from '../ui/alert/alert-motion'
 import {
@@ -73,6 +74,7 @@ export function DragReorderList<ItemT>({
   scrollOffsetY,
   scrollContentHeight
 }: DragReorderListProps<ItemT>): React.JSX.Element {
+  const styles = useThemedStyles(dragReorderListStyles)
   const keys = items.map(itemKey)
   const count = keys.length
   const positions = useSharedValue<DragReorderPositions>(dragReorderPositionsFromKeys(keys))
@@ -203,6 +205,7 @@ export function DragReorderList<ItemT>({
           onDragActiveChange={handleDragActiveChange}
           onCommit={commitReorder}
           onAccessibilityMove={moveRowByAccessibilityAction}
+          styles={styles}
         >
           {renderRow(item)}
         </DragReorderRow>
@@ -220,7 +223,8 @@ function DragReorderRow({
   onDragActiveChange,
   onCommit,
   onAccessibilityMove,
-  children
+  children,
+  styles
 }: {
   rowKey: string
   rowHeight: number
@@ -231,7 +235,9 @@ function DragReorderRow({
   onCommit: (orderedKeys: string[]) => void
   onAccessibilityMove: (key: string, delta: number) => void
   children: ReactNode
+  styles: ReturnType<typeof dragReorderListStyles>
 }): React.JSX.Element {
+  const { colors } = useTheme()
   const {
     positions,
     activeKey,
@@ -291,7 +297,12 @@ function DragReorderRow({
       backgroundColor: colors.bgPanel,
       transform: [{ scale: 1 }]
     }
-  }, [positions, activeKey, activeTop, rowKey, rowHeight])
+    // `colors` must be listed even though it is a plain object, not a SharedValue: this array is
+    // also useAnimatedStyle's own React-style "recompute when this changes" list (like
+    // useMemo's), not only the web mapper's SharedValue inputs. Leaving it out freezes the row on
+    // whatever theme was active when it last dragged, on both native and web, after Settings ->
+    // Appearance changes.
+  }, [positions, activeKey, activeTop, rowKey, rowHeight, colors])
 
   return (
     <Animated.View style={[styles.row, { height: rowHeight }, rowStyle]}>
@@ -324,31 +335,33 @@ function DragReorderRow({
   )
 }
 
-const styles = StyleSheet.create({
-  row: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 8
-  },
-  rowContent: {
-    flex: 1
-  },
-  handle: {
-    alignSelf: 'stretch',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md
-  },
-  rowSeparator: {
-    position: 'absolute',
-    bottom: 0,
-    left: spacing.md,
-    right: spacing.md,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle
-  }
-})
+function dragReorderListStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    row: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowRadius: 8
+    },
+    rowContent: {
+      flex: 1
+    },
+    handle: {
+      alignSelf: 'stretch',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.md
+    },
+    rowSeparator: {
+      position: 'absolute',
+      bottom: 0,
+      left: spacing.md,
+      right: spacing.md,
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border
+    }
+  })
+}
