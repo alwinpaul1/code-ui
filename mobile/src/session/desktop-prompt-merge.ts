@@ -1,3 +1,4 @@
+import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
@@ -31,15 +32,21 @@ export function mergeDesktopPrompts(
   beacon: readonly DesktopPrompt[]
 ): DesktopPrompt[] {
   const merged: DesktopPrompt[] = [...status]
-  // A status copy held back (`heldBack`, agent-status-prompts.ts) still drops
-  // the beacon's copies of its words. That includes a desk resend's own copy,
-  // whose anchor could place it (combined review of 30c94116), and it is not
-  // recovered: the held copy can be placed later, once the rows show a harness
-  // message carried it (desk-prompt-harness-turns.ts, after this merge), and a
-  // beacon copy let through here would then draw the same message twice.
+  // The two copies of one message are told by the status's own folding: it
+  // keeps a prompt on one line and cuts it at 200 characters
+  // (normalizePromptField), while the beacon keeps the words as typed, up to
+  // 2,000 bytes. Matched on exact text, a multi-line or long prompt kept both
+  // and was drawn twice (pre-merge review of 06911823). A status copy held
+  // back (`heldBack`, agent-status-prompts.ts) drops its twin the same way,
+  // a desk resend's own copy included, whose anchor could place it (combined
+  // review of 30c94116): the held copy can be placed later, once the rows show
+  // a harness message carried it (desk-prompt-harness-turns.ts, after this
+  // merge), and a twin let through would then draw the message twice. Two
+  // messages whose first 200 folded characters agree also count as one here.
   const seen = new Set(status.map((prompt) => prompt.text))
   for (const prompt of beacon) {
-    if (!seen.has(prompt.text) && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
+    const twin = seen.has(prompt.text) || seen.has(normalizePromptField(prompt.text))
+    if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
       merged.push(prompt)
     }
   }

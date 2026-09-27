@@ -219,7 +219,11 @@ export function pairPendingWithHookPrompts(
       claim(own ?? timed[0]!, false)
       steppedAside.add(item.id)
     } else if (candidates[0] !== undefined) {
-      claim(candidates[0], true)
+      // Its own prompt first: claimed, that echo is hidden. Another copy of
+      // the words claimed instead (a held status copy, listed first) left the
+      // echo of its own nonce drawn beside it, one key twice (pre-merge
+      // review of 06911823).
+      claim(candidates.find((index) => deskEchoId(prompts[index]!.nonce) === item.id) ?? candidates[0], true)
     }
   }
   // A copy a phone photo already claimed stays its own after it retires.

@@ -40,7 +40,9 @@ export function useAgentStatusPrompts(
   } else {
     readRef.current = { ...readRef.current, connected }
   }
-  const firstRead = readRef.current.stale !== NOTHING_PENDING && status !== readRef.current.stale
+  // A null status is no reading: it neither is the first read nor ends the
+  // wait for one (pre-merge review of 06911823).
+  const firstRead = readRef.current.stale !== NOTHING_PENDING && status != null && status !== readRef.current.stale
   if (firstRead) {
     readRef.current = { connected, stale: NOTHING_PENDING }
   }

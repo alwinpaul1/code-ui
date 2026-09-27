@@ -214,3 +214,37 @@ describe('a desk prompt typed during a short drop in a long run', () => {
     ])
   })
 })
+
+// Pre-merge review of 06911823: the tab can hand the chat a null status on the
+// way back, and the latch took that null as the first read, so the status
+// after it was treated as watched and the prompt timed by the reconnect.
+describe('a desk prompt taken while the phone was away, after a null status on the way back', () => {
+  it('is still timed by the run it came in', () => {
+    let listed: readonly { text: string; at?: number }[] = []
+    function Chat({ status, connected }: { status: AgentStatusPromptSource; connected: boolean }) {
+      listed = useAgentStatusPrompts('sess-1', status, undefined, connected).prompts
+      return null
+    }
+    let renderer!: ReactTestRenderer
+    const show = (status: AgentStatusPromptSource, connected: boolean) =>
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(Chat, { status, connected }))
+        } else {
+          renderer = create(createElement(Chat, { status, connected }))
+        }
+      })
+    const history = [{ state: 'done', prompt: 'earlier', startedAt: 500 }]
+    const watched = { state: 'working', prompt: 'run the migration', updatedAt: 1_000, stateStartedAt: 1_000, stateHistory: history }
+    show(watched, true)
+    show(watched, false)
+    show(watched, true)
+    show(null, true)
+    show({ ...watched, prompt: 'and keep the old table', updatedAt: 9_000 }, true)
+    act(() => renderer.unmount())
+    expect(listed.map((prompt) => [prompt.text, prompt.at])).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 1_000]
+    ])
+  })
+})

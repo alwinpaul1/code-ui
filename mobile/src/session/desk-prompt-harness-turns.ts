@@ -37,7 +37,14 @@ export function placedByHarnessTurns(
   return placed ?? prompts
 }
 
-/** How far a row's stamp may sit from Orca's hook clock for the same moment. */
+/** The window a harness row must fall in, around Orca's times for the turn
+ *  end and the next run's start. Both are guesses: nothing measured them. The
+ *  one real record, session 76ba8f2f, has the teammate rows stamped to the
+ *  millisecond of the runs Orca's history would start (13:46:47.262,
+ *  13:48:06.780, 14:27:03.037). A window too narrow misses the row and keeps
+ *  the prompt held; too wide, it can take in a person's row and also keep it
+ *  held. Either error refuses, never places wrongly. */
+/** How far a row's stamp may sit before Orca's hook clock for the same moment. */
 const HOOK_CLOCK_SLACK_MS = 1_000
 /** How long after the hook took a turn's first message its row can be stamped. */
 const ROW_AFTER_HOOK_MS = 5_000

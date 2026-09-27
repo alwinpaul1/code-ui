@@ -309,3 +309,18 @@ describe('promptTakenBetween', () => {
     expect(promptTakenBetween(later, send, undefined, 1000)).toBe(false)
   })
 })
+
+// Pre-merge review of 06911823: a desk message the chat drew from the beacon
+// and remembered (`desk-9001`), back after its turn ended. The status's copy
+// of the same words is held (untimed) and listed first, so the witness claimed
+// it and left the beacon's echo of its own nonce drawn beside it: one key
+// twice. The witness takes its own prompt first.
+describe('a remembered desk message beside a held status copy of its words', () => {
+  it('stands for its own beacon prompt, so that echo is not drawn a second time', () => {
+    const words = 'and paste the failing names here then rerun only those'
+    const held: DesktopPrompt = { nonce: 'status:s:x:0', text: words, heldBack: true, seenAt: 5 }
+    const own: DesktopPrompt = { nonce: '9001', text: words, anchorId: 'a1', seenAt: 1 }
+    const pairing = pairPendingWithHookPrompts([{ id: 'desk-9001', text: words }], [held, own])
+    expect([...pairing.standIns]).toEqual(['9001'])
+  })
+})
