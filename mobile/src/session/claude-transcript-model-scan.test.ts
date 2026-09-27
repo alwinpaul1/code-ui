@@ -12,7 +12,8 @@ import {
   HOST_SESSION_LIST_CACHE_MS,
   peekClaudeTranscriptModel,
   requestClaudeTranscriptModelScan,
-  resetClaudeTranscriptModelScansForTests
+  resetClaudeTranscriptModelScansForTests,
+  watchClaudeTranscriptModelHost
 } from './claude-transcript-model-scan'
 
 const HOST = 'host-win'
@@ -139,27 +140,98 @@ describe("the host session scan behind a Windows session's model pill", () => {
     expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it('forgets what an earlier scan said once a later one fails', async () => {
+  it('keeps the last good reading through a failed rescan', async () => {
     let reply: Responder = () => ok({ sessions: [opusRow], issues: [] })
     const host = answering((method, params) => reply(method, params))
     await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 })
-    expect(peekClaudeTranscriptModel(HOST, SESSION)).not.toBeNull()
 
     reply = () => refused('internal_error', 'scan worker exited')
     const later = T0 + CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS
     expect(await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: later })).toBe(
       'failed'
     )
-    expect(peekClaudeTranscriptModel(HOST, SESSION)).toBeNull()
+    // One bad answer does not blank a pill that was right a minute ago.
+    expect(peekClaudeTranscriptModel(HOST, SESSION)?.label).toBe('Opus 5.5')
+    expect(warn).toHaveBeenCalledTimes(1)
   })
 
-  it('counts a failed scan against the five minutes, so a failing host is not asked again at once', async () => {
+  it('holds a failed scan to the five minutes on the same connection', async () => {
     const host = answering(() => refused('internal_error', 'scan worker exited'))
-    await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 })
-    expect(await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 1000 })).toBe(
-      'throttled'
-    )
+    await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0, connection: 1 })
+    expect(
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 1000, connection: 1 })
+    ).toBe('throttled')
     expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+  })
+
+  it('asks again once on the next connection after a failed scan, inside the five minutes', async () => {
+    // The chat opened while the relay was still dialling and the scan failed;
+    // the connection came up. Nothing stays stale once it does (CLAUDE.md).
+    let reply: Responder = () =>
+      Promise.reject(markRpcDeliveryUnknown(new Error('Request timed out: aiVault.listSessions')))
+    const host = answering((method, params) => reply(method, params))
+    await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0, connection: 1 })
+    expect(peekClaudeTranscriptModel(HOST, SESSION)).toBeNull()
+
+    reply = () => ok({ sessions: [opusRow], issues: [] })
+    expect(
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 5_000, connection: 2 })
+    ).toBe('scanned')
+    expect(peekClaudeTranscriptModel(HOST, SESSION)?.label).toBe('Opus 5.5')
+    // Once per new connection, and a success ends it: the budget holds again.
+    expect(
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 6_000, connection: 3 })
+    ).toBe('throttled')
+    expect(host.sent('aiVault.listSessions')).toHaveLength(2)
+  })
+
+  it('retries a failed scan only once per new connection while it keeps failing', async () => {
+    const host = answering(() => refused('internal_error', 'scan worker exited'))
+    await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0, connection: 1 })
+    expect(
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 1_000, connection: 2 })
+    ).toBe('failed')
+    expect(
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 + 2_000, connection: 2 })
+    ).toBe('throttled')
+    expect(host.sent('aiVault.listSessions')).toHaveLength(2)
+  })
+
+  describe('by itself, once the five minutes after a failure are up', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(T0)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('asks again while a chat for that host is on screen', async () => {
+      let reply: Responder = () => refused('internal_error', 'scan worker exited')
+      const host = answering((method, params) => reply(method, params))
+      const unwatch = watchClaudeTranscriptModelHost(HOST)
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE)
+
+      reply = () => ok({ sessions: [opusRow], issues: [] })
+      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS - 1)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(2)
+      expect(peekClaudeTranscriptModel(HOST, SESSION)?.label).toBe('Opus 5.5')
+      // A success leaves nothing scheduled.
+      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS * 3)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(2)
+      unwatch()
+    })
+
+    it('asks nothing once no chat for that host is on screen', async () => {
+      const host = answering(() => refused('internal_error', 'scan worker exited'))
+      const unwatch = watchClaudeTranscriptModelHost(HOST)
+      await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE)
+      unwatch()
+      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS * 3)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    })
   })
 
   it('scans the whole host when the worktree names no absolute folder', async () => {

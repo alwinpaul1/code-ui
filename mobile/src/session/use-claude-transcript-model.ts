@@ -83,10 +83,13 @@ export function useClaudeTranscriptModel(args: {
   const scan = useCallback(
     (force: boolean) => {
       if (quiet && connected && client) {
-        void requestClaudeTranscriptModelScan(client, hostId, worktreeId, { force })
+        void requestClaudeTranscriptModelScan(client, hostId, worktreeId, {
+          force,
+          connection: lastConnectedAt
+        })
       }
     },
-    [client, connected, hostId, quiet, worktreeId]
+    [client, connected, hostId, lastConnectedAt, quiet, worktreeId]
   )
   const request = useCallback(() => scan(false), [scan])
 

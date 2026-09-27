@@ -282,6 +282,26 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Sonnet 5' } })
   })
 
+  it('shows the model once the relay reconnects, after a first scan that failed', async () => {
+    let refuse = true
+    host = createAnsweringClient((method) =>
+      method === 'aiVault.listSessions' && !refuse
+        ? ok({ sessions: [historySession({ sessionId: SESSION, model })], issues: [] })
+        : refused('unavailable', 'relay not ready')
+    )
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(scans()).toBe(1)
+    expect(latest?.fallback).toEqual({ kind: 'none' })
+
+    refuse = false
+    fakes.lastConnectedAt = 2
+    render()
+    await advance(0)
+    expect(scans()).toBe(2)
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+  })
+
   it('keeps one answer object across renders, so the pickers are not rebuilt every render', async () => {
     render()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)

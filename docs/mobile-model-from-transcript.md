@@ -44,10 +44,14 @@ under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
   connection), when the user opens the model sheet, and at the end of the
   first turn that began after the phone itself changed the model. It never
   asks on every turn end.
-- **Budget:** at most one attempt per host per five minutes, counting failed
-  attempts. Every call uses `force: false` and the history screen's own
-  workspace `scopePaths`, so the two share the host's cache. It sends
-  `limit: 20`.
+- **Budget:** at most one attempt per host per five minutes. It sends
+  `limit: 20` and the history screen's own workspace `scopePaths`, so the two
+  share the host's cache. Every call uses `force: false` except the one that
+  confirms a model switch. That call is forced, because an answer the host
+  cached before the confirming turn would still name the old model. When the
+  budget holds it back, it runs by itself once the five minutes are up, while
+  a chat for that host is on screen. An unforced reading counts as fresh only
+  from one host-cache minute before it was asked for.
 - **Matching:** it reads only the row for this tab's exact session id. It skips
   subagent rows and other agents' rows. It drops `<synthetic>` (the model Claude
   Code records on a reply it wrote itself, such as an API error) and any id that
@@ -65,12 +69,20 @@ under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
   still the old model. Once such a scan exists, it shows what answered, whether
   or not the switch took. Both times are the phone's own clock. The composer's
   own snapshot label, drawn when there is no pair at all, is unchanged.
-- **Failure:** a refused, timed-out or malformed reply shows nothing and logs
-  one `[transcript-model]` line naming the host and the reason.
+- **Failure:** a refused, timed-out or malformed reply logs one
+  `[transcript-model]` line naming the host and the reason. It keeps the last
+  good reading (nothing, if there was none). The next new connection asks
+  again once, even inside the five minutes (`shouldRefetchAfterReconnect`).
+  A single retry runs by itself when the five minutes are up, while a chat for
+  that host is on screen.
 
 **Known limits:**
 
-- The reading can be up to five minutes (and one host cache minute) old.
+- A reading is only as new as the last scan, and scans run only on the
+  triggers above. In a chat left open, it can be as old as the chat. A switch
+  made on the desktop shows once the chat reopens or reconnects, or once the
+  model sheet opens after the five-minute budget. In each case it can also be
+  up to one host-cache minute stale.
 - A turn that runs while the chat is closed is not seen ending, so after a pick
   the fallback stays blank until the next turn the chat sees.
 - Unverified: the phone's own pick is a `/model` typed into the agent's

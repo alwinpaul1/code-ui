@@ -2,6 +2,10 @@ import { deriveMobileAiVaultScopePaths } from '../agent-history/agent-history-sc
 import { agentHistorySessionScan } from '../agent-history/mobile-agent-history-operations'
 import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
 import type { RpcClient } from '../transport/rpc-client'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import { worktreePathFromId } from './mobile-native-chat-skill-browse'
 import { transcriptModelForSession, type ScannedTranscriptModel } from './claude-transcript-model'
 
@@ -33,8 +37,14 @@ import { transcriptModelForSession, type ScannedTranscriptModel } from './claude
  * old model; when the budget holds it back, it runs by itself (still forced)
  * once the five minutes are up, if a chat still wants this host.
  *
- * A failure of any kind — refused, timed out, not a session list — shows
- * nothing and leaves one log line naming the host and the reason.
+ * A failure of any kind — refused, timed out, not a session list — leaves one
+ * log line naming the host and the reason, and keeps whatever the last good
+ * scan said (nothing, if there was none): one bad answer does not blank a pill
+ * that was right. The budget does not hold a failure for long. The next NEW
+ * connection asks once more even inside the five minutes (CLAUDE.md, "Nothing
+ * stays stale once the relay connects", through `shouldRefetchAfterReconnect`),
+ * and once the five minutes are up the scan runs by itself, if a chat still
+ * wants this host.
  */
 export const CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS = 5 * 60_000
 /** How old a list the host may answer an unforced scan with: Orca's
@@ -47,23 +57,29 @@ const SCAN_TIMEOUT_MS = 30_000
 
 type HostScan = {
   attemptedAt: number
+  /** The last attempt failed. */
+  failed: boolean
   /** How recent a transcript the rows speak for (the phone's clock). */
   freshAsOf: number | null
-  /** The rows of the last scan that succeeded; empty after a failure. */
+  /** The rows of the last scan that succeeded, kept through failures. */
   rows: readonly unknown[]
 }
 
-/** A forced scan the budget held back, run by itself when it allows. */
+/** A scan the budget held back — one that must confirm a switch, or the retry
+ *  after a failure — run by itself when the budget allows. */
 type DeferredScan = {
   timer: ReturnType<typeof setTimeout>
   client: RpcClient
   worktreeId: string
+  force: boolean
 }
 
 const scans = new Map<string, HostScan>()
 const deferred = new Map<string, DeferredScan>()
 const watchers = new Map<string, number>()
 const listeners = new Set<() => void>()
+/** Which connection each host's failed scan happened on. */
+const failedOn = createStaleAfterReconnectLedger()
 
 function notify(): void {
   for (const listener of listeners) {
@@ -100,6 +116,7 @@ export function resetClaudeTranscriptModelScansForTests(): void {
   deferred.clear()
   watchers.clear()
   listeners.clear()
+  failedOn.clear()
 }
 
 /** What the last scan of this host says about one session, with how recent a
@@ -126,30 +143,54 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function deferForcedScan(client: RpcClient, hostId: string, worktreeId: string, delayMs: number): void {
-  if (deferred.has(hostId)) {
+/** One scan waiting per host; a forced one is never downgraded. */
+function deferScan(
+  client: RpcClient,
+  hostId: string,
+  worktreeId: string,
+  delayMs: number,
+  force: boolean
+): void {
+  const waiting = deferred.get(hostId)
+  if (waiting) {
+    waiting.force ||= force
     return
   }
-  const timer = setTimeout(() => {
-    deferred.delete(hostId)
-    if ((watchers.get(hostId) ?? 0) > 0) {
-      void requestClaudeTranscriptModelScan(client, hostId, worktreeId, { force: true })
-    }
-  }, delayMs)
-  deferred.set(hostId, { timer, client, worktreeId })
+  const entry: DeferredScan = {
+    client,
+    worktreeId,
+    force,
+    timer: setTimeout(() => {
+      deferred.delete(hostId)
+      if ((watchers.get(hostId) ?? 0) > 0) {
+        void requestClaudeTranscriptModelScan(entry.client, hostId, entry.worktreeId, {
+          force: entry.force
+        })
+      }
+    }, delayMs)
+  }
+  deferred.set(hostId, entry)
 }
 
 export async function requestClaudeTranscriptModelScan(
   client: RpcClient,
   hostId: string,
   worktreeId: string,
-  options: { force?: boolean; now?: number } = {}
+  options: {
+    force?: boolean
+    /** The host's `lastConnectedAt`: a failed scan is asked again once per new one. */
+    connection?: number | null
+    now?: number
+  } = {}
 ): Promise<'scanned' | 'throttled' | 'failed'> {
   const now = options.now ?? Date.now()
+  const connection = options.connection ?? null
   const last = scans.get(hostId)
-  if (last && now - last.attemptedAt < CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS) {
+  const retryOnNewConnection =
+    last?.failed === true && shouldRefetchAfterReconnect(failedOn, hostId, 'error', connection)
+  if (last && now - last.attemptedAt < CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS && !retryOnNewConnection) {
     if (options.force) {
-      deferForcedScan(client, hostId, worktreeId, last.attemptedAt + CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS - now)
+      deferScan(client, hostId, worktreeId, last.attemptedAt + CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS - now, true)
     }
     return 'throttled'
   }
@@ -159,10 +200,15 @@ export async function requestClaudeTranscriptModelScan(
     clearTimeout(waiting.timer)
     deferred.delete(hostId)
   }
-  const force = options.force === true || waiting !== undefined
+  const force = options.force === true || waiting?.force === true
   // Stamped before the request goes out, so a second caller while this one is
   // in flight is held off too. What the last success said stands meanwhile.
-  scans.set(hostId, { attemptedAt: now, freshAsOf: last?.freshAsOf ?? null, rows: last?.rows ?? [] })
+  scans.set(hostId, {
+    attemptedAt: now,
+    failed: last?.failed ?? false,
+    freshAsOf: last?.freshAsOf ?? null,
+    rows: last?.rows ?? []
+  })
   try {
     const reply = await agentHistorySessionScan.request(
       client,
@@ -175,15 +221,25 @@ export async function requestClaudeTranscriptModelScan(
     )
     scans.set(hostId, {
       attemptedAt: now,
+      failed: false,
       freshAsOf: force ? now : now - HOST_SESSION_LIST_CACHE_MS,
       rows: result.sessions
     })
+    shouldRefetchAfterReconnect(failedOn, hostId, 'ready', connection)
     notify()
     return 'scanned'
   } catch (error) {
-    scans.set(hostId, { attemptedAt: now, freshAsOf: null, rows: [] })
+    scans.set(hostId, {
+      attemptedAt: now,
+      failed: true,
+      freshAsOf: last?.freshAsOf ?? null,
+      rows: last?.rows ?? []
+    })
+    // Records the connection this failed on (a no-op when it already has).
+    shouldRefetchAfterReconnect(failedOn, hostId, 'error', connection)
+    deferScan(client, hostId, worktreeId, CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS, force)
     console.warn(
-      `[transcript-model] aiVault.listSessions on ${hostId}: ${reasonOf(error)}; the model pill shows nothing until the next scan`
+      `[transcript-model] aiVault.listSessions on ${hostId}: ${reasonOf(error)}; the model pill keeps its last reading, and asks again on the next connection or in five minutes`
     )
     notify()
     return 'failed'
