@@ -248,6 +248,7 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     setComposerBody,
     setActionError,
     setBusyAction,
+    sendSheet,
     setSendSheet,
     setShowCompletion,
     loadReviewData,

@@ -81,7 +81,7 @@ function useSendActions(controller: ReturnType<typeof useMobileDiffReviewControl
               disabled: comments.length === 0 || (sending !== null && !loading),
               loading,
               skipAutoClose: true,
-              onPress: () => void controller.sendNotesToTerminal(terminal.terminal, comments)
+              onPress: () => void controller.sendNotesToTerminal(terminal, comments)
             }
           })
         : []

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { DiffComment, MobileDiffReviewState } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -15,6 +15,7 @@ import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
+import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 
 /** Why the notes did not go when the terminal's leftover input could not be
  *  cleared first (a paste native chat left there, #10228). */
@@ -30,6 +31,8 @@ type SendActionsInput = {
   worktreeId: string
   screenState: ReviewScreenState
   setActionError: Dispatch<SetStateAction<string | null>>
+  /** The sheet as last drawn, for a send that fails after it closed. */
+  sendSheet: SendSheetState | null
   setSendSheet: Dispatch<SetStateAction<SendSheetState | null>>
   saveCommentsAndReviewState: (
     comments: DiffComment[],
@@ -47,11 +50,18 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     worktreeId,
     screenState,
     setActionError,
+    sendSheet,
     setSendSheet,
     saveCommentsAndReviewState
   } = input
   const [notesSending, setNotesSending] = useState<NotesSendTarget | null>(null)
   const sendingRef = useRef(false)
+  // Read when a send settles, which can be seconds after the tap: the sheet
+  // may have closed, or closed and reopened, since.
+  const sheetRef = useRef(sendSheet)
+  useEffect(() => {
+    sheetRef.current = sendSheet
+  }, [sendSheet])
 
   const copyNotes = useCallback(async () => {
     if (screenState.kind !== 'ready' || screenState.comments.length === 0) {
@@ -125,7 +135,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         // The terminal has the notes; only recording that failed. Not a failed
         // send: the sheet closes rather than offer the same notes again.
         setActionError(
-          `Review notes sent, but not marked sent: ${err instanceof Error ? err.message : 'Failed to save review'}`
+          `Review notes sent, but not marked sent: ${(err instanceof Error && err.message) || 'Failed to save review'}`
         )
         setSendSheet(null)
         return
@@ -148,15 +158,15 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
    * Fails open like every other caller: a read that fails lets the notes go.
    */
   const sendPromptToTerminal = useCallback(
-    async (terminal: string, comments: readonly DiffComment[]) => {
+    async (terminal: string, comments: readonly DiffComment[], agent?: string | null) => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
       }
-      // The listed tabs carry no agent, so the look runs without one. Claude's
-      // input-row rule then applies to a Codex tab too, which misses a Codex
-      // prompt only when a row on screen reads like Claude's input (a bare `❯`,
-      // or `❯` and a no-break space, at column 0).
-      const refusal = await readSendUnderDialogRefusal({ client, terminal })
+      // The agent the host names for the tab, when it names one. Without it
+      // the look applies Claude's input-row rule to any tab, and a Codex menu
+      // under a row of output that reads like Claude's input (a bare `❯`, or
+      // `❯` and a no-break space, at column 0) would read as no dialog.
+      const refusal = await readSendUnderDialogRefusal({ client, terminal, agent })
       if (refusal) {
         throw new Error(refusal)
       }
@@ -205,22 +215,32 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       } catch (err) {
         const message = err instanceof Error && err.message ? err.message : 'Failed to send notes'
         console.warn(`[review-send] notes not sent to ${target.terminal ?? 'a new agent session'}: ${message}`)
-        setSendSheet((sheet) => ({
-          kind: 'error',
-          message,
-          terminals: sheet && sheet.kind !== 'loading' ? sheet.terminals : []
-        }))
+        if (sheetRef.current === null) {
+          // Closed while the send ran. Reopening it on the failure drew an
+          // error sheet with no terminals in it; the review banner says why.
+          setActionError(message)
+        } else {
+          // A sheet reopened since and still loading keeps the reason for its
+          // list, which would otherwise overwrite it.
+          setSendSheet((sheet) =>
+            sheet === null
+              ? null
+              : sheet.kind === 'loading'
+                ? { kind: 'loading', reason: message }
+                : { kind: 'error', message, terminals: sheet.terminals }
+          )
+        }
       } finally {
         sendingRef.current = false
         setNotesSending(null)
       }
     },
-    [setSendSheet]
+    [setActionError, setSendSheet]
   )
 
   const sendNotesToTerminal = useCallback(
-    (terminal: string, comments: readonly DiffComment[]) =>
-      sendFromSheet({ terminal }, () => sendPromptToTerminal(terminal, comments)),
+    (tab: MobileReviewTerminalTab, comments: readonly DiffComment[]) =>
+      sendFromSheet({ terminal: tab.terminal }, () => sendPromptToTerminal(tab.terminal, comments, tab.agent)),
     [sendFromSheet, sendPromptToTerminal]
   )
 
@@ -245,13 +265,18 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
         () => reviewTerminalListRead.interpret(response),
         'Unable to load agent sessions'
       )
-      setSendSheet({ kind: 'ready', terminals })
+      // A list that lands after the user closed the sheet leaves it closed,
+      // and one a failed send is waiting on shows that send's reason.
+      setSendSheet((sheet) =>
+        sheet === null
+          ? null
+          : sheet.kind === 'loading' && sheet.reason
+            ? { kind: 'error', message: sheet.reason, terminals }
+            : { kind: 'ready', terminals }
+      )
     } catch (err) {
-      setSendSheet({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Unable to load agent sessions',
-        terminals: []
-      })
+      const message = err instanceof Error ? err.message : 'Unable to load agent sessions'
+      setSendSheet((sheet) => (sheet === null ? null : { kind: 'error', message, terminals: [] }))
     }
   }, [client, connState, setActionError, setSendSheet, worktreeId])
 
