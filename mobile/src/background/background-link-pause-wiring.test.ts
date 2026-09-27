@@ -19,8 +19,14 @@ vi.mock('./app-pause-detector', async (importActual) => ({
   }
 }))
 
+const appState = { currentState: 'background' }
 vi.mock('react-native', () => ({
-  AppState: { currentState: 'background', addEventListener: () => ({ remove: () => undefined }) },
+  AppState: {
+    get currentState() {
+      return appState.currentState
+    },
+    addEventListener: () => ({ remove: () => undefined })
+  },
   Platform: { OS: 'android' }
 }))
 
@@ -92,6 +98,7 @@ async function wakeFromPause(): Promise<void> {
 
 describe('the app waking from a pause with its background service dead', () => {
   beforeEach(() => {
+    appState.currentState = 'background'
     native.running = false
     native.unrestricted = true
     native.start.mockReset()
@@ -121,6 +128,14 @@ describe('the app waking from a pause with its background service dead', () => {
       'Android paused the app',
       'Could not restart the background service'
     ])
+  })
+
+  it('leaves the start to the foreground heal when the pause is noticed on an open', async () => {
+    appState.currentState = 'active'
+    await wakeFromPause()
+
+    expect(native.start).not.toHaveBeenCalled()
+    expect(appended.map((entry) => entry.message)).toEqual(['Android paused the app'])
   })
 
   it('leaves it stopped when notifications are off', async () => {

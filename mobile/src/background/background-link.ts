@@ -63,6 +63,7 @@ const pauseDetector = new AppPauseDetector({
     }
     void handleAppPause(pause, {
       now: Date.now,
+      appInForeground: () => AppState.currentState === 'active',
       backgroundState: backgroundDeliveryState,
       lastServiceStop: readBackgroundServiceStop,
       loadDeliveryOn: loadBackgroundDeliveryOn,

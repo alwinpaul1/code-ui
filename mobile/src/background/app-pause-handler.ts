@@ -4,6 +4,8 @@ import type { BackgroundServiceStop } from './background-service-stop'
 
 export type AppPauseHandlerDependencies = {
   now: () => number
+  /** On screen now: heal() owns the restart on a return to the foreground. */
+  appInForeground: () => boolean
   /** Read on waking, not during the pause. */
   backgroundState: () => { serviceRunning: boolean; unrestricted: boolean }
   lastServiceStop: () => BackgroundServiceStop | null
@@ -38,7 +40,9 @@ export async function handleAppPause(
   const background = dependencies.backgroundState()
   const stop = background.serviceRunning ? null : dependencies.lastServiceStop()
   dependencies.record(appPauseLogEntry(pause, background, stop))
-  if (background.serviceRunning) {
+  // Noticed on an open: heal() starts the service on that same return to the
+  // foreground, so a start here would only claim that one in the log.
+  if (background.serviceRunning || dependencies.appInForeground()) {
     return
   }
   let deliveryOn: boolean

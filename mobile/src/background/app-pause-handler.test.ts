@@ -9,6 +9,7 @@ function makeDependencies(overrides: Partial<AppPauseHandlerDependencies> = {}) 
   const entries: ConnectionLogEntry[] = []
   const dependencies: AppPauseHandlerDependencies = {
     now: () => pause.to + 5,
+    appInForeground: () => false,
     backgroundState: () => ({ serviceRunning: false, unrestricted: true }),
     lastServiceStop: () => ({ at: from - 60_000, cause: 'its task ended' }),
     loadDeliveryOn: async () => true,
@@ -80,6 +81,17 @@ describe('what the app does when it wakes from a pause', () => {
 
     expect(dependencies.startService).not.toHaveBeenCalled()
     expect(entries).toHaveLength(1)
+  })
+
+  // Noticed on an open: heal() (background-link-healing.ts) starts the service
+  // on the same return to the foreground, so a "Restarted" line here would
+  // claim a start this handler did not need to make.
+  it('leaves the restart to the foreground heal when the pause is noticed on an open', async () => {
+    const { dependencies, entries } = makeDependencies({ appInForeground: () => true })
+    await handleAppPause(pause, dependencies)
+
+    expect(dependencies.startService).not.toHaveBeenCalled()
+    expect(entries.map((entry) => entry.message)).toEqual(['Android paused the app'])
   })
 
   it('does not start a service the user switched off', async () => {
