@@ -13,6 +13,9 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
 import { agentRow, userRow, landingHarness, at } from './mobile-chat-phone-photo-landing.test-support'
 import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, resetAgentHudBeacons, type DesktopPrompt } from './agent-hud-beacon'
+import { agentMessagesOfBeacon, beaconAgentMessages } from './mobile-native-chat-agent-messages'
+import { agentMessagePlacements, resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
+import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -211,3 +214,55 @@ describe('a beacon copy of a desk prompt restored by the warm start', () => {
     expect(rowsIn(frames.at(-1)!).filter((row) => row.text === PROMPT).map((row) => row.id)).toEqual([prompt.id])
   })
 })
+
+// Combined review of 30c94116: a subagent's message the prompt hook carried is
+// drawn as its own "Message from" row, placed by the row the hook named. Found
+// long after it arrived with that row on a page not loaded, it took the tail,
+// and the tail was stored as where it was drawn: after a relaunch that stored
+// row won, and stayed even once the real row loaded.
+describe('a subagent message the beacon carried, found long after it arrived', () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const agentRows = (frame: Record<string, unknown>) => rowsIn(frame).filter((row) => row.id.startsWith('agent-message:'))
+
+  it('is not drawn at the tail while the row it came after is on the page above, and no tail is stored for it', async () => {
+    vi.setSystemTime(at('21:30:00.000'))
+    const copy = { nonce: '48299', text: SUBAGENT_REQUEST_PROMPT, anchorId: previousAnswer.id, seenAt: at('13:20:50.000') }
+    const agentMessages = beaconAgentMessages([copy])
+    await show('21:30:00.000', { messages: tailPage, hasMore: true, promptHook: true, agentMessages })
+    await show('21:30:01.000', { messages: tailPage, hasMore: true, promptHook: true, agentMessages })
+    expect(frames.flatMap(agentRows)).toEqual([])
+    expect(agentMessagePlacements(`tab:${'967668df-a7d9-40e7-964b-7812815c010d'}`, agentMessages)).toEqual([])
+    const whole = [previousAnswer, itsReply, ...tailPage]
+    await show('21:31:00.000', { messages: whole, hasMore: true, promptHook: true, agentMessages })
+    const ids = rowsIn(frames.at(-1)!).map((row) => row.id)
+    expect(ids.indexOf('agent-message:48299')).toBe(ids.indexOf(previousAnswer.id) + 1)
+  })
+
+  it('is not drawn at the tail when the phone read it off the terminal hours before the chat opened', async () => {
+    vi.setSystemTime(at('13:20:50.000'))
+    const text = encodeURIComponent(JSON.stringify(SUBAGENT_REQUEST_PROMPT).slice(1, -1))
+    consumeAgentHudBeacons('terminal-paper-review', `\u001b]7777;CUIHUD1 agent=claude hk=1 sid=${SESSION} up=48297:${text} at=${previousAnswer.id}\u0007`)
+    const agentMessages = agentMessagesOfBeacon(getAgentHudBeacon('terminal-paper-review'), 'terminal-paper-review')
+    expect(agentMessages.map((message) => message.id)).toEqual(['agent-message:48297'])
+    vi.setSystemTime(at('21:30:00.000'))
+    await show('21:30:00.000', { messages: tailPage, hasMore: true, promptHook: true, agentMessages })
+    await show('21:30:01.000', { messages: tailPage, hasMore: true, promptHook: true, agentMessages })
+    expect(frames.flatMap(agentRows)).toEqual([])
+    resetAgentHudBeacons()
+  })
+
+  it('moves to the row it came after once that row loads, after a relaunch brought back a stored tail', async () => {
+    vi.setSystemTime(at('21:30:00.000'))
+    // Stored by a build that kept the tail it was drawn at.
+    const stored = { nonce: '48298', text: SUBAGENT_REQUEST_PROMPT, anchorId: previousAnswer.id, restored: true as const, drawnAfter: stopping.id }
+    const agentMessages = beaconAgentMessages([stored])
+    await show('21:30:00.000', { messages: tailPage, hasMore: true, promptHook: true, agentMessages })
+    const whole = [previousAnswer, itsReply, ...tailPage]
+    await show('21:31:00.000', { messages: whole, hasMore: true, promptHook: true, agentMessages })
+    await show('21:31:01.000', { messages: whole, hasMore: true, promptHook: true, agentMessages })
+    const ids = rowsIn(frames.at(-1)!).map((row) => row.id)
+    expect(ids.indexOf('agent-message:48298')).toBe(ids.indexOf(previousAnswer.id) + 1)
+  })
+})
+

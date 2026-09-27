@@ -9,7 +9,7 @@ import {
   type BeaconAgentMessage,
   type SameRowPrompt
 } from './mobile-native-chat-agent-messages'
-import { deskEchoId } from './use-desktop-prompt-echoes'
+import { arrivedLongAgo, deskEchoId } from './use-desktop-prompt-echoes'
 
 /**
  * Where each subagent message the prompt hook carried is drawn: after the row
@@ -72,10 +72,19 @@ function rawAnchor(scope: string, message: BeaconAgentMessage, raw: readonly Nat
     return message.anchorId
   }
   if (message.restored && message.drawnAfter && raw.some((row) => row.id === message.drawnAfter)) {
-    remember(anchorByKey, key, message.drawnAfter)
+    // Not kept: the row the hook named wins once it loads. A build before
+    // 2026-09-27 stored the tail a message found late was drawn at, and kept
+    // here it held the message there for good (combined review of 30c94116).
     return message.drawnAfter
   }
   if (!tail || message.restored) {
+    return undefined
+  }
+  if (message.anchorId && !provisionalByKey.has(key) && arrivedLongAgo(message.seenAt)) {
+    // Found long after it arrived, with its row not loaded: the tail is not
+    // where it came, and a tail taken now would be stored as where it was
+    // drawn. Held until the row loads, as a desk prompt's copy is
+    // (use-desktop-prompt-echoes.ts, foundWithoutItsRow).
     return undefined
   }
   if (message.anchorId) {

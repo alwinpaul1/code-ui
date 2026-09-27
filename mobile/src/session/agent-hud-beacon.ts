@@ -275,6 +275,9 @@ function publish(handle: string, payload: string): void {
   // wholesale would blank the HUD every time a turn ended.
   const held = beacons.get(handle)
   const previous = held && !sessionChanged(held, beacon) ? held : undefined
+  // The prompt with when the phone received it, which tells a copy the chat
+  // saw arrive from one it found long after (use-desktop-prompt-echoes.ts).
+  const arrived = beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }
   const joined: AgentHudBeacon = previous
     ? {
         ...previous,
@@ -289,15 +292,14 @@ function publish(handle: string, payload: string): void {
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
         // Prompts accumulate: each submission is its own beacon and the phone
         // must keep the ones that came before it.
-        // Each stamped with its arrival, which tells a copy the chat saw
-        // arrive from one it found long after (use-desktop-prompt-echoes.ts).
-        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }),
+        // Each stamped with its arrival (`arrived`, above).
+        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, arrived),
         desktopPrompt: beacon.desktopPrompt ?? previous.desktopPrompt,
         promptHook: beacon.promptHook || previous.promptHook,
         receivedAt: beacon.receivedAt
       }
-    : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }) }
-  const merged = withAgentMessagesOf(handle, joined, previous === undefined, beacon.desktopPrompt)
+    : { ...beacon, desktopPrompts: appendDesktopPrompt([], arrived) }
+  const merged = withAgentMessagesOf(handle, joined, previous === undefined, arrived)
   // A repeat says nothing new: keep the object readers already hold.
   if (previous && unchangedBeacon(previous, merged)) {
     return

@@ -47,6 +47,9 @@ export type BeaconAgentMessage = {
   restored?: true
   /** The row the chat drew it after before it was stored. */
   drawnAfter?: string
+  /** When the phone received it: one found long after has no place until the
+   *  row it came after loads (mobile-native-chat-agent-message-rows.ts). */
+  seenAt?: number
   /** The terminal whose beacon carried it, where that row is stored: a
    *  nonce is the hook's process id, and another terminal can hold the same
    *  one (review of 2026-09-27). */
@@ -191,6 +194,7 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
       ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
       ...(prompt.restored ? { restored: true as const } : {}),
       ...(prompt.drawnAfter ? { drawnAfter: prompt.drawnAfter } : {}),
+      ...(typeof prompt.seenAt === 'number' ? { seenAt: prompt.seenAt } : {}),
       ...(later.length > 0 ? { laterAtSameRow: later } : {}),
       ...(later.length > 0 && earlier.length > 0 ? { earlierAtSameRow: earlier } : {})
     })

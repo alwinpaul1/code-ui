@@ -306,13 +306,18 @@ function foundWithoutItsRow(prompt: DesktopPrompt, rawMessages: readonly NativeC
   return (
     prompt.anchorId !== undefined &&
     prompt.at === undefined &&
-    typeof prompt.seenAt === 'number' &&
-    Date.now() - prompt.seenAt > TIMED_ANCHOR_OPEN_MS &&
+    arrivedLongAgo(prompt.seenAt) &&
     !anchorByNonce.has(prompt.nonce) &&
     !provisionalByNonce.has(prompt.nonce) &&
     !waitsByNonce.has(prompt.nonce) &&
     !rawMessages.some((message) => message.id === prompt.anchorId)
   )
+}
+
+/** Whether a beacon copy arrived more than TIMED_ANCHOR_OPEN_MS before now:
+ *  found then, not seen arrive, and the tail is no place for it. */
+export function arrivedLongAgo(seenAt: number | undefined): boolean {
+  return typeof seenAt === 'number' && Date.now() - seenAt > TIMED_ANCHOR_OPEN_MS
 }
 
 /** The bubble id of a hook prompt's echo. */
