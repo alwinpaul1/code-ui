@@ -70,20 +70,42 @@ export function useMobileDiffReviewGitActions(input: GitActionsInput) {
     setActionError(null)
     let staged = 0
     let failed = 0
-    for (const item of files) {
-      const response = reviewGitStageRun.interpret(
-        await reviewGitStageRun.request(client, {
-          worktree: `id:${worktreeId}`,
-          filePath: item.filePath
-        })
-      )
-      if (response.accepted) {
-        staged += 1
-      } else {
-        failed += 1
+    // A refusal counts as failed in the loop; a send the link lost throws, and
+    // ends the run. That used to skip the busy mark's reset and say nothing,
+    // leaving every Stage, Unstage and Discard button disabled. An empty
+    // message falls back: this catch has no main behaviour to keep, and an
+    // empty banner draws nothing.
+    let lost: { why: string } | null = null
+    try {
+      for (const item of files) {
+        const response = reviewGitStageRun.interpret(
+          await reviewGitStageRun.request(client, {
+            worktree: `id:${worktreeId}`,
+            filePath: item.filePath
+          })
+        )
+        if (response.accepted) {
+          staged += 1
+        } else {
+          failed += 1
+        }
       }
+    } catch (err) {
+      lost = { why: (err instanceof Error && err.message) || "Couldn't stage the reviewed files" }
+    } finally {
+      setBusyAction(null)
     }
-    setBusyAction(null)
+    if (lost) {
+      console.warn(`[review-git] stage reviewed files stopped after ${staged} of ${files.length}: ${lost.why}`)
+      triggerError()
+      // Reloaded first: a reload clears the banner, and the files staged
+      // before the loss should show as staged.
+      if (staged > 0) {
+        await loadReviewData()
+      }
+      setActionError(staged > 0 ? `${staged} staged, then: ${lost.why}` : lost.why)
+      return
+    }
     triggerSuccess()
     setActionError(
       failed > 0
