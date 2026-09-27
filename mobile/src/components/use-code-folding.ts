@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { FileReaderLineRange } from '../session/mobile-file-reader-line-selection'
 import type { MobileCodeDocument } from './mobile-code-document'
-import { rangeCoveringFolds, visibleLineIndices, type CodeFoldRegion } from './mobile-code-folding'
+import { listIndexOfLine, rangeCoveringFolds, visibleLineIndices, type CodeFoldRegion } from './mobile-code-folding'
 
 export type CodeFolding = {
   document: MobileCodeDocument
@@ -13,6 +13,9 @@ export type CodeFolding = {
   toggle: (lineIndex: number) => void
   /** A 1-based line selection grown over the folded blocks it takes in. */
   coverFolds: (range: FileReaderLineRange) => FileReaderLineRange
+  /** The 1-based line whose row shows this one: itself, or the header of the
+   *  folded block hiding it. */
+  shownLine: (lineNumber: number) => number
 }
 
 const NOTHING_FOLDED: ReadonlySet<number> = new Set()
@@ -61,8 +64,13 @@ export function useCodeFolding(document: MobileCodeDocument, active = true): Cod
     (range: FileReaderLineRange) => rangeCoveringFolds(range, document.folds, folded),
     [document, folded]
   )
+  const shownLine = useCallback(
+    (lineNumber: number) =>
+      folded.size === 0 || visible.length === 0 ? lineNumber : visible[listIndexOfLine(visible, lineNumber - 1)]! + 1,
+    [folded, visible]
+  )
   return useMemo(
-    () => ({ document, visible, regionAt, isFolded, toggle, coverFolds }),
-    [coverFolds, document, isFolded, regionAt, toggle, visible]
+    () => ({ document, visible, regionAt, isFolded, toggle, coverFolds, shownLine }),
+    [coverFolds, document, isFolded, regionAt, shownLine, toggle, visible]
   )
 }

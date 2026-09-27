@@ -55,7 +55,8 @@ export function MobileSessionFileSource({
     canOpen: canAsk,
     canRange: canAsk && !document.reformatted,
     resetKey: relativePath,
-    coverRange: folding.coverFolds
+    coverRange: folding.coverFolds,
+    shownLine: folding.shownLine
   })
   const linesCopy = useCopyToClipboard()
   const { range, clear } = selection

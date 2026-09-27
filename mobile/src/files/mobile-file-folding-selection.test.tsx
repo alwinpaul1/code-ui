@@ -172,6 +172,32 @@ describe.each(['dark', 'light'] as const)('selecting across a folded block (%s)'
     expect(clipboard.writeText).toHaveBeenCalledWith(LINES.slice(0, 5).join('\n'))
   })
 
+  it('moves a selection inside a block the reader folds up to the block\'s header', async () => {
+    // Folded away, the selected line had no row to show it, and the bar
+    // still offered "Copy line 3" (review, 2026-09-27).
+    openInExplorer()
+    act(() => {
+      ;(rowProps(2).onLongPress as () => void)() // line 3, inside lines 2–3
+    })
+    pressToggle(1, 'Fold lines 2–3')
+    expect(rowProps(1).highlighted).toBe(true)
+    await press('Copy lines 2–3')
+    expect(clipboard.writeText).toHaveBeenCalledWith(LINES.slice(1, 3).join('\n'))
+  })
+
+  it('keeps the end of a selection that runs out of a folded block', async () => {
+    openInExplorer()
+    act(() => {
+      ;(rowProps(2).onLongPress as () => void)() // line 3
+    })
+    act(() => {
+      ;(rowProps(4).onPress as () => void)() // line 5
+    })
+    pressToggle(1, 'Fold lines 2–3')
+    await press('Copy lines 2–5')
+    expect(clipboard.writeText).toHaveBeenCalledWith(LINES.slice(1, 5).join('\n'))
+  })
+
   it('asks the chat about the file\'s own line numbers, hidden lines included', () => {
     const onAskAboutLines = vi.fn()
     openInFileTab(onAskAboutLines)
