@@ -125,6 +125,40 @@ describe('the file names and extensions the viewer knows', () => {
     expect(resolveMobileSyntaxLanguage(path)).toBe(language)
   })
 
+  it.each([
+    ['.env.staging', 'ini'],
+    ['config/.env.test.local', 'ini'],
+    ['.envrc', 'bash'],
+    ['.zshenv', 'bash'],
+    ['.bash_aliases', 'bash'],
+    ['PKGBUILD', 'bash'],
+    ['.bazelrc', 'bash'],
+    ['Cargo.lock', 'ini'],
+    ['uv.lock', 'ini'],
+    ['poetry.lock', 'ini'],
+    ['Pipfile', 'ini'],
+    ['stubs/os.pyi', 'python'],
+    ['Tiltfile', 'python'],
+    ['MODULE.bazel', 'python'],
+    ['WORKSPACE.bazel', 'python'],
+    ['tools/defs.bazel', 'python'],
+    ['orca.gemspec', 'ruby'],
+    ['lib/tasks/db.rake', 'ruby'],
+    ['config.ru', 'ruby'],
+    ['ios/Orca.podspec', 'ruby'],
+    ['docs/guide.markdown', 'markdown'],
+    ['.cursor/rules/style.mdc', 'markdown'],
+    ['kernels/add.cu', 'cpp'],
+    ['kernels/add.cuh', 'cpp'],
+    ['src/node.hh', 'cpp'],
+    ['src/node.hxx', 'cpp'],
+    ['dockerfile', 'dockerfile'],
+    ['docker/dockerfile.prod', 'dockerfile'],
+    ['ios/Podfile.lock', 'yaml']
+  ])('%s is %s too', (path, language) => {
+    expect(resolveMobileSyntaxLanguage(path)).toBe(language)
+  })
+
   it('knows plain text by name, and does not know a name it has no entry for', () => {
     for (const path of ['notes.txt', 'server.log', 'LICENSE', 'data/scores.csv']) {
       expect(isUnknownMobileFileName(path), path).toBe(false)

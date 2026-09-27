@@ -153,6 +153,20 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.jsonl': 'json',
   '.json5': 'json',
   '.ipynb': 'json',
+  '.pyi': 'python',
+  // Starlark: BUILD.bazel, MODULE.bazel, WORKSPACE.bazel.
+  '.bazel': 'python',
+  '.gemspec': 'ruby',
+  '.rake': 'ruby',
+  '.podspec': 'ruby',
+  '.ru': 'ruby',
+  '.markdown': 'markdown',
+  // Cursor's rule files: Markdown under front matter.
+  '.mdc': 'markdown',
+  '.cu': 'cpp',
+  '.cuh': 'cpp',
+  '.hh': 'cpp',
+  '.hxx': 'cpp',
   // `name.js.flow`: a Flow declaration file, JavaScript with types.
   '.flow': 'javascript',
   // Front matter, then HTML with components in it.
@@ -186,10 +200,6 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   '.gitignore': 'ini',
   '.gitattributes': 'ini',
   '.editorconfig': 'ini',
-  '.env': 'ini',
-  '.env.local': 'ini',
-  '.env.development': 'ini',
-  '.env.production': 'ini',
   '.npmrc': 'ini',
   '.gitconfig': 'ini',
   '.gitmodules': 'ini',
@@ -209,6 +219,18 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   BUILD: 'python',
   'BUILD.bazel': 'python',
   WORKSPACE: 'python',
+  '.envrc': 'bash',
+  '.zshenv': 'bash',
+  '.bash_aliases': 'bash',
+  PKGBUILD: 'bash',
+  '.bazelrc': 'bash',
+  // TOML, which highlight.js reads as ini.
+  'Cargo.lock': 'ini',
+  'uv.lock': 'ini',
+  'poetry.lock': 'ini',
+  Pipfile: 'ini',
+  'Podfile.lock': 'yaml',
+  Tiltfile: 'python',
   '.bashrc': 'bash',
   '.bash_profile': 'bash',
   '.zshrc': 'bash',
@@ -239,8 +261,12 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   README: 'plaintext'
 }
 
-/** `Dockerfile.dev`, `Containerfile.base`: a Dockerfile by its prefix. */
-const DOCKERFILE_NAME = /^(?:Dockerfile|Containerfile)(?:\.|$)/
+/** `Dockerfile.dev`, `dockerfile`, `Containerfile.base`: a Dockerfile by
+ *  its prefix, in either case. */
+const DOCKERFILE_NAME = /^(?:dockerfile|containerfile)(?:\.|$)/i
+/** `.env`, `.env.local`, `.env.staging`: dotenv files, by their prefix
+ *  (`.envrc` is a shell script, and not one of them). */
+const DOTENV_NAME = /^\.env(?:\.|$)/
 
 /** An own entry only: a file named `constructor` is not Object's. */
 function lookUp(map: Record<string, string>, key: string): string | undefined {
@@ -251,6 +277,7 @@ function languageFromName(filename: string): string | undefined {
   return (
     lookUp(FILENAME_TO_LANGUAGE, filename) ??
     (DOCKERFILE_NAME.test(filename) ? 'dockerfile' : undefined) ??
+    (DOTENV_NAME.test(filename) ? 'ini' : undefined) ??
     lookUp(EXT_TO_LANGUAGE, extname(filename).toLowerCase())
   )
 }
