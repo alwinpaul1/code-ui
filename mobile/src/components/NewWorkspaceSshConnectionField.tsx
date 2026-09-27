@@ -1,7 +1,8 @@
 import { Pressable, Text, View } from 'react-native'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import { workspaceSshStatusLabel } from '../tasks/workspace-ssh-gate'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { useThemedStyles } from '../theme/theme-context'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 
 export function NewWorkspaceSshConnectionField({
   repoName,
@@ -12,6 +13,7 @@ export function NewWorkspaceSshConnectionField({
   sshGate: WorkspaceSshGate
   onConnect: () => void
 }) {
+  const styles = useThemedStyles(newWorktreeFormStyles)
   return (
     <View style={styles.field}>
       <Text style={styles.label}>SSH Connection</Text>

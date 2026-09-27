@@ -16,7 +16,9 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-vi.mock('./mobile-source-control-styles', () => ({ styles: new Proxy({}, { get: () => ({}) }) }))
+vi.mock('./mobile-source-control-styles', () => ({
+  sourceControlStyles: () => new Proxy({}, { get: () => ({}) })
+}))
 
 /**
  * The dock closes and the route goes back, and only one of them is a Back control.

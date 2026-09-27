@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Sparkles } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileCommitFailureRecovery } from './mobile-commit-failure-recovery'
 import type { MobileCommitFailureRecoveryAction } from './use-mobile-commit-failure-recovery'
-import { styles } from './mobile-source-control-styles'
+import { sourceControlStyles } from './mobile-source-control-styles'
 
 type Props = {
   failure: MobileCommitFailureRecovery
@@ -13,6 +13,8 @@ type Props = {
 
 export function MobileCommitFailurePanel({ failure, action }: Props) {
   const [expanded, setExpanded] = useState(false)
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sourceControlStyles)
   const Chevron = expanded ? ChevronDown : ChevronRight
   const detailsText = failure.error.trim()
 
@@ -37,9 +39,9 @@ export function MobileCommitFailurePanel({ failure, action }: Props) {
           accessibilityLabel="Fix commit failure with AI"
         >
           {action.launching ? (
-            <ActivityIndicator color={colors.bgBase} />
+            <ActivityIndicator color={colors.bg} />
           ) : (
-            <Sparkles size={14} color={colors.bgBase} strokeWidth={2.2} />
+            <Sparkles size={14} color={colors.bg} strokeWidth={2.2} />
           )}
           <Text style={styles.commitFailureFixButtonText}>Fix</Text>
         </Pressable>

@@ -1,6 +1,8 @@
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native'
 import { ChevronDown, Monitor } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 
 type Selection = { label: string; detail?: string }
 
@@ -17,6 +19,8 @@ export function NewWorktreeProjectTargetFields({
   onOpenProject: () => void
   onOpenRunTarget: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(projectTargetFieldsStyles)
   return (
     <>
       <View style={styles.field}>
@@ -49,6 +53,7 @@ function SelectionCopy({
   selection: Selection | null
   placeholder: string
 }) {
+  const styles = useThemedStyles(projectTargetFieldsStyles)
   return (
     <View style={styles.fieldButtonCopy}>
       <Text
@@ -66,46 +71,48 @@ function SelectionCopy({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
-  },
-  projectDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  fieldButtonCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  fieldButtonText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  fieldButtonDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  }
-})
+function projectTargetFieldsStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    field: {
+      marginBottom: spacing.md
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      marginBottom: spacing.xs
+    },
+    fieldButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: Platform.OS === 'ios' ? spacing.sm + 2 : spacing.sm
+    },
+    projectDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 999
+    },
+    fieldButtonCopy: {
+      flex: 1,
+      minWidth: 0
+    },
+    fieldButtonText: {
+      fontSize: typography.bodySize,
+      color: colors.text
+    },
+    fieldButtonDetail: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      marginTop: 1
+    },
+    fieldButtonPlaceholder: {
+      color: colors.textMuted
+    }
+  })
+}

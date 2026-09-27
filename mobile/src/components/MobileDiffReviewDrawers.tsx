@@ -3,14 +3,14 @@ import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from
 import { Check, Copy, FileText, Plus, Send, Trash2, X } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { useKeyboardAvoidingPadding } from '../platform/keyboard-occlusion'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { ActionSheetAction } from './ActionSheetModal'
 import { ActionSheetModal } from './ActionSheetModal'
 import { BottomDrawer } from './BottomDrawer'
 import { ConfirmModal } from './ConfirmModal'
 import { mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -167,6 +167,8 @@ function NoteComposerDrawer({ controller }: Props) {
   // keyboard measurement where it cannot, because that view is driven by events RN Web never
   // sends. Padding rather than a second avoiding view: the drawer owns the position.
   const keyboardPadding = useKeyboardAvoidingPadding()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <BottomDrawer visible={composer !== null} onClose={controller.closeComposer}>
       <KeyboardAvoidingView
@@ -190,7 +192,7 @@ function NoteComposerDrawer({ controller }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Cancel note"
           >
-            <X size={18} color={colors.textPrimary} strokeWidth={2.2} />
+            <X size={18} color={colors.text} strokeWidth={2.2} />
           </Pressable>
         </View>
         <TextInput
@@ -223,6 +225,8 @@ function composerLabel(
 }
 
 function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <Pressable
       style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
@@ -230,7 +234,7 @@ function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
       accessibilityRole="button"
       accessibilityLabel="Delete note"
     >
-      <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
+      <Trash2 size={14} color={colors.danger} strokeWidth={2.2} />
       <Text style={styles.destructiveText}>Delete</Text>
     </Pressable>
   )
@@ -244,6 +248,8 @@ function SaveNoteButton({
   composer: ReturnType<typeof useMobileDiffReviewController>['composer']
 }) {
   const disabled = controller.composerBody.trim().length === 0
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <Pressable
       style={({ pressed }) => [
@@ -256,7 +262,7 @@ function SaveNoteButton({
       accessibilityRole="button"
       accessibilityLabel={composerLabel(composer)}
     >
-      <Check size={14} color={colors.bgBase} strokeWidth={2.2} />
+      <Check size={14} color={colors.bg} strokeWidth={2.2} />
       <Text style={styles.primaryButtonText}>Save</Text>
     </Pressable>
   )
@@ -265,6 +271,8 @@ function SaveNoteButton({
 function CompletionDrawer({ controller }: Props) {
   const noteCount =
     controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <BottomDrawer
       visible={controller.showCompletion}
@@ -293,7 +301,7 @@ function CompletionDrawer({ controller }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Send notes to agent"
         >
-          <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
+          <Send size={14} color={colors.bg} strokeWidth={2.2} />
           <Text style={styles.primaryButtonText}>Send Notes</Text>
         </Pressable>
       </View>

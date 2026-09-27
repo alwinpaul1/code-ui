@@ -18,7 +18,18 @@ import { mobileDiffReviewControlStyles } from '../components/mobile-diff-review-
 import { customKeyModalStyles } from '../components/CustomKeyModal.styles'
 import { mobileSessionCommandInputStyles } from '../session/mobile-session-command-input-styles'
 import { typography } from '../theme/mobile-theme'
+import { lightColors } from '../theme/tokens'
+import type { Theme } from '../theme/theme-context'
 import { TEXT_INPUT_FONT_SIZE } from './text-input-font-size'
+
+// `listStyles` and `mobileDiffReviewControlStyles` read the live theme now (theme-review sweep),
+// so they are factories over `Theme` rather than static StyleSheet objects. Both read only
+// `colors` off it, so a colours-only stand-in is enough to call them here; the scheme itself is
+// not this file's business (mobile-source-control-screen-state.test.ts and the other
+// `*.theme.test.tsx` files cover light vs dark for these same modules).
+const themeStub = { colors: lightColors } as Theme
+const listStylesResolved = listStyles(themeStub)
+const mobileDiffReviewControlStylesResolved = mobileDiffReviewControlStyles(themeStub)
 import {
   TEXT_INPUT_FONT_SIZE_FLOOR,
   TEXT_INPUT_FONT_SIZE as WEB_TEXT_INPUT_FONT_SIZE
@@ -85,8 +96,8 @@ describe('the font size the page-served text inputs carry', () => {
 
   it('leaves a phone rendering exactly what it rendered before', () => {
     expect(TEXT_INPUT_FONT_SIZE).toBe(typography.bodySize)
-    expect(listStyles.commitInput.fontSize).toBe(typography.bodySize)
-    expect(mobileDiffReviewControlStyles.composerInput.fontSize).toBe(typography.bodySize)
+    expect(listStylesResolved.commitInput.fontSize).toBe(typography.bodySize)
+    expect(mobileDiffReviewControlStylesResolved.composerInput.fontSize).toBe(typography.bodySize)
     expect(mobileBrowserPaneStyles.keyboardInput.fontSize).toBe(typography.bodySize)
     expect(customKeyModalStyles.fieldInput.fontSize).toBe(typography.bodySize)
     // The capture field beside it, which is the one input on this screen no seam touches.
