@@ -4,7 +4,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
@@ -35,6 +36,8 @@ export function QuickCommandRow({
   onDelete,
   disabled
 }: QuickCommandRowProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(quickCommandRowStyles)
   const clipboard = useClipboardWriter()
   const isAgent = isAgentQuickCommand(command)
   const body = getTerminalQuickCommandBody(command)
@@ -108,9 +111,9 @@ export function QuickCommandRow({
           : 'Nothing to copy'
   const copyIconColor =
     copyStatus === 'copied'
-      ? colors.statusGreen
+      ? colors.success
       : copyStatus === 'failed'
-        ? colors.statusRed
+        ? colors.danger
         : colors.textSecondary
 
   return (
@@ -126,7 +129,7 @@ export function QuickCommandRow({
           {isAgent ? (
             <MobileAgentIcon agentId={command.agent} size={16} />
           ) : (
-            <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
+            <Play size={14} color={colors.text} fill={colors.text} />
           )}
         </View>
         <View style={styles.rowText}>
@@ -174,37 +177,39 @@ export function QuickCommandRow({
         onPress={() => onDelete(command)}
         accessibilityLabel={`Delete ${command.label}`}
       >
-        <Trash2 size={15} color={colors.statusRed} />
+        <Trash2 size={15} color={colors.danger} />
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  pressed: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.45 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.md,
-    minWidth: 0
-  },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  mono: { fontFamily: typography.monoFamily },
-  rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
-})
+function quickCommandRowStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    pressed: { backgroundColor: colors.bgRaised },
+    disabled: { opacity: 0.45 },
+    row: { flexDirection: 'row', alignItems: 'center' },
+    rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    rowMain: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingLeft: spacing.md,
+      minWidth: 0
+    },
+    rowIcon: {
+      width: 26,
+      height: 26,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    rowText: { flex: 1, minWidth: 0 },
+    rowLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+    rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+    mono: { fontFamily: typography.monoFamily },
+    rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' }
+  })
+}

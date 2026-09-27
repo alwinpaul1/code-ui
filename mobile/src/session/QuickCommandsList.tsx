@@ -1,6 +1,7 @@
 import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
 import { Check, Plus, Search } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
@@ -46,6 +47,8 @@ export function QuickCommandsList({
   onDelete,
   onAdd
 }: ListProps) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(quickCommandsListStyles)
   const hasVisible = repoCommands.length + globalCommands.length > 0
   const addDisabled = disabled || !canAdd
   // Why: keep an active filter clearable if a delete or paired desktop edit
@@ -141,6 +144,7 @@ function QuickCommandGroup({
   onDelete: (command: TerminalQuickCommand) => void
   disabled: boolean
 }) {
+  const styles = useThemedStyles(quickCommandsListStyles)
   return (
     <View>
       <Text style={styles.groupLabel}>{label}</Text>
@@ -168,6 +172,8 @@ export function QuickCommandAgentPicker({
   selected: TuiAgent | null
   onSelect: (agent: TuiAgent) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(quickCommandsListStyles)
   return (
     <View style={styles.group}>
       {QUICK_COMMAND_SUPPORTED_AGENTS.map((agent, index) => (
@@ -186,71 +192,73 @@ export function QuickCommandAgentPicker({
             <MobileAgentIcon agentId={agent.id} size={16} />
           </View>
           <Text style={styles.agentLabel}>{agent.label}</Text>
-          {selected === agent.id ? <Check size={16} color={colors.textPrimary} /> : null}
+          {selected === agent.id ? <Check size={16} color={colors.text} /> : null}
         </Pressable>
       ))}
     </View>
   )
 }
 
-const styles = StyleSheet.create({
-  pressed: { backgroundColor: colors.bgRaised },
-  disabled: { opacity: 0.45 },
-  listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
-  search: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm
-  },
-  searchInput: { flex: 1, color: colors.textPrimary, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
-  error: { color: colors.statusRed, fontSize: 13, paddingHorizontal: spacing.xs },
-  loading: { paddingVertical: spacing.lg },
-  empty: {
-    color: colors.textMuted,
-    fontSize: 14,
-    textAlign: 'center',
-    paddingVertical: spacing.lg
-  },
-  groupLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    paddingHorizontal: spacing.xs,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.xs
-  },
-  group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  rowIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: colors.bgRaised,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  agentLabel: { flex: 1, fontSize: 14, color: colors.textPrimary },
-  addRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.xs
-  },
-  addText: { fontSize: 14, fontWeight: '600', color: colors.textPrimary }
-})
+function quickCommandsListStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    pressed: { backgroundColor: colors.bgRaised },
+    disabled: { opacity: 0.45 },
+    listBody: { gap: spacing.sm, paddingBottom: spacing.sm },
+    search: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgPanel,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm
+    },
+    searchInput: { flex: 1, color: colors.text, fontSize: TEXT_INPUT_FONT_SIZE, padding: 0 },
+    error: { color: colors.danger, fontSize: 13, paddingHorizontal: spacing.xs },
+    loading: { paddingVertical: spacing.lg },
+    empty: {
+      color: colors.textMuted,
+      fontSize: 14,
+      textAlign: 'center',
+      paddingVertical: spacing.lg
+    },
+    groupLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 0.6,
+      paddingHorizontal: spacing.xs,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.xs
+    },
+    group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
+    row: { flexDirection: 'row', alignItems: 'center' },
+    rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
+    rowIcon: {
+      width: 26,
+      height: 26,
+      borderRadius: 6,
+      backgroundColor: colors.bgRaised,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    agentLabel: { flex: 1, fontSize: 14, color: colors.text },
+    addRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: colors.border,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md,
+      marginTop: spacing.xs
+    },
+    addText: { fontSize: 14, fontWeight: '600', color: colors.text }
+  })
+}
