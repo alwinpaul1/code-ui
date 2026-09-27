@@ -42,6 +42,7 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   onLongPress,
   onPress,
   foldColumn,
+  foldHitSlop,
   fold
 }: MobileCodeLineInteraction & {
   number: number
@@ -58,6 +59,8 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   numberOfLines: 1 | undefined
   /** The file has blocks to fold: every row keeps the toggles' column. */
   foldColumn: boolean
+  /** How far the toggle's touch reaches (codeViewFoldHitSlop). */
+  foldHitSlop?: { top: number; bottom: number; left: number; right: number }
   fold?: MobileCodeLineFold
 }) {
   return (
@@ -77,7 +80,7 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
           accessibilityRole="button"
           accessibilityLabel={fold.label}
           accessibilityState={{ expanded: !fold.folded }}
-          hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+          hitSlop={foldHitSlop}
         >
           <Text style={highlighted ? [styles.foldGlyph, styles.foldGlyphSelected] : styles.foldGlyph}>
             {fold.folded ? '▸' : '▾'}

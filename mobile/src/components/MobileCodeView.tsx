@@ -15,6 +15,7 @@ import { clipSegmentsToColumns } from './mobile-code-indent'
 import type { MobileCodeDocument } from './mobile-code-document'
 import {
   CODE_VIEW_MAX_NO_WRAP_COLUMNS,
+  codeViewFoldHitSlop,
   codeViewListLayout,
   codeViewMetrics,
   defaultCodeViewWrap
@@ -86,6 +87,7 @@ export function MobileCodeView({
     [document, fontScale]
   )
   const styles = useMemo(() => makeCodeViewStyles(theme, metrics), [theme, metrics])
+  const foldHitSlop = useMemo(() => codeViewFoldHitSlop(metrics), [metrics])
   const [wrapChoice, setWrapChoice] = useState<{
     doc: MobileCodeDocument
     wrap: boolean
@@ -193,6 +195,7 @@ export function MobileCodeView({
           rowStyle={layout.rowStyle}
           numberOfLines={layout.numberOfLines}
           foldColumn={metrics.foldWidth > 0}
+          foldHitSlop={foldHitSlop}
           fold={
             region
               ? {
@@ -206,7 +209,7 @@ export function MobileCodeView({
         />
       )
     },
-    [clip, document, folding, guideSpacing, layout, lineProps, metrics, segmentsFor, styles, theme.syntax, visible]
+    [clip, document, folding, foldHitSlop, guideSpacing, layout, lineProps, metrics, segmentsFor, styles, theme.syntax, visible]
   )
   const listExtraData = useMemo(() => ({ chunks, extraData }), [chunks, extraData])
 

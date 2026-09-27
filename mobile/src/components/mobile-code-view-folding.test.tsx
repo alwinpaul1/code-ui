@@ -193,6 +193,20 @@ describe.each(['dark', 'light'] as const)('folding a block of code (%s)', (curre
   })
 })
 
+describe('a fold toggle', () => {
+  it('can be hit anywhere in 48 by 48 points, though the row is 20 tall', () => {
+    const doc = buildMobileCodeDocument(PYTHON, 'python')
+    const r = mount(doc)
+    const button = toggle(row(r, 0), 'Fold lines 1–5')
+    const slop = button.props.hitSlop as { top: number; bottom: number; left: number; right: number }
+    const metrics = codeViewMetrics({ lineCount: doc.lines.length, maxColumns: doc.maxColumns, fontScale: 1, foldable: true })
+    expect(metrics.foldWidth + slop.left + slop.right).toBeGreaterThanOrEqual(48)
+    expect(metrics.rowHeight + slop.top + slop.bottom).toBeGreaterThanOrEqual(48)
+    // The slop is only reach: the column itself stays its width.
+    expect(flat(button.props.style).width).toBe(metrics.foldWidth)
+  })
+})
+
 describe('a file with nothing to fold', () => {
   it('keeps the old gap after its line numbers, with no fold column', () => {
     // Plain text and logs drew an empty toggle column (review, 2026-09-27).

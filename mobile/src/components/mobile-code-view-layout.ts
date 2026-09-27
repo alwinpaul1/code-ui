@@ -86,6 +86,18 @@ export function codeViewMetrics({
 
 export const CODE_VIEW_PADDING_START = PADDING_START
 
+/** Android's smallest comfortable touch target, in points. */
+const MIN_TOUCH_TARGET = 48
+
+/** How far a fold toggle's touch reaches past its column and row, so it can
+ *  be hit in 48 by 48 points: the toggle is 18 by 20 on its own (26 by 32
+ *  with the old slop, review 2026-09-27). Reach only; the layout is as is. */
+export function codeViewFoldHitSlop(metrics: CodeViewMetrics): { top: number; bottom: number; left: number; right: number } {
+  const across = Math.max(0, Math.ceil((MIN_TOUCH_TARGET - metrics.foldWidth) / 2))
+  const down = Math.max(0, Math.ceil((MIN_TOUCH_TARGET - metrics.rowHeight) / 2))
+  return { top: down, bottom: down, left: across, right: across }
+}
+
 /** Wrapping is off, as on the desktop, unless a line is too long to draw
  *  unwrapped. The reader can turn it on or off either way. */
 export function defaultCodeViewWrap(doc: { maxColumns: number }): boolean {
