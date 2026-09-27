@@ -143,6 +143,7 @@ export async function* pickVideoFrames(
         sourceName,
         durationLabel: formatVideoFrameDurationLabel(meta.durationMs),
         intervalLabel: formatVideoFrameIntervalLabel(meta.intervalMs),
+        intervalMs: meta.intervalMs,
         sourceSizeLabel: formatVideoFrameSizeLabel(sourceSizeBytes)
       }
       yield {

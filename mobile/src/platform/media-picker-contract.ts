@@ -35,6 +35,11 @@ export type VideoFrameAttachmentMeta = {
   readonly durationLabel: string
   /** `null` for a single-frame group, which has no cadence to state. */
   readonly intervalLabel: string | null
+  /** The same cadence as `intervalLabel`, unformatted — lets the note compute
+   *  how much of the video a group that fell short of its plan (a cancel, a
+   *  failed upload) actually covers, instead of restating the whole video's
+   *  duration over however few frames survived. */
+  readonly intervalMs: number | null
   readonly sourceSizeLabel: string
 }
 

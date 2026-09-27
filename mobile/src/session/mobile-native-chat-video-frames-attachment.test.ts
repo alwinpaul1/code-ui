@@ -22,6 +22,7 @@ function frame(index: number, total: number): PendingNativeChatImage {
       sourceName: 'Screen_Recording_2026-09-27.mp4',
       durationLabel: '2 min 14 s',
       intervalLabel: 'every 6.7 s',
+      intervalMs: 6700,
       sourceSizeLabel: '142 MB'
     }
   }
@@ -56,14 +57,16 @@ describe('buildMobileNativeChatVideoFrameNotes', () => {
     )
   })
 
-  it('counts the frames actually in the send, not the plan each one still carries from extraction', () => {
+  it('states the span actually covered, not the whole video\'s duration and cadence, when a group is short of its plan', () => {
     // 2026-09-27 review: a cancel or a failed upload can leave a group short
-    // of its plan; the note must say how many really made it, not repeat
-    // "20 frames" over two survivors. `intervalLabel`/`durationLabel` still
-    // describe the source video's own sampling, unaffected by the shortfall.
+    // of its plan. The note must say how many frames really made it and what
+    // span of the video they cover ("2 frames from the first 7 s"), not
+    // restate the plan's own duration/cadence as if a full, even read
+    // happened — it didn't. (index 2 at a 6.7 s cadence -> (2-1)*6700ms = 7 s
+    // once formatVideoFrameDurationLabel rounds it.)
     expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20), frame(2, 20)])).toBe(
-      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 2 frames, every 6.7 s). ' +
-        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 frames from the first 7 s of a 2 min 14 s video). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent; reading stopped early.'
     )
   })
 

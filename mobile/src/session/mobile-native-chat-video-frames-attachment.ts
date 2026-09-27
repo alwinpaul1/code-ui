@@ -1,5 +1,5 @@
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
-import { formatVideoFrameSizeLabel } from './mobile-video-frame-extractor'
+import { formatVideoFrameDurationLabel, formatVideoFrameSizeLabel } from './mobile-video-frame-extractor'
 import {
   isPendingNativeChatFile,
   stripMobileNativeChatFileNotes,
@@ -24,18 +24,25 @@ export function isPendingNativeChatVideoFrame(attachment: PendingNativeChatImage
  *  of that group are actually in `attachments` right now — not the planned
  *  total each frame's own metadata still carries — so a group a cancel or a
  *  failed upload left short of its plan is described as it really is
- *  (2026-09-27 review: the note used to repeat the plan regardless). The
- *  cadence and duration describe the source video itself and stay as
- *  sampled, whatever the survivor count. */
+ *  (2026-09-27 review: the note used to repeat the plan regardless). When
+ *  the group IS short, the note states the span the survivors actually
+ *  cover ("3 frames from the first 14 s of a 2 min 14 s video") rather than
+ *  the cadence and duration a complete read would state — those describe an
+ *  even sampling of the WHOLE video, which a cut-short read never was. */
 export function buildMobileNativeChatVideoFrameNotes(
   attachments: readonly PendingNativeChatImage[]
 ): string {
-  const actualTotalByGroup = new Map<string, number>()
+  const actualByGroup = new Map<string, { count: number; maxIndex: number }>()
   for (const attachment of attachments) {
     const groupId = attachment.videoFrame?.groupId
-    if (groupId) {
-      actualTotalByGroup.set(groupId, (actualTotalByGroup.get(groupId) ?? 0) + 1)
+    if (!groupId) {
+      continue
     }
+    const current = actualByGroup.get(groupId) ?? { count: 0, maxIndex: 0 }
+    actualByGroup.set(groupId, {
+      count: current.count + 1,
+      maxIndex: Math.max(current.maxIndex, attachment.videoFrame!.index)
+    })
   }
   const seen = new Set<string>()
   const lines: string[] = []
@@ -45,8 +52,18 @@ export function buildMobileNativeChatVideoFrameNotes(
       continue
     }
     seen.add(meta.groupId)
-    const total = actualTotalByGroup.get(meta.groupId) ?? meta.total
+    const actual = actualByGroup.get(meta.groupId)
+    const total = actual?.count ?? meta.total
     const frameWord = total === 1 ? 'frame' : 'frames'
+    const short = total < meta.total
+    if (short && meta.intervalMs !== null) {
+      const spanLabel = formatVideoFrameDurationLabel((actual!.maxIndex - 1) * meta.intervalMs)
+      lines.push(
+        `Frames from ${meta.sourceName} (${total} ${frameWord} from the first ${spanLabel} of a ${meta.durationLabel} video). ` +
+          `The video itself is ${meta.sourceSizeLabel}, over the ${UPLOAD_CAP_LABEL} the desktop accepts, so it was not sent; reading stopped early.`
+      )
+      continue
+    }
     const cadence = meta.intervalLabel ? `, ${meta.intervalLabel}` : ''
     lines.push(
       `Frames from ${meta.sourceName} (${meta.durationLabel}, ${total} ${frameWord}${cadence}). ` +
@@ -69,7 +86,10 @@ export function withMobileNativeChatVideoFrameNotes(
   return body ? `${notes}\n\n${body}` : notes
 }
 
-const FRAME_NOTE_LINE = /^Frames from .* so it was not sent\.$/
+// Matches both endings buildMobileNativeChatVideoFrameNotes can produce: a
+// complete read's plain "...so it was not sent." and a cut-short one's
+// "...so it was not sent; reading stopped early."
+const FRAME_NOTE_LINE = /^Frames from .* so it was not sent(?:; reading stopped early)?\.$/
 
 /** The user's own text out of a sent body `withMobileNativeChatVideoFrameNotes`
  *  built, mirroring `stripMobileNativeChatFileNotes`. Unchanged when no note leads. */

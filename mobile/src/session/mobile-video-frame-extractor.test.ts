@@ -147,6 +147,12 @@ describe('the note\'s numbers', () => {
     expect(formatVideoFrameDurationLabel(1000)).toBe('1 s')
   })
 
+  it('formats a video under half a second as "under 1 s", not "0 s"', () => {
+    // 2026-09-27 review: Math.round(300 / 1000) is 0, and a bare "0 s" reads
+    // as "this video has no duration" rather than "this video is very short".
+    expect(formatVideoFrameDurationLabel(300)).toBe('under 1 s')
+  })
+
   it('formats the worked example\'s duration as minutes and seconds', () => {
     expect(formatVideoFrameDurationLabel(134_000)).toBe('2 min 14 s')
   })
@@ -189,6 +195,18 @@ describe('describeVideoFrameExtractionFailure', () => {
     const raw = 'MediaCodec.CodecException: Error 0xfffffc0e occurred'
     expect(describeVideoFrameExtractionFailure(new Error(raw))).not.toContain('MediaCodec')
     expect(describeVideoFrameExtractionFailure(new Error(raw))).toBe('could not be read')
+  })
+
+  it('does not double the dash when a native error carries no message of its own', () => {
+    // 2026-09-27 review: mobile-video-frame-player.ts's own fallback
+    // ('This video could not be read') lands in the 'could not be read'
+    // branch, and every caller already writes its own dash before this
+    // reason ("... (18 MB max) — the video ${reason}"). A reason with an
+    // embedded dash of its own reads as two dashes in one sentence.
+    const reason = describeVideoFrameExtractionFailure(new VideoFrameExtractionError('This video could not be read'))
+    const toast = `File too large to attach (18 MB max) — the video ${reason}`
+    expect(toast.match(/—/g)).toHaveLength(1)
+    expect(toast).toBe('File too large to attach (18 MB max) — the video could not be read; the format may not be supported')
   })
 })
 

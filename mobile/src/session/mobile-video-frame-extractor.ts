@@ -159,9 +159,13 @@ export function videoFrameSampledIntervalMs(timestampsMs: readonly number[]): nu
   return Math.round((last - first) / (timestampsMs.length - 1))
 }
 
-/** "2 min 14 s", or "14 s" under a minute. */
+/** "2 min 14 s", or "14 s" under a minute — "under 1 s" rather than "0 s" for
+ *  a video short enough to round down to nothing. */
 export function formatVideoFrameDurationLabel(durationMs: number): string {
   const totalSeconds = Math.max(0, Math.round(durationMs / 1000))
+  if (durationMs > 0 && totalSeconds === 0) {
+    return 'under 1 s'
+  }
   const minutes = Math.floor(totalSeconds / 60)
   const seconds = totalSeconds % 60
   return minutes > 0 ? `${minutes} min ${seconds} s` : `${seconds} s`
@@ -209,7 +213,12 @@ export function describeVideoFrameExtractionFailure(error: unknown): string {
     return 'could not be processed into images'
   }
   if (lower.includes('could not be read')) {
-    return 'could not be read — the format may not be supported'
+    // No embedded dash: this is the branch a native error with no message of
+    // its own falls into (mobile-video-frame-player.ts's own fallback text is
+    // what "could not be read" matches here), and the caller already puts one
+    // dash of its own before this reason — a second one read as a mistake,
+    // not emphasis (2026-09-27 review).
+    return 'could not be read; the format may not be supported'
   }
   return 'could not be read'
 }

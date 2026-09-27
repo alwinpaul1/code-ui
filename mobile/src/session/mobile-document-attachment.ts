@@ -2,8 +2,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
 import type { PickedMobileImage } from './mobile-image-source-picker'
-import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { buildMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
 
 export type AttachMobileDocumentDeps = {
   readonly client: Pick<RpcClient, 'sendRequest'>
@@ -18,13 +17,14 @@ export type AttachMobileDocumentDeps = {
 /**
  * Terminal-mode counterpart of the chat file attachment: pick documents,
  * upload them through the image channel (the only byte path a phone has), and
- * type the notes onto the terminal's input line without pressing Enter, so
- * the user can add a prompt after them. Returns false when nothing was sent.
+ * type the file notes onto the terminal's input line without pressing Enter,
+ * so the user can add a prompt after them. Returns false when nothing was sent.
  *
- * A picked item is a named file everywhere except an over-the-cap video's
- * frames, which carry `videoFrame` instead of a name (`pickMobileDocuments`) —
- * this screen has no chip strip to paste them into, so like any other
- * document they become a note naming what they are, not a pasted image.
+ * This screen's own `pickDocuments` always calls `pickMobileDocuments` with
+ * `videoFrames: 'refuse'` (use-mobile-image-attachment.ts): it has no chip
+ * strip to paste a video's frames into, no progress chip, and no cancel, so
+ * an over-cap video keeps the ordinary "too large" refusal instead of being
+ * read for its frames. Every picked item here is a named document.
  */
 export async function attachMobileDocumentsToTerminal({
   client,
@@ -35,7 +35,7 @@ export async function attachMobileDocumentsToTerminal({
   onUploadStart,
   beforeTerminalSend
 }: AttachMobileDocumentDeps): Promise<boolean> {
-  const notes: PendingNativeChatImage[] = []
+  const notes: { id: string; path: string; previewUri: string; kind: 'file'; name: string }[] = []
   let connectionId: string | null = null
   for await (const picked of pickDocuments()) {
     if (notes.length === 0) {
@@ -43,17 +43,13 @@ export async function attachMobileDocumentsToTerminal({
       connectionId = await getConnectionId()
     }
     const path = await saveMobileClipboardImageAsTempFile(client, picked.base64, { connectionId })
-    notes.push(
-      picked.videoFrame
-        ? { id: `doc-${notes.length}`, path, previewUri: picked.uri ?? '', videoFrame: picked.videoFrame }
-        : {
-            id: `doc-${notes.length}`,
-            path,
-            previewUri: picked.uri ?? '',
-            kind: 'file',
-            name: picked.name ?? 'file'
-          }
-    )
+    notes.push({
+      id: `doc-${notes.length}`,
+      path,
+      previewUri: picked.uri ?? '',
+      kind: 'file',
+      name: picked.name ?? 'file'
+    })
   }
   if (notes.length === 0) {
     return false
@@ -63,7 +59,7 @@ export async function attachMobileDocumentsToTerminal({
   }
   const response = await client.sendRequest('terminal.send', {
     terminal,
-    text: `${withMobileNativeChatAttachmentNotes('', notes)} `,
+    text: `${buildMobileNativeChatFileNotes(notes)} `,
     enter: false,
     ...(deviceToken ? { client: { id: deviceToken, type: 'mobile' as const } } : {})
   })

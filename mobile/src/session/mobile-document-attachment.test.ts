@@ -37,65 +37,6 @@ describe('attachMobileDocumentsToTerminal', () => {
     expect((sendCall.params as { text: string }).text).toMatch(/^Attached file "a\.pdf" is on this machine at/)
   })
 
-  it('describes an over-the-cap video\'s frames as a group note, not a mislabeled "file" note', async () => {
-    const client = documentClient()
-    const frame = (index: number): PickedMobileImage => ({
-      base64: `f${index}`,
-      uri: `data:image/jpeg;base64,f${index}`,
-      videoFrame: {
-        groupId: 'g1',
-        index,
-        total: 2,
-        sourceName: 'clip.mp4',
-        durationLabel: '10 s',
-        intervalLabel: 'every 5 s',
-        sourceSizeLabel: '30 MB'
-      }
-    })
-    const accepted = await attachMobileDocumentsToTerminal({
-      client,
-      terminal: 't1',
-      deviceToken: null,
-      getConnectionId: async () => null,
-      pickDocuments: () => pick([frame(1), frame(2)])
-    })
-    expect(accepted).toBe(true)
-    const text = (client.calls.find((call) => call.method === 'terminal.send')!.params as { text: string }).text
-    expect(text).toContain('Frames from clip.mp4 (10 s, 2 frames, every 5 s)')
-    expect(text).not.toContain('Attached file "file"')
-  })
-
-  it('combines a document\'s file note with a video\'s frame note in one selection', async () => {
-    const client = documentClient()
-    const accepted = await attachMobileDocumentsToTerminal({
-      client,
-      terminal: 't1',
-      deviceToken: null,
-      getConnectionId: async () => null,
-      pickDocuments: () =>
-        pick([
-          { base64: 'AAAA', uri: 'file:///a.pdf', name: 'a.pdf' },
-          {
-            base64: 'f1',
-            uri: 'data:image/jpeg;base64,f1',
-            videoFrame: {
-              groupId: 'g1',
-              index: 1,
-              total: 1,
-              sourceName: 'clip.mp4',
-              durationLabel: '1 s',
-              intervalLabel: 'every 1 s',
-              sourceSizeLabel: '30 MB'
-            }
-          }
-        ])
-    })
-    expect(accepted).toBe(true)
-    const text = (client.calls.find((call) => call.method === 'terminal.send')!.params as { text: string }).text
-    expect(text).toContain('Frames from clip.mp4')
-    expect(text).toContain('Attached file "a.pdf"')
-  })
-
   it('returns false, sending nothing, when the picker yields nothing', async () => {
     const client = documentClient()
     const accepted = await attachMobileDocumentsToTerminal({
