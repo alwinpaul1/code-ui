@@ -1,7 +1,8 @@
 import { useRef } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import type { ConnectionLogEntry } from '../transport/types'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useThemedStyles, type Theme } from '../theme/theme-context'
 
 type Props = {
   entries: ConnectionLogEntry[]
@@ -11,11 +12,13 @@ type Props = {
   fillAvailableHeight?: boolean
 }
 
-const LEVEL_COLOR: Record<ConnectionLogEntry['level'], string> = {
-  info: colors.textSecondary,
-  success: colors.statusGreen,
-  warn: colors.statusAmber,
-  error: colors.statusRed
+function levelColor({ colors }: Theme): Record<ConnectionLogEntry['level'], string> {
+  return {
+    info: colors.textSecondary,
+    success: colors.success,
+    warn: colors.warning,
+    error: colors.danger
+  }
 }
 
 const LEVEL_GLYPH: Record<ConnectionLogEntry['level'], string> = {
@@ -40,6 +43,8 @@ function formatTime(ts: number, baseTs: number): string {
 
 export function ConnectionLog({ entries, title, fillAvailableHeight = false }: Props) {
   const scrollRef = useRef<ScrollView | null>(null)
+  const styles = useThemedStyles(connectionLogStyles)
+  const colorForLevel = useThemedStyles(levelColor)
 
   if (entries.length === 0) {
     return null
@@ -69,11 +74,11 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
           return (
             <View key={renderKey} style={styles.row}>
               <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>
-              <Text style={[styles.glyph, { color: LEVEL_COLOR[entry.level] }]}>
+              <Text style={[styles.glyph, { color: colorForLevel[entry.level] }]}>
                 {LEVEL_GLYPH[entry.level]}
               </Text>
               <View style={styles.rowText}>
-                <Text style={[styles.message, { color: LEVEL_COLOR[entry.level] }]}>
+                <Text style={[styles.message, { color: colorForLevel[entry.level] }]}>
                   {entry.message}
                 </Text>
                 {entry.detail && (
@@ -90,71 +95,73 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    width: '100%',
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md
-  },
-  boundedContainer: {
-    maxHeight: 240
-  },
-  fillContainer: {
-    flex: 1
-  },
-  title: {
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: spacing.xs
-  },
-  boundedScroll: {
-    maxHeight: 200
-  },
-  fillScroll: {
-    flex: 1
-  },
-  scrollContent: {
-    gap: 6
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm
-  },
-  timestamp: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    width: 52,
-    paddingTop: 1
-  },
-  glyph: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    width: 12,
-    textAlign: 'center',
-    paddingTop: 1
-  },
-  rowText: {
-    flex: 1
-  },
-  message: {
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 16
-  },
-  detail: {
-    fontFamily: typography.monoFamily,
-    fontSize: 11,
-    color: colors.textMuted,
-    lineHeight: 14,
-    marginTop: 1
-  }
-})
+function connectionLogStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      width: '100%',
+      backgroundColor: colors.bgPanel,
+      borderRadius: radii.card,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.md
+    },
+    boundedContainer: {
+      maxHeight: 240
+    },
+    fillContainer: {
+      flex: 1
+    },
+    title: {
+      fontSize: typography.metaSize,
+      fontFamily: typography.monoFamily,
+      color: colors.textMuted,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      marginBottom: spacing.xs
+    },
+    boundedScroll: {
+      maxHeight: 200
+    },
+    fillScroll: {
+      flex: 1
+    },
+    scrollContent: {
+      gap: 6
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm
+    },
+    timestamp: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      width: 52,
+      paddingTop: 1
+    },
+    glyph: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      width: 12,
+      textAlign: 'center',
+      paddingTop: 1
+    },
+    rowText: {
+      flex: 1
+    },
+    message: {
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      lineHeight: 16
+    },
+    detail: {
+      fontFamily: typography.monoFamily,
+      fontSize: 11,
+      color: colors.textMuted,
+      lineHeight: 14,
+      marginTop: 1
+    }
+  })
+}
