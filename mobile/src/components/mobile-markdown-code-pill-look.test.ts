@@ -2,14 +2,21 @@ import { describe, expect, it, vi } from 'vitest'
 
 // makeMarkdownStyles calls StyleSheet.create and reads the density; the real
 // react-native entry is Flow-typed and this runner cannot parse it.
-const screen = vi.hoisted(() => ({ density: 3 }))
+const screen = vi.hoisted(() => ({ density: 3, fontScale: 1, api: 34 }))
 vi.mock('react-native', () => ({
-  PixelRatio: { get: () => screen.density },
+  PixelRatio: { get: () => screen.density, getFontScale: () => screen.fontScale },
+  Platform: {
+    OS: 'android',
+    get Version() {
+      return screen.api
+    }
+  },
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
 }))
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
 import type { Theme } from '../theme/theme-context'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
+import { androidSpScale } from './android-font-scale'
 import { markdownChipInkRoom } from './mobile-markdown-prose-scale'
 import { makeMarkdownStyles } from './mobile-markdown-styles'
 
@@ -151,32 +158,55 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
   // above and below, taken back by as much negative margin. Review of
   // 4c2732f4: that padding below never drew at 2.625, 2.75, 3 or 3.5, and the
   // comma below was still clipped by 1.9 to 4.2 px (see drawnRoom).
+  // Review of 63858e9e: Android 14 scales a pill's line height as sp on its
+  // curve (TextAttributes.kt), which at 150% to 200% leaves the line much
+  // tighter on the type than linear scaling does (at 200%, 28.5 dp of line
+  // for 26 dp of type), and the ring of Å and a comma below were clipped by
+  // up to 5.5 px. The room for ink is sized from the type and line as drawn.
   it.each([2.625, 2.75, 2.8125, 3, 3.5])("keeps every glyph of the font whole, at every zoom and system font size, at density %s", (density) => {
     screen.density = density
-    const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as Styles
     const clipped: string[] = []
-    for (const [name, text] of [
-      ['prose', styles.inlineCodeChipText],
-      ['table', { ...styles.inlineCodeChipText, ...styles.inlineCodeChipTextTable }]
+    for (const [api, fontScale] of [
+      [33, 1],
+      [33, 1.15],
+      [33, 1.3],
+      [33, 1.5],
+      [33, 1.7],
+      [33, 2],
+      [34, 1.15],
+      [34, 1.3],
+      [34, 1.5],
+      [34, 1.8],
+      [34, 2]
     ] as const) {
-      for (const zoom of [0.8, 0.9, 1, 1.25, 1.5, 1.8]) {
-        // The zoom scales the pill's type and its room for ink alike
-        // (MobileMarkdownCodeChip); the system font size scales type only.
-        const room = zoom === 1 ? { top: text.paddingTop ?? 0, bottom: text.paddingBottom ?? 0 } : markdownChipInkRoom(density, zoom)
-        for (const fontScale of [1, 1.15, 1.3]) {
-          const px = text.fontSize * zoom * fontScale * density
-          const { above, below } = drawnRoom(px, text.lineHeight * zoom * fontScale * density, room, density)
+      screen.fontScale = fontScale
+      screen.api = api
+      const sp = androidSpScale(fontScale, api)
+      const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as Styles
+      for (const [name, text] of [
+        ['prose', styles.inlineCodeChipText],
+        ['table', { ...styles.inlineCodeChipText, ...styles.inlineCodeChipTextTable }]
+      ] as const) {
+        for (const zoom of [0.8, 0.9, 1, 1.25, 1.5, 1.8]) {
+          // The zoom scales the pill's type (MobileMarkdownCodeChip), and the
+          // system font size turns that sp into dp; the room for ink is dp.
+          const room =
+            zoom === 1 ? { top: text.paddingTop ?? 0, bottom: text.paddingBottom ?? 0 } : markdownChipInkRoom(density, zoom, sp.toDp)
+          const px = sp.toDp(text.fontSize * zoom) * density
+          const { above, below } = drawnRoom(px, sp.toDp(text.lineHeight * zoom) * density, room, density)
           // The font's ink: 986 above the baseline (the ring of Å), 296 below
           // (a comma below), per 1000 em (glyf of the bundled TTF).
+          const at = `${name} zoom ${zoom} font ${fontScale} on API ${api}`
           if (0.986 * px > above) {
-            clipped.push(`${name} zoom ${zoom} font ${fontScale}: top by ${(0.986 * px - above).toFixed(2)} px`)
+            clipped.push(`${at}: top by ${(0.986 * px - above).toFixed(2)} px`)
           }
           if (0.296 * px > below) {
-            clipped.push(`${name} zoom ${zoom} font ${fontScale}: bottom by ${(0.296 * px - below).toFixed(2)} px`)
+            clipped.push(`${at}: bottom by ${(0.296 * px - below).toFixed(2)} px`)
           }
         }
       }
     }
+    screen.fontScale = 1
     expect(clipped).toEqual([])
   })
 
