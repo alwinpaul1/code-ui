@@ -14,10 +14,14 @@ import {
 } from './mobile-task-item-state-operations'
 import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
 
+/** The state colour a just-created Linear issue carries until the next load replaces it with the one
+ *  Linear reports. It is issue data, a hue like Linear's own state colours, not app chrome, so it is
+ *  fixed in both schemes: the terracotta the static palette gave it before the theme sweep. */
+const NEW_LINEAR_ISSUE_STATE_COLOR = '#D9825F'
+
 export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
   const {
     client,
-    colors,
     createBody,
     createRepoId,
     createTeamId,
@@ -135,7 +139,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             title: result.title ?? title,
             description: createBody.trim(),
             url: result.url ?? '',
-            state: { name: 'Open', type: 'unstarted', color: colors.accent },
+            state: { name: 'Open', type: 'unstarted', color: NEW_LINEAR_ISSUE_STATE_COLOR },
             team,
             labels: [],
             priority: 0,
@@ -154,7 +158,6 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     }
   }, [
     client,
-    colors,
     createBody,
     createRepoId,
     createTeamId,

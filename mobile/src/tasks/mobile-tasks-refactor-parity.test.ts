@@ -70,7 +70,12 @@ const hash = (parts: string[] | string): string =>
 // The render tree gains seven `colors`/`styles` argument tokens (35,299 -> 35,306) and renames the
 // static tokens (`textPrimary` -> `text` and the rest) one for one. The StyleSheet reader differs
 // only by those renames: mapping the old output through the rename table reproduces the new one.
-const PROVIDER_RPC_SCREEN_HOOKS = 'd9b357813a15ca094d9df767cecce3081bbbe9a8c59e6678633c99e3199acb90'
+// Same day, later: the create action's new Linear issue takes a fixed state hue
+// (NEW_LINEAR_ISSUE_STATE_COLOR, '#D9825F', the value it always had) instead of the palette, so the
+// RPC recording fixtures need no palette and their goldens hold. That moves the createTask body in
+// the hooks and statements pins (counts unchanged) and adds the one literal to `semantics`
+// (3,275 -> 3,276).
+const PROVIDER_RPC_SCREEN_HOOKS = 'ae1db153f31d18850576ccec082422b35024f4a5527fc8ca126eae13ec3af2a2'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -109,7 +114,7 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
 // stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
 // 2026-09-27 (theme pass 2): 418 -> 420; see the note above PROVIDER_RPC_SCREEN_HOOKS.
-const PROVIDER_RPC_STATEMENTS = 'd8aa570be802c51fcae7051b713b81ac5b6666df2494c252a1243e489bae3056'
+const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a78d403fa6f67167f1'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -134,8 +139,8 @@ const PRESS_FEEDBACK_DECLARATIONS = 'dfeee267e57463591730cc85d504e558b4833b902e5
 // 2026-09-26: the PR diff prefix's style attribute; see the declarations pin above.
 // 2026-09-27 (theme pass 2): that diff's `jsx:MobileSyntaxSegments:segments` host signature
 // becomes `…:segments,palette`. 3,271 lines still.
-// Later the same day: 3,271 -> 3,275 (note above the hooks pin).
-const A11Y_BACK_SEMANTICS = 'f0d5906e596b6f7e08c1cd398fc96d47d6b75971be8313cb2a4fca41277084fe'
+// Later the same day: 3,271 -> 3,275 -> 3,276 (notes above the hooks pin).
+const A11Y_BACK_SEMANTICS = 'e2904f6a4dea08ba3c42d42777f2a219b556f10dbbc6ca28f113aba330111679'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
@@ -167,7 +172,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_275)
+    expect(semantics.split('\n')).toHaveLength(3_276)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 

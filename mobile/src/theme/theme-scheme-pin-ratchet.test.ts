@@ -93,9 +93,16 @@ function schemePins(fileName: string, source: string): string[] {
   return pins
 }
 
+// src/test/ and src/test-support/ are test harness (mocks, the RPC recorder and its fixtures), which
+// may pin a scheme on purpose to reproduce a value; nothing in them ships.
 const APP_CODE = [...sourceFiles(join(MOBILE, 'src')), ...sourceFiles(join(MOBILE, 'app'))]
   .map((path) => relative(MOBILE, path))
-  .filter((path) => !path.startsWith('src/theme/') && !path.startsWith('src/test/'))
+  .filter(
+    (path) =>
+      !path.startsWith('src/theme/') &&
+      !path.startsWith('src/test/') &&
+      !path.startsWith('src/test-support/')
+  )
 
 describe('no app code pins a palette to one scheme', () => {
   it('names no scheme-pinned palette outside src/theme/ and the terminal content files', () => {
