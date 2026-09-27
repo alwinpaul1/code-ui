@@ -7,6 +7,8 @@ import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
   MARKDOWN_CHIP_FONT_SIZE,
+  MARKDOWN_CHIP_INK_ROOM_BOTTOM,
+  MARKDOWN_CHIP_INK_ROOM_TOP,
   MARKDOWN_CHIP_LINE_HEIGHT,
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
@@ -126,6 +128,12 @@ export function makeMarkdownStyles(theme: Theme) {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_CHIP_FONT_SIZE,
       lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
+      // Room for the font's ink past its line (accents, a comma below), which
+      // the Text would clip, taken back in margin (MARKDOWN_CHIP_INK_ROOM_TOP).
+      paddingTop: MARKDOWN_CHIP_INK_ROOM_TOP,
+      paddingBottom: MARKDOWN_CHIP_INK_ROOM_BOTTOM,
+      marginTop: -MARKDOWN_CHIP_INK_ROOM_TOP,
+      marginBottom: -MARKDOWN_CHIP_INK_ROOM_BOTTOM,
       color: colors.codeSpanText
     },
     /** A pill in a table cell: the cell's own size, which is smaller type. */

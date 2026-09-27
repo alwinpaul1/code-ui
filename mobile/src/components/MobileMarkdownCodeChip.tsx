@@ -3,6 +3,8 @@ import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
 import type { MarkdownStyles } from './mobile-markdown-styles'
 import {
+  MARKDOWN_CHIP_INK_ROOM_BOTTOM,
+  MARKDOWN_CHIP_INK_ROOM_TOP,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
   type MarkdownChipScale
@@ -69,6 +71,15 @@ export function MobileMarkdownCodeChip({
                   lineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT * chipScale.factor
                 }
               : { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
+            : null,
+          // The room for ink grows with the type (see the style).
+          chipScale
+            ? {
+                paddingTop: MARKDOWN_CHIP_INK_ROOM_TOP * chipScale.factor,
+                paddingBottom: MARKDOWN_CHIP_INK_ROOM_BOTTOM * chipScale.factor,
+                marginTop: -MARKDOWN_CHIP_INK_ROOM_TOP * chipScale.factor,
+                marginBottom: -MARKDOWN_CHIP_INK_ROOM_BOTTOM * chipScale.factor
+              }
             : null,
           onPress ? styles.inlineCodeLink : null
         ]}

@@ -323,3 +323,19 @@ describe('pills on wrapped heading and table cell lines', () => {
   })
 })
 
+describe("a zoomed pill's room for ink", () => {
+  it.each([0.8, 1.5])('grows with its type at zoom %s, and is taken back in margin', (textScale) => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: 'Ring `Å ș g` here.\n\n| a |\n| --- |\n| `Ů ļ j` |', textScale }))
+    })
+    for (const pill of pills()) {
+      const label = flatStyle(pill.findByType('Text' as never).props.style)
+      expect(label.paddingTop).toBeCloseTo(1.25 * textScale, 6)
+      expect(label.paddingBottom).toBeCloseTo(2 * textScale, 6)
+      expect(label.marginTop).toBeCloseTo(-1.25 * textScale, 6)
+      expect(label.marginBottom).toBeCloseTo(-2 * textScale, 6)
+    }
+    expect(pills().length).toBe(2)
+  })
+})
+

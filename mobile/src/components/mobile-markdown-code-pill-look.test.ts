@@ -23,7 +23,16 @@ function themeFor(scheme: 'light' | 'dark'): Theme {
   }
 }
 
-type TextStyle = { fontFamily: string; fontSize: number; lineHeight: number; color?: string }
+type TextStyle = {
+  fontFamily: string
+  fontSize: number
+  lineHeight: number
+  color?: string
+  paddingTop?: number
+  paddingBottom?: number
+  marginTop?: number
+  marginBottom?: number
+}
 type Box = {
   backgroundColor?: string
   borderColor?: string
@@ -84,21 +93,52 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
     expect(height).toBeLessThanOrEqual(1.35 * styles.paragraph.fontSize)
   })
 
-  // Review of f8c968a1: a 16 dp line clipped g and j by up to 0.9 px. Android
-  // rounds font metrics to whole pixels (Paint.getFontMetricsInt),
-  // CustomLineHeightSpan (RN 0.86) takes the odd pixel of a negative leading
-  // off the descent, and TextView.onDraw clips at the view's height.
-  it.each([2.625, 2.75, 2.8125, 3, 3.5])("keeps g and j whole at density %s, as Android rounds the pill's line", (density) => {
+  // Review of f8c968a1: a 16 dp line clipped g and j by up to 0.9 px. Review
+  // of c3e62696: still g and j by up to 0.32 px at zoom 0.8 to 0.9, the ring of
+  // Å and Ů (above the 970 ascent) by up to 1.41 px, and a comma below (ș ļ ķ)
+  // by up to 3.5 px. Android rounds font metrics to whole pixels
+  // (Paint.getFontMetricsInt), CustomLineHeightSpan (RN 0.86) takes the odd
+  // pixel of a negative leading off the descent, and TextView.onDraw clips at
+  // the view's height, padding included. The pill's Text carries padding
+  // above and below, taken back by as much negative margin, so it clips out
+  // at the font's ink and the pill is no bigger.
+  it.each([2.625, 2.75, 2.8125, 3, 3.5])("keeps every glyph of the font whole, at every zoom and system font size, at density %s", (density) => {
     const skRound = (x: number) => Math.floor(x + 0.5)
-    // The lowest ink in the font's ASCII: g and j, 215 below the baseline per
-    // 1000 em (glyf of the bundled TTF).
-    for (const text of [label, styles.inlineCodeChipTextTable]) {
-      const px = text.fontSize * density
-      const ascent = skRound(ASCENT * px)
-      const descent = skRound(DESCENT * px)
-      const leading = Math.ceil(text.lineHeight * density) - (ascent + descent)
-      const underBaseline = descent + Math.floor(leading / 2)
-      expect(0.215 * px, `${text.fontSize} sp`).toBeLessThanOrEqual(underBaseline)
+    const clipped: string[] = []
+    for (const [name, text] of [
+      ['prose', label],
+      ['table', { ...label, ...styles.inlineCodeChipTextTable }]
+    ] as const) {
+      for (const zoom of [0.8, 0.9, 1, 1.25, 1.5, 1.8]) {
+        for (const fontScale of [1, 1.15, 1.3]) {
+          // The zoom scales the pill's type and its room for ink alike
+          // (MobileMarkdownCodeChip); the system font size scales type only.
+          const px = text.fontSize * zoom * fontScale * density
+          const ascent = skRound(ASCENT * px)
+          const descent = skRound(DESCENT * px)
+          const leading = Math.ceil(text.lineHeight * zoom * fontScale * density) - (ascent + descent)
+          const above = ascent + Math.ceil(leading / 2) + Math.round((text.paddingTop ?? 0) * zoom * density)
+          const below = descent + Math.floor(leading / 2) + Math.round((text.paddingBottom ?? 0) * zoom * density)
+          // The font's ink: 986 above the baseline (the ring of Å), 296 below
+          // (a comma below), per 1000 em (glyf of the bundled TTF).
+          if (0.986 * px > above) {
+            clipped.push(`${name} zoom ${zoom} font ${fontScale}: top by ${(0.986 * px - above).toFixed(2)} px`)
+          }
+          if (0.296 * px > below) {
+            clipped.push(`${name} zoom ${zoom} font ${fontScale}: bottom by ${(0.296 * px - below).toFixed(2)} px`)
+          }
+        }
+      }
+    }
+    expect(clipped).toEqual([])
+  })
+
+  it('takes the room for ink back in margin, so the pill is no bigger for it', () => {
+    for (const text of [label, { ...label, ...styles.inlineCodeChipTextTable }]) {
+      expect(text.paddingTop).toBeGreaterThan(0)
+      expect(text.paddingBottom).toBeGreaterThan(0)
+      expect(text.marginTop).toBe(-(text.paddingTop ?? 0))
+      expect(text.marginBottom).toBe(-(text.paddingBottom ?? 0))
     }
   })
 

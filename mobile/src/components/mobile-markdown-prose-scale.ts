@@ -53,6 +53,18 @@ export const MARKDOWN_TABLE_CHIP_LINE_HEIGHT = 15.5
 /** How far above the paragraph's baseline a pill's text sits: half a dp,
  *  which keeps a dp of every line below the pill in it. */
 export const MARKDOWN_CHIP_LIFT = 0.5
+/**
+ * Room for ink above and below the pill's text line, per unit of zoom, given
+ * back in negative margin so the pill is no bigger. The pill's Text clips at
+ * its own height (TextView.onDraw), and the font's ink runs past its line: the
+ * ring of Å and Ů to 986 above the baseline, a comma below (ș ļ ķ) to 296 below
+ * (glyf of the bundled TTF), past the 970 and 250 its line is built from;
+ * Android's whole-pixel metrics take up to a pixel more (review of c3e62696,
+ * clipped by up to 3.5 px). Sized for a system font size of 130%, which
+ * grows the type and not this.
+ */
+export const MARKDOWN_CHIP_INK_ROOM_TOP = 1.25
+export const MARKDOWN_CHIP_INK_ROOM_BOTTOM = 2
 /** A table cell's own type, which keeps its size at a zoom. */
 export const MARKDOWN_TABLE_CELL_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
 export const MARKDOWN_TABLE_CELL_LINE_HEIGHT = MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP
