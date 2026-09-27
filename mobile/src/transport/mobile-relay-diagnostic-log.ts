@@ -1,3 +1,4 @@
+import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import type { RelayRecoveryLog } from './mobile-relay-recovery-log'
 import { RelayDirectorHttpError, isRelayCredentialRejected } from './mobile-relay-resume-director'
@@ -37,14 +38,95 @@ export function logRelayDialFailure(
   })
 }
 
-export function logRelayCredentialUnavailable(log: RelayRecoveryLog, hasBundle: boolean): void {
-  log(
-    hasBundle
-      ? 'relay credential expired or rejected; slow reprobe armed'
-      : 'no relay credential bundle; slow reprobe armed',
-    undefined,
-    { level: 'warn', code: 'relay-credential-unavailable' }
-  )
+/**
+ * Why no relay credential could be dialled. One line used to say "expired or
+ * rejected" for all of these, and a Keystore read failure logged the same way:
+ * a report could not tell a phone that slept past expiry (re-pair or LAN) from
+ * a refused credential (rotation over direct) or an unreadable store (Pixel,
+ * 2026-09-27).
+ */
+type HeldCredential = { version: number; expiresAt: number; rejected: boolean }
+
+export type RelayCredentialUnavailableReason =
+  | { kind: 'expired'; version: number; expiresAt: number }
+  | { kind: 'rejected'; version: number | null }
+  // `held`: what memory still had, so the line says what the read could have replaced.
+  | { kind: 'store-unreadable'; error: Error; held: HeldCredential | null }
+  | { kind: 'missing' }
+
+export function relayCredentialUnavailableReason(
+  selection: { bundle: MobileRelayCredentialBundle | null; diskReadError?: Error },
+  isRejected: (version: number) => boolean
+): RelayCredentialUnavailableReason {
+  const current = selection.bundle?.current
+  if (selection.diskReadError) {
+    const held = current ? { ...current, rejected: isRejected(current.version) } : null
+    return { kind: 'store-unreadable', error: selection.diskReadError, held }
+  }
+  if (!current) {
+    return { kind: 'missing' }
+  }
+  if (isRejected(current.version)) {
+    return { kind: 'rejected', version: current.version }
+  }
+  return { kind: 'expired', version: current.version, expiresAt: current.expiresAt }
+}
+
+function describeUnavailable(reason: RelayCredentialUnavailableReason): [string, string?] {
+  switch (reason.kind) {
+    case 'expired':
+      return [
+        'relay credential expired; slow reprobe armed',
+        `version ${reason.version} expired at ${new Date(reason.expiresAt).toISOString()}`
+      ]
+    case 'rejected':
+      return [
+        'relay credential rejected; slow reprobe armed',
+        reason.version === null
+          ? 'refused by the relay twice in a row'
+          : `version ${reason.version} refused by the relay`
+      ]
+    case 'store-unreadable': {
+      const error = `${reason.error.name}: ${String(reason.error.message).slice(0, 160)}`
+      return [
+        'relay credential store unreadable; slow reprobe armed',
+        `${error}; ${describeHeld(reason.held)}`
+      ]
+    }
+    case 'missing':
+      return ['no relay credential bundle; slow reprobe armed']
+    default: {
+      const unhandled: never = reason
+      return unhandled
+    }
+  }
+}
+
+function describeHeld(held: HeldCredential | null): string {
+  if (!held) {
+    return 'no credential held in memory'
+  }
+  const state = held.rejected
+    ? 'refused by the relay'
+    : `expired at ${new Date(held.expiresAt).toISOString()}`
+  return `held version ${held.version} ${state}`
+}
+
+export function logRelayCredentialUnavailable(
+  log: RelayRecoveryLog,
+  reason: RelayCredentialUnavailableReason
+): void {
+  const [message, detail] = describeUnavailable(reason)
+  log(message, detail, { level: 'warn', code: 'relay-credential-unavailable' })
+}
+
+/** Credential selection came back empty: log why. */
+export function logNoDialableCredential(
+  log: RelayRecoveryLog,
+  selection: { bundle: MobileRelayCredentialBundle | null; diskReadError?: Error },
+  isRejected: (version: number) => boolean
+): void {
+  logRelayCredentialUnavailable(log, relayCredentialUnavailableReason(selection, isRejected))
 }
 
 /** Consecutive refusals a dial must collect before the phone stops trying.
@@ -76,11 +158,14 @@ export function createRelayCredentialRefusalRun(): RelayCredentialRefusalRun {
 export function noteRelayDialFailure(
   log: RelayRecoveryLog,
   error: Error | null,
-  armCredentialReprobe: () => void,
+  // Returns false when it armed nothing (a stopped or backgrounded client).
+  armCredentialReprobe: () => boolean | void,
   // Required, not defaulted: a fresh run per call would count 0->1 forever and
   // never arm — the fix reintroduced from the other side. The tracker below
   // owns the one persistent run; callers pass it (2026-09-14 review).
-  run: RelayCredentialRefusalRun
+  run: RelayCredentialRefusalRun,
+  // The credential the refused dial used, when the caller knows it.
+  version: number | null = null
 ): void {
   logRelayDialFailure(log, error)
   if (!isRelayCredentialRejected(error)) {
@@ -92,8 +177,10 @@ export function noteRelayDialFailure(
   if (run.consecutive < RELAY_CREDENTIAL_REFUSALS_BEFORE_REPROBE) {
     return
   }
-  logRelayCredentialUnavailable(log, true)
-  armCredentialReprobe()
+  if (armCredentialReprobe() === false) {
+    return
+  }
+  logRelayCredentialUnavailable(log, { kind: 'rejected', version })
 }
 
 /** A dial that got through: the run of refusals is over. */
@@ -109,10 +196,10 @@ export function noteRelayDialSucceeded(run: RelayCredentialRefusalRun): void {
 export class RelayCredentialRefusalTracker {
   private readonly run = createRelayCredentialRefusalRun()
 
-  constructor(private readonly armCredentialReprobe: () => void) {}
+  constructor(private readonly armCredentialReprobe: () => boolean | void) {}
 
-  noteFailure(log: RelayRecoveryLog, error: Error | null): void {
-    noteRelayDialFailure(log, error, this.armCredentialReprobe, this.run)
+  noteFailure(log: RelayRecoveryLog, error: Error | null, version: number | null = null): void {
+    noteRelayDialFailure(log, error, this.armCredentialReprobe, this.run, version)
   }
 
   noteConnected(): void {

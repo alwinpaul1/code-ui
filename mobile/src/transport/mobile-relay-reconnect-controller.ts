@@ -215,6 +215,9 @@ export class RelayReconnectController {
   }
 
   recordRejectedCredential = (version: number): void => this.credentials.recordRejected(version)
+  isCredentialRejected = (version: number): boolean => this.credentials.isRejected(version)
+  // What a `shouldDefer()` that returned true is waiting on, for its log line.
+  deferralReason = (): string => (this.recoveryGate ? `${this.recoveryGate} gate` : 'cooldown')
 
   registerActiveFailure(logical: StableLogicalRpcClient): Error | null {
     if (logical.getActivePath() !== 'relay') {

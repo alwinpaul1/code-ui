@@ -8,11 +8,16 @@ import {
   persistRelayHost,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
-import { selectDialableRelayCredentials } from './mobile-relay-credential-selection'
+import {
+  adoptDurableCredentialForManualRetry,
+  selectDialableRelayCredentials
+} from './mobile-relay-credential-selection'
+import { RelayRecoveryDeferralLog, trackTimerDueTime } from './mobile-relay-recovery-deferral'
 import { createRelayRecoveryLog, type RelayRecoveryLog } from './mobile-relay-recovery-log'
 import {
   mobileRelayCredentialNeedsRotation,
-  rotateMobileRelayCredential
+  rotateMobileRelayCredential,
+  rotateMobileRelayCredentialOncePerHost
 } from './mobile-relay-credential-rotation'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import { MobileEndpointNudgeRouter } from './mobile-endpoint-nudge-router'
@@ -31,8 +36,8 @@ import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import { directEndpointUrls, withPreferredDirectEndpoint } from './mobile-direct-endpoint-list'
 import {
   RelayCredentialRefusalTracker,
+  logNoDialableCredential,
   logRelayConnected,
-  logRelayCredentialUnavailable,
   logRelayDialFailure
 } from './mobile-relay-diagnostic-log'
 
@@ -53,6 +58,7 @@ export class MobileEndpointSupervisor {
   private pendingReplace = false
   private readonly nudgeRouter: MobileEndpointNudgeRouter
   private credentialRotationInFlight = false
+  private readonly deferralLog: RelayRecoveryDeferralLog
   private relayRotationPending = false
   private relayDialStartedAt: number | null = null
   // The direct head start expired with direct still unauthenticated; if the
@@ -63,8 +69,9 @@ export class MobileEndpointSupervisor {
   private readonly relayReconnect: RelayReconnectController
   // Two director 401s in a row is a refused credential worth reprobing for; a
   // lone one is a rotation racing an in-flight dial and must not park a phone.
-  private readonly credentialRefusals = new RelayCredentialRefusalTracker(() =>
-    this.relayReconnect.armCredentialReprobe()
+  // A closed or backgrounded client arms nothing: its reprobe would outlive it.
+  private readonly credentialRefusals = new RelayCredentialRefusalTracker(
+    () => this.isActive() && this.relayReconnect.armCredentialReprobe()
   )
   private readonly leaseRotation: RelayLeaseRotationTimer
   private readonly logRelay: RelayRecoveryLog
@@ -88,7 +95,10 @@ export class MobileEndpointSupervisor {
       maxFailureCooldownMs: MAX_FAILURE_COOLDOWN_MS
     })
     this.logRelay = createRelayRecoveryLog(dependencies.now, dependencies.onLog)
-    this.relayReconnect = new RelayReconnectController(dependencies, (forceReplacement) => {
+    // The controller's one timer, tracked so a deferral can say when it is due.
+    const timer = trackTimerDueTime(dependencies)
+    this.deferralLog = new RelayRecoveryDeferralLog(this.logRelay, dependencies.now, timer.dueAt)
+    this.relayReconnect = new RelayReconnectController(timer.dependencies, (forceReplacement) => {
       // Why: a relay retry is otherwise held while the direct socket sits in
       // 'connecting' ("live direct progress"), and against a dead direct
       // endpoint that is the whole 12s connect timeout — so during a relay
@@ -170,7 +180,8 @@ export class MobileEndpointSupervisor {
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
-      onDialFailure: (error) => this.credentialRefusals.noteFailure(this.logRelay, error)
+      onDialFailure: (error, { version }) =>
+        this.credentialRefusals.noteFailure(this.logRelay, error, version)
     })
     this.directVerdict = new DirectVerdictMemory(dependencies, () => this.host, (h) => (this.host = h))
     this.directProbe = new DirectReturnProbe(dependencies, {
@@ -327,7 +338,22 @@ export class MobileEndpointSupervisor {
     }
   }
 
-  nudge = (reason: ForegroundNudgeReason): void => this.nudgeRouter.nudge(reason)
+  nudge = (reason: ForegroundNudgeReason): void => {
+    this.nudgeRouter.nudge(reason)
+    // Why: the gate re-reads the durable bundle only on its slow tick (up to
+    // 15 min); a manual retry reads it now, beside the nudge, and recovers at
+    // once if another client or a re-pair left a different credential there.
+    void adoptDurableCredentialForManualRetry(reason, this.relayReconnect, this.logRelay, {
+      held: this.bundle,
+      readBundle: () => this.dependencies.readBundle(this.host.id),
+      isActive: () => this.isActive()
+    }).then((adopted) => {
+      if (adopted) {
+        this.bundle = adopted
+        void this.recoverRelay()
+      }
+    })
+  }
 
   stop(): void {
     this.stopped = true
@@ -384,9 +410,10 @@ export class MobileEndpointSupervisor {
         // queued so the armed retry runs forced once the cooldown lapses.
         this.pendingReplace = true
       }
-      this.logRelay('recovery deferred by cooldown or gate')
+      this.deferralLog.note(this.relayReconnect.deferralReason())
       return
     }
+    this.deferralLog.proceeded()
     this.operationInFlight = true
     let retryAfterOperation = false
     try {
@@ -399,9 +426,14 @@ export class MobileEndpointSupervisor {
       this.bundle = selection.bundle
       if (selection.credentials.length === 0) {
         this.logical.setRecoveryPath(null)
-        // Why: "expired" vs "missing" separates a sleep-past-expiry phone
-        // (needs re-pair or LAN) from a Keychain failure in field reports.
-        logRelayCredentialUnavailable(this.logRelay, selection.bundle !== null)
+        if (!this.isActive()) {
+          // Closed or backgrounded during the read: a reprobe armed now would
+          // outlive the client that owns it.
+          return
+        }
+        // Why: expired, refused, unreadable and missing need different fixes
+        // (re-pair or LAN, rotation over direct, a Keystore problem).
+        logNoDialableCredential(this.logRelay, selection, this.relayReconnect.isCredentialRejected)
         this.relayReconnect.armCredentialReprobe()
         if (ownsRecovery) {
           // Why: no dial happened — keep the session and the intent; the reprobe
@@ -466,13 +498,16 @@ export class MobileEndpointSupervisor {
     }
     this.credentialRotationInFlight = true
     let credentialRefreshed = false
+    const bundle = this.bundle
     try {
-      const result = await rotateMobileRelayCredential({
-        client: this.logical,
-        bundle: this.bundle,
-        writeBundle: this.dependencies.writeBundle,
-        randomBytes: this.dependencies.randomBytes
-      })
+      const result = await rotateMobileRelayCredentialOncePerHost(this.host.id, () =>
+        rotateMobileRelayCredential({
+          client: this.logical,
+          bundle,
+          writeBundle: this.dependencies.writeBundle,
+          randomBytes: this.dependencies.randomBytes
+        })
+      )
       this.bundle = result.bundle
       // Why: a scheduled rotation can finish after the old credential enters the rejection gate.
       credentialRefreshed = true

@@ -182,7 +182,14 @@
         "max-lines": [
           "error",
           {
-            "max": 413,
+            // 2026-09-27: +28 (413 -> 441) for three fixes from a Pixel's
+            // diagnostics, whose logic lives in their own modules
+            // (mobile-relay-recovery-deferral.ts, the credential selection and
+            // diagnostic-log helpers); what stays here is the wiring. A manual
+            // retry re-reads the durable credential before the gate defers it,
+            // credential rotation is serialized per host, and a stopped or
+            // backgrounded client arms no credential reprobe.
+            "max": 441,
             "skipBlankLines": true,
             "skipComments": true
           }

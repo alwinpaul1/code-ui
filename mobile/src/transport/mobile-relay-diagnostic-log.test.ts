@@ -49,12 +49,36 @@ describe('a relay credential the director refuses', () => {
     noteRelayDialFailure(log, refused(), arm, run)
 
     expect(arm).toHaveBeenCalledOnce()
-    expect(log.mock.calls.map((call) => call[1])).toContainEqual(undefined)
-    expect(
-      log.mock.calls.some(
-        (call) => String(call[0]) === 'relay credential expired or rejected; slow reprobe armed'
-      )
-    ).toBe(true)
+    // Named as a refusal, not "expired or rejected": the two need different fixes.
+    expect(log.mock.calls.map((call) => [call[0], call[1]])).toContainEqual([
+      'relay credential rejected; slow reprobe armed',
+      'refused by the relay twice in a row'
+    ])
+  })
+
+  it('does not claim a reprobe was armed when the client is stopped and armed nothing', () => {
+    const log = vi.fn()
+    const run = createRelayCredentialRefusalRun()
+    const armNothing = vi.fn(() => false)
+
+    noteRelayDialFailure(log, refused(), armNothing, run)
+    noteRelayDialFailure(log, refused(), armNothing, run)
+
+    expect(armNothing).toHaveBeenCalledOnce()
+    expect(log.mock.calls.map((call) => call[0])).toEqual(['relay dial failed', 'relay dial failed'])
+  })
+
+  it('names the refused credential version when the dial knows it', () => {
+    const log = vi.fn()
+    const run = createRelayCredentialRefusalRun()
+
+    noteRelayDialFailure(log, refused(), vi.fn(), run, 4)
+    noteRelayDialFailure(log, refused(), vi.fn(), run, 4)
+
+    expect(log.mock.calls.map((call) => [call[0], call[1]])).toContainEqual([
+      'relay credential rejected; slow reprobe armed',
+      'version 4 refused by the relay'
+    ])
   })
 
   it('forgets the first refusal when the next dial fails for another reason', () => {

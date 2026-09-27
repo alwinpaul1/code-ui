@@ -46,7 +46,7 @@ export class MobileRelaySessionEstablisher {
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
       onBookkeepingError: (error: Error) => void
-      onDialFailure: (error: Error) => void
+      onDialFailure: (error: Error, credential: { version: number }) => void
     }
   ) {}
 
@@ -67,7 +67,7 @@ export class MobileRelaySessionEstablisher {
         return { outcome: 'aborted' }
       }
       lastError = result.error
-      this.args.onDialFailure(result.error)
+      this.args.onDialFailure(result.error, credential)
       if (!relayFailureAllowsGraceRetry(result.error)) {
         break
       }
