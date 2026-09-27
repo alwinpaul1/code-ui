@@ -1,7 +1,8 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { Check, Download, Trash2 } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import {
   isModelInFlight,
   type MobileSpeechModel,
@@ -43,6 +44,8 @@ export function VoiceModelList({
   onDownload,
   onDelete
 }: Props): React.JSX.Element {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(voiceModelListStyles)
   return (
     <View style={disabled ? styles.disabled : undefined} pointerEvents={disabled ? 'none' : 'auto'}>
       {setup.models.map((model, idx) => {
@@ -74,7 +77,7 @@ export function VoiceModelList({
                 <View style={styles.readyActions}>
                   {isSelected ? (
                     <View style={styles.selectedTag}>
-                      <Check size={14} color={colors.statusGreen} strokeWidth={2.4} />
+                      <Check size={14} color={colors.success} strokeWidth={2.4} />
                       <Text style={styles.selectedText}>In use</Text>
                     </View>
                   ) : (
@@ -101,9 +104,9 @@ export function VoiceModelList({
                     accessibilityLabel={'Delete ' + model.label}
                   >
                     {deleteBusy ? (
-                      <ActivityIndicator size="small" color={colors.statusRed} />
+                      <ActivityIndicator size="small" color={colors.danger} />
                     ) : (
-                      <Trash2 size={18} color={colors.statusRed} strokeWidth={2.2} />
+                      <Trash2 size={18} color={colors.danger} strokeWidth={2.2} />
                     )}
                   </Pressable>
                 </View>
@@ -132,52 +135,54 @@ export function VoiceModelList({
   )
 }
 
-const styles = StyleSheet.create({
-  disabled: { opacity: 0.5 },
-  modelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  modelInfo: { flex: 1, minWidth: 0 },
-  modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  modelLabel: {
-    color: colors.textPrimary,
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    flexShrink: 1
-  },
-  recommended: { color: colors.statusGreen, fontSize: 10, fontWeight: '700' },
-  modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
-  modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  actionPressed: { opacity: 0.7 },
-  actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
-  iconButton: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgRaised
-  },
-  readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  selectedText: { color: colors.statusGreen, fontSize: typography.metaSize, fontWeight: '600' },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  }
-})
+function voiceModelListStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    disabled: { opacity: 0.5 },
+    modelRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    modelInfo: { flex: 1, minWidth: 0 },
+    modelTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    modelLabel: {
+      color: colors.text,
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      flexShrink: 1
+    },
+    recommended: { color: colors.success, fontSize: 10, fontWeight: '700' },
+    modelMeta: { color: colors.textMuted, fontSize: typography.metaSize, marginTop: 2 },
+    modelStateText: { color: colors.textMuted, fontSize: typography.metaSize },
+    actionButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 6,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    actionPressed: { opacity: 0.7 },
+    actionText: { color: colors.textSecondary, fontSize: typography.metaSize, fontWeight: '600' },
+    iconButton: {
+      width: 34,
+      height: 34,
+      borderRadius: radii.button,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgRaised
+    },
+    readyActions: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+    selectedTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    selectedText: { color: colors.success, fontSize: typography.metaSize, fontWeight: '600' },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: spacing.md
+    }
+  })
+}

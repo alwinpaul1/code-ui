@@ -1,5 +1,6 @@
 import { Switch, Text, View } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 
 /** One labelled switch row of the Voice settings card. */
 export function VoiceSettingsSwitchRow({
@@ -13,6 +14,7 @@ export function VoiceSettingsSwitchRow({
   value: boolean
   onValueChange: (value: boolean) => void
 }) {
+  const { colors } = useTheme()
   return (
     <View
       style={{
@@ -24,14 +26,14 @@ export function VoiceSettingsSwitchRow({
       }}
     >
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ color: colors.textPrimary, fontSize: typography.bodySize }}>{label}</Text>
+        <Text style={{ color: colors.text, fontSize: typography.bodySize }}>{label}</Text>
         <Text style={{ color: colors.textMuted, fontSize: typography.metaSize }}>{sublabel}</Text>
       </View>
       <Switch
         value={value}
         onValueChange={onValueChange}
         trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
+        thumbColor={colors.text}
       />
     </View>
   )
