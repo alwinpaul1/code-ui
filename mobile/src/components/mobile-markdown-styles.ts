@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { StyleSheet } from 'react-native'
+import { PixelRatio, StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
@@ -7,8 +7,6 @@ import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
   MARKDOWN_CHIP_FONT_SIZE,
-  MARKDOWN_CHIP_INK_ROOM_BOTTOM,
-  MARKDOWN_CHIP_INK_ROOM_TOP,
   MARKDOWN_CHIP_LINE_HEIGHT,
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
@@ -18,7 +16,8 @@ import {
   MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
-  markdownChipBaselineShift
+  markdownChipBaselineShift,
+  markdownChipInkRoom
 } from './mobile-markdown-prose-scale'
 export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
 
@@ -35,8 +34,20 @@ export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = markdownChipBaselineShift(
   MARKDOWN_CHIP_LINE_HEIGHT
 )
 
+/** The screen's pixels per dp, which a pill's room for ink is counted in
+ *  (markdownChipInkRoom); 3 where the platform does not say. */
+export function markdownScreenDensity(): number {
+  try {
+    const density = PixelRatio.get()
+    return density > 0 ? density : 3
+  } catch {
+    return 3
+  }
+}
+
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
+  const inkRoom = markdownChipInkRoom(markdownScreenDensity())
   return StyleSheet.create({
     root: {
       gap: space.sm + 2
@@ -129,11 +140,11 @@ export function makeMarkdownStyles(theme: Theme) {
       fontSize: MARKDOWN_CHIP_FONT_SIZE,
       lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
       // Room for the font's ink past its line (accents, a comma below), which
-      // the Text would clip, taken back in margin (MARKDOWN_CHIP_INK_ROOM_TOP).
-      paddingTop: MARKDOWN_CHIP_INK_ROOM_TOP,
-      paddingBottom: MARKDOWN_CHIP_INK_ROOM_BOTTOM,
-      marginTop: -MARKDOWN_CHIP_INK_ROOM_TOP,
-      marginBottom: -MARKDOWN_CHIP_INK_ROOM_BOTTOM,
+      // the Text would clip, taken back in margin (markdownChipInkRoom).
+      paddingTop: inkRoom.top,
+      paddingBottom: inkRoom.bottom,
+      marginTop: -inkRoom.top,
+      marginBottom: -inkRoom.bottom,
       color: colors.codeSpanText
     },
     /** A pill in a table cell: the cell's own size, which is smaller type. */

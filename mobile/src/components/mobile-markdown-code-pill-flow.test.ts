@@ -15,7 +15,8 @@ import { resetRememberedPillCutsForTests, rememberedPillTextCount } from './use-
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
-  PixelRatio: { getFontScale: () => 1 },
+  // A 1080-wide phone at 411 dp (the Galaxy S23 at FHD+).
+  PixelRatio: { getFontScale: () => 1, get: () => 2.625 },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -324,16 +325,22 @@ describe('pills on wrapped heading and table cell lines', () => {
 })
 
 describe("a zoomed pill's room for ink", () => {
-  it.each([0.8, 1.5])('grows with its type at zoom %s, and is taken back in margin', (textScale) => {
+  it.each([0.8, 1.5])('grows with its type at zoom %s, in whole pixels, and is taken back in margin', (textScale) => {
     act(() => {
       renderer = create(createElement(MobileMarkdown, { content: 'Ring `Å ș g` here.\n\n| a |\n| --- |\n| `Ů ļ j` |', textScale }))
     })
     for (const pill of pills()) {
       const label = flatStyle(pill.findByType('Text' as never).props.style)
-      expect(label.paddingTop).toBeCloseTo(1.25 * textScale, 6)
-      expect(label.paddingBottom).toBeCloseTo(2 * textScale, 6)
-      expect(label.marginTop).toBeCloseTo(-1.25 * textScale, 6)
-      expect(label.marginBottom).toBeCloseTo(-2 * textScale, 6)
+      for (const [side, room] of [
+        ['paddingTop', 1.25],
+        ['paddingBottom', 2]
+      ] as const) {
+        const px = Number(label[side]) * 2.625
+        expect(px).toBeGreaterThanOrEqual(room * textScale * 2.625)
+        expect(Math.abs(px - Math.round(px))).toBeLessThan(1e-4)
+      }
+      expect(label.marginTop).toBe(-Number(label.paddingTop))
+      expect(label.marginBottom).toBe(-Number(label.paddingBottom))
     }
     expect(pills().length).toBe(2)
   })

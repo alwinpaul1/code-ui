@@ -1,12 +1,11 @@
 import { Text, View } from 'react-native'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import type { MarkdownStyles } from './mobile-markdown-styles'
+import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
 import {
-  MARKDOWN_CHIP_INK_ROOM_BOTTOM,
-  MARKDOWN_CHIP_INK_ROOM_TOP,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+  markdownChipInkRoom,
   type MarkdownChipScale
 } from './mobile-markdown-prose-scale'
 
@@ -40,6 +39,8 @@ export function MobileMarkdownCodeChip({
   onPress?: () => void
 }) {
   const selectable = useChatTextSelectable()
+  // The room for ink grows with the type, in whole pixels (see the style).
+  const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor) : null
   return (
     <View
       // A plain object when the reader has not zoomed: an array per chip costs
@@ -72,13 +73,12 @@ export function MobileMarkdownCodeChip({
                 }
               : { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
             : null,
-          // The room for ink grows with the type (see the style).
-          chipScale
+          inkRoom
             ? {
-                paddingTop: MARKDOWN_CHIP_INK_ROOM_TOP * chipScale.factor,
-                paddingBottom: MARKDOWN_CHIP_INK_ROOM_BOTTOM * chipScale.factor,
-                marginTop: -MARKDOWN_CHIP_INK_ROOM_TOP * chipScale.factor,
-                marginBottom: -MARKDOWN_CHIP_INK_ROOM_BOTTOM * chipScale.factor
+                paddingTop: inkRoom.top,
+                paddingBottom: inkRoom.bottom,
+                marginTop: -inkRoom.top,
+                marginBottom: -inkRoom.bottom
               }
             : null,
           onPress ? styles.inlineCodeLink : null

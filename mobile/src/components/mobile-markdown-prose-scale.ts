@@ -61,11 +61,38 @@ export const MARKDOWN_CHIP_LIFT = 0.5
  * (glyf of the bundled TTF), past the 970 and 250 its line is built from;
  * Android's whole-pixel metrics take up to a pixel more (review of c3e62696,
  * clipped by up to 3.5 px). Sized for a system font size of 130%, which
- * grows the type and not this.
+ * grows the type and not this. Drawn only as whole pixels: see
+ * markdownChipInkRoom.
  */
 export const MARKDOWN_CHIP_INK_ROOM_TOP = 1.25
 export const MARKDOWN_CHIP_INK_ROOM_BOTTOM = 2
-/** A table cell's own type, which keeps its size at a zoom. */
+/** What a whole number of pixels is nudged by. Divided by the density and
+ *  multiplied back it can land a hair under itself (3 / 2.625 * 2.625 does,
+ *  in doubles), and Fabric floors it; nudged, it floors to itself, and Yoga,
+ *  which takes a height within 1e-4 px of a whole pixel as whole, still
+ *  does. */
+const PIXEL_NUDGE = 1e-5
+
+/**
+ * The pill's room for ink at `zoom`, each side in dp that come to a whole
+ * number of pixels at `density`, at least MARKDOWN_CHIP_INK_ROOM_* of them.
+ *
+ * Only then does the room below draw. Fabric gives a Text its padding as
+ * floor(dp * density) pixels (FabricMountingManager.cpp), and Yoga rounds a
+ * text node with a fractional height in pixels up at its bottom
+ * (PixelGrid.cpp), so the view comes out a pixel taller than its layout and
+ * padding; TextView.onDraw then clips at the bottom of its
+ * content box, not of its padding, unless the layout fills that box exactly.
+ * A room of 1.25 and 2 dp left the comma below clipped by 1.9 to 4.2 px at
+ * densities 2.625, 2.75, 3 and 3.5 (review of 4c2732f4). The room above
+ * draws either way.
+ */
+export function markdownChipInkRoom(density: number, zoom = 1): { top: number; bottom: number } {
+  const whole = (dp: number) => (Math.ceil(dp * density - PIXEL_NUDGE) + PIXEL_NUDGE) / density
+  return { top: whole(MARKDOWN_CHIP_INK_ROOM_TOP * zoom), bottom: whole(MARKDOWN_CHIP_INK_ROOM_BOTTOM * zoom) }
+}
+/** A table cell's own type at no zoom; it follows the zoom as prose does
+ *  (markdownZoomedLine). */
 export const MARKDOWN_TABLE_CELL_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
 export const MARKDOWN_TABLE_CELL_LINE_HEIGHT = MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP
 /** 2 dp more below a cell's text than above it, as since 2026-09-14. */

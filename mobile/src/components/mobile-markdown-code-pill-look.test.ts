@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
-// makeMarkdownStyles calls StyleSheet.create; the real react-native entry is
-// Flow-typed and this runner cannot parse it.
+// makeMarkdownStyles calls StyleSheet.create and reads the density; the real
+// react-native entry is Flow-typed and this runner cannot parse it.
+const screen = vi.hoisted(() => ({ density: 3 }))
 vi.mock('react-native', () => ({
+  PixelRatio: { get: () => screen.density },
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
 }))
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
 import type { Theme } from '../theme/theme-context'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
+import { markdownChipInkRoom } from './mobile-markdown-prose-scale'
 import { makeMarkdownStyles } from './mobile-markdown-styles'
 
 function themeFor(scheme: 'light' | 'dark'): Theme {
@@ -57,6 +60,49 @@ type Styles = {
 const ASCENT = 0.97
 const DESCENT = 0.25
 
+const f32 = Math.fround
+/** Within Yoga's 1e-4 of a whole pixel (Comparison.h). */
+const whole = (px: number) => Math.abs(px - Math.round(px)) < 1e-4
+
+/**
+ * How many pixels a pill's Text draws above and below its baseline, the worst
+ * over where its top falls within a pixel, as RN 0.86 Fabric on Android lays
+ * it out and draws it:
+ * - the line: Paint.getFontMetricsInt rounds the font's 970 and 250 to whole
+ *   pixels, and CustomLineHeightSpan shares out the line height, the odd
+ *   pixel of a negative leading off the descent;
+ * - its padding: floor(dp * density) in float (FabricMountingManager.cpp);
+ * - its frame: Yoga puts a text node's top on the pixel below it and, when
+ *   its height is not a whole pixel, its bottom on the pixel after
+ *   (PixelGrid.cpp), so the frame can come out taller than the text and its
+ *   padding;
+ * - the clip: TextView.onDraw clips at the view's bottom only when the
+ *   layout fills the content box exactly, and at the content box's bottom
+ *   otherwise; at the top, not scrolled, it never clips.
+ */
+function drawnRoom(fontPx: number, lineHeightPx: number, room: { top: number; bottom: number }, density: number) {
+  const skRound = (x: number) => Math.floor(x + 0.5)
+  const ascent = skRound(ASCENT * fontPx)
+  const descent = skRound(DESCENT * fontPx)
+  const leading = Math.ceil(lineHeightPx) - (ascent + descent)
+  const lineAbove = ascent + Math.ceil(leading / 2)
+  const lineBelow = descent + Math.floor(leading / 2)
+  const layout = lineAbove + lineBelow
+  const inset = (dp: number) => Math.floor(f32(f32(dp) * f32(density)))
+  const [padTop, padBottom] = [inset(room.top), inset(room.bottom)]
+  const node = layout + room.top * density + room.bottom * density
+  let below = Infinity
+  for (let step = 0; step < 40; step += 1) {
+    const top = 100 + step / 40
+    const bottom = top + node
+    const onGrid = (px: number, up: boolean) => (whole(px) ? Math.round(px) : up ? Math.ceil(px) : Math.floor(px))
+    const frame = onGrid(bottom, !whole(node)) - onGrid(top, false)
+    const content = frame - padTop - padBottom
+    below = Math.min(below, lineBelow + (content === layout ? padBottom : content - layout))
+  }
+  return { above: lineAbove + padTop, below }
+}
+
 // 2026-09-26, two screenshots: the Claude app draws inline code in the
 // paragraph's own face at about its size, blue on a faint pill with a little
 // padding, on the paragraph's baseline. Code UI drew JetBrains Mono, wider,
@@ -102,25 +148,24 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
   // (Paint.getFontMetricsInt), CustomLineHeightSpan (RN 0.86) takes the odd
   // pixel of a negative leading off the descent, and TextView.onDraw clips at
   // the view's height, padding included. The pill's Text carries padding
-  // above and below, taken back by as much negative margin, so it clips out
-  // at the font's ink and the pill is no bigger.
+  // above and below, taken back by as much negative margin. Review of
+  // 4c2732f4: that padding below never drew at 2.625, 2.75, 3 or 3.5, and the
+  // comma below was still clipped by 1.9 to 4.2 px (see drawnRoom).
   it.each([2.625, 2.75, 2.8125, 3, 3.5])("keeps every glyph of the font whole, at every zoom and system font size, at density %s", (density) => {
-    const skRound = (x: number) => Math.floor(x + 0.5)
+    screen.density = density
+    const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as Styles
     const clipped: string[] = []
     for (const [name, text] of [
-      ['prose', label],
-      ['table', { ...label, ...styles.inlineCodeChipTextTable }]
+      ['prose', styles.inlineCodeChipText],
+      ['table', { ...styles.inlineCodeChipText, ...styles.inlineCodeChipTextTable }]
     ] as const) {
       for (const zoom of [0.8, 0.9, 1, 1.25, 1.5, 1.8]) {
+        // The zoom scales the pill's type and its room for ink alike
+        // (MobileMarkdownCodeChip); the system font size scales type only.
+        const room = zoom === 1 ? { top: text.paddingTop ?? 0, bottom: text.paddingBottom ?? 0 } : markdownChipInkRoom(density, zoom)
         for (const fontScale of [1, 1.15, 1.3]) {
-          // The zoom scales the pill's type and its room for ink alike
-          // (MobileMarkdownCodeChip); the system font size scales type only.
           const px = text.fontSize * zoom * fontScale * density
-          const ascent = skRound(ASCENT * px)
-          const descent = skRound(DESCENT * px)
-          const leading = Math.ceil(text.lineHeight * zoom * fontScale * density) - (ascent + descent)
-          const above = ascent + Math.ceil(leading / 2) + Math.round((text.paddingTop ?? 0) * zoom * density)
-          const below = descent + Math.floor(leading / 2) + Math.round((text.paddingBottom ?? 0) * zoom * density)
+          const { above, below } = drawnRoom(px, text.lineHeight * zoom * fontScale * density, room, density)
           // The font's ink: 986 above the baseline (the ring of Å), 296 below
           // (a comma below), per 1000 em (glyf of the bundled TTF).
           if (0.986 * px > above) {
