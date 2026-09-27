@@ -5,10 +5,15 @@ import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import { NativeChatTasksContext } from './native-chat-tasks-context'
 
-// "6 running tasks" above the composer opens the background tasks sheet the
-// way the + does (849b0843): on touch-down. The row is in the dock's chrome
-// row, a sibling of the chat list, outside its scroll and under no gesture
-// handler, so nothing can claim the touch after it has opened the sheet.
+// "6 running tasks" above the composer opens the background tasks sheet on
+// release, not on touch-down. The + and the context ring open on touch-down
+// (849b0843, ec380e99), but this row is where the user swipes with the
+// keyboard up: MobileNativeChatView's dock is pointerEvents box-none because
+// swipes on the row above the composer did nothing (device, 2026-09-20). A
+// swipe that starts on the label (hitSlop 10) is taken by its Pressable, and
+// only a release inside it may open the sheet; on touch-down every such
+// swipe would open it (review of ec380e99). The sheet itself still sends the
+// keyboard away as it opens (00560382).
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -76,15 +81,16 @@ async function mount(scheme: 'light' | 'dark'): Promise<ReactTestInstance> {
 }
 
 describe.each(['light', 'dark'] as const)('the running tasks row in %s mode', (scheme) => {
-  it('opens the background tasks sheet as the finger lands', async () => {
+  it('opens nothing when a touch only lands on it, so a swipe that starts there stays a swipe', async () => {
     const row = await mount(scheme)
     await act(async () => (row.props.onPressIn as (() => void) | undefined)?.())
-    expect(state.open, 'the row waited for the finger to lift').toBe(true)
+    expect(state.open, 'touch-down opened the tasks sheet').toBe(false)
   })
 
-  it('still opens from a screen reader’s click, which has no press-in', async () => {
+  it('opens the background tasks sheet on release', async () => {
     const row = await mount(scheme)
     await act(async () => (row.props.onPress as () => void)())
     expect(state.open).toBe(true)
+    expect(state.opens).toBe(1)
   })
 })

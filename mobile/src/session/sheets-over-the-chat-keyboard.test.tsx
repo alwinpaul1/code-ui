@@ -159,7 +159,8 @@ function sourceFiles(dir: string): string[] {
 describe('sheets that bring their own keyboard', () => {
   const src = path.resolve(import.meta.dirname, '..')
   const drawers = sourceFiles(src).filter((file) => /<BottomDrawer\b/.test(codeOf(file)))
-  const typing = drawers.filter((file) => /\bautoFocus\b/.test(codeOf(file)))
+  // autoFocus, or a field focused by hand as the sheet opens (a ref's focus()).
+  const typing = drawers.filter((file) => /\bautoFocus\b|\.focus\(\)/.test(codeOf(file)))
 
   // The chat's queue editor also focuses a field as it opens, but it is a
   // plain Modal with its own KeyboardAvoidingView, not a bottom drawer.
