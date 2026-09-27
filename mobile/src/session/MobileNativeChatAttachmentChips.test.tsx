@@ -36,7 +36,7 @@ vi.mock('react-native', async () => {
 
 vi.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: 'GestureHandlerRootView' }))
 
-vi.mock('lucide-react-native', () => ({ FileText: 'FileText', Pencil: 'Pencil', X: 'X' }))
+vi.mock('lucide-react-native', () => ({ FileText: 'FileText', Film: 'Film', Pencil: 'Pencil', X: 'X' }))
 
 vi.mock('../components/ZoomableImage', () => ({ ZoomableImage: 'ZoomableImage' }))
 
@@ -224,6 +224,35 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
   })
 
+  // 2026-09-27 review: a video frame's preview is a small copy kept only for
+  // the chip strip — the pencil's re-upload (replaceAttachment) would
+  // silently replace the real, full-size frame already on the desktop with
+  // that small copy. No pencil at all on a frame chip, uploaded or not.
+  it('offers no pencil on a video-frame chip, even with an editor to hand', () => {
+    const onEditAttachment = vi.fn()
+    const frame: PendingNativeChatImage = {
+      id: 'frame-1',
+      path: '/tmp/frame-1.png',
+      previewUri: 'data:image/jpeg;base64,f1',
+      videoFrame: {
+        groupId: 'g1',
+        index: 1,
+        total: 3,
+        sourceName: 'clip.mp4',
+        durationLabel: '10 s',
+        intervalLabel: 'every 3.3 s',
+        intervalMs: 3300,
+        sourceSizeLabel: '30 MB',
+        stoppedEarly: false
+      }
+    }
+    const screenNow = draw('light', { attachments: [frame], onEditAttachment })
+    tap(thumbnails(screenNow)[0])
+    expect(pictureInViewer(screenNow)).toBe('data:image/jpeg;base64,f1')
+    expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
+    expect(onEditAttachment).not.toHaveBeenCalled()
+  })
+
   it('gives a document chip nothing to open and nothing to draw on', () => {
     const screenNow = draw('light', {
       attachments: [{ id: 'doc-1', path: '/tmp/a.pdf', previewUri: 'file:///a.pdf', kind: 'file', name: 'a.pdf' }],
@@ -348,5 +377,107 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]).toEqual([
       expect.objectContaining({ id: 'img-1', path: '/tmp/a-marked.png', previewUri: 'data:image/png;base64,ZZZZ' })
     ])
+  })
+})
+
+// 2026-09-27: an over-the-cap video's frames take a while to read. The strip
+// shows one progress chip while that runs — "Reading frames 5/20…" — ahead
+// of any finished frame chips, with a cancel affordance of its own.
+describe('the video-frame extraction progress chip', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+
+  function draw(scheme: Scheme, props: ChipProps): ReactTestRenderer {
+    act(() => {
+      renderer = create(screen(scheme, props))
+    })
+    return renderer!
+  }
+
+  it.each(SCHEMES)('shows how many frames are in, in the reader\'s own theme (%s)', (scheme) => {
+    const screenNow = draw(scheme, {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 5, total: 20 }
+    })
+    const text = screenNow.root.findAll(
+      (node) => String(node.type) === 'Txt' || String(node.type) === 'Text'
+    )
+    expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading frames 5/20'))).toBe(true)
+    const chip = screenNow.root.find(
+      (node) => String(node.type) === 'View' && node.props.style?.height === 60 && node.props.style?.maxWidth === 210
+    )
+    expect(chip.props.style).toMatchObject({
+      borderColor: PALETTE[scheme].border,
+      backgroundColor: PALETTE[scheme].bgRaised
+    })
+  })
+
+  it('draws the strip for the progress chip alone, with no other attachments yet', () => {
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 0, total: 20 }
+    })
+    expect(screenNow.root.findAll((node) => String(node.type) === 'ScrollView')).toHaveLength(1)
+  })
+
+  it('draws no strip at all with neither attachments nor an extraction running', () => {
+    const screenNow = draw('light', { attachments: [] })
+    expect(screenNow.root.findAll((node) => String(node.type) === 'ScrollView')).toHaveLength(0)
+  })
+
+  // 2026-09-27 review: the slot is now set the moment a video is recognized,
+  // well before its duration (let alone a frame count) is known — a send
+  // tapped during that stretch used to see no sign a video was even being
+  // read. `total: null` is that stretch; the chip has something to say
+  // regardless.
+  it.each(SCHEMES)('says a video is being read, with no count yet, before the first frame\'s own metadata arrives (%s)', (scheme) => {
+    const screenNow = draw(scheme, {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 0, total: null }
+    })
+    const text = screenNow.root.findAll(
+      (node) => String(node.type) === 'Txt' || String(node.type) === 'Text'
+    )
+    expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading a video…'))).toBe(true)
+    expect(text.some((node) => JSON.stringify(node.props.children).includes('Reading frames'))).toBe(false)
+  })
+
+  it('puts the progress chip ahead of any already-finished frame chips', () => {
+    const screenNow = draw('light', {
+      attachments: [PHOTO],
+      videoFrameExtraction: { batch: 'batch-1', done: 1, total: 20 }
+    })
+    // Both chip shapes are a 60-tall View; the progress chip is the wide one
+    // (maxWidth 210, like a file chip), the photo the square one (width 60).
+    // findAll walks the tree in render order, so their relative order here is
+    // the strip's own left-to-right order.
+    const chips = screenNow.root.findAll(
+      (node) => String(node.type) === 'View' && node.props.style?.height === 60
+    )
+    expect(chips).toHaveLength(2)
+    expect(chips[0]!.props.style).toMatchObject({ maxWidth: 210 })
+    expect(chips[1]!.props.style).toMatchObject({ width: 60 })
+  })
+
+  it('cancels through the same remove badge the strip already draws', () => {
+    const onCancelVideoFrameExtraction = vi.fn()
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 3, total: 20 },
+      onCancelVideoFrameExtraction
+    })
+    tap(pressables(screenNow, 'Cancel reading frames')[0])
+    expect(onCancelVideoFrameExtraction).toHaveBeenCalledOnce()
+  })
+
+  it('offers no cancel button when the caller gave it nothing to call', () => {
+    const screenNow = draw('light', {
+      attachments: [],
+      videoFrameExtraction: { batch: 'batch-1', done: 3, total: 20 }
+    })
+    expect(pressables(screenNow, 'Cancel reading frames')).toHaveLength(0)
   })
 })

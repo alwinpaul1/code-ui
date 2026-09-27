@@ -21,6 +21,45 @@
  */
 export type MobileImageSource = 'camera' | 'library' | 'files' | 'clipboard'
 
+/**
+ * What a still frame pulled from an over-the-cap video carries, so the chip
+ * strip can group it and the sent message can tell the agent it is looking at
+ * frames, not the video (`mobile-native-chat-video-frames-attachment.ts`).
+ * Every frame from the same pick shares `groupId`; `index` is 1-based.
+ */
+export type VideoFrameAttachmentMeta = {
+  readonly groupId: string
+  readonly index: number
+  readonly total: number
+  readonly sourceName: string
+  readonly durationLabel: string
+  /** `null` for a single-frame group, which has no cadence to state. */
+  readonly intervalLabel: string | null
+  /** The same cadence as `intervalLabel`, unformatted — lets the note compute
+   *  how much of the video a group that fell short of its plan (a cancel, a
+   *  failed upload) actually covers, instead of restating the whole video's
+   *  duration over however few frames survived. */
+  readonly intervalMs: number | null
+  readonly sourceSizeLabel: string
+  /** True once THIS GROUP'S own read was actually cut short — false for
+   *  every frame yielded while reading itself is still healthy, patched to
+   *  true (`use-mobile-native-chat-image-upload.ts`) on the frames a group
+   *  DID manage to upload once ANY error stops the pick, whatever kind:
+   *  extraction failing outright, a cancel, or a plain upload error on a
+   *  frame that itself read and encoded fine. Checked per group, by whether
+   *  that group's own uploaded count reached its own planned total — not
+   *  per pick or per error type — so a video that read and uploaded
+   *  completely is never flagged just because something else in the SAME
+   *  pick failed afterward (a later video's bad codec, say). A group can
+   *  also be short of its plan for a reason that has NOTHING to do with any
+   *  error at all — every frame arrived, and the user removed one chip
+   *  before sending — and that is not "reading stopped early" either
+   *  (2026-09-27 reviews: the note used to say so unconditionally whenever
+   *  the survivor count was short, then only for two of the three ways a
+   *  group actually can be cut short). */
+  readonly stoppedEarly: boolean
+}
+
 export type PickedMobileImage = {
   // Raw base64 (no data: prefix); fed straight into the existing upload pipeline.
   // Empty when the bytes come on demand through `load`: a photo from the
@@ -37,6 +76,10 @@ export type PickedMobileImage = {
   // name, and the sent message tells the agent what the upload actually is.
   readonly name?: string
   readonly mimeType?: string
+  // Set for a still frame pulled from an over-the-cap video instead of `name`:
+  // this rides as an ordinary image chip (not a file chip), and the group's
+  // note takes the place a file note would otherwise hold.
+  readonly videoFrame?: VideoFrameAttachmentMeta
 }
 
 export class ImageLibraryPermissionError extends Error {

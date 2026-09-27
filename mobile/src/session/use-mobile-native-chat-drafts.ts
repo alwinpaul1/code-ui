@@ -1,4 +1,4 @@
-import { stripMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
+import { stripMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
 import { clearDraftAtSendStartWith } from './mobile-native-chat-draft-send-start'
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
@@ -203,7 +203,7 @@ export function useMobileNativeChatDrafts(args: {
   // send". Clear at send time; a definite rejection restores the text below.
   // A document rides ahead as a note; the draft is only the text.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
-    const draftText = stripMobileNativeChatFileNotes(text)
+    const draftText = stripMobileNativeChatAttachmentNotes(text)
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
       draftWasSent(previous[origin.draftKey] ?? '', draftText)
@@ -217,7 +217,7 @@ export function useMobileNativeChatDrafts(args: {
     setDrafts((previous) =>
       draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
       (previous[origin.draftKey] ?? '') === ''
-        ? { ...previous, [origin.draftKey]: stripMobileNativeChatFileNotes(text) }
+        ? { ...previous, [origin.draftKey]: stripMobileNativeChatAttachmentNotes(text) }
         : previous
     )
   }, [])

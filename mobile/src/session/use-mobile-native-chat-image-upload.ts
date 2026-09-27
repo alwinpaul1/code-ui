@@ -15,6 +15,19 @@ import {
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
+import {
+  cancelVideoFrameExtractionFor,
+  clearVideoFrameExtractionController,
+  registerVideoFrameExtractionController,
+  videoFrameExtractionControllerFor,
+  videoFrameExtractionState,
+  type NativeChatVideoFrameExtractionState
+} from './mobile-native-chat-image-attachments-store'
+import {
+  describeVideoFrameExtractionFailure,
+  VideoFrameExtractionCancelledError,
+  VideoFrameExtractionError
+} from './mobile-video-frame-extractor'
 
 type CurrentRef<T> = { readonly current: T }
 type UploadedNativeChatImage = Omit<PendingNativeChatImage, 'id'>
@@ -26,6 +39,16 @@ type ShowToast = (message: string, durationMs?: number) => void
 // the earlier mount's sweep took a photo the new one was still uploading
 // (2026-09-26 review).
 let nativeChatUploadBatches = 0
+
+/** Exposed so `attachDocument` can learn its own selection's batch tag
+ *  BEFORE `attachWith` runs — it needs to stamp the same tag onto the
+ *  extraction-progress slot a video pick starts writing before `attachWith`
+ *  (which generates its own batch internally for every other attach path)
+ *  ever gets called (2026-09-27 review). */
+function nextNativeChatUploadBatch(): string {
+  nativeChatUploadBatches += 1
+  return `batch-${nativeChatUploadBatches}`
+}
 
 export function useMobileNativeChatImageUpload(args: {
   client: RpcClient | null
@@ -40,12 +63,22 @@ export function useMobileNativeChatImageUpload(args: {
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
+  /** A document attach is reading an over-the-cap video's frames — drawn
+   *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
+   *  `null` once the attach settles, extracted or not. */
+  onVideoFrameExtractionProgress?: (
+    scope: string,
+    progress: NativeChatVideoFrameExtractionState | null
+  ) => void
   onAttachSuccess?: () => void
   onError?: () => void
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
   attachImageFile: (uri: string) => Promise<void>
   attachDocument: () => Promise<void>
+  /** Stops a document attach's frame extraction in progress; a no-op once it
+   *  has already settled. */
+  cancelVideoFrameExtraction: () => void
   isAttaching: boolean
 } {
   const {
@@ -58,6 +91,7 @@ export function useMobileNativeChatImageUpload(args: {
     onImagesUploaded,
     onImageUploading,
     onUploadSettled,
+    onVideoFrameExtractionProgress,
     scopeKey,
     showToast,
     structuredNativeChat
@@ -69,11 +103,25 @@ export function useMobileNativeChatImageUpload(args: {
   useLayoutEffect(() => {
     connStateRef.current = connState
   }, [connState])
+  // Reads the store's own scope-keyed map, not a `useRef` on this instance:
+  // a composer remount mid-read gets a fresh hook instance (and would get a
+  // fresh, empty ref), but the read itself — and its controller — belong to
+  // the store, which outlives any one mount (2026-09-27 review).
+  const cancelVideoFrameExtraction = useCallback(() => {
+    if (scopeKey) {
+      cancelVideoFrameExtractionFor(scopeKey)
+    }
+  }, [scopeKey])
 
   const attachWith = useCallback(
     async (
       pickImages: Parameters<typeof uploadMobileNativeChatImages>[1]['pickImages'],
-      source: MobileImageSource
+      source: MobileImageSource,
+      /** Stamped on every chip this selection produces. Generated here unless
+       *  the caller already needed it earlier — `attachDocument` learns its
+       *  own batch before this runs, to tag the extraction-progress slot a
+       *  video pick starts writing with the SAME value (2026-09-27 review). */
+      batchOverride?: string
     ): Promise<void> => {
       const scope = scopeKey
       if (
@@ -85,8 +133,7 @@ export function useMobileNativeChatImageUpload(args: {
         return
       }
       let started = false
-      nativeChatUploadBatches += 1
-      const batch = `batch-${nativeChatUploadBatches}`
+      const batch = batchOverride ?? nextNativeChatUploadBatch()
       const uploadedImages: UploadedNativeChatImage[] = []
       let uploadError: unknown = null
       try {
@@ -111,6 +158,47 @@ export function useMobileNativeChatImageUpload(args: {
             setIsAttaching(false)
           }
         }
+        // Whatever the outcome, this attach is no longer reading frames —
+        // but only clear the slot if it is still THIS pick's own batch: a
+        // refused video's attachWith reaches this finally too, having
+        // registered nothing, and must not blank a DIFFERENT pick's still-
+        // reading progress chip out from under it (2026-09-27 review).
+        if (videoFrameExtractionState(scope)?.batch === batch) {
+          onVideoFrameExtractionProgress?.(scope, null)
+        }
+      }
+      if (uploadError !== null) {
+        // Something cut this pick off before it finished naturally — an
+        // extraction failure, a cancel, or (2026-09-27 review: the actual
+        // regression here) a plain Error from saveMobileClipboardImageAsTempFile
+        // on a frame that itself read and encoded fine. Whatever the error's
+        // TYPE, flag stoppedEarly PER GROUP, not for the whole pick: a group
+        // whose own uploaded count already reached its own planned total is
+        // a complete read, whatever else in the SAME pick failed afterward
+        // (a later video's bad codec, say) — only a group genuinely short of
+        // its own plan is a stopped-early one. This is what the sent note
+        // reads to say "reading stopped early" instead of silently
+        // understating the video, or wrongly claiming a complete read was
+        // cut short (mobile-native-chat-video-frames-attachment.ts). A group
+        // short of its plan for an unrelated reason (the user removed a chip
+        // after an otherwise complete, error-free read) never reaches this
+        // block at all and must not say so either.
+        const uploadedCountByGroup = new Map<string, number>()
+        for (const image of uploadedImages) {
+          if (image.videoFrame) {
+            uploadedCountByGroup.set(
+              image.videoFrame.groupId,
+              (uploadedCountByGroup.get(image.videoFrame.groupId) ?? 0) + 1
+            )
+          }
+        }
+        for (let i = 0; i < uploadedImages.length; i += 1) {
+          const image = uploadedImages[i]!
+          const meta = image.videoFrame
+          if (meta && !meta.stoppedEarly && (uploadedCountByGroup.get(meta.groupId) ?? 0) < meta.total) {
+            uploadedImages[i] = { ...image, videoFrame: { ...meta, stoppedEarly: true } }
+          }
+        }
       }
       if (uploadedImages.length > 0) {
         onImagesUploaded(scope, uploadedImages)
@@ -118,6 +206,12 @@ export function useMobileNativeChatImageUpload(args: {
       }
       onUploadSettled?.(scope, batch)
       if (uploadError !== null) {
+        // A cancelled extraction is the user changing their mind, like a
+        // dismissed picker — no toast, same as `result.canceled` never
+        // reaching this catch at all.
+        if (uploadError instanceof VideoFrameExtractionCancelledError) {
+          return
+        }
         const message = uploadError instanceof Error ? uploadError.message : String(uploadError)
         onError?.()
         if (connStateRef.current !== 'connected') {
@@ -126,6 +220,17 @@ export function useMobileNativeChatImageUpload(args: {
         }
         if (uploadError instanceof ImageLibraryPermissionError) {
           showToast('Photo permission denied', 1500)
+          return
+        }
+        if (uploadError instanceof VideoFrameExtractionError) {
+          // The video is still over the cap — extraction was the alternative
+          // to refusing it outright, and that alternative just failed too, so
+          // the same "too large" story stands, with a short reason (never the
+          // raw native exception text) appended.
+          showToast(
+            `File too large to attach (18 MB max) — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
+            1500
+          )
           return
         }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
@@ -145,6 +250,7 @@ export function useMobileNativeChatImageUpload(args: {
       onImagesUploaded,
       onImageUploading,
       onUploadSettled,
+      onVideoFrameExtractionProgress,
       scopeKey,
       showToast,
       structuredNativeChat
@@ -159,10 +265,79 @@ export function useMobileNativeChatImageUpload(args: {
     (uri: string) => attachWith(() => pickMobileImageFiles([uri]), 'files'),
     [attachWith]
   )
-  const attachDocument = useCallback(
-    () => attachWith(() => pickMobileDocuments(), 'files'),
-    [attachWith]
-  )
+  const attachDocument = useCallback(() => {
+    const scope = scopeKey
+    // No pre-pick gate here at all: what this pick holds — a video, a PDF, a
+    // mix, nothing over the cap — is not knowable until the picker has
+    // actually run, so nothing about the SCOPE'S CURRENT STATE can decide
+    // whether this attach is allowed before that (2026-09-27 review: a
+    // top-level check here used to refuse a pick outright whenever some
+    // OTHER pick's video was still reading, even one holding nothing but a
+    // PDF, since the check ran before the picker even opened and could not
+    // yet know that). The one thing worth refusing — a SECOND video reading
+    // at once — is decided per video, in `onStart` below, once the picker
+    // has actually found one.
+    const controller = new AbortController()
+    const batch = nextNativeChatUploadBatch()
+    return attachWith(
+      () =>
+        pickMobileDocuments(undefined, undefined, {
+          signal: controller.signal,
+          // Fired once a specific asset turns out to be an over-cap video,
+          // never merely because this function was called. Registers this
+          // pick's controller if the scope's slot is free OR already this
+          // same pick's own (a second video within ONE pick shares the first
+          // one's controller rather than refusing itself) — otherwise
+          // refuses just this video, returning `false` so `pickVideoFrames`
+          // yields nothing for it without throwing: anything else in this
+          // same pick (a PDF, another file) still attaches (2026-09-27
+          // review).
+          onStart: () => {
+            if (!scope) {
+              return true
+            }
+            const existing = videoFrameExtractionControllerFor(scope)
+            if (existing && existing !== controller) {
+              showToast('Already reading a video — wait for it to finish', 1500)
+              return false
+            }
+            registerVideoFrameExtractionController(scope, controller)
+            // Something to show for the whole ready-wait (up to
+            // VIDEO_FRAME_READY_TIMEOUT_MS), not just from the first frame
+            // (2026-09-27 review).
+            onVideoFrameExtractionProgress?.(scope, { batch, done: 0, total: null })
+            return true
+          },
+          onProgress: (progress) => {
+            if (!scope) {
+              return
+            }
+            onVideoFrameExtractionProgress?.(scope, { batch, ...progress })
+            // The chip — and the controller a second attach's guard reads —
+            // clear the moment reading finishes, not once the last frame's
+            // own upload also finishes: those are two different things once
+            // frames upload one at a time as they are read, and holding the
+            // controller past reading's own end refused a second attach with
+            // no video chip left on screen to explain why (2026-09-27
+            // review).
+            if (progress.done === progress.total) {
+              onVideoFrameExtractionProgress?.(scope, null)
+              clearVideoFrameExtractionController(scope, controller)
+            }
+          }
+        }),
+      'files',
+      batch
+    ).finally(() => {
+      // A fallback for the path `onProgress`'s own clear above never reaches
+      // — a cancel or a failure midway, where reading never reports
+      // done === total at all. Idempotent: a no-op if the clear above (or a
+      // later pick's own registration) already took this entry.
+      if (scope) {
+        clearVideoFrameExtractionController(scope, controller)
+      }
+    })
+  }, [attachWith, onVideoFrameExtractionProgress, scopeKey, showToast])
 
-  return { attachImage, attachImageFile, attachDocument, isAttaching }
+  return { attachImage, attachImageFile, attachDocument, cancelVideoFrameExtraction, isAttaching }
 }

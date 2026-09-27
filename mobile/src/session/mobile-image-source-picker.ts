@@ -12,6 +12,13 @@ import { MobileImageBase64Accumulator } from './mobile-image-base64-accumulator'
 // error must not import this module for it, or the page bundle gets the native picker chain with it.
 import { ImageLibraryPermissionError } from '../platform/media-picker-contract'
 import type { MobileImageSource, PickedMobileImage } from '../platform/media-picker-contract'
+import {
+  isVideoAsset,
+  isVideoOverUploadCap,
+  pickVideoFrames,
+  videoAssetSizeBytes,
+  type PickVideoFramesDeps
+} from './mobile-video-frame-picker'
 
 export { ImageLibraryPermissionError }
 export type { MobileImageSource, PickedMobileImage }
@@ -27,6 +34,7 @@ type MobileImageFileHandle = {
 type MobileImageFile = {
   readonly size: number
   open(): MobileImageFileHandle
+  delete(): void
 }
 
 /** Reads an image off the system clipboard, or null when it holds none.
@@ -174,11 +182,40 @@ export async function* pickMobileImageFiles(
   }
 }
 
+/** Best-effort delete of the document picker's own cache copy — never lets a
+ *  cleanup failure hide (or replace) whatever the caller already threw; the
+ *  OS reclaims the cache directory regardless. */
+function deleteMobileFileQuietly(createFile: MobileImageFileFactory, uri: string): void {
+  try {
+    createFile(uri).delete()
+  } catch {
+    // Best-effort.
+  }
+}
+
+/** A video attach's cleanup after `pickMobileDocuments`: 'refuse' skips frame
+ *  extraction for that video entirely, so it takes the whole-file path
+ *  (today's cap refusal, unchanged) — for a screen with no chip strip to
+ *  show extraction progress in, or no cancel affordance to stop it with. */
+export type PickMobileDocumentsVideoFrames = PickVideoFramesDeps | 'refuse'
+
 /** Any document (PDF, docx, csv, source…) via the system file picker. The bytes
- *  ride the same host upload as images (the only byte channel a phone has). */
+ *  ride the same host upload as images (the only byte channel a phone has).
+ *
+ *  A video over the desktop's upload cap is the one exception: instead of the
+ *  whole file (which `readUriAsBase64` would refuse past
+ *  `CLIPBOARD_IMAGE_MAX_SOURCE_BYTES` anyway), its still frames are pulled on
+ *  the phone and yielded as ordinary picked images
+ *  (`mobile-video-frame-picker.ts`) — the video's own bytes are never read. A
+ *  video at or under the cap is untouched, the same file-upload path as
+ *  today, and so is one whose size could not be proven over the cap at all
+ *  (its whole-file read still refuses it if it turns out too large). The
+ *  document picker's own cache copy of an over-cap video is deleted once its
+ *  frames are read, whether that finished, failed or was cancelled. */
 export async function* pickMobileDocuments(
   launch: typeof DocumentPicker.getDocumentAsync = DocumentPicker.getDocumentAsync,
-  createFile: MobileImageFileFactory = defaultMobileImageFileFactory
+  createFile: MobileImageFileFactory = defaultMobileImageFileFactory,
+  videoFrames?: PickMobileDocumentsVideoFrames
 ): AsyncGenerator<PickedMobileImage> {
   const result = await launch({ type: '*/*', multiple: true, copyToCacheDirectory: true })
   if (result.canceled) {
@@ -187,6 +224,17 @@ export async function* pickMobileDocuments(
   for (const asset of result.assets) {
     if (!asset.uri) {
       continue
+    }
+    if (isVideoAsset(asset) && videoFrames !== 'refuse') {
+      const sizeBytes = videoAssetSizeBytes(asset, createFile)
+      if (isVideoOverUploadCap(sizeBytes)) {
+        try {
+          yield* pickVideoFrames(asset, sizeBytes, videoFrames)
+        } finally {
+          deleteMobileFileQuietly(createFile, asset.uri)
+        }
+        continue
+      }
     }
     const base64 = await readUriAsBase64(asset.uri, asset.size, createFile)
     if (base64) {

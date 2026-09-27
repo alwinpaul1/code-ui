@@ -337,7 +337,11 @@
             // state, the FlashList prop and renderItem's dependency), so a
             // running row's shimmer stops off screen; the logic lives in
             // native-chat-row-visibility.tsx.
-            "max": 416,
+            // 2026-09-27: +4 for `videoFrameExtraction` / `onCancelVideoFrameExtraction`,
+            // threaded from the overlay to the composer for the over-the-cap
+            // video-frames progress chip; the extraction itself lives in
+            // mobile-video-frame-extractor.ts / mobile-video-frame-picker.ts.
+            "max": 420,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -431,7 +435,12 @@
             // 2026-09-26: -4. The caret put-back went: the input no longer
             // changes native parent when the menu opens or closes, so its
             // caret stays in the field on its own.
-            "max": 419,
+            // 2026-09-27: +7 for `videoFrameExtraction` / `onCancelVideoFrameExtraction`
+            // (the import, the prop type's two fields, the destructure, the
+            // chip's props) — an over-the-cap video's frame-reading progress,
+            // handed to MobileNativeChatAttachmentChips. The extraction logic
+            // lives in mobile-video-frame-extractor.ts.
+            "max": 426,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -525,15 +534,29 @@
             // once the chips have settled, and threads markup's re-uploading
             // mark to its hook (two of the three are those calls wrapped to
             // the formatter's 100 columns).
-            // 2026-09-27: +15 for refusing a composer send while a dialog on
-            // screen would take its keys as answers (a subagent's prompt sat
-            // eight hours with "Yes" highlighted under a chat whose Enter would
-            // have approved it). The screen read and the dialog test live in
-            // mobile-native-chat-dialog-guard.ts; this file gains the injected
-            // look (its type, import, destructure and dependency) and the call
-            // before anything is written, which waits on the send gate first
-            // and has two ways out, a gate that gave up and a refusal it says.
-            "max": 345,
+            // 2026-09-27: +15 for the video-frames feature: a video over the
+            // desktop's 18 MB cap has its frames read instead of being
+            // refused. This file gains the store's extra slice (read +
+            // writer), the upload hook's new callback wired to it, the
+            // combined note-builder's import replacing the file-only one, and
+            // the two new return fields. The extraction, the frame math and
+            // the note text itself live in mobile-video-frame-extractor.ts,
+            // mobile-video-frame-picker.ts and
+            // mobile-native-chat-video-frames-attachment.ts.
+            // 2026-09-27, same day: +15 more for refusing a composer send
+            // while a dialog on screen would take its keys as answers (a
+            // subagent's prompt sat eight hours with "Yes" highlighted under
+            // a chat whose Enter would have approved it). The screen read and
+            // the dialog test live in mobile-native-chat-dialog-guard.ts; this
+            // file gains the injected look (its type, import, destructure and
+            // dependency) and the call before anything is written, which
+            // waits on the send gate first and has two ways out, a gate that
+            // gave up and a refusal it says.
+            // 2026-09-27, merge: the two entries above landed on separate
+            // branches off the same 330 baseline; only the import line
+            // actually conflicted (one name each, now both kept), so the
+            // combined file counts to 360, not 330+15+15.
+            "max": 360,
             "skipBlankLines": true,
             "skipComments": true
           }

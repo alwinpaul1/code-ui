@@ -5,7 +5,8 @@ import { draftWasSent } from './mobile-native-chat-draft-reconcile'
 import {
   nativeChatAttachmentsResets,
   nativeChatWaitingSends,
-  useNativeChatImageAttachmentsStore
+  useNativeChatImageAttachmentsStore,
+  videoFrameExtractionState
 } from './mobile-native-chat-image-attachments-store'
 import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import {
@@ -15,9 +16,11 @@ import {
 
 type CurrentRef<T> = { readonly current: T }
 
-/** Why a send tapped beside a chip still uploading wrote nothing, and the chip it waited on. */
+/** Why a send tapped beside a chip still uploading (or a video still being
+ *  read) wrote nothing, and the chip it waited on — `null` for `extracting`,
+ *  which has no chip yet to name. */
 export type MobileNativeChatSendChipsRefusal = {
-  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy'
+  readonly reason: 'failed' | 'markup' | 'timeout' | 'session' | 'busy' | 'extracting'
   readonly chip: PendingNativeChatImage | null
 }
 
@@ -59,6 +62,21 @@ export async function settleMobileNativeChatSendChips(args: {
   readonly scope: string
   /** The chips in the strip at the tap. One picked during the wait stays for the next send. */
   readonly ids: readonly string[]
+  /** Every distinct `.batch` among the chips this send was tapped with — a
+   *  batch not represented by ANY tap-time chip has nothing to do with this
+   *  send, and must never be waited on or gathered. One already represented
+   *  (an already-uploading PDF, say) is watched for the WHOLE wait, even if
+   *  an extraction for that SAME batch only starts reading after the tap
+   *  (2026-09-27 review: computing "the batch to watch" once, only from
+   *  whichever batch happened to be actively reading right at the tap,
+   *  missed a video that started reading only after the tap, from the same
+   *  pick as an already-uploading PDF the tap DID know about — the wait then
+   *  sent the PDF alone once it settled, dropping every frame). Every frame
+   *  a watched batch produces (including one that lands after this call
+   *  started, past the original `ids`) rides with it (2026-09-27 review:
+   *  this used to gather only the ids the tap already knew, dropping every
+   *  frame that arrived during the wait). */
+  readonly tapBatches: ReadonlySet<string>
   readonly deadline: number
   /** True once the send's tab or terminal has gone, or the store was reset. */
   readonly abandoned: () => boolean
@@ -74,9 +92,37 @@ export async function settleMobileNativeChatSendChips(args: {
     if (args.abandoned()) {
       return { reason: 'session', chip: null }
     }
-    const byId = new Map(chipsIn(args.scope).map((chip) => [chip.id, chip]))
+    // A video's frames are read one at a time, ahead of any chip: nothing
+    // named in `args.ids` exists yet to wait on, so wait on this instead, the
+    // same way a send tapped beside an uploading chip already waits
+    // (2026-09-27 review — a send tapped mid-extraction used to go out with
+    // no frames at all, since `chips.some((chip) => chip.uploading)` saw
+    // nothing to wait for). Gated on `tapBatches`, checked fresh every loop
+    // (not just once at the top): a send whose own chips have nothing to do
+    // with whatever is reading must not wait on it, but one that DOES must
+    // keep waiting even if that reading only started after the tap.
+    const state = videoFrameExtractionState(args.scope)
+    if (state && args.tapBatches.has(state.batch)) {
+      const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
+      if (remainingMs <= 0) {
+        return { reason: 'extracting', chip: null }
+      }
+      await nextChipChange(Math.min(MOBILE_NATIVE_CHAT_SEND_CHIPS_POLL_MS, remainingMs))
+      continue
+    }
+    const currentChips = chipsIn(args.scope)
+    const byId = new Map(currentChips.map((chip) => [chip.id, chip]))
+    // Every chip named at tap time, plus every current chip of a watched
+    // batch — a frame that lands mid-wait has an id the tap never saw, and
+    // would otherwise be silently left out of the send.
+    const watchedIds = new Set(args.ids)
+    for (const chip of currentChips) {
+      if (chip.batch !== undefined && args.tapBatches.has(chip.batch)) {
+        watchedIds.add(chip.id)
+      }
+    }
     let waiting: PendingNativeChatImage | null = null
-    for (const id of args.ids) {
+    for (const id of watchedIds) {
       const chip = byId.get(id)
       const drawn = uploading.get(id)
       if (chip?.uploading) {
@@ -90,7 +136,7 @@ export async function settleMobileNativeChatSendChips(args: {
     }
     if (!waiting) {
       // A chip the user took out during the wait is not sent.
-      return args.ids.flatMap((id) => byId.get(id) ?? [])
+      return currentChips.filter((chip) => watchedIds.has(chip.id))
     }
     // The same reserve the link's wait keeps, so the paste and the text still fit.
     const remainingMs = args.deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS - Date.now()
@@ -125,6 +171,8 @@ export function mobileNativeChatSendChipsRefusalMessage({
       // waits: it cannot go first, and going after would send the same
       // photos twice (2026-09-26 reviews).
       return `Message not sent: the last message is still waiting for ${chipNoun(chip)}`
+    case 'extracting':
+      return 'Message not sent: a video is still being read'
     default: {
       const exhaustive: never = reason
       return exhaustive
@@ -189,23 +237,42 @@ export function useMobileNativeChatSendChips(args: {
       latest.current.onSendError(mobileNativeChatSendChipsRefusalMessage(settled))
       return false
     }
+    // Every distinct batch among this tap's own chips — computed before the
+    // join check below, since a joining tap's NEW chips (more frames of a
+    // batch the first tap already knew) must count as already-known, not as
+    // a reason to refuse (2026-09-27 review).
+    const tapBatches = new Set(chips.flatMap((chip) => (chip.batch !== undefined ? [chip.batch] : [])))
     const waiting = scope ? nativeChatWaitingSends.get(scope) : undefined
     if (waiting) {
       // The text trimmed as the draft store compares it, which empties the
       // box once the first send lands: a trailing space was "not sent" over a
-      // message that went. And no chip the first tap did not have: a photo
-      // picked since stayed in the strip while the tap read as sent
-      // (2026-09-26 reviews). A tap with a chip taken out since still joins:
-      // the wait sees that chip gone.
+      // message that went. And no chip the first tap did not have — UNLESS
+      // it is another frame of a batch the first tap already had a stake in,
+      // which is the wait's own doing, not a new attachment the user added
+      // (2026-09-27 review: joining used to check only the first tap's exact
+      // ids, so a video's later frames, landing between the first tap and a
+      // same-text second one, refused the second tap as "busy" instead of
+      // joining the first) — a photo from an unrelated pick still breaks the
+      // join (2026-09-26 review). A tap with a chip taken out since still
+      // joins: the wait sees that chip gone.
       const same =
-        draftWasSent(waiting.text, text) && chips.every((chip) => waiting.ids.includes(chip.id))
+        draftWasSent(waiting.text, text) &&
+        chips.every(
+          (chip) => waiting.ids.includes(chip.id) || (chip.batch !== undefined && waiting.batches.has(chip.batch))
+        )
       return same
         ? waiting.whole
         : Promise.resolve(
             refuse({ reason: 'busy', chip: chips.find((chip) => chip.uploading) ?? null })
           )
     }
-    if (!scope || !chips.some((chip) => chip.uploading)) {
+    // An extraction reading into one of THIS tap's batches, even one that
+    // only started after the tap (checked fresh inside the wait loop, not
+    // just here) — a send with nothing to do with whatever happens to be
+    // reading must not wait on it (2026-09-27 review).
+    const activeState = scope ? videoFrameExtractionState(scope) : null
+    const activeMatchesTap = activeState !== null && tapBatches.has(activeState.batch)
+    if (!scope || (!chips.some((chip) => chip.uploading) && !activeMatchesTap)) {
       return send([...chips])
     }
     const resets = nativeChatAttachmentsResets.current
@@ -213,6 +280,7 @@ export function useMobileNativeChatSendChips(args: {
     const waited = settleMobileNativeChatSendChips({
       scope,
       ids,
+      tapBatches,
       deadline,
       abandoned: () =>
         nativeChatAttachmentsResets.current !== resets ||
@@ -223,6 +291,7 @@ export function useMobileNativeChatSendChips(args: {
     const entry = {
       text,
       ids,
+      batches: tapBatches,
       whole: waited.then((settled) => (Array.isArray(settled) ? send(settled) : refuse(settled)))
     }
     nativeChatWaitingSends.set(scope, entry)

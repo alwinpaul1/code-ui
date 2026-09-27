@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest'
+import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { withMobileNativeChatFileNotes } from './mobile-native-chat-file-attachment'
+import {
+  buildMobileNativeChatVideoFrameNotes,
+  isPendingNativeChatVideoFrame,
+  stripMobileNativeChatAttachmentNotes,
+  stripMobileNativeChatVideoFrameNotes,
+  withMobileNativeChatAttachmentNotes,
+  withMobileNativeChatVideoFrameNotes
+} from './mobile-native-chat-video-frames-attachment'
+
+function frame(index: number, total: number, stoppedEarly = false): PendingNativeChatImage {
+  return {
+    id: `img-${index}`,
+    path: `/tmp/frame-${index}.png`,
+    previewUri: `data:image/jpeg;base64,f${index}`,
+    videoFrame: {
+      groupId: 'g1',
+      index,
+      total,
+      sourceName: 'Screen_Recording_2026-09-27.mp4',
+      durationLabel: '2 min 14 s',
+      intervalLabel: 'every 6.7 s',
+      intervalMs: 6700,
+      sourceSizeLabel: '142 MB',
+      stoppedEarly
+    }
+  }
+}
+
+function allFrames(total: number): PendingNativeChatImage[] {
+  return Array.from({ length: total }, (_, i) => frame(i + 1, total))
+}
+
+const pdf: PendingNativeChatImage = {
+  id: 'f1',
+  path: '/tmp/a.png',
+  previewUri: 'file:///cache/report.pdf',
+  kind: 'file',
+  name: 'report.pdf'
+}
+const plainImage: PendingNativeChatImage = { id: 'i1', path: '/tmp/b.png', previewUri: 'file:///cache/a.jpg' }
+
+describe('isPendingNativeChatVideoFrame', () => {
+  it('tells a video frame apart from a plain image and a file', () => {
+    expect(isPendingNativeChatVideoFrame(frame(1, 20))).toBe(true)
+    expect(isPendingNativeChatVideoFrame(plainImage)).toBe(false)
+    expect(isPendingNativeChatVideoFrame(pdf)).toBe(false)
+  })
+})
+
+describe('buildMobileNativeChatVideoFrameNotes', () => {
+  it('states the video, its duration, the frame count and the cadence, exactly as decided', () => {
+    expect(buildMobileNativeChatVideoFrameNotes(allFrames(20))).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 20 frames, every 6.7 s). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('states the span actually covered, not the whole video\'s duration and cadence, when reading a group genuinely stopped early', () => {
+    // 2026-09-27 review: a cancel or a failed upload can leave a group short
+    // of its plan. The note must say how many frames really made it and what
+    // span of the video they cover ("2 frames from the first 7 s"), not
+    // restate the plan's own duration/cadence as if a full, even read
+    // happened — it didn't. (index 2 at a 6.7 s cadence -> (2-1)*6700ms = 7 s
+    // once formatVideoFrameDurationLabel rounds it.) This is gated on
+    // `stoppedEarly`, not merely on the survivor count being short of the
+    // plan — see the next test for why that distinction matters.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, true), frame(2, 20, true)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 frames from the first 7 s of a 2 min 14 s video). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent; reading stopped early.'
+    )
+  })
+
+  it('does not say reading stopped early when a complete read is merely short because the user removed a chip', () => {
+    // 2026-09-27 review: all 20 frames were read and uploaded successfully —
+    // `stoppedEarly` is false on every one of them — and the user removed 18
+    // of the resulting chips before sending. The survivor count (2 of 20) is
+    // just as "short" as the cut-short case above, but nothing about the
+    // READ itself stopped early, so the note must say so honestly: the whole
+    // video's own duration and cadence, however few of its frames are here.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, false), frame(2, 20, false)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 2 frames, every 6.7 s). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('leaves the span out, rather than saying "from the first 0 s", with only one surviving frame', () => {
+    // 2026-09-27 review nit: (1-1)*6700ms = 0ms, which reads as "from the
+    // first 0 s" — worse than just not stating a span for a single instant.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, true)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (1 frame of a 2 min 14 s video). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent; reading stopped early.'
+    )
+  })
+
+  it('omits the cadence clause when the metadata carries none (a single-frame group)', () => {
+    const solo: PendingNativeChatImage = {
+      ...frame(1, 1),
+      videoFrame: { ...frame(1, 1).videoFrame!, intervalLabel: null }
+    }
+    expect(buildMobileNativeChatVideoFrameNotes([solo])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 1 frame). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('says "frame" in the singular for a one-frame group', () => {
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 1)])).toContain('1 frame,')
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 1)])).not.toContain('1 frames,')
+  })
+
+  it('writes one line per distinct video, not one per frame', () => {
+    const second: PendingNativeChatImage = {
+      ...frame(1, 1),
+      id: 'img-second',
+      videoFrame: { ...frame(1, 1).videoFrame!, groupId: 'g2', sourceName: 'clip-2.mp4' }
+    }
+    const notes = buildMobileNativeChatVideoFrameNotes([frame(1, 20), frame(2, 20), second])
+    expect(notes.split('\n')).toHaveLength(2)
+    expect(notes).toContain('Screen_Recording_2026-09-27.mp4')
+    expect(notes).toContain('clip-2.mp4')
+  })
+
+  it('is empty with no video frames at all, plain images included', () => {
+    expect(buildMobileNativeChatVideoFrameNotes([plainImage, pdf])).toBe('')
+  })
+})
+
+describe('withMobileNativeChatVideoFrameNotes / stripMobileNativeChatVideoFrameNotes', () => {
+  it('prepends the note and a bare group still sends', () => {
+    expect(withMobileNativeChatVideoFrameNotes('describe this', [frame(1, 1)])).toBe(
+      `${buildMobileNativeChatVideoFrameNotes([frame(1, 1)])}\n\ndescribe this`
+    )
+    expect(withMobileNativeChatVideoFrameNotes('   ', [frame(1, 1)])).toBe(
+      buildMobileNativeChatVideoFrameNotes([frame(1, 1)])
+    )
+    expect(withMobileNativeChatVideoFrameNotes('hi', [plainImage])).toBe('hi')
+  })
+
+  it('gives back the typed text out of a sent body led by a frame note', () => {
+    const body = withMobileNativeChatVideoFrameNotes('what happened here?', [frame(1, 20)])
+    expect(stripMobileNativeChatVideoFrameNotes(body)).toBe('what happened here?')
+  })
+
+  it('leaves plain text, and a line that merely mentions "Frames from" without the note\'s tail, alone', () => {
+    expect(stripMobileNativeChatVideoFrameNotes('plain text')).toBe('plain text')
+    expect(stripMobileNativeChatVideoFrameNotes('Frames from my trip last year\n\nlook at these')).toBe(
+      'Frames from my trip last year\n\nlook at these'
+    )
+  })
+})
+
+describe('withMobileNativeChatAttachmentNotes / stripMobileNativeChatAttachmentNotes', () => {
+  it('reads frames, then the file note, then the user\'s text, for a mixed send', () => {
+    const text = withMobileNativeChatAttachmentNotes('take a look', [frame(1, 1), pdf])
+    const lines = text.split('\n\n')
+    expect(lines[0]).toBe(buildMobileNativeChatVideoFrameNotes([frame(1, 1)]))
+    expect(lines[1]).toContain('Attached file "report.pdf"')
+    expect(lines[2]).toBe('take a look')
+  })
+
+  it('round-trips through both notes back to the user\'s own text', () => {
+    const text = withMobileNativeChatAttachmentNotes('take a look', [frame(1, 1), pdf])
+    expect(stripMobileNativeChatAttachmentNotes(text)).toBe('take a look')
+  })
+
+  it('is unaffected by files alone, matching the plain file-note behavior', () => {
+    expect(withMobileNativeChatAttachmentNotes('hi', [pdf])).toBe(withMobileNativeChatFileNotes('hi', [pdf]))
+  })
+})

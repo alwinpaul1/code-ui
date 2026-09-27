@@ -19,6 +19,12 @@ export type AttachMobileDocumentDeps = {
  * upload them through the image channel (the only byte path a phone has), and
  * type the file notes onto the terminal's input line without pressing Enter,
  * so the user can add a prompt after them. Returns false when nothing was sent.
+ *
+ * This screen's own `pickDocuments` always calls `pickMobileDocuments` with
+ * `videoFrames: 'refuse'` (use-mobile-image-attachment.ts): it has no chip
+ * strip to paste a video's frames into, no progress chip, and no cancel, so
+ * an over-cap video keeps the ordinary "too large" refusal instead of being
+ * read for its frames. Every picked item here is a named document.
  */
 export async function attachMobileDocumentsToTerminal({
   client,

@@ -12,6 +12,7 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { useRichPasteInput } from './use-rich-paste-input'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
@@ -71,6 +72,9 @@ type Props = {
   /** Opens the markup editor on a photo chip (the Claude app's pencil,
    *  2026-09-24). */
   onEditAttachment?: (id: string, uri: string) => void
+  /** A document attach is reading an over-the-cap video's frames. */
+  videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
+  onCancelVideoFrameExtraction?: () => void
   isAttaching?: boolean
   onMicPress?: () => void
   /** Runs before `onSend`: ends live dictation so the sent words do not come back. */
@@ -138,6 +142,8 @@ export function MobileNativeChatComposer({
   attachments = NO_ATTACHMENTS,
   onRemoveAttachment,
   onEditAttachment,
+  videoFrameExtraction = null,
+  onCancelVideoFrameExtraction,
   onMicPress,
   onBeforeSend,
   micActive = false,
@@ -331,6 +337,8 @@ export function MobileNativeChatComposer({
             attachments={attachments}
             onRemoveAttachment={onRemoveAttachment}
             onEditAttachment={sending ? undefined : onEditAttachment}
+            videoFrameExtraction={videoFrameExtraction}
+            onCancelVideoFrameExtraction={onCancelVideoFrameExtraction}
           />
           {/* While the `/` or `@` menu is up the draft folds to its last two
               lines, so a long prompt leaves the menu its rows, as the Claude

@@ -1,16 +1,20 @@
-import { FileText, X } from 'lucide-react-native'
+import { FileText, Film, X } from 'lucide-react-native'
 import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { openImagePreview } from './image-preview-store'
 
 /** The strip above the composer text: image thumbnails and named document
- *  chips, each with its remove badge. */
+ *  chips, each with its remove badge, plus (while a document attach is
+ *  reading an over-the-cap video) one progress chip ahead of them all. */
 export function MobileNativeChatAttachmentChips({
   attachments,
   onRemoveAttachment,
-  onEditAttachment
+  onEditAttachment,
+  videoFrameExtraction,
+  onCancelVideoFrameExtraction
 }: {
   attachments: readonly PendingNativeChatImage[]
   onRemoveAttachment?: (id: string) => void
@@ -19,9 +23,15 @@ export function MobileNativeChatAttachmentChips({
    *  pencil (2026-09-24). Never used for a document chip, which has nothing
    *  to draw on. */
   onEditAttachment?: (id: string, uri: string) => void
+  /** An over-the-cap video's frames are still being read — "Reading frames
+   *  5/20…", cancellable. Not one of `attachments`: it is drawn beside them
+   *  so it can never be mistaken for a chip a send is waiting on
+   *  (`mobile-native-chat-image-attachments-store.ts`). */
+  videoFrameExtraction?: NativeChatVideoFrameExtractionState | null
+  onCancelVideoFrameExtraction?: () => void
 }) {
   const { colors, radius, space } = useTheme()
-  if (attachments.length === 0) {
+  if (attachments.length === 0 && !videoFrameExtraction) {
     return null
   }
   return (
@@ -36,6 +46,56 @@ export function MobileNativeChatAttachmentChips({
         paddingTop: space.md
       }}
     >
+      {videoFrameExtraction ? (
+        <View
+          style={{
+            height: 60,
+            maxWidth: 210,
+            paddingRight: 26,
+            borderRadius: radius.sm,
+            borderWidth: 1,
+            borderColor: colors.border,
+            backgroundColor: colors.bgRaised
+          }}
+        >
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.xs,
+              paddingLeft: space.sm
+            }}
+          >
+            <Film size={20} color={colors.textSecondary} strokeWidth={1.8} />
+            <Txt variant="caption" weight="medium" numberOfLines={2} style={{ maxWidth: 140 }}>
+              {videoFrameExtraction.total === null
+                ? 'Reading a video…'
+                : `Reading frames ${videoFrameExtraction.done}/${videoFrameExtraction.total}…`}
+            </Txt>
+          </View>
+          {onCancelVideoFrameExtraction ? (
+            <Pressable
+              accessibilityLabel="Cancel reading frames"
+              style={{
+                position: 'absolute',
+                top: 3,
+                right: 3,
+                width: 20,
+                height: 20,
+                borderRadius: 10,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: colors.text
+              }}
+              onPress={onCancelVideoFrameExtraction}
+              hitSlop={8}
+            >
+              <X size={12} color={colors.textInverse} strokeWidth={2.6} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {attachments.map((attachment) => {
         const isFile = attachment.kind === 'file'
         return (
@@ -69,7 +129,11 @@ export function MobileNativeChatAttachmentChips({
               // A tap opens the photo full-screen, the way the Claude app does,
               // and markup is the pencil there (2026-09-26; from 360ef269 a tap
               // went straight into markup). No pencil while an upload has not
-              // settled, or with no editor to hand.
+              // settled, with no editor to hand, or on a video frame: its
+              // preview is a small copy kept only for the chip strip, and the
+              // pencil's re-upload would silently replace the real, full-size
+              // frame the desktop already has with that small copy
+              // (2026-09-27 review).
               <Pressable
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
@@ -79,7 +143,7 @@ export function MobileNativeChatAttachmentChips({
                     attachment.previewUri,
                     attachment.name ?? 'Image',
                     0,
-                    onEditAttachment && !attachment.uploading
+                    onEditAttachment && !attachment.uploading && !attachment.videoFrame
                       ? () => onEditAttachment(attachment.id, attachment.previewUri)
                       : undefined
                   )

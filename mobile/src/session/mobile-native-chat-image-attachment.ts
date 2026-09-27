@@ -4,6 +4,7 @@ import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/str
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
+import type { VideoFrameAttachmentMeta } from '../platform/media-picker-contract'
 
 /** A picked-and-uploaded image held in the native-chat composer until submit.
  *  `path` is the host temp file pasted into the agent on send; `previewUri` is a
@@ -16,6 +17,11 @@ export type PendingNativeChatImage = {
    *  in text instead of being pasted as an image. Absent means image. */
   readonly kind?: 'image' | 'file'
   readonly name?: string
+  /** Set on a still frame pulled from an over-the-cap video: it rides as an
+   *  ordinary image chip (no `.name`, so `kind` stays "image"), and this is
+   *  what groups it with its siblings for the note
+   *  (`mobile-native-chat-video-frames-attachment.ts`). */
+  readonly videoFrame?: VideoFrameAttachmentMeta
   /** Bytes on their way to the host, from a pick (`path` still empty) or
    *  from markup's Done (`path` still the photo as it was): drawn as a chip
    *  with a spinner (2026-09-13, the Claude app's per-file loading ring). A
@@ -203,7 +209,13 @@ export async function uploadMobileNativeChatImages(
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    onImageStart?.(image.name ? { previewUri, kind: 'file', name: image.name } : { previewUri })
+    onImageStart?.(
+      image.name
+        ? { previewUri, kind: 'file', name: image.name }
+        : image.videoFrame
+          ? { previewUri, videoFrame: image.videoFrame }
+          : { previewUri }
+    )
     // The chip is up; now the bytes, which a photo reads (and scales) on demand.
     const base64 = image.base64 || (image.load ? await image.load() : '')
     if (!base64) {
@@ -213,7 +225,9 @@ export async function uploadMobileNativeChatImages(
     const contentFingerprint = mobileNativeChatImageContentFingerprint(base64)
     const result = image.name
       ? { path, previewUri, kind: 'file' as const, name: image.name, contentFingerprint }
-      : { path, previewUri, contentFingerprint }
+      : image.videoFrame
+        ? { path, previewUri, videoFrame: image.videoFrame, contentFingerprint }
+        : { path, previewUri, contentFingerprint }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

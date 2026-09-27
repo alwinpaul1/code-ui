@@ -29,6 +29,7 @@ import {
   makeClient,
   methodNotFound,
   ok,
+  SCOPE_A,
   sendResult,
   type Hook,
   type HookArgs
@@ -161,6 +162,79 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
     expect(beginImageSend).not.toHaveBeenCalled()
     expect(args.baseSend).not.toHaveBeenCalled()
+    expect(hook!.attachments).toHaveLength(1)
+  })
+
+  // 2026-09-27 merge: a video's frames are read ahead of any chip, so a send
+  // tapped mid-read waits on the store's own extraction slice
+  // (use-mobile-native-chat-send-chips.ts), not on a chip. That wait must
+  // finish BEFORE the dialog look, not instead of it — the screen can change
+  // while the phone is busy reading frames, and the look has to be fresh.
+  it('waits for a video\'s frames, then is refused if a dialog is up by the time it looks, keeping the frames and the draft', async () => {
+    const { client, args } = setUp(() => read(SUBAGENT_PROMPT))
+    // One frame already landed; the group is still being read.
+    useNativeChatImageAttachmentsStore.getState().update((prev) => ({
+      ...prev,
+      [SCOPE_A]: [
+        {
+          id: 'img-1',
+          path: '/tmp/f1.png',
+          previewUri: 'data:image/jpeg;base64,p1',
+          // The same batch the extraction record below names: this is what
+          // ties this already-landed chip to the read still in progress, so
+          // the send recognizes it has a stake in waiting for it
+          // (2026-09-27 review — settleMobileNativeChatSendChips's
+          // readingBatch gate reads `chip.batch`, not `chip.videoFrame`).
+          batch: 'batch-1',
+          videoFrame: {
+            groupId: 'g1',
+            index: 1,
+            total: 2,
+            sourceName: 'clip.mp4',
+            durationLabel: '2 s',
+            intervalLabel: 'every 1 s',
+            intervalMs: 1000,
+            sourceSizeLabel: '30 MB',
+            stoppedEarly: false
+          }
+        }
+      ]
+    }))
+    useNativeChatImageAttachmentsStore
+      .getState()
+      .updateVideoFrameExtraction((prev) => ({ ...prev, [SCOPE_A]: { batch: 'batch-1', done: 1, total: 2 } }))
+
+    let sending: Promise<boolean> = Promise.resolve(true)
+    act(() => {
+      sending = hook!.sendNativeChat('look at these')
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    // Still reading: the send has not looked at the screen yet.
+    expect(client.calls.some((call) => call.method === 'terminal.read')).toBe(false)
+
+    // Reading finishes — the dialog (already on screen, per setUp) is what
+    // the send's look now finds, since the look only happens once this clears.
+    act(() => {
+      useNativeChatImageAttachmentsStore.getState().updateVideoFrameExtraction((prev) => {
+        const next = { ...prev }
+        delete next[SCOPE_A]
+        return next
+      })
+    })
+    let accepted = true
+    await act(async () => {
+      accepted = await sending
+    })
+
+    expect(accepted).toBe(false)
+    expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_UNDER_DIALOG_REFUSAL)
+    expect(args.baseSend).not.toHaveBeenCalled()
+    expect(client.calls.some((call) => call.method === 'terminal.send')).toBe(false)
+    // The frame and the draft (never cleared, since sendNativeChat returned
+    // false before reaching clearSent()) are both still there for a retry.
     expect(hook!.attachments).toHaveLength(1)
   })
 
