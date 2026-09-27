@@ -91,7 +91,7 @@ const ROWS: [string, () => ReturnType<typeof createElement>][] = [
       createElement(MobileDiffReviewLine, {
         line: LINE,
         comments: [],
-        staleCommentIds: new Set(),
+        staleCommentIds: new Set<string>(),
         active: false,
         onAddNote: () => undefined,
         onEditNote: () => undefined
