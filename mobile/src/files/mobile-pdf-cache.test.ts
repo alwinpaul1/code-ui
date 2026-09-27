@@ -30,6 +30,32 @@ function fakeFs() {
   }
 }
 
+/** A desktop that refuses every chunk, as Orca does for a file that is gone. */
+function missingFile() {
+  return vi.fn(async () => ({
+    id: 'r',
+    ok: false as const,
+    error: { code: 'error', message: "ENOENT: no such file or directory, open 'gone.pdf'" },
+    _meta: { runtimeId: 'rt' }
+  }))
+}
+
+/** Node reports an unhandled rejection at the end of a microtask checkpoint, so one macrotask is
+ *  long enough to see it, and a listener is the only way to observe one from inside a test. */
+async function unhandledRejectionsWhile(run: () => Promise<void>): Promise<unknown[]> {
+  const seen: unknown[] = []
+  const listener = (reason: unknown) => seen.push(reason)
+  process.on('unhandledRejection', listener)
+  try {
+    await run()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await new Promise<void>((resolve) => setImmediate(resolve))
+  } finally {
+    process.off('unhandledRejection', listener)
+  }
+  return seen
+}
+
 describe('resolveMobilePdfUri', () => {
   afterEach(() => clearMobilePdfCacheForTests())
 
@@ -84,5 +110,49 @@ describe('resolveMobilePdfUri', () => {
     }
     const result = await resolveMobilePdfUri({ sendRequest }, 'id:w', 'd.pdf', { fs })
     expect(result.uri.startsWith('data:application/pdf;base64,')).toBe(true)
+  })
+
+  // Why: the in-flight entry was cleared through `void pending.finally(...)`, a second promise
+  // that rejects with the read and that nothing handled. Every PDF that failed to load raised
+  // an unhandled rejection beside the error the viewer showed.
+  it('hands a failed read to its caller and leaves no unhandled rejection behind', async () => {
+    const { fs } = fakeFs()
+    const unhandled = await unhandledRejectionsWhile(async () => {
+      await expect(
+        resolveMobilePdfUri({ sendRequest: missingFile() }, 'id:w', 'gone.pdf', { fs })
+      ).rejects.toThrow("ENOENT: no such file or directory, open 'gone.pdf'")
+    })
+    expect(unhandled).toEqual([])
+  })
+
+  it('hands the failure to every open that joined the read, still with none left unhandled', async () => {
+    const { fs } = fakeFs()
+    const sendRequest = missingFile()
+    const unhandled = await unhandledRejectionsWhile(async () => {
+      const outcomes = await Promise.allSettled([
+        resolveMobilePdfUri({ sendRequest }, 'id:w', 'gone.pdf', { fs }),
+        resolveMobilePdfUri({ sendRequest }, 'id:w', 'gone.pdf', { fs })
+      ])
+      expect(outcomes.map((outcome) => outcome.status)).toEqual(['rejected', 'rejected'])
+    })
+    expect(unhandled).toEqual([])
+  })
+
+  it('reads the PDF again on the next open after a failed read', async () => {
+    const { fs } = fakeFs()
+    await expect(
+      resolveMobilePdfUri({ sendRequest: missingFile() }, 'id:w', 'back.pdf', { fs })
+    ).rejects.toThrow(/ENOENT/)
+
+    const result = await resolveMobilePdfUri(
+      { sendRequest: server(Buffer.from('%PDF z')) },
+      'id:w',
+      'back.pdf',
+      {
+        fs
+      }
+    )
+    expect(result.fromCache).toBe(false)
+    expect(result.uri.startsWith('file:///cache/orca-pdf-')).toBe(true)
   })
 })

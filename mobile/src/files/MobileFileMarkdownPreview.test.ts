@@ -83,8 +83,7 @@ describe('MobileFileMarkdownPreview', () => {
     const baseProps: PreviewProps = {
       relativePath: 'notes/first.md',
       content: '# First',
-      truncated: false,
-      byteLength: 7
+      truncated: false
     }
     renderer = await renderPreview(baseProps)
 
@@ -111,7 +110,6 @@ describe('MobileFileMarkdownPreview', () => {
       relativePath: 'notes/first.md',
       content: '# First',
       truncated: false,
-      byteLength: 7,
       renderSource: () => createElement('CallerSourceView')
     })
 
@@ -127,8 +125,7 @@ describe('MobileFileMarkdownPreview', () => {
     renderer = await renderPreview({
       relativePath: 'notes/first.md',
       content: '# First',
-      truncated: false,
-      byteLength: 7
+      truncated: false
     })
 
     await selectMode(renderer, 'View Markdown source')
@@ -141,8 +138,7 @@ describe('MobileFileMarkdownPreview', () => {
     renderer = await renderPreview({
       relativePath: 'notes/first.md',
       content: '# First',
-      truncated: true,
-      byteLength: 400_000
+      truncated: true
     })
 
     expect(JSON.stringify(renderer.toJSON())).toContain('MobileFilePreviewTruncatedNote')

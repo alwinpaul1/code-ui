@@ -80,12 +80,14 @@ describe('opening a markdown file tab on the phone', () => {
   })
 
   // Why: a rendered document hides where the text stops, so the host's
-  // truncation facts have to reach the preview that draws the note.
-  it('hands the preview the truncation facts, so a cut-off file says so', () => {
+  // truncation flag has to reach the preview that draws the note. Not its
+  // byteLength: on a cut read that is what the host READ, not the file's size,
+  // and the note called every file over the cap 512 KB.
+  it('hands the preview the truncation flag, so a cut-off file says so', () => {
     const renderer = renderMarkdownTab()
     const preview = renderer.root.findByType('MobileFileMarkdownPreview' as never)
     expect(preview.props.truncated).toBe(true)
-    expect(preview.props.byteLength).toBe(400_000)
+    expect(preview.props).not.toHaveProperty('byteLength')
     renderer.unmount()
   })
 

@@ -287,7 +287,7 @@ export function FileReader({
     )
   }
 
-  const renderSourceText = (content: string, truncated?: boolean, byteLength?: number) => (
+  const renderSourceText = (content: string, truncated?: boolean) => (
     // The desktop editor's view of a source file: the code face, line
     // numbers, indent guides, its colours and no wrapping (2026-09-26). A
     // file the host cut short says so, and copies only what came.
@@ -298,7 +298,6 @@ export function FileReader({
       relativePath={relativePath}
       onAskAboutLines={onAskAboutLines}
       truncated={truncated}
-      byteLength={byteLength}
     />
   )
 
@@ -321,14 +320,13 @@ export function FileReader({
           relativePath={relativePath}
           content={doc.content}
           truncated={doc.truncated}
-          byteLength={doc.byteLength}
           readingPositionKey={readingPositionKey}
           resolveImage={resolveImage}
-          renderSource={() => renderSourceText(doc.content, doc.truncated, doc.byteLength)}
+          renderSource={() => renderSourceText(doc.content, doc.truncated)}
         />
       </View>
     )
   }
 
-  return renderSourceText(doc.content, doc.truncated, doc.byteLength)
+  return renderSourceText(doc.content, doc.truncated)
 }

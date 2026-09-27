@@ -1,14 +1,14 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileFileImageZoom } from './MobileFileImageZoom'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import { MobileFilePdfPreview } from './MobileFilePdfPreview'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { filePreviewStyles } from './mobile-file-preview-styles'
 import type { MarkdownImageResolver } from '../components/markdown-image-source'
 
 type Props = {
@@ -33,6 +33,8 @@ type Props = {
 }
 
 export function MobileFilePreviewBody({ preview, ...options }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
   if (preview.status === 'loading') {
     return (
       <View style={styles.state}>
@@ -97,7 +99,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}
-        byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
         readingPositionKey={options.readingPositionKey}
         resolveImage={options.resolveImage ?? undefined}
@@ -112,7 +113,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         relativePath={options.relativePath}
         content={preview.content}
         truncated={preview.truncated}
-        byteLength={preview.byteLength}
         initialLine={options.lineColumn?.line}
       />
     )
@@ -125,7 +125,6 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       relativePath={options.relativePath}
       content={preview.content}
       truncated={preview.truncated}
-      byteLength={preview.byteLength}
       initialLine={options.lineColumn?.line}
     />
   )

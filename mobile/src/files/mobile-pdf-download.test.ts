@@ -6,6 +6,7 @@ function deps(overrides: Partial<MobilePdfDownloadDeps> = {}): MobilePdfDownload
     createDocument: vi.fn(async () => 'content://downloads/42'),
     readBase64: vi.fn(async () => 'JVBERi0xLjQK'),
     writeBase64: vi.fn(async () => {}),
+    remove: vi.fn(async () => {}),
     ...overrides
   }
 }
@@ -17,7 +18,7 @@ describe('downloading a previewed PDF', () => {
       { uri: 'file:///cache/orca-pdf-1a2b.pdf', fileName: 'thesis-draft.pdf' },
       d
     )
-    expect(outcome).toBe('saved')
+    expect(outcome).toEqual({ status: 'saved' })
     expect(d.createDocument).toHaveBeenCalledWith('thesis-draft.pdf')
     expect(d.readBase64).toHaveBeenCalledWith('file:///cache/orca-pdf-1a2b.pdf')
     expect(d.writeBase64).toHaveBeenCalledWith('content://downloads/42', 'JVBERi0xLjQK')
@@ -25,7 +26,9 @@ describe('downloading a previewed PDF', () => {
 
   it('reports cancelled, and writes nothing, when the picker is dismissed', async () => {
     const d = deps({ createDocument: vi.fn(async () => null) })
-    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe('cancelled')
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toEqual({
+      status: 'cancelled'
+    })
     expect(d.writeBase64).not.toHaveBeenCalled()
   })
 
@@ -35,7 +38,7 @@ describe('downloading a previewed PDF', () => {
       { uri: 'data:application/pdf;base64,JVBERi0xLjQK', fileName: 'inline.pdf' },
       d
     )
-    expect(outcome).toBe('saved')
+    expect(outcome).toEqual({ status: 'saved' })
     expect(d.readBase64).not.toHaveBeenCalled()
     expect(d.writeBase64).toHaveBeenCalledWith('content://downloads/42', 'JVBERi0xLjQK')
   })
@@ -48,8 +51,50 @@ describe('downloading a previewed PDF', () => {
     expect(d.createDocument).toHaveBeenLastCalledWith('Report.PDF')
   })
 
-  it('reports failed when the write throws', async () => {
+  it('reports failed when the write throws, and removes the empty PDF the picker made', async () => {
     const d = deps({ writeBase64: vi.fn(async () => { throw new Error('EACCES') }) })
-    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toBe('failed')
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toEqual({
+      status: 'failed'
+    })
+    expect(d.remove).toHaveBeenCalledWith('content://downloads/42')
+  })
+
+  it('says an empty PDF is left behind when the write fails and so does its removal', async () => {
+    const d = deps({
+      writeBase64: vi.fn(async () => {
+        throw new Error('EACCES')
+      }),
+      remove: vi.fn(async () => {
+        throw new Error('Unable to delete: provider refused')
+      })
+    })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toEqual({
+      status: 'failed-left-incomplete',
+      fileName: 'a.pdf'
+    })
+  })
+
+  it('says the same when the cached PDF cannot be read into the document the picker made', async () => {
+    const d = deps({
+      readBase64: vi.fn(async () => {
+        throw new Error('ENOENT: cache file gone')
+      }),
+      remove: vi.fn(async () => {
+        throw new Error('Unable to delete: provider refused')
+      })
+    })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toEqual({
+      status: 'failed-left-incomplete',
+      fileName: 'a.pdf'
+    })
+    expect(d.remove).toHaveBeenCalledWith('content://downloads/42')
+  })
+
+  it('removes nothing when the picker itself fails', async () => {
+    const d = deps({ createDocument: vi.fn(async () => { throw new Error('No Activity') }) })
+    expect(await downloadMobilePdf({ uri: 'file:///c.pdf', fileName: 'a.pdf' }, d)).toEqual({
+      status: 'failed'
+    })
+    expect(d.remove).not.toHaveBeenCalled()
   })
 })

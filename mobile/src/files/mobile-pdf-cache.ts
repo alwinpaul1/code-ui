@@ -93,7 +93,13 @@ export async function resolveMobilePdfUri(
       return { uri, byteLength }
     })()
     inFlight.set(key, pending)
-    void pending.finally(() => inFlight.delete(key))
+    // Why not `.finally`: it returns a second promise that rejects with a failed read, and
+    // nothing here awaits it, so every failed read raised an unhandled rejection. Both arms
+    // settle this one; the caller still gets the failure from `pending` below.
+    const forget = () => {
+      inFlight.delete(key)
+    }
+    void pending.then(forget, forget)
   }
   return { ...(await pending), fromCache: false }
 }

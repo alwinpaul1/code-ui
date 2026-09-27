@@ -42,7 +42,16 @@ export async function downloadApk(input: {
   return result.uri
 }
 
-/** Open the system package installer on a downloaded APK. */
+/**
+ * Open the system package installer on a downloaded APK.
+ *
+ * This shares expo-intent-launcher's single `pendingPromise` (IntentLauncherModule.kt) with the
+ * file save and the PDF viewer's Download, and is NOT routed through their shared picker gate
+ * (mobile-picker-gate.ts): it only runs when the native ApkUpdater module is unavailable
+ * (`isApkUpdaterAvailable` in apk-install-store.ts), a fallback path a save or a Download landing
+ * on at the very same moment is unlikely enough, and separate enough in purpose, that gating it
+ * alongside them was left out of this pass rather than folded in without its own review.
+ */
 export async function openApkInstaller(fileUri: string): Promise<void> {
   const contentUri = await FileSystem.getContentUriAsync(fileUri)
   await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {

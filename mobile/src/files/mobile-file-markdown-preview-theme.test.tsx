@@ -30,8 +30,7 @@ function renderInScheme(scheme: 'light' | 'dark'): ReactTestRenderer {
         createElement(MobileFileMarkdownPreview, {
           relativePath: 'CLAUDE.md',
           content: '# Rules',
-          truncated: false,
-          byteLength: 7
+          truncated: false
         })
       )
     )

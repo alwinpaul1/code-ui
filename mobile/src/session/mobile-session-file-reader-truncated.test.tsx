@@ -70,7 +70,9 @@ function open(truncated: boolean): void {
   act(() => {
     renderer = create(
       createElement(FileReader, {
-        doc: { status: 'ready', kind: 'file', content: LOADED, truncated, byteLength: truncated ? 9_000_000 : LOADED.length },
+        // Orca's files.read for any file over its cap: `byteLength` is what the host READ
+        // (512 KiB and a byte), not the file's size, which the phone is never told.
+        doc: { status: 'ready', kind: 'file', content: LOADED, truncated, byteLength: truncated ? 524_289 : LOADED.length },
         title: 'lever_energy.py',
         relativePath: 'algorithm/lever_energy.py',
         onAskAboutLines: vi.fn()
@@ -102,9 +104,10 @@ describe.each(['dark', 'light'] as const)('a file tab showing only part of a fil
     scheme = current
   })
 
-  it('says the file was cut, and that Copy takes only the loaded text, in words on the button', async () => {
+  it('says the file was cut, never calling it 512 KB, and that Copy takes only the loaded text, in words on the button', async () => {
     open(true)
-    expect(texts().some((text) => text.startsWith('Preview truncated. File size:'))).toBe(true)
+    const notes = texts().filter((text) => text.startsWith('Preview truncated'))
+    expect(notes).toEqual(['Preview truncated: showing the first 512 KB of the file.'])
     const button = renderer!.root
       .findAll((node) => node.props.accessibilityLabel === 'Copy loaded text')
       .find((node) => typeof node.props.onPress === 'function')

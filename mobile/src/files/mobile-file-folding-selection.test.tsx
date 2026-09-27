@@ -39,16 +39,19 @@ let scheme: 'light' | 'dark' = 'dark'
 vi.mock('../theme/theme-context', async () => {
   const tokens = await vi.importActual<typeof import('../theme/tokens')>('../theme/tokens')
   const palettes = await vi.importActual<typeof import('../theme/syntax-palette')>('../theme/syntax-palette')
+  const useTheme = () => ({
+    colors: tokens.colorsForScheme(scheme),
+    syntax: palettes.syntaxPaletteForScheme(scheme),
+    fonts: tokens.fontFamily,
+    space: tokens.space,
+    radius: { ...tokens.radius, xl: 24 },
+    type: { ...tokens.type, label: { size: 13 } },
+    isDark: scheme === 'dark'
+  })
   return {
-    useTheme: () => ({
-      colors: tokens.colorsForScheme(scheme),
-      syntax: palettes.syntaxPaletteForScheme(scheme),
-      fonts: tokens.fontFamily,
-      space: tokens.space,
-      radius: { ...tokens.radius, xl: 24 },
-      type: { ...tokens.type, label: { size: 13 } },
-      isDark: scheme === 'dark'
-    })
+    useTheme,
+    // The file preview's styles are a factory of the live theme (mobile-file-preview-styles.ts).
+    useThemedStyles: <T,>(factory: (theme: ReturnType<typeof useTheme>) => T) => factory(useTheme())
   }
 })
 

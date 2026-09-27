@@ -1,13 +1,25 @@
 // Pure: no React Native or Expo imports, so vitest can run it unmocked.
+import { pickedDocumentName } from './android-picked-document-name'
+import { PickerGateAbandonedError, withPickerGate, type PickerGateWaiter } from './mobile-picker-gate'
+
 export type MobilePdfDownloadDeps = {
   /** Ask the OS where to save; resolves the writable target URI, or null when
    *  the user backed out. */
   createDocument: (suggestedName: string) => Promise<string | null>
   readBase64: (uri: string) => Promise<string>
   writeBase64: (targetUri: string, base64: string) => Promise<void>
+  /** Removes the document the picker made when the write into it failed, so no empty PDF is left
+   *  under the name the user chose. When it throws, the outcome says the document is still there. */
+  remove: (targetUri: string) => Promise<void>
 }
 
-export type MobilePdfDownloadOutcome = 'saved' | 'cancelled' | 'failed'
+export type MobilePdfDownloadOutcome =
+  | { status: 'saved' | 'cancelled' | 'failed' }
+  /** The download failed after the picker had made its document, and the document could not be
+   *  removed. It is still where the user chose, empty or cut short, and would read as the PDF.
+   *  `fileName` is its name there: the one the picker's URI gives (the user may have renamed it),
+   *  else the one it was offered under. */
+  | { status: 'failed-left-incomplete'; fileName: string }
 
 const DATA_URI_PREFIX = /^data:application\/pdf;base64,/i
 
@@ -29,26 +41,51 @@ export function suggestedPdfFileName(fileName: string): string {
  *
  * Why a system file picker and not a fixed Downloads path: Android 10+ gives an
  * app no direct write access to Downloads; ACTION_CREATE_DOCUMENT opens the
- * system picker (defaulting to Downloads) and hands back a content URI the
- * legacy file-system API can write through. The viewer already holds the PDF
+ * system picker (defaulting to Downloads) and hands back a content URI that
+ * expo-file-system's File writes through (android-create-document.ts says why
+ * not the legacy API). The viewer already holds the PDF
  * as a cache file (or, when the cache was unavailable, a data URI), so no
  * second round trip to the desktop is needed.
  */
 export async function downloadMobilePdf(
   input: { uri: string; fileName: string },
-  deps: MobilePdfDownloadDeps
+  deps: MobilePdfDownloadDeps,
+  waiter: PickerGateWaiter = {}
 ): Promise<MobilePdfDownloadOutcome> {
+  const offeredName = suggestedPdfFileName(input.fileName)
+  let target: string | null = null
   try {
-    const target = await deps.createDocument(suggestedPdfFileName(input.fileName))
+    // Shared with the file save's runner (mobile-file-save.ts): Android's create-document picker
+    // keeps one pending Activity result at a time. If another picker -- a different file's save,
+    // or another Download -- is still open when this one is ready to ask for its own, opening a
+    // second would collide with it. `withPickerGate` serializes every request, from whichever
+    // caller it comes from, so this one waits its turn instead. `waiter` is the viewer's own
+    // mount state: queued behind another picker, a Download whose screen has gone away drops out
+    // rather than opening one later over whatever the user moved to (mobile-pdf-download-device.ts).
+    target = await withPickerGate(() => deps.createDocument(offeredName), waiter)
     if (!target) {
-      return 'cancelled'
+      return { status: 'cancelled' }
     }
     const base64 = DATA_URI_PREFIX.test(input.uri)
       ? input.uri.replace(DATA_URI_PREFIX, '')
       : await deps.readBase64(input.uri)
     await deps.writeBase64(target, base64)
-    return 'saved'
-  } catch {
-    return 'failed'
+    return { status: 'saved' }
+  } catch (error) {
+    if (error instanceof PickerGateAbandonedError) {
+      // Nothing was ever asked of the OS; closest existing outcome to "we stopped waiting".
+      return { status: 'cancelled' }
+    }
+    if (target) {
+      try {
+        await deps.remove(target)
+      } catch {
+        return {
+          status: 'failed-left-incomplete',
+          fileName: pickedDocumentName(target) ?? offeredName
+        }
+      }
+    }
+    return { status: 'failed' }
   }
 }

@@ -37,7 +37,7 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
 }))
 
 vi.mock('./mobile-pdf-download-device', () => ({
-  savePreviewedPdf: async () => 'saved'
+  savePreviewedPdf: async () => ({ status: 'saved' })
 }))
 
 vi.mock('../theme/theme-context', () => ({
@@ -97,7 +97,6 @@ async function renderMarkdown(scrollTo: ReturnType<typeof vi.fn>): Promise<React
         relativePath: 'docs/thesis.md',
         content: '# Thesis\n\nlong',
         truncated: false,
-        byteLength: 20,
         readingPositionKey: markdownKey
       }),
       { createNodeMock: (element) => (element.type === 'ScrollView' ? { scrollTo } : null) }

@@ -15,9 +15,11 @@ import { salvagedOptional } from '../../../src/shared/zod-salvage'
  *
  * All three are required because all three are published unguarded into MobileFileTabDoc:
  * mobile-file-tab-doc.ts:68 renders `content` as the html body and :73-75 puts `content`,
- * `truncated` and `byteLength` into the `file` arm, whose size label and truncation banner read
- * them as a number and a boolean. A reply missing one rendered `undefined` in the tab. All three
- * are declared required by RuntimeFileReadResult, so no host that answers this method omits them.
+ * `truncated` and `byteLength` into the `file` arm, typed as a boolean and a number. The truncation
+ * banner reads `truncated`; nothing draws `byteLength` any more, because on a cut read it is what the
+ * host read, not the file's size (previewTruncatedText). A reply missing one rendered `undefined` in
+ * the tab. All three are declared required by RuntimeFileReadResult, so no host that answers this
+ * method omits them.
  */
 export const fileTabTextSchema = z.looseObject({
   content: z.string(),

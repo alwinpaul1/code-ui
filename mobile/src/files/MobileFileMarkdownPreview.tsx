@@ -14,7 +14,6 @@ type Props = {
   relativePath: string
   content: string
   truncated: boolean
-  byteLength: number
   initialLine?: number
   /** Names the document across opens, so the rendered view scrolls back to
    *  where the reader left it, app restarts included. Without it the document
@@ -46,7 +45,6 @@ export function MobileFileMarkdownPreview({
   relativePath,
   content,
   truncated,
-  byteLength,
   initialLine,
   readingPositionKey = null,
   resolveImage,
@@ -104,9 +102,7 @@ export function MobileFileMarkdownPreview({
           style={styles.scroll}
           contentContainerStyle={styles.markdownContent}
         >
-          {truncated ? (
-            <MobileFilePreviewTruncatedNote byteLength={byteLength} style={styles.truncatedNote} />
-          ) : null}
+          {truncated ? <MobileFilePreviewTruncatedNote style={styles.truncatedNote} /> : null}
           <MobileMarkdown content={content} resolveImage={resolveImage} />
         </ScrollView>
       ) : renderSource ? (
@@ -116,7 +112,6 @@ export function MobileFileMarkdownPreview({
           relativePath={relativePath}
           content={content}
           truncated={truncated}
-          byteLength={byteLength}
           initialLine={initialLine}
         />
       )}

@@ -27,8 +27,7 @@ export function MobileSessionFileSource({
   title,
   relativePath,
   onAskAboutLines,
-  truncated = false,
-  byteLength
+  truncated = false
 }: {
   content: string
   /** The highlighter's language by name (resolveMobileSyntaxLanguage); a
@@ -39,7 +38,6 @@ export function MobileSessionFileSource({
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
   /** The host sent only part of the file: say so, and copy only what came. */
   truncated?: boolean
-  byteLength?: number
 }) {
   // A file whose name says nothing (`bin/deploy`) is read for its language,
   // a tick after it is drawn.
@@ -63,7 +61,7 @@ export function MobileSessionFileSource({
   const notice = linesCopy.error
     ? copyFailedNotice(linesCopy.error)
     : truncated
-      ? previewTruncatedText(byteLength ?? content.length)
+      ? previewTruncatedText()
       : document.reformatted
         ? REFORMATTED_JSON_NOTICE
         : null

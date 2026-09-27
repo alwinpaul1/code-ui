@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import Pdf from 'react-native-pdf'
 import { Check, Download } from 'lucide-react-native'
-import { useTheme } from '../theme/theme-context'
-import { filePreviewStyles as styles } from './mobile-file-preview-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { filePreviewStyles } from './mobile-file-preview-styles'
 import { savePreviewedPdf } from './mobile-pdf-download-device'
 import type { MobilePdfDownloadOutcome } from './mobile-pdf-download'
 import { saveReadingPosition } from '../storage/reading-positions'
 import { useRestoredReadingPosition } from './use-reading-position'
 
 const SAVE_FEEDBACK_MS = 2200
+/** Long enough to read the line that says an incomplete PDF is left, as the file save's problem
+ *  toast is (mobile-file-save.ts). */
+const LEFT_BEHIND_FEEDBACK_MS = 4500
 
 /** In-app PDF viewer for the file explorer and session file tabs. `uri` is
  *  normally a file in the app cache written by `resolveMobilePdfUri` (fast to
@@ -29,6 +32,7 @@ export function MobileFilePdfPreview({
   readingPositionKey?: string | null
 }) {
   const { colors } = useTheme()
+  const styles = useThemedStyles(filePreviewStyles)
   const [pageCount, setPageCount] = useState<number | null>(null)
   const [page, setPage] = useState(1)
   const restored = useRestoredReadingPosition(readingPositionKey)
@@ -46,11 +50,21 @@ export function MobileFilePdfPreview({
     setPage(startPage)
   }, [initial, restored, uri])
   const [error, setError] = useState<string | null>(null)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | MobilePdfDownloadOutcome>('idle')
+  const [saveState, setSaveState] = useState<
+    { status: 'idle' | 'saving' } | MobilePdfDownloadOutcome
+  >({ status: 'idle' })
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A Download's own picker call can be queued behind another one -- a file save, or a different
+  // Download -- still open elsewhere (mobile-picker-gate.ts). `mounted` and `downloadAbort` are how
+  // it drops out rather than opening its own picker later, over whatever screen the user moved to,
+  // and then setting state on this component once it is gone.
+  const mounted = useRef(true)
+  const downloadAbort = useRef<AbortController | null>(null)
 
   useEffect(
     () => () => {
+      mounted.current = false
+      downloadAbort.current?.abort()
       if (feedbackTimer.current) {
         clearTimeout(feedbackTimer.current)
       }
@@ -59,29 +73,43 @@ export function MobileFilePdfPreview({
   )
 
   const save = async () => {
-    if (saveState === 'saving') {
+    if (saveState.status === 'saving') {
       return
     }
-    setSaveState('saving')
-    const outcome = await savePreviewedPdf({ uri, fileName: fileName ?? 'document.pdf' })
+    setSaveState({ status: 'saving' })
+    const abort = new AbortController()
+    downloadAbort.current = abort
+    const outcome = await savePreviewedPdf(
+      { uri, fileName: fileName ?? 'document.pdf' },
+      { signal: abort.signal, isStillWanted: () => mounted.current }
+    )
+    if (!mounted.current) {
+      return
+    }
     setSaveState(outcome)
     if (feedbackTimer.current) {
       clearTimeout(feedbackTimer.current)
     }
-    feedbackTimer.current = setTimeout(() => setSaveState('idle'), SAVE_FEEDBACK_MS)
+    feedbackTimer.current = setTimeout(
+      () => setSaveState({ status: 'idle' }),
+      outcome.status === 'failed-left-incomplete' ? LEFT_BEHIND_FEEDBACK_MS : SAVE_FEEDBACK_MS
+    )
   }
+  const saveFailed = saveState.status === 'failed' || saveState.status === 'failed-left-incomplete'
   const saveLabel =
-    saveState === 'saved'
+    saveState.status === 'saved'
       ? 'Saved'
-      : saveState === 'failed'
+      : saveFailed
         ? "Couldn't save"
-        : saveState === 'saving'
+        : saveState.status === 'saving'
           ? 'Saving…'
           : null
 
   if (error) {
+    // On the viewer's own page like its other states. A session file tab mounts it in a frame on
+    // the static dark palette in both schemes, and the live-theme red is unreadable on that.
     return (
-      <View style={styles.state}>
+      <View style={[styles.state, { backgroundColor: colors.bg }]}>
         <Text style={styles.errorText}>{error}</Text>
       </View>
     )
@@ -119,7 +147,7 @@ export function MobileFilePdfPreview({
           {saveLabel ? (
             <Text
               style={{
-                color: saveState === 'failed' ? colors.danger : colors.textSecondary,
+                color: saveFailed ? colors.danger : colors.textSecondary,
                 fontSize: 12
               }}
             >
@@ -130,7 +158,7 @@ export function MobileFilePdfPreview({
             accessibilityRole="button"
             accessibilityLabel="Download PDF"
             onPress={() => void save()}
-            disabled={saveState === 'saving'}
+            disabled={saveState.status === 'saving'}
             hitSlop={8}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -142,10 +170,10 @@ export function MobileFilePdfPreview({
               backgroundColor: pressed ? colors.bgRaised : colors.bg,
               borderWidth: 1,
               borderColor: colors.border,
-              opacity: saveState === 'saving' ? 0.6 : 1
+              opacity: saveState.status === 'saving' ? 0.6 : 1
             })}
           >
-            {saveState === 'saved' ? (
+            {saveState.status === 'saved' ? (
               <Check size={16} color={colors.text} strokeWidth={2.2} />
             ) : (
               <Download size={16} color={colors.text} strokeWidth={2.2} />
@@ -154,6 +182,23 @@ export function MobileFilePdfPreview({
           </Pressable>
         </View>
       </View>
+      {saveState.status === 'failed-left-incomplete' ? (
+        // Its own row: the sentence does not fit beside the button, and the empty PDF it names
+        // is the user's to delete.
+        <Text
+          style={{
+            color: colors.danger,
+            fontSize: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+            backgroundColor: colors.bgPanel
+          }}
+        >
+          {`An incomplete ${saveState.fileName} is left where you chose to save it; delete it there`}
+        </Text>
+      ) : null}
       <Pdf
         key={uri}
         source={{ uri, cache: false }}
