@@ -1,7 +1,8 @@
 import { Pressable, Text, View } from 'react-native'
 import { ArrowDown, ArrowUp } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { ThemeColors } from '../theme/tokens'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import { MOBILE_GIT_STATUS_LABELS } from '../source-control/mobile-git-status'
 import {
@@ -9,7 +10,7 @@ import {
   mobileReviewScopeLabel,
   type ReviewDiffState
 } from '../session/mobile-diff-review-screen-model'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   currentIndex: number
@@ -22,17 +23,17 @@ type Props = {
   onJumpHunk: (direction: 'next' | 'previous') => void
 }
 
-function statusColor(status: MobileDiffReviewQueueItem['status']): string {
+function statusColor(status: MobileDiffReviewQueueItem['status'], colors: ThemeColors): string {
   switch (status) {
     case 'added':
     case 'copied':
-      return colors.statusGreen
+      return colors.success
     case 'deleted':
-      return colors.statusRed
+      return colors.danger
     case 'renamed':
-      return colors.accentBlue
+      return colors.accent
     case 'untracked':
-      return colors.statusAmber
+      return colors.warning
     case 'modified':
     default:
       return colors.textSecondary
@@ -49,8 +50,10 @@ export function MobileDiffReviewFileSummary({
   onEditNote,
   onJumpHunk
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   const hunkDisabled = diffState.kind !== 'ready' || diffState.hunks.length === 0
-  const badgeColor = statusColor(item.status)
+  const badgeColor = statusColor(item.status, colors)
   return (
     <View style={styles.fileHeader}>
       <View style={styles.fileTitleRow}>

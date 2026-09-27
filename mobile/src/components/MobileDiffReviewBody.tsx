@@ -2,7 +2,7 @@ import { ActivityIndicator, FlatList, Pressable, Text, View } from 'react-native
 import { RefreshCw } from 'lucide-react-native'
 import type { RefObject } from 'react'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileDiffReviewLine } from './MobileDiffReviewLine'
 import type {
   ReviewDiffLine,
@@ -10,7 +10,7 @@ import type {
   ReviewScreenState
 } from '../session/mobile-diff-review-screen-model'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   activeHunkIndex: number | null
@@ -39,6 +39,7 @@ export function MobileDiffReviewBody({
   onEditNote,
   onRetry
 }: Props) {
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   if (screenState.kind === 'loading') {
     return <CenteredState text="Loading review..." busy />
   }
@@ -139,11 +140,11 @@ function CenteredState({
   text: string
   onRetry?: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <View style={styles.state}>
-      {busy ? (
-        <ActivityIndicator color={muted ? colors.textSecondary : colors.textPrimary} />
-      ) : null}
+      {busy ? <ActivityIndicator color={muted ? colors.textSecondary : colors.text} /> : null}
       {title ? <Text style={styles.stateTitle}>{title}</Text> : null}
       <Text style={styles.stateText}>{text}</Text>
       {onRetry ? (
@@ -153,7 +154,7 @@ function CenteredState({
           accessibilityRole="button"
           accessibilityLabel="Retry loading review"
         >
-          <RefreshCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <RefreshCw size={14} color={colors.text} strokeWidth={2.2} />
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       ) : null}

@@ -11,8 +11,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { MobileDiffReviewQueueItem } from '../session/mobile-diff-review-queue'
 import type { GitMutationMethod } from '../session/mobile-diff-review-screen-model'
-import { colors, spacing } from '../theme/mobile-theme'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   busyAction: string | null
@@ -34,6 +35,8 @@ export function MobileDiffReviewFooter({
   onMoveFile
 }: Props) {
   const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <View style={[styles.footer, { paddingBottom: insets.bottom + spacing.sm }]}>
       <View style={styles.fileActionRow}>
@@ -69,7 +72,7 @@ export function MobileDiffReviewFooter({
             accessibilityRole="button"
             accessibilityLabel="Discard file"
           >
-            <Trash2 size={14} color={colors.statusRed} strokeWidth={2.2} />
+            <Trash2 size={14} color={colors.danger} strokeWidth={2.2} />
             <Text style={styles.destructiveText}>Discard</Text>
           </Pressable>
         ) : null}
@@ -81,7 +84,7 @@ export function MobileDiffReviewFooter({
           accessibilityRole="button"
           accessibilityLabel="Previous file"
         >
-          <ChevronLeft size={17} color={colors.textPrimary} strokeWidth={2.2} />
+          <ChevronLeft size={17} color={colors.text} strokeWidth={2.2} />
         </Pressable>
         <Pressable
           style={({ pressed }) => [styles.footerButton, pressed && styles.buttonPressed]}
@@ -102,7 +105,7 @@ export function MobileDiffReviewFooter({
           accessibilityRole="button"
           accessibilityLabel="Mark file reviewed"
         >
-          <Check size={14} color={colors.bgBase} strokeWidth={2.2} />
+          <Check size={14} color={colors.bg} strokeWidth={2.2} />
           <Text style={styles.primaryButtonText}>
             {item.isReviewed ? 'Reviewed' : 'Mark Reviewed'}
           </Text>
@@ -113,7 +116,7 @@ export function MobileDiffReviewFooter({
           accessibilityRole="button"
           accessibilityLabel="Next file"
         >
-          <ChevronRight size={17} color={colors.textPrimary} strokeWidth={2.2} />
+          <ChevronRight size={17} color={colors.text} strokeWidth={2.2} />
         </Pressable>
       </View>
     </View>

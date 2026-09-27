@@ -1,10 +1,10 @@
 import { FlatList, Pressable, Text, View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS, mobileReviewCountLabel } from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
-import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { mobileDiffReviewStyles } from './mobile-diff-review-screen-styles'
 
 type Props = {
   filter: MobileDiffReviewQueueFilter
@@ -42,6 +42,8 @@ export function MobileDiffReviewHeader({
     isWideLayout,
     canDock: prSidebarCanDock
   })
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileDiffReviewStyles)
   return (
     <View style={styles.header}>
       <View style={styles.topBar}>
@@ -51,7 +53,7 @@ export function MobileDiffReviewHeader({
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
+          <ChevronLeft size={19} color={colors.text} strokeWidth={2.2} />
         </Pressable>
         <View style={styles.titleBlock}>
           <Text style={styles.title} numberOfLines={1}>
@@ -68,7 +70,7 @@ export function MobileDiffReviewHeader({
             accessibilityRole="button"
             accessibilityLabel="Open pull request sidebar"
           >
-            <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
+            <ListChecks size={19} color={colors.text} strokeWidth={2.2} />
           </Pressable>
         ) : null}
         <Pressable
@@ -77,7 +79,7 @@ export function MobileDiffReviewHeader({
           accessibilityRole="button"
           accessibilityLabel="Open review actions"
         >
-          <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
+          <MoreHorizontal size={19} color={colors.text} strokeWidth={2.2} />
         </Pressable>
       </View>
       <View style={styles.progressRow}>

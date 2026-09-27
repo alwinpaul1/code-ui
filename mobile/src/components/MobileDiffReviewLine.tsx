@@ -5,7 +5,9 @@ import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { MobileDiffLine } from '../session/mobile-diff-lines'
 import type { MobileHighlightedDiffLine } from '../session/mobile-file-syntax'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from '../source-control/mobile-diff-format'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'
 
 type Props = {
@@ -35,6 +37,8 @@ export function MobileDiffReviewLine({
   onAddNote,
   onEditNote
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(diffReviewLineStyles)
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
 
@@ -83,7 +87,7 @@ export function MobileDiffReviewLine({
             >
               <MessageSquare
                 size={13}
-                color={staleCommentIds.has(comment.id) ? colors.statusAmber : colors.textSecondary}
+                color={staleCommentIds.has(comment.id) ? colors.warning : colors.textSecondary}
                 strokeWidth={2}
               />
             </Pressable>
@@ -96,67 +100,69 @@ export function MobileDiffReviewLine({
 
 // Row height comes from the 18px code lineHeight alone (no vertical padding or
 // minHeight) so mobile diff density matches the desktop diff editor (STA-1239).
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  addedRow: {
-    backgroundColor: colors.diffAddedBg
-  },
-  deletedRow: {
-    backgroundColor: colors.diffDeletedBg
-  },
-  activeRow: {
-    borderLeftWidth: 2,
-    borderLeftColor: colors.accentBlue
-  },
-  prefix: {
-    width: 18,
-    textAlign: 'center',
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 18
-  },
-  lineNumber: {
-    width: 44,
-    paddingRight: spacing.xs,
-    textAlign: 'right',
-    color: colors.textMuted,
-    fontFamily: typography.monoFamily,
-    fontSize: typography.metaSize,
-    lineHeight: 18
-  },
-  code: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: spacing.sm
-  },
-  codePressed: {
-    backgroundColor: colors.bgRaised
-  },
-  codeText: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily,
-    fontSize: 12,
-    lineHeight: 18
-  },
-  notes: {
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2
-  },
-  noteButton: {
-    minWidth: 32,
-    minHeight: 28,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  noteButtonPressed: {
-    opacity: 0.72
-  }
-})
+function diffReviewLineStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    row: {
+      flexDirection: 'row',
+      alignItems: 'stretch',
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border
+    },
+    addedRow: {
+      backgroundColor: colors.diffAddBg
+    },
+    deletedRow: {
+      backgroundColor: colors.diffDelBg
+    },
+    activeRow: {
+      borderLeftWidth: 2,
+      borderLeftColor: colors.accent
+    },
+    prefix: {
+      width: 18,
+      textAlign: 'center',
+      color: colors.textMuted,
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      lineHeight: 18
+    },
+    lineNumber: {
+      width: 44,
+      paddingRight: spacing.xs,
+      textAlign: 'right',
+      color: colors.textMuted,
+      fontFamily: typography.monoFamily,
+      fontSize: typography.metaSize,
+      lineHeight: 18
+    },
+    code: {
+      flex: 1,
+      minWidth: 0,
+      paddingHorizontal: spacing.sm
+    },
+    codePressed: {
+      backgroundColor: colors.bgRaised
+    },
+    codeText: {
+      color: colors.text,
+      fontFamily: typography.monoFamily,
+      fontSize: 12,
+      lineHeight: 18
+    },
+    notes: {
+      width: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2
+    },
+    noteButton: {
+      minWidth: 32,
+      minHeight: 28,
+      alignItems: 'center',
+      justifyContent: 'center'
+    },
+    noteButtonPressed: {
+      opacity: 0.72
+    }
+  })
+}
