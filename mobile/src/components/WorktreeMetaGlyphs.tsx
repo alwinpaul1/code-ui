@@ -1,15 +1,16 @@
 import { CircleDot, GitMerge, StickyNote } from 'lucide-react-native'
 import { View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
+import type { ThemeColors } from '../theme/tokens'
 import { Txt } from '../ui/Txt'
 import { prStateToken } from './pr-state-token'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
 
 // PR chip color by state, resolved through the shared prStateToken so it always
 // matches the PR sidebar's state badge: merged = purple, open = green, closed =
-// red, draft/unknown = muted.
-export function prStateColor(state: string): string {
-  return statusColor(prStateToken(state))
+// red, draft/unknown = muted. `colors` is the live theme's.
+export function prStateColor(state: string, colors: ThemeColors): string {
+  return statusColor(prStateToken(state), colors)
 }
 
 type Props = {

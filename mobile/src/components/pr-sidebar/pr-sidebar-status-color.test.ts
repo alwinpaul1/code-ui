@@ -30,8 +30,4 @@ describe('the merged-PR purple clears icon contrast on both surfaces it sits on'
     expect(statusColor('statusPurple', lightColors)).toBe(lightColors.mergedPurple)
     expect(statusColor('statusPurple', darkColors)).toBe(darkColors.mergedPurple)
   })
-
-  it('defaults to the dark palette for a caller outside the PR sidebar slice that has not been converted yet', () => {
-    expect(statusColor('statusPurple')).toBe(darkColors.mergedPurple)
-  })
 })

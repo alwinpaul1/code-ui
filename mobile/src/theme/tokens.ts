@@ -160,8 +160,8 @@ export const darkColors: ThemeColors = {
   danger: '#E06C5B',
   dangerSoft: 'rgba(224, 108, 91, 0.16)',
   info: '#7FA7E0',
-  // Lowercase, matching the exact legacy `mobile-theme.colors.statusPurple` byte
-  // for byte: `statusColor`'s dark-palette default depends on this being identical.
+  // Violet-400, the desktop ReviewIcon's tone, exactly as the sidebar always drew
+  // it in dark (pinned by pr-sidebar-status-color.test.ts).
   mergedPurple: '#a78bfa',
   userBubble: '#2E2B26',
   userBubbleText: '#ECE9E2',

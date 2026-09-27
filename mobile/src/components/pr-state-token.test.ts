@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { prStateToken } from './pr-state-token'
 import { prStateBadge } from './pr-sidebar/pr-checks-presentation'
 import { statusColor } from './pr-sidebar/pr-sidebar-status-color'
-import { colors } from '../theme/mobile-theme'
+import { darkColors, lightColors } from '../theme/tokens'
 
 describe('prStateToken', () => {
   it('maps PR states to the desktop-matching status palette', () => {
@@ -18,11 +18,14 @@ describe('prStateToken', () => {
     expect(prStateToken('')).toBe('textSecondary')
   })
 
-  it('resolves to the expected concrete colors', () => {
-    expect(statusColor(prStateToken('merged'))).toBe(colors.statusPurple)
-    expect(statusColor(prStateToken('open'))).toBe(colors.statusGreen)
-    expect(statusColor(prStateToken('closed'))).toBe(colors.statusRed)
-    expect(statusColor(prStateToken('draft'))).toBe(colors.textSecondary)
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('resolves to the expected concrete %s colors', (_scheme, palette) => {
+    expect(statusColor(prStateToken('merged'), palette)).toBe(palette.mergedPurple)
+    expect(statusColor(prStateToken('open'), palette)).toBe(palette.success)
+    expect(statusColor(prStateToken('closed'), palette)).toBe(palette.danger)
+    expect(statusColor(prStateToken('draft'), palette)).toBe(palette.textSecondary)
   })
 })
 
@@ -30,11 +33,13 @@ describe('workspace-list and PR-sidebar palette agreement', () => {
   // Both surfaces must resolve the SAME color for the same state so the
   // linked-PR badge and the sidebar state badge never drift.
   it.each(['open', 'closed', 'merged', 'draft'] as const)(
-    'sidebar badge and list badge agree for %s',
+    'sidebar badge and list badge agree for %s in both schemes',
     (state) => {
-      const listColor = statusColor(prStateToken(state))
-      const sidebarColor = statusColor(prStateBadge(state).token)
-      expect(sidebarColor).toBe(listColor)
+      for (const palette of [lightColors, darkColors]) {
+        const listColor = statusColor(prStateToken(state), palette)
+        const sidebarColor = statusColor(prStateBadge(state).token, palette)
+        expect(sidebarColor).toBe(listColor)
+      }
     }
   )
 })
