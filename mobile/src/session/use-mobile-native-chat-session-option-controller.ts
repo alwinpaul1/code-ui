@@ -14,6 +14,7 @@ import { useCodexNativeChatOptions } from './use-codex-native-chat-options'
 import { useMobileOmpModelDiscovery } from './use-mobile-omp-model-discovery'
 import { useClaudeModelDiscovery } from './use-claude-model-discovery'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import type { ClaudeModelFallback } from './claude-transcript-model'
 
 export function useMobileNativeChatSessionOptionController(args: {
   activeChatStructured: boolean
@@ -33,6 +34,12 @@ export function useMobileNativeChatSessionOptionController(args: {
   reportedModelSource?: ModelReportSource
   /** The tab's terminal, so a new one forgets the old agent's statements. */
   terminalHandle?: string | null
+  /** What stands in for the live pair on a Claude session that states no model
+   *  (use-claude-transcript-model.ts). Only the transcript reading labels the
+   *  pill: after a pick of the phone's own the snapshot already names it. */
+  transcriptModel?: ClaudeModelFallback
+  /** The user opened the model sheet: the one moment the fallback may ask. */
+  onModelSheetOpen?: () => void
   /** Bumped to open the model sheet imperatively. */
   openRequest?: number
   /** The command the running OMP extension installed for a model switch; absent
@@ -73,6 +80,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     reportedModelLabel,
     reportedModelSource,
     terminalHandle,
+    transcriptModel,
+    onModelSheetOpen,
     openRequest = 0,
     structured,
     toggleTabChatView,
@@ -195,11 +204,11 @@ export function useMobileNativeChatSessionOptionController(args: {
               scopeKey,
               openRequest,
               modelsPending: codex.modelsPending,
-              liveModel: {
-                model: reportedModel,
-                label: reportedModelLabel ?? null,
-                effort: reportedEffort ?? null
-              }
+              liveModel:
+                !reportedModel && transcriptModel?.kind === 'transcript'
+                  ? { model: transcriptModel.model.model, label: transcriptModel.model.label, effort: null }
+                  : { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null },
+              onOpen: onModelSheetOpen
             }
           : null,
     [
@@ -213,7 +222,9 @@ export function useMobileNativeChatSessionOptionController(args: {
       reportedModelLabel,
       scopeKey,
       sessionOptions,
-      structuredController
+      structuredController,
+      transcriptModel,
+      onModelSheetOpen
     ]
   )
 

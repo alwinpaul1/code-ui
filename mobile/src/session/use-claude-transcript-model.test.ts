@@ -1,0 +1,249 @@
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const fakes = vi.hoisted(() => ({ lastConnectedAt: 1 as number | null }))
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => fakes.lastConnectedAt
+}))
+
+import {
+  createAnsweringClient,
+  historySession,
+  ok,
+  refused,
+  type AnsweringClient
+} from '../agent-history/agent-history-panel.test-support'
+import type { ClaudeModelFallback } from './claude-transcript-model'
+import {
+  CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS,
+  resetClaudeTranscriptModelScansForTests
+} from './claude-transcript-model-scan'
+import {
+  clearPendingModelPicksForTests,
+  notePendingModelPick
+} from './mobile-native-chat-model-report-authority'
+import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import {
+  CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS,
+  resetClaudeTranscriptModelPicksForTests,
+  useClaudeTranscriptModel
+} from './use-claude-transcript-model'
+
+const HOST = 'host-win'
+const WORKTREE = 'repo-1::C:\\Users\\danny\\code\\app'
+const SESSION = 'a3f1c2d4-5b6e-4f70-8a91-b2c3d4e5f607'
+const SCOPE = mobileNativeChatScopeKey(HOST, WORKTREE, 'tab-1')!
+
+type Probe = { liveModel?: string | null; beacon?: boolean; working?: boolean; sessionId?: string | null }
+
+describe('when a Claude chat with no live model asks the host what answered', () => {
+  let host: AnsweringClient
+  let renderer: ReactTestRenderer | null = null
+  let latest: { fallback: ClaudeModelFallback; requestScan: () => void } | null = null
+  let model = 'claude-opus-5-5'
+
+  function Harness({ liveModel = null, beacon = false, working = false, sessionId = SESSION }: Probe) {
+    latest = useClaudeTranscriptModel({
+      client: host.client,
+      hostId: HOST,
+      worktreeId: WORKTREE,
+      tabId: 'tab-1',
+      sessionId,
+      enabled: true,
+      connected: true,
+      liveModel,
+      beacon,
+      agentWorking: working
+    })
+    return null
+  }
+
+  function render(probe: Probe = {}): void {
+    act(() => {
+      if (renderer) {
+        renderer.update(createElement(Harness, probe))
+      } else {
+        renderer = create(createElement(Harness, probe))
+      }
+    })
+  }
+
+  async function advance(ms: number): Promise<void> {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(ms)
+    })
+  }
+
+  const scans = (): number => host.sent('aiVault.listSessions').length
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(Date.parse('2026-09-27T10:10:00.000Z'))
+    resetClaudeTranscriptModelScansForTests()
+    clearPendingModelPicksForTests()
+    resetClaudeTranscriptModelPicksForTests()
+    fakes.lastConnectedAt = 1
+    model = 'claude-opus-5-5'
+    host = createAnsweringClient((method) =>
+      method === 'aiVault.listSessions'
+        ? ok({
+            sessions: [
+              historySession({
+                sessionId: SESSION,
+                model,
+                previewMessages: [{ role: 'assistant', text: 'Done.', timestamp: null }]
+              })
+            ],
+            issues: []
+          })
+        : refused('method_not_found', method)
+    )
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    latest = null
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
+
+  it('waits out the settle time before asking, so a tab about to beacon never costs a scan', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS - 1)
+    expect(scans()).toBe(0)
+    // The beacon arrives inside the window: nothing is asked, now or later.
+    render({ beacon: true })
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 4)
+    expect(scans()).toBe(0)
+    expect(latest?.fallback).toEqual({ kind: 'none' })
+  })
+
+  it('asks nothing and states nothing before the tab knows its session', async () => {
+    render({ sessionId: null })
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
+    latest?.requestScan()
+    await advance(0)
+    expect(scans()).toBe(0)
+    expect(latest?.fallback).toEqual({ kind: 'none' })
+  })
+
+  it('asks when the user opens the model sheet, inside the same five-minute budget', async () => {
+    render()
+    act(() => latest?.requestScan())
+    await advance(0)
+    expect(scans()).toBe(1)
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+    // The chat's own settle-time ask lands inside the budget and is skipped.
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    act(() => latest?.requestScan())
+    await advance(0)
+    expect(scans()).toBe(1)
+  })
+
+  it('asks again on a new connection once the budget allows, never before', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(scans()).toBe(1)
+    fakes.lastConnectedAt = 2
+    render()
+    await advance(0)
+    expect(scans()).toBe(1)
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+    fakes.lastConnectedAt = 3
+    render()
+    await advance(0)
+    expect(scans()).toBe(2)
+  })
+
+  it("shows the phone's own pick, then asks once when the next turn ends, and not on the turns after", async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(scans()).toBe(1)
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+
+    // The phone switches to Sonnet at the idle prompt; the transcript still
+    // says Opus answered last.
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render()
+    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+    expect(scans()).toBe(1)
+
+    // The next prompt runs under Sonnet; that turn ending is the ask.
+    model = 'claude-sonnet-5'
+    render({ working: true })
+    await advance(60_000)
+    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(2)
+    expect(latest?.fallback).toEqual({
+      kind: 'transcript',
+      model: { model: 'claude-sonnet-5', label: 'Sonnet 5' }
+    })
+
+    // Later turns ask nothing more.
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(2)
+  })
+
+  it('keeps a pick made mid-turn through the end of that turn, which Claude Code finishes on the old model', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+
+    // Opus is working; the phone picks Sonnet. Claude Code queues the switch
+    // and applies it when this turn ends, so this turn's reply is still Opus.
+    render({ working: true })
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(1)
+    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+
+    // The turn after it is the first to run under the switch.
+    model = 'claude-sonnet-5'
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(2)
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Sonnet 5' } })
+  })
+
+  it("stops showing a pick the agent refused once a turn after it has been scanned", async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
+    // The switch never took (a dismissed confirmation): the next reply is Opus.
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render()
+    render({ working: true })
+    render({ working: false })
+    await advance(0)
+    expect(scans()).toBe(2)
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+  })
+
+  it('keeps one answer object across renders, so the pickers are not rebuilt every render', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    const first = latest?.fallback
+    expect(first?.kind).toBe('transcript')
+    render()
+    render()
+    expect(latest?.fallback).toBe(first)
+  })
+
+  it('states nothing once a live pair speaks, whatever the last scan said', async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(latest?.fallback.kind).toBe('transcript')
+    render({ liveModel: 'claude-fable-5-1' })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
+  })
+})

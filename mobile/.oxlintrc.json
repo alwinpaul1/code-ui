@@ -220,7 +220,13 @@
             // (an import and the memoized read, useBeaconAgentMessages); the
             // parsing and placing live in mobile-native-chat-agent-messages.ts
             // and mobile-native-chat-agent-message-rows.ts.
-            "max": 505,
+            // 2026-09-27: +3 for the model a Claude session with no beacon and
+            // no badge last answered with (a Windows host): two imports and the
+            // useClaudeTranscriptModel call; the fallback's prop to the option
+            // controller and the header's pair ride on existing lines. The scan,
+            // its budget and the precedence live in use-claude-transcript-model.ts,
+            // claude-transcript-model-scan.ts and claude-transcript-model.ts.
+            "max": 508,
             "skipBlankLines": true,
             "skipComments": true
           }

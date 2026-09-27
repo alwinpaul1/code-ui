@@ -29,6 +29,8 @@ import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-ac
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
 import { nativeChatHudPhase, useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { reportedModelPair } from './mobile-chat-reported-model'
+import { useClaudeTranscriptModel } from './use-claude-transcript-model'
+import { claudeModelPillPair } from './claude-transcript-model'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import { resolveObservedPermission, terminalPromptWait, withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -198,6 +200,8 @@ export function useMobileNativeChatController(
   })
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
+  // No beacon and no badge (a Windows host, a tab launched before the flag): what the transcript last answered with.
+  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeReported.model, beacon: hudBeacon !== null, agentWorking: nativeChatAgentWorking })
   const isCodexChat = activeChatResolution?.agent === 'codex'
   const isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has
@@ -403,11 +407,14 @@ export function useMobileNativeChatController(
       hostId,
       isTabChatView,
       isWorking: nativeChatAgentWorking,
-      // Neither agent needs the status line: Orca's own hooks report the model
-      // into agent-status (Claude's raw id maps onto the catalog; Codex's goes
-      // through useCodexCurrentModel, which guards the host's occasional Claude
-      // id on a Codex pane and falls back to the picker's `(current)` row). The
-      // footer, when a turn has drawn it, is only a fresher override.
+      // Codex needs no status line: Orca's own Codex hook reports the model
+      // into agent-status, through useCodexCurrentModel, which guards the host's
+      // occasional Claude id on a Codex pane and falls back to the picker's
+      // `(current)` row; the footer, when a turn has drawn it, is only a fresher
+      // override. Claude's comes from the beacon or the badge alone: Orca's
+      // Claude hooks set no `agentStatus.model` (origin/main 8d6fec597b), and
+      // with neither, the pills fall back to the transcript's own record of what
+      // answered (use-claude-transcript-model.ts), which never seeds the record.
       //
       // OMP (Orca #20612): its extension stamps `provider/id` on every hook post
       // and re-posts on a switch, so for that agent — and only that one — the
@@ -426,6 +433,7 @@ export function useMobileNativeChatController(
       // here, so its report is always the live one; so is OMP's, see above.
       reportedModelSource: isCodexChat || isOmpChat ? 'live' : claudeReported.source,
       modelSwitchCommand: isOmpChat ? activeSessionTab?.agentStatus?.modelSwitchCommand : undefined,
+      transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan,
       terminalHandle: activeHandle,
       openRequest: modelSheetRequest,
       structured: {
@@ -583,7 +591,7 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: liveHud.context, nativeChatLiveModel: { model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: liveHud.context, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback, nativeChatSessionOptions?.controller.snapshot), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }

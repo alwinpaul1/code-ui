@@ -6,7 +6,8 @@ import { effortDisplayLabel } from './mobile-claude-session-catalog'
  * `[Opus 5 (1M context) xhigh | Max 20x]` — and the phone's screen parser reads
  * exactly that back into the live pair. The VS Code extension reads the same
  * fact from the SDK's init message. Both are the agent's own word about itself,
- * and that is the only thing this pill may show.
+ * and only the agent's own word may reach this pill (the one stand-in, below,
+ * is the agent's own transcript).
  *
  * What it deliberately does NOT read: the session-options snapshot. That value
  * is the tracked record — a pick, a seed, a remembered value — and every
@@ -21,6 +22,12 @@ import { effortDisplayLabel } from './mobile-claude-session-catalog'
  * Absent a live pair the pill shows nothing. CLAUDE.md: a figure that cannot be
  * known is not to be filled in from somewhere else. The picker is untouched — a
  * model can still be chosen; the app just stops asserting one it has not heard.
+ *
+ * One exception, and it is still the agent's own word: a Claude session with no
+ * beacon and no badge (a Windows host, 2026-09-27) is given the model its own
+ * transcript recorded on its last reply, by name only, never an effort. The
+ * controller passes that in as the pair (claude-transcript-model.ts); a live
+ * pair always replaces it.
  */
 export type LiveModelPair = {
   model: string | null

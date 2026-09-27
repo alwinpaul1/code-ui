@@ -324,6 +324,12 @@ bar. Found nothing, print nothing, draw no row. Codex's own single-line
 
 ### Windows takes a different route (switched off)
 
+(2026-09-27: with no beacon and no badge, the Claude model pills fall back to
+the model the session's own transcript recorded on its last reply, read from the
+host's session scan under a five-minute budget. See
+`docs/mobile-model-from-transcript.md`, which also records the Orca change that
+would make the scan unnecessary.)
+
 **2026-09-25: a Windows host gets no beacon flag, from the phone or through
 the desktop sync, and the sync takes back out one it already saved.** The
 first report from a real Windows machine was Claude refusing to start at all:
