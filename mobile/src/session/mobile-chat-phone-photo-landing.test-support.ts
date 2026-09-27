@@ -13,6 +13,8 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-data'
+import type { BeaconAgentMessage, StatusSubagentMessage } from './mobile-native-chat-agent-messages'
+import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
 // The rows, photos and helpers of mobile-chat-phone-photo-landing.test.ts,
 // kept here so the file of cases stays readable.
@@ -77,11 +79,12 @@ export const P2 = promptRow('e96491cb', 70, 3, TEXT2, '07:02:54.344')
 export const C2 = companionRow('394fac0f', PATHS2, '07:02:54.345')
 
 /** Orca's hook copy of a submission, as the tab status reports it: Claude's
- *  UserPromptSubmit prompt carries the `[Image #N]` markers. */
+ *  UserPromptSubmit prompt carries the `[Image #N]` markers, and puts the
+ *  pane in `working` (the phone watched it arrive, so its time is the ping's). */
 export function hookCopy(clock: string, body: string): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: '', updatedAt: at(clock) })
-  state = observeAgentStatusPrompt(state, SESSION, { prompt: body, updatedAt: at(clock) })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: body, updatedAt: at(clock) })
   return [...state.prompts]
 }
 
@@ -111,6 +114,19 @@ export type Tick = {
   queued?: string[]
   screen?: string[]
   agent?: 'claude' | 'codex'
+  /** The subagent messages the prompt beacon carried (the controller's
+   *  `nativeChatAgentMessages`). */
+  agentMessages?: BeaconAgentMessage[]
+  /** The peer-message rows the agent's screen showed. */
+  peerRows?: ScreenPeerRow[]
+  /** What the tab status carried of subagent messages (the controller's
+   *  `nativeChatStatusAgentMessages`). */
+  statusAgentMessages?: readonly StatusSubagentMessage[]
+  /** Whether the tab was launched with the prompt hook. */
+  promptHook?: boolean
+  /** Rows older than `messages` exist and are not loaded (the session's
+   *  `hasMore`): the chat holds a tail page. */
+  hasMore?: boolean
 }
 export type Drafts = ReturnType<typeof useMobileNativeChatDrafts>
 /** A user bubble as the list draws it: `P` a picture, `D` the "Image on
@@ -187,7 +203,8 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatSession: {
         messages: tick.messages,
         status: tick.loading ? 'loading' : 'ready',
-        transcriptLoading: tick.loading ?? false
+        transcriptLoading: tick.loading ?? false,
+        hasMore: tick.hasMore ?? false
       },
       nativeChatAgent: tick.agent ?? 'claude',
       nativeChatStructured: false,
@@ -202,6 +219,10 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       nativeChatDesktopPrompts: tick.prompts,
       nativeChatQueuedMessages: tick.queued ?? [],
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
+      nativeChatAgentMessages: tick.agentMessages ?? [],
+      nativeChatScreenPeerNotices: tick.peerRows ?? [],
+      nativeChatStatusAgentMessages: tick.statusAgentMessages ?? [],
+      nativeChatPromptHook: tick.promptHook ?? null,
       chatImagePreviewsByMessageId: mergeImagePreviews(drafts.imagePreviewsByMessageId, {}),
       chatComposerText: '',
       setChatComposerText: vi.fn()

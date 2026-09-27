@@ -35,6 +35,7 @@ describe('a desk photo of no words, then a desk text, both mid-turn, then a tab 
     const running = [...before, agentRow('080e05a3', 'Working on it.', '07:01:05.000')]
     // The phone opens the chat while the desk screenshot is the status prompt.
     let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: '[Image #74]',
       updatedAt: at('07:03:10.000'),
       stateStartedAt: at('07:01:00.100')
@@ -42,13 +43,14 @@ describe('a desk photo of no words, then a desk text, both mid-turn, then a tab 
     await show('07:03:20.000', { messages: running, working: true, prompts: [...state.prompts] })
     await show('07:03:21.000', { messages: running, working: true, prompts: [...state.prompts] })
     // The desk types a follow-up, mid-turn, while the phone watches.
-    state = observeAgentStatusPrompt(state, SESSION, { prompt: FOLLOW, updatedAt: at('07:04:00.000') })
+    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: FOLLOW, updatedAt: at('07:04:00.000') })
     await show('07:04:00.500', { messages: running, working: true, prompts: [...state.prompts] })
     await show('07:04:01.000', { messages: running, working: true, prompts: [...state.prompts] })
     const beforeSwitch = lastFrame()
     // Tab switch and back, same turn: the status is read afresh.
     unmount()
     const back = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+      state: 'working',
       prompt: FOLLOW,
       updatedAt: at('07:04:30.000'),
       stateStartedAt: at('07:01:00.100')

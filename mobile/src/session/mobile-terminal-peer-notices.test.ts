@@ -53,7 +53,7 @@ describe('peer message rows Claude Code paints when a subagent or session writes
 
   it('keeps one entry per row, so five replies from one agent are five', () => {
     const rows = Array.from({ length: 5 }, () => '› Message from @probe (ctrl+o to expand)')
-    expect(peerNoticesFromScreen(rows)).toEqual(Array.from({ length: 5 }, () => ({ sender: 'probe' })))
+    expect(peerNoticesFromScreen(rows).map((row) => row.sender)).toEqual(Array.from({ length: 5 }, () => 'probe'))
   })
 
   it('reads a bodied row that fits on one line, and one whose tail wraps alone', () => {
@@ -77,6 +77,31 @@ describe('peer message rows Claude Code paints when a subagent or session writes
         '⏺ A message from @probe arrived.'
       ])
     ).toEqual([])
+  })
+
+  // Combined review of fix/prompt-leak, 2026-09-27: a peer message waiting in
+  // the queue box (the 2.1.281 layout) is not in the turn yet. Read there, it
+  // was counted again once Claude took it and painted it in the turn.
+  it('leaves out a row waiting in the queue box, and reads the one in the turn above it', () => {
+    const RULE = '────────────────────────────────────────────────────────────────────────────────'
+    const screen = [
+      '⏺ The suite is green; reading the dump for the render counts now.',
+      '',
+      '› Message from @probe (ctrl+o to expand)',
+      '',
+      '● Running 1 shell command · 14s…',
+      '',
+      '› Message from @a9d5c2f85e94ca47f (ctrl+o to expand)',
+      '❯ We miss this[Image #102]',
+      '  ctrl+x ctrl+s to send now',
+      '',
+      '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+      '',
+      RULE,
+      '❯ Press up to edit queued messages',
+      RULE
+    ]
+    expect(peerNoticesFromScreen(screen).map((row) => row.sender)).toEqual(['probe'])
   })
 
   it('finds nothing on an empty screen', () => {

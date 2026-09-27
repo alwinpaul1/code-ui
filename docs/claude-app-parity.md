@@ -22,6 +22,8 @@ failing-first test and has been checked on the phone in light and dark.
 | 12 | A reply written just before a phone send stays above the message | Drew it below | done (3ed09620) |
 | 13 | A quote of several paragraphs has one bar down its whole height, text indented beside it | A bar stub on each paragraph's first line, a lone bar on each blank `>` line, wrapped lines with none | done (60322f4a) |
 | 14 | Where a mid-turn message sits among the rows around it: its own sends where it sent them, a message sent elsewhere where the agent took it (below) | A phone text send gave way to the hook's copy and drew under rows written after it | phone sends fixed, not yet checked on the phone; a Claude app send reaches the phone as the hook's text only (below); a Claude app or desktop send keeps rows written just after it below it (f2b2a5ca). A phone send Claude took mid-turn drew as the last row, under the reply that ended the turn, when the chat's read settled late or the chat came back after the turn, and a later send of its text drew twice (fixed 2026-09-25, not yet checked on the phone; records below) |
+| 15 | A subagent's message to its lead folded in the turn, "› Message from @general-purpose (ctrl+o to expand)", opening to "Message from general-purpose" and the message (the desktop TUI, Claude Code 2.1.283, 2026-09-26) | Nothing. On a tab launched with the prompt hook the hook's copy was drawn as the user's own bubble | built, not yet checked on the phone: a folded "Message from <agent>" row after the row the prompt hook named, opening to the hook's copy of the message (the first 2,000 bytes of its JSON-escaped text, so fewer characters where it has line breaks, quotes or non-ASCII) as Markdown; on a tab without the hook, the TUI's row, which names the sender, opening to the tab status's copy (200 characters, folded to one line) when the phone read that copy within seconds of the row, and otherwise to a note that only the sender reached the phone. There a sender's messages are counted by the most of its rows the screen has shown at once, so a second message from the same agent after the first has scrolled off is not drawn: telling it by what was painted above the row drew one message twice in four ways (2026-09-27), and a missing row beats a duplicate. Words that are only the start of the message say so. Never a bubble (below) |
+| 16 | An image the agent read with its Read tool, as a picture under the step ("Ran 3 commands, read 2 files"), opening full-screen on a tap (2026-09-26) | Only "Read 1 file" | drawn and opened since 95d99f9a whenever the desktop shares the file; the desktop does not share one outside every workspace unless the agent's text or terminal output named it (below). The picture is now kept as a cache file, not in memory, and a picture that never came says why in the log |
 
 ## New in Claude Code 2.1.283, not yet compared with the Claude app
 
@@ -241,6 +243,27 @@ Nothing here is built.
   `queued_command` with `origin.kind: "peer"` and `handback: true`; the
   user's own mid-turn messages are `origin.kind: "human"`. Orca's reader drops
   both attachment kinds.
+- **Messages from subagents (15).** Claude Code 2.1.283 delivers one as an
+  `attachment`/`queued_command` whose prompt is `<agent-message from="<agent
+  id>">…` (a hand-back: `[Subagent hand-back] … The report follows:` and the
+  report indented two spaces), or as an `isMeta` user row behind "Another
+  Claude session sent a message:". Orca 1.4.212's reader (`bTn` in its
+  bundle) keeps only `user`/`assistant` records and keeps only the tool
+  results of an `isMeta` row, so neither reaches the phone. Claude fires
+  UserPromptSubmit for it, so the phone's prompt hook carries it. The TUI's
+  row showed a named agent as `@probe` (2.1.278 capture) and an unnamed one as
+  `@general-purpose` (2.1.283 screenshot); the phone names it by the Agent
+  call's `name`, else its `subagent_type`, from the call whose launch result
+  carries the id, and by the id when that call is not loaded. Fixtures: `mobile/src/session/fixtures/claude-agent-message-read-image-2.1.283.ts`.
+- **Images the agent read (16).** Orca 1.4.212 flattens a tool result's
+  `content` to its text (`uTn`/`Aj`), so a Read of an image reaches the phone
+  as an empty result. The phone asks the desktop for the file the Read
+  named (`files.resolveTerminalPath`), and the desktop grants a file outside
+  every workspace only when an assistant text or thinking block of the last
+  2,000 transcript messages names it, or when it is under the temp directory
+  and the terminal's recent output held it. A screenshot in a scratchpad
+  that Claude Code 2.1.283 folds into "Read 1 file" is neither. The fix is
+  the desktop's: forward the image, or grant the path a Read call named.
 - **What a queued message leaves in the transcript (14).** Two shapes, and
   the phone reads only one. A message still queued when a turn ends is
   dequeued as a `user` row with `promptSource: "queued"`. A message Claude

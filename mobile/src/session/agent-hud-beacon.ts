@@ -6,6 +6,7 @@ import {
   readWarmStartBeacons,
   rememberWarmStartBeacon
 } from './agent-hud-beacon-warm-start'
+import { agentMessagesIdentity, withAgentMessagePlaced, withAgentMessagesOf, withRestoredAgentMessages, type AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 
 /**
  * The phone half of the invisible HUD channel.
@@ -48,10 +49,20 @@ export type AgentHudBeaconLimit = {
 /** `at`: epoch ms of the submission, when the source knows it (the transcript
  *  does; the beacon does not) — places the echo after the last row written
  *  before it when `anchorId` names a row the phone never holds. */
-/** `atStateStart`: `at` is when the pane's state began, read at first sight of
- *  the tab status (agent-status-prompts.ts), which can be before the prompt.
+/** `ifHarnessStarted` on a held copy: the start of the run it came in, and
+ *  each turn end the pane carried it past, with the start of the run after
+ *  it. It is placed there if the rows show a harness message started each of
+ *  those runs (desk-prompt-harness-turns.ts). */
+/** `seenAt` on a beacon copy: when the phone received it (a restored one from
+ *  an older build: its record's last beacon, agent-hud-beacon-warm-start.ts). */
+/** `atStateStart`: `at` is when the pane's working run began, read at first
+ *  sight of the tab status (agent-status-prompts.ts), which can be before the
+ *  prompt (one sent mid-run).
+ *  `heldBack`: a status prompt whose time the status does not hold, found on a
+ *  pane whose state began after it was taken. It has no `at`, pairs like any
+ *  other copy (a phone send still claims its own), and is never drawn.
  *  `seenAt`: when the phone first read a status prompt, by the phone's clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; seenAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number }
 
 export type AgentHudBeacon = {
   agent: string
@@ -90,8 +101,13 @@ export type AgentHudBeacon = {
   promptHook: boolean
   /** Null on every beacon that is not a prompt submission. */
   desktopPrompt: DesktopPrompt | null
-  /** Every desktop prompt seen on this terminal, oldest first, newest last. */
+  /** The last desktop prompts seen on this terminal (MAX_DESKTOP_PROMPTS),
+   *  oldest first, newest last. */
   desktopPrompts: DesktopPrompt[]
+  /** The subagent messages among them, kept apart from that rolling list so
+   *  their rows stay drawn (agent-hud-beacon-agent-messages.ts). Absent until
+   *  one arrives. */
+  agentMessagePrompts?: AgentMessagePrompt[]
   /** When `runningTaskIds` was received (phone clock, epoch ms); null until a
    *  beacon has carried `run=`. The Stop hook speaks only when a turn ends,
    *  so its list cannot name a shell launched after it — the reader uses this
@@ -222,7 +238,10 @@ function splitPrefixLength(text: string): number {
 /** What the warm start actually needs; a repainting agent must not write to
  *  disk on every frame just because its token count moved. */
 function beaconIdentity(beacon: AgentHudBeacon): string {
-  return `${beacon.agent}\u0000${beacon.sessionId ?? ''}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}`
+  // The subagent messages too: their rows have no other source, and one that
+  // came within the rewrite window of the last write was never stored when the
+  // tab then went quiet (review of 2026-09-27).
+  return `${beacon.agent}\u0000${beacon.sessionId ?? ''}\u0000${beacon.modelId ?? ''}\u0000${beacon.modelLabel ?? ''}\u0000${beacon.effort ?? ''}\u0000${agentMessagesIdentity(beacon.agentMessagePrompts)}`
 }
 
 const WARM_START_REWRITE_MS = 30_000
@@ -260,7 +279,10 @@ function publish(handle: string, payload: string): void {
   // wholesale would blank the HUD every time a turn ended.
   const held = beacons.get(handle)
   const previous = held && !sessionChanged(held, beacon) ? held : undefined
-  const merged: AgentHudBeacon = previous
+  // The prompt with when the phone received it, which tells a copy the chat
+  // saw arrive from one it found long after (use-desktop-prompt-echoes.ts).
+  const arrived = beacon.desktopPrompt && { ...beacon.desktopPrompt, seenAt: beacon.receivedAt }
+  const joined: AgentHudBeacon = previous
     ? {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
@@ -274,12 +296,14 @@ function publish(handle: string, payload: string): void {
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
         // Prompts accumulate: each submission is its own beacon and the phone
         // must keep the ones that came before it.
-        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, beacon.desktopPrompt),
+        // Each stamped with its arrival (`arrived`, above).
+        desktopPrompts: appendDesktopPrompt(previous.desktopPrompts, arrived),
         desktopPrompt: beacon.desktopPrompt ?? previous.desktopPrompt,
         promptHook: beacon.promptHook || previous.promptHook,
         receivedAt: beacon.receivedAt
       }
-    : { ...beacon, desktopPrompts: appendDesktopPrompt([], beacon.desktopPrompt) }
+    : { ...beacon, desktopPrompts: appendDesktopPrompt([], arrived) }
+  const merged = withAgentMessagesOf(handle, joined, previous === undefined, arrived)
   // A repeat says nothing new: keep the object readers already hold.
   if (previous && unchangedBeacon(previous, merged)) {
     return
@@ -305,7 +329,7 @@ export async function hydrateAgentHudBeacons(): Promise<void> {
   let restored = false
   for (const [handle, beacon] of Object.entries(stored)) {
     if (!beacons.has(handle)) {
-      beacons.set(handle, beacon)
+      beacons.set(handle, withRestoredAgentMessages(beacon, handle))
       restored = true
     }
   }
@@ -360,6 +384,19 @@ export function consumeAgentHudBeacons(handle: string, chunk: string): string {
     return out + text.slice(0, text.length - keep)
   }
   return out + text
+}
+
+/** Records the row the chat drew a subagent message after, on the beacon of
+ *  the terminal that carried it, and stores it: a restored message goes back
+ *  there when its own row is one the phone never holds. */
+export function rememberAgentMessagePlacement(handle: string, nonce: string, rowId: string): void {
+  const beacon = beacons.get(handle)
+  const placed = beacon && withAgentMessagePlaced(handle, beacon, nonce, rowId)
+  if (placed && placed !== beacon) {
+    beacons.set(handle, placed)
+    storeForWarmStart(handle, placed)
+    listeners.forEach((listener) => listener())
+  }
 }
 
 export function getAgentHudBeacon(handle: string | null): AgentHudBeacon | null {

@@ -216,7 +216,11 @@
             // 2026-09-20: +1 for the screen's peer-message rows handed to the
             // contract (read in use-mobile-terminal-hud-observation.ts, placed
             // by use-screen-peer-notices.ts).
-            "max": 503,
+            // 2026-09-26: +2 for the subagent messages off the prompt beacon
+            // (an import and the memoized read, useBeaconAgentMessages); the
+            // parsing and placing live in mobile-native-chat-agent-messages.ts
+            // and mobile-native-chat-agent-message-rows.ts.
+            "max": 505,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -380,7 +384,12 @@
             // 2026-09-25: 329. The C0 channel is read first on every chunk (an
             // import, the take, the publish, the reset); its state lives in
             // agent-hud-channel.ts.
-            "max": 329,
+            // 2026-09-26: 332. A session's subagent messages are kept apart
+            // from the last 40 prompts (an import, the field, the merge); the
+            // list itself lives in agent-hud-beacon-agent-messages.ts.
+            // 2026-09-27: 342 for rememberAgentMessagePlacement, which has to
+            // reach the store's own map, listeners and warm-start write.
+            "max": 342,
             "skipBlankLines": true,
             "skipComments": true
           }

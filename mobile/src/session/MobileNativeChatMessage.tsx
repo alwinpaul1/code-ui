@@ -19,6 +19,8 @@ import {
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
+import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
@@ -191,6 +193,12 @@ function MobileNativeChatMessageImpl({
   // The harness's words around a peer message, as the Claude app draws them.
   if (isPeerBoilerplateRow(message)) {
     return <MobileNativeChatPeerBoilerplateRow message={message} fontScale={fontScale} styles={styles} />
+  }
+
+  // A subagent's message to this session, folded as the desktop TUI folds it.
+  const agentMessage = agentMessageOf(message)
+  if (agentMessage) {
+    return <MobileNativeChatAgentMessageRow {...agentMessage} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
   }
 
   // A host-authored notice — a compaction boundary, a plan document, a toned
