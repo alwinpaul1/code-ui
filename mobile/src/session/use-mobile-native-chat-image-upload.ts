@@ -16,6 +16,7 @@ import {
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
 import {
+  describeVideoFrameExtractionFailure,
   VideoFrameExtractionCancelledError,
   VideoFrameExtractionError
 } from './mobile-video-frame-extractor'
@@ -156,8 +157,12 @@ export function useMobileNativeChatImageUpload(args: {
         if (uploadError instanceof VideoFrameExtractionError) {
           // The video is still over the cap — extraction was the alternative
           // to refusing it outright, and that alternative just failed too, so
-          // the same "too large" story stands, with why this time.
-          showToast(`File too large to attach (18 MB max) — couldn't read frames: ${message}`, 1500)
+          // the same "too large" story stands, with a short reason (never the
+          // raw native exception text) appended.
+          showToast(
+            `File too large to attach (18 MB max) — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
+            1500
+          )
           return
         }
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
@@ -193,6 +198,14 @@ export function useMobileNativeChatImageUpload(args: {
     [attachWith]
   )
   const attachDocument = useCallback(() => {
+    // A second video attach while one is still reading frames would overwrite
+    // this ref (so cancel could only ever reach the newer one) and both would
+    // write the same scope's single progress slot (2026-09-27 review) —
+    // refuse rather than let either happen.
+    if (videoFrameExtractionAbortRef.current) {
+      showToast('Already reading a video — wait for it to finish', 1500)
+      return Promise.resolve()
+    }
     const controller = new AbortController()
     videoFrameExtractionAbortRef.current = controller
     return attachWith(
@@ -201,14 +214,24 @@ export function useMobileNativeChatImageUpload(args: {
           signal: controller.signal,
           onProgress: (progress) => {
             const scope = scopeKey
-            if (scope) {
-              onVideoFrameExtractionProgress?.(scope, progress)
+            if (!scope) {
+              return
+            }
+            onVideoFrameExtractionProgress?.(scope, progress)
+            // The chip clears the moment reading finishes, not once the last
+            // frame's own upload also finishes — those are two different
+            // things once frames upload one at a time as they are read
+            // (2026-09-27 review).
+            if (progress.done === progress.total) {
+              onVideoFrameExtractionProgress?.(scope, null)
             }
           }
         }),
       'files'
-    )
-  }, [attachWith, onVideoFrameExtractionProgress, scopeKey])
+    ).finally(() => {
+      videoFrameExtractionAbortRef.current = null
+    })
+  }, [attachWith, onVideoFrameExtractionProgress, scopeKey, showToast])
 
   return { attachImage, attachImageFile, attachDocument, cancelVideoFrameExtraction, isAttaching }
 }

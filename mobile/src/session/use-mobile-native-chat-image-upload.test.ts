@@ -82,7 +82,10 @@ describe('useMobileNativeChatImageUpload — video-frame extraction', () => {
     })
 
     expect(showToast).toHaveBeenCalledExactlyOnceWith(
-      "File too large to attach (18 MB max) — couldn't read frames: Unsupported codec",
+      // "Unsupported codec" (a raw native-shaped message) maps to a short,
+      // generic reason rather than being repeated verbatim in the toast
+      // (2026-09-27 review).
+      'File too large to attach (18 MB max) — the video could not be read',
       1500
     )
   })
@@ -138,5 +141,91 @@ describe('useMobileNativeChatImageUpload — video-frame extraction', () => {
     expect(onVideoFrameExtractionProgress).toHaveBeenNthCalledWith(2, 'scope-1', { done: 2, total: 20 })
     // Cleared last, whatever the outcome — nothing is left reading forever.
     expect(onVideoFrameExtractionProgress).toHaveBeenLastCalledWith('scope-1', null)
+  })
+
+  it('clears the progress chip the moment reading finishes, before the attach itself has settled', async () => {
+    // 2026-09-27 review: the chip and its cancel X used to stay up through
+    // every frame's own upload, since the only clear was in `attachWith`'s
+    // finally — reached only once the WHOLE attach (all uploads too) settles.
+    const held = Promise.withResolvers<void>()
+    // oxlint-disable-next-line require-yield -- reports the last progress, then hangs; no frame is ever yielded.
+    pickDocumentsMock.mockImplementation(async function* (
+      _launch: unknown,
+      _createFile: unknown,
+      videoFrameDeps: { onProgress?: (p: { done: number; total: number }) => void }
+    ) {
+      videoFrameDeps.onProgress?.({ done: 1, total: 1 })
+      await held.promise
+    })
+    const onVideoFrameExtractionProgress = vi.fn()
+    mount(baseArgs({ showToast: vi.fn(), onVideoFrameExtractionProgress }))
+
+    let attachPromise: Promise<void> | null = null
+    act(() => {
+      attachPromise = hook!.attachDocument()
+    })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    // Cleared already — the mock is still hanging inside the pick, so the
+    // whole attach has not settled yet.
+    expect(onVideoFrameExtractionProgress).toHaveBeenLastCalledWith('scope-1', null)
+
+    held.resolve()
+    await act(async () => {
+      await attachPromise
+    })
+  })
+
+  it('refuses a second document attach while one is still reading a video\'s frames', async () => {
+    // 2026-09-27 review: a second attach used to overwrite the abort
+    // controller (so cancel could only ever reach the newer one) and both
+    // wrote the same scope's single progress slot.
+    const held = Promise.withResolvers<void>()
+    // oxlint-disable-next-line require-yield -- hangs mid-extraction; no frame is ever yielded.
+    pickDocumentsMock.mockImplementation(async function* () {
+      await held.promise
+    })
+    const showToast = vi.fn()
+    mount(baseArgs({ showToast }))
+
+    let firstAttach: Promise<void> | null = null
+    act(() => {
+      firstAttach = hook!.attachDocument()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+
+    expect(pickDocumentsMock).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledExactlyOnceWith('Already reading a video — wait for it to finish', 1500)
+
+    held.resolve()
+    await act(async () => {
+      await firstAttach
+    })
+  })
+
+  it('allows a new document attach once the previous one has fully settled', async () => {
+    // oxlint-disable-next-line require-yield -- cancelled immediately; no frame is ever yielded.
+    pickDocumentsMock.mockImplementation(async function* () {
+      throw new VideoFrameExtractionCancelledError()
+    })
+    mount(baseArgs({ showToast: vi.fn() }))
+
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+    await act(async () => {
+      await hook!.attachDocument()
+    })
+
+    expect(pickDocumentsMock).toHaveBeenCalledTimes(2)
   })
 })
