@@ -66,7 +66,8 @@ export function readHostLiveConnection(
  *
  * The probe alone said "Cannot reach" in red while Home said "Connected · Orca Relay" for the
  * same host (2026-09-27). A failed direct probe under a live connection is a degraded path, not
- * a dead host, so it warns. Red is kept for a host with no live connection at all.
+ * a dead host: it warns when the phone can name the cause, and passes over the relay when it
+ * cannot. Red is kept for a host with no live connection at all.
  */
 export function troubleshootHostCheck(args: {
   host: Pick<HostProfile, 'name' | 'endpoint'>
@@ -99,11 +100,19 @@ export function troubleshootHostCheck(args: {
       detail: `${connectedVia} · a fresh probe of ${endpoint} did not answer`
     }
   }
+  // The relay is a working path. A down direct path is worth a line only when the phone can say
+  // why: "direct Tailscale path unavailable (check Tailscale)" and a bare "did not answer" named
+  // nothing to fix, and read as a fault on a healthy connection (2026-09-27).
+  if (isTailscaleEndpoint(host.endpoint)) {
+    return { label: host.name, status: 'pass', detail: connectedVia }
+  }
   const { reason, hint } = explainUnreachableHost(host.endpoint, localAddress, context)
-  const directPath = isTailscaleEndpoint(host.endpoint) ? 'Tailscale' : 'Wi-Fi'
+  if (reason === null && hint === null) {
+    return { label: host.name, status: 'pass', detail: connectedVia }
+  }
   return {
     label: host.name,
     status: 'warn',
-    detail: `${connectedVia} · direct ${directPath} path unavailable (${reason ?? `${endpoint} did not answer`})${hint ? `. ${hint}` : ''}`
+    detail: `${connectedVia} · direct Wi-Fi path unavailable (${reason ?? `${endpoint} did not answer`})${hint ? `. ${hint}` : ''}`
   }
 }

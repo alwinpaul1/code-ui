@@ -54,7 +54,9 @@ describe('the Troubleshooting host row', () => {
     })
   })
 
-  it('says only that the endpoint did not answer when nothing more is known', () => {
+  // 2026-09-27: "Connected via Orca Relay · direct Tailscale path unavailable (check Tailscale)"
+  // was noise to the user: the relay is a working path, and the clause named nothing to fix.
+  it('says only "Connected via Orca Relay" when the direct path is down for no reason the phone can name', () => {
     expect(
       troubleshootHostCheck({
         host: HOME_HOST,
@@ -63,15 +65,10 @@ describe('the Troubleshooting host row', () => {
         localAddress: '10.0.0.7',
         phoneVpn: VPN_UNKNOWN
       })
-    ).toEqual({
-      label: 'Studio',
-      status: 'warn',
-      detail:
-        'Connected via Orca Relay · direct Wi-Fi path unavailable (192.168.1.20:6768 did not answer)'
-    })
+    ).toEqual({ label: 'Studio', status: 'pass', detail: 'Connected via Orca Relay' })
   })
 
-  it('names Tailscale, not Wi-Fi, for a tailnet endpoint behind a live relay', () => {
+  it('does not tell the user to check Tailscale for a tailnet host the relay carries', () => {
     expect(
       troubleshootHostCheck({
         host: { name: 'Tail', endpoint: 'ws://100.65.9.106:6768' },
@@ -79,8 +76,24 @@ describe('the Troubleshooting host row', () => {
         live: { state: 'connected', path: 'relay' },
         localAddress: null,
         phoneVpn: VPN_ON
-      }).detail
-    ).toBe('Connected via Orca Relay · direct Tailscale path unavailable (check Tailscale)')
+      })
+    ).toEqual({ label: 'Tail', status: 'pass', detail: 'Connected via Orca Relay' })
+  })
+
+  it('still names the cause when the phone knows it, such as its own VPN', () => {
+    expect(
+      troubleshootHostCheck({
+        host: HOME_HOST,
+        reachable: false,
+        live: { state: 'connected', path: 'relay' },
+        localAddress: '192.168.1.40',
+        phoneVpn: VPN_ON
+      })
+    ).toEqual({
+      label: 'Studio',
+      status: 'warn',
+      detail: `Connected via Orca Relay · direct Wi-Fi path unavailable (${PHONE_VPN})`
+    })
   })
 
   it('warns when a live direct connection works but the fresh probe did not answer', () => {
