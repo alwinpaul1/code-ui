@@ -22,6 +22,7 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 import type { MobileNativeChatPendingItem } from './mobile-native-chat-render-data'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
+import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
@@ -171,6 +172,10 @@ export type MobileNativeChatViewProps = {
   permission?: MobileChatPermission | null
   onRespondPermission?: (send: string) => Promise<boolean>
   onRespondPermissionWithComment?: (send: string, comment: string) => Promise<boolean>
+  /** The agent waits on a prompt no card shows (mobile-terminal-permission-options-merge.ts). */
+  terminalWait?: NativeChatTerminalWait | null
+  /** Shows the terminal, where that prompt can be answered. */
+  onOpenTerminal?: () => void
   /** Drop one message Claude Code has queued behind the running turn. */
   onCancelQueued?: (id: string) => Promise<boolean>
   /** Rewind the conversation to before a sent prompt (structured lane, on a host

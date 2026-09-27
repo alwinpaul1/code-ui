@@ -280,8 +280,12 @@ const HEAD_CONTENT_HOOK_SHA256 = '15a1b1e35ee4c3fb901188f61194c2dee6b310e81098b4
 // Re-pinned on the group D merge, 2026-09-19: main's (b014e15d) carried
 // #20069's placement, ours (ccff5b6c) the operation sends; handleCreateTerminal
 // now does both — sessionTabCreateTerminal, then the guarded placement.
+// 2026-09-27: handleForkClaudeSession types `/fork` only with no dialog on
+// screen (forkClaudeSessionUnlessDialog) and toasts the refusal when there is
+// one; its two toast strings stay in the handler. Same one function; count
+// still 13.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '8d1508016ebbb37ef43c81c543a0bd7d51cc0ed82c30b07eaf7f7f08a2f625ef'
+  '811906ba34788b33676546fede7b621fbe4a40beff9747e89d23f97c8206adb7'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.

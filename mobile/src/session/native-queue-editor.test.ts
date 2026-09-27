@@ -854,4 +854,3 @@ it('opens a Codex tap on the row the card drew', async () => {
   )
   expect(recall.text).toBe('bravo second')
 })
-

@@ -24,6 +24,7 @@ import {
 } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
+import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
 
 
 export type MobileNativeChatMessageSend = {
@@ -78,6 +79,9 @@ export function useMobileNativeChatMessageSend(args: {
   /** A composer-originated slash/skill send was accepted by the TUI. The result
    *  renders in the terminal, not the transcript, so the caller can surface it. */
   onCommandDispatched?: (command: string) => void
+  /** The look at the screen before an answer or a pick types (the screen read
+   *  by default; mobile-native-chat-dialog-guard.ts). */
+  refuseUnderDialog?: typeof readSendUnderDialogRefusal
 }): MobileNativeChatMessageSend {
   const {
     client,
@@ -94,7 +98,8 @@ export function useMobileNativeChatMessageSend(args: {
     holdUnconfirmedSend,
     onSendError,
     beforeSend,
-    onCommandDispatched
+    onCommandDispatched,
+    refuseUnderDialog = readSendUnderDialogRefusal
   } = args
   const sendGate = useMobileNativeChatSendGate({
     client,
@@ -138,6 +143,12 @@ export function useMobileNativeChatMessageSend(args: {
         ? await sendGate.wait(deadline, () => handleRef.current !== handle)
         : sendGate.now(recordControlSend ? 'Answer' : 'Command', report)
       if (!client) {
+        return 'rejected'
+      }
+      // An answer or a pick types text and an Enter, which a dialog on screen
+      // takes as its answer (2026-09-27). A composer send looked already,
+      // before its paste (use-mobile-native-chat-image-attachments.ts).
+      if (!syncComposer && (await refusedUnderDialog(refuseUnderDialog, { client, terminal: handle, deadline, agent }, report))) {
         return 'rejected'
       }
       if (syncComposer && beforeSend) {
@@ -284,6 +295,7 @@ export function useMobileNativeChatMessageSend(args: {
       onCommandDispatched,
       onSendError,
       readSeededLaunchDraftSeed,
+      refuseUnderDialog,
       restoreRejectedDraft,
       sendGate
     ]
@@ -350,15 +362,16 @@ export function useMobileNativeChatMessageSend(args: {
           // A command does not wait for the link: what it types was chosen
           // against a screen the phone has not seen since it dropped.
           const client = sendGate.now('Command', report)
-          return client
-            ? await typeCodexChatCommand({
-                client,
-                terminal,
-                command: text,
-                deviceToken: deviceTokenRef.current,
-                onSendError: report
-              })
-            : 'rejected'
+          if (!client || (await refusedUnderDialog(refuseUnderDialog, { client, terminal, agent: 'codex' }, report))) {
+            return 'rejected'
+          }
+          return await typeCodexChatCommand({
+            client,
+            terminal,
+            command: text,
+            deviceToken: deviceTokenRef.current,
+            onSendError: report
+          })
         }
         return await sendMessage(text, undefined, false, false, undefined, report)
       } finally {
@@ -367,7 +380,7 @@ export function useMobileNativeChatMessageSend(args: {
         }
       }
     },
-    [deviceTokenRef, handleRef, onSendError, sendGate, sendMessage]
+    [deviceTokenRef, handleRef, onSendError, refuseUnderDialog, sendGate, sendMessage]
   )
 
   return { send, sendWithOutcome, answerQuestion, dispatchCommand }

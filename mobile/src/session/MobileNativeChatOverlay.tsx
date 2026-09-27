@@ -417,6 +417,8 @@ export function MobileNativeChatOverlay({
         permission={controller.nativeChatPermission}
         onRespondPermission={controller.handleNativeChatRespondPermission}
         onRespondPermissionWithComment={controller.handleNativeChatRespondPermissionWithComment}
+        terminalWait={controller.nativeChatTerminalWait}
+        onOpenTerminal={controller.openNativeChatTerminal}
         onOpenFile={onOpenFile}
         onRevertHunk={onRevertHunk}
         hasMore={session.hasMore}

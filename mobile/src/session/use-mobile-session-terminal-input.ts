@@ -9,7 +9,7 @@ import {
   buildTerminalSendParams,
   TERMINAL_INPUT_SEND_OPTIONS
 } from '../terminal/terminal-send-request'
-import { forkClaudeSession } from './claude-fork-session'
+import { forkClaudeSessionUnlessDialog } from './claude-fork-session'
 import {
   isMouseClickSequence,
   splitTerminalGestureInputSequences,
@@ -261,13 +261,13 @@ export function useMobileSessionTerminalInput(scope: MobileSessionFileActionsMod
     if (!client) {
       return
     }
-    const forked = await forkClaudeSession({
+    const { forked, refusal } = await forkClaudeSessionUnlessDialog({
       client,
       terminal: target.handle,
       deviceToken: deviceTokenRef.current
     })
     showToast(
-      forked ? 'Forking from the latest message' : "Couldn't fork the session",
+      refusal ?? (forked ? 'Forking from the latest message' : "Couldn't fork the session"),
       forked ? 1600 : 1500
     )
   }

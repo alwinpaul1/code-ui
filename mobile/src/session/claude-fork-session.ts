@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { forkSessionWrite } from './claude-fork-session-operations'
+import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 
 /**
  * Claude Code's typed `/fork` command. The CLI resumes the session as a new
@@ -59,4 +60,18 @@ export async function forkClaudeSession(args: {
   } catch {
     return false
   }
+}
+
+/**
+ * `/fork` from the tab menu, only with no dialog on screen. The hook status
+ * the button waits for can miss a prompt (a subagent's, 2026-09-27), and the
+ * typed command and its Enter would answer it. `refusal` is what to say then.
+ */
+export async function forkClaudeSessionUnlessDialog(args: {
+  client: RpcClient
+  terminal: string
+  deviceToken: string | null
+}): Promise<{ forked: boolean; refusal: string | null }> {
+  const refusal = await readSendUnderDialogRefusal({ client: args.client, terminal: args.terminal, agent: 'claude' })
+  return refusal ? { forked: false, refusal } : { forked: await forkClaudeSession(args), refusal: null }
 }
