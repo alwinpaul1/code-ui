@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Pressable, type ViewStyle } from 'react-native'
+import { Keyboard, Pressable, type ViewStyle } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { MobileNativeChatAttachSheet } from './MobileNativeChatAttachSheet'
@@ -36,7 +36,22 @@ export function MobileNativeChatAttachButton({
   // With a file option the + opens a small chooser (Claude's "Add to Chat"
   // sheet); without one it keeps opening Photos directly.
   const opensSheet = Boolean(onAttachFile || onCaptureImage)
-  const openSheet = (): void => setSheetOpen(true)
+
+  // On touch-down, and the keyboard first. The sheet's Modal window takes
+  // focus when it shows, and until now that alone sent the keyboard away:
+  // on the device (S23 Ultra, keyboard up, 2026-09-27) the keyboard started
+  // to leave 128 ms after the finger lifted, and the sheet, already open and
+  // at rest under it, was uncovered row by row until 286 ms. Asked here, the
+  // keyboard is on its way out while the window is still being built, and
+  // the ~80 ms the finger rests on the + is no longer spent waiting for it
+  // to lift. The + sits in the dock, outside the chat list, so no scroll can
+  // claim a touch after it has opened the sheet. onPress stays for a screen
+  // reader's click, which comes with no press-in; the release after a
+  // press-in finds the sheet open and changes nothing.
+  const openSheet = (): void => {
+    Keyboard.dismiss()
+    setSheetOpen(true)
+  }
   const closeSheet = (): void => setSheetOpen(false)
 
   return (
@@ -48,6 +63,7 @@ export function MobileNativeChatAttachButton({
           iconButtonStyle,
           { backgroundColor: pressed ? colors.bgRaised : 'transparent' }
         ]}
+        onPressIn={opensSheet ? openSheet : undefined}
         onPress={opensSheet ? openSheet : onAttachImage}
         disabled={disabled}
       >
