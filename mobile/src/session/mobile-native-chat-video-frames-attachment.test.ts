@@ -10,7 +10,7 @@ import {
   withMobileNativeChatVideoFrameNotes
 } from './mobile-native-chat-video-frames-attachment'
 
-function frame(index: number, total: number): PendingNativeChatImage {
+function frame(index: number, total: number, stoppedEarly = false): PendingNativeChatImage {
   return {
     id: `img-${index}`,
     path: `/tmp/frame-${index}.png`,
@@ -23,7 +23,8 @@ function frame(index: number, total: number): PendingNativeChatImage {
       durationLabel: '2 min 14 s',
       intervalLabel: 'every 6.7 s',
       intervalMs: 6700,
-      sourceSizeLabel: '142 MB'
+      sourceSizeLabel: '142 MB',
+      stoppedEarly
     }
   }
 }
@@ -57,15 +58,39 @@ describe('buildMobileNativeChatVideoFrameNotes', () => {
     )
   })
 
-  it('states the span actually covered, not the whole video\'s duration and cadence, when a group is short of its plan', () => {
+  it('states the span actually covered, not the whole video\'s duration and cadence, when reading a group genuinely stopped early', () => {
     // 2026-09-27 review: a cancel or a failed upload can leave a group short
     // of its plan. The note must say how many frames really made it and what
     // span of the video they cover ("2 frames from the first 7 s"), not
     // restate the plan's own duration/cadence as if a full, even read
     // happened — it didn't. (index 2 at a 6.7 s cadence -> (2-1)*6700ms = 7 s
-    // once formatVideoFrameDurationLabel rounds it.)
-    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20), frame(2, 20)])).toBe(
+    // once formatVideoFrameDurationLabel rounds it.) This is gated on
+    // `stoppedEarly`, not merely on the survivor count being short of the
+    // plan — see the next test for why that distinction matters.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, true), frame(2, 20, true)])).toBe(
       'Frames from Screen_Recording_2026-09-27.mp4 (2 frames from the first 7 s of a 2 min 14 s video). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent; reading stopped early.'
+    )
+  })
+
+  it('does not say reading stopped early when a complete read is merely short because the user removed a chip', () => {
+    // 2026-09-27 review: all 20 frames were read and uploaded successfully —
+    // `stoppedEarly` is false on every one of them — and the user removed 18
+    // of the resulting chips before sending. The survivor count (2 of 20) is
+    // just as "short" as the cut-short case above, but nothing about the
+    // READ itself stopped early, so the note must say so honestly: the whole
+    // video's own duration and cadence, however few of its frames are here.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, false), frame(2, 20, false)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 2 frames, every 6.7 s). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('leaves the span out, rather than saying "from the first 0 s", with only one surviving frame', () => {
+    // 2026-09-27 review nit: (1-1)*6700ms = 0ms, which reads as "from the
+    // first 0 s" — worse than just not stating a span for a single instant.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20, true)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (1 frame of a 2 min 14 s video). ' +
         'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent; reading stopped early.'
     )
   })

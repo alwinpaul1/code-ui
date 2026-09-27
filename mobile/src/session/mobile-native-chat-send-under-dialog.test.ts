@@ -194,7 +194,8 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
             durationLabel: '2 s',
             intervalLabel: 'every 1 s',
             intervalMs: 1000,
-            sourceSizeLabel: '30 MB'
+            sourceSizeLabel: '30 MB',
+            stoppedEarly: false
           }
         }
       ]

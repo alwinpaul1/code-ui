@@ -24,11 +24,21 @@ export function isPendingNativeChatVideoFrame(attachment: PendingNativeChatImage
  *  of that group are actually in `attachments` right now — not the planned
  *  total each frame's own metadata still carries — so a group a cancel or a
  *  failed upload left short of its plan is described as it really is
- *  (2026-09-27 review: the note used to repeat the plan regardless). When
- *  the group IS short, the note states the span the survivors actually
- *  cover ("3 frames from the first 14 s of a 2 min 14 s video") rather than
- *  the cadence and duration a complete read would state — those describe an
- *  even sampling of the WHOLE video, which a cut-short read never was. */
+ *  (2026-09-27 review: the note used to repeat the plan regardless). A group
+ *  can also be short of its plan for a reason that has nothing to do with
+ *  reading stopping early: every frame arrived, and the user removed one
+ *  chip before sending. Only `meta.stoppedEarly` (true on the frames that DID
+ *  survive a cancel or a failed upload, set in
+ *  `use-mobile-native-chat-image-upload.ts`) says which happened — a bare
+ *  frame-count shortfall is not proof by itself (2026-09-27 review: the note
+ *  used to say "reading stopped early" whenever the count was short, even
+ *  after a complete read). When it genuinely did stop early, the note states
+ *  the span the survivors actually cover ("3 frames from the first 14 s of a
+ *  2 min 14 s video") rather than the cadence and duration a complete read
+ *  would state — those describe an even sampling of the WHOLE video, which a
+ *  cut-short read never was. With only one survivor (or no cadence to begin
+ *  with) there is no span worth stating either — "1 frame of a 2 min 14 s
+ *  video" reads better than "1 frame from the first 0 s". */
 export function buildMobileNativeChatVideoFrameNotes(
   attachments: readonly PendingNativeChatImage[]
 ): string {
@@ -56,10 +66,13 @@ export function buildMobileNativeChatVideoFrameNotes(
     const total = actual?.count ?? meta.total
     const frameWord = total === 1 ? 'frame' : 'frames'
     const short = total < meta.total
-    if (short && meta.intervalMs !== null) {
-      const spanLabel = formatVideoFrameDurationLabel((actual!.maxIndex - 1) * meta.intervalMs)
+    if (short && meta.stoppedEarly) {
+      const spanPhrase =
+        meta.intervalMs !== null && actual!.maxIndex > 1
+          ? ` from the first ${formatVideoFrameDurationLabel((actual!.maxIndex - 1) * meta.intervalMs)}`
+          : ''
       lines.push(
-        `Frames from ${meta.sourceName} (${total} ${frameWord} from the first ${spanLabel} of a ${meta.durationLabel} video). ` +
+        `Frames from ${meta.sourceName} (${total} ${frameWord}${spanPhrase} of a ${meta.durationLabel} video). ` +
           `The video itself is ${meta.sourceSizeLabel}, over the ${UPLOAD_CAP_LABEL} the desktop accepts, so it was not sent; reading stopped early.`
       )
       continue

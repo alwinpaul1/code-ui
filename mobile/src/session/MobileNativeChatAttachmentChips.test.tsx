@@ -242,7 +242,8 @@ describe('a photo in the attachment strip opens full-screen first', () => {
         durationLabel: '10 s',
         intervalLabel: 'every 3.3 s',
         intervalMs: 3300,
-        sourceSizeLabel: '30 MB'
+        sourceSizeLabel: '30 MB',
+        stoppedEarly: false
       }
     }
     const screenNow = draw('light', { attachments: [frame], onEditAttachment })
@@ -432,8 +433,8 @@ describe('the video-frame extraction progress chip', () => {
   // tapped during that stretch used to see no sign a video was even being
   // read. `total: null` is that stretch; the chip has something to say
   // regardless.
-  it('says a video is being read, with no count yet, before the first frame\'s own metadata arrives', () => {
-    const screenNow = draw('light', {
+  it.each(SCHEMES)('says a video is being read, with no count yet, before the first frame\'s own metadata arrives (%s)', (scheme) => {
+    const screenNow = draw(scheme, {
       attachments: [],
       videoFrameExtraction: { batch: 'batch-1', done: 0, total: null }
     })

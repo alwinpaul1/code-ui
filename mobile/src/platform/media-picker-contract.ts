@@ -41,6 +41,15 @@ export type VideoFrameAttachmentMeta = {
    *  duration over however few frames survived. */
   readonly intervalMs: number | null
   readonly sourceSizeLabel: string
+  /** True once the group's own read was actually cut short (cancelled, or a
+   *  frame failed) — false for every frame yielded while reading itself is
+   *  still healthy, patched to true on the frames already uploaded once a
+   *  cancel or failure is caught (`use-mobile-native-chat-image-upload.ts`).
+   *  A group can be short of its plan for a DIFFERENT reason entirely — every
+   *  frame arrived, and the user removed one chip before sending — and that
+   *  is not "reading stopped early" at all (2026-09-27 review: the note used
+   *  to say so unconditionally whenever the survivor count was short). */
+  readonly stoppedEarly: boolean
 }
 
 export type PickedMobileImage = {

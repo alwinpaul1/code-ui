@@ -499,7 +499,7 @@ describe('extractVideoFrames — per-frame stall', () => {
     expect(player.released).toBe(true)
   })
 
-  it('fails a stalled encodeFrame call after its own timeout too, releasing the thumbnail', async () => {
+  it('fails a stalled encodeFrame call after its own timeout too', async () => {
     const thumbnail = fakeThumbnail()
     const player = fakePlayer(10, { thumbnailsPerCall: () => [thumbnail] })
     const hangingEncoder = () => new Promise<never>(() => {})
@@ -514,6 +514,69 @@ describe('extractVideoFrames — per-frame stall', () => {
     const result = await pending
     expect(result).toBeInstanceOf(VideoFrameExtractionError)
     expect((result as Error).message).toMatch(/timed out encoding a frame/i)
-    expect(thumbnail.released).toBe(true)
+  })
+
+  // 2026-09-27 review: releasing on the TIMEOUT's own schedule, rather than
+  // encodeFrame's, could free the native thumbnail while the real call was
+  // still reading it. A hanging encoder that never settles at all must never
+  // see its thumbnail released either — there is nothing to prove it is safe
+  // to free yet.
+  it('does not release a thumbnail while a timed-out encodeFrame call is still (hypothetically) reading it', async () => {
+    const thumbnail = fakeThumbnail()
+    const player = fakePlayer(10, { thumbnailsPerCall: () => [thumbnail] })
+    const hangingEncoder = () => new Promise<never>(() => {})
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: hangingEncoder,
+        stepTimeoutMs: 5000
+      })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(5000)
+    await pending
+    expect(thumbnail.released).toBe(false)
+  })
+
+  it('releases the thumbnail once a timed-out-away encodeFrame call actually finishes, late', async () => {
+    const thumbnail = fakeThumbnail()
+    const player = fakePlayer(10, { thumbnailsPerCall: () => [thumbnail] })
+    const encodeResult = Promise.withResolvers<{ base64: string; previewBase64: string }>()
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: () => encodeResult.promise,
+        stepTimeoutMs: 5000
+      })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(5000)
+    await pending
+    expect(thumbnail.released).toBe(false)
+
+    encodeResult.resolve({ base64: 'late', previewBase64: 'late-preview' })
+    await vi.waitFor(() => expect(thumbnail.released).toBe(true))
+  })
+
+  // 2026-09-27 review: the raw generateThumbnails call raced away from can
+  // still resolve later, handing back thumbnails nothing else ever reads —
+  // those must be released too, not just the one actually used.
+  it('releases a late-arriving generateThumbnails result that lost its own timeout race', async () => {
+    const lateThumbnail = fakeThumbnail()
+    const generateResult = Promise.withResolvers<VideoFrameThumbnail[]>()
+    const player = fakePlayer(10, { neverGenerateThumbnails: false })
+    vi.spyOn(player, 'generateThumbnails').mockReturnValue(generateResult.promise)
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: fakeEncoder,
+        stepTimeoutMs: 5000
+      })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(5000)
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionError)
+    expect(lateThumbnail.released).toBe(false)
+
+    generateResult.resolve([lateThumbnail])
+    await vi.waitFor(() => expect(lateThumbnail.released).toBe(true))
   })
 })

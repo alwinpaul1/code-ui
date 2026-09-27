@@ -248,6 +248,12 @@ function checkCancelled(signal: AbortSignal | undefined): void {
   }
 }
 
+/** For a raw native promise's rejection branch when nothing about the
+ *  rejection itself is interesting — the race it was also given already
+ *  turned it into the real, reported error; this is only here so a promise
+ *  no one else awaits never surfaces an unhandled-rejection warning. */
+function noop(): void {}
+
 /** Resolves or rejects exactly as `promise` does, unless `signal` aborts or
  *  `timeoutMs` passes first — either one settles this race instead, and
  *  whichever loses is ignored (a `promise` that keeps running after losing
@@ -332,31 +338,60 @@ export async function* extractVideoFrames(
     for (let i = 0; i < timestampsMs.length; i += 1) {
       checkCancelled(deps.signal)
       const timeSec = (timestampsMs[i] as number) / 1000
-      const thumbnails = await raceAgainstSignalAndTimeout(
-        player.generateThumbnails([timeSec], maxEdge),
-        deps.signal,
-        stepTimeoutMs,
-        () => new VideoFrameExtractionError('Timed out reading a frame from this video')
-      )
+      // The raw call, raced separately below: if it loses the race (a
+      // timeout or a cancel), the real native call may still be running and
+      // its thumbnails may still arrive later — `lostGenerateThumbnails`
+      // tells this handler whether that late arrival needs releasing (never,
+      // on the winning path: the array below is what the rest of this loop
+      // iteration actually uses) (2026-09-27 review).
+      let lostGenerateThumbnails = false
+      const rawGenerateThumbnails = player.generateThumbnails([timeSec], maxEdge)
+      rawGenerateThumbnails.then((lateThumbnails) => {
+        if (lostGenerateThumbnails) {
+          for (const late of lateThumbnails) {
+            late.release()
+          }
+        }
+      }, noop)
+      let thumbnails: VideoFrameThumbnail[]
+      try {
+        thumbnails = await raceAgainstSignalAndTimeout(
+          rawGenerateThumbnails,
+          deps.signal,
+          stepTimeoutMs,
+          () => new VideoFrameExtractionError('Timed out reading a frame from this video')
+        )
+      } catch (error) {
+        lostGenerateThumbnails = true
+        throw error
+      }
       const thumbnail = thumbnails[0]
       if (!thumbnail) {
         throw new VideoFrameExtractionError('Could not read a frame from this video')
       }
       try {
-        // Inside the try: a cancel seen right here still releases the
-        // thumbnail below, instead of throwing past it unreleased.
+        // A cancel seen right here still releases the thumbnail, instead of
+        // throwing past it unreleased.
         checkCancelled(deps.signal)
-        const encoded = await raceAgainstSignalAndTimeout(
-          deps.encodeFrame(thumbnail, quality),
-          deps.signal,
-          stepTimeoutMs,
-          () => new VideoFrameExtractionError('Timed out encoding a frame from this video')
-        )
-        deps.onProgress?.({ done: i + 1, total })
-        yield { kind: 'frame', frame: { ...encoded, index: i + 1 } }
-      } finally {
+      } catch (error) {
         thumbnail.release()
+        throw error
       }
+      // The raw encode, released on ITS OWN settlement — not on the race's,
+      // which can resolve (timeout or cancel) while this real call is still
+      // reading `thumbnail`. Releasing on the race's schedule instead could
+      // free the native image while `encodeFrame` still holds it
+      // (2026-09-27 review).
+      const rawEncode = deps.encodeFrame(thumbnail, quality)
+      rawEncode.then(() => thumbnail.release(), () => thumbnail.release())
+      const encoded = await raceAgainstSignalAndTimeout(
+        rawEncode,
+        deps.signal,
+        stepTimeoutMs,
+        () => new VideoFrameExtractionError('Timed out encoding a frame from this video')
+      )
+      deps.onProgress?.({ done: i + 1, total })
+      yield { kind: 'frame', frame: { ...encoded, index: i + 1 } }
     }
   } finally {
     player.release()
