@@ -39,6 +39,15 @@ vi.mock('@react-native-async-storage/async-storage', () => {
   return { default: storage, ...storage }
 })
 
+// Why: the chat list reads its screen's navigation focus through expo-router's
+// useFocusEffect (use-native-chat-screen-focus.ts), and expo-router has no Node
+// entry: every test that draws the chat would fail at import. Stubbed, the list
+// hears no focus report and its running rows keep sweeping, which is the hook's
+// fail-open answer. Its own test unmocks it; a local mock takes priority.
+vi.mock('./src/session/use-native-chat-screen-focus', () => ({
+  useNativeChatScreenFocus: () => undefined
+}))
+
 // Why: the shared press primitives (PressScale, Button, IconButton) call the
 // haptics helpers, which import expo-haptics and through it expo-modules-core's
 // EventEmitter — unavailable when 'react-native' is mocked to host tags. Tests

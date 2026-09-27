@@ -94,6 +94,25 @@ describe('copying the mergeability refresh commands', () => {
     expect(labels(rendered)).toContain('Copied')
   })
 
+  // The same stray selection the tool sheet had (2026-09-26): this section
+  // sits in RightDrawer, whose only vertical recogniser is its Native scroll.
+  // When the scroll takes a drag, gesture-handler's root stops passing the
+  // touch to the Android views below without a cancel, and a selectable
+  // TextView under the finger selects a word mid-scroll. A Native gesture on
+  // the text cannot fix it there: the scroll's activation recognises it as
+  // simultaneous and never cancels it. The Copy button already copies this
+  // exact text, so the text itself is not selectable.
+  it('does not select the refresh commands when a scroll starts on them; Copy copies them', async () => {
+    const rendered = await render()
+    const shown = rendered.root.findAll(
+      (node) => typeof node.type === 'string' && node.props.children === COMMANDS
+    )
+    expect(shown).toHaveLength(1)
+    expect(shown[0]!.props.selectable).not.toBe(true)
+    await press(rendered)
+    expect(clipboard.writeText).toHaveBeenCalledWith(COMMANDS)
+  })
+
   it('says it failed instead of saying nothing at all', async () => {
     // The seam rejects when the pasteboard refused, which inside the page is a route that was not
     // granted the verb. Dropped, the tap is indistinguishable from one that copied nothing.
