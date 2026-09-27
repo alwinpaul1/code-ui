@@ -333,3 +333,116 @@ describe('useMobileNativeChatSendChips — joining a wait for a video still bein
     ])
   })
 })
+
+// Item 4 (2026-09-27 review): `tapBatches` covers EVERY batch among the
+// tap's own chips, not just a reading video's — `.batch` is stamped on the
+// chips of an ordinary multi-photo pick too (attachWith already tags every
+// image a selection produces with the same value). So a send tapped while
+// the FIRST photo of a multi-photo pick is still uploading now waits for,
+// and gathers, the rest of that SAME pick's photos too, once they land —
+// not just the one chip present at the tap. Before batch-aware gathering
+// existed (round 4), the wait only ever re-checked the tap-time ids, so a
+// send in this position took ph1 alone and silently left ph2/ph3 behind for
+// the NEXT send. This is a genuine behaviour change, and the better one —
+// pinned here as intended, not guarded against.
+describe('useMobileNativeChatSendChips — a multi-photo pick rides together with a send tapped mid-upload', () => {
+  let renderer: ReactTestRenderer | null = null
+  let bound:
+    | ((tap: MobileNativeChatSendChipsTap, send: (chips: PendingNativeChatImage[]) => Promise<boolean>) => Promise<boolean>)
+    | null = null
+
+  function Harness({ scopeKey, onSendError }: { scopeKey: string; onSendError: (message: string) => void }): null {
+    bound = useMobileNativeChatSendChips({
+      scopeKey,
+      activeHandleRef: { current: 'term-1' },
+      structuredNativeChat: false,
+      client: { getState: () => 'connected' as const },
+      sendGate: { now: () => null },
+      onSendError
+    })
+    return null
+  }
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    bound = null
+    useNativeChatImageAttachmentsStore.getState().reset()
+  })
+
+  it('takes the whole selection, not just the first photo, when it was still uploading at the tap', async () => {
+    const PHOTO_BATCH = 'batch-photos'
+    const onSendError = vi.fn()
+    act(() => {
+      renderer = create(createElement(Harness, { scopeKey: SCOPE, onSendError }))
+    })
+    // ph1 is the only chip that exists yet — the same as any ordinary
+    // send-tapped-beside-an-uploading-photo case, nothing video-related here.
+    useNativeChatImageAttachmentsStore.getState().update(() => ({
+      [SCOPE]: [{ id: 'ph-1', path: '', previewUri: 'file:///1.jpg', batch: PHOTO_BATCH, uploading: true }]
+    }))
+
+    const send = vi.fn().mockResolvedValue(true)
+    const deadline = Date.now() + 5000
+    let tapped: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      tapped = bound!({ scope: SCOPE, deadline, terminal: 'term-1', text: 'three photos' }, send)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    // ph1 finishes uploading; ph2, from the SAME pick, lands and starts uploading.
+    act(() => {
+      useNativeChatImageAttachmentsStore.getState().update(() => ({
+        [SCOPE]: [
+          { id: 'ph-1', path: '/tmp/1.jpg', previewUri: 'file:///1.jpg', batch: PHOTO_BATCH },
+          { id: 'ph-2', path: '', previewUri: 'file:///2.jpg', batch: PHOTO_BATCH, uploading: true }
+        ]
+      }))
+    })
+    let resolved = false
+    void tapped.then(() => {
+      resolved = true
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // ph2 is still uploading — the wait must not have sent ph1 alone yet.
+    expect(resolved).toBe(false)
+
+    // ph2 finishes; ph3 lands and starts uploading.
+    act(() => {
+      useNativeChatImageAttachmentsStore.getState().update((prev) => ({
+        ...prev,
+        [SCOPE]: [
+          ...(prev[SCOPE] ?? []).map((chip) => (chip.id === 'ph-2' ? { ...chip, path: '/tmp/2.jpg', uploading: false } : chip)),
+          { id: 'ph-3', path: '', previewUri: 'file:///3.jpg', batch: PHOTO_BATCH, uploading: true }
+        ]
+      }))
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(resolved).toBe(false)
+
+    // ph3 finishes — the whole selection has landed now.
+    act(() => {
+      useNativeChatImageAttachmentsStore.getState().update((prev) => ({
+        ...prev,
+        [SCOPE]: (prev[SCOPE] ?? []).map((chip) =>
+          chip.id === 'ph-3' ? { ...chip, path: '/tmp/3.jpg', uploading: false } : chip
+        )
+      }))
+    })
+
+    const accepted = await tapped
+    expect(accepted).toBe(true)
+    expect(onSendError).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ id: 'ph-1' }),
+      expect.objectContaining({ id: 'ph-2' }),
+      expect.objectContaining({ id: 'ph-3' })
+    ])
+  })
+})
