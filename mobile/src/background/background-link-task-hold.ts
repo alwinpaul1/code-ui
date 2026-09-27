@@ -14,27 +14,48 @@
  * ends background delivery releases the brake here, the task returns, React
  * Native reports it finished, the service stops itself and Android releases
  * the lock.
+ *
+ * Each park hands back its OWN release. A task cleaning up after itself must
+ * end only its own park, never "whatever is parked now": on 2026-09-27 the
+ * service started a second task while the first was parked, the second park
+ * let the first go, and the first task's cleanup then released the second.
+ * Both ended, the service found no task left, and it stopped itself seconds
+ * after the app was opened.
  */
 
-let release: (() => void) | null = null
+let parkedRelease: (() => void) | null = null
 
-/** Park the caller until `releaseBackgroundLinkTask` is called. */
-export function parkBackgroundLinkTask(): Promise<void> {
-  // A second park would strand the first; release it rather than leak it.
-  releaseBackgroundLinkTask()
-  return new Promise<void>((resolve) => {
-    release = resolve
-  })
+export type ParkedBackgroundLinkTask = {
+  /** Settles when this park is released, by its own release or a global one. */
+  parked: Promise<void>
+  /** Ends this park and no other. Safe to call more than once. */
+  release: () => void
 }
 
-/** End a parked task, if one is parked. Safe to call at any time. */
+/** Park the caller until it is released. */
+export function parkBackgroundLinkTask(): ParkedBackgroundLinkTask {
+  // A second park would strand the first; release it rather than leak it.
+  releaseBackgroundLinkTask()
+  let settle: () => void = () => undefined
+  const parked = new Promise<void>((resolve) => {
+    settle = resolve
+  })
+  const release = (): void => {
+    if (parkedRelease === release) {
+      parkedRelease = null
+    }
+    settle()
+  }
+  parkedRelease = release
+  return { parked, release }
+}
+
+/** End whichever task is parked, if one is. Safe to call at any time. */
 export function releaseBackgroundLinkTask(): void {
-  const parked = release
-  release = null
-  parked?.()
+  parkedRelease?.()
 }
 
 /** Test-only: whether a task is currently parked. */
 export function isBackgroundLinkTaskParked(): boolean {
-  return release !== null
+  return parkedRelease !== null
 }
