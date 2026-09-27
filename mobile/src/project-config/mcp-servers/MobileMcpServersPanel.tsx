@@ -19,7 +19,7 @@ import {
   type McpServerFormState
 } from './mcp-server-form-fields'
 import { McpServerForm } from './McpServerForm'
-import { canShowMcpStatusOverlay, openMcpStatusOverlay } from './mcp-status-overlay'
+import { canShowMcpStatusOverlay, MCP_STATUS_NOT_SENT, openMcpStatusOverlayUnlessDialog } from './mcp-status-overlay'
 import { mcpStatusSessionTabsRead } from './mcp-status-overlay-operations'
 import { findMcpStatusTerminalCandidate, type McpStatusTerminalCandidate } from './mcp-status-terminal-lookup'
 
@@ -50,6 +50,10 @@ export function MobileMcpServersPanel({
   const [form, setForm] = useState<McpServerFormState>(EMPTY_MCP_SERVER_FORM)
   const [removeIndex, setRemoveIndex] = useState<number | null>(null)
   const [statusCandidate, setStatusCandidate] = useState<McpStatusTerminalCandidate | null>(null)
+  // Show status looks at the terminal before it types (up to 2 s), and says
+  // here, under the button, why nothing was typed.
+  const [statusLooking, setStatusLooking] = useState(false)
+  const [statusNotice, setStatusNotice] = useState<string | null>(null)
 
   // One-shot, best-effort lookup for the optional "Show status in terminal"
   // button — see mcp-status-terminal-lookup.ts. Not a live subscription: a
@@ -67,6 +71,9 @@ export function MobileMcpServersPanel({
         }
         const result = mcpStatusSessionTabsRead.interpret(response)
         setStatusCandidate(findMcpStatusTerminalCandidate(result))
+        // A refusal was about the terminal the last lookup offered; it goes
+        // with that lookup, and never outlives the button it was drawn under.
+        setStatusNotice(null)
       })
       .catch(() => undefined)
     return () => {
@@ -112,6 +119,23 @@ export function MobileMcpServersPanel({
   const showStatusButton =
     statusCandidate !== null &&
     canShowMcpStatusOverlay({ agent: statusCandidate.agent, status: statusCandidate.status, structured: false })
+
+  async function showStatus(terminal: string) {
+    if (!client) {
+      return
+    }
+    setStatusLooking(true)
+    setStatusNotice(null)
+    const { opened, refusal } = await openMcpStatusOverlayUnlessDialog({ client, terminal, deviceToken: null })
+    setStatusLooking(false)
+    setStatusNotice(refusal ?? (opened ? null : MCP_STATUS_NOT_SENT))
+  }
+
+  const statusNoticeCaption = statusNotice ? (
+    <Txt tone="danger" variant="caption" style={{ marginBottom: 8 }}>
+      {statusNotice}
+    </Txt>
+  ) : null
 
   return (
     <ProjectConfigScreenChrome title="MCP Servers" subtitle={name || undefined}>
@@ -188,13 +212,13 @@ export function MobileMcpServersPanel({
             <>
               {showStatusButton && statusCandidate ? (
                 <View style={styles.footer}>
+                  {statusNoticeCaption}
                   <Button
                     label="Show status"
                     icon={TerminalIcon}
                     variant="secondary"
-                    onPress={() =>
-                      void openMcpStatusOverlay({ client: client!, terminal: statusCandidate.terminal, deviceToken: null })
-                    }
+                    loading={statusLooking}
+                    onPress={() => void showStatus(statusCandidate.terminal)}
                   />
                 </View>
               ) : null}
@@ -209,6 +233,7 @@ export function MobileMcpServersPanel({
                   {state.saveError}
                 </Txt>
               ) : null}
+              {statusNoticeCaption}
               <View style={styles.footerRow}>
                 <Button
                   label="Add server"
@@ -225,9 +250,8 @@ export function MobileMcpServersPanel({
                     label="Show status"
                     icon={TerminalIcon}
                     variant="secondary"
-                    onPress={() =>
-                      void openMcpStatusOverlay({ client: client!, terminal: statusCandidate.terminal, deviceToken: null })
-                    }
+                    loading={statusLooking}
+                    onPress={() => void showStatus(statusCandidate.terminal)}
                     style={{ flex: 1 }}
                   />
                 ) : null}
