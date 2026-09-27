@@ -36,8 +36,9 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
         visible={controller.sendSheet !== null}
         title="Send Notes"
         message={sendSheetMessage(controller)}
+        messageTone={controller.sendSheet?.kind === 'error' ? 'danger' : undefined}
         actions={sendActions}
-        onClose={() => controller.setSendSheet(null)}
+        onClose={controller.closeSendSheet}
       />
       <ConfirmModal
         visible={controller.discardTarget !== null}
@@ -67,24 +68,32 @@ export function MobileDiffReviewDrawers({ controller }: Props) {
 function useSendActions(controller: ReturnType<typeof useMobileDiffReviewController>) {
   return useMemo<ActionSheetAction[]>(() => {
     const comments = controller.unsentComments
+    // One send at a time, the row it runs from spinning: the look at the
+    // terminal takes up to 2 s, and a dead row reads the same as a slow one.
+    const sending = controller.notesSending
     const terminalActions =
       controller.sendSheet?.kind === 'ready' || controller.sendSheet?.kind === 'error'
-        ? controller.sendSheet.terminals.map((terminal) => ({
-            label: `${terminal.title || 'Terminal'} (${terminal.terminal.slice(0, 6)})`,
-            icon: Send,
-            disabled: comments.length === 0,
-            skipAutoClose: true,
-            onPress: () => void controller.sendPromptToTerminal(terminal.terminal, comments)
-          }))
+        ? controller.sendSheet.terminals.map((terminal) => {
+            const loading = sending?.terminal === terminal.terminal
+            return {
+              label: `${terminal.title || 'Terminal'} (${terminal.terminal.slice(0, 6)})`,
+              icon: Send,
+              disabled: comments.length === 0 || (sending !== null && !loading),
+              loading,
+              skipAutoClose: true,
+              onPress: () => void controller.sendNotesToTerminal(terminal, comments)
+            }
+          })
         : []
     return [
       ...terminalActions,
       {
         label: 'New Agent Session',
         icon: Plus,
-        disabled: comments.length === 0,
+        disabled: comments.length === 0 || (sending !== null && sending.terminal !== null),
+        loading: sending !== null && sending.terminal === null,
         skipAutoClose: true,
-        onPress: () => void controller.createTerminalAndSend(comments)
+        onPress: () => void controller.sendNotesToNewSession(comments)
       },
       {
         label: 'Copy Notes',

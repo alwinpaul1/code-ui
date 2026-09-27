@@ -1,6 +1,9 @@
 /**
  * A refused operation's message, or the screen's own copy when the host sent none. Only the
  * refusal catch may call this: a transport rejection's message is surfaced verbatim, empty included.
+ * The exception is a catch this fork added where main had none (the diff review's Send Notes, Stage
+ * Reviewed Files, Open in Session and marking notes sent): with no main behaviour to keep, an empty
+ * transport message falls back to the screen's copy there, since an empty banner draws nothing.
  */
 export function refusedRpcMessageOrFallback(error: unknown, fallback: string): string {
   return (error instanceof Error ? error.message : '') || fallback

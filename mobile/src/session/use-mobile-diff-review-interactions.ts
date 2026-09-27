@@ -124,20 +124,30 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     loadReviewData
   })
 
-  const { clearSentNotes, copyNotes, createTerminalAndSend, openSendSheet, sendPromptToTerminal } =
-    useMobileDiffReviewSendActions({
-      client,
-      connState,
-      worktreeId,
-      screenState,
-      setActionError,
-      setSendSheet,
-      saveCommentsAndReviewState
-    })
+  const {
+    clearSentNotes,
+    closeSendSheet,
+    copyNotes,
+    createTerminalAndSend,
+    notesSending,
+    openSendSheet,
+    sendNotesToNewSession,
+    sendNotesToTerminal,
+    sendPromptToTerminal
+  } = useMobileDiffReviewSendActions({
+    client,
+    connState,
+    worktreeId,
+    screenState,
+    setActionError,
+    setSendSheet,
+    saveCommentsAndReviewState
+  })
 
   return {
     clearSentNotes,
     closeComposer,
+    closeSendSheet,
     copyNotes,
     createTerminalAndSend,
     deleteComment,
@@ -179,21 +189,36 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
             : index - 1
       )
     },
+    notesSending,
     openComposer,
     openEditComposer,
     openInSession: async () => {
       if (!client || !currentItem || currentItem.scope === 'branch') {
         return
       }
-      const response = await sourceFileDiffOpenRun.request(client, {
-        worktree: `id:${worktreeId}`,
-        relativePath: currentItem.filePath,
-        staged: currentItem.scope === 'staged'
-      })
+      const filePath = currentItem.filePath
+      let response
+      try {
+        response = await sourceFileDiffOpenRun.request(client, {
+          worktree: `id:${worktreeId}`,
+          relativePath: filePath,
+          staged: currentItem.scope === 'staged'
+        })
+      } catch (error) {
+        // A send the link lost. It was awaited outside any catch and rejected
+        // into the tap, leaving nothing on screen. No main behaviour to keep
+        // here, and an empty message would draw no banner, so it falls back.
+        const why = (error instanceof Error && error.message) || 'Unable to open in session'
+        console.warn(`[review-open] ${filePath} not opened: ${why}`)
+        setActionError(why)
+        return
+      }
       try {
         sourceFileDiffOpenRun.interpret(response)
       } catch (error) {
-        setActionError(refusedRpcMessageOrFallback(error, 'Unable to open in session'))
+        const why = refusedRpcMessageOrFallback(error, 'Unable to open in session')
+        console.warn(`[review-open] ${filePath} not opened: ${why}`)
+        setActionError(why)
         return
       }
       onOpenSession()
@@ -211,6 +236,8 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       setFilter(nextFilter)
       setCurrentIndex(0)
     },
+    sendNotesToNewSession,
+    sendNotesToTerminal,
     sendPromptToTerminal,
     stageReviewedFiles
   }

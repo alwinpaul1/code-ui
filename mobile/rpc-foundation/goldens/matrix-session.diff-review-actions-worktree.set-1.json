@@ -3,8 +3,8 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "d4d749a04142f7cd48152d508b6899e33a638044",
-  "lockfileSha256": "fc17f4cc6e9b73532dda8f68ccb31bccb82ecd1bf386c2198328989e1970146e",
+  "baseline": "5616bbd5b077524b8c3c596dbb29c37e2a3c17b4",
+  "lockfileSha256": "7bcf54f462c0b85dbb203cdd77a77c4de3efbc65865e91ae931b6516a82e0c70",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
   "scenarioSha256": "c583058382c949e977b7a1287895ed9ccb8cb408b684aef186b629976ff1da4d",
@@ -161,16 +161,6 @@
         }
       }
     },
-    "32a7c0ae7918": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "outer refused",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "44fe127e6d75": {
       "name": "worktree.set#1",
       "ordinal": 1,
@@ -302,16 +292,6 @@
             "error": "refused"
           }
         }
-      }
-    },
-    "63639602640e": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Failed to save review state",
-        "isRpcDeliveryUnknown": false
       }
     },
     "73f7bfbf2ed4": {
@@ -446,16 +426,6 @@
         "$rpc": "null"
       }
     },
-    "a947768bc0ed": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "transport failure",
-        "isRpcDeliveryUnknown": true
-      }
-    },
     "b19741dc6694": {
       "name": "worktree.set#1",
       "ordinal": 1,
@@ -522,30 +492,10 @@
         }
       }
     },
-    "b948e8307e81": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "Unknown method",
-        "isRpcDeliveryUnknown": false
-      }
-    },
     "bc47263d2197": {
       "name": "worktree.set#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:workspace-1\",\"diffComments\":[{\"side\":\"modified\",\"id\":\"note-1\",\"worktreeId\":\"workspace-1\",\"filePath\":\"src/app.ts\",\"lineNumber\":4,\"body\":\"needs a test\",\"createdAt\":0}],\"mobileDiffReview\":{\"version\":1,\"files\":{\"unstaged:src/app.ts\":{\"key\":\"unstaged:src/app.ts\",\"filePath\":\"src/app.ts\",\"scope\":\"unstaged\",\"lastSeenDiffIdentity\":\"identity-1\",\"reviewedAt\":1767225600000,\"reviewDiffIdentity\":\"identity-1\"}},\"updatedAt\":1767225600000,\"completedAt\":1767225600000}}}"
-    },
-    "c7584e82c72f": {
-      "status": "rejected",
-      "startedAt": 0,
-      "settledAt": 0,
-      "error": {
-        "category": "Error",
-        "message": "",
-        "isRpcDeliveryUnknown": true
-      }
     },
     "d7908c1db91a": {
       "name": "worktree.set#1",
@@ -1101,7 +1051,7 @@
           "sender": ["f19c54834931"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "32a7c0ae7918"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "9e0132f8d584",
           "effects": []
@@ -1113,7 +1063,7 @@
           "sender": ["44fe127e6d75"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "63639602640e"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "d98361dedc14",
           "effects": []
@@ -1125,7 +1075,7 @@
           "sender": ["e689b4c26c6e"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "b948e8307e81"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "73f7bfbf2ed4",
           "effects": []
@@ -1137,7 +1087,7 @@
           "sender": ["e779df686927"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "a947768bc0ed"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "fa4af2435d85",
           "effects": []
@@ -1149,7 +1099,7 @@
           "sender": ["f2507f6faff8"],
           "payloads": ["bc47263d2197"],
           "settlements": {
-            "mark-reviewed": "c7584e82c72f"
+            "mark-reviewed": "eb79a9b3682a"
           },
           "state": "1c6a13b5a4b5",
           "effects": []

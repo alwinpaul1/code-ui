@@ -100,11 +100,31 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
           setScreenState(previous)
         }
         triggerError()
-        setActionError(err instanceof Error ? err.message : 'Failed to save review')
+        const why = err instanceof Error ? err.message : 'Failed to save review'
+        console.warn(`[review-save] notes and review marks not saved: ${why}`)
+        setActionError(why)
         throw err
       }
     },
     [persistMetadata, screenState, setActionError, setScreenState, updateReadyState]
+  )
+
+  /**
+   * The save for an action a tap runs. The tap has nowhere to send a
+   * rejection, and the save has already rolled back, said why on the banner
+   * and logged it, so a failure is `false` here rather than a rejection
+   * floating out of a `void` handler. Callers that must know stop on it.
+   */
+  const savedFromTap = useCallback(
+    async (comments: DiffComment[], reviewState: MobileDiffReviewState): Promise<boolean> => {
+      try {
+        await saveCommentsAndReviewState(comments, reviewState)
+        return true
+      } catch {
+        return false
+      }
+    },
+    [saveCommentsAndReviewState]
   )
 
   const openComposer = useCallback(
@@ -154,17 +174,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (!result.comment) {
       return
     }
-    await saveCommentsAndReviewState(result.comments, screenState.reviewState)
-    closeComposer()
-  }, [
-    closeComposer,
-    composer,
-    composerBody,
-    currentItem,
-    saveCommentsAndReviewState,
-    screenState,
-    worktreeId
-  ])
+    // A failed save keeps the composer open, the note's text in it.
+    if (await savedFromTap(result.comments, screenState.reviewState)) {
+      closeComposer()
+    }
+  }, [closeComposer, composer, composerBody, currentItem, savedFromTap, screenState, worktreeId])
 
   const deleteComment = useCallback(async () => {
     if (!composer || composer.mode !== 'edit' || screenState.kind !== 'ready') {
@@ -174,9 +188,10 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       screenState.comments,
       new Set([composer.comment.id])
     )
-    await saveCommentsAndReviewState(nextComments, screenState.reviewState)
-    closeComposer()
-  }, [closeComposer, composer, saveCommentsAndReviewState, screenState])
+    if (await savedFromTap(nextComments, screenState.reviewState)) {
+      closeComposer()
+    }
+  }, [closeComposer, composer, savedFromTap, screenState])
 
   const markReviewed = useCallback(async () => {
     if (!currentItem || screenState.kind !== 'ready') {
@@ -191,7 +206,9 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     if (queue.every((item) => item.key === currentItem.key || item.isReviewed)) {
       nextReviewState = completeMobileDiffReviewState(nextReviewState, now)
     }
-    await saveCommentsAndReviewState(screenState.comments, nextReviewState)
+    if (!(await savedFromTap(screenState.comments, nextReviewState))) {
+      return
+    }
     const nextIndex = nextReviewIndexAfterMarkReviewed({
       currentIndex,
       currentItemKey: currentItem.key,
@@ -209,7 +226,7 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
     filter,
     filteredQueue,
     queue,
-    saveCommentsAndReviewState,
+    savedFromTap,
     screenState,
     setCurrentIndex,
     setShowCompletion
@@ -225,11 +242,11 @@ export function useMobileDiffReviewCommentActions(input: CommentActionsInput) {
       currentItem.key,
       now
     )
-    await saveCommentsAndReviewState(screenState.comments, {
+    await savedFromTap(screenState.comments, {
       ...nextReviewState,
       completedAt: undefined
     })
-  }, [currentItem, saveCommentsAndReviewState, screenState])
+  }, [currentItem, savedFromTap, screenState])
 
   return {
     closeComposer,

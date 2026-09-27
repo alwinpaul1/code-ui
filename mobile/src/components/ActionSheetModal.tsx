@@ -3,7 +3,7 @@ import { ActivityIndicator, View, Pressable } from 'react-native'
 import { Check, Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Surface } from '../ui/Surface'
-import { Txt } from '../ui/Txt'
+import { Txt, type TxtTone } from '../ui/Txt'
 import { BottomDrawer } from './BottomDrawer'
 
 export type ActionSheetAction = {
@@ -31,6 +31,8 @@ type Props = {
   /** Centre the title (pickers without a message read better that way). */
   centerTitle?: boolean
   message?: string
+  /** `danger` when the message says why something failed. */
+  messageTone?: TxtTone
   actions: ActionSheetAction[]
   onClose: () => void
 }
@@ -49,6 +51,7 @@ type ContentProps = {
   title?: string
   centerTitle?: boolean
   message?: string
+  messageTone?: TxtTone
   actions: ActionSheetAction[]
   onClose?: () => void
 }
@@ -57,6 +60,7 @@ export function ActionSheetContent({
   title,
   centerTitle,
   message,
+  messageTone = 'muted',
   actions,
   onClose
 }: ContentProps) {
@@ -84,7 +88,7 @@ export function ActionSheetContent({
             </Txt>
           ) : null}
           {message ? (
-            <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+            <Txt variant="caption" tone={messageTone} style={{ marginTop: 2 }}>
               {message}
             </Txt>
           ) : null}
@@ -192,6 +196,7 @@ export function ActionSheetModal({
   title,
   centerTitle,
   message,
+  messageTone,
   actions,
   onClose
 }: Props) {
@@ -225,6 +230,7 @@ export function ActionSheetModal({
         title={title}
         centerTitle={centerTitle}
         message={message}
+        messageTone={messageTone}
         actions={sequencedActions}
         onClose={onClose}
       />

@@ -128,6 +128,30 @@ describe('required members', () => {
     expect(refuses(reviewTerminalTabsSchema, { tabs: 'none' })).toBe(true)
   })
 
+  // The send sheet looks at a tab's screen before it types, and a Codex tab is
+  // read by Codex's rules only when the look knows it is one.
+  it("names a listed tab's agent from Orca's hooks, then its launch, and names none the host does not", () => {
+    const row = { type: 'terminal', title: 'Terminal' }
+    const tabs = reads(reviewTerminalTabsSchema, {
+      tabs: [
+        { ...row, id: 'hooked', terminal: 't-1', launchAgent: 'claude', agentStatus: { agentType: 'codex' } },
+        { ...row, id: 'launched', terminal: 't-2', launchAgent: 'codex', agentStatus: { agentType: 'unknown' } },
+        { ...row, id: 'status-null', terminal: 't-3', launchAgent: 'codex', agentStatus: null },
+        { ...row, id: 'malformed', terminal: 't-4', launchAgent: 7, agentStatus: { agentType: ['codex'] } },
+        { ...row, id: 'plain', terminal: 't-5' }
+      ]
+    })
+    expect(tabs.map((tab) => [tab.id, tab.agent])).toEqual([
+      ['hooked', 'codex'],
+      ['launched', 'codex'],
+      ['status-null', 'codex'],
+      ['malformed', undefined],
+      ['plain', undefined]
+    ])
+    // A tab the host names no agent for reads exactly as it did before.
+    expect(tabs[4]).toEqual({ id: 'plain', terminal: 't-5', title: 'Terminal' })
+  })
+
   it('requires the three compare members every summary line reads', () => {
     const summary = { baseRef: 'origin/main', compareRef: 'feature', changedFiles: 2 }
     expect(reads(branchCompareProjectionSchema, { summary, entries: [] }).summary.baseRef).toBe(

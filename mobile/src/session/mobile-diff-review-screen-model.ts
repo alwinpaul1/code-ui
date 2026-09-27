@@ -46,7 +46,9 @@ export type ComposerState =
   | { mode: 'edit'; comment: DiffComment }
 
 export type SendSheetState =
-  | { kind: 'loading' }
+  /** `reason`: a send from the sheet this one replaced failed while it
+   *  loaded; the loaded list shows it. */
+  | { kind: 'loading'; reason?: string }
   | { kind: 'ready'; terminals: MobileReviewTerminalTab[] }
   | { kind: 'error'; message: string; terminals: MobileReviewTerminalTab[] }
 

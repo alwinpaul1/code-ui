@@ -3,26 +3,54 @@
   "family": "session.diff-review-actions",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "d4d749a04142f7cd48152d508b6899e33a638044",
-  "lockfileSha256": "fc17f4cc6e9b73532dda8f68ccb31bccb82ecd1bf386c2198328989e1970146e",
+  "baseline": "5616bbd5b077524b8c3c596dbb29c37e2a3c17b4",
+  "lockfileSha256": "7bcf54f462c0b85dbb203cdd77a77c4de3efbc65865e91ae931b6516a82e0c70",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "2d72b8e68a66a906394167beb8c78f1c0521ca1e731976fd26963ec3bfa9cca4",
-  "scenarioSha256": "7099d7311b2046dde21a2750201718995c0869bc4f17fb7f3ce2b997ce0e6506",
+  "scenarioSha256": "675afd817352fc63ed97000108f446f07ec4a91d038e1aaf5039406b42f9ad04",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
-    "09ce77ea89fa": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"enter\":true}}"
+    "08bfb776083b": {
+      "name": "terminal.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.read\",\"params\":{\"terminal\":\"terminal-1\",\"screen\":true}}"
     },
     "0db3b6958ec7": {
       "status": "fulfilled",
       "startedAt": 0,
       "settledAt": 0,
       "value": "terminal-1"
+    },
+    "18bb1f0b722e": {
+      "name": "terminal.send#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
     "2fc890e4b748": {
       "actionError": {
@@ -59,35 +87,31 @@
         "$rpc": "null"
       }
     },
-    "5a2217c55af2": {
+    "32e84feca4e9": {
       "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false}}"
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false}}"
     },
-    "9270aeb7d9c6": {
-      "status": "pending",
-      "startedAt": 0
-    },
-    "9fb5d21c0986": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
+    "4292702c4dbf": {
+      "name": "terminal.read#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "terminal.send"
+          "value": "terminal.read"
         },
         {
           "name": "params",
           "value": {
-            "enter": true,
-            "terminal": "terminal-1",
-            "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+            "screen": true,
+            "terminal": "terminal-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "budgetSpansConnect": true,
+            "timeoutMs": 2000
           }
         }
       ],
@@ -96,9 +120,9 @@
         "startedAt": 0
       }
     },
-    "c638ffbb7699": {
+    "4f958f7a89b0": {
       "name": "terminal.send#1",
-      "ordinal": 1,
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -125,11 +149,65 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "send": {
               "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "5af909291a8f": {
+      "name": "terminal.send#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"enter\":true}}"
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "a3e1e0e0138b": {
+      "name": "terminal.read#1",
+      "ordinal": 1,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.read"
+        },
+        {
+          "name": "params",
+          "value": {
+            "screen": true,
+            "terminal": "terminal-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 2000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminal": {
+              "lines": [
+                "────────────────────────────────────────────────────────────────────────────────────────────────────",
+                "❯ ",
+                "────────────────────────────────────────────────────────────────────────────────────────────────────",
+                "  [Opus 5.5 xhigh | Bedrock] ░░░░░░░░░░ 0% (1/200k) | img-repro | 1 CLAUDE.md | 4 rules | 6 MCPs",
+                "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
+              ],
+              "source": "screen"
             }
           }
         }
@@ -140,10 +218,23 @@
     "scenario": "review-send-notes-heals-stale-input",
     "checkpoints": [
       {
+        "id": "looking",
+        "observation": {
+          "sender": ["4292702c4dbf"],
+          "payloads": ["08bfb776083b"],
+          "settlements": {
+            "mark-stale": "0db3b6958ec7",
+            "send-notes": "9270aeb7d9c6"
+          },
+          "state": "2fc890e4b748",
+          "effects": []
+        }
+      },
+      {
         "id": "healed",
         "observation": {
-          "sender": ["c638ffbb7699", "9fb5d21c0986"],
-          "payloads": ["5a2217c55af2", "09ce77ea89fa"],
+          "sender": ["a3e1e0e0138b", "4f958f7a89b0", "18bb1f0b722e"],
+          "payloads": ["08bfb776083b", "32e84feca4e9", "5af909291a8f"],
           "settlements": {
             "mark-stale": "0db3b6958ec7",
             "send-notes": "9270aeb7d9c6"

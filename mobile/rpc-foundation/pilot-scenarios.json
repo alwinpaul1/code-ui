@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "d4d749a04142f7cd48152d508b6899e33a638044",
+  "baseline": "5616bbd5b077524b8c3c596dbb29c37e2a3c17b4",
   "scenarios": [
     {
       "id": "b1",
@@ -18411,7 +18411,8 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/mobile-native-chat-stale-input.ts",
+        "mobile/src/session/mobile-native-chat-dialog-guard.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18422,6 +18423,31 @@
         {
           "action": "send-notes",
           "id": "send-notes"
+        },
+        {
+          "checkpoint": "looking"
+        },
+        {
+          "complete": "terminal.read#1",
+          "params": {
+            "screen": true,
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminal": {
+                "lines": [
+                  "────────────────────────────────────────────────────────────────────────────────────────────────────",
+                  "❯\u00a0",
+                  "────────────────────────────────────────────────────────────────────────────────────────────────────",
+                  "  [Opus 5.5 xhigh | Bedrock] ░░░░░░░░░░ 0% (1/200k) | img-repro | 1 CLAUDE.md | 4 rules | 6 MCPs",
+                  "  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents"
+                ],
+                "source": "screen"
+              }
+            }
+          }
         },
         {
           "complete": "terminal.send#1",
