@@ -28,15 +28,19 @@ function sourceFiles(dir: string, into: string[] = []): string[] {
   return into
 }
 
-/** `key: { … }` blocks at two-space indent: the shape of a StyleSheet.create
- *  entry. Only stated, non-zero sizes count (see tapTargetHitSlop). The body
+/** `key: { … }` blocks at two- or four-space indent: the shape of a
+ *  StyleSheet.create entry at module level, and inside a themed style factory
+ *  (`(theme) => StyleSheet.create({…})`, one level deeper). Two-space alone
+ *  went blind to every factory: the 2026-09-27 theme sweep moved ~130 files'
+ *  sheets into factories, and the scan kept passing while it read none of
+ *  them. Only stated, non-zero sizes count (see tapTargetHitSlop). The body
  *  ends at the brace that closes it, found by depth, not at the next line
  *  that happens to start with `}`: a one-line `pressed: { opacity: 0.7 },`
  *  would otherwise swallow the sized block after it and inherit its size
  *  (which is exactly how the first scan misread VoiceModelList's Use button). */
 function styleDims(source: string): Record<string, Dims> {
   const dims: Record<string, Dims> = {}
-  const opener = /^\s{2}([a-zA-Z0-9_]+):\s*\{/gm
+  const opener = /^(?: {2}| {4})([a-zA-Z0-9_]+):\s*\{/gm
   let match: RegExpExecArray | null
   while ((match = opener.exec(source))) {
     const start = match.index + match[0].length

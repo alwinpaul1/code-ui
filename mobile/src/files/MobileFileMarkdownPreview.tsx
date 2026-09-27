@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Code, Pencil } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
+import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   MobileFilePreviewSourceText,
   MobileFilePreviewTruncatedNote
@@ -70,6 +71,7 @@ export function MobileFileMarkdownPreview({
     <View style={styles.modeContainer}>
       <View style={styles.modeToolbar}>
         <Pressable
+          hitSlop={tapTargetHitSlop(styles.modeToggle, { horizontalGap: 0 })}
           style={[styles.modeToggle, sourceSelected && styles.modeToggleActive]}
           onPress={() => setMode('source')}
           accessibilityRole="button"
@@ -83,6 +85,7 @@ export function MobileFileMarkdownPreview({
           />
         </Pressable>
         <Pressable
+          hitSlop={tapTargetHitSlop(styles.modeToggle, { horizontalGap: 0 })}
           style={[styles.modeToggle, previewSelected && styles.modeToggleActive]}
           onPress={() => setMode('preview')}
           accessibilityRole="button"
