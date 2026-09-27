@@ -134,24 +134,29 @@ describe('the in-app browser toolbar', () => {
 
   // The busy/error scrim is drawn over the website's own pixels, which the app does not theme, so
   // it is one fixed tint in both schemes, like the terminal's content. `colors.shadow` was tried
-  // and made the same page read heavier in dark (50% black) than in light (18% ink).
-  it.each(['light', 'dark'] as const)(
-    'tints a loading page with the same scrim and a fixed light spinner in %s',
-    (scheme) => {
+  // and made the same page read heavier in dark (50% black) than in light (18% ink). The spinner
+  // cannot be fixed too: a fixed light one read 1.33:1 over a white page (review of
+  // fix/theme-pass-2, 2026-09-27), and a fixed dark one would vanish over a dark page. So it sits
+  // on its own themed chip, the way the error text does, and reads the same over any page.
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)(
+    'tints a loading page with the fixed scrim and draws its spinner on a %s chip',
+    (scheme, palette) => {
       const root = render(scheme, {
         busy: true,
         renderedFrameSource: { uri: 'data:image/jpeg;base64,AAAA' },
         frameGeometry: null
       })
       const spinner = root.findByType('ActivityIndicator' as never)
-      // The scrim is the spinner's own container, drawn over the whole viewport.
-      expect(styleOf(spinner.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
-      expect(spinner.props.color).toBe('#B8B4AB')
+      expect(spinner.props.color).toBe(palette.textSecondary)
+      expect(styleOf(spinner.parent!).backgroundColor).toBe(palette.bgPanel)
+      // The scrim is the chip's container, drawn over the whole viewport.
+      expect(styleOf(spinner.parent!.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
     }
   )
 
-  // Before the first frame there is no page under the scrim, only the viewport's own themed
-  // canvas: a fixed light spinner there read 1.18:1 on the light canvas, so it follows the theme.
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
@@ -160,8 +165,9 @@ describe('the in-app browser toolbar', () => {
     (scheme, palette) => {
       const root = render(scheme, { renderedFrameSource: null })
       const spinner = root.findByType('ActivityIndicator' as never)
-      expect(styleOf(spinner.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
       expect(spinner.props.color).toBe(palette.textSecondary)
+      expect(styleOf(spinner.parent!).backgroundColor).toBe(palette.bgPanel)
+      expect(styleOf(spinner.parent!.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
     }
   )
 })

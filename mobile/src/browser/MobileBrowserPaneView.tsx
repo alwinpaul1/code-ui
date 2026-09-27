@@ -21,7 +21,7 @@ import {
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import { buttonColor, type FrameLayer } from './mobile-browser-frame-state'
-import { BROWSER_CONTENT_SPINNER, mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 import type {
   BrowserFrameGeometry,
   BrowserTouchLayout,
@@ -254,12 +254,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             {/* Why: a stream can report ready and then deliver no frames, so key the
                 indicator off actually having pixels or it clears into a blank pane. */}
             {busy || (!renderedFrameSource && !error) ? (
-              // Over a page the spinner is fixed like the scrim; before the first frame the scrim
-              // sits on the viewport's themed canvas, where a fixed light one read 1.18:1 in light.
-              <ActivityIndicator
-                size="small"
-                color={renderedFrameSource ? BROWSER_CONTENT_SPINNER : colors.textSecondary}
-              />
+              <View style={styles.spinnerChip}>
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              </View>
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>

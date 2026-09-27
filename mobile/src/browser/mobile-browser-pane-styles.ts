@@ -6,8 +6,6 @@ import type { Theme } from '../theme/theme-context'
 /** The busy/error scrim over the web page's own pixels. Fixed in both schemes: it tints content the
  *  app does not draw, the way the terminal's content keeps its own colours. */
 export const BROWSER_CONTENT_SCRIM = 'rgba(13, 15, 24, 0.2)'
-/** The spinner over a rendered page, fixed light for the same reason as the scrim it sits in. */
-export const BROWSER_CONTENT_SPINNER = '#B8B4AB'
 
 /** The two flip-layer wrappers carry no colour, so they stay a plain (unthemed) StyleSheet that
  *  `use-mobile-browser-pane-layers.ts` can keep reading as a static import. */
@@ -75,6 +73,16 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
       padding: spacing.xl,
       gap: spacing.sm,
       backgroundColor: BROWSER_CONTENT_SCRIM
+    },
+    // The spinner cannot take the scrim's fixed colour: a light one read 1.33:1 over a white page
+    // and a dark one would vanish over a dark page. On its own themed chip, like the error text
+    // below, it reads the same over any page and on the canvas before the first frame.
+    spinnerChip: {
+      backgroundColor: colors.bgPanel,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.button,
+      padding: spacing.sm
     },
     errorText: {
       color: colors.text,
