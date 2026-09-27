@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { classifyConnection, verdictDisplayLabel } from './connection-health'
+import type { ConnectionLogEntry } from './types'
 
 // Slack P0 — "mobile connection issue. was using it with my linux host then
 // after i navigated out of the app and back it doesn't work anymore. Now i went
@@ -179,6 +180,47 @@ describe('foregrounding a phone that was suspended mid-dial', () => {
     expect(latest()).not.toBe(doomed)
     latest().authenticate()
     expect(client.getState()).toBe('connected')
+  })
+
+  // The Pixel diagnostics (2026-09-27) showed "WebSocket closed — Close code
+  // unavailable" on every resume. Nothing closed that socket but the phone.
+  it('says the phone abandoned a stale dial on resume, not that the close code is unavailable', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key', {
+      onLog: (entry) => entries.push(entry)
+    })
+    latest().authenticate()
+    latest().close()
+    await vi.advanceTimersByTimeAsync(500)
+    expect(client.getState()).toBe('connecting')
+
+    suspend(120_000)
+    entries.length = 0
+    client.notifyForeground('app-resume')
+
+    expect(
+      entries.filter((entry) => entry.code === 'socket-closed').map((entry) => entry.detail)
+    ).toEqual(['abandoned a stale dial after resume; reconnect scheduled'])
+    client.close()
+  })
+
+  it('says a network change, not a resume, abandoned the stale dial when that was the nudge', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const client = connect(TAILSCALE_ENDPOINT, 'token', 'server-key', {
+      onLog: (entry) => entries.push(entry)
+    })
+    latest().authenticate()
+    latest().close()
+    await vi.advanceTimersByTimeAsync(500)
+
+    suspend(120_000)
+    entries.length = 0
+    client.notifyForeground('network-change')
+
+    expect(
+      entries.filter((entry) => entry.code === 'socket-closed').map((entry) => entry.detail)
+    ).toEqual(['abandoned a stale dial after a network change; reconnect scheduled'])
+    client.close()
   })
 
   it('does not strand the user on "Connecting…" for a minute after returning', async () => {
