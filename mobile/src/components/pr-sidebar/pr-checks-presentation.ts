@@ -15,9 +15,9 @@ import { prStateToken } from '../pr-state-token'
 // Ports the LOGIC of the desktop presenters (github-pr-merge-state.ts,
 // github-pr-reviewer-display.ts), not their components.
 
-// The mobile-theme color tokens this logic maps to. Section components resolve
-// the token name to an actual color from `mobile-theme`, keeping this module
-// free of style imports.
+// The status token names this logic maps to. Section components resolve a
+// token to a colour of the live theme through `statusColor(token, colors)`
+// (pr-sidebar-status-color.ts), keeping this module free of style imports.
 export type MobileStatusToken =
   | 'statusGreen'
   | 'statusAmber'

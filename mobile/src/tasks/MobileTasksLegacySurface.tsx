@@ -4,12 +4,10 @@ import {
   View,
   Text,
   AlertTriangle,
-  colors,
   ActionSheetModal,
   GitBranch,
   ConfirmModal
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 import {
   getHostedReviewMergeMethodLabel,
@@ -78,6 +76,7 @@ import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-dr
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const {
+    colors,
     error,
     githubMode,
     githubProjectTable,
@@ -100,6 +99,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     setPendingHostedMerge,
     setPendingHostedStateChange,
     setPendingProjectGitHubMerge,
+    styles,
     taskUiReady,
     toggleGitHubStatus,
     toggleGitLabStatus
@@ -169,7 +169,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
       githubMode === 'project' &&
       githubProjectTable?.parentFieldDropped === true ? (
         <View style={styles.projectDataNotice}>
-          <AlertTriangle size={15} color={colors.statusAmber} />
+          <AlertTriangle size={15} color={colors.warning} />
           <Text style={styles.projectDataNoticeText}>
             Sub-issue data is unavailable for your token.
           </Text>

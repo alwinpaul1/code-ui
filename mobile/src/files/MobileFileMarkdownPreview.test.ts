@@ -28,7 +28,8 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
 // test (mobile-file-markdown-preview-theme).
 vi.mock('../theme/theme-context', () => ({
   useTheme: () => ({ colors: { text: '#fff', textSecondary: '#999' } }),
-  useThemedStyles: () => ({})
+  // Every style key reads as an empty style: the toggles size their hitSlop from theirs.
+  useThemedStyles: () => new Proxy({}, { get: () => ({}) })
 }))
 
 type PreviewProps = Parameters<typeof MobileFileMarkdownPreview>[0]

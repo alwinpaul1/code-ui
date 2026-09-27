@@ -31,7 +31,7 @@ vi.mock('../files/MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('../session/MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
-vi.mock('../session/mobile-session-styles', () => ({ styles: {}, sessionStyles: () => ({}) }))
+vi.mock('../session/mobile-session-styles', () => ({ sessionStyles: () => ({}) }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('../files/mobile-file-preview-request', () => ({
   formatPreviewByteLength: (n: number) => `${n} B`

@@ -14,10 +14,10 @@ import {
   issueSourceSlug,
   taskRepositoryMeta
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 
 export function useMobileTasksPickerProjection(model: DetailCommentRenderersModel) {
   const {
+    colors,
     createRepoId,
     createTeamId,
     githubMode,
@@ -34,6 +34,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     reposById,
     selectedHostedRepos,
     selectedRepoIds,
+    styles,
     taskSort,
     visibleProviders,
     workspaceRepos
@@ -59,7 +60,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
             label: team.name,
             subtitle: team.workspaceName
           })),
-    [hostedRepos, linearTeams, provider]
+    [hostedRepos, linearTeams, provider, styles]
   )
   const selectedCreateTarget =
     provider === 'github' || provider === 'gitlab'
@@ -130,7 +131,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
           />
         )
       })),
-    [workspaceRepos]
+    [styles, workspaceRepos]
   )
   const sortedItems = useMemo(
     () => sortMobileTaskItems(items, taskSort, reposById),
@@ -143,7 +144,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
     const entries: TaskListEntry[] = []
     let previousRepoKey = ''
     for (const item of sortedItems) {
-      const repo = taskRepositoryMeta(item, reposById)
+      const repo = taskRepositoryMeta(item, reposById, colors)
       if (repo.key !== previousRepoKey) {
         entries.push({
           type: 'section',
@@ -156,7 +157,7 @@ export function useMobileTasksPickerProjection(model: DetailCommentRenderersMode
       entries.push({ type: 'item', key: item.key, item })
     }
     return entries
-  }, [reposById, sortedItems, taskSort])
+  }, [colors, reposById, sortedItems, taskSort])
   const sortLabel = SORT_OPTIONS.find((option) => option.value === taskSort)?.label ?? 'Updated'
   const githubProjectFields = githubProjectTable?.selectedView.fields ?? []
   const githubProjectViewSort = githubProjectTable?.selectedView.sortByFields?.[0] ?? null

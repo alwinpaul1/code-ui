@@ -56,6 +56,48 @@ function styleOf(node: { props: { style?: unknown } }): Record<string, unknown> 
   return Object.assign({}, ...flat)
 }
 
+function paneProps(overrides: Record<string, unknown>) {
+  return {
+    addressFocused: false,
+    addressValue: 'https://example.com',
+    bottomInset: 0,
+    browserLayerRef: () => () => undefined,
+    browserViewMode: 'web',
+    busy: false,
+    controlsDisabled: false,
+    dialog: null,
+    error: null,
+    frameGeometry: null,
+    frameLayerErrorHandler: () => () => undefined,
+    frameLayerLoadHandler: () => () => undefined,
+    frameLayerRef: () => () => undefined,
+    frameLayerStyle: () => ({}),
+    goBack: () => undefined,
+    goForward: () => undefined,
+    keyboardLift: 0,
+    keyboardValue: '',
+    layoutRef: { current: null },
+    navigateToAddress: async () => undefined,
+    panResponder: { panHandlers: {} } as never,
+    pointerModifiers: [],
+    reloadPage: () => undefined,
+    renderedFrameSource: null,
+    selectBrowserViewMode: () => undefined,
+    sendDialogCommand: async () => undefined,
+    sendKeyboardText: async () => undefined,
+    sendKeypress: async () => undefined,
+    setAddressFocused: () => undefined,
+    setAddressValue: () => undefined,
+    setKeyboardValue: () => undefined,
+    setLayout: () => undefined,
+    setRootViewRef: () => undefined,
+    tab: TAB,
+    togglePointerModifier: () => undefined,
+    zoom: { scale: 1, offsetX: 0, offsetY: 0 },
+    ...overrides
+  }
+}
+
 describe('the in-app browser toolbar', () => {
   let renderer: ReactTestRenderer | null = null
 
@@ -64,54 +106,22 @@ describe('the in-app browser toolbar', () => {
     renderer = null
   })
 
+  function render(scheme: 'light' | 'dark', overrides: Record<string, unknown> = {}) {
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference={scheme}>
+          {createElement(MobileBrowserPaneView, paneProps(overrides) as never)}
+        </ThemeProvider>
+      )
+    })
+    return renderer!.root
+  }
+
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)('draws the toolbar and address field from the %s theme', (scheme, palette) => {
-    act(() => {
-      renderer = create(
-        <ThemeProvider initialPreference={scheme}>
-          {createElement(MobileBrowserPaneView, {
-            addressFocused: false,
-            addressValue: 'https://example.com',
-            bottomInset: 0,
-            browserLayerRef: () => () => undefined,
-            browserViewMode: 'web',
-            busy: false,
-            controlsDisabled: false,
-            dialog: null,
-            error: null,
-            frameGeometry: null,
-            frameLayerErrorHandler: () => () => undefined,
-            frameLayerLoadHandler: () => () => undefined,
-            frameLayerRef: () => () => undefined,
-            frameLayerStyle: () => ({}),
-            goBack: () => undefined,
-            goForward: () => undefined,
-            keyboardLift: 0,
-            keyboardValue: '',
-            layoutRef: { current: null },
-            navigateToAddress: async () => undefined,
-            panResponder: { panHandlers: {} } as never,
-            pointerModifiers: [],
-            reloadPage: () => undefined,
-            renderedFrameSource: null,
-            selectBrowserViewMode: () => undefined,
-            sendDialogCommand: async () => undefined,
-            sendKeyboardText: async () => undefined,
-            sendKeypress: async () => undefined,
-            setAddressFocused: () => undefined,
-            setAddressValue: () => undefined,
-            setKeyboardValue: () => undefined,
-            setLayout: () => undefined,
-            setRootViewRef: () => undefined,
-            tab: TAB,
-            togglePointerModifier: () => undefined,
-            zoom: { scale: 1, offsetX: 0, offsetY: 0 }
-          })}
-        </ThemeProvider>
-      )
-    })
+    render(scheme)
     const toolbar = renderer!.root.findByProps({ testID: 'mobile-browser-toolbar' })
     expect(styleOf(toolbar).backgroundColor).toBe(palette.bgPanel)
     const addressInput = renderer!.root
@@ -121,4 +131,43 @@ describe('the in-app browser toolbar', () => {
     expect(styleOf(addressInput!).color).toBe(palette.text)
     expect(styleOf(addressInput!).backgroundColor).toBe(palette.bgRaised)
   })
+
+  // The busy/error scrim is drawn over the website's own pixels, which the app does not theme, so
+  // it is one fixed tint in both schemes, like the terminal's content. `colors.shadow` was tried
+  // and made the same page read heavier in dark (50% black) than in light (18% ink). The spinner
+  // cannot be fixed too: a fixed light one read 1.33:1 over a white page (review of
+  // fix/theme-pass-2, 2026-09-27), and a fixed dark one would vanish over a dark page. So it sits
+  // on its own themed chip, the way the error text does, and reads the same over any page.
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)(
+    'tints a loading page with the fixed scrim and draws its spinner on a %s chip',
+    (scheme, palette) => {
+      const root = render(scheme, {
+        busy: true,
+        renderedFrameSource: { uri: 'data:image/jpeg;base64,AAAA' },
+        frameGeometry: null
+      })
+      const spinner = root.findByType('ActivityIndicator' as never)
+      expect(spinner.props.color).toBe(palette.textSecondary)
+      expect(styleOf(spinner.parent!).backgroundColor).toBe(palette.bgPanel)
+      // The scrim is the chip's container, drawn over the whole viewport.
+      expect(styleOf(spinner.parent!.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
+    }
+  )
+
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)(
+    'shows a readable spinner on the %s canvas before the first frame',
+    (scheme, palette) => {
+      const root = render(scheme, { renderedFrameSource: null })
+      const spinner = root.findByType('ActivityIndicator' as never)
+      expect(spinner.props.color).toBe(palette.textSecondary)
+      expect(styleOf(spinner.parent!).backgroundColor).toBe(palette.bgPanel)
+      expect(styleOf(spinner.parent!.parent!).backgroundColor).toBe('rgba(13, 15, 24, 0.2)')
+    }
+  )
 })

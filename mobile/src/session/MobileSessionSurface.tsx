@@ -1,5 +1,6 @@
 import { View } from 'react-native'
-import { styles } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/theme-context'
+import { sessionStyles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { MobileSessionContentRow } from './MobileSessionContentRow'
 import { MobileSessionHeader } from './MobileSessionHeader'
@@ -7,6 +8,7 @@ import { MobileSessionSheets } from './MobileSessionSheets'
 import { MobileFileTapMatchPicker } from './MobileFileTapMatchPicker'
 
 export function MobileSessionSurface({ controller }: { controller: MobileSessionController }) {
+  const styles = useThemedStyles(sessionStyles)
   const { setMobileSessionRootRef } = controller
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>

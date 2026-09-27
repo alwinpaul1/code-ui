@@ -3,9 +3,8 @@ import {
   View,
   Text,
   ActivityIndicator,
-  colors,
-  TaskProviderLogo } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+  TaskProviderLogo
+} from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 import { renderMobileTasksGitHubProjectList } from './mobile-tasks-github-project-list'
 import { renderMobileTasksLinearList } from './mobile-tasks-linear-list'
@@ -13,6 +12,7 @@ import { renderMobileTasksProviderItemList } from './mobile-tasks-provider-item-
 
 export function renderMobileTasksListSurface(model: ConnectionPresentationModel) {
   const {
+    colors,
     githubMode,
     linearConnected,
     provider,
@@ -20,6 +20,7 @@ export function renderMobileTasksListSurface(model: ConnectionPresentationModel)
     setLinearConnectError,
     setLinearConnectState,
     setShowLinearConnect,
+    styles,
     taskUiReady,
     tasksSupported,
     tasksUnsupported

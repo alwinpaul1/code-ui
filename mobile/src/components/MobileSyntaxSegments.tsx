@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, type TextStyle } from 'react-native'
 import type { MobileSyntaxSegment, MobileSyntaxTokenKind } from '../session/mobile-file-syntax'
-import { darkSyntaxPalette, SYNTAX_TOKEN_ROLES, type SyntaxPalette } from '../theme/syntax-palette'
+import { SYNTAX_TOKEN_ROLES, type SyntaxPalette } from '../theme/syntax-palette'
 import { fontFamily } from '../theme/tokens'
 
 /** One numbered source line: the gutter in its own column, then the line's
@@ -24,8 +24,8 @@ export function MobileSyntaxLine({
 }: {
   number: number
   segments: MobileSyntaxSegment[]
-  /** The code colours; `useTheme().syntax` on a themed surface. */
-  palette?: SyntaxPalette
+  /** The code colours: the live theme's `useTheme().syntax`. */
+  palette: SyntaxPalette
   gutterWidth: number
   /** False while a list is scrolling: a selectable Text under a finger that
    *  stops a fling arms a long-press the reader did not ask for, which
@@ -88,12 +88,13 @@ const lineStyles = StyleSheet.create({
 
 export function MobileSyntaxSegments({
   segments,
-  palette = darkSyntaxPalette
+  palette
 }: {
   segments: MobileSyntaxSegment[]
-  /** Defaults to Dark+ for the surfaces still painted from the static dark
-   *  palette (the diff rows). A themed surface passes `useTheme().syntax`. */
-  palette?: SyntaxPalette
+  /** The code colours: the live theme's `useTheme().syntax`. Required: a
+   *  Dark+ default drew every diff row's code in dark-scheme colours on a
+   *  light surface (2026-09-27). */
+  palette: SyntaxPalette
 }) {
   const styles = syntaxSpanStyles(palette)
   return (

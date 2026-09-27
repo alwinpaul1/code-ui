@@ -134,9 +134,9 @@ export function hostScreenSecondaryStyles({ colors }: Theme) {
       color: colors.textSecondary
     },
     confirmBtnDestructiveText: {
-      // The platform draws its own destructive buttons in white on red; kept as a named constant
-      // (not a token) for the same reason the legacy `onStatusRed` was: it is a fixed pairing with
-      // `danger`, not a role that should follow the theme's ink/paper balance.
+      // The platform draws its own destructive buttons in white on red; a named constant, not a
+      // token: it is a fixed pairing with `danger`, not a role that should follow the theme's
+      // ink/paper balance.
       fontSize: typography.bodySize,
       fontWeight: '600',
       color: ON_DESTRUCTIVE_FILL
@@ -145,6 +145,8 @@ export function hostScreenSecondaryStyles({ colors }: Theme) {
 }
 
 /** White label on the destructive-red fill, in both schemes, mirroring the platform's own
- *  destructive buttons (see mobile-theme.ts's `onStatusRed` for the contrast rationale this
- *  carries forward: 3.3:1 on the red, clearing the 3:1 floor for a bold label). */
-const ON_DESTRUCTIVE_FILL = '#ffffff'
+ *  destructive buttons. 5.44:1 on light `danger`; 3.25:1 on dark `danger`, which clears the 3:1
+ *  floor for a bold label and not the 4.5:1 body target (iOS ships 3.0:1 for the same control).
+ *  Ink would reach 5.4:1 on the dark red too, but it changes what a destructive button looks
+ *  like, which is a product call, not a token's. Pinned by legacy-hex-hardcodes.test.ts. */
+export const ON_DESTRUCTIVE_FILL = '#ffffff'

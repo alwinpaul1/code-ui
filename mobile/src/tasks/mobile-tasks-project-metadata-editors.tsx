@@ -7,23 +7,23 @@ import {
   View,
   Text,
   ActivityIndicator,
-  colors,
   Check,
   TextInput,
   MobileMarkdown
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentationModel) {
   const {
+    colors,
     mutateProjectRowMetadata,
     projectAvailableLabels,
     projectLabelsError,
     projectLabelsLoading,
     projectMutating,
     projectRowDetail,
-    projectRowItem
+    projectRowItem,
+    styles
   } = model
   if (!projectRowItem) {
     return null
@@ -76,7 +76,7 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
                 }
               >
                 <View style={styles.issueTypeChipContent}>
-                  {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                  {selected ? <Check size={12} color={colors.accent} /> : null}
                   <Text style={styles.detailChipText}>{label}</Text>
                 </View>
               </TasksButton>
@@ -90,13 +90,15 @@ export function renderMobileTasksProjectLabelsEditor(model: ConnectionPresentati
 
 export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresentationModel) {
   const {
+    colors,
     mutateProjectRowMetadata,
     projectAssignableUsers,
     projectAssignableUsersError,
     projectAssignableUsersLoading,
     projectMutating,
     projectRowDetail,
-    projectRowItem
+    projectRowItem,
+    styles
   } = model
   if (!projectRowItem) {
     return null
@@ -156,7 +158,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
                 }
               >
                 <View style={styles.issueTypeChipContent}>
-                  {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                  {selected ? <Check size={12} color={colors.accent} /> : null}
                   <Text style={styles.detailChipText}>{user.login}</Text>
                 </View>
               </TasksButton>
@@ -170,6 +172,7 @@ export function renderMobileTasksProjectAssigneesEditor(model: ConnectionPresent
 
 export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentationModel) {
   const {
+    colors,
     mutateProjectRowIssueOrPr,
     projectBodyDraft,
     projectMutating,
@@ -177,7 +180,8 @@ export function renderMobileTasksProjectIssueMetadata(model: ConnectionPresentat
     projectRowItem,
     projectTitleDraft,
     setProjectBodyDraft,
-    setProjectTitleDraft
+    setProjectTitleDraft,
+    styles
   } = model
   if (!projectRowItem) {
     return null

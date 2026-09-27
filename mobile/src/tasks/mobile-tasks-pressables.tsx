@@ -1,5 +1,6 @@
+import { useThemedStyles } from '../theme/theme-context'
 import { PressFeedback, type PressFeedbackProps } from '../ui/PressFeedback'
-import { styles } from './mobile-tasks-legacy-styles'
+import { mobileTasksStyles } from './mobile-tasks-legacy-styles'
 
 type TasksPressableProps = Omit<PressFeedbackProps, 'pressedStyle'>
 
@@ -11,17 +12,17 @@ type TasksRowProps = TasksPressableProps & {
 }
 
 /**
- * The tasks surface's two pressable shapes, bound to its legacy palette once
- * so no call site chooses a colour. The surface is a dark island (it paints
- * its own background from the static palette in both schemes), so the
- * themed `alertRowPressed` would be wrong here; `taskRowPressed` is the
- * lift the list rows already used, applied now to every row.
+ * The tasks surface's two pressable shapes, bound to its styles once so no
+ * call site chooses a colour. `taskRowPressed` is the lift the list rows
+ * already used, applied to every row, and it follows the live theme like the
+ * rest of the surface.
  */
 
 /** A full-width row: an action in a drawer, a picker entry, a file line, a
  *  group header. Lifts to `bgRaised` while the finger is on it, the same
  *  highlight the task list rows have always had. */
 export function TasksRow({ raised, ...props }: TasksRowProps) {
+  const styles = useThemedStyles(mobileTasksStyles)
   return (
     <PressFeedback
       pressedStyle={raised ? styles.taskRowPressedOnRaised : styles.taskRowPressed}

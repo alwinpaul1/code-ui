@@ -29,7 +29,7 @@ vi.mock('../components/MobileHtmlPreview', () => ({ MobileHtmlPreview: 'MobileHt
 vi.mock('../files/MobileFilePdfPreview', () => ({ MobileFilePdfPreview: 'MobileFilePdfPreview' }))
 vi.mock('../files/MobileFileMarkdownPreview', () => ({ MobileFileMarkdownPreview: 'MobileFileMarkdownPreview' }))
 vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
-vi.mock('./mobile-session-styles', () => ({ styles: {}, sessionStyles: () => ({}) }))
+vi.mock('./mobile-session-styles', () => ({ sessionStyles: () => ({}) }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 
 let scheme: 'light' | 'dark' = 'dark'

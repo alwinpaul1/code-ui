@@ -2,11 +2,11 @@ import {
   type PickerOption,
   type TaskProvider,
   TaskProviderLogo,
-  colors,
   getLinkedWorkItemSuggestedName,
   type GitHubProjectSettings
 } from './mobile-tasks-dependencies'
 import type { GitHubProjectSortDirection } from '../../../src/shared/github/project-types'
+import { useTheme } from '../theme/theme-context'
 import type { ProjectGroup } from '../../../src/shared/github/project-group-sort'
 import type {
   GitHubMode,
@@ -24,42 +24,36 @@ import type {
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { LinearIssue } from './mobile-tasks-provider-detail-types'
 
+/** A provider's logo in the provider picker, in the live theme's text colours. */
+function ProviderPickerLogo({ provider, selected }: { provider: TaskProvider; selected: boolean }) {
+  const { colors } = useTheme()
+  return (
+    <TaskProviderLogo
+      provider={provider}
+      size={16}
+      color={selected ? colors.text : colors.textSecondary}
+    />
+  )
+}
+
 export const PROVIDER_OPTIONS: PickerOption<TaskProvider>[] = [
   {
     value: 'github',
     label: 'GitHub',
     subtitle: 'Issues and pull requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="github"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
+    renderIcon: (selected) => <ProviderPickerLogo provider="github" selected={selected} />
   },
   {
     value: 'gitlab',
     label: 'GitLab',
     subtitle: 'Issues and merge requests',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="gitlab"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
+    renderIcon: (selected) => <ProviderPickerLogo provider="gitlab" selected={selected} />
   },
   {
     value: 'linear',
     label: 'Linear',
     subtitle: 'Assigned and team issues',
-    renderIcon: (selected) => (
-      <TaskProviderLogo
-        provider="linear"
-        size={16}
-        color={selected ? colors.textPrimary : colors.textSecondary}
-      />
-    )
+    renderIcon: (selected) => <ProviderPickerLogo provider="linear" selected={selected} />
   }
 ]
 

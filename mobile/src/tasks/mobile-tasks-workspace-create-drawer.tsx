@@ -4,7 +4,6 @@ import {
   View,
   Text,
   ChevronDown,
-  colors,
   workspaceSshStatusLabel,
   MobileWorkspaceNameInput,
   MobileAgentIcon,
@@ -19,11 +18,11 @@ import {
   getRepoBadgeColor,
   workspaceAgentIconId
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {
   const {
+    colors,
     connectWorkspaceSshRepo,
     createWorkspace,
     creatingKey,
@@ -36,6 +35,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
     setWorkspaceBaseBranchQuery,
     setWorkspaceCreateDraft,
     showWorkspaceAdvanced,
+    styles,
     taskUiReady,
     workspaceAgentDetectionPending,
     workspaceBaseBranch,
@@ -266,7 +266,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
               }}
             >
               {creatingKey === workspaceCreateDraft.item.key ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
+                <ActivityIndicator size="small" color={colors.bg} />
               ) : (
                 <Text style={styles.createButtonText}>
                   {workspaceAgentDetectionPending

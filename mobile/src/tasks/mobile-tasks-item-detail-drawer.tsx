@@ -1,32 +1,28 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { tapTargetHitSlop } from '../ui/tap-target'
-import {
-  BottomDrawer,
-  View,
-  TaskProviderLogo,
-  colors,
-  Text,
-  RefreshCw
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { BottomDrawer, View, TaskProviderLogo, Text, RefreshCw } from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 import { taskKindLabel } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
 import { renderMobileTasksItemActions } from './mobile-tasks-item-actions'
 
 export function renderMobileTasksItemDetailDrawer(model: ConnectionPresentationModel) {
-  const { actionItem, detailLoading, setActionItem, setDetailRefreshSeq, taskUiReady } = model
+  const {
+    actionItem,
+    colors,
+    detailLoading,
+    setActionItem,
+    setDetailRefreshSeq,
+    styles,
+    taskUiReady
+  } = model
   return (
     <BottomDrawer visible={taskUiReady && actionItem != null} onClose={() => setActionItem(null)}>
       {actionItem ? (
         <View>
           <View style={styles.sheetHeader}>
             <View style={styles.sheetTitleRow}>
-              <TaskProviderLogo
-                provider={actionItem.provider}
-                size={16}
-                color={colors.textPrimary}
-              />
+              <TaskProviderLogo provider={actionItem.provider} size={16} color={colors.text} />
               <Text style={styles.sheetTitle} numberOfLines={2}>
                 {actionItem.title}
               </Text>

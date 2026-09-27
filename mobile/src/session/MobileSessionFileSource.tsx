@@ -14,7 +14,8 @@ import {
   type FileReaderLineRange
 } from './mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from './MobileSessionFileReaderLineActionBar'
-import { styles } from './mobile-session-styles'
+import { useThemedStyles } from '../theme/theme-context'
+import { sessionStyles } from './mobile-session-styles'
 
 /**
  * A file tab's source, in the code viewer, with the reader's line selection
@@ -41,6 +42,7 @@ export function MobileSessionFileSource({
 }) {
   // A file whose name says nothing (`bin/deploy`) is read for its language,
   // a tick after it is drawn.
+  const styles = useThemedStyles(sessionStyles)
   const syntaxLanguage = useMobileSyntaxLanguage(relativePath || title, content, language)
   const document = useMemo(() => buildMobileCodeDocument(content, syntaxLanguage), [content, syntaxLanguage])
   // An empty file has nothing to ask about. A pretty-printed JSON file's line

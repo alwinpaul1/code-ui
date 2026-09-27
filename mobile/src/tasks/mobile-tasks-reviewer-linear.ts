@@ -1,4 +1,5 @@
-import { type GitHubOwnerRepo, colors } from './mobile-tasks-dependencies'
+import type { GitHubOwnerRepo } from './mobile-tasks-dependencies'
+import type { ThemeColors } from '../theme/tokens'
 import { getLinearPriorityLabel, getLinearPriorityRank } from './mobile-tasks-hosted-review'
 import { formatUpdatedAt, taskTime } from './mobile-tasks-item-mapping'
 import type { LinearIssueSection } from './mobile-tasks-options'
@@ -103,9 +104,12 @@ export function sortLinearIssues(
   return keyed.map(({ issue }) => issue)
 }
 
+/** A group's key, label and dot colour. `colors` is the live theme's: the accent and danger dots
+ *  follow the appearance setting, while status and team dots keep Linear's own hue. */
 export function getLinearIssueGroup(
   issue: LinearIssue,
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  colors: ThemeColors
 ): {
   key: string
   label: string
@@ -118,51 +122,54 @@ export function getLinearIssueGroup(
     return {
       key: `assignee:${issue.assignee?.id ?? issue.assignee?.displayName ?? 'unassigned'}`,
       label: issue.assignee?.displayName ?? 'Unassigned',
-      color: colors.accentBlue
+      color: colors.accent
     }
   }
   if (groupBy === 'priority') {
     return {
       key: `priority:${issue.priority}`,
       label: getLinearPriorityLabel(issue.priority),
-      color: issue.priority === 1 ? colors.statusRed : colors.accentBlue
+      color: issue.priority === 1 ? colors.danger : colors.accent
     }
   }
   if (groupBy === 'team') {
     return { key: `team:${issue.team.id}`, label: issue.team.name, color: issue.state.color }
   }
-  return { key: 'all', label: 'Issues', color: colors.accentBlue }
+  return { key: 'all', label: 'Issues', color: colors.accent }
 }
 
 export function groupLinearIssues(
   issues: LinearIssue[],
   groupBy: LinearGroupBy,
-  orderBy: LinearOrderBy
+  orderBy: LinearOrderBy,
+  colors: ThemeColors
 ): LinearIssueSection[] {
-  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy)
+  return groupOrderedLinearIssues(sortLinearIssues(issues, orderBy), groupBy, colors)
 }
 
 /** The caller must sort issues by its selected order before grouping. */
 export function groupSortedLinearIssues(
   issues: readonly LinearIssue[],
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  colors: ThemeColors
 ): LinearIssueSection[] {
-  return groupOrderedLinearIssues([...issues], groupBy)
+  return groupOrderedLinearIssues([...issues], groupBy, colors)
 }
 
 function groupOrderedLinearIssues(
   sorted: LinearIssue[],
-  groupBy: LinearGroupBy
+  groupBy: LinearGroupBy,
+  colors: ThemeColors
 ): LinearIssueSection[] {
   if (groupBy === 'none') {
-    return [{ key: 'all', label: 'Issues', color: colors.accentBlue, issues: sorted }]
+    return [{ key: 'all', label: 'Issues', color: colors.accent, issues: sorted }]
   }
   const sections = new Map<
     string,
     { key: string; label: string; color: string; issues: LinearIssue[] }
   >()
   for (const issue of sorted) {
-    const group = getLinearIssueGroup(issue, groupBy)
+    const group = getLinearIssueGroup(issue, groupBy, colors)
     const section = sections.get(group.key)
     if (section) {
       section.issues.push(issue)

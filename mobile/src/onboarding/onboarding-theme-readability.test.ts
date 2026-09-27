@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { darkColors, lightColors } from '../theme/tokens'
-import { colors as legacyDarkPalette } from '../theme/mobile-theme'
 import { contrastRatio } from '../test/contrast'
 
 const WCAG_AA_BODY = 4.5
@@ -19,17 +18,18 @@ const WCAG_AA_BODY = 4.5
  * (14.49:1 and 8.50:1), which is why every automated check stayed green and
  * only a light-mode reader would have seen it.
  *
- * The existing `mobile-theme-contrast.test.ts` could not catch this: it pairs
- * the legacy palette only with dark surfaces, so it never tests the
- * combination the app actually renders.
+ * The existing `mobile-theme-contrast.test.ts` could not catch this: it paired
+ * the legacy palette only with dark surfaces, so it never tested the
+ * combination the app actually renders. (That palette was deleted on
+ * 2026-09-27; its values were the dark scheme's, which is what the last case
+ * below measures.)
  */
 describe('onboarding stays readable in the theme the user chose', () => {
   /** Swept rather than spot-fixed: the page was found drawing from the legacy
    *  palette, and the brand-new preview component imported it too. One file at a
    *  time would have shipped a dark-only component into the screen being fixed,
    *  so every onboarding module that RENDERS is checked. `mobile-onboarding-styles`
-   *  is excluded on purpose — it is the static sheet whose colour values these
-   *  components override. */
+   *  is excluded on purpose: it is a themed style factory, not a component. */
   const RENDERING_MODULES = [
     'MobileOnboardingPage.tsx',
     'NotificationOnboardingPreview.tsx'
@@ -48,7 +48,7 @@ describe('onboarding stays readable in the theme the user chose', () => {
 
   it('does not leave the route painting its progress dots from the legacy palette', () => {
     const route = readFileSync(join(__dirname, '..', '..', 'app', 'mobile-onboarding.tsx'), 'utf8')
-    // `progressDotActive` is `colors.textPrimary` in the static sheet — near-white,
+    // `progressDotActive` was `colors.textPrimary` in the static sheet — near-white,
     // and invisible on the light background this same file paints. The route must
     // colour the dots from the palette it already reads via useTheme().
     expect(route).not.toMatch(/styles\.progressDotActive/)
@@ -72,10 +72,12 @@ describe('onboarding stays readable in the theme the user chose', () => {
   })
 
   /** The measurement that made this a bug rather than a worry: the legacy
-   *  palette is fine on its own surface and unusable on the light one, so any
-   *  screen mixing it with the themed shell is broken in light mode. */
-  it('records why the legacy palette cannot be mixed with the themed shell', () => {
-    expect(contrastRatio(legacyDarkPalette.textPrimary, darkColors.bg)).toBeGreaterThan(WCAG_AA_BODY)
-    expect(contrastRatio(legacyDarkPalette.textPrimary, lightColors.bg)).toBeLessThan(2)
+   *  palette's text (#ECE9E2, the dark scheme's `text`) is fine on its own
+   *  surface and unusable on the light one, so any screen mixing a dark-only
+   *  colour with the themed shell is broken in light mode. */
+  it('records why a dark-only colour cannot be mixed with the themed shell', () => {
+    expect(darkColors.text).toBe('#ECE9E2')
+    expect(contrastRatio(darkColors.text, darkColors.bg)).toBeGreaterThan(WCAG_AA_BODY)
+    expect(contrastRatio(darkColors.text, lightColors.bg)).toBeLessThan(2)
   })
 })

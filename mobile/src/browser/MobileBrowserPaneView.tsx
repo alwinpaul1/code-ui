@@ -254,7 +254,9 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
             {/* Why: a stream can report ready and then deliver no frames, so key the
                 indicator off actually having pixels or it clears into a blank pane. */}
             {busy || (!renderedFrameSource && !error) ? (
-              <ActivityIndicator size="small" color={colors.textSecondary} />
+              <View style={styles.spinnerChip}>
+                <ActivityIndicator size="small" color={colors.textSecondary} />
+              </View>
             ) : null}
             {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>

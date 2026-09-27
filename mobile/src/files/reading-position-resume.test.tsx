@@ -52,7 +52,8 @@ vi.mock('../theme/theme-context', () => ({
       danger: '#f00'
     }
   }),
-  useThemedStyles: () => ({})
+  // Every style key reads as an empty style: the toggles size their hitSlop from theirs.
+  useThemedStyles: () => new Proxy({}, { get: () => ({}) })
 }))
 
 const key = readingPositionKey('host-1', 'wt-1', 'docs/thesis.pdf')

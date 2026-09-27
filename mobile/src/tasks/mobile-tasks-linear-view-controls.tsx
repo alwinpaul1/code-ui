@@ -1,6 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { Text } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksLinearViewControls(model: ConnectionPresentationModel) {
@@ -21,6 +20,7 @@ export function renderMobileTasksLinearViewControls(model: ConnectionPresentatio
     setShowLinearTeamPicker,
     setShowLinearViewPicker,
     setShowLinearWorkspacePicker,
+    styles,
     taskUiReady
   } = model
   return (

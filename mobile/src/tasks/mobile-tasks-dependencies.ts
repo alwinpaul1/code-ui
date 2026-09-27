@@ -132,7 +132,7 @@ export {
   trustedOrcaHooksWithSetupApproval,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
-export { colors, radii, spacing, typography } from '../theme/mobile-theme'
+export { radii, spacing, typography } from '../theme/mobile-theme'
 export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,

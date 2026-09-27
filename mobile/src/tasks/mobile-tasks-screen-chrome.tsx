@@ -1,21 +1,12 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { tapTargetHitSlop } from '../ui/tap-target'
-import {
-  View,
-  ChevronLeft,
-  colors,
-  StatusDot,
-  Text,
-  RefreshCw,
-  Plus
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { View, ChevronLeft, StatusDot, Text, RefreshCw, Plus } from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 import { renderMobileTasksProviderControls } from './mobile-tasks-provider-controls'
 import { renderMobileTasksSearchControl } from './mobile-tasks-search-control'
 
 export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
-  const { setTaskCopyFeedbackRootRef } = model
+  const { setTaskCopyFeedbackRootRef, styles } = model
   return (
     <View ref={setTaskCopyFeedbackRootRef} style={styles.topChrome}>
       {renderMobileTasksStatusBar(model)}
@@ -29,6 +20,7 @@ export function renderMobileTasksChrome(model: ConnectionPresentationModel) {
 
 export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
   const {
+    colors,
     connState,
     githubMode,
     githubProjectLoading,
@@ -48,6 +40,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
     setShowCreateTask,
     setShowLinearConnect,
     showHeaderCreateTask,
+    styles,
     taskUiReady
   } = model
   return (
@@ -59,7 +52,7 @@ export function renderMobileTasksStatusBar(model: ConnectionPresentationModel) {
         accessibilityRole="button"
         accessibilityLabel="Back"
       >
-        <ChevronLeft size={22} color={colors.textPrimary} />
+        <ChevronLeft size={22} color={colors.text} />
       </TasksButton>
       <View style={styles.titleWrap}>
         <StatusDot state={connState} verdict={headerVerdict} />

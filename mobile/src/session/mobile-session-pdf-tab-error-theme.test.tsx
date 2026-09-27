@@ -3,10 +3,12 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 // A PDF that react-native-pdf cannot open, in a session file tab and in the file preview. The
-// session draws its file tabs in `styles.markdownFrame` (MobileSessionActiveContent.tsx), which is
-// on the static dark palette in both schemes, like the rest of the legacy session styles. The PDF
-// viewer's error state had no surface of its own, so its live-theme red sat on that dark frame:
-// #C0392B on #1A1917 in light mode, 3.2:1 (review of 6c19a3e0).
+// session draws its file tabs in `markdownFrame` (MobileSessionActiveContent.tsx). When this test
+// was written that frame was still on the static dark palette in both schemes, and the PDF
+// viewer's error state had no surface of its own, so its live-theme red sat on the dark frame:
+// #C0392B on #1A1917 in light mode, 3.2:1 (review of 6c19a3e0). The frame is themed now
+// (mobile-session-frame-theme.test.tsx); the viewer still paints its own page, which is what this
+// pins.
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -64,7 +66,7 @@ import { ThemeProvider, useThemedStyles } from '../theme/theme-context'
 import { colorsForScheme, type ThemeScheme } from '../theme/tokens'
 import { MobileFilePdfPreview } from '../files/MobileFilePdfPreview'
 import { filePreviewStyles } from '../files/mobile-file-preview-styles'
-import { styles as sessionStyles } from './mobile-session-styles'
+import { sessionStyles } from './mobile-session-styles'
 import { FileReader } from './MobileSessionFileReader'
 
 let tree: ReactTestRenderer | null = null
@@ -104,6 +106,12 @@ function errorOnSurface(): { ink: string; surface: string } {
   return { ink: styleOf(message).color as string, surface: surface! }
 }
 
+/** The session's file-tab frame, as MobileSessionActiveContent draws it around a FileReader. */
+function SessionFileTabFrame({ children }: { children: ReactNode }) {
+  const styles = useThemedStyles(sessionStyles)
+  return <View style={styles.markdownFrame}>{children}</View>
+}
+
 /** The file preview screen's own page (MobileFilePreviewScreen draws its body in `container`). */
 function PreviewPage({ children }: { children: ReactNode }) {
   const styles = useThemedStyles(filePreviewStyles)
@@ -115,7 +123,7 @@ describe('a PDF that will not open', () => {
     it(`says so readably inside a session file tab (${scheme})`, async () => {
       await renderIn(
         scheme,
-        <View style={sessionStyles.markdownFrame}>
+        <SessionFileTabFrame>
           <FileReader
             doc={{ status: 'ready', kind: 'pdf', uri: 'file:///cache/orca-pdf-1.pdf' }}
             title="paper.pdf"
@@ -123,7 +131,7 @@ describe('a PDF that will not open', () => {
             language="plaintext"
             readingPositionKey={null}
           />
-        </View>
+        </SessionFileTabFrame>
       )
 
       const { ink, surface } = errorOnSurface()

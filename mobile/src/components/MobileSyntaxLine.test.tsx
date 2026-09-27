@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileSyntaxLine } from './MobileSyntaxSegments'
 import { instrumentSansTextStyle } from '../theme/instrument-sans-text'
 import { fontFamily } from '../theme/tokens'
+import { lightSyntaxPalette } from '../theme/syntax-palette'
 
 vi.mock('react-native', () => {
   // A real flatten: the Instrument Sans hook reads the flattened style to
@@ -45,6 +46,7 @@ function render(props: Partial<Parameters<typeof MobileSyntaxLine>[0]> = {}) {
         gutterDigits: 2,
         lineStyle: { fontSize: 14 },
         gutterStyle: { color: '#999' },
+        palette: lightSyntaxPalette,
         ...props
       })
     )

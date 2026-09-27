@@ -5,14 +5,12 @@ import {
   View,
   Text,
   TextInput,
-  colors,
   AlertTriangle,
   ActivityIndicator,
   githubProjectKey,
   Check,
   PickerModal
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
 
@@ -20,6 +18,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
   const {
     activeGitHubProject,
     browseGitHubProjects,
+    colors,
     githubProjectError,
     githubProjectLoading,
     githubProjectPartialFailures,
@@ -41,6 +40,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
     setGithubProjectPickerSearch,
     setShowGitHubProjectPicker,
     showGitHubProjectPicker,
+    styles,
     taskUiReady
   } = model
   return (
@@ -97,7 +97,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
 
       {githubProjectPartialFailures.length > 0 ? (
         <View style={styles.projectWarningBanner}>
-          <AlertTriangle size={15} color={colors.statusAmber} />
+          <AlertTriangle size={15} color={colors.warning} />
           <View style={styles.projectWarningTextWrap}>
             <Text style={styles.projectWarningTitle}>
               {githubProjectPartialFailures.length === 1 &&
@@ -182,7 +182,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                         >
                           <Text style={styles.inlineSaveText}>Remove</Text>
                         </TasksButton>
-                        {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                        {selected ? <Check size={15} color={colors.text} /> : null}
                       </TasksRow>
                     </View>
                   )
@@ -236,7 +236,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                             <Text style={styles.inlineSaveText}>Pin</Text>
                           </TasksButton>
                         ) : null}
-                        {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                        {selected ? <Check size={15} color={colors.text} /> : null}
                       </TasksRow>
                     </View>
                   )
@@ -274,7 +274,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                           {project.owner} · #{project.number}
                         </Text>
                       </View>
-                      {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                      {selected ? <Check size={15} color={colors.text} /> : null}
                     </TasksRow>
                   </View>
                 )

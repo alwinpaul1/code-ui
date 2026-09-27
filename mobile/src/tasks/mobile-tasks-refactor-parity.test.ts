@@ -54,8 +54,32 @@ const hash = (parts: string[] | string): string =>
 // `semantics` 3275 → 3271 is exactly the four literals inside the deleted cast type (`'DISMISSED'`,
 // `'VIEWED'`, `'UNVIEWED'`, `'status'`), checked against the pre-port tree; the render-token hash
 // does not move. The hooks hash is upstream's own value once more.
-const PROVIDER_RPC_SCREEN_HOOKS = '0f66df2141117dfec2f8a0adb3f598312e6fda8e80833a365a645796f5ab48c3'
-const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9d53ddec2b9686f58f'
+// 2026-09-27 (theme pass 2, the Tasks surface onto the live theme): every file here took `colors`
+// from mobile-tasks-dependencies, which re-exported the dark-only static palette, and the seven
+// StyleSheets were built from it at module load, so a light session drew the whole screen dark.
+// Each pin below moved for that and nothing else, checked by dumping every reader's output before
+// and after and diffing: stage one binds `useTheme()` and `useThemedStyles(mobileTasksStyles)` onto
+// the model (hooks 351 -> 353, statements 418 -> 420); render functions destructure `colors` and
+// `styles` from the model; the helpers that drew a colour take the palette (`githubProjectOptionColor`,
+// `taskRepositoryMeta`, the Linear grouping, `renderCommentReactions`, `getPrSignalToneStyle`,
+// `getGitLabPipelineStatusStyle`), and three memos list it in their deps. New declarations: the
+// cached `mobileTasksStyles` factory with its builder, type and cache, `taskRepositoryLabel` (split
+// out so sorting needs no palette) and `ProviderPickerLogo` (the provider picker's themed logo), so
+// 194 -> 200. `semantics` 3,271 -> 3,275: three `jsx:ProviderPickerLogo` signatures in place of two
+// net `jsx:TaskProviderLogo` ones, and the three provider literals `taskRepositoryLabel` compares.
+// The render tree gains seven `colors`/`styles` argument tokens (35,299 -> 35,306) and renames the
+// static tokens (`textPrimary` -> `text` and the rest) one for one. The StyleSheet reader differs
+// only by those renames: mapping the old output through the rename table reproduces the new one.
+// Same day, later: the create action's new Linear issue takes a fixed state hue
+// (NEW_LINEAR_ISSUE_STATE_COLOR, '#D9825F', the value it always had) instead of the palette, so the
+// RPC recording fixtures need no palette and their goldens hold. That moves the createTask body in
+// the hooks and statements pins (counts unchanged) and adds the one literal to `semantics`
+// (3,275 -> 3,276).
+const PROVIDER_RPC_SCREEN_HOOKS = 'ae1db153f31d18850576ccec082422b35024f4a5527fc8ca126eae13ec3af2a2'
+// 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
+// had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
+// Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
+const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4a9cebba852ebcf89b'
 // 0.6.7 press feedback: every static-style `<Pressable>` on the surface (135 of them) became a
 // `<TasksRow>` or `<TasksButton>` from mobile-tasks-pressables, which is where the pressed state
 // is now drawn. That is a behaviour change, not a refactor, and the pins below moved with it:
@@ -89,7 +113,8 @@ const PRE_REFACTOR_DIFF_HOOKS = '93c7189b32bed8456cc51814fffa8ce80cf62011ef968a9
 // call, method literal or JSX host signature changed, and the render and style pins hold. The
 // hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
 // stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
-const PROVIDER_RPC_STATEMENTS = '1a4b59ae77b80dfea9e39844fb514e3c90751a0f2d8bda97e612d57fecc91c12'
+// 2026-09-27 (theme pass 2): 418 -> 420; see the note above PROVIDER_RPC_SCREEN_HOOKS.
+const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a78d403fa6f67167f1'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -98,7 +123,10 @@ const PROVIDER_RPC_STATEMENTS = '1a4b59ae77b80dfea9e39844fb514e3c90751a0f2d8bda9
 // (that `jsx:Text:` host signature becomes `jsx:Text:style`, 3,271 lines still) and the
 // StyleSheets (the one `diffLinePrefix` key). Hooks, statements and the render tree hold;
 // diff-line-prefix-face.test.tsx guards the face.
-const PRESS_FEEDBACK_DECLARATIONS = 'a5328ba9b4ac87ec1cf56f3b7e31f0fdc7afe014d56a5c6550aca37f10dd7ba7'
+// 2026-09-27 (theme pass 2): GitHubPrFileDiff's declaration gains the `useTheme()` line and the
+// `palette={syntax}` attribute on its <MobileSyntaxSegments>. 194 declarations still.
+// Later the same day, the Tasks surface onto the live theme: 194 -> 200 (note above the hooks pin).
+const PRESS_FEEDBACK_DECLARATIONS = 'dfeee267e57463591730cc85d504e558b4833b902e56bd4b37a1c20d1323df37'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -109,37 +137,42 @@ const PRESS_FEEDBACK_DECLARATIONS = 'a5328ba9b4ac87ec1cf56f3b7e31f0fdc7afe014d56
 // arrive); the render-token stream gains the eight tokens the two attributes are, 35,291 -> 35,299.
 // Hooks, statements, declarations and styles do not move.
 // 2026-09-26: the PR diff prefix's style attribute; see the declarations pin above.
-const A11Y_BACK_SEMANTICS = '9513e373cecf94e9b7d77e1e8ca3946490e4819f313dbbf43c46360fb0cabf93'
+// 2026-09-27 (theme pass 2): that diff's `jsx:MobileSyntaxSegments:segments` host signature
+// becomes `…:segments,palette`. 3,271 lines still.
+// Later the same day: 3,271 -> 3,275 -> 3,276 (notes above the hooks pin).
+const A11Y_BACK_SEMANTICS = 'e2904f6a4dea08ba3c42d42777f2a219b556f10dbbc6ca28f113aba330111679'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
-const PRE_REFACTOR_STYLES = '3e7b8b7caf018e9442c52c60b73317fe61c984fee249a07b3ac7a2f4f0777f40'
-const A11Y_BACK_RENDER_TREE = '71d021c1f5be406513850a3a32f8487dc352edbc017a2e7c37b5c1a5da131369'
+// 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
+const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
+// 2026-09-27 (theme pass 2): 35,299 -> 35,306 (note above the hooks pin).
+const A11Y_BACK_RENDER_TREE = '6bde687376965123d7a936746b7216d0493f78b5c73cd01428debf6b2977509f'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(351)
+    expect(screenHooks).toHaveLength(353)
     expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
-    expect(diffHooks).toHaveLength(3)
+    expect(diffHooks).toHaveLength(5)
     expect(hash(diffHooks)).toBe(PRE_REFACTOR_DIFF_HOOKS)
   })
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(418)
+    expect(statements).toHaveLength(420)
     expect(hash(statements)).toBe(PROVIDER_RPC_STATEMENTS)
   })
 
   it('preserves every moved top-level declaration', () => {
     const declarations = readMobileTasksDeclarationSignatures()
-    expect(declarations).toHaveLength(194)
+    expect(declarations).toHaveLength(200)
     expect(hash(declarations)).toBe(PRESS_FEEDBACK_DECLARATIONS)
   })
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_271)
+    expect(semantics.split('\n')).toHaveLength(3_276)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
@@ -157,7 +190,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_299)
+    expect(tokens).toHaveLength(35_306)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 

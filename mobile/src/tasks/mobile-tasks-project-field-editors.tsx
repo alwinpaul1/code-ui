@@ -4,19 +4,20 @@ import {
   editableProjectFields,
   projectFieldValueLabel
 } from './mobile-tasks-legacy-foundation'
-import { View, Text, Check, colors, TextInput } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { View, Text, Check, TextInput } from './mobile-tasks-dependencies'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentationModel) {
   const {
+    colors,
     githubProjectTable,
     mutateProjectRowField,
     projectFieldDrafts,
     projectMutating,
     projectRowItem,
     setProjectFieldDrafts,
-    setProjectRowDetailError
+    setProjectRowDetailError,
+    styles
   } = model
   if (!projectRowItem) {
     return null
@@ -83,7 +84,7 @@ export function renderMobileTasksProjectFieldEditors(model: ConnectionPresentati
                       }
                     >
                       <View style={styles.issueTypeChipContent}>
-                        {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                        {selected ? <Check size={12} color={colors.accent} /> : null}
                         <Text style={styles.detailChipText}>{option.name}</Text>
                       </View>
                     </TasksButton>

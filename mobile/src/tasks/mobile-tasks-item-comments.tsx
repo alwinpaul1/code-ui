@@ -4,7 +4,7 @@ import { COMMENT_REACTION_EMOJI } from './mobile-tasks-options'
 import type { DetailCommentGroup } from './mobile-tasks-view-state-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailComment } from './mobile-tasks-provider-detail-types'
-import { styles } from './mobile-tasks-legacy-styles'
+import type { MobileTasksStyles } from './mobile-tasks-legacy-styles'
 
 export function taskKindLabel(item: TaskItem): string {
   if (item.provider === 'github') {
@@ -141,7 +141,10 @@ export function discussionSummary(count: number): string {
   return `${count} ${count === 1 ? 'comment' : 'comments'}`
 }
 
-export function renderCommentReactions(comment: DetailComment): ReactNode {
+export function renderCommentReactions(
+  styles: MobileTasksStyles,
+  comment: DetailComment
+): ReactNode {
   const reactions = (comment.reactions ?? []).filter((reaction) => reaction.count > 0)
   if (reactions.length === 0) {
     return null

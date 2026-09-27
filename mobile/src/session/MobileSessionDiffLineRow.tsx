@@ -33,7 +33,7 @@ export function DiffLineRow({
   onSubmitComment: (lineNumber: number) => void
   onDeleteComment: (commentId: string) => void
 }) {
-  const { colors } = useTheme()
+  const { colors, syntax } = useTheme()
   const styles = useThemedStyles(sessionStyles)
   const commentLine = line.newLineNumber
   const isCommenting = commentLine !== undefined && activeCommentLine === commentLine
@@ -64,7 +64,7 @@ export function DiffLineRow({
           >
             {line.kind === 'add' ? '+ ' : line.kind === 'delete' ? '- ' : '  '}
           </Text>
-          <MobileSyntaxSegments segments={line.segments} />
+          <MobileSyntaxSegments segments={line.segments} palette={syntax} />
         </Text>
         {canComment ? (
           <Pressable

@@ -8,11 +8,12 @@ import {
   Text,
   View,
   MobileSyntaxSegments,
-  TextInput,
-  colors } from './mobile-tasks-dependencies'
+  TextInput
+} from './mobile-tasks-dependencies'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MAX_RENDERED_PR_DIFF_LINES } from './mobile-tasks-options'
 import type { GitHubPRFileContents } from './mobile-tasks-provider-detail-types'
-import { styles } from './mobile-tasks-legacy-styles'
+import { mobileTasksStyles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 
 export function formatDiffLineNumber(value: number | undefined): string {
@@ -44,6 +45,8 @@ export function GitHubPrFileDiff({
   onCommentDraftChange: (key: string, value: string) => void
   onSubmitComment: (line: number) => void
 }): ReactNode {
+  const { colors, syntax } = useTheme()
+  const styles = useThemedStyles(mobileTasksStyles)
   const diffPreview = useMemo(
     () =>
       buildGitHubPrFileDiffPreview(
@@ -102,7 +105,7 @@ export function GitHubPrFileDiff({
                 ]}
               >
                 <Text style={styles.diffLinePrefix}>{diffLinePrefix(line.kind)} </Text>
-                <MobileSyntaxSegments segments={line.segments} />
+                <MobileSyntaxSegments segments={line.segments} palette={syntax} />
                 {line.text ? null : ' '}
               </Text>
             </View>

@@ -1,13 +1,13 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { tapTargetHitSlop } from '../ui/tap-target'
-import { Text, View, Linking, ExternalLink, colors } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { Text, View, Linking, ExternalLink } from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksGitHubViewControls(model: ConnectionPresentationModel) {
   const {
     activeGitHubProjectView,
     activeProjectLabel,
+    colors,
     githubIssueSourceLabel,
     githubIssueSourceRows,
     githubMode,
@@ -26,6 +26,7 @@ export function renderMobileTasksGitHubViewControls(model: ConnectionPresentatio
     setShowGitHubProjectPicker,
     setShowGitHubProjectSortPicker,
     setShowGitHubProjectViewPicker,
+    styles,
     taskUiReady,
     visibleGitHubProjectRows
   } = model

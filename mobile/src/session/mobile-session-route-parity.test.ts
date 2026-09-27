@@ -239,7 +239,10 @@ const HEAD_EFFECT_SHA256 = '45fd88101543aa8e804103aafbb6bd7c1cedffbcfc9f3676e087
 // 2026-09-27 (theme sweep): MarkdownReader, DiffLineRow and FileReader each moved off the static
 // `mobile-theme` palette onto `useTheme()` + `useThemedStyles(sessionStyles)` — see the count
 // comment above.
-const HEAD_CONTENT_HOOK_SHA256 = 'f2c45e785e876b23f4a0e7ce2744fdead17607242b60cd555eea19d03dc98aa9'
+// 2026-09-27 (theme pass 2): DiffLineRow's `useTheme()` binding also takes `syntax`, the palette
+// its code spans now get instead of MobileSyntaxSegments' old Dark+ default. Same 22 bindings;
+// reverting that one file restores the previous hash.
+const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1b4b7f2bd9432a7060c'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -490,7 +493,9 @@ const HEAD_HOST_JSX_SHA256 = '4553739f7c7aa13a4d322a342929ba66eaf4c8a5b85facea30
 // palette (e.g. `colors.textPrimary`) onto the live `useTheme()` colours (`colors.text`) in
 // MarkdownReader, DiffLineRow and FileReader. Same record count (73); only those records' captured
 // expressions moved.
-const HEAD_LEAF_JSX_SHA256 = '1f72eea3ccc86a3412c8c3517636f9e778daa9265c6011f721e660ec9b9dcf93'
+// 2026-09-27 (theme pass 2): DiffLineRow's <MobileSyntaxSegments> gains `palette={syntax}`. Same
+// 73 records; reverting that one file restores the previous hash.
+const HEAD_LEAF_JSX_SHA256 = '0992a61601d3679f32e3f5f748952ef75edbda8a734b2bd3ecc6ce3866825bff'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).

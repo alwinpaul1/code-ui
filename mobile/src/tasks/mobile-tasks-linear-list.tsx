@@ -2,7 +2,6 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   View,
   ActivityIndicator,
-  colors,
   Text,
   ScrollView,
   spacing,
@@ -12,7 +11,6 @@ import {
   FlatList,
   TaskProviderLogo
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 import {
   createLinearTask,
@@ -23,6 +21,7 @@ import {
 
 export function renderMobileTasksLinearList(model: ConnectionPresentationModel) {
   const {
+    colors,
     effectiveLinearDisplayProperties,
     emptyLabel,
     insets,
@@ -35,7 +34,8 @@ export function renderMobileTasksLinearList(model: ConnectionPresentationModel) 
     refreshTasks,
     refreshing,
     setActionItem,
-    setLinearStatusPickerItem
+    setLinearStatusPickerItem,
+    styles
   } = model
   return loading ? (
     <View style={styles.centered}>

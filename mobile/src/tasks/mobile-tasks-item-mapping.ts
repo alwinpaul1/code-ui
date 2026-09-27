@@ -1,9 +1,5 @@
-import {
-  type RpcSuccess,
-  type TaskProvider,
-  type GitHubOwnerRepo,
-  colors
-} from './mobile-tasks-dependencies'
+import type { RpcSuccess, TaskProvider, GitHubOwnerRepo } from './mobile-tasks-dependencies'
+import type { ThemeColors } from '../theme/tokens'
 import type {
   GitHubPreset,
   GitHubProjectRow,
@@ -132,7 +128,12 @@ export const GITHUB_PROJECT_OPTION_COLORS: Record<string, string> = {
   PINK: '#db61a2'
 }
 
-export function githubProjectOptionColor(color: string | null | undefined): string {
+/** A GitHub Projects option's swatch: GitHub's own hue when it names one, else muted text in the
+ *  live theme's `colors`. */
+export function githubProjectOptionColor(
+  color: string | null | undefined,
+  colors: ThemeColors
+): string {
   if (!color) {
     return colors.textMuted
   }

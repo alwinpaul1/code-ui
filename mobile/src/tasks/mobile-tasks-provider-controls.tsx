@@ -1,13 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import {
-  ScrollView,
-  TaskProviderLogo,
-  colors,
-  Text,
-  View,
-  GitBranch
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { ScrollView, TaskProviderLogo, Text, View, GitBranch } from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 import { getRepoBadgeColor } from './mobile-tasks-legacy-foundation'
 import { renderMobileTasksGitHubViewControls } from './mobile-tasks-github-view-controls'
@@ -15,6 +7,7 @@ import { renderMobileTasksLinearViewControls } from './mobile-tasks-linear-view-
 
 export function renderMobileTasksProviderControls(model: ConnectionPresentationModel) {
   const {
+    colors,
     githubMode,
     gitlabFilterLabel,
     gitlabView,
@@ -28,6 +21,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
     setShowRepoPicker,
     setShowSortPicker,
     sortLabel,
+    styles,
     taskUiReady
   } = model
   return (
@@ -47,7 +41,7 @@ export function renderMobileTasksProviderControls(model: ConnectionPresentationM
           setShowProviderPicker(true)
         }}
       >
-        <TaskProviderLogo provider={provider} size={14} color={colors.textPrimary} />
+        <TaskProviderLogo provider={provider} size={14} color={colors.text} />
         <Text style={styles.segmentButtonText}>{providerLabel}</Text>
       </TasksButton>
 

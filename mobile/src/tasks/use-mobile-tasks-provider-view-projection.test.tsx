@@ -10,19 +10,20 @@ import type {
   TaskItem
 } from './mobile-tasks-legacy-foundation'
 import type { PickerProjectionModel } from './use-mobile-tasks-picker-projection'
+import type { ThemeColors } from '../theme/tokens'
 
 // Why: the tasks barrel pulls the whole react-native screen graph in; re-export only the
 // linear pieces this hook uses, straight from their leaf modules, and count grouping calls.
 const groupingInputSizes: number[] = []
 
+// The provider picker's logos read the live theme, whose module reaches for react-native.
+vi.mock('react-native', () => ({ useColorScheme: () => 'dark', View: 'View' }))
 vi.mock('./mobile-tasks-dependencies', async () => {
   const react = await import('react')
-  const { colors } = await import('../theme/mobile-theme')
   const { githubProjectIdentityKey } = await import('../../../src/shared/github/project-identity')
   return {
     useCallback: react.useCallback,
     useMemo: react.useMemo,
-    colors,
     githubProjectKey: githubProjectIdentityKey,
     TaskProviderLogo: () => null,
     getLinkedWorkItemSuggestedName: () => ''
@@ -35,18 +36,28 @@ vi.mock('./mobile-tasks-legacy-foundation', async () => {
   return {
     ...options,
     ...linear,
-    groupLinearIssues: (issues: LinearIssue[], groupBy: LinearGroupBy, orderBy: LinearOrderBy) => {
+    groupLinearIssues: (
+      issues: LinearIssue[],
+      groupBy: LinearGroupBy,
+      orderBy: LinearOrderBy,
+      colors: ThemeColors
+    ) => {
       groupingInputSizes.push(issues.length)
-      return linear.groupLinearIssues(issues, groupBy, orderBy)
+      return linear.groupLinearIssues(issues, groupBy, orderBy, colors)
     },
-    groupSortedLinearIssues: (issues: readonly LinearIssue[], groupBy: LinearGroupBy) => {
+    groupSortedLinearIssues: (
+      issues: readonly LinearIssue[],
+      groupBy: LinearGroupBy,
+      colors: ThemeColors
+    ) => {
       groupingInputSizes.push(issues.length)
-      return linear.groupSortedLinearIssues(issues, groupBy)
+      return linear.groupSortedLinearIssues(issues, groupBy, colors)
     }
   }
 })
 
 const { sortLinearIssues, groupLinearIssues } = await import('./mobile-tasks-legacy-foundation')
+const { darkColors } = await import('../theme/tokens')
 const { useMobileTasksProviderViewProjection } =
   await import('./use-mobile-tasks-provider-view-projection')
 
@@ -117,6 +128,8 @@ const DEFAULT_INPUT: ProbeInput = {
 function createModel(input: ProbeInput): PickerProjectionModel {
   return {
     activeGitHubProject: null,
+    // One palette for every render, as the live theme is between appearance changes.
+    colors: darkColors,
     defaultGitHubPreset: 'open',
     githubKind: 'issues',
     githubMode: 'repo',
@@ -204,11 +217,17 @@ function legacyProjection(input: ProbeInput): {
   )
   return {
     issuesForView,
-    listSections: groupLinearIssues(issuesForView, input.linearGroupBy, input.linearOrderBy),
+    listSections: groupLinearIssues(
+      issuesForView,
+      input.linearGroupBy,
+      input.linearOrderBy,
+      darkColors
+    ),
     boardSections: groupLinearIssues(
       issuesForView,
       input.linearGroupBy === 'none' ? 'status' : input.linearGroupBy,
-      input.linearOrderBy
+      input.linearOrderBy,
+      darkColors
     )
   }
 }
