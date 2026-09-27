@@ -1,12 +1,46 @@
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { permissionOptionsFromScreen } from './mobile-terminal-permission-options'
 
+/**
+ * The title row of Claude Code's Bash permission dialog. 2.1.283's frame
+ * (`Pi`/`X3` in its binary) draws the title, then, when the request came from
+ * somewhere other than the lead, a one-cell gap, a dim "· " and where it came
+ * from: `from the ${agent} agent`, `from a subagent`, `from the "${name}"
+ * workflow`, `from a workflow`, `from a remote cloud agent`, `from the ${name}
+ * plugin`, `from a plugin`. The Bash title itself is "Bash command", or with
+ * " (unsandboxed)" or " (runs on ${machine})" after it. The whole row must
+ * match, so a title quoted in conversation history does not count and a
+ * decoration this list does not know is refused (the chat then says a prompt
+ * waits in the terminal). Until 2026-09-27 only the bare title matched, and a
+ * background subagent's prompt sat unseen for eight hours
+ * (fixtures/claude-screen-subagent-bash-permission-2.1.283.txt).
+ */
+// The gap before "·" and the space after it are taken as a plain or a
+// no-break space: the capture is a transcription, and which one a live read
+// returns is unverified (fixtures/claude-screen-subagent-bash-permission-2.1.283.txt).
+const TITLE =
+  /^(\s*)Bash command(?: \((?:unsandboxed|runs on [^)]+)\))?(?:[ \u00a0]·[ \u00a0](from (?:the (?:"[^"]+" workflow|\S.*? (?:agent|plugin))|a (?:subagent|workflow|plugin|remote cloud agent))))?\s*$/
+
+/** A row of the auto-deny countdown 2.1.283 draws on the timed shape of the
+ *  classifier's denial-limit fallback (`Tt`). It changes every second, so it
+ *  cannot be part of what identifies the prompt: the send path compares the
+ *  whole card with a fresh read before it writes a digit. `Tt` draws it in a
+ *  box of its own, last in the reason block, outside the `│` gutter, with a
+ *  blank row under it. Read from the binary; no real screen has shown one. */
+const COUNTDOWN = /will automatically deny this request in /
+/** The words its sentence ends on: `…to avoid blocking progress on an
+ *  unattended session`. */
+const COUNTDOWN_END = /unattended session\s*$/
+
+const indentOf = (row: string): number => row.length - row.trimStart().length
+
 /** Require a live selected Bash approval, not a quoted prompt in conversation history. */
 export function claudePermissionFromScreen(lines: readonly string[]): MobileChatPermission | null {
-  const start = lines.findLastIndex((line) => /^\s*Bash command\s*$/.test(line))
+  const start = lines.findLastIndex((line) => TITLE.test(line))
   if (start === -1) {
     return null
   }
+  const [, margin, origin] = TITLE.exec(lines[start]!)!
   const dialog = lines.slice(start + 1)
   const menu = dialog.findIndex((line) => /^\s*[❯›>]\s*\d[.)]\s/.test(line))
   const first = dialog.findIndex((line) => /^\s*[❯›>]?\s*1[.)]\s+Yes\b/.test(line))
@@ -23,5 +57,61 @@ export function claudePermissionFromScreen(lines: readonly string[]): MobileChat
   if (!options) {
     return null
   }
-  return { title: 'Allow Bash?', detail: dialog.slice(0, first).join('\n').trim(), options }
+  const { body, notes } = splitDialogBody(dialog.slice(0, first), margin!.length)
+  return {
+    title: 'Allow Bash?',
+    ...(origin ? { description: origin.charAt(0).toUpperCase() + origin.slice(1) } : {}),
+    ...(notes ? { decisionReason: notes } : {}),
+    detail: body.join('\n').trim(),
+    options
+  }
+}
+
+/**
+ * Tell the tool's own rows from the harness's notes about them. The command
+ * and its description sit in a box indented two cells past the title; the
+ * decision reason (the classifier's, a rule's, a hook's), its hints and any
+ * warning come after that box at the title's own column (2.1.283, `kS`). Both
+ * put a `│` gutter on a multi-line block, so the gutter cannot tell them apart
+ * and the card folded the classifier's reason into the command. The column
+ * can. A row at the title's column BEFORE the box (the auto-mode tip) stays in
+ * the body, where the card already drops it.
+ */
+function splitDialogBody(
+  rows: readonly string[],
+  margin: number
+): { body: string[]; notes: string | null } {
+  const box = rows.findIndex((row) => row.trim().length > 0 && indentOf(row) > margin)
+  const body: string[] = []
+  const notes: string[] = []
+  // The countdown's sentence so far while it is still open, else null.
+  let countdown: string | null = null
+  rows.forEach((row, index) => {
+    const blank = row.trim().length === 0
+    const note =
+      box !== -1 &&
+      index > box &&
+      !blank &&
+      indentOf(row) === margin &&
+      !/^\s*Do you want to proceed\?\s*$/.test(row)
+    // Only the countdown's own sentence goes: its row, and a wrapped tail up
+    // to the words it ends on, which can themselves wrap apart. A reason drawn
+    // right under it stays (an independent review, 2026-09-27, found every
+    // later note row dropped).
+    const inCountdown = note && (COUNTDOWN.test(row) || (countdown !== null && !/^\s*│/.test(row)))
+    const sentence = inCountdown ? `${countdown ?? ''} ${row.trim()}` : null
+    countdown = sentence !== null && !COUNTDOWN_END.test(sentence) ? sentence : null
+    if (inCountdown) {
+      return
+    }
+    if (!note) {
+      body.push(row)
+      return
+    }
+    const text = row.trim().replace(/^│\s?/, '').trim()
+    if (text) {
+      notes.push(text)
+    }
+  })
+  return { body, notes: notes.length > 0 ? notes.join('\n') : null }
 }

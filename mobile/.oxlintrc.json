@@ -543,7 +543,20 @@
             // the note text itself live in mobile-video-frame-extractor.ts,
             // mobile-video-frame-picker.ts and
             // mobile-native-chat-video-frames-attachment.ts.
-            "max": 345,
+            // 2026-09-27, same day: +15 more for refusing a composer send
+            // while a dialog on screen would take its keys as answers (a
+            // subagent's prompt sat eight hours with "Yes" highlighted under
+            // a chat whose Enter would have approved it). The screen read and
+            // the dialog test live in mobile-native-chat-dialog-guard.ts; this
+            // file gains the injected look (its type, import, destructure and
+            // dependency) and the call before anything is written, which
+            // waits on the send gate first and has two ways out, a gate that
+            // gave up and a refusal it says.
+            // 2026-09-27, merge: the two entries above landed on separate
+            // branches off the same 330 baseline; only the import line
+            // actually conflicted (one name each, now both kept), so the
+            // combined file counts to 360, not 330+15+15.
+            "max": 360,
             "skipBlankLines": true,
             "skipComments": true
           }

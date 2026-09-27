@@ -361,7 +361,11 @@ describe('MobileNativeChatPermission', () => {
     ])
     expect(buttons.some((button) => button.props.accessibilityLabel === auto)).toBe(false)
     const texts = renderer.root.findAllByType('Text')
-    expect(texts.some((text) => text.props.children === 'Always allow for this session')).toBe(true)
+    // 2026-09-27: this read "Always allow for this session", but Claude Code
+    // 2.1.283 saves this choice as a rule in the project's local settings. The
+    // choice keeps the words the agent drew.
+    expect(texts.some((text) => text.props.children === `Yes, and don’t ask again for: ${scope}`)).toBe(true)
+    expect(texts.some((text) => /this session/.test(String(text.props.children)))).toBe(false)
     expect(texts.some((text) => text.props.children === scope && text.props.selectable)).toBe(true)
     expect(onRespond).not.toHaveBeenCalled()
     // Deny still sends the TUI's own digit for "No", which is 4 here, not 3.
@@ -394,8 +398,10 @@ describe('MobileNativeChatPermission', () => {
     })
     // Reading area, remembered-scope blocks, and the choices themselves.
     expect(bounded.length).toBeGreaterThanOrEqual(2)
+    // 2026-09-27: found by the agent's own words for the remembered rule, which
+    // replaced "Always allow for this session" (it outlives the session).
     const choices = scrollers.find((node) =>
-      node.findAllByType('Text').some((text) => String(text.props.children).includes('Always allow for this session'))
+      node.findAllByType('Text').some((text) => String(text.props.children).startsWith("Yes, and don't ask again for commands that start with"))
     )
     expect(choices).toBeDefined()
     const choiceStyle = choices!.props.style as { maxHeight?: number; flexShrink?: number }

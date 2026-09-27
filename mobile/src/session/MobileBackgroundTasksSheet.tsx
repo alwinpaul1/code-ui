@@ -76,16 +76,22 @@ export function MobileBackgroundTasksSheet({
       : onStopTask
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
-    <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss expandable>
+    // The title rides above the list rather than in it, so it stays in view
+    // while the list scrolls, and a drag on it moves the sheet.
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      dragContentToDismiss
+      expandable
+      header={<MobileBackgroundTasksSheetHeader onClose={onClose} stopFailure={failure.shown} />}
+    >
       <MobileBackgroundTasksSheetBody
-        onClose={onClose}
         messages={messages}
         agent={agent}
         agentStatus={agentStatus ?? null}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
-        stopFailure={failure.shown}
       />
     </BottomDrawer>
   )
@@ -94,7 +100,25 @@ export function MobileBackgroundTasksSheet({
 // Never called: the sheet makes a reporter only when it was handed one.
 const ignoreFailure: SheetFailureReport = () => undefined
 
-/** The sheet's contents, exported so render tests can mount them without the
+/** The sheet's title and close cross, with why the last Stop did not go
+ *  through under them. The drawer pins it above the list. */
+export function MobileBackgroundTasksSheetHeader({
+  onClose,
+  stopFailure = null
+}: {
+  onClose?: () => void
+  stopFailure?: string | null
+}) {
+  const { space } = useTheme()
+  return (
+    <View style={{ gap: space.sm, paddingBottom: space.sm }}>
+      <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
+      {stopFailure ? <SheetFailureLine>{stopFailure}</SheetFailureLine> : null}
+    </View>
+  )
+}
+
+/** The sheet's list, exported so render tests can mount it without the
  *  drawer's gesture/animation stack. */
 export function MobileBackgroundTasksSheetBody({
   messages,
@@ -102,9 +126,7 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask,
-  stopFailure = null,
-  onClose
+  onStopTask
 }: {
   messages: readonly NativeChatMessage[]
   agent?: string | null
@@ -112,9 +134,6 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => void
-  /** Why the last Stop did not go through, drawn under the title. */
-  stopFailure?: string | null
-  onClose?: () => void
 }) {
   const { space } = useTheme()
   // Where the parent transcript is, from the agent's own hook. Null leaves the
@@ -151,8 +170,6 @@ export function MobileBackgroundTasksSheetBody({
 
   return (
     <View style={{ paddingBottom: space.md, gap: space.sm }}>
-      <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
-      {stopFailure ? <SheetFailureLine>{stopFailure}</SheetFailureLine> : null}
       <BackgroundTasksSection
         title="Running"
         open={runningOpen}

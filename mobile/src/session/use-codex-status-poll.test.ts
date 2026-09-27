@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import { isCodexTerminalLocked } from './codex-terminal-lock'
 import { useCodexStatusPoll } from './use-codex-status-poll'
 
 const fakes = vi.hoisted(() => ({
@@ -63,6 +64,21 @@ describe('Codex model discovery scheduling', () => {
     await act(async () => renderer?.unmount())
     vi.useRealTimers()
   })
+  // The chat's screen read stands aside while a Codex driver holds the
+  // terminal (2026-09-27), so a refresh asked for inside the lock read nothing
+  // and a stale notice or a closed draft echo waited for the next poll.
+  it("refreshes the chat's screen read once it has let go of the terminal", async () => {
+    const lockedAtRefresh: boolean[] = []
+    refreshHud.mockImplementation(async () => {
+      lockedAtRefresh.push(isCodexTerminalLocked('term'))
+    })
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await advance(0)
+    expect(lockedAtRefresh).toEqual([false])
+  })
+
   it('starts the first idle model read without the post-turn delay', async () => {
     await act(async () => {
       renderer = create(createElement(Harness))

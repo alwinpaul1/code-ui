@@ -37,6 +37,7 @@ import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
 import type { VideoFrameExtractionProgress } from './mobile-video-frame-extractor'
+import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -77,6 +78,9 @@ type Args = {
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured sessions send attachments without the terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** Why a send must not write to the terminal now, read off its screen: a
+   *  dialog there takes typed keys as answers (mobile-native-chat-dialog-guard.ts). */
+  readonly refuseUnderDialog: typeof readSendUnderDialogRefusal
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -128,6 +132,7 @@ export function useMobileNativeChatImageAttachments({
   beforeImagePaste,
   beginImageSend,
   structuredNativeChat,
+  refuseUnderDialog,
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
@@ -228,6 +233,21 @@ export function useMobileNativeChatImageAttachments({
           return false
         }
         try {
+          // A dialog on screen takes typed keys as answers: this text could pick
+          // a choice by its digit and its Enter confirm the highlighted one
+          // (2026-09-27). Looked at before anything is written or cleared, so a
+          // refusal leaves the draft and its chips where they are.
+          if (!structuredNativeChat && operationTerminal) {
+            const screenClient = await sendGate.wait(deadline, () => activeHandleRef.current !== operationTerminal)
+            const refusal = screenClient && (await refuseUnderDialog({ client: screenClient, terminal: operationTerminal, deadline, agent }))
+            if (!screenClient || refusal) {
+              if (refusal) {
+                onError?.()
+                onSendError(refusal)
+              }
+              return false
+            }
+          }
           // Documents never paste as images: their note joins the text body, and
           // the chip clears with the images once the send is accepted. A
           // video's frames DO paste as images (they are ordinary photos to
@@ -424,6 +444,7 @@ export function useMobileNativeChatImageAttachments({
       onError,
       onSendError,
       readSeededLaunchDraft,
+      refuseUnderDialog,
       scopeKey,
       sendGate,
       settleSendChips,

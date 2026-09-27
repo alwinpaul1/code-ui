@@ -63,6 +63,10 @@ export function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>
   return {
     agent: 'claude',
     structuredNativeChat: false,
+    // No dialog on screen: these suites are about the paste and the text, and
+    // their clients answer in order (mobile-native-chat-send-under-dialog.test.ts
+    // drives the look itself).
+    refuseUnderDialog: async () => null,
     activeHandleRef: { current: 'term-1' },
     deviceTokenRef: { current: null },
     getActiveWorktreeConnectionId: async () => null,

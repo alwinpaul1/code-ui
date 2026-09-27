@@ -1,68 +1,95 @@
-import { useState } from 'react'
-import {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  type SharedValue
-} from 'react-native-reanimated'
+import { useEffect, useMemo, useState } from 'react'
+import { runOnJS, useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
 import { spacing } from '../theme/mobile-theme'
-import { dragExpandableSheet, expandableSheetHeights, settleExpandableSheet } from './bottom-drawer-expandable'
+import {
+  dragExpandableSheet,
+  expandableSheetHeights,
+  expandableSheetOpeningOffset,
+  settleExpandableSheet,
+  type ExpandableSheetSettle
+} from './bottom-drawer-expandable'
+import { DRAWER_SPRING } from './drawer-spring'
 
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 const DISMISS_DURATION_MS = 220
 
-/** The two-height state of an expandable drawer: how tall it stands, what a
- *  drag does to it, and where it rests when the finger lifts
- *  (bottom-drawer-expandable.ts holds the rules). Inert when `expandable` is
- *  false, so the drawer's other sheets are untouched. */
+/** The two rests of an expandable drawer, what a drag does between them, and
+ *  where it comes to rest when the finger lifts (bottom-drawer-expandable.ts
+ *  holds the rules). The sheet is laid out once at `fullHeight` and moved by
+ *  `translateY`: 0 at full height, `openingOffset` at its opening height.
+ *  Inert when `expandable` is false: the rest is 0 and the list always
+ *  scrolls, so the drawer's other sheets are untouched. */
 export function useExpandableBottomDrawer(args: {
   expandable: boolean
   screenHeight: number
   topInset: number
   translateY: SharedValue<number>
   progress: SharedValue<number>
-  onClose: () => void
+  /** Stable for the drawer's life: the gestures are built once around it. */
+  close: () => void
 }) {
-  const { expandable, screenHeight, translateY, progress, onClose } = args
-  const heights = expandableSheetHeights({ screenHeight, topInset: args.topInset, topGap: spacing.lg })
-  const sheetHeight = useSharedValue(heights.collapsed)
-  const dragStartHeight = useSharedValue(heights.collapsed)
-  // Why: while the sheet is at its opening height a drag on the content grows
-  // it; letting the list scroll then would fight the finger for the same drag.
+  const { expandable, screenHeight, translateY, progress, close } = args
+  const { collapsed, full } = expandableSheetHeights({ screenHeight, topInset: args.topInset, topGap: spacing.lg })
+  const openingOffset = expandable ? expandableSheetOpeningOffset({ collapsed, full }) : 0
+  const dragStartOffset = useSharedValue(0)
+  // Why a shared value beside `expanded`: the gestures read it on the UI thread
+  // in the frame the finger lifts, where the state reaches the list's
+  // scrollEnabled only after a render.
+  const listScrolls = useSharedValue(!expandable)
+  // Why: at its opening height a drag on the content moves the sheet; letting
+  // the list scroll there would fight the finger for the same drag.
   const [expanded, setExpanded] = useState(false)
+  // Built once per window size, so a re-render mid-drag (the running clock,
+  // a streamed message) hands gesture-handler the same callbacks.
+  const worklets = useMemo(() => {
+    const heights = { collapsed, full }
+    const begin = () => {
+      'worklet'
+      dragStartOffset.value = translateY.value
+    }
+    const drag = (translationY: number) => {
+      'worklet'
+      translateY.value = dragExpandableSheet(dragStartOffset.value, translationY)
+    }
+    const release = (velocityY: number): ExpandableSheetSettle => {
+      'worklet'
+      const settle = settleExpandableSheet({ offset: translateY.value, velocityY }, heights)
+      if (settle === 'dismiss') {
+        translateY.value = withTiming(screenHeight, { duration: DISMISS_DURATION_MS })
+        progress.value = withTiming(0, { duration: DISMISS_DURATION_MS }, () => {
+          runOnJS(close)()
+        })
+        return settle
+      }
+      const toFull = settle === 'full'
+      listScrolls.value = toFull
+      translateY.value = withSpring(toFull ? 0 : expandableSheetOpeningOffset(heights), DRAWER_SPRING)
+      runOnJS(setExpanded)(toFull)
+      return settle
+    }
+    return { begin, drag, release }
+  }, [collapsed, full, screenHeight, close])
+  const restingOffset = expanded ? 0 : openingOffset
+  // Why: turning the phone moves both rests, and nothing else would move the
+  // sheet onto the new one. Left at its portrait offset in landscape, it
+  // showed 71 dp of itself, and a 10 dp nudge on the handle closed it.
+  useEffect(() => {
+    if (expandable) {
+      translateY.value = restingOffset
+    }
+  }, [openingOffset])
   const reset = () => {
-    sheetHeight.value = heights.collapsed
+    translateY.value = openingOffset
+    listScrolls.value = !expandable
     setExpanded(false)
   }
-  const begin = () => {
-    'worklet'
-    dragStartHeight.value = sheetHeight.value
+  return {
+    ...worklets,
+    expanded,
+    listScrolls,
+    openingOffset,
+    /** Where the sheet stands at rest right now. */
+    restingOffset,
+    fullHeight: expandable ? full : undefined,
+    reset
   }
-  const drag = (translationY: number) => {
-    'worklet'
-    const next = dragExpandableSheet(dragStartHeight.value, translationY, heights)
-    sheetHeight.value = next.height
-    translateY.value = next.translateY
-  }
-  const release = (velocityY: number) => {
-    'worklet'
-    const settle = settleExpandableSheet({ height: sheetHeight.value, translateY: translateY.value, velocityY }, heights)
-    if (settle === 'dismiss') {
-      translateY.value = withTiming(screenHeight, { duration: DISMISS_DURATION_MS })
-      progress.value = withTiming(0, { duration: DISMISS_DURATION_MS }, () => {
-        runOnJS(onClose)()
-      })
-      return
-    }
-    sheetHeight.value = withSpring(settle === 'full' ? heights.full : heights.collapsed, SPRING_CONFIG)
-    translateY.value = withSpring(0, SPRING_CONFIG)
-    runOnJS(setExpanded)(settle === 'full')
-  }
-  const style = useAnimatedStyle(
-    () => (expandable ? { height: sheetHeight.value } : {}),
-    [sheetHeight, expandable]
-  )
-  return { expanded, reset, begin, drag, release, style }
 }

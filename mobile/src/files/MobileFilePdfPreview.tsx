@@ -54,9 +54,17 @@ export function MobileFilePdfPreview({
     { status: 'idle' | 'saving' } | MobilePdfDownloadOutcome
   >({ status: 'idle' })
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // A Download's own picker call can be queued behind another one -- a file save, or a different
+  // Download -- still open elsewhere (mobile-picker-gate.ts). `mounted` and `downloadAbort` are how
+  // it drops out rather than opening its own picker later, over whatever screen the user moved to,
+  // and then setting state on this component once it is gone.
+  const mounted = useRef(true)
+  const downloadAbort = useRef<AbortController | null>(null)
 
   useEffect(
     () => () => {
+      mounted.current = false
+      downloadAbort.current?.abort()
       if (feedbackTimer.current) {
         clearTimeout(feedbackTimer.current)
       }
@@ -69,7 +77,15 @@ export function MobileFilePdfPreview({
       return
     }
     setSaveState({ status: 'saving' })
-    const outcome = await savePreviewedPdf({ uri, fileName: fileName ?? 'document.pdf' })
+    const abort = new AbortController()
+    downloadAbort.current = abort
+    const outcome = await savePreviewedPdf(
+      { uri, fileName: fileName ?? 'document.pdf' },
+      { signal: abort.signal, isStillWanted: () => mounted.current }
+    )
+    if (!mounted.current) {
+      return
+    }
     setSaveState(outcome)
     if (feedbackTimer.current) {
       clearTimeout(feedbackTimer.current)

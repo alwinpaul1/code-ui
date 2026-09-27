@@ -18,6 +18,8 @@ type Props = {
   interactive?: boolean
   /** Opens part way and drags up to full screen, like the Claude app's sheets. */
   expandable?: boolean
+  /** Pinned above the content, outside its scroll: a title that never scrolls away. */
+  header?: ReactNode
   zIndex?: number
 }
 
@@ -31,6 +33,7 @@ export function BottomDrawer({
   fillAvailable = false,
   interactive = true,
   expandable = false,
+  header,
   zIndex
 }: Props) {
   const [mounted, setMounted] = useState(visible)
@@ -89,6 +92,7 @@ export function BottomDrawer({
       fillAvailable={fillAvailable}
       interactive={interactive}
       expandable={expandable}
+      header={header}
       zIndex={zIndex}
     >
       {children}

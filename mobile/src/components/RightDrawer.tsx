@@ -19,10 +19,10 @@ import { useReducedMotion } from '../ui/use-reduced-motion'
 // the exact same gate as BottomDrawer rather than duplicating it.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
+import { DRAWER_SPRING } from './drawer-spring'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 
 const DISMISS_THRESHOLD = 80
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Why: leftward drags (negative translateX) pull the panel past its docked edge;
 // damp them with a rubber-band factor so the drawer resists over-pulling inward.
 const RUBBER_BAND_FACTOR = 0.25
@@ -146,7 +146,7 @@ function MountedRightDrawer({
           runOnJS(dismiss)()
         })
       } else {
-        translateX.value = withSpring(0, SPRING_CONFIG)
+        translateX.value = withSpring(0, DRAWER_SPRING)
       }
     })
 

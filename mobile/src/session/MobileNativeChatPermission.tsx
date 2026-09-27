@@ -94,10 +94,11 @@ function MobileNativeChatPermissionImpl({
         : null,
     [preview, showAllRows]
   )
-  // The Claude app offers exactly three: allow once, always for this session,
-  // deny. The TUI's "switch to auto mode" is a mode change, not an answer to
-  // this prompt. Filtering never leaves nothing to tap: if it would, the agent
-  // offered only that, so keep what it gave rather than render a dead card.
+  // Three choices, as the Claude app offers: allow once, the agent's own
+  // remembered rule, deny. The TUI's "switch to auto mode" is a mode change,
+  // not an answer to this prompt. Filtering never leaves nothing to tap: if it
+  // would, the agent offered only that, so keep what it gave rather than
+  // render a dead card.
   const withoutAutoMode = permission.options.filter(
     (option) => !/^Yes, and switch to auto mode\b/i.test(option.label)
   )
@@ -308,29 +309,25 @@ function MobileNativeChatPermissionImpl({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ gap: space.sm }}
       >
-        {/* The Claude app offers exactly three: allow once, always for this
-            session, deny. The TUI's "switch to auto mode" is a mode change, not
-            an answer to this prompt, and is left out on the user's instruction. */}
+        {/* Three choices: allow once, the agent's remembered rule, deny. The
+            TUI's "switch to auto mode" is a mode change, not an answer to this
+            prompt, and is left out on the user's instruction.
+            A remembered rule keeps the words the agent drew. Until 2026-09-27
+            it read "Always allow for this session", but Claude Code 2.1.283's
+            "Yes, and don’t ask again for: git *" writes an allow rule to the
+            project's local settings, and Codex's prefix rule outlives the
+            session too: the card promised a limit the choice does not have. */}
         {choices.map((option, index) => {
-          const rememberedPrefix = option.label.match(
-            /^Yes, and don't ask again for commands that start with\s+(.+)$/is
-          )?.[1]
-          const rememberedScope = option.label.match(
-            /^Yes, and don['’]t ask again for:?\s+(.+)$/is
-          )?.[1]
           // Only when the caller wired a way to carry it — see the prop doc.
           const opensCommentSheet =
             onRespondWithComment != null && isClaudePlanFeedbackOptionLabel(option.label)
-          const shortLabel =
-            rememberedPrefix || rememberedScope
-              ? 'Always allow for this session'
-              : /^Yes$/i.test(option.label)
-                ? 'Allow once'
-                : /^No$/i.test(option.label)
-                  ? 'Deny'
-                  : opensCommentSheet
-                    ? 'Send back'
-                    : option.label
+          const shortLabel = /^Yes$/i.test(option.label)
+            ? 'Allow once'
+            : /^No$/i.test(option.label)
+              ? 'Deny'
+              : opensCommentSheet
+                ? 'Send back'
+                : option.label
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
               {submittingIndex === index ? (

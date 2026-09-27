@@ -28,6 +28,7 @@ import type {
 } from '../../../src/shared/native-chat-ask'
 import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
+import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -114,6 +115,12 @@ export type MobileNativeChatController = {
   nativeChatStreamScopeKey: string
   nativeChatPermission: ReturnType<typeof detectAgentPermission>
   nativeChatQuestion: ReturnType<typeof parseAgentQuestion>
+  /** The agent waits on a prompt the chat has no card for; the chat says so
+   *  (mobile-terminal-permission-options-merge.ts). Null while nothing waits. */
+  nativeChatTerminalWait: NativeChatTerminalWait | null
+  /** Shows the active tab's terminal, where that prompt can be answered,
+   *  without changing the tab's saved chat preference. */
+  openNativeChatTerminal: () => void
   /** The pending ask, already null while dismissed (dismissal lives here so it
    *  survives the chat-view subtree unmounting on a view toggle). */
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>

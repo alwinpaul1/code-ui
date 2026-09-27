@@ -56,8 +56,9 @@ vi.mock('react-native', () => ({
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
-    BottomDrawer: ({ visible, children }: { visible: boolean; children?: ReactNode }) =>
-      visible ? React.createElement('BottomDrawer', { visible }, children) : null
+    // The header is drawn by the drawer too, pinned above the list.
+    BottomDrawer: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children?: ReactNode }) =>
+      visible ? React.createElement('BottomDrawer', { visible }, header, children) : null
   }
 })
 vi.mock('lucide-react-native', () => ({

@@ -3,6 +3,7 @@ import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
+import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   useMobileNativeChatImageAttachments,
   type MobileNativeChatImageAttachments
@@ -106,6 +107,7 @@ export function useMobileSessionImageAttachments({
     scopeKey: nativeChatScopeKey,
     enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
     structuredNativeChat,
+    refuseUnderDialog: readSendUnderDialogRefusal,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,

@@ -74,7 +74,11 @@ describe('a session-option pick or slash command that did not go out says so', (
         restoreRejectedDraft: () => undefined,
         acceptSend: () => undefined,
         holdUnconfirmedSend,
-        onSendError
+        onSendError,
+        // No dialog on screen: these cases script the host's replies in order,
+        // and the look before a pick is driven in
+        // mobile-native-chat-writes-under-dialog.test.ts.
+        refuseUnderDialog: async () => null
       })
       return null
     }

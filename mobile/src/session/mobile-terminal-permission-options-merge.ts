@@ -1,3 +1,4 @@
+import type { TerminalDialogKind } from './mobile-native-chat-dialog-guard'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 
 /** The card built from the host's approval envelope only knows Allow/Deny; when
@@ -25,4 +26,52 @@ export function resolveObservedPermission(
   dismissed: boolean
 ): MobileChatPermission | null {
   return screen ?? (dismissed ? null : reported)
+}
+
+/** Why the chat says the agent is waiting in the terminal: the screen draws a
+ *  dialog (of this kind, with these choices), or only the host's hook status
+ *  says so. */
+export type NativeChatTerminalWait =
+  | { source: 'screen'; kind: TerminalDialogKind; choices: string[] }
+  | { source: 'hook' }
+
+/**
+ * The agent is waiting on a prompt the chat has no card for. On 2026-09-27 a
+ * background subagent's Bash prompt went unread for eight hours: the screen
+ * parser refused its title, the hook status carried no card, and the chat said
+ * nothing at all, so a stuck agent looked like a busy one. A prompt the phone
+ * cannot read must still be announced, with nothing to tap but the way to it.
+ *
+ * The screen's word is `terminalDialogKind`, the one test the sends, the
+ * queue edit and the draft mirror use too: a dialog of either agent, whatever
+ * its title says, counted only as a menu at the live bottom of the screen with
+ * one of its own rows selected, so nothing in the conversation or the chat's
+ * own draft raises the notice. Its kind words the notice: an approval, or a
+ * menu (an ask, a picker). The hook's waiting/blocked state speaks for a
+ * prompt the screen read has not seen, but not for one the screen saw leave:
+ * the hook's row outlives its answer.
+ */
+export function terminalPromptWait(input: {
+  /** The card the chat shows for a prompt: permission, question or ask. */
+  card: unknown
+  /** `terminalDialogKind` over the last screen read. */
+  dialogKind: TerminalDialogKind | null
+  /** Its numbered choices as drawn, when they read as Yes…/No…. */
+  dialogOptions: MobileChatPermission['options'] | null
+  /** A dialog was seen on screen and has since left it. */
+  dialogLeft: boolean
+  hookState: string | null | undefined
+}): NativeChatTerminalWait | null {
+  if (input.card != null) {
+    return null
+  }
+  if (input.dialogKind !== null) {
+    return {
+      source: 'screen',
+      kind: input.dialogKind,
+      choices: (input.dialogOptions ?? []).map((option) => option.label)
+    }
+  }
+  const waiting = input.hookState === 'waiting' || input.hookState === 'blocked'
+  return waiting && !input.dialogLeft ? { source: 'hook' } : null
 }

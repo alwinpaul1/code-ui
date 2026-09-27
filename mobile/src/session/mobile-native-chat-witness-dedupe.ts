@@ -46,6 +46,50 @@ export function preferredWitnessReading(a: string, b: string): 'a' | 'b' | null 
   return null
 }
 
+/** A row only the agent's TUI paints: a tool's dot ("⏺", or "●" off macOS)
+ *  or the `⎿` of its result or hint. Not words shaped like a tool: a person
+ *  types "QueueEditor() still hangs" or "Read 3 files in src first" under a
+ *  repeated question, and both were suppressed as tool rows in review
+ *  (2026-09-27). */
+function isToolRowLine(line: string): boolean {
+  return /^[⏺●⎿]/.test(line.trim())
+}
+
+/**
+ * Whether a screen reading is a message already known here, whole and on its
+ * own lines at the top, with rows of the agent's screen joined on under it,
+ * one of them a row only the TUI paints (`isToolRowLine`).
+ *
+ * The queue reader once walked from a queued row up into the transcript and
+ * read the prompt Claude had taken, with the running tool's description and
+ * its `⎿ $ …` rows, as a queued message (Claude Code 2.1.283, 2026-09-27). The
+ * copy never equalled the send it began with, so nothing retired it, and the
+ * chat drew the message a second time with the tool's rows inside the bubble.
+ * The reader now stops at the `⎿` row; this keeps any reading shaped like it
+ * from becoming a bubble. A longer message that starts with an earlier one's
+ * words and goes on in the user's own words is a different message and is
+ * kept.
+ *
+ * What it costs: a message that repeats an earlier send word for word and
+ * then pastes a line from the terminal starting with a glyph ("⎿  Error: …")
+ * is taken for the glued copy and not drawn from the queue box.
+ *
+ * `known` holds keys: `normalizeNativeChatUserText(asPaintedPrompt(text))`.
+ * An empty key (a message of photos alone) is never a head.
+ */
+export function readingGluesToolRowsOnto(known: ReadonlySet<string>, reading: string): boolean {
+  const lines = reading.split('\n')
+  for (let end = 1; end < lines.length; end += 1) {
+    const head = normalizeNativeChatUserText(asPaintedPrompt(lines.slice(0, end).join('\n')))
+    if (head.length > 0 && known.has(head)) {
+      // The shortest known head leaves the longest tail, and a longer head's
+      // tail is part of it, so the first match decides.
+      return lines.slice(end).some(isToolRowLine)
+    }
+  }
+  return false
+}
+
 function stubStem(key: string): string | null {
   return key.endsWith('…') ? key.slice(0, -1).trimEnd() : null
 }
