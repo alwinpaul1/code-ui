@@ -590,3 +590,84 @@ describe('one subagent row under the tool output of the turn it came in', () => 
     expect(agentRows()).toEqual(['peer-notice:probe:1'])
   })
 })
+
+// Combined review of fix/prompt-leak at 30c94116 (blocker): the screen reader
+// read the whole screen, queue box included, so a peer message waiting there
+// became a notice sighted IN the box. Taken by Claude, the row is painted in
+// the turn under text Claude wrote while it waited, and that text reached the
+// phone after the first sighting, so it read as a second message: two
+// "Message from" rows, or two peer bubbles. The queue block is the 2.1.281
+// layout (mobile-terminal-queued-messages.test.ts).
+describe('a peer message that waited in the queue box, once Claude takes it', () => {
+  const { show } = landingHarness(frames)
+  afterEach(() => resetAgentMessageAnchorsForTests())
+  const RULE = '────────────────────────────────────────────────────────────────────────────────'
+  const queued = (row: string) => [
+    '⏺ Reconnected. Opening Thesis main and scrolling to lever_energy.py.',
+    '',
+    '● Running 1 shell command · 14s…',
+    '',
+    row,
+    '  ctrl+x ctrl+s to send now',
+    '',
+    '✻ Incubating… (31m 27s · ↓ 67.8k tokens)',
+    '',
+    RULE,
+    '❯ Press up to edit queued messages',
+    RULE
+  ]
+  const taken = (row: string) => [
+    '⏺ Reconnected. Opening Thesis main and scrolling to lever_energy.py.',
+    '',
+    '⏺ The suite is green; reading the dump for the render counts now.',
+    '',
+    row,
+    '',
+    '✻ Incubating… (31m 40s · ↓ 68.1k tokens)',
+    '',
+    RULE,
+    '❯ ',
+    RULE
+  ]
+  const LATER = agentRow('a3', 'The suite is green; reading the dump for the render counts now.', '12:40:35.000')
+  const drawnIds = () => ((frames.at(-1)!.folded as NativeChatMessage[]) ?? []).flatMap((row) => (row.id.startsWith('peer-notice:') ? [row.id] : []))
+
+  it('is drawn once as "Message from", on a tab with no prompt hook', async () => {
+    const messages = [PROMPT, OPENING, ...LAUNCH]
+    await show('12:40:30.000', {
+      messages,
+      working: true,
+      promptHook: false,
+      queued: queuedMessagesFromScreen(queued(MIDTURN_HANDBACK_ROW)),
+      peerRows: peerNoticesFromScreen(queued(MIDTURN_HANDBACK_ROW))
+    })
+    await show('12:40:40.000', {
+      messages: [...messages, LATER],
+      working: true,
+      promptHook: false,
+      queued: queuedMessagesFromScreen(taken(MIDTURN_HANDBACK_ROW)),
+      peerRows: peerNoticesFromScreen(taken(MIDTURN_HANDBACK_ROW))
+    })
+    expect(drawnIds()).toEqual([`peer-notice:${MIDTURN_HANDBACK_FROM}:1`])
+  })
+
+  it("is drawn once as the peer bubble for another session's one-line message, with the prompt hook", async () => {
+    const ROW = '› Cross-session message from @code-ui-6f: reply with received (ctrl+o to expand)'
+    const messages = [PROMPT, OPENING, ...LAUNCH]
+    await show('12:40:30.000', {
+      messages,
+      working: true,
+      promptHook: true,
+      queued: queuedMessagesFromScreen(queued(ROW)),
+      peerRows: peerNoticesFromScreen(queued(ROW))
+    })
+    await show('12:40:40.000', {
+      messages: [...messages, LATER],
+      working: true,
+      promptHook: true,
+      queued: queuedMessagesFromScreen(taken(ROW)),
+      peerRows: peerNoticesFromScreen(taken(ROW))
+    })
+    expect(drawnIds()).toEqual(['peer-notice:code-ui-6f:1'])
+  })
+})

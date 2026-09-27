@@ -1,16 +1,17 @@
 import { normalizeNativeChatUserText } from './mobile-native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
-/** Verified against Claude Code 2.1.263. Two different queue footers exist:
- * the legacy whole-queue recall, and the per-message selector that only appears
- * when CLAUDE_CODE_KB_COHESION_FIXES is set in the agent's environment.
- * Claude Code 2.1.277 keeps the placeholder but redraws the block itself —
- * see `columnZeroQueueEntries`. Claude Code 2.1.283 draws the hints, the block,
- * its send-now row and the layout above the spinner with 2.1.282's code
- * (binaries compared 2026-09-26, not captured live). */
-export const QUEUE_HINT =
-  /^\s*[❯›>]?\s*Press up to (?:edit queued messages|select a queued message)\b/i
-export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected message\b/i
+import {
+  footerWindow,
+  isQueueBound,
+  queueFooterIndex,
+  SELECTED_HINT,
+  SEND_NOW_HINT,
+  SPINNER_ROW,
+  withComposerText
+} from './mobile-terminal-queue-block'
+
+export { QUEUE_HINT, SELECTED_HINT, queueBlockLineIndices } from './mobile-terminal-queue-block'
 
 export type ClaudeQueueView = {
   /** Empty while an entry is selected: the rows are ambiguous then. */
@@ -39,26 +40,9 @@ export function claudeQueueViewFromScreen(
   screen: readonly string[],
   draft?: unknown
 ): ClaudeQueueView {
-  const lines = [...screen]
-  // Orca removes the composer text from tail and publishes it separately, even
-  // when Claude paints a queue hint as a placeholder in that composer.
-  if (typeof draft === 'string' && (QUEUE_HINT.test(draft) || SELECTED_HINT.test(draft))) {
-    const input = lines.findLastIndex((line) => /^\s*❯\s*$/.test(line))
-    if (input !== -1) {
-      lines[input] = `❯ ${draft}`
-    }
-  }
-  // Either footer can wrap on a narrow phone-sized terminal.
-  const window = (index: number) =>
-    lines
-      .slice(index, index + 3)
-      .map((part) => part.trim())
-      .join(' ')
-  const footer = lines.findLastIndex(
-    (line, index) =>
-      (/^\s*[❯›>]?\s*Press up to\b/i.test(line) && QUEUE_HINT.test(window(index))) ||
-      (/^\s*[❯›>]?\s*Press Enter\b/i.test(line) && SELECTED_HINT.test(window(index)))
-  )
+  const lines = withComposerText(screen, draft)
+  const window = (index: number) => footerWindow(lines, index)
+  const footer = queueFooterIndex(lines)
   if (footer === -1) {
     return EMPTY_VIEW
   }
@@ -125,23 +109,6 @@ export function claudeQueueViewFromScreen(
     selected: null,
     selectedOldest: false
   }
-}
-
-/** Claude Code 2.1.277 closes its queue block with this row instead of putting
- *  "Enter to send them immediately" in the composer placeholder. Its presence
- *  is what tells the 2.1.277 shape from a 2.1.263 transcript echo, which draws
- *  a delivered message with the same column-zero marker. The chord differs by
- *  build: "ctrl+x ctrl+s to send now" on 2.1.277, "ctrl+enter to send now" on
- *  2.1.280 (2026-09-23), so any key chord before "to send now" closes it. */
-const SEND_NOW_HINT = /^\s*(?:(?:ctrl|shift|alt|option|opt|cmd|meta)\+\S+\s+)+to send now\s*$/i
-/** The working spinner Claude draws between the transcript and the queue:
- *  "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)". The glyph rotates; the
- *  ellipsis after the verb does not. */
-const SPINNER_ROW = /^[^\s❯›>⏺⎿]\s+\S.*…/
-const TOOL_ROW = /^\s*[⏺⎿]/
-
-function isQueueBound(line: string): boolean {
-  return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
 
 /** Index of the "… to send now" row directly above the composer,
