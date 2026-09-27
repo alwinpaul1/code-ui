@@ -42,7 +42,10 @@ The sheet never stands above full height: its box is exactly that tall, and
 above it the bottom would lift off the screen. Its springs settle without
 overshoot (`drawer-spring.ts`): the old `{damping 28, stiffness 400}` named no
 mass, Reanimated 4 filled in 4, and the sheet sprang about 50 dp into the
-status bar.
+status bar. At the opening height the sheet's bottom, with its inset padding,
+is below the screen, so a strip of the sheet's colour lies over the rows at
+the screen's edge and keeps them off the gesture bar. A sheet reopened while
+it was still closing shows its list from the top.
 
 ## The structured lane reads the host's roster
 

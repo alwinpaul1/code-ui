@@ -151,7 +151,7 @@ export function MountedBottomDrawer({
 
   useEffect(() => {
     if (visible) {
-      drag.scrollOffsetY.value = 0
+      drag.resetList()
       // Stands the sheet at its rest: 0, or an expandable sheet's opening offset.
       sheet.reset()
       progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
@@ -298,6 +298,15 @@ export function MountedBottomDrawer({
     return { opacity: progress.value * dragFade }
   }, [progress, translateY, openingOffset])
 
+  // Why: an expandable sheet at its opening height stands with its bottom
+  // (and the inset padding that keeps rows off the gesture bar) below the
+  // screen, so its rows ran to the screen's edge. This strip of the sheet's
+  // own colour lies over them at the edge; it rides up with the sheet only
+  // below its opening height, as the sheet leaves. Moved, never resized.
+  const bottomStripStyle = useAnimatedStyle(() => {
+    return { transform: [{ translateY: -Math.min(Math.max(translateY.value, 0), openingOffset) }] }
+  }, [translateY, openingOffset])
+
   // Why: the sheet renders through a full-screen native window (its own Modal
   // below, or the shared BottomDrawerModalHost) so it always covers the viewport
   // — even when mounted deep inside a ScrollView, where a plain absolute overlay
@@ -422,6 +431,17 @@ export function MountedBottomDrawer({
             ]}
           >
             {body}
+            {expandable ? (
+              <Animated.View
+                testID="bottom-drawer-bottom-strip"
+                pointerEvents="none"
+                style={[
+                  styles.bottomStrip,
+                  { height: insets.bottom + spacing.lg, backgroundColor: colors.bgPanel },
+                  bottomStripStyle
+                ]}
+              />
+            ) : null}
             <View style={[styles.bottomExtension, { backgroundColor: colors.bgPanel }]} />
           </Animated.View>
         </View>

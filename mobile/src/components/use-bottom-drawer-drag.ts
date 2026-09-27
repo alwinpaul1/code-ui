@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { Gesture } from 'react-native-gesture-handler'
 import type Animated from 'react-native-reanimated'
 import {
   runOnJS,
+  runOnUI,
   scrollTo,
   useAnimatedRef,
   useAnimatedScrollHandler,
@@ -177,5 +178,20 @@ export function useBottomDrawerDrag(args: {
     return { scroll, handle, content }
   }, [expandable, hasList, screenHeight, begin, drag, release, close])
 
-  return { ...gestures, scrollRef, scrollHandler, scrollOffsetY }
+  // For a sheet opened again: a reopen during the close finds the list where
+  // it was left, and the sheet stands at its opening height, where the list
+  // does not scroll. Reanimated's scrollTo does nothing on the JS thread, so
+  // it runs on the UI one; a list already at its top is left alone.
+  const resetList = useCallback(() => {
+    if (!hasList || scrollOffsetY.value <= 0) {
+      return
+    }
+    scrollOffsetY.value = 0
+    runOnUI(() => {
+      'worklet'
+      scrollTo(scrollRef, 0, 0, false)
+    })()
+  }, [hasList])
+
+  return { ...gestures, scrollRef, scrollHandler, scrollOffsetY, resetList }
 }

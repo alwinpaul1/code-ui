@@ -455,6 +455,19 @@ function playFrames(ms: number, probe: () => number): number[] {
   return seen
 }
 
+/** The strip the drawer lays over the bottom of what it shows, if any. */
+function bottomStripNode(): ReactTestInstance {
+  return renderer!.root.find((node) => typeof node.type === 'string' && node.props.testID === 'bottom-drawer-bottom-strip')
+}
+
+/** How far the strip's bottom edge is from the top of the window: the sheet's
+ *  box is bottom-anchored and moved by its translateY, and the strip sits at
+ *  the box's bottom, moved by its own. */
+function bottomStripBottom(): number {
+  const sheet = sheetStyle()
+  return win.height + translateY(sheet) + translateY(flatten(bottomStripNode().props.style))
+}
+
 function elapsedTexts(): string[] {
   return renderer!.root
     .findAll((node) => isHost(node, 'Text') && typeof node.props.children === 'string')
@@ -679,12 +692,48 @@ describe('the Background tasks sheet dragged down from full height (recording of
     expect(sheetTop()).toBeCloseTo(OPENING_TOP, 0)
   })
 
+  it('opens with its list at the top when reopened while it was still closing', async () => {
+    await open(tasksSheet('light'))
+    pullToFull()
+    listReportsScroll(150)
+    shown.visible = false
+    rerender()
+    clock.now += 50
+    scrolls.calls = []
+    shown.visible = true
+    rerender()
+    expect(listPutBackAtTop(), 'the list reopened part way down').toBe(true)
+    clock.now += 1000
+    expect(sheetTop()).toBe(OPENING_TOP)
+  })
+
   it('keeps the chat behind dimmed at its opening height', async () => {
     await open(tasksSheet('light'))
     const backdrop = renderer!.root.find(
       (node) => isHost(node, 'AnimatedView') && flatten(node.props.style).backgroundColor === lightColors.bgOverlay
     )
     expect(flatten(backdrop.props.style).opacity).toBe(1)
+  })
+})
+
+describe('the bottom of the Background tasks sheet', () => {
+  it.each(['light', 'dark'] as const)('keeps the rows it shows clear of the gesture bar, in %s', async (scheme) => {
+    const colors = scheme === 'light' ? lightColors : darkColors
+    await open(tasksSheet(scheme))
+    // The gesture bar's inset (24) and the drawer's own 16 below it.
+    expect(flatten(bottomStripNode().props.style).height).toBe(24 + 16)
+    expect(flatten(bottomStripNode().props.style).backgroundColor).toBe(colors.bgPanel)
+    expect(bottomStripBottom(), 'the strip is not on the screen edge at the opening height').toBe(WINDOW)
+    // Drawn after the list, so it lies over the rows that run under the bar.
+    const children = sheetNode().children as ReactTestInstance[]
+    const listAt = children.findIndex((child) => child.findAll((node) => isHost(node, 'AnimatedScrollView')).length > 0)
+    expect(children.indexOf(bottomStripNode())).toBeGreaterThan(listAt)
+    pullToFull()
+    expect(bottomStripBottom(), 'the strip left the screen edge at full height').toBe(WINDOW)
+    // Dragged down to close, the strip goes with the sheet.
+    begin(handlePan)
+    move(handlePan, 261 + 60)
+    expect(bottomStripBottom()).toBe(WINDOW + 60)
   })
 })
 
