@@ -3,7 +3,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
   footerWindow,
-  isQueueBound,
+  queueBlockRows,
   queueFooterIndex,
   SELECTED_HINT,
   SEND_NOW_HINT,
@@ -161,34 +161,16 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
  * the user's messages; an empty one only hides a pencil.
  */
 function columnZeroQueueEntries(lines: readonly string[], sendNow: number): string[] {
-  const rows: string[] = []
-  let bounded = false
-  let i = sendNow - 1
-  for (; i >= Math.max(0, sendNow - 60); i--) {
-    const line = lines[i]!
-    if (/^[❯›>]\s+\S/.test(line) || /^\s{2,}\S/.test(line)) {
-      rows.unshift(line)
-      continue
-    }
-    bounded = isQueueBound(line)
-    if (!bounded) {
-      // A spinner line that hard-wrapped on a phone-width terminal puts its
-      // tail at column zero, marker-less. The row above it says what it is.
-      const above = lines[i - 1]
-      bounded = above !== undefined && SPINNER_ROW.test(above)
-    }
-    break
-  }
-  // Indented rows above the first marker are not a message's wrapped lines:
-  // they belong to whatever sits above the queue (a tool row's own
-  // continuation, the spinner's todo list).
-  while (rows.length > 0 && !/^[❯›>]\s+\S/.test(rows[0]!)) {
-    rows.shift()
-  }
+  // Which rows, and what closes them above: queueBlockRows, which also stops
+  // at the transcript's own tool rows above the newest entry.
+  const { rows, bounded } = queueBlockRows(lines, sendNow)
   if (!bounded || rows.length === 0) {
     return []
   }
-  return queueEntries(rows, /^[❯›>]\s+(.+)$/)
+  return queueEntries(
+    rows.map((index) => lines[index]!),
+    /^[❯›>]\s+(.+)$/
+  )
 }
 
 /** The head of the TUI's row for a peer message, as a queue row: the `›`

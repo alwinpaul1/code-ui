@@ -6,7 +6,7 @@ import {
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { useStableEchoes } from './use-stable-echoes'
-import { preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
+import { preferredWitnessReading, readingGluesToolRowsOnto } from './mobile-native-chat-witness-dedupe'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import {
   normalizeNativeChatUserText,
@@ -30,7 +30,8 @@ import {
  * here and drawn where it was, until the transcript shows it (a prompt sent
  * while the agent is idle does land as a real user turn) or the tab changes.
  */
-/** Queue entries whose first sighting is remembered at once; see `appeared`. */
+/** Queue entries remembered at once: their first sightings (`appeared`), and
+ *  the readings a glued copy is checked against (`listed`). */
 const SIGHTING_CAP = 64
 
 export function useAbsorbedQueueEchoes(
@@ -86,6 +87,10 @@ export function useAbsorbedQueueEchoes(
   /** The raw row that was last when each queue entry was first seen, by key:
    *  where the message was SENT, which is where it is drawn (2026-09-23). */
   const appeared = useRef(new Map<string, string>())
+  /** Every queue entry this scope has read, by key, newest last: what a
+   *  reading with tool rows glued on is checked against even after the clean
+   *  one has been held and retired (readingGluesToolRowsOnto). */
+  const listed = useRef<string[]>([])
   const provisional = useRef(new Set<string>())
   const scope = useRef(scopeKey)
   const counter = useRef(0)
@@ -96,6 +101,7 @@ export function useAbsorbedQueueEchoes(
     provisional.current = new Set()
     previousSent.current = null
     appeared.current = new Map()
+    listed.current = []
   }
   // Keyed on collapsed whitespace: the queue box and the scrollback wrap the
   // same message differently, and keying on the raw text showed it twice
@@ -103,6 +109,24 @@ export function useAbsorbedQueueEchoes(
   const live = queued.map(promptKey).filter((text) => text.length > 0)
   const own = ownPrompts.map(promptKey)
   const anchorId = rawMessages.at(-1)?.id ?? null
+  for (const key of live) {
+    if (!listed.current.includes(key)) {
+      listed.current = [...listed.current, key].slice(-SIGHTING_CAP)
+    }
+  }
+  // A queued message that did land as its own user turn needs no echo.
+  const landedText = folded
+    .filter((message) => message.role === 'user')
+    .map((message) =>
+      message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+    )
+  const landed = landedText.map(promptKey)
+  const landedCutKeys = landedText.map(cutKey)
+  // Messages this hook knows the words of, whichever copy they came from. A
+  // reading that is one of them with a tool's rows glued under it is that
+  // message, not a new one.
+  const known = (): Set<string> =>
+    new Set([...own, ...landed, ...live, ...listed.current, ...held.current.keys()])
   // The first sighting of each entry is its send: the Claude app draws a
   // mid-turn message there, with the calls that ran while it waited below it,
   // and the user chose that order over the desk terminal's, which draws it
@@ -136,6 +160,12 @@ export function useAbsorbedQueueEchoes(
     // No transcript yet means no row to anchor on, and a null anchor pins
     // the echo to the bottom for good; it is picked up on a later render.
     if (key.length === 0 || anchorId === null || live.some((k) => sameMessage(k, key))) {
+      return
+    }
+    // The prompt Claude took, read with the running tool's rows under it
+    // (2026-09-27): never a second bubble, whether or not the phone still
+    // counts the send as its own.
+    if (readingGluesToolRowsOnto(known(), text)) {
       return
     }
     // A reading that only glues the screen's rows onto one of the phone's
@@ -189,18 +219,13 @@ export function useAbsorbedQueueEchoes(
     hold(text, false)
   }
   previous.current = queued
-  // A queued message that did land as its own user turn needs no echo.
-  const landedText = folded
-    .filter((message) => message.role === 'user')
-    .map((message) =>
-      message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    )
-  const landed = landedText.map(promptKey)
-  const landedCutKeys = landedText.map(cutKey)
+  const knownBeforeRetiring = known()
   for (const key of Array.from(held.current.keys())) {
     const entry = held.current.get(key)
     if (
       [...live, ...own].some((other) => sameMessage(other, key)) ||
+      // Held before the message it glues onto was known here.
+      (entry != null && readingGluesToolRowsOnto(knownBeforeRetiring, entry.text)) ||
       landed.some((other) => sameMessage(other, key)) ||
       (entry != null && landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other))) ||
       // The witness reads the message off the agent's SCREEN, where it is
