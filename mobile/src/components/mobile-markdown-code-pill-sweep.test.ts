@@ -12,9 +12,11 @@ import {
 } from './mobile-markdown-code-pill-phone.test-support'
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
 
+/** The system font size (Settings > Display > Font size), as RN reads it. */
+const system = vi.hoisted(() => ({ fontScale: 1 }))
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
-  PixelRatio: { getFontScale: () => 1 },
+  PixelRatio: { getFontScale: () => system.fontScale },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -35,6 +37,7 @@ const device = createPhone(() => renderer!)
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  system.fontScale = 1
   resetRememberedPillCutsForTests()
 })
 
@@ -212,6 +215,50 @@ describe('pills drawn wider than estimated, on a fresh phone', () => {
             ...sharedLines(lines).map((text) => `shared "${text}"`),
             ...overflowingLines(lines, lineWidth),
             ...earlyLineEnds(lines, lineWidth, 1, pillError)
+          ]
+          found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
+          act(() => renderer?.unmount())
+          renderer = null
+          resetRememberedPillCutsForTests()
+        }
+      }
+    })
+    expect(found).toEqual([])
+  })
+})
+
+// The same paragraphs at a larger system font size. Android scales sp
+// through a curve from Android 14 on (FontScaleConverterFactory: at 130%,
+// 14 sp is 18.8 dp and 15 sp 19.5), so a pill's text is drawn a few per cent
+// wider again than the prose beside it is scaled.
+describe('pills at a larger system font size, on a fresh phone', () => {
+  const PARAGRAPHS = [
+    'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.',
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+
+  it.each([
+    [1.15, 1.015],
+    [1.3, 1.035]
+  ])('settles whole at %s, pill text drawn x%s beyond it, at every width', (fontScale, pillError) => {
+    system.fontScale = fontScale
+    const as = { fontScale, pillError }
+    const found: string[] = []
+    PARAGRAPHS.forEach((base, index) => {
+      for (let n = 0; n <= LEAD.length; n += 6) {
+        const content = `${LEAD.slice(0, n).join(' ')}${n ? ' ' : ''}${base}`
+        for (let width = 300; width <= 820; width += 40) {
+          act(() => {
+            renderer = create(createElement(MobileMarkdown, { content }))
+          })
+          act(() => device.layOutDocument(width))
+          const { lines, lineWidth } = device.settle(width, as)
+          const problems = [
+            ...sharedLines(lines).map((text) => `shared "${text}"`),
+            ...overflowingLines(lines, lineWidth),
+            ...earlyLineEnds(lines, lineWidth, 1, pillError, fontScale)
           ]
           found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
           act(() => renderer?.unmount())

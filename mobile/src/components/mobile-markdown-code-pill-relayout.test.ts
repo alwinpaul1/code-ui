@@ -351,6 +351,21 @@ describe('reply parts streaming through one live row', () => {
 })
 
 describe('a system font size change', () => {
+  // Review of 12e3b98e: the cut left the system font size out and waited to
+  // learn it from a lone pill, so at 130% every first layout drew its pills
+  // cut for the smaller type: whole-line pieces ran past the edge and first
+  // pieces went down a line, until the layouts after put them right.
+  it('cuts its first pills for the larger type, before it has read any', () => {
+    system.fontScale = 1.3
+    const content =
+      'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-first` and the fix in `mobile/src/components/use-markdown-code-pill-runs.ts` today.'
+    mount(content, 360)
+    const first = device.lines(360, { fontScale: 1.3 })
+    expect([...overflowingLines(first.lines, first.lineWidth), ...sharedLines(first.lines)]).toEqual([])
+    const { lines, lineWidth } = device.settle(360, { fontScale: 1.3 })
+    expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth), ...earlyLineEnds(lines, lineWidth, 1, 1, 1.3)]).toEqual([])
+  })
+
   it('does not reuse the pills learnt at the old size', () => {
     const content = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe` here.'
     mount(content, 360)
@@ -358,12 +373,17 @@ describe('a system font size change', () => {
     unmount()
     system.fontScale = 1.3
     mount(content, 360)
-    // Nothing learnt at this size: cut to a whole line, as on a first mount.
+    // Nothing learnt at this size: cut to a whole line at it, as on a first
+    // mount.
     expect(device.pillTexts()).toEqual(
-      cutCodePills('/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe', 360, 360, {
-        fontSize: 14,
-        insets: 10
-      }).pieces
+      cutCodePills(
+        '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe',
+        360,
+        360,
+        { fontSize: 14, insets: 10, scale: 1.3 },
+        0,
+        true
+      ).pieces
     )
   })
 })

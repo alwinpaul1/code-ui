@@ -8,7 +8,9 @@ import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './
  * - Widths: Instrument Sans Regular advances (hmtx of the bundled TTF), an em
  *   for a wide character from a fallback font; a pill as its text times
  *   `pillError` (how much wider the phone draws it than the app estimates),
- *   plus kerning when given, plus its padding and border.
+ *   plus kerning when given, plus its padding and border. At a system font
+ *   size (`fontScale`) all type is that much wider, prose and pill text
+ *   alike, and padding and border are not (Android scales sp, not dp).
  * - Lines: greedy breaking (`textBreakStrategy="simple"`) after spaces and
  *   around an inline view (U+FFFC, class CB), no break before closing
  *   punctuation, as FontMetricsUtil.kt reports them (RN 0.86): `width` is
@@ -24,6 +26,8 @@ import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './
 export type PhoneAs = {
   pillError?: number
   textScale?: number
+  /** The system font size (Settings > Display > Font size). */
+  fontScale?: number
   /** Kerning per pair of characters inside a pill, per 1000 em. */
   kern?: Readonly<Record<string, number>>
 }
@@ -70,10 +74,11 @@ function fiberOf(node: ReactTestInstance): { key: string | null; stateNode: unkn
  *  inline View as one placeholder as wide as the pill it draws. */
 function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[]): ModelItem[] {
   const size = Number(flatStyle(node.props.style).fontSize ?? fontSize)
+  const system = as.fontScale ?? 1
   for (const child of node.children) {
     if (typeof child === 'string') {
       for (const ch of Array.from(child)) {
-        out.push({ kind: 'char', ch, width: glyphWidth(ch, size) })
+        out.push({ kind: 'char', ch, width: glyphWidth(ch, size) * system })
       }
     } else if (child.type === ('View' as never)) {
       const box = flatStyle(child.props.style)
@@ -87,7 +92,7 @@ function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: Mo
       const glyphs =
         chars.reduce((sum, ch) => sum + glyphWidth(ch, labelSize, String(labelStyle.fontFamily ?? '')), 0) +
         (kern * labelSize) / 1000
-      out.push({ kind: 'pill', text, width: glyphs * (as.pillError ?? 1) + inset })
+      out.push({ kind: 'pill', text, width: glyphs * (as.pillError ?? 1) * system + inset })
     } else {
       flatten(child, size, as, out)
     }
@@ -236,7 +241,7 @@ export function createPhone(current: () => ReactTestRenderer) {
   const passNow = (documentWidth: number, as: PhoneAs = {}): boolean => {
     const { text, event } = lines(documentWidth, as)
     const mounted = fiberOf(text).stateNode as object
-    const tree = JSON.stringify([documentWidth, as.textScale ?? 1, hostTree(text)])
+    const tree = JSON.stringify([documentWidth, as.textScale ?? 1, as.fontScale ?? 1, hostTree(text)])
     const sent = JSON.stringify(event.nativeEvent.lines)
     const last = laidOut.get(mounted)
     if (last?.tree === tree) {
@@ -322,7 +327,7 @@ export function createPhone(current: () => ReactTestRenderer) {
 /** Nothing on the next line could have fitted at the end of this one. For a
  *  pill that means its first unbreakable piece (up to a slash or a space),
  *  and the punctuation glued after it when that is the whole pill. */
-export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, pillError = 1): string[] {
+export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, pillError = 1, fontScale = 1): string[] {
   const found: string[] = []
   lines.forEach((line, index) => {
     const next = lines[index + 1]
@@ -335,7 +340,8 @@ export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, 
     if (head.kind === 'pill') {
       const unit = /^[^/\s]*[/\s]?/.exec(head.text)![0]
       need =
-        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError + 10 * scale
+        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError * fontScale +
+        10 * scale
       if (unit.length === head.text.length) {
         for (const item of next.items.slice(1)) {
           if (item.kind !== 'char' || item.ch === ' ') {
@@ -346,7 +352,7 @@ export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, 
       }
     } else {
       const word = /^\S+/.exec(next.text)?.[0] ?? ''
-      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, 15 * scale), 0)
+      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, 15 * scale), 0) * fontScale
     }
     if (need <= room - 2) {
       found.push(`line ${index} "${line.text}" left ${room.toFixed(1)} dp for "${next.text.slice(0, 12)}" (${need.toFixed(1)} dp)`)

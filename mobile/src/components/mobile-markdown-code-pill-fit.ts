@@ -80,20 +80,20 @@ export function pillFitScale(fit: PillFit | undefined, textScale = 1): number {
 
 /**
  * The scale for a span that has no reading of its own: the most any span in
- * the Text has read. The system font size scales every pill alike (Android
- * scales an inline view's room by it: toPixelFromSP), so a short span that
- * has never been alone on a line is cut as the long one beside it reads; with
- * every advance read from the font, what differs between spans is kerning,
- * which only makes this cut a little short. 1 until anything is read.
+ * the Text has read. The system font size scales every pill alike, so a
+ * short span that has never been alone on a line is cut as the long one
+ * beside it reads; with every advance read from the font, what differs
+ * between spans is kerning, which only makes this cut a little short. Until
+ * anything is read, `guess`: the system font size (use-markdown-code-pill-runs.ts).
  */
-export function textPillScale(fits: ReadonlyMap<number, PillFit>): number {
+export function textPillScale(fits: ReadonlyMap<number, PillFit>, guess = 1): number {
   let most: number | undefined
   for (const fit of fits.values()) {
     if (fit.floor !== undefined) {
       most = Math.max(most ?? fit.floor, fit.floor)
     }
   }
-  return most ?? 1
+  return most ?? guess
 }
 
 const TOLERANCE = 1
@@ -293,8 +293,10 @@ export function readPillFits(args: {
   measure: PillMeasure
   /** The Text's own type size, for the punctuation beside a pill. */
   proseSize: number
+  /** The scale a span is cut with before anything is read (textPillScale). */
+  guess?: number
 }): PillFitRead {
-  const { lines, spans, lineWidth, current, cut, measure, proseSize } = args
+  const { lines, spans, lineWidth, current, cut, measure, proseSize, guess = 1 } = args
   const at = placeholders(lines)
   const drawn = spans.reduce((sum, span) => sum + span.pieces.length, 0)
   if (at.length !== drawn || !(lineWidth > 0) || !brokenTo(lines, lineWidth)) {
@@ -304,7 +306,7 @@ export function readPillFits(args: {
   let stale = false
   // Each span's pieces, and what its own lines read of its scale; then the
   // Text's scale from all of them, for the spans with none.
-  const heldTextScale = textPillScale(current.fits)
+  const heldTextScale = textPillScale(current.fits, guess)
   let offset = 0
   const learnt = spans.map((span, ordinal) => {
     const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[offset + piece]!, span: ordinal, piece, text }))
@@ -312,7 +314,7 @@ export function readPillFits(args: {
     const held = current.fits.get(ordinal)
     return { owners, held, ...learnScale(lines, owners, measure, held, lineWidth, proseSize, heldTextScale) }
   })
-  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])))
+  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])), guess)
   const allOwners = learnt.flatMap(({ owners }) => owners)
   spans.forEach((span, ordinal) => {
     const { owners, held, floor } = learnt[ordinal]!

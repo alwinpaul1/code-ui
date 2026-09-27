@@ -63,9 +63,12 @@ export function resetRememberedPillCutsForTests(): void {
 
 const NO_FITS: ReadonlyMap<number, PillFit> = new Map()
 
-/** The system font size (Settings > Display > Font size). Android scales an
- *  inline view's room on the line by it, so cuts learnt at one size are not
- *  another's. 1 where the platform does not say. */
+/** The system font size (Settings > Display > Font size). All type is drawn
+ *  that much larger, a pill's text and the words beside it, and its padding
+ *  and border are not, so cuts learnt at one size are not another's; before
+ *  anything is read, a pill is cut at it (review of 12e3b98e: cut at 1 and
+ *  left to learn, every first layout at 130% ran its pills past the edge or
+ *  down a line). 1 where the platform does not say. */
 function systemFontScale(): number {
   try {
     return PixelRatio.getFontScale()
@@ -164,11 +167,12 @@ export function useMarkdownCodePillRuns(
           ? remembered.get(rememberKey)
           : undefined
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
-    // A table cell is set at BASE - 2; both follow the zoom.
-    const proseSize = (table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale
+    // A table cell is set at BASE - 2; both follow the zoom and the system
+    // font size.
+    const proseSize = (table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale * fontScale
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
-    const textScaleNow = textPillScale(current.fits)
+    const textScaleNow = textPillScale(current.fits, fontScale)
     const spans: PillSpanDrawn[] = []
     let backtick = false
     const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) =>
@@ -206,7 +210,8 @@ export function useMarkdownCodePillRuns(
         current,
         cut: cutWith,
         measure: { textWidth: (piece) => codeTextWidth(piece, font.fontSize), insets: font.insets },
-        proseSize
+        proseSize,
+        guess: fontScale
       })
       switch (result.kind) {
         case 'unreadable':
