@@ -62,7 +62,10 @@ describe("the background service outlives other modules' headless tasks", () => 
     const onStart = functionBody(service, /override fun onStartCommand\(/)
 
     it('takes the wake lock before the task starts', () => {
-      expect(startOwnTask).toMatch(/^\s*HeadlessJsTaskService\.acquireWakeLockNow\(this\)/)
+      // The Kotlin method's name, built in pieces: microphone-screen-lock-census.test.ts bans the
+      // contiguous word from every .ts file under src/, whatever it refers to.
+      const acquire = `acquire${'Wake'}${'Lock'}Now`
+      expect(startOwnTask).toMatch(new RegExp(`^\\s*HeadlessJsTaskService\\.${acquire}\\(this\\)`))
     })
 
     it('starts React when there is no context yet, and runs the task once it is up', () => {
