@@ -28,6 +28,12 @@ export const VIDEO_FRAME_PREVIEW_QUALITY = 0.5
 /** `waitUntilReady` past this long fails loudly instead of leaking the player
  *  forever — nothing native ever promised the `readyToPlay` status arrives. */
 export const VIDEO_FRAME_READY_TIMEOUT_MS = 10_000
+/** Same reasoning, per frame: a stalled `generateThumbnails`/`encodeFrame`
+ *  call carries no promise it ever settles either. Before this, cancel
+ *  checked `signal` only between whole native calls, so a stall inside one
+ *  left it unreachable — the extraction slot (and every send in that tab
+ *  waiting on it) stuck until the app restarted (2026-09-27 review). */
+export const VIDEO_FRAME_STEP_TIMEOUT_MS = 10_000
 
 export class VideoFrameExtractionError extends Error {
   constructor(message: string) {
@@ -95,6 +101,10 @@ export type VideoFrameExtractionDeps = {
   readonly maxEdge?: number
   readonly quality?: number
   readonly readyTimeoutMs?: number
+  /** Per-frame counterpart of `readyTimeoutMs` — how long a single
+   *  `generateThumbnails`/`encodeFrame` call is given before it is treated
+   *  as stalled. Defaults to `VIDEO_FRAME_STEP_TIMEOUT_MS`. */
+  readonly stepTimeoutMs?: number
 }
 
 export type ExtractedVideoFrame = EncodedVideoFrame & {
@@ -200,6 +210,12 @@ export function formatVideoFrameSizeLabel(bytes: number | null): string {
 export function describeVideoFrameExtractionFailure(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error)
   const lower = message.toLowerCase()
+  if (lower.includes('timed out') && lower.includes('frame')) {
+    // A stalled per-frame native call (generateThumbnails/encodeFrame), not
+    // the initial ready-wait — distinct enough from "took too long to load"
+    // that a reader mid-read isn't told the video never opened at all.
+    return 'took too long reading one of its frames'
+  }
   if (lower.includes('timed out')) {
     return 'took too long to load'
   }
@@ -229,16 +245,20 @@ function checkCancelled(signal: AbortSignal | undefined): void {
   }
 }
 
-/** Resolves once `player` reports `readyToPlay`, rejects on its own `error`
- *  status, on `signal` aborting, or after `timeoutMs` with no answer at all
- *  — the case nothing else here catches, since `waitUntilReady` has no
- *  contract that it ever settles by itself. */
-function waitUntilReadyOrTimeout(
-  player: VideoFramePlayer,
+/** Resolves or rejects exactly as `promise` does, unless `signal` aborts or
+ *  `timeoutMs` passes first — either one settles this race instead, and
+ *  whichever loses is ignored (a `promise` that keeps running after losing
+ *  the race, native code included, has nothing left listening to it). Shared
+ *  by the ready-wait and the per-frame native calls: neither has a contract
+ *  that it ever settles by itself, and a signal that only got checked
+ *  BETWEEN calls could never interrupt one already in flight. */
+function raceAgainstSignalAndTimeout<T>(
+  promise: Promise<T>,
   signal: AbortSignal | undefined,
-  timeoutMs: number
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+  timeoutMs: number,
+  onTimeout: () => Error
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
     let settled = false
     const finish = (run: () => void): void => {
       if (settled) {
@@ -250,17 +270,32 @@ function waitUntilReadyOrTimeout(
       run()
     }
     const timer = setTimeout(() => {
-      finish(() => reject(new VideoFrameExtractionError('Timed out waiting for the video to load')))
+      finish(() => reject(onTimeout()))
     }, timeoutMs)
     const onAbort = (): void => {
       finish(() => reject(new VideoFrameExtractionCancelledError()))
     }
     signal?.addEventListener('abort', onAbort)
-    player.waitUntilReady().then(
-      () => finish(resolve),
+    promise.then(
+      (value) => finish(() => resolve(value)),
       (error: unknown) => finish(() => reject(error))
     )
   })
+}
+
+/** Resolves once `player` reports `readyToPlay`, rejects on its own `error`
+ *  status, on `signal` aborting, or after `timeoutMs` with no answer at all. */
+function waitUntilReadyOrTimeout(
+  player: VideoFramePlayer,
+  signal: AbortSignal | undefined,
+  timeoutMs: number
+): Promise<void> {
+  return raceAgainstSignalAndTimeout(
+    player.waitUntilReady(),
+    signal,
+    timeoutMs,
+    () => new VideoFrameExtractionError('Timed out waiting for the video to load')
+  )
 }
 
 /**
@@ -279,6 +314,7 @@ export async function* extractVideoFrames(
   const maxEdge = deps.maxEdge ?? VIDEO_FRAME_MAX_EDGE
   const quality = deps.quality ?? VIDEO_FRAME_JPEG_QUALITY
   const readyTimeoutMs = deps.readyTimeoutMs ?? VIDEO_FRAME_READY_TIMEOUT_MS
+  const stepTimeoutMs = deps.stepTimeoutMs ?? VIDEO_FRAME_STEP_TIMEOUT_MS
   const player = deps.createPlayer(uri)
   try {
     checkCancelled(deps.signal)
@@ -293,7 +329,12 @@ export async function* extractVideoFrames(
     for (let i = 0; i < timestampsMs.length; i += 1) {
       checkCancelled(deps.signal)
       const timeSec = (timestampsMs[i] as number) / 1000
-      const thumbnails = await player.generateThumbnails([timeSec], maxEdge)
+      const thumbnails = await raceAgainstSignalAndTimeout(
+        player.generateThumbnails([timeSec], maxEdge),
+        deps.signal,
+        stepTimeoutMs,
+        () => new VideoFrameExtractionError('Timed out reading a frame from this video')
+      )
       const thumbnail = thumbnails[0]
       if (!thumbnail) {
         throw new VideoFrameExtractionError('Could not read a frame from this video')
@@ -302,7 +343,12 @@ export async function* extractVideoFrames(
         // Inside the try: a cancel seen right here still releases the
         // thumbnail below, instead of throwing past it unreleased.
         checkCancelled(deps.signal)
-        const encoded = await deps.encodeFrame(thumbnail, quality)
+        const encoded = await raceAgainstSignalAndTimeout(
+          deps.encodeFrame(thumbnail, quality),
+          deps.signal,
+          stepTimeoutMs,
+          () => new VideoFrameExtractionError('Timed out encoding a frame from this video')
+        )
         deps.onProgress?.({ done: i + 1, total })
         yield { kind: 'frame', frame: { ...encoded, index: i + 1 } }
       } finally {

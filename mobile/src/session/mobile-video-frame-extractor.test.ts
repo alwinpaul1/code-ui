@@ -11,6 +11,7 @@ import {
   VideoFrameExtractionError,
   VIDEO_FRAME_MAX_COUNT,
   VIDEO_FRAME_READY_TIMEOUT_MS,
+  VIDEO_FRAME_STEP_TIMEOUT_MS,
   type VideoFrameExtractionEvent,
   type VideoFramePlayer,
   type VideoFrameThumbnail
@@ -38,6 +39,9 @@ function fakePlayer(
     readyError?: Error
     neverReady?: boolean
     thumbnailsPerCall?: (timesSec: number[]) => VideoFrameThumbnail[]
+    /** `generateThumbnails` never settles at all, the same stall shape a
+     *  hung native call has — for the per-frame timeout/cancel tests. */
+    neverGenerateThumbnails?: boolean
   }
 ): VideoFramePlayer & { released: boolean; generateThumbnailsCalls: Array<{ times: number[]; maxEdge: number }> } {
   const generateThumbnailsCalls: Array<{ times: number[]; maxEdge: number }> = []
@@ -53,6 +57,9 @@ function fakePlayer(
           : Promise.resolve(),
     generateThumbnails: async (timesSec: number[], maxEdge: number) => {
       generateThumbnailsCalls.push({ times: timesSec, maxEdge })
+      if (options?.neverGenerateThumbnails) {
+        return new Promise<VideoFrameThumbnail[]>(() => {})
+      }
       return options?.thumbnailsPerCall ? options.thumbnailsPerCall(timesSec) : timesSec.map(() => fakeThumbnail())
     },
     release: () => {
@@ -189,6 +196,20 @@ describe('describeVideoFrameExtractionFailure', () => {
     expect(describeVideoFrameExtractionFailure(new VideoFrameExtractionError('Could not read a frame from this video'))).toBe(
       'could not be read at one of its frames'
     )
+  })
+
+  it('tells a stalled per-frame call apart from a stalled initial load', () => {
+    // 2026-09-27 review: both are "timed out", but a reader already partway
+    // through a video isn't told it never opened at all.
+    expect(
+      describeVideoFrameExtractionFailure(new VideoFrameExtractionError('Timed out reading a frame from this video'))
+    ).toBe('took too long reading one of its frames')
+    expect(
+      describeVideoFrameExtractionFailure(new VideoFrameExtractionError('Timed out encoding a frame from this video'))
+    ).toBe('took too long reading one of its frames')
+    expect(
+      describeVideoFrameExtractionFailure(new VideoFrameExtractionError('Timed out waiting for the video to load'))
+    ).toBe('took too long to load')
   })
 
   it('never repeats a raw native exception string verbatim', () => {
@@ -411,5 +432,88 @@ describe('extractVideoFrames — readiness timeout', () => {
     const result = await pending
     expect(result).toBeInstanceOf(VideoFrameExtractionCancelledError)
     expect(player.released).toBe(true)
+  })
+})
+
+describe('extractVideoFrames — per-frame stall', () => {
+  // 2026-09-27 review: before this, a cancel only checked `signal` BETWEEN
+  // whole native calls, so a `generateThumbnails`/`encodeFrame` call that
+  // never settled — a real risk, nothing native promises it always does —
+  // was unreachable by cancel and unbounded by any timeout. The slot (and
+  // every send in that tab waiting on it) stuck until the app restarted.
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('fails a stalled generateThumbnails call after its own timeout, rather than hanging forever', async () => {
+    const player = fakePlayer(10, { neverGenerateThumbnails: true })
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: fakeEncoder,
+        stepTimeoutMs: 5000
+      })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(5000)
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionError)
+    expect((result as Error).message).toMatch(/timed out reading a frame/i)
+    expect(player.released).toBe(true)
+  })
+
+  it('defaults the per-frame timeout to 10 seconds', async () => {
+    const player = fakePlayer(10, { neverGenerateThumbnails: true })
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', { createPlayer: () => player, encodeFrame: fakeEncoder })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(VIDEO_FRAME_STEP_TIMEOUT_MS - 1)
+    expect(player.released).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionError)
+  })
+
+  it('cancelling stops a stalled generateThumbnails call immediately, without waiting out its timeout', async () => {
+    const controller = new AbortController()
+    const player = fakePlayer(10, { neverGenerateThumbnails: true })
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: fakeEncoder,
+        signal: controller.signal,
+        stepTimeoutMs: 30_000
+      })
+    ).catch((error: unknown) => error)
+    // Let the generator actually reach the stalled generateThumbnails call
+    // before aborting — aborting right away would only re-prove the
+    // (already covered) ready-wait cancel, since that settles first and
+    // the frame loop would never even be reached.
+    await vi.advanceTimersByTimeAsync(0)
+    expect(player.generateThumbnailsCalls).toHaveLength(1)
+    controller.abort()
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionCancelledError)
+    expect(player.released).toBe(true)
+  })
+
+  it('fails a stalled encodeFrame call after its own timeout too, releasing the thumbnail', async () => {
+    const thumbnail = fakeThumbnail()
+    const player = fakePlayer(10, { thumbnailsPerCall: () => [thumbnail] })
+    const hangingEncoder = () => new Promise<never>(() => {})
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: hangingEncoder,
+        stepTimeoutMs: 5000
+      })
+    ).catch((error: unknown) => error)
+    await vi.advanceTimersByTimeAsync(5000)
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionError)
+    expect((result as Error).message).toMatch(/timed out encoding a frame/i)
+    expect(thumbnail.released).toBe(true)
   })
 })
