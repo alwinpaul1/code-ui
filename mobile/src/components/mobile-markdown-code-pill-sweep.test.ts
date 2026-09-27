@@ -200,6 +200,22 @@ describe('pills drawn wider than estimated, on a fresh phone', () => {
     expect([...sharedLines(lines), ...earlyLineEnds(lines, lineWidth, 1, 1.03)]).toEqual([])
   })
 
+  // At phone widths a span tried whole while its scale was a guess ran past
+  // its line's edge, was read as if cut to fit it, and read 5% too wide: two
+  // of its pieces then fitted side by side, or a line ended early.
+  it.each([
+    [1, 3, 372, 1.15],
+    [1, 18, 372, 1.1]
+  ])('settles whole at a phone width: paragraph %i after %i words at %i dp, drawn x%s', (index, words, width, pillError) => {
+    const content = `${LEAD.slice(0, words).join(' ')} ${PARAGRAPHS[index]!}`
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content }))
+    })
+    act(() => device.layOutDocument(width))
+    const { lines, lineWidth } = device.settle(width, { pillError })
+    expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth), ...earlyLineEnds(lines, lineWidth, 1, pillError)]).toEqual([])
+  })
+
   it.each([1.03, 1.05, 1.1, 1.15, 1.3])('settles whole, drawn x%s, at every width', (pillError) => {
     const found: string[] = []
     PARAGRAPHS.forEach((base, index) => {

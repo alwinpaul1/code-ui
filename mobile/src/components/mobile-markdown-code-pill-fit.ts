@@ -190,9 +190,11 @@ function sameCut(cut: CodePillCut, span: PillSpanDrawn): boolean {
  * A span's scale, from the current layout and what it has seen before. A line
  * that holds one of its pieces and nothing else reports that piece's width as
  * drawn; one that holds a piece and the punctuation glued to it (`\uFFFC.`)
- * does, less that punctuation and any hanging space at the prose size. Such a
- * line that still runs past its edge was cut to fit at the current scale, so
- * the scale rises by at least that much. The first reading sets it; after
+ * does, less that punctuation and any hanging space at the prose size, and
+ * so when the pill runs past the line's edge too. (It was once pushed further
+ * there, as if the pill had been cut to fit the line at the old scale; a span
+ * tried whole while its scale was a guess was not, read 5% too wide, and
+ * ended lines early: review of 12e3b98e.) The first reading sets it; after
  * that it only rises, and never falls below the most it has read (`floor`),
  * save for two of its pieces side by side on a line, which fitted there
  * together and cap it (2026-09-27 review, probe C2). One scale per Text, set
@@ -205,12 +207,10 @@ function learnScale(
   owners: readonly Owner[],
   measure: PillMeasure,
   fit: PillFit | undefined,
-  lineWidth: number,
   proseSize: number,
   /** The Text's scale, which a span with none of its own is cut with. */
   textScale: number
 ): { scale: number | undefined; floor: number | undefined } {
-  const current = pillFitScale(fit, textScale)
   const ratios: number[] = []
   const caps: number[] = []
   owners.forEach((owner, index) => {
@@ -222,9 +222,6 @@ function learnScale(
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
       const drawn = lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize)
       ratios.push((drawn - measure.insets) / text)
-      if (drawn > lineWidth + TOLERANCE) {
-        ratios.push((current * (drawn - measure.insets)) / (lineWidth - TOLERANCE - measure.insets))
-      }
     }
     // A run of this span's pieces side by side that starts its line: its
     // continuation pieces, or its first piece and the next when both went
@@ -312,7 +309,7 @@ export function readPillFits(args: {
     const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[offset + piece]!, span: ordinal, piece, text }))
     offset += span.pieces.length
     const held = current.fits.get(ordinal)
-    return { owners, held, ...learnScale(lines, owners, measure, held, lineWidth, proseSize, heldTextScale) }
+    return { owners, held, ...learnScale(lines, owners, measure, held, proseSize, heldTextScale) }
   })
   const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])), guess)
   const allOwners = learnt.flatMap(({ owners }) => owners)
