@@ -2,7 +2,12 @@ import { useCallback, useState } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { colors } from '../theme/mobile-theme'
+import { darkColors } from '../theme/tokens'
+
+// This overlay paints over the terminal WebView, which stays Tokyonight-dark in both app themes
+// (BRIEF: terminal content stays terminal-coloured, not app chrome). Its colours are pinned to the
+// dark palette rather than the live theme, so a light-mode phone still gets legible text on the
+// terminal's fixed dark background instead of near-black-on-near-black.
 
 export type NativeWebViewEngineEvent = {
   readonly nativeEvent?: object
@@ -91,7 +96,7 @@ export function TerminalWebViewEngineErrorOverlay({
         style={styles.reloadButton}
         onPress={onReload}
       >
-        <RefreshCw size={16} color={colors.terminalBg} />
+        <RefreshCw size={16} color={darkColors.textInverse} />
         <Text style={styles.reloadButtonText}>Reload</Text>
       </Pressable>
     </View>
@@ -105,16 +110,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 12,
     padding: 24,
-    backgroundColor: colors.terminalBg
+    backgroundColor: darkColors.terminalBg
   },
   errorTitle: {
-    color: colors.textPrimary,
+    color: darkColors.text,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center'
   },
   errorDetail: {
-    color: colors.textSecondary,
+    color: darkColors.textSecondary,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center'
@@ -126,10 +131,12 @@ const styles = StyleSheet.create({
     minHeight: 36,
     paddingHorizontal: 14,
     borderRadius: 6,
-    backgroundColor: colors.surfaceBright
+    // Was `surfaceBright`: the near-white inverse-surface fill for a primary action, same pairing
+    // as `text` + `textInverse` elsewhere in the sweep.
+    backgroundColor: darkColors.text
   },
   reloadButtonText: {
-    color: colors.terminalBg,
+    color: darkColors.textInverse,
     fontSize: 14,
     fontWeight: '700'
   }
