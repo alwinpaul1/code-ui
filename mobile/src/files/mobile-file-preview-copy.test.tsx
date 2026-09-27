@@ -198,6 +198,19 @@ describe.each(['dark', 'light'] as const)('copying code out of a file opened fro
     expect(clipboard.writeText).toHaveBeenCalledWith('def cell(em):\r\n    for r in em:')
   })
 
+  it('copies lines from a file with mixed line breaks each with its own', async () => {
+    // One CRLF line made every copied line CRLF (review, 2026-09-27).
+    openInExplorer('def cell(em):\r\n    for r in em:\n        yield r\r\n    return None')
+    act(() => {
+      ;(rowProps(0).onLongPress as () => void)()
+    })
+    act(() => {
+      ;(rowProps(3).onPress as () => void)()
+    })
+    await press('Copy lines 1–4')
+    expect(clipboard.writeText).toHaveBeenCalledWith('def cell(em):\r\n    for r in em:\n        yield r\r\n    return None')
+  })
+
   it('offers nothing to copy in an empty file', () => {
     openInExplorer('')
     expect(button('Copy file')).toBeUndefined()

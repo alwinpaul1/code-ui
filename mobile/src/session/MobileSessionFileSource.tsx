@@ -10,7 +10,7 @@ import { useMobileSyntaxLanguage } from './use-mobile-syntax-language'
 import {
   fileReaderLineCopyLabel,
   fileReaderLineSelectionLabel,
-  fileReaderSelectedLinesText,
+  fileLinesText,
   type FileReaderLineRange
 } from './mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from './MobileSessionFileReaderLineActionBar'
@@ -101,7 +101,7 @@ export function MobileSessionFileSource({
               ? {
                   label: fileReaderLineCopyLabel(range),
                   onPress: () => {
-                    void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range, document.lineBreak)).then((copied) => {
+                    void linesCopy.copy(fileLinesText(content, range)).then((copied) => {
                       if (copied) {
                         clear()
                       }

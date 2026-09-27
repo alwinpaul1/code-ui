@@ -9,7 +9,7 @@ import { useCodeLineSelection } from '../components/use-code-line-selection'
 import { copyFailedNotice, useCopyToClipboard } from '../components/use-copy-to-clipboard'
 import {
   fileReaderLineCopyLabel,
-  fileReaderSelectedLinesText
+  fileLinesText
 } from '../session/mobile-file-reader-line-selection'
 import { MobileSessionFileReaderLineActionBar } from '../session/MobileSessionFileReaderLineActionBar'
 import { filePreviewStyles as styles } from './mobile-file-preview-styles'
@@ -77,7 +77,7 @@ export function MobileFilePreviewSourceText({
           range={{
             label: fileReaderLineCopyLabel(range),
             onPress: () => {
-              void linesCopy.copy(fileReaderSelectedLinesText(document.lines, range, document.lineBreak)).then((copied) => {
+              void linesCopy.copy(fileLinesText(content, range)).then((copied) => {
                 if (copied) {
                   clear()
                 }
