@@ -1,8 +1,8 @@
 import { FlatList, Pressable, Text, TextInput, View } from 'react-native'
 import { File, Search, X } from 'lucide-react-native'
 import { triggerSelection } from '../platform/haptics'
-import { colors } from '../theme/mobile-theme'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { fileExplorerStyles } from './mobile-file-explorer-styles'
 
 /** The explorer's search field, rendered under the title bar. */
 export function MobileFileExplorerSearchBar({
@@ -12,6 +12,8 @@ export function MobileFileExplorerSearchBar({
   query: string
   onChangeQuery: (query: string) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(fileExplorerStyles)
   return (
     <View style={styles.searchRow}>
       <Search size={16} color={colors.textSecondary} strokeWidth={2} />
@@ -59,6 +61,8 @@ export function MobileFileExplorerSearchResults({
   searching: boolean
   onOpen: (relativePath: string, displayName: string) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(fileExplorerStyles)
   if (paths.length === 0) {
     return (
       <View style={styles.state}>

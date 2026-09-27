@@ -20,7 +20,7 @@ import {
   type FileExplorerRow
 } from './file-tree'
 import type { RpcFailure } from '../transport/types'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import {
   beginDirectoryLoad,
   createDirectoryLoadRevisions,
@@ -30,7 +30,7 @@ import {
 } from './directory-load-revisions'
 import { directoryCacheFromFileList, isMobileMethodUnavailableError } from './file-list-fallback'
 import { fileDirectoryRead, legacyFileListRead } from './mobile-file-explorer-operations'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { fileExplorerStyles } from './mobile-file-explorer-styles'
 import { MobileFileExplorerRow } from './mobile-file-explorer-row'
 import {
   MobileFileExplorerSearchBar,
@@ -55,6 +55,8 @@ export function MobileFileExplorerPanel(props: {
   onRequestClose?: () => void
 }) {
   const { hostId, worktreeId, name, embedded, onRequestClose } = props
+  const { colors } = useTheme()
+  const styles = useThemedStyles(fileExplorerStyles)
   const router = useRouteHandoff()
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
@@ -405,7 +407,7 @@ export function MobileFileExplorerPanel(props: {
   // Embedded: the dock column owns safe-area/layout, so render a plain View and
   // a non-inset header. Full-screen: keep the SafeAreaView top inset + chrome.
   return (
-    <View style={styles.container}>
+    <View testID="mobile-file-explorer-panel" style={styles.container}>
       {embedded ? (
         <View style={styles.header}>
           {headerBar}
