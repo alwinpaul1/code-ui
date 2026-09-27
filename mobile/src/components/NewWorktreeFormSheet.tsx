@@ -3,11 +3,11 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
 import type { WorkspaceSshGate } from '../tasks/workspace-ssh-gate'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 import { NewWorktreeProjectTargetFields } from './NewWorktreeProjectTargetFields'
 import { NewWorkspaceSetupScriptField } from './NewWorkspaceSetupScriptField'
@@ -55,6 +55,8 @@ export function NewWorktreeFormSheet(props: {
   onRunSetupChange: (run: boolean) => void
   onCreate: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(newWorktreeFormStyles)
   return (
     <BottomDrawer visible={props.visible} interactive={props.interactive} onClose={props.onClose}>
       <View style={styles.header}>
@@ -169,7 +171,7 @@ export function NewWorktreeFormSheet(props: {
               onPress={props.onCreate}
             >
               {props.creating ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
+                <ActivityIndicator size="small" color={colors.bg} />
               ) : (
                 <Text style={styles.createText}>
                   {props.sshGate.requiresConnection ? 'Connect target' : 'Create worktree'}

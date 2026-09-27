@@ -1,7 +1,7 @@
 import { Pressable, Switch, Text, View } from 'react-native'
 import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
-import { colors } from '../theme/mobile-theme'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 import type { SetupRunPolicy } from './new-worktree-modal-types'
 
 export function NewWorkspaceSetupScriptField({
@@ -21,6 +21,8 @@ export function NewWorkspaceSetupScriptField({
   onDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
   onRunSetupChange: (run: boolean) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(newWorktreeFormStyles)
   return (
     <View style={styles.field}>
       <View style={styles.setupHeader}>
@@ -61,8 +63,8 @@ export function NewWorkspaceSetupScriptField({
             <Switch
               value={runSetup}
               onValueChange={onRunSetupChange}
-              trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
+              trackColor={{ false: colors.border, true: colors.textSecondary }}
+              thumbColor={colors.text}
               style={styles.setupSwitch}
             />
           </View>

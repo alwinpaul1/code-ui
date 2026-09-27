@@ -3,10 +3,10 @@ import { Monitor } from 'lucide-react-native'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import type { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import type { NewWorktreeAgentOption } from './new-worktree-agent-selection'
-import { newWorktreeFormStyles as styles } from './new-worktree-form-styles'
+import { newWorktreeFormStyles } from './new-worktree-form-styles'
 import type { MobileWorkspaceRepo } from './new-worktree-modal-types'
 import type {
   NewWorkspaceProjectOption,
@@ -45,6 +45,8 @@ export function NewWorktreeModalDrawers(props: {
   onSkipSetupTrust: () => void
   onCloseSetupTrust: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(newWorktreeFormStyles)
   return (
     <>
       <SmartWorkspaceSourceDrawer

@@ -10,7 +10,9 @@ import {
 } from 'lucide-react-native'
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import type { Theme } from '../theme/theme-context'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 
@@ -26,20 +28,20 @@ type Props = {
   onOpenDrawer: () => void
 }
 
-function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
+function SelectionIcon({ kind, color }: { kind: SmartNameSelection['kind']; color: string }) {
   if (kind === 'github-pr') {
-    return <GitPullRequest size={15} color={colors.textSecondary} />
+    return <GitPullRequest size={15} color={color} />
   }
   if (kind === 'gitlab-mr') {
-    return <GitMerge size={15} color={colors.textSecondary} />
+    return <GitMerge size={15} color={color} />
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
-    return <CircleDot size={15} color={colors.textSecondary} />
+    return <CircleDot size={15} color={color} />
   }
   if (kind === 'branch') {
-    return <GitBranch size={15} color={colors.textSecondary} />
+    return <GitBranch size={15} color={color} />
   }
-  return <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
+  return <TaskProviderLogo provider="linear" size={15} color={color} />
 }
 
 export function SmartWorkspaceSourceField({
@@ -50,6 +52,8 @@ export function SmartWorkspaceSourceField({
   onBeforeOpen,
   onOpenDrawer
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sourceFieldStyles)
   const selection = composer.smartNameSelection
 
   function openDrawer(): void {
@@ -67,7 +71,7 @@ export function SmartWorkspaceSourceField({
       </Text>
       {selection ? (
         <View style={styles.pill}>
-          <SelectionIcon kind={selection.kind} />
+          <SelectionIcon kind={selection.kind} color={colors.textSecondary} />
           <Text style={styles.pillLabel} numberOfLines={1}>
             {selection.label}
           </Text>
@@ -115,47 +119,49 @@ export function SmartWorkspaceSourceField({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  input: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm + 2,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    fontSize: TEXT_INPUT_FONT_SIZE,
-    color: colors.textPrimary
-  },
-  disabled: {
-    opacity: 0.55
-  },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  pillLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  }
-})
+function sourceFieldStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    field: {
+      marginBottom: spacing.md
+    },
+    label: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textSecondary,
+      marginBottom: spacing.xs
+    },
+    labelHint: {
+      fontWeight: '400',
+      color: colors.textMuted
+    },
+    input: {
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm + 2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      fontSize: TEXT_INPUT_FONT_SIZE,
+      color: colors.text
+    },
+    disabled: {
+      opacity: 0.55
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      backgroundColor: colors.bgRaised,
+      borderRadius: radii.input,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      borderWidth: 1,
+      borderColor: colors.border
+    },
+    pillLabel: {
+      flex: 1,
+      fontSize: typography.bodySize,
+      color: colors.text
+    }
+  })
+}
