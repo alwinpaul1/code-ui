@@ -42,6 +42,13 @@ export type ThemeColors = {
   danger: string
   dangerSoft: string
   info: string
+  /** Merged-PR icon accent (violet, mirrors the desktop ReviewIcon's purple-400/70).
+   *  The dark value (violet-400, #A78BFA) reads fine on the dark surfaces it was
+   *  picked for, but at 2.4:1 on the light canvas it is well under the 3:1 floor
+   *  for a UI icon — so light uses violet-600 instead, which clears 3:1 on both
+   *  `bg` and `bgPanel` (mobile-theme-contrast-equivalent assertion in
+   *  pr-sidebar-status-color.test.ts). */
+  mergedPurple: string
   /** The user's own message bubble. */
   userBubble: string
   userBubbleText: string
@@ -109,6 +116,7 @@ export const lightColors: ThemeColors = {
   danger: '#C0392B',
   dangerSoft: 'rgba(192, 57, 43, 0.12)',
   info: '#3B6FB6',
+  mergedPurple: '#7C3AED',
   userBubble: '#E6E2D7',
   userBubbleText: '#1E1C19',
   codeBg: '#ECE9E0',
@@ -152,6 +160,9 @@ export const darkColors: ThemeColors = {
   danger: '#E06C5B',
   dangerSoft: 'rgba(224, 108, 91, 0.16)',
   info: '#7FA7E0',
+  // Lowercase, matching the exact legacy `mobile-theme.colors.statusPurple` byte
+  // for byte: `statusColor`'s dark-palette default depends on this being identical.
+  mergedPurple: '#a78bfa',
   userBubble: '#2E2B26',
   userBubbleText: '#ECE9E2',
   codeBg: '#26231F',
