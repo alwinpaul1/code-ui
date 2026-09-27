@@ -43,9 +43,14 @@ type Entry = TextPillFits & {
    *  span before it is re-cut, so only pills that move are remounted. */
   versions: readonly number[]
   epoch: number
-  /** Layouts read for this document and width; a cap against a Text that
-   *  never settles (each round re-lays the whole Text). */
+  /** Layouts read for this document on this visit to the width; a cap
+   *  against a Text that never settles (each round re-lays the whole Text). */
   rounds: number
+  /** Which visit to the width the rounds were counted on. Counted for as
+   *  long as the document lasted, every turn back spent some of the cap, and
+   *  by the third return to a width the re-cut that would have filled a line
+   *  was refused (review of 12e3b98e, probe R4-W13x). */
+  visit: number
 }
 
 const remembered = new Map<string, Entry>()
@@ -144,6 +149,9 @@ export function useMarkdownCodePillRuns(
   const rememberedHere = useRef(new Map<string, { key: string; document: string; identity: string | undefined }>())
   // The width each Text was first measured at; see keyFor.
   const firstWidths = useRef(new Map<string, number>())
+  // The width each Text was last drawn at, and how many times it has come to
+  // a width from another; see Entry.visit.
+  const visits = useRef(new Map<string, { width: number; visit: number }>())
   const chipScale = markdownChipScale(textScale)
   const factor = chipScale?.factor ?? 1
   const fontScale = systemFontScale()
@@ -179,6 +187,11 @@ export function useMarkdownCodePillRuns(
       cutCodePills(code, firstRoom, lineRoom, { ...font, scale }, glue, guessed)
     if (measured && !firstWidths.current.has(textKey)) {
       firstWidths.current.set(textKey, lineWidth)
+    }
+    const seen = visits.current.get(textKey)
+    const visit = seen?.width === lineWidth ? seen.visit : (seen?.visit ?? 0) + 1
+    if (seen?.width !== lineWidth) {
+      visits.current.set(textKey, { width: lineWidth, visit })
     }
 
     const rememberSettled = () => {
@@ -228,7 +241,7 @@ export function useMarkdownCodePillRuns(
       }
       setEntries((prev) => {
         const was = prev.get(liveKey)
-        const rounds = was?.document === document ? was.rounds + 1 : 1
+        const rounds = was?.document === document && was.visit === visit ? was.rounds + 1 : 1
         if (rounds > 2 * spans.length + 4) {
           return prev
         }
@@ -242,7 +255,8 @@ export function useMarkdownCodePillRuns(
             ordinal < result.firstChanged ? (entry?.versions[ordinal] ?? 0) : epoch
           ),
           epoch,
-          rounds
+          rounds,
+          visit
         }
         const map = new Map(prev)
         map.set(liveKey, updated)

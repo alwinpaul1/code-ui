@@ -273,6 +273,43 @@ describe('a turn between two close widths', () => {
   })
 })
 
+// Review of 12e3b98e (probe R4-W13x): every layout read at a width counted
+// against one cap on re-cuts, kept for as long as the document did, so each
+// visit to a width spent some of it; by the third return to 600 dp the cap
+// was spent and the re-cut that would have filled the line was refused, 9 of
+// 1080 runs as estimated.
+describe('a width turned back to again and again', () => {
+  const PARAGRAPHS = [
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+
+  it.each([
+    [600, 571, 1, 21, 1],
+    [600, 522, 0, 21, 1],
+    [600, 522, 1, 21, 1],
+    [412, 358, 1, 21, 1],
+    [412, 330, 1, 21, 1],
+    [600, 480, 1, 21, 1.03],
+    [412, 305, 1, 21, 1.03],
+    [800, 552, 0, 15, 0.97]
+  ])('leaves no gap at %i dp on any return from %i (paragraph %i, %i words before, drawn x%s)', (wide, narrow, index, words, pillError) => {
+    const as = { pillError }
+    const content = `${LEAD.slice(0, words).join(' ')} ${PARAGRAPHS[index]!}`
+    mount(content, wide)
+    device.settle(wide, as)
+    for (const [turn, width] of [narrow, wide, narrow, wide, narrow, wide].entries()) {
+      device.rotateTo(width, as)
+      const { lines, lineWidth } = device.settle(width, as)
+      expect(
+        [...sharedLines(lines), ...overflowingLines(lines, lineWidth), ...earlyLineEnds(lines, lineWidth, 1, pillError)],
+        `turn ${turn + 1} at ${width}`
+      ).toEqual([])
+    }
+  })
+})
+
 // Review of 216a856f: the chat list (FlashList 2.3.2, no per-item key in
 // MobileNativeChatView) recycles a cell for another message. The cell's
 // rooms were used for whatever it drew next at the same width.
