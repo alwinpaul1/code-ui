@@ -252,6 +252,25 @@ describe('a subagent message the beacon carried, found long after it arrived', (
     resetAgentHudBeacons()
   })
 
+  // Review of bc9f07b4: the row it names can be one Orca never publishes. With
+  // every row loaded it never comes, and the message is never drawn: the log
+  // says so once, as a held desk copy's does.
+  it('says once in the log why it is not drawn when the row it came after never loads', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.setSystemTime(at('21:30:00.000'))
+    const toolRow = 'c0ffee00-0000-4000-8000-000000000002'
+    const agentMessages = beaconAgentMessages([{ nonce: '48296', text: SUBAGENT_REQUEST_PROMPT, anchorId: toolRow, seenAt: at('14:27:05.000') }])
+    const whole = [previousAnswer, itsReply, ...tailPage]
+    for (const clock of ['21:30:00.000', '21:30:01.000', '21:30:02.000']) {
+      await show(clock, { messages: whole, hasMore: false, promptHook: true, agentMessages })
+    }
+    expect(frames.flatMap(agentRows)).toEqual([])
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[agent-message]'))).toEqual([
+      `[agent-message] not drawn: agent-message:48296 was found long after it arrived, and the row it came after (${toolRow}) is not in the transcript`
+    ])
+    warn.mockRestore()
+  })
+
   it('moves to the row it came after once that row loads, after a relaunch brought back a stored tail', async () => {
     vi.setSystemTime(at('21:30:00.000'))
     // Stored by a build that kept the tail it was drawn at.

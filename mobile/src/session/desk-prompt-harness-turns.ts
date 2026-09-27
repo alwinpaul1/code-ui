@@ -27,7 +27,11 @@ export function placedByHarnessTurns(
     if (hint && hint.crossings.every((crossing) => harnessStartedBetween(rows, crossing.after, crossing.before))) {
       const { heldBack: _held, ifHarnessStarted: _hint, ...rest } = prompt
       placed ??= [...prompts]
-      placed[index] = { ...rest, at: hint.at, atStateStart: true }
+      // Its own nonce, by its run: the held one (`status:<session>:x:<n>`) is
+      // what every mount gives its first held copy, and a copy placed in a
+      // later mount took the first one's remembered anchor, a turn early
+      // (review of 0a70f90a).
+      placed[index] = { ...rest, nonce: prompt.nonce.replace(/:x:(\d+)$/, `:${hint.at}:$1`), at: hint.at, atStateStart: true }
     }
   })
   return placed ?? prompts

@@ -408,3 +408,58 @@ describe('a desk message typed mid-turn, first read after a harness message star
   })
 })
 
+// Review of 0a70f90a: a placed copy kept its held nonce, `status:<session>:x:0`,
+// which every mount gives its first held copy. The next mount's copy took the
+// first one's remembered anchor, and was drawn a turn early.
+describe('two desk messages placed by harness turns, in different mounts', () => {
+  const { show, unmount } = landingHarness(frames)
+  const P = 'also check the migration logs'
+  const Q = 'and skip the flaky test'
+  const teammateRow = (id: string, clock: string) =>
+    userRow(id, ['Another Claude session sent a message:\n<teammate-message teammate_id="builder-select" color="pink" summary="report">\n(report)\n</teammate-message>'], clock)
+  const rows = [
+    agentRow('r0', 'Earlier.', '05:59:00.000'),
+    userRow('u1', ['first task'], '06:01:00.000'),
+    agentRow('a1', 'On it.', '06:10:00.000'),
+    teammateRow('t1', '06:31:00.000'),
+    agentRow('a2', 'Noted.', '06:40:00.000'),
+    userRow('u3', ['second task'], '07:00:00.000'),
+    agentRow('a3', 'On that too.', '07:05:00.000'),
+    teammateRow('t2', '07:31:00.000'),
+    agentRow('a4', 'Noted again.', '07:40:00.000')
+  ]
+  const found = (prompt: string, run: string, end: string, next: string) =>
+    [
+      ...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, {
+        state: 'working',
+        prompt,
+        updatedAt: at(next) + 60_000,
+        stateStartedAt: at(next),
+        stateHistory: [
+          { state: 'done', prompt: 'before', startedAt: at(run) - 60_000 },
+          { state: 'working', prompt, startedAt: at(run) },
+          { state: 'done', prompt, startedAt: at(end) }
+        ]
+      }).prompts
+    ]
+
+  it('draws each in its own turn, the second not under the first', async () => {
+    vi.setSystemTime(at('06:45:00.000'))
+    const first = found(P, '06:01:00.000', '06:30:00.000', '06:31:00.010')
+    await show('06:45:00.000', { messages: rows.slice(0, 5), working: true, prompts: first })
+    await show('06:45:01.000', { messages: rows.slice(0, 5), working: true, prompts: first })
+    unmount()
+    vi.setSystemTime(at('07:45:00.000'))
+    // (Its run starts 250 ms after u3's stamp: another case in this file
+    // already placed a copy at 07:00:00.000, and a status nonce is its run's
+    // start and index, which module state keeps across cases.)
+    const second = found(Q, '07:00:00.250', '07:30:00.000', '07:31:00.010')
+    await show('07:45:00.000', { messages: rows, working: true, prompts: second })
+    await show('07:45:01.000', { messages: rows, working: true, prompts: second })
+    const ids = rowIds(frames.at(-1)!)
+    const q = ids.findIndex((row) => row.text === Q)
+    expect(ids[q - 1]?.id).toBe('u3')
+    expect(ids.filter((row) => row.text === P || row.text === Q).map((row) => row.text)).toEqual([P, Q])
+  })
+})
+

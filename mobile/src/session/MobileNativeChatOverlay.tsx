@@ -286,12 +286,8 @@ export function MobileNativeChatOverlay({
   // A subagent's message never reaches the transcript the phone reads; the
   // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
   const agentMessages = controller.nativeChatAgentMessages ?? NO_AGENT_MESSAGES
-  const foldedWithAgents = useAgentMessageRows(
-    agentMessages,
-    foldedWithoutPeers,
-    session.messages,
-    controller.nativeChatStreamScopeKey
-  )
+  const wholeSessionHeld = session.status === 'ready' && session.baseRetained !== true && !session.hasMore
+  const foldedWithAgents = useAgentMessageRows(agentMessages, foldedWithoutPeers, session.messages, controller.nativeChatStreamScopeKey, wholeSessionHeld)
   // A message from a subagent or another session mostly never reaches the
   // transcript the phone reads; the agent's screen says one arrived, and
   // from whom, so that is drawn where it was seen (2026-09-20). A subagent's

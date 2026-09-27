@@ -249,13 +249,36 @@ function cameAfter(message: BeaconAgentMessage, item: { id: string; text: string
   return later.some((prompt) => prompt.text === item.text) && !earlier.some((prompt) => prompt.text === item.text)
 }
 
+/** The messages found long after they arrived whose row is not held
+ *  (rawAnchor), with that row's id: never drawn once every row is loaded. */
+function heldLate(scope: string, messages: readonly BeaconAgentMessage[], raw: readonly NativeChatMessage[]): [string, string][] {
+  return messages.flatMap((message) => {
+    const key = `${scope}\0${message.id}`
+    const held =
+      !message.restored &&
+      message.anchorId !== undefined &&
+      !anchorByKey.has(key) &&
+      !provisionalByKey.has(key) &&
+      arrivedLongAgo(message.seenAt) &&
+      !raw.some((row) => row.id === message.anchorId)
+    return held ? [[message.id, message.anchorId!]] : []
+  })
+}
+
+/** The refusals already logged, so each says so once. */
+const loggedLate = new Set<string>()
+
 /** The folded chat with the prompt hook's subagent messages drawn in. Where
  *  each was drawn is stored with the beacon (rememberAgentMessagePlacement). */
 export function useAgentMessageRows(
   messages: readonly BeaconAgentMessage[],
   folded: readonly NativeChatMessage[],
   raw: readonly NativeChatMessage[],
-  scope: string | null
+  scope: string | null,
+  /** Whether the chat holds every row of the session, read and settled: a
+   *  message still held then names a row Orca never publishes, and the log
+   *  says it will not be drawn (review of bc9f07b4). */
+  wholeSessionHeld = false
 ): NativeChatMessage[] {
   const rows = useMemo(
     () => (scope === null ? (folded as NativeChatMessage[]) : withAgentMessageRows(folded, raw, messages, scope)),
@@ -270,5 +293,14 @@ export function useAgentMessageRows(
       }
     }
   }, [messages, rows, scope])
+  const refusals = scope !== null && wholeSessionHeld ? JSON.stringify(heldLate(scope, messages, raw)) : '[]'
+  useEffect(() => {
+    for (const [id, anchorId] of JSON.parse(refusals) as [string, string][]) {
+      if (!loggedLate.has(id)) {
+        loggedLate.add(id)
+        console.warn(`[agent-message] not drawn: ${id} was found long after it arrived, and the row it came after (${anchorId}) is not in the transcript`)
+      }
+    }
+  }, [refusals])
   return rows
 }

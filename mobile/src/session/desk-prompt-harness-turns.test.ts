@@ -41,7 +41,8 @@ const starts = [
 describe('a desk prompt the tab status carried past turn ends', () => {
   it('goes to the run it came in when a harness message started every turn after', () => {
     expect(placedByHarnessTurns([held], starts)).toEqual([
-      { nonce: held.nonce, text: PROMPT, at: T('13:20:44.026'), atStateStart: true, seenAt: 1 }
+      // Its own nonce, by its run: the held `…:x:0` is every mount's first.
+      { nonce: `status:76ba8f2f:${T('13:20:44.026')}:0`, text: PROMPT, at: T('13:20:44.026'), atStateStart: true, seenAt: 1 }
     ])
   })
 
