@@ -15,8 +15,11 @@ import { permissionOptionsFromScreen } from './mobile-terminal-permission-option
  * background subagent's prompt sat unseen for eight hours
  * (fixtures/claude-screen-subagent-bash-permission-2.1.283.txt).
  */
+// The gap before "·" and the space after it are taken as a plain or a
+// no-break space: the capture is a transcription, and which one a live read
+// returns is unverified (fixtures/claude-screen-subagent-bash-permission-2.1.283.txt).
 const TITLE =
-  /^(\s*)Bash command(?: \((?:unsandboxed|runs on [^)]+)\))?(?: · (from (?:the (?:"[^"]+" workflow|\S.*? (?:agent|plugin))|a (?:subagent|workflow|plugin|remote cloud agent))))?\s*$/
+  /^(\s*)Bash command(?: \((?:unsandboxed|runs on [^)]+)\))?(?:[ \u00a0]·[ \u00a0](from (?:the (?:"[^"]+" workflow|\S.*? (?:agent|plugin))|a (?:subagent|workflow|plugin|remote cloud agent))))?\s*$/
 
 /** A row of the auto-deny countdown 2.1.283 draws on the timed shape of the
  *  classifier's denial-limit fallback (`Tt`). It changes every second, so it
@@ -25,6 +28,9 @@ const TITLE =
  *  box of its own, last in the reason block, outside the `│` gutter, with a
  *  blank row under it. Read from the binary; no real screen has shown one. */
 const COUNTDOWN = /will automatically deny this request in /
+/** The words its sentence ends on: `…to avoid blocking progress on an
+ *  unattended session`. */
+const COUNTDOWN_END = /unattended session\s*$/
 
 const indentOf = (row: string): number => row.length - row.trimStart().length
 
@@ -78,7 +84,7 @@ function splitDialogBody(
   const box = rows.findIndex((row) => row.trim().length > 0 && indentOf(row) > margin)
   const body: string[] = []
   const notes: string[] = []
-  let countdown = false
+  let countdownOpen = false
   rows.forEach((row, index) => {
     const blank = row.trim().length === 0
     const note =
@@ -87,9 +93,12 @@ function splitDialogBody(
       !blank &&
       indentOf(row) === margin &&
       !/^\s*Do you want to proceed\?\s*$/.test(row)
-    // A wrapped tail of the countdown goes with it. Its box ends at the first
-    // row that is not one of its own: a blank, the body, a gutter row.
-    countdown = note && (COUNTDOWN.test(row) || (countdown && !/^\s*│/.test(row)))
+    // Only the countdown's own sentence goes: its row, and a wrapped tail up
+    // to the words it ends on. A reason drawn right under it stays (an
+    // independent review, 2026-09-27, found every later note row dropped).
+    const countdown =
+      note && (COUNTDOWN.test(row) || (countdownOpen && !/^\s*│/.test(row)))
+    countdownOpen = countdown && !COUNTDOWN_END.test(row)
     if (countdown) {
       return
     }

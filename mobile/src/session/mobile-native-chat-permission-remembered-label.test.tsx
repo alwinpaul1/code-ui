@@ -33,6 +33,8 @@ function readScreen(name: string): string[] {
 // Claude Code 2.1.283, 2026-09-27. Its second choice, "Yes, and don’t ask
 // again for: git *", writes an allow rule to the project's local settings
 // (`destination:"localSettings"` in the binary): it lasts past this session.
+// (A transcription of the user's screenshot, not a tmux capture; see the
+// fixture's header for the bytes it cannot vouch for.)
 const SUBAGENT_PROMPT = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
 
 // Codex's persistent choice, from a screenshot (codex-terminal-permission.test.ts).

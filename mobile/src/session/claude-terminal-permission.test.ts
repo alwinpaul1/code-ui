@@ -15,8 +15,10 @@ function readScreen(name: string): string[] {
 }
 
 // Claude Code 2.1.283, 2026-09-27: a background subagent's Bash prompt, which
-// the phone's chat view never showed. See the fixture's header for how the
-// rows were taken and what in the binary they agree with.
+// the phone's chat view never showed. The fixture is a TRANSCRIPTION of the
+// user's screenshot, not a tmux capture (agent CLIs were off limits): the gap
+// before "·", the "·" and plain versus no-break spaces are unverified. See its
+// header for how the rows were taken and what in the binary they agree with.
 const SUBAGENT_PROMPT = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
 
 const GIT_COMMAND =
@@ -106,6 +108,15 @@ describe('the other titles 2.1.283 paints on the same Bash dialog', () => {
 
   // Refused, not guessed at: the chat then says a prompt is waiting in the
   // terminal (use-mobile-native-chat-controller-terminal-wait.test.ts).
+  // Unverified bytes of the transcription: the one-cell gap before "·" and the
+  // space after it could come back as no-break spaces on a live read.
+  it('reads the title with no-break spaces around its "·"', () => {
+    const permission = claudePermissionFromScreen(
+      titled(' Bash command\u00a0·\u00a0from the general-purpose agent')
+    )
+    expect(permission?.description).toBe('From the general-purpose agent')
+  })
+
   it('refuses a title with a decoration it does not know', () => {
     expect(claudePermissionFromScreen(titled(' Bash command · queued'))).toBeNull()
     expect(
@@ -143,6 +154,23 @@ describe("the auto-deny countdown under a classifier's reason", () => {
     expect(claudePermissionFromScreen(lines)?.decisionReason).toBe(
       claudePermissionFromScreen(SUBAGENT_PROMPT)?.decisionReason
     )
+  })
+
+  // An independent review (2026-09-27): once the countdown matched, every
+  // note row after it went too, so a reason drawn right under it was lost.
+  it('keeps a reason drawn right under the countdown', () => {
+    const at = SUBAGENT_PROMPT.indexOf(' Do you want to proceed?')
+    const lines = [
+      ...SUBAGENT_PROMPT.slice(0, at - 1),
+      '',
+      ' ⚠ Claude Code will automatically deny this request in 4:59, to avoid blocking progress on',
+      ' an unattended session',
+      ' Permission rule Bash(git *) requires confirmation for this command.',
+      ...SUBAGENT_PROMPT.slice(at - 1)
+    ]
+    const reason = claudePermissionFromScreen(lines)?.decisionReason
+    expect(reason).toContain('Permission rule Bash(git *) requires confirmation for this command.')
+    expect(reason).not.toMatch(/automatically deny|unattended/)
   })
 
   it('keeps the card the same prompt from one second to the next', () => {

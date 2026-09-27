@@ -22,6 +22,14 @@
 #   - the second option's label is `Yes, and don\u2019t ask again for: ${rule}`, with a
 #     typographic apostrophe.
 # The rows above the dialog are the end of the lead's last message, as painted.
+#
+# A TRANSCRIPTION, NOT A CAPTURE. What a screenshot cannot show and no live read
+# has confirmed: the one-cell gap before the title's "·" (Ink's `gap: 1`), the
+# "·" itself (U+00B7, taken from the binary's "\xB7 "), and whether any space
+# on these rows comes back as U+0020 or U+00A0 (Claude paints its composer's ❯
+# with a no-break space; every space here is written as a plain one). The
+# screen parser takes either space around the "·". Replace this file with a
+# `tmux capture-pane -p` of the same dialog when one can be taken.
 === screen: subagent bash prompt under the classifier's denial limit ===
   Save to phone is the only piece still out. The phone still isn't showing up. Plug it in and I'll
   build and install whatever is on main.

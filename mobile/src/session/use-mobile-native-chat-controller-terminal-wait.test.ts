@@ -96,6 +96,8 @@ function readScreen(name: string): string[] {
 // Claude Code 2.1.283, 2026-09-27: a background general-purpose subagent's
 // Bash prompt. The phone's chat showed the lead's last message and "1 running
 // task", and nothing else, for about eight hours.
+// (A transcription of the user's screenshot, not a tmux capture; see the
+// fixture's header for the bytes it cannot vouch for.)
 const SUBAGENT_PROMPT = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
 const SUBAGENT_TITLE = ' Bash command · from the general-purpose agent'
 
