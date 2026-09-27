@@ -219,6 +219,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: tab as never,
@@ -566,6 +567,7 @@ describe('useMobileNativeChatController launch-draft wiring', () => {
     useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: tab as never,
@@ -687,6 +689,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: {
@@ -970,6 +973,7 @@ describe('useMobileNativeChatController streaming scope', () => {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: workingTab as never,

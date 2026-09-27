@@ -475,7 +475,9 @@
             // 2026-09-24: +7 for Orca #22256's reportDictationFailure, the one
             // policy both desktop-dictation failure paths now call, so a refused
             // start opens the setup sheet instead of toasting the host's code.
-            "max": 310,
+            // 2026-09-27: +1 for `tabsLive`, which tells the chat's status
+            // reader the tab list is the host's, not the last visit's cache.
+            "max": 311,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -507,7 +509,8 @@
             // file-search stand-in, which only the catalogs mount), and the
             // case that pins the menu to the tab's own chat while the tab
             // shows its terminal.
-            "max": 847,
+            // 2026-09-27: +4 for `tabsLive: true` in each harness's args.
+            "max": 851,
             "skipBlankLines": true,
             "skipComments": true
           }

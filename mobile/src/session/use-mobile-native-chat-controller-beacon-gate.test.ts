@@ -102,6 +102,7 @@ describe('what the controller takes from a beacon on the active terminal', () =>
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: tab as never,
@@ -185,5 +186,76 @@ describe('what the controller takes from a beacon on the active terminal', () =>
     expect(controller?.nativeChatDesktopPrompts).toEqual([{ nonce: '42', text: 'typed on the desk', cut: false, seenAt: expect.any(Number) }])
     expect(controller?.nativeChatPromptHook).toBe(true)
     expect(draftsArgs.at(-1)?.beaconPromptReceipts?.map((r) => r.nonce)).toEqual(['42'])
+  })
+})
+
+// Device, 2026-09-27 (session 790eafa8): the session screen paints the tab
+// list the last visit cached before the host answers, and the controller read
+// the host's first status after it as one the chat had watched arrive. A desk
+// message taken while the chat was closed was timed by that status's stamp,
+// the last tool ping before the chat opened, and drew at the tail under the
+// agent's reply to it. The controller now hands the status reader whether the
+// tab list is the host's (`tabsLive`).
+describe('a desk message on the host’s first tab status after the tabs the last visit cached', () => {
+  let renderer: ReactTestRenderer | null = null
+  let controller: MobileNativeChatController | null = null
+  const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
+  const status = (prompt: string, updatedAt: number) => ({
+    state: 'working',
+    agentType: 'claude',
+    prompt,
+    updatedAt,
+    stateStartedAt: 1_000,
+    stateHistory: [{ state: 'done', prompt: 'earlier', startedAt: 500 }],
+    providerSession: { id: OWN }
+  })
+
+  function Harness({ agentStatus, tabsLive }: { agentStatus: ReturnType<typeof status>; tabsLive: boolean }): null {
+    controller = useMobileNativeChatController({
+      client: clientStub as unknown as RpcClient,
+      connState: 'connected',
+      tabsLive,
+      hostId: 'h',
+      worktreeId: 'w',
+      activeSessionTab: { type: 'terminal', id: 'tab-1', terminal: 'term-1', launchAgent: 'claude', agentStatus, isActive: true } as never,
+      activeSessionTabId: 'tab-1',
+      activeHandle: 'term-1',
+      activeHandleRef: { current: 'term-1' },
+      deviceTokenRef: { current: null },
+      nativeChatTranscriptIsLocalReadable: true,
+      nativeChatInputLeaseReady: true,
+      onSendError: vi.fn(),
+      onSendResolved: vi.fn()
+    })
+    return null
+  }
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    controller = null
+    resetAgentHudBeacons()
+  })
+
+  it('is timed by the run it came in, not by the status that brought it', () => {
+    act(() => {
+      renderer = create(createElement(Harness, { agentStatus: status('run the migration', 3_600_000), tabsLive: false }))
+    })
+    act(() => renderer?.update(createElement(Harness, { agentStatus: status('and keep the old table', 3_606_000), tabsLive: true })))
+    expect(controller?.nativeChatDesktopPrompts.map((prompt) => [prompt.text, prompt.at])).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 3_600_000]
+    ])
+  })
+
+  it('is timed by its own status when the tab list was the host’s all along', () => {
+    act(() => {
+      renderer = create(createElement(Harness, { agentStatus: status('run the migration', 3_600_000), tabsLive: true }))
+    })
+    act(() => renderer?.update(createElement(Harness, { agentStatus: status('and keep the old table', 3_606_000), tabsLive: true })))
+    expect(controller?.nativeChatDesktopPrompts.map((prompt) => [prompt.text, prompt.at])).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 3_606_000]
+    ])
   })
 })

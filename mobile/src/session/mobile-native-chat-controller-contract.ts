@@ -246,6 +246,11 @@ export type MobileNativeChatControllerArgs = {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  /** Whether the tab list is one the host sent since the screen opened. Until
+   *  it is, the screen shows the tabs the last visit cached, and the chat must
+   *  not take the host's first status after them for one it watched arrive
+   *  (use-agent-status-prompts.ts). */
+  tabsLive: boolean
   /** Host capability fact from the shared runtime status probe (Orca #20601). */
   agentSessionPromptCancelSupported?: boolean | null
   onSendError: (message: string) => void

@@ -79,6 +79,9 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    // Set by the first tab list the host sends; until then the screen shows
+    // the tabs the last visit cached (use-mobile-session-tab-application.ts).
+    tabsLive: scope.terminalsLoaded,
     agentSessionPromptCancelSupported,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear

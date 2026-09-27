@@ -147,6 +147,7 @@ describe('what the chat says while the agent waits on a prompt', () => {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
+      tabsLive: true,
       hostId: 'h',
       worktreeId: 'w',
       activeSessionTab: tab as never,
