@@ -1,7 +1,7 @@
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import type { MobilePullToRefresh } from '../source-control/mobile-pull-to-refresh'
 import { RotateCw } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -18,7 +18,7 @@ import { useMobilePrAiTriage, type MobilePrAiTriage } from '../session/use-mobil
 import { usePRBotAuthorOverrides } from '../session/use-pr-bot-author-overrides'
 import { buildFixChecksPrompt, buildResolveConflictsPrompt } from '../session/pr-ai-triage-prompt'
 import { prSidebarRenderBranch } from './mobile-pr-sidebar-presentation'
-import { mobilePrSidebarStyles as styles } from './pr-sidebar/mobile-pr-sidebar-styles'
+import { mobilePrSidebarStyles } from './pr-sidebar/mobile-pr-sidebar-styles'
 import type { MobileGitStatusResult } from '../source-control/mobile-git-status'
 import { PRSidebarHeader } from './pr-sidebar/PRSidebarHeader'
 import { PRConflictingFilesSection } from './pr-sidebar/PRConflictingFilesSection'
@@ -61,6 +61,8 @@ export function MobilePRSidebar({
   showOpenOnWeb = true,
   pullToRefresh
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
   const branch = prSidebarRenderBranch(state)
   // prNumber is 0 until ready; the hook gates on `ready` so it never fires early.
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -175,6 +177,8 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
@@ -194,7 +198,7 @@ function PrSidebarContent({
           accessibilityRole="button"
           accessibilityLabel="Retry loading pull request"
         >
-          <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
+          <RotateCw size={14} color={colors.text} strokeWidth={2.2} />
           <Text style={styles.retryText}>Retry</Text>
         </Pressable>
       </View>
@@ -270,6 +274,7 @@ function PrSidebarSections({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  const styles = useThemedStyles(mobilePrSidebarStyles)
   const pr = data.pr
   // Bind the triage launchers to this PR's data; the prompt builders are pure so
   // building lazily inside launch() keeps a stale capture from leaking in.

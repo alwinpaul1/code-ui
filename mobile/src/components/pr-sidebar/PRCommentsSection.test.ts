@@ -33,9 +33,11 @@ vi.mock('./PRSection', () => ({ PRSection: 'PRSection' }))
 vi.mock('./CommentMarkdown', () => ({ CommentMarkdown: 'CommentMarkdown' }))
 vi.mock('./PRCommentCard', () => ({ PRCommentCard: 'PRCommentCard' }))
 vi.mock('./PRCommentComposer', () => ({ PRCommentComposer: 'PRCommentComposer' }))
-vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: {} }))
-vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: {} }))
-vi.mock('../../theme/mobile-theme', () => ({ colors: { textSecondary: '#999' } }))
+// Themed factories now, not static objects (`useThemedStyles` calls them with the
+// live theme) — mocked the same shape so `styles.x` still resolves to `undefined`
+// rather than throwing "not a function".
+vi.mock('./pr-comments-styles', () => ({ prCommentsStyles: () => ({}) }))
+vi.mock('./mobile-pr-sidebar-styles', () => ({ mobilePrSidebarStyles: () => ({}) }))
 
 function comment(id: number): PRComment {
   return {

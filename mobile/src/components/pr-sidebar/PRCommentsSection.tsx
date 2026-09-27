@@ -4,7 +4,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import type { PRState } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import { canAddRootComment } from '../../session/pr-comment-actions'
 import { isPrSidebarDetailsPlaceholder } from '../../session/mobile-pr-sidebar-state'
 import type { MobilePrCommentActions } from '../../session/use-mobile-pr-comment-actions'
@@ -29,8 +29,8 @@ import {
   isResolvedPRCommentGroup,
   type PRCommentGroup
 } from '../../../../src/shared/pr-comment-groups'
-import { prCommentsStyles as styles } from './pr-comments-styles'
-import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
+import { prCommentsStyles } from './pr-comments-styles'
+import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 import { useNow } from '../../hooks/use-now'
 
 type Props = {
@@ -63,6 +63,8 @@ export function PRCommentsSection({
   actions,
   botAuthorOverrides
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(prCommentsStyles)
   // details is null while phase 2 (the heavy comments/body payload) is still loading.
   // A synthetic placeholder means phase 2 failed — do not paint that as empty success.
   const loadingDetails = details === null
@@ -239,6 +241,9 @@ function CommentGroupView({
   actions?: PRCommentCardActions
   now: number
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(prCommentsStyles)
+  const shared = useThemedStyles(mobilePrSidebarStyles)
   const [expanded, setExpanded] = useState(false)
   const cards =
     group.kind === 'thread'

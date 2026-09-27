@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowRight, ExternalLink, Pencil } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { MobilePrTitleAction } from '../../session/use-mobile-pr-title-action'
@@ -9,8 +9,8 @@ import { prStateBadge } from './pr-checks-presentation'
 import { statusColor } from './pr-sidebar-status-color'
 import { canEditPRTitle } from '../../session/pr-title-edit'
 import { openMobilePrUrl } from '../mobile-pr-url'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
-import { prCommentComposerStyles as composerStyles } from './pr-comment-composer-styles'
+import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
+import { prCommentComposerStyles } from './pr-comment-composer-styles'
 
 type Props = {
   pr: PRInfo
@@ -32,9 +32,11 @@ export function PRSidebarHeader({
   showOpenOnWeb = true,
   bare = false
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
   const item = details?.item
   const badge = prStateBadge(pr.state)
-  const badgeColor = statusColor(badge.token)
+  const badgeColor = statusColor(badge.token, colors)
   const title = item?.title ?? pr.title
   const author = item?.author ?? null
   const baseRef = item?.baseRefName ?? null
@@ -115,6 +117,9 @@ function PRTitle({
   editable: boolean
   titleAction: MobilePrTitleAction
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
+  const composerStyles = useThemedStyles(prCommentComposerStyles)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(title)
 
@@ -166,7 +171,7 @@ function PRTitle({
             accessibilityLabel="Save title"
           >
             {titleAction.saving ? (
-              <ActivityIndicator size="small" color={colors.bgBase} />
+              <ActivityIndicator size="small" color={colors.bg} />
             ) : (
               <Text style={composerStyles.submitText}>Save</Text>
             )}

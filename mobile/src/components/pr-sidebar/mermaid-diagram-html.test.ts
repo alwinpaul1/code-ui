@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildHtml } from './MermaidDiagram'
+import { mermaidDiagramConfig } from './mermaid-diagram-config'
+import { darkColors } from '../../theme/tokens'
 import { MERMAID_ENGINE_JS } from './mermaid-webview-engine.generated'
 
 vi.mock('react-native', () => ({
@@ -10,6 +12,12 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('react-native-webview', () => ({ WebView: 'WebView' }))
 
+// A fixed config for every case: this file is about the HTML-escaping mechanics of the splice, not
+// about what a particular theme resolves to (that is mermaid-diagram-config.test.ts's business, if
+// one is added). Built from a real theme resolver rather than an ad hoc object so it has the same
+// shape production code hands `buildHtml`.
+const CONFIG = mermaidDiagramConfig('dark', darkColors)
+
 // The diagram source is untrusted (agent output, PR/chat content). It is embedded
 // inside an inline <script>, so it must not be able to close that script element.
 describe('buildHtml source escaping', () => {
@@ -18,36 +26,27 @@ describe('buildHtml source escaping', () => {
     const countClosers = (html: string) => (html.match(/<\/script>/gi) ?? []).length
     // The payload's two </script> must add zero raw closers over a benign render —
     // they were neutralized to \u003c instead of closing our inline script.
-    const benign = countClosers(buildHtml('graph TD; A-->B'))
-    expect(countClosers(buildHtml(payload))).toBe(benign)
-    expect(buildHtml(payload)).toContain('\\u003c/script')
+    const benign = countClosers(buildHtml('graph TD; A-->B', CONFIG))
+    expect(countClosers(buildHtml(payload, CONFIG))).toBe(benign)
+    expect(buildHtml(payload, CONFIG)).toContain('\\u003c/script')
   })
 
-  it('does not let a config value break out of the inline script either', async () => {
+  it('does not let a config value break out of the inline script either', () => {
     // The config is spliced into the same `<script>` as the source and is not a fixed set of hex
     // colours by nature: a `themeCSS` or a font stack is free text, and `JSON.stringify` leaves
-    // `<` and `>` raw. Mocked rather than edited in place, because what is under test is the
-    // splice and not today's values.
-    vi.resetModules()
-    vi.doMock('./mermaid-diagram-config', () => ({
-      MERMAID_DIAGRAM_CONFIG: { themeCSS: '</script><script>window.evil=1</script>' }
-    }))
-    try {
-      const hostile = await import('./MermaidDiagram')
-      const countClosers = (html: string) => (html.match(/<\/script>/gi) ?? []).length
-      const benign = countClosers(buildHtml('graph TD; A-->B'))
-      const built = hostile.buildHtml('graph TD; A-->B')
-      expect(countClosers(built)).toBe(benign)
-      expect(built).toContain('\\u003c/script')
-    } finally {
-      vi.doUnmock('./mermaid-diagram-config')
-      vi.resetModules()
-    }
+    // `<` and `>` raw. Passed straight to `buildHtml` (rather than mocking the config module) since
+    // what is under test is the splice, not any particular theme's resolved values.
+    const hostileConfig = { ...CONFIG, themeCSS: '</script><script>window.evil=1</script>' }
+    const countClosers = (html: string) => (html.match(/<\/script>/gi) ?? []).length
+    const benign = countClosers(buildHtml('graph TD; A-->B', CONFIG))
+    const built = buildHtml('graph TD; A-->B', hostileConfig)
+    expect(countClosers(built)).toBe(benign)
+    expect(built).toContain('\\u003c/script')
   })
 
   it('escapes the U+2028/U+2029 line separators that would break the JS literal', () => {
     const payload = `a${String.fromCharCode(0x2028)}b${String.fromCharCode(0x2029)}c`
-    const html = buildHtml(payload)
+    const html = buildHtml(payload, CONFIG)
     expect(html).toContain('\\u2028')
     expect(html).toContain('\\u2029')
     expect(html.includes(String.fromCharCode(0x2028))).toBe(false)
@@ -56,7 +55,7 @@ describe('buildHtml source escaping', () => {
 
   it('still round-trips ordinary source to the exact original string', () => {
     const payload = 'graph LR\n  A["node & <tag>"] --> B'
-    const html = buildHtml(payload)
+    const html = buildHtml(payload, CONFIG)
     const match = html.match(/\.textContent = (".*?");\n {4}mermaid\.initialize/s)
     expect(match).not.toBeNull()
     expect(JSON.parse(match![1]!)).toBe(payload)
@@ -67,13 +66,13 @@ describe('buildHtml source escaping', () => {
   // supply-chain exposure). The engine's internal URL literals (xmlns, docs links)
   // are inert data, so the gate checks the document with the engine stripped out.
   it('embeds the mermaid engine and loads no external resource', () => {
-    const html = buildHtml('graph TD; A-->B')
+    const html = buildHtml('graph TD; A-->B', CONFIG)
     expect(html).toContain(MERMAID_ENGINE_JS)
     expect(html.replace(MERMAID_ENGINE_JS, '')).not.toMatch(/\bhttps?:\/\//)
   })
 
   it('blocks external resources requested by diagram syntax', () => {
-    const html = buildHtml('flowchart LR\nA@{ img: "https://example.com/pixel.png" }')
+    const html = buildHtml('flowchart LR\nA@{ img: "https://example.com/pixel.png" }', CONFIG)
     const policy = html.match(/Content-Security-Policy" content="([^"]+)"/)?.[1]
     expect(policy).toContain("default-src 'none'")
     expect(policy).toContain('img-src data: blob:')

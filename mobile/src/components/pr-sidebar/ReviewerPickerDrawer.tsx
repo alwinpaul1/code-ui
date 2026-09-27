@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
-import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
+import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 
 type Props = {
   visible: boolean
@@ -39,6 +39,8 @@ export function ReviewerPickerDrawer({
   isRequested,
   onToggle
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 
@@ -128,7 +130,7 @@ export function ReviewerPickerDrawer({
               >
                 <View style={styles.rowTrailing}>
                   {requested ? (
-                    <Check size={16} color={colors.textPrimary} strokeWidth={2.4} />
+                    <Check size={16} color={colors.text} strokeWidth={2.4} />
                   ) : null}
                 </View>
                 <View style={styles.pickerRowMain}>

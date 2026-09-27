@@ -3,6 +3,7 @@ import { View, StyleSheet } from 'react-native'
 import { MobileSourceControlPanel } from '../source-control/MobileSourceControlPanel'
 import { MobileFileExplorerPanel } from '../files/MobileFileExplorerPanel'
 import { mobilePrSidebarStyles } from '../components/pr-sidebar/mobile-pr-sidebar-styles'
+import { useThemedStyles } from '../theme/theme-context'
 import { useMobileDockResize } from './use-mobile-dock-resize'
 import type { ActivePanel } from './session-panel-host'
 
@@ -35,8 +36,11 @@ export function SessionDockColumn({
   onOpenedFileDiff
 }: Props) {
   const { dockWidth, panHandlers } = useMobileDockResize(availableWidth)
+  // Shared with the PR sidebar itself (theme-sweep, 2026-09-27): mobile-pr-sidebar-styles now
+  // resolves from the live theme, so this dock column follows the same appearance setting.
+  const prSidebarStyles = useThemedStyles(mobilePrSidebarStyles)
   return (
-    <View style={[mobilePrSidebarStyles.dockColumn, { width: dockWidth }]}>
+    <View style={[prSidebarStyles.dockColumn, { width: dockWidth }]}>
       {/* Dedicated drag handle over the dock's left border — a leaf overlay so the
           inner ScrollView can't intercept the gesture on Android. */}
       <View style={styles.resizeHandle} {...panHandlers} />

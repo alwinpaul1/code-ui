@@ -1,7 +1,8 @@
 import type { MobilePullToRefresh } from '../../source-control/mobile-pull-to-refresh'
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors } from '../../theme/mobile-theme'
+import { useThemedStyles } from '../../theme/theme-context'
+import type { Theme } from '../../theme/theme-context'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -37,6 +38,7 @@ export function MobilePrViewPanelBody({
   pullToRefresh
 }: Props) {
   const insets = useSafeAreaInsets()
+  const styles = useThemedStyles(mobilePrViewPanelStyles)
 
   const sidebarState = !branchContextLoaded
     ? ({ kind: 'loading' } as const)
@@ -73,9 +75,11 @@ export function MobilePrViewPanelBody({
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  }
-})
+function mobilePrViewPanelStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg
+    }
+  })
+}
