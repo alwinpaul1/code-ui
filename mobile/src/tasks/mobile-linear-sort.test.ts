@@ -4,8 +4,8 @@ import type { LinearOrderBy } from './mobile-tasks-view-state-types'
 import { groupLinearIssues, sortLinearIssues } from './mobile-tasks-reviewer-linear'
 import { taskTime } from './mobile-tasks-item-mapping'
 import { getLinearPriorityRank } from './mobile-tasks-hosted-review'
+import { darkColors } from '../theme/tokens'
 
-vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
 afterEach(() => vi.restoreAllMocks())
 
 const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
@@ -48,7 +48,7 @@ describe('mobile Linear sorting', () => {
       actual.forEach((issue, index) => expect(issue).toBe(expected[index]))
       expect(input).toEqual(issues)
       for (const groupBy of ['none', 'status', 'priority', 'team', 'assignee'] as const) {
-        const groups = groupLinearIssues([...input], groupBy, mode)
+        const groups = groupLinearIssues([...input], groupBy, mode, darkColors)
         for (const group of groups) {
           expect(group.issues).toEqual(expected.filter((issue) => group.issues.includes(issue)))
         }

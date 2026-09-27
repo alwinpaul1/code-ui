@@ -5,7 +5,6 @@ import {
   View,
   Text,
   Check,
-  colors,
   ScrollView
 } from './mobile-tasks-dependencies'
 import {
@@ -19,7 +18,6 @@ import {
   issueSourceSlug,
   GITHUB_KIND_OPTIONS
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
@@ -90,12 +88,14 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
 
 export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     hostedRepos,
     persistRepoSelection,
     selectedRepoIds,
     setSelectedRepoIds,
     setShowRepoPicker,
     showRepoPicker,
+    styles,
     taskUiReady,
     toggleRepoSelection
   } = model
@@ -119,7 +119,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
             <Text style={styles.repoPickerTitle}>All repositories</Text>
             <Text style={styles.repoPickerSubtitle}>{repositoryCount(hostedRepos.length)}</Text>
           </View>
-          {selectedRepoIds.size === 0 ? <Check size={15} color={colors.textPrimary} /> : null}
+          {selectedRepoIds.size === 0 ? <Check size={15} color={colors.text} /> : null}
         </TasksRow>
 
         {hostedRepos.map((repo) => {
@@ -142,7 +142,7 @@ export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) 
                     {repo.path}
                   </Text>
                 </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                {selected ? <Check size={15} color={colors.text} /> : null}
               </TasksRow>
             </View>
           )
@@ -158,6 +158,7 @@ export function renderMobileTasksGitHubIssueSourcePicker(model: ConnectionPresen
     setGitHubIssueSourcePreference,
     setShowGitHubIssueSourcePicker,
     showGitHubIssueSourcePicker,
+    styles,
     taskUiReady
   } = model
   return (
@@ -328,6 +329,7 @@ export function renderMobileTasksGitHubPresetPicker(model: ConnectionPresentatio
 
 export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     githubCurrentPage,
     githubPagePickerPages,
     githubPages,
@@ -335,6 +337,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
     handleGitHubPageChange,
     setShowGitHubPagePicker,
     showGitHubPagePicker,
+    styles,
     taskUiReady
   } = model
   return (
@@ -367,7 +370,7 @@ export function renderMobileTasksPagePicker(model: ConnectionPresentationModel) 
                   {loaded ? 'Loaded' : 'Loads older results'}
                 </Text>
               </View>
-              {selected ? <Check size={16} color={colors.textPrimary} /> : null}
+              {selected ? <Check size={16} color={colors.text} /> : null}
             </TasksRow>
           )
         })}

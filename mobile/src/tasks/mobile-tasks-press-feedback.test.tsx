@@ -9,26 +9,34 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
   View: 'View',
-  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 0.5 }
+  StyleSheet: { create: (s: unknown) => s, flatten: (s: unknown) => s, hairlineWidth: 0.5 },
+  useColorScheme: () => 'light'
 }))
 vi.mock('./mobile-tasks-dependencies', async () => {
   const theme = await import('../theme/mobile-theme')
   return {
     StyleSheet: { create: (s: unknown) => s, hairlineWidth: 0.5 },
     Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
-    colors: theme.colors,
     radii: theme.radii,
     spacing: theme.spacing,
     typography: theme.typography
   }
 })
 
-import { colors } from '../theme/mobile-theme'
+import type { ReactElement } from 'react'
+import { ThemeProvider, type Theme } from '../theme/theme-context'
+import { colorsForScheme, type ThemeScheme } from '../theme/tokens'
 import { mobileTasksDetailStyles } from './mobile-tasks-detail-styles'
 import { mobileTasksListStyles } from './mobile-tasks-list-styles'
 import { contrastRatio } from '../test/contrast'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import { mobileTasksProjectPickerStyles } from './mobile-tasks-project-picker-styles'
+
+/** The style factories read only `colors`; this is just enough Theme to call them. */
+function themeFor(scheme: ThemeScheme): Theme {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tasks style factories destructure `colors` and nothing else.
+  return { colors: colorsForScheme(scheme) } as Theme
+}
 
 const TASKS_DIR = import.meta.dirname
 
@@ -95,10 +103,10 @@ describe('the tasks surface acknowledges every press on the way down', () => {
 
 type StyleFn = (state: { pressed: boolean }) => unknown[]
 
-function styleAt(element: ReturnType<typeof createElement>, pressed: boolean) {
+function styleAt(element: ReactElement, pressed: boolean, scheme: ThemeScheme = 'light') {
   let renderer: ReactTestRenderer | null = null
   act(() => {
-    renderer = create(element)
+    renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
   })
   const pressable = renderer!.root.findByType('Pressable' as never)
   const style = pressable.props.style as StyleFn
@@ -106,12 +114,16 @@ function styleAt(element: ReturnType<typeof createElement>, pressed: boolean) {
   return Object.assign({}, ...style({ pressed }).flat().filter(Boolean))
 }
 
-describe('the two tasks shapes', () => {
+describe.each(['light', 'dark'] as const)('the two tasks shapes in %s', (scheme) => {
+  const list = mobileTasksListStyles(themeFor(scheme))
+  const detail = mobileTasksDetailStyles(themeFor(scheme))
+  const picker = mobileTasksProjectPickerStyles(themeFor(scheme))
+
   it('TasksRow lifts its background while pressed, like the list rows always did', () => {
-    const resting = mobileTasksDetailStyles.actionGroup
+    const resting = detail.actionGroup
     const row = createElement(TasksRow, { style: resting })
-    expect(styleAt(row, true).backgroundColor).toBe(mobileTasksListStyles.taskRowPressed.backgroundColor)
-    expect(styleAt(row, false).backgroundColor).toBe(resting.backgroundColor)
+    expect(styleAt(row, true, scheme).backgroundColor).toBe(list.taskRowPressed.backgroundColor)
+    expect(styleAt(row, false, scheme).backgroundColor).toBe(resting.backgroundColor)
   })
 
   /**
@@ -123,27 +135,29 @@ describe('the two tasks shapes', () => {
    */
   it('lifts a row that already rests at the lift colour to something else', () => {
     const resting = {
-      ...mobileTasksProjectPickerStyles.pickerRow,
-      ...mobileTasksProjectPickerStyles.pickerRowSelected
+      ...picker.pickerRow,
+      ...picker.pickerRowSelected
     }
     const row = createElement(TasksRow, { style: resting, raised: true })
-    expect(styleAt(row, true).backgroundColor).not.toBe(resting.backgroundColor)
+    expect(styleAt(row, true, scheme).backgroundColor).not.toBe(resting.backgroundColor)
   })
 
   it('TasksButton dims while pressed and is opaque at rest', () => {
     const button = createElement(TasksButton, { style: { padding: 4 } })
-    expect(styleAt(button, true).opacity).toBeLessThan(1)
-    expect(styleAt(button, false).opacity).toBeUndefined()
+    expect(styleAt(button, true, scheme).opacity).toBeLessThan(1)
+    expect(styleAt(button, false, scheme).opacity).toBeUndefined()
   })
 
   it('the row lift is a visibly different colour from both surfaces a row sits on', () => {
-    const lift = mobileTasksListStyles.taskRowPressed.backgroundColor
-    // The action group (drawer rows) and the page (list rows). The ratio is
-    // the palette's existing bgPanel → bgRaised step, not a target; a lift
-    // set to the group's own colour would be invisible and fail here.
-    for (const surface of [mobileTasksDetailStyles.actionGroup.backgroundColor, colors.bgBase]) {
+    const lift = list.taskRowPressed.backgroundColor
+    // The action group (drawer rows) and the page (list rows). The floor is
+    // the smallest step the palette itself uses for a pressed row, not a
+    // target: `bg` -> `bgRaised` in light, 1.094:1 (dark's smallest is
+    // `bgPanel` -> `bgRaised`, 1.13:1). A lift set to the group's own colour
+    // would be 1:1 and fail here in either scheme.
+    for (const surface of [detail.actionGroup.backgroundColor, colorsForScheme(scheme).bg]) {
       expect(lift).not.toBe(surface)
-      expect(contrastRatio(lift, surface as string)).toBeGreaterThanOrEqual(1.1)
+      expect(contrastRatio(lift, surface as string)).toBeGreaterThanOrEqual(1.09)
     }
   })
 })

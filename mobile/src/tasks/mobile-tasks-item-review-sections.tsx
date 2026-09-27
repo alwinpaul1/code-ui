@@ -9,23 +9,23 @@ import {
 } from './mobile-tasks-legacy-foundation'
 import {
   TextInput,
-  colors,
   Text,
   MobileMarkdown,
   View,
   ActivityIndicator,
   Check
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    colors,
     detailPayload,
     itemBodyDraft,
     mutatingStatus,
     setItemBodyDraft,
+    styles,
     updateGitHubIssueMetadata,
     updateGitHubPullRequestMetadata,
     updateGitLabIssueMetadata
@@ -91,6 +91,7 @@ export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationMod
 export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    colors,
     detailPayload,
     itemAssignableUsersError,
     itemAssignableUsersLoading,
@@ -99,7 +100,8 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
     itemSelectedReviewerLogins,
     mutatingStatus,
     requestGitHubReviewers,
-    setItemReviewersDraft
+    setItemReviewersDraft,
+    styles
   } = model
   if (!actionItem || !detailPayload) {
     return null
@@ -161,7 +163,7 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
                 onPress={() => void requestGitHubReviewers(actionItem, [user.login])}
               >
                 <View style={styles.issueTypeChipContent}>
-                  {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                  {selected ? <Check size={12} color={colors.accent} /> : null}
                   <Text style={styles.detailChipText}>{user.login}</Text>
                 </View>
               </TasksButton>
@@ -192,6 +194,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
   const {
     actionItem,
     addGitHubFileReviewComment,
+    colors,
     detailPayload,
     expandedPrFilePath,
     mutatingStatus,
@@ -199,6 +202,7 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
     prFileContents,
     prFileLoadingPath,
     setPrFileCommentDrafts,
+    styles,
     toggleGitHubFileExpansion,
     toggleGitHubFileViewed
   } = model

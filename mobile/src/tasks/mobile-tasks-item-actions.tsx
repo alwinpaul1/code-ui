@@ -2,7 +2,6 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   View,
   Plus,
-  colors,
   Text,
   Linking,
   ExternalLink,
@@ -11,7 +10,6 @@ import {
   X,
   GitBranch
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksRow } from './mobile-tasks-pressables'
 import {
   taskExternalOpenLabel,
@@ -23,6 +21,7 @@ import {
 export function renderMobileTasksItemActions(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    colors,
     copiedLinkKey,
     copyTaskLink,
     copyTextToClipboard,
@@ -33,6 +32,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
     setMergeMethodTaskItem,
     setPendingHostedStateChange,
     setWorkspaceRepoPickerItem,
+    styles,
     workspaceRepos
   } = model
   if (!actionItem) {
@@ -51,7 +51,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
           openWorkspaceCreate(actionItem)
         }}
       >
-        <Plus size={16} color={colors.textPrimary} />
+        <Plus size={16} color={colors.text} />
         <Text style={styles.actionText}>
           {creatingKey === actionItem.key ? 'Creating...' : 'Create Workspace'}
         </Text>
@@ -62,7 +62,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
         style={styles.actionRow}
         onPress={() => void Linking.openURL(actionItem.source.url)}
       >
-        <ExternalLink size={16} color={colors.textPrimary} />
+        <ExternalLink size={16} color={colors.text} />
         <Text style={styles.actionText}>{taskExternalOpenLabel(actionItem)}</Text>
       </TasksRow>
 
@@ -75,7 +75,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               void copyTextToClipboard(`linear-url:${actionItem.key}`, actionItem.source.url)
             }
           >
-            <Copy size={16} color={colors.textPrimary} />
+            <Copy size={16} color={colors.text} />
             <Text style={styles.actionText}>
               {copiedLinkKey === `linear-url:${actionItem.key}` ? 'Copied' : 'Copy Linear link'}
             </Text>
@@ -90,7 +90,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             style={styles.actionRow}
             onPress={() => void copyTaskLink(`task:${actionItem.key}`, actionItem.source.url)}
           >
-            <Copy size={16} color={colors.textPrimary} />
+            <Copy size={16} color={colors.text} />
             <Text style={styles.actionText}>
               {copiedLinkKey === `task:${actionItem.key}` ? 'Copied' : 'Copy GitHub link'}
             </Text>
@@ -114,9 +114,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             }}
           >
             {actionItem.source.state === 'closed' ? (
-              <RefreshCw size={16} color={colors.textPrimary} />
+              <RefreshCw size={16} color={colors.text} />
             ) : (
-              <X size={16} color={colors.textPrimary} />
+              <X size={16} color={colors.text} />
             )}
             <Text style={styles.actionText}>{taskStatusActionLabel(actionItem)}</Text>
           </TasksRow>
@@ -135,7 +135,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               setMergeMethodTaskItem(actionItem as Extract<TaskItem, { provider: 'github' }>)
             }
           >
-            <GitBranch size={16} color={colors.textPrimary} />
+            <GitBranch size={16} color={colors.text} />
             <Text style={styles.actionText}>Merge pull request</Text>
           </TasksRow>
           {isGitHubPrMergeBlocked(actionItem) ? (
@@ -162,9 +162,9 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
             }}
           >
             {actionItem.source.state === 'closed' ? (
-              <RefreshCw size={16} color={colors.textPrimary} />
+              <RefreshCw size={16} color={colors.text} />
             ) : (
-              <X size={16} color={colors.textPrimary} />
+              <X size={16} color={colors.text} />
             )}
             <Text style={styles.actionText}>{taskStatusActionLabel(actionItem)}</Text>
           </TasksRow>
@@ -183,7 +183,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               setMergeMethodTaskItem(actionItem as Extract<TaskItem, { provider: 'gitlab' }>)
             }
           >
-            <GitBranch size={16} color={colors.textPrimary} />
+            <GitBranch size={16} color={colors.text} />
             <Text style={styles.actionText}>Merge merge request</Text>
           </TasksRow>
         </>
@@ -199,7 +199,7 @@ export function renderMobileTasksItemActions(model: ConnectionPresentationModel)
               setLinearStatusPickerItem(actionItem as Extract<TaskItem, { provider: 'linear' }>)
             }}
           >
-            <GitBranch size={16} color={colors.textPrimary} />
+            <GitBranch size={16} color={colors.text} />
             <Text style={styles.actionText}>Change status</Text>
           </TasksRow>
         </>

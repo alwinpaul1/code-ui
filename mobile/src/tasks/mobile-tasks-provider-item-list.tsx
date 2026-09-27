@@ -3,7 +3,6 @@ import { tapTargetHitSlop } from '../ui/tap-target'
 import {
   View,
   ActivityIndicator,
-  colors,
   Text,
   FlatList,
   spacing,
@@ -19,7 +18,7 @@ import {
   getHostedChecksLabel,
   getHostedMergeLabel
 } from './mobile-tasks-dependencies'
-import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
+import { getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 import {
   taskRepositoryMeta,
@@ -33,6 +32,7 @@ import {
 
 export function renderMobileTasksProviderItemList(model: ConnectionPresentationModel) {
   const {
+    colors,
     displayedEntries,
     emptyLabel,
     githubCanLoadUncountedNextPage,
@@ -53,6 +53,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
     setActionItem,
     setShowGitHubPagePicker,
     sortedItems,
+    styles,
     taskUiReady
   } = model
   return loading ? (
@@ -93,7 +94,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               disabled={githubCurrentPage === 0 || githubPaginationLoading}
               onPress={() => void handleGitHubPageChange(githubCurrentPage - 1)}
             >
-              <ChevronLeft size={17} color={colors.textPrimary} />
+              <ChevronLeft size={17} color={colors.text} />
             </TasksButton>
             <TasksButton
               accessibilityRole="button"
@@ -140,9 +141,9 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               onPress={() => void handleGitHubPageChange(githubCurrentPage + 1)}
             >
               {githubLoadingTargetPage === githubCurrentPage + 1 ? (
-                <ActivityIndicator size="small" color={colors.textPrimary} />
+                <ActivityIndicator size="small" color={colors.text} />
               ) : (
-                <ChevronRight size={17} color={colors.textPrimary} />
+                <ChevronRight size={17} color={colors.text} />
               )}
             </TasksButton>
           </View>
@@ -160,7 +161,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
           )
         }
         const item = entry.item
-        const repo = taskRepositoryMeta(item, reposById)
+        const repo = taskRepositoryMeta(item, reposById, colors)
         const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
@@ -221,7 +222,10 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                     <View
                       style={[
                         styles.prSignalChip,
-                        getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'review'))
+                        getPrSignalToneStyle(
+                          styles,
+                          getHostedReviewSignalTone(item.source, 'review')
+                        )
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>
@@ -234,7 +238,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                   <View
                     style={[
                       styles.prSignalChip,
-                      getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'checks'))
+                      getPrSignalToneStyle(styles, getHostedReviewSignalTone(item.source, 'checks'))
                     ]}
                   >
                     <Text style={styles.prSignalText} numberOfLines={1}>
@@ -245,7 +249,10 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                     <View
                       style={[
                         styles.prSignalChip,
-                        getPrSignalToneStyle(getHostedReviewSignalTone(item.source, 'merge'))
+                        getPrSignalToneStyle(
+                          styles,
+                          getHostedReviewSignalTone(item.source, 'merge')
+                        )
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>

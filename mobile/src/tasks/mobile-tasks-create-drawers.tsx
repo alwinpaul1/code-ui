@@ -3,7 +3,6 @@ import {
   BottomDrawer,
   View,
   TaskProviderLogo,
-  colors,
   Text,
   ChevronDown,
   TextInput,
@@ -13,7 +12,6 @@ import {
   ExternalLink,
   Lock
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton } from './mobile-tasks-pressables'
 import {
   getRepoBadgeColor,
@@ -26,6 +24,7 @@ import {
 
 export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel) {
   const {
+    colors,
     createBody,
     createTask,
     createTitle,
@@ -43,6 +42,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     setShowCreateTargetPicker,
     setShowCreateTask,
     showCreateTask,
+    styles,
     taskUiReady
   } = model
   return (
@@ -55,7 +55,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
     >
       <View style={styles.sheetHeader}>
         <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider={provider} size={16} color={colors.textPrimary} />
+          <TaskProviderLogo provider={provider} size={16} color={colors.text} />
           <Text style={styles.sheetTitle}>New {providerLabel} Issue</Text>
         </View>
         <Text style={styles.sheetSubtitle}>
@@ -179,7 +179,7 @@ export function renderMobileTasksCreateDrawer(model: ConnectionPresentationModel
           onPress={() => void createTask()}
         >
           {creatingTask ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
+            <ActivityIndicator size="small" color={colors.bg} />
           ) : (
             <Text style={styles.createButtonText}>Create Issue</Text>
           )}
@@ -225,6 +225,7 @@ export function renderMobileTasksCreateTargetPicker(model: ConnectionPresentatio
 
 export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentationModel) {
   const {
+    colors,
     connectLinearAccount,
     linearApiKeyDraft,
     linearConnectError,
@@ -234,6 +235,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     setLinearConnectState,
     setShowLinearConnect,
     showLinearConnect,
+    styles,
     taskUiReady
   } = model
   return (
@@ -247,7 +249,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
     >
       <View style={styles.sheetHeader}>
         <View style={styles.sheetTitleRow}>
-          <TaskProviderLogo provider="linear" size={16} color={colors.textPrimary} />
+          <TaskProviderLogo provider="linear" size={16} color={colors.text} />
           <Text style={styles.sheetTitle}>Connect Linear workspace</Text>
         </View>
         <Text style={styles.sheetSubtitle}>
@@ -300,7 +302,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
           onPress={() => void connectLinearAccount()}
         >
           {linearConnectState === 'connecting' ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
+            <ActivityIndicator size="small" color={colors.bg} />
           ) : (
             <Text style={styles.createButtonText}>Connect</Text>
           )}

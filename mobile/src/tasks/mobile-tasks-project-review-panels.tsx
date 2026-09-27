@@ -12,18 +12,17 @@ import {
   View,
   Text,
   ActivityIndicator,
-  colors,
   Check,
   TextInput,
   Linking,
   ExternalLink
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentationModel) {
   const {
     addProjectGitHubFileReviewComment,
+    colors,
     expandedPrFilePath,
     prFileCommentDrafts,
     prFileContents,
@@ -42,6 +41,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
     rerunProjectGitHubChecks,
     setPrFileCommentDrafts,
     setProjectReviewersDraft,
+    styles,
     toggleProjectGitHubFileExpansion,
     toggleProjectGitHubFileViewed
   } = model
@@ -103,7 +103,7 @@ export function renderMobileTasksProjectReviewPanels(model: ConnectionPresentati
                   onPress={() => void requestProjectGitHubReviewers(projectRowItem, [user.login])}
                 >
                   <View style={styles.issueTypeChipContent}>
-                    {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                    {selected ? <Check size={12} color={colors.accent} /> : null}
                     <Text style={styles.detailChipText}>{user.login}</Text>
                   </View>
                 </TasksButton>

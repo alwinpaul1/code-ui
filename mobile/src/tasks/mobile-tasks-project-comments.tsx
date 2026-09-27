@@ -1,13 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import {
-  View,
-  Text,
-  type ReactNode,
-  TextInput,
-  colors,
-  MobileMarkdown
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { View, Text, type ReactNode, TextInput, MobileMarkdown } from './mobile-tasks-dependencies'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   discussionSummary,
@@ -27,6 +19,7 @@ import {
 export function renderMobileTasksProjectComments(model: ConnectionPresentationModel) {
   const {
     addProjectRowComment,
+    colors,
     deleteProjectRowComment,
     expandedResolvedCommentGroups,
     itemReplyDrafts,
@@ -44,6 +37,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
     setProjectCommentDraft,
     setProjectEditingCommentDraft,
     setProjectEditingCommentId,
+    styles,
     toggleProjectGitHubReviewThread,
     updateProjectRowComment
   } = model
@@ -148,7 +142,7 @@ export function renderMobileTasksProjectComments(model: ConnectionPresentationMo
                 ) : (
                   <>
                     <MobileMarkdown content={comment.body} />
-                    {renderCommentReactions(comment)}
+                    {renderCommentReactions(styles, comment)}
                     {SHOW_MOBILE_COMMENT_THREAD_TOOLS ? (
                       <View style={styles.inlineActionRow}>
                         {projectRowType(projectRowItem) === 'pr' && comment.threadId ? (

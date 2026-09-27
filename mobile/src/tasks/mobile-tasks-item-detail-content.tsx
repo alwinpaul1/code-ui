@@ -2,13 +2,12 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   View,
   ActivityIndicator,
-  colors,
   Text,
   Linking,
   ExternalLink,
   TextInput
 } from './mobile-tasks-dependencies'
-import { styles, getGitLabPipelineStatusStyle } from './mobile-tasks-legacy-styles'
+import { getGitLabPipelineStatusStyle } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   taskKindLabel,
@@ -31,6 +30,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     actionItem,
     addHostedItemComment,
     addLinearComment,
+    colors,
     createLinearSubIssue,
     detailCommentGroups,
     detailError,
@@ -47,7 +47,8 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
     rerunGitHubChecks,
     setItemCommentDraft,
     setLinearCommentDraft,
-    setLinearSubIssueTitle
+    setLinearSubIssueTitle,
+    styles
   } = model
   if (!actionItem) {
     return null
@@ -200,7 +201,10 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
                       {job.name}
                     </Text>
                     <View
-                      style={[styles.pipelineStatusChip, getGitLabPipelineStatusStyle(job.status)]}
+                      style={[
+                        styles.pipelineStatusChip,
+                        getGitLabPipelineStatusStyle(styles, job.status)
+                      ]}
                     >
                       <Text style={styles.pipelineStatusText}>{job.status}</Text>
                     </View>

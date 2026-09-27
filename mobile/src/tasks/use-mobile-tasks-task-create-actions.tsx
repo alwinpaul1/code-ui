@@ -1,5 +1,5 @@
 import type { LinearItemActionsModel } from './use-mobile-tasks-linear-item-actions'
-import { colors, useCallback } from './mobile-tasks-dependencies'
+import { useCallback } from './mobile-tasks-dependencies'
 import {
   type RepoSummary,
   type TaskItem,
@@ -17,6 +17,7 @@ import { taskRepoPreferenceWrite } from './mobile-task-list-operations'
 export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
   const {
     client,
+    colors,
     createBody,
     createRepoId,
     createTeamId,
@@ -134,7 +135,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
             title: result.title ?? title,
             description: createBody.trim(),
             url: result.url ?? '',
-            state: { name: 'Open', type: 'unstarted', color: colors.accentBlue },
+            state: { name: 'Open', type: 'unstarted', color: colors.accent },
             team,
             labels: [],
             priority: 0,
@@ -153,6 +154,7 @@ export function useMobileTasksTaskCreateActions(model: LinearItemActionsModel) {
     }
   }, [
     client,
+    colors,
     createBody,
     createRepoId,
     createTeamId,

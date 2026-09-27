@@ -22,6 +22,7 @@ import {
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
   const {
     activeGitHubProject,
+    colors,
     defaultGitHubPreset,
     githubKind,
     githubMode,
@@ -133,8 +134,8 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
     [items, linearOrderBy]
   )
   const linearIssueSections = useMemo(
-    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy),
-    [linearGroupBy, linearIssuesForView]
+    () => groupSortedLinearIssues(linearIssuesForView, linearGroupBy, colors),
+    [colors, linearGroupBy, linearIssuesForView]
   )
   // Why: FlatList treats data identity as meaningful; unrelated renders should
   // not rebuild the section/item wrapper array.
@@ -155,9 +156,9 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
   const linearBoardSections = useMemo(
     () =>
       linearGroupBy === 'none'
-        ? groupSortedLinearIssues(linearIssuesForView, 'status')
+        ? groupSortedLinearIssues(linearIssuesForView, 'status', colors)
         : linearIssueSections,
-    [linearGroupBy, linearIssueSections, linearIssuesForView]
+    [colors, linearGroupBy, linearIssueSections, linearIssuesForView]
   )
   const githubModeLabel =
     githubMode === 'project' ? 'Projects' : githubKind === 'prs' ? 'PRs' : 'Issues'

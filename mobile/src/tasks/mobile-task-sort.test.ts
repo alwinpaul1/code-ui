@@ -3,8 +3,7 @@ import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
 import { sortMobileTaskItems, taskRepositoryMeta } from './mobile-tasks-repository-presentation'
 import { taskTime } from './mobile-tasks-item-mapping'
-
-vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
+import { darkColors } from '../theme/tokens'
 
 function task(
   provider: TaskItem['provider'],
@@ -39,8 +38,8 @@ describe('mobile task sorting', () => {
       const compareBefore = (a: TaskItem, b: TaskItem) => {
         const labelOrder =
           sort === 'repository'
-            ? taskRepositoryMeta(a, repos).label.localeCompare(
-                taskRepositoryMeta(b, repos).label,
+            ? taskRepositoryMeta(a, repos, darkColors).label.localeCompare(
+                taskRepositoryMeta(b, repos, darkColors).label,
                 undefined,
                 { sensitivity: 'base' }
               )

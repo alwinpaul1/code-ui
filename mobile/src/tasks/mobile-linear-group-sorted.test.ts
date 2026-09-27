@@ -5,8 +5,8 @@ import {
   groupLinearIssues,
   groupSortedLinearIssues
 } from './mobile-tasks-reviewer-linear'
+import { darkColors as palette } from '../theme/tokens'
 
-vi.mock('./mobile-tasks-dependencies', () => import('../theme/mobile-theme'))
 afterEach(() => vi.restoreAllMocks())
 
 const issues: LinearIssue[] = Array.from({ length: 60 }, (_, i) => ({
@@ -29,8 +29,8 @@ describe('mobile Linear grouping of sorted issues', () => {
     (order) => {
       const sorted = Object.freeze(sortLinearIssues(issues, order))
       for (const group of ['none', 'status', 'assignee', 'team', 'priority'] as const) {
-        const expected = groupLinearIssues([...sorted], group, order)
-        const actual = groupSortedLinearIssues(sorted, group)
+        const expected = groupLinearIssues([...sorted], group, order, palette)
+        const actual = groupSortedLinearIssues(sorted, group, palette)
         expect(actual).toEqual(expected)
         actual.forEach((section, index) => {
           expect(section.issues).not.toBe(sorted)
@@ -46,24 +46,24 @@ describe('mobile Linear grouping of sorted issues', () => {
     const sorted = sortLinearIssues(issues, 'updated')
     const parse = vi.spyOn(Date, 'parse')
     const compare = vi.spyOn(String.prototype, 'localeCompare')
-    groupSortedLinearIssues(sorted, 'none')
-    groupSortedLinearIssues(sorted, 'status')
+    groupSortedLinearIssues(sorted, 'none', palette)
+    groupSortedLinearIssues(sorted, 'status', palette)
     expect(parse).not.toHaveBeenCalled()
     expect(compare).not.toHaveBeenCalled()
-    groupLinearIssues(sorted, 'status', 'updated')
+    groupLinearIssues(sorted, 'status', 'updated', palette)
     expect(parse).toHaveBeenCalled()
   })
 
   it('returns independent issue arrays for empty, singleton and ungrouped inputs', () => {
     for (const input of [[], [issues[0]], issues]) {
       const sorted = Object.freeze([...input])
-      const first = groupSortedLinearIssues(sorted, 'none')
-      const second = groupSortedLinearIssues(sorted, 'none')
+      const first = groupSortedLinearIssues(sorted, 'none', palette)
+      const second = groupSortedLinearIssues(sorted, 'none', palette)
       expect(first).toEqual(second)
       expect(first[0].issues).not.toBe(second[0].issues)
       first[0].issues.pop()
       expect(second[0].issues).toEqual(sorted)
     }
-    expect(groupSortedLinearIssues([], 'status')).toEqual([])
+    expect(groupSortedLinearIssues([], 'status', palette)).toEqual([])
   })
 })

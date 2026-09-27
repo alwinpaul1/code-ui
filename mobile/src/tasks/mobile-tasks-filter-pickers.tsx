@@ -4,12 +4,10 @@ import {
   View,
   Text,
   Check,
-  colors,
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksRow } from './mobile-tasks-pressables'
 import {
   GITLAB_VIEW_OPTIONS,
@@ -20,10 +18,12 @@ import {
 
 export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     githubProjectAvailableSummaryFields,
     githubProjectHiddenFieldIds,
     setShowGitHubProjectFieldsPicker,
     showGitHubProjectFieldsPicker,
+    styles,
     taskUiReady,
     toggleGitHubProjectFieldVisibility
   } = model
@@ -57,7 +57,7 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
                       {visible ? 'Shown on cards' : 'Hidden from cards'}
                     </Text>
                   </View>
-                  {visible ? <Check size={15} color={colors.textPrimary} /> : null}
+                  {visible ? <Check size={15} color={colors.text} /> : null}
                 </TasksRow>
               </View>
             )
@@ -185,12 +185,14 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
 
 export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     linearTeams,
     persistLinearTeamSelection,
     selectedLinearTeamIds,
     setSelectedLinearTeamIds,
     setShowLinearTeamPicker,
     showLinearTeamPicker,
+    styles,
     taskUiReady
   } = model
   return (
@@ -216,7 +218,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
             <Text style={styles.repoPickerSubtitle}>{linearTeams.length} teams</Text>
           </View>
           {selectedLinearTeamIds.size === linearTeams.length ? (
-            <Check size={15} color={colors.textPrimary} />
+            <Check size={15} color={colors.text} />
           ) : null}
         </TasksRow>
         {linearTeams.map((team) => {
@@ -249,7 +251,7 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
                     {team.workspaceName ?? team.key}
                   </Text>
                 </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                {selected ? <Check size={15} color={colors.text} /> : null}
               </TasksRow>
             </View>
           )
@@ -261,12 +263,14 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
 
 export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     linearStates,
     linearStatesLoading,
     linearStatusPickerItem,
     mutatingStatus,
     setLinearStatus,
     setLinearStatusPickerItem,
+    styles,
     taskUiReady
   } = model
   return (
@@ -323,7 +327,7 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
                       {state.type}
                     </Text>
                   </View>
-                  {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                  {selected ? <Check size={15} color={colors.text} /> : null}
                 </TasksRow>
               </View>
             )

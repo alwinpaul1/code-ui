@@ -1,4 +1,4 @@
-import { colors } from './mobile-tasks-dependencies'
+import type { ThemeColors } from '../theme/tokens'
 import { taskTime } from './mobile-tasks-item-mapping'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
 import type { RepoSummary } from './mobile-tasks-provider-detail-types'
@@ -41,29 +41,40 @@ export function setupSourceLabel(source: string | null | undefined): string {
   return 'repository hooks'
 }
 
+/** The name a task's repository section is headed and sorted by. */
+function taskRepositoryLabel(item: TaskItem, reposById: Map<string, RepoSummary>): string {
+  if (item.provider === 'github' || item.provider === 'gitlab') {
+    return reposById.get(item.source.repoId)?.displayName ?? item.source.repoName
+  }
+  return item.provider === 'gitlabTodo' ? item.source.projectPath : item.source.team.name
+}
+
+/** A task's repository section: key, label and dot colour. `colors` is the live theme's; it only
+ *  fills in for a Linear state that names no colour of its own. */
 export function taskRepositoryMeta(
   item: TaskItem,
-  reposById: Map<string, RepoSummary>
+  reposById: Map<string, RepoSummary>,
+  colors: ThemeColors
 ): { key: string; label: string; color: string } {
+  const label = taskRepositoryLabel(item, reposById)
   if (item.provider === 'github' || item.provider === 'gitlab') {
-    const repo = reposById.get(item.source.repoId)
     return {
       key: item.source.repoId,
-      label: repo?.displayName ?? item.source.repoName,
-      color: getRepoBadgeColor(repo, item.source.repoName)
+      label,
+      color: getRepoBadgeColor(reposById.get(item.source.repoId), item.source.repoName)
     }
   }
   if (item.provider === 'gitlabTodo') {
     return {
       key: item.source.projectPath,
-      label: item.source.projectPath,
+      label,
       color: repoColor(item.source.projectPath)
     }
   }
   return {
     key: item.source.team.id,
-    label: item.source.team.name,
-    color: item.source.state.color || colors.accentBlue
+    label,
+    color: item.source.state.color || colors.accent
   }
 }
 
@@ -81,7 +92,7 @@ export function sortMobileTaskItems(
     .map((item) => ({
       item,
       updatedAt: taskTime(item.updatedAt),
-      repositoryLabel: byRepository ? taskRepositoryMeta(item, reposById).label : ''
+      repositoryLabel: byRepository ? taskRepositoryLabel(item, reposById) : ''
     }))
     .sort(
       (a, b) =>

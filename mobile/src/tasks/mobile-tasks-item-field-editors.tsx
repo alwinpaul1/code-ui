@@ -3,20 +3,13 @@ import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,
   splitCommaList
 } from './mobile-tasks-legacy-foundation'
-import {
-  View,
-  Text,
-  TextInput,
-  colors,
-  ActivityIndicator,
-  Check
-} from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
+import { View, Text, TextInput, ActivityIndicator, Check } from './mobile-tasks-dependencies'
 import { TasksButton } from './mobile-tasks-pressables'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {
     actionItem,
+    colors,
     detailPayload,
     itemAddAssigneesDraft,
     itemAddLabelsDraft,
@@ -35,6 +28,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
     setItemRemoveAssigneesDraft,
     setItemRemoveLabelsDraft,
     setItemTitleDraft,
+    styles,
     updateGitHubIssueMetadata,
     updateGitHubPullRequestMetadata,
     updateGitLabIssueMetadata
@@ -122,7 +116,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                     }
                   >
                     <View style={styles.issueTypeChipContent}>
-                      {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                      {selected ? <Check size={12} color={colors.accent} /> : null}
                       <Text style={styles.detailChipText}>{label}</Text>
                     </View>
                   </TasksButton>
@@ -213,7 +207,7 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
                     }
                   >
                     <View style={styles.issueTypeChipContent}>
-                      {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                      {selected ? <Check size={12} color={colors.accent} /> : null}
                       <Text style={styles.detailChipText}>{user.login}</Text>
                     </View>
                   </TasksButton>

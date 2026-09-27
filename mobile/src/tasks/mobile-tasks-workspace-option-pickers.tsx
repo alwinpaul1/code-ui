@@ -4,22 +4,22 @@ import {
   View,
   Text,
   TextInput,
-  colors,
   Check,
   ActivityIndicator,
   Pencil
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPresentationModel) {
   const {
     clearWorkspaceBaseBranch,
+    colors,
     selectWorkspaceBaseBranch,
     setShowWorkspaceBaseBranchPicker,
     setWorkspaceBaseBranchQuery,
     showWorkspaceBaseBranchPicker,
+    styles,
     taskUiReady,
     workspaceBaseBranch,
     workspaceBaseBranchError,
@@ -56,7 +56,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
             }}
           >
             <View style={styles.pickerCheck}>
-              {workspaceBaseBranch === null ? <Check size={16} color={colors.textPrimary} /> : null}
+              {workspaceBaseBranch === null ? <Check size={16} color={colors.text} /> : null}
             </View>
             <View style={styles.pickerContent}>
               <Text style={styles.pickerLabel}>Default branch</Text>
@@ -83,7 +83,7 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
               >
                 <View style={styles.pickerCheck}>
                   {workspaceBaseBranch?.refName === branch.refName ? (
-                    <Check size={16} color={colors.textPrimary} />
+                    <Check size={16} color={colors.text} />
                   ) : null}
                 </View>
                 <View style={styles.pickerContent}>
@@ -107,11 +107,13 @@ export function renderMobileTasksWorkspaceBaseBranchPicker(model: ConnectionPres
 
 export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     setShowWorkspaceSparsePicker,
     setWorkspaceSparsePresetId,
     showWorkspaceSparsePicker,
     startEditWorkspaceSparsePreset,
     startNewWorkspaceSparsePreset,
+    styles,
     taskUiReady,
     workspaceCreateDraft,
     workspaceSparsePresetId,
@@ -138,9 +140,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
             }}
           >
             <View style={styles.pickerCheck}>
-              {workspaceSparsePresetId === null ? (
-                <Check size={16} color={colors.textPrimary} />
-              ) : null}
+              {workspaceSparsePresetId === null ? <Check size={16} color={colors.text} /> : null}
             </View>
             <View style={styles.pickerContent}>
               <Text style={styles.pickerLabel}>Full checkout</Text>
@@ -160,7 +160,7 @@ export function renderMobileTasksWorkspaceSparsePicker(model: ConnectionPresenta
                 >
                   <View style={styles.pickerCheck}>
                     {workspaceSparsePresetId === preset.id ? (
-                      <Check size={16} color={colors.textPrimary} />
+                      <Check size={16} color={colors.text} />
                     ) : null}
                   </View>
                   <View style={styles.pickerContent}>

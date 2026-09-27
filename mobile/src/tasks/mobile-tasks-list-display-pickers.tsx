@@ -4,10 +4,8 @@ import {
   View,
   Text,
   Check,
-  colors,
   PickerModal
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksRow } from './mobile-tasks-pressables'
 import {
   LINEAR_VIEW_OPTIONS,
@@ -79,11 +77,13 @@ export function renderMobileTasksLinearOrderPicker(model: ConnectionPresentation
 
 export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentationModel) {
   const {
+    colors,
     effectiveLinearDisplayProperties,
     setLinearDisplayProperties,
     setLinearTeamPropertyTouched,
     setShowLinearDisplayPicker,
     showLinearDisplayPicker,
+    styles,
     taskUiReady
   } = model
   return (
@@ -120,7 +120,7 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
                 <View style={styles.repoPickerTextWrap}>
                   <Text style={styles.repoPickerTitle}>{property.label}</Text>
                 </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
+                {selected ? <Check size={15} color={colors.text} /> : null}
               </TasksRow>
             </View>
           )

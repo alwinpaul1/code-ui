@@ -1,6 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { View, MobileSearchField } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
 
 export function renderMobileTasksSearchControl(model: ConnectionPresentationModel) {
@@ -22,6 +21,7 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     setAppliedQuery,
     setGithubProjectSearch,
     setQuery,
+    styles,
     taskUiReady
   } = model
   return provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&

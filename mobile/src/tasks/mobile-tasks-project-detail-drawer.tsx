@@ -5,7 +5,6 @@ import {
   Text,
   Linking,
   ExternalLink,
-  colors,
   Copy,
   TaskProviderLogo,
   ActivityIndicator,
@@ -14,7 +13,6 @@ import {
   X,
   GitBranch
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   projectRowStatusLabel,
@@ -33,10 +31,12 @@ import { renderMobileTasksProjectLoadedDetail } from './mobile-tasks-project-det
 
 export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPresentationModel) {
   const {
+    colors,
     copiedLinkKey,
     copyTextToClipboard,
     projectRepoNotInOrca,
     setProjectRepoNotInOrca,
+    styles,
     taskUiReady
   } = model
   return (
@@ -66,7 +66,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
                   }
                 }}
               >
-                <ExternalLink size={16} color={colors.textPrimary} />
+                <ExternalLink size={16} color={colors.text} />
                 <Text style={styles.actionText}>Open in GitHub</Text>
               </TasksRow>
             ) : null}
@@ -80,7 +80,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
                 )
               }
             >
-              <Copy size={16} color={colors.textPrimary} />
+              <Copy size={16} color={colors.text} />
               <Text style={styles.actionText}>
                 {copiedLinkKey ===
                 `project-repo:${projectRepoNotInOrca.owner}/${projectRepoNotInOrca.repo}`
@@ -98,6 +98,7 @@ export function renderMobileTasksProjectMissingRepoDrawer(model: ConnectionPrese
 export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentationModel) {
   const {
     activeProjectLabel,
+    colors,
     copiedLinkKey,
     copyTaskLink,
     createWorkspaceFromProjectRow,
@@ -113,6 +114,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
     setMergeMethodProjectRow,
     setPendingHostedStateChange,
     setProjectRowItem,
+    styles,
     taskUiReady
   } = model
   return (
@@ -124,7 +126,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
         <View>
           <View style={styles.sheetHeader}>
             <View style={styles.sheetTitleRow}>
-              <TaskProviderLogo provider="github" size={16} color={colors.textPrimary} />
+              <TaskProviderLogo provider="github" size={16} color={colors.text} />
               <Text style={styles.sheetTitle} numberOfLines={2}>
                 {projectRowItem.content.title}
               </Text>
@@ -209,7 +211,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                             <View
                               style={[
                                 styles.issueTypeDot,
-                                { backgroundColor: githubProjectOptionColor(issueType.color) }
+                                {
+                                  backgroundColor: githubProjectOptionColor(issueType.color, colors)
+                                }
                               ]}
                             />
                             <Text style={styles.detailChipText}>{issueType.name}</Text>
@@ -243,7 +247,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                 disabled={creatingKey === `github-project:${projectRowItem.id}`}
                 onPress={() => void createWorkspaceFromProjectRow(projectRowItem)}
               >
-                <Plus size={16} color={colors.textPrimary} />
+                <Plus size={16} color={colors.text} />
                 <Text style={styles.actionText}>Create Workspace</Text>
               </TasksRow>
             ) : (
@@ -265,7 +269,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                     }
                   }}
                 >
-                  <ExternalLink size={16} color={colors.textPrimary} />
+                  <ExternalLink size={16} color={colors.text} />
                   <Text style={styles.actionText}>Open in GitHub</Text>
                 </TasksRow>
                 <View style={styles.actionSeparator} />
@@ -280,7 +284,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                       : undefined
                   }
                 >
-                  <Copy size={16} color={colors.textPrimary} />
+                  <Copy size={16} color={colors.text} />
                   <Text style={styles.actionText}>
                     {copiedLinkKey === `github-project:${projectRowItem.id}`
                       ? 'Copied'
@@ -315,9 +319,9 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   }}
                 >
                   {projectRowItem.content.state === 'CLOSED' ? (
-                    <RefreshCw size={16} color={colors.textPrimary} />
+                    <RefreshCw size={16} color={colors.text} />
                   ) : (
-                    <X size={16} color={colors.textPrimary} />
+                    <X size={16} color={colors.text} />
                   )}
                   <Text style={styles.actionText}>
                     {projectRowItem.content.state === 'CLOSED' ? 'Reopen item' : 'Close item'}
@@ -335,7 +339,7 @@ export function renderMobileTasksProjectDetailDrawer(model: ConnectionPresentati
                   disabled={projectMutating || !projectRowHostedRepo}
                   onPress={() => setMergeMethodProjectRow(projectRowItem)}
                 >
-                  <GitBranch size={16} color={colors.textPrimary} />
+                  <GitBranch size={16} color={colors.text} />
                   <Text style={styles.actionText}>Merge pull request</Text>
                 </TasksRow>
                 {!projectRowHostedRepo ? (

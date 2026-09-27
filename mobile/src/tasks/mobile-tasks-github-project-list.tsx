@@ -2,7 +2,6 @@ import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-
 import {
   View,
   ActivityIndicator,
-  colors,
   Text,
   Pressable,
   FlatList,
@@ -11,7 +10,6 @@ import {
   triggerMediumImpact,
   TaskProviderLogo
 } from './mobile-tasks-dependencies'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   projectGroupMeta,
@@ -24,6 +22,7 @@ import {
 export function renderMobileTasksGitHubProjectList(model: ConnectionPresentationModel) {
   const {
     activeGitHubProject,
+    colors,
     findProjectRowRepo,
     githubProjectError,
     githubProjectListEntries,
@@ -36,6 +35,7 @@ export function renderMobileTasksGitHubProjectList(model: ConnectionPresentation
     setCollapsedGitHubProjectGroups,
     setProjectRowItem,
     setShowGitHubProjectPicker,
+    styles,
     taskUiReady,
     visibleGitHubProjectRows
   } = model

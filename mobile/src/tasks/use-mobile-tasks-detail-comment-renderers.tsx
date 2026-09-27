@@ -7,8 +7,7 @@ import {
   Send,
   Text,
   TextInput,
-  View,
-  colors
+  View
 } from './mobile-tasks-dependencies'
 import {
   type DetailComment,
@@ -23,12 +22,12 @@ import {
   isResolvedDetailCommentGroup,
   renderCommentReactions
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsModel) {
   const {
     actionItem,
+    colors,
     detailPayload,
     expandedResolvedCommentGroups,
     itemReplyDrafts,
@@ -36,6 +35,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
     replyToGitHubComment,
     setExpandedResolvedCommentGroups,
     setItemReplyDrafts,
+    styles,
     toggleGitHubReviewThread
   } = model
   const renderCommentComposer = (args: {
@@ -71,7 +71,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
             disabled={args.disabled}
             onPress={args.onSubmit}
           >
-            <Send size={16} color={args.disabled ? colors.textMuted : colors.textPrimary} />
+            <Send size={16} color={args.disabled ? colors.textMuted : colors.text} />
           </Pressable>
         ) : null}
       </View>
@@ -98,7 +98,7 @@ export function useMobileTasksDetailCommentRenderers(model: TaskCreateActionsMod
         {commentDate(comment.createdAt) ? ` · ${commentDate(comment.createdAt)}` : ''}
       </Text>
       <MobileMarkdown content={comment.body} />
-      {renderCommentReactions(comment)}
+      {renderCommentReactions(styles, comment)}
       {SHOW_MOBILE_COMMENT_THREAD_TOOLS &&
       actionItem?.provider === 'github' &&
       detailPayload?.provider === 'github' ? (

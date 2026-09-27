@@ -4,20 +4,20 @@ import {
   View,
   Text,
   TextInput,
-  colors,
   ActivityIndicator,
   Check,
   X
 } from './mobile-tasks-dependencies'
 import { TASK_SECONDARY_DRAWER_Z_INDEX, setupSourceLabel } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
 import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
     canSaveWorkspaceSparseDraft,
+    colors,
     saveWorkspaceSparsePreset,
     setWorkspaceSparseDraft,
+    styles,
     taskUiReady,
     workspaceCreateDraft,
     workspaceSparseDraft,
@@ -95,9 +95,7 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
               disabled={!canSaveWorkspaceSparseDraft}
               onPress={() => void saveWorkspaceSparsePreset()}
             >
-              {workspaceSparseSaving ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : null}
+              {workspaceSparseSaving ? <ActivityIndicator size="small" color={colors.bg} /> : null}
               <Text style={styles.primaryActionText}>Save</Text>
             </TasksButton>
           </View>
@@ -108,7 +106,8 @@ export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresenta
 }
 
 export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationModel) {
-  const { createWorkspace, creatingKey, setSetupPrompt, setupPrompt, taskUiReady } = model
+  const { colors, createWorkspace, creatingKey, setSetupPrompt, setupPrompt, styles, taskUiReady } =
+    model
   return (
     <BottomDrawer
       visible={taskUiReady && setupPrompt != null}
@@ -149,7 +148,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
                 )
               }
             >
-              <Check size={16} color={colors.textPrimary} />
+              <Check size={16} color={colors.text} />
               <Text style={styles.actionText}>
                 {creatingKey === setupPrompt.item.key ? 'Creating...' : 'Run setup and create'}
               </Text>
@@ -172,7 +171,7 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
                 )
               }
             >
-              <X size={16} color={colors.textPrimary} />
+              <X size={16} color={colors.text} />
               <Text style={styles.actionText}>Skip setup and create</Text>
             </TasksRow>
           </View>
@@ -184,12 +183,14 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
 
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
+    colors,
     createWorkspace,
     creatingKey,
     orcaYamlTrustPrompt,
     persistSetupHookTrust,
     setError,
     setOrcaYamlTrustPrompt,
+    styles,
     taskUiReady
   } = model
   return (
@@ -252,7 +253,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                 })()
               }
             >
-              <Check size={16} color={colors.textPrimary} />
+              <Check size={16} color={colors.text} />
               <Text style={styles.actionText}>Run hooks</Text>
             </TasksRow>
             <View style={styles.actionSeparator} />
@@ -286,7 +287,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                 })()
               }
             >
-              <Check size={16} color={colors.textPrimary} />
+              <Check size={16} color={colors.text} />
               <Text style={styles.actionText}>Always trust and run</Text>
             </TasksRow>
             <View style={styles.actionSeparator} />
@@ -309,7 +310,7 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
                 )
               }}
             >
-              <X size={16} color={colors.textPrimary} />
+              <X size={16} color={colors.text} />
               <Text style={styles.actionText}>Don't run</Text>
             </TasksRow>
           </View>

@@ -43,12 +43,18 @@ import {
   type TasksSupportState,
   getTaskPresetQuery
 } from './mobile-tasks-legacy-foundation'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { mobileTasksStyles } from './mobile-tasks-legacy-styles'
 import { useMobileTasksItemState } from './use-mobile-tasks-item-state'
 
 export function useMobileTasksRouteAndItemState() {
   const { hostId, taskSource } = useLocalSearchParams<{ hostId: string; taskSource?: string }>()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  // The live theme, carried on the model to every render function and stage below: the surface's
+  // styles and the colours its icons and inline styles read. Both follow Settings -> Appearance.
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileTasksStyles)
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
@@ -171,6 +177,8 @@ export function useMobileTasksRouteAndItemState() {
     taskSource,
     router,
     insets,
+    colors,
+    styles,
     client,
     connState,
     reconnectAttempts,
