@@ -20,7 +20,9 @@ import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './
  *   only when its host tree or its width changed (a new function for
  *   `onTextLayout` is not a change: ReactNativeAttributePayload), and
  *   ParagraphEventEmitter does not send a Text the lines it sent it last.
- *   The lines go to the handler the Text holds at that moment.
+ *   Lines are measured, sent and kept for that dedup only while the Text has
+ *   `onTextLayout` (ParagraphShadowNode.cpp). The lines go to the handler the
+ *   Text holds at that moment.
  */
 
 export type PhoneAs = {
@@ -247,8 +249,12 @@ export function createPhone(current: () => ReactTestRenderer) {
     if (last?.tree === tree) {
       return false
     }
+    if (typeof text.props.onTextLayout !== 'function') {
+      laidOut.set(mounted, { tree, sent: last?.sent ?? '' })
+      return false
+    }
     laidOut.set(mounted, { tree, sent })
-    if (last?.sent === sent || typeof text.props.onTextLayout !== 'function') {
+    if (last?.sent === sent) {
       return false
     }
     text.props.onTextLayout(event)
