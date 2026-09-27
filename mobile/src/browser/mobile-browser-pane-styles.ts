@@ -3,6 +3,12 @@ import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { radii, spacing, typography } from '../theme/mobile-theme'
 import type { Theme } from '../theme/theme-context'
 
+/** The busy/error scrim over the web page's own pixels. Fixed in both schemes: it tints content the
+ *  app does not draw, the way the terminal's content keeps its own colours. */
+export const BROWSER_CONTENT_SCRIM = 'rgba(13, 15, 24, 0.2)'
+/** The spinner over a rendered page, fixed light for the same reason as the scrim it sits in. */
+export const BROWSER_CONTENT_SPINNER = '#B8B4AB'
+
 /** The two flip-layer wrappers carry no colour, so they stay a plain (unthemed) StyleSheet that
  *  `use-mobile-browser-pane-layers.ts` can keep reading as a static import. */
 export const mobileBrowserPaneLayerStyles = StyleSheet.create({
@@ -68,10 +74,7 @@ export function mobileBrowserPaneStyles({ colors }: Theme) {
       justifyContent: 'center',
       padding: spacing.xl,
       gap: spacing.sm,
-      // A transient busy/error tint over the live frame, lighter than the modal scrim below it
-      // (`dialogOverlay`/`bgOverlay`), so `shadow` stands in rather than flattening both to one
-      // weight.
-      backgroundColor: colors.shadow
+      backgroundColor: BROWSER_CONTENT_SCRIM
     },
     errorText: {
       color: colors.text,
