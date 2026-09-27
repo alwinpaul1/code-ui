@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { GitPullRequestArrow, Link2, RefreshCw } from 'lucide-react-native'
-import { colors } from '../../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { ConnectionState } from '../../transport/types'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
@@ -20,7 +20,7 @@ import {
 import { fetchWorktreeLinkedPR } from '../../source-control/mobile-pr-link'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import { MobileLinkPrForm } from './MobileLinkPrForm'
-import { prCreateEmptyStateStyles as styles } from './pr-create-empty-state-styles'
+import { prCreateEmptyStateStyles } from './pr-create-empty-state-styles'
 
 type Props = {
   client: RpcClient | null
@@ -45,6 +45,8 @@ export function PrSidebarCreateEmptyState({
   connState,
   onCreated
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(prCreateEmptyStateStyles)
   const [mode, setMode] = useState<Mode>('choose')
   const [loading, setLoading] = useState(false)
   const [createWarning, setCreateWarning] = useState<string | null>(null)
@@ -180,9 +182,9 @@ export function PrSidebarCreateEmptyState({
             accessibilityLabel="Create pull request"
           >
             {loading ? (
-              <ActivityIndicator color={colors.bgBase} />
+              <ActivityIndicator color={colors.bg} />
             ) : (
-              <GitPullRequestArrow size={14} color={colors.bgBase} strokeWidth={2.2} />
+              <GitPullRequestArrow size={14} color={colors.bg} strokeWidth={2.2} />
             )}
             <Text style={styles.createButtonText}>Create PR</Text>
           </Pressable>
