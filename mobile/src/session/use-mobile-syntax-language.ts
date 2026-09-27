@@ -20,18 +20,27 @@ export function useMobileSyntaxLanguage(filePath: string, content: string, prefe
     byName === 'plaintext' && isUnknownMobileFileName(filePath)
       ? `${filePath}\u0000${content.slice(0, DETECT_KEY_CHARS)}`
       : null
-  const [detected, setDetected] = useState<{ key: string; language: string } | null>(null)
+  // The language found, by path; the key it was found for is a ref, so an
+  // edit near the top that reads the same language again renders nothing.
+  const [detected, setDetected] = useState<{ path: string; language: string } | null>(null)
+  const detectedKey = useRef<string | null>(null)
   const contentRef = useRef(content)
   contentRef.current = content
-  const known = key !== null && detected?.key === key
   useEffect(() => {
-    if (key === null || known) {
+    if (key === null || detectedKey.current === key) {
       return undefined
     }
     const timer = setTimeout(() => {
-      setDetected({ key, language: detectMobileSyntaxLanguage(contentRef.current, filePath) ?? 'plaintext' })
+      detectedKey.current = key
+      const language = detectMobileSyntaxLanguage(contentRef.current, filePath) ?? 'plaintext'
+      setDetected((previous) =>
+        previous?.path === filePath && previous.language === language ? previous : { path: filePath, language }
+      )
     }, 0)
     return () => clearTimeout(timer)
-  }, [filePath, key, known])
-  return key !== null && detected?.key === key ? detected.language : byName
+  }, [filePath, key])
+  // While an edit near the top is read again, the same file keeps the
+  // language it had: falling back to plain for that tick built its document
+  // twice and reset its folds (review, 2026-09-27).
+  return key !== null && detected?.path === filePath ? detected.language : byName
 }
