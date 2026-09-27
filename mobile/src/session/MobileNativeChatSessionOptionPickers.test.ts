@@ -238,6 +238,43 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     expect(checkedText).not.toContain('Sonnet')
   })
 
+  const checkedRowText = (): string =>
+    renderer!.root
+      .findAll((node) => node.props.accessibilityState?.checked === true)
+      .flatMap((row) => row.findAllByType('Text').map((t) => String(t.props.children)))
+      .join(' ')
+
+  // The agent states full ids — the beacon `model=claude-opus-4-8`, the
+  // transcript's `claude-sonnet-5` — and the sheet's rows are catalog ids
+  // (`opus`, `sonnet`). Compared raw, no row matched, so on a Windows host,
+  // where the only model is the transcript's, the drawer checked nothing
+  // (2026-09-27 review).
+  it("checks the running model's row for the full id a beacon states", async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: 'claude-opus-4-8', label: 'Opus 4.8', effort: 'high' }
+    })
+    await act(async () => pill('Model').props.onPress())
+    expect(checkedRowText()).toContain('Opus 4.8')
+    expect(checkedRowText()).not.toContain('Sonnet')
+  })
+
+  it("checks the running model's row for the id the transcript records", async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: 'claude-sonnet-5', label: 'Sonnet 5', effort: null }
+    })
+    await act(async () => pill('Model').props.onPress())
+    expect(checkedRowText()).toContain('Sonnet 5')
+    expect(checkedRowText()).not.toContain('Opus')
+  })
+
+  it("checks no row for a running model the list does not carry, never the record's", async () => {
+    mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR], false, {
+      liveModel: { model: 'claude-haiku-4-5', label: 'Haiku 4.5', effort: null }
+    })
+    await act(async () => pill('Model').props.onPress())
+    expect(checkedRowText()).toBe('')
+  })
+
   it('opens the model sheet and applies a picked model', async () => {
     mount([MODEL_DESCRIPTOR, EFFORT_DESCRIPTOR])
     await act(async () => pill('Model').props.onPress())

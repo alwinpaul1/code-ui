@@ -182,6 +182,17 @@ describe('the composer model pill on a Claude chat that states no model', () => 
     expect(renderer!.root.findAllByType('BottomDrawer' as never)).toHaveLength(1)
   })
 
+  it("checks the running model's row in the drawer on a Windows host", async () => {
+    await mount()
+    await act(async () => {
+      modelPill().props.onPress()
+    })
+    const checked = renderer!.root.findAll((node) => node.props.accessibilityState?.checked === true)
+    // The seed's Opus row, the one `claude-opus-5-5` runs as; its first Text is the name.
+    expect(checked).toHaveLength(1)
+    expect(checked[0]!.findAllByType('Text' as never)[0]?.props.children).toBe('Opus')
+  })
+
   it('still reads "Model" with no transcript reading, rather than inventing one', async () => {
     transcriptModel = { kind: 'none' }
     await mount()
