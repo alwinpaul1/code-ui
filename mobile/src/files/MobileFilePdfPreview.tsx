@@ -5,7 +5,7 @@ import { Check, Download } from 'lucide-react-native'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { filePreviewStyles } from './mobile-file-preview-styles'
 import { savePreviewedPdf } from './mobile-pdf-download-device'
-import { suggestedPdfFileName, type MobilePdfDownloadOutcome } from './mobile-pdf-download'
+import type { MobilePdfDownloadOutcome } from './mobile-pdf-download'
 import { saveReadingPosition } from '../storage/reading-positions'
 import { useRestoredReadingPosition } from './use-reading-position'
 
@@ -50,7 +50,9 @@ export function MobileFilePdfPreview({
     setPage(startPage)
   }, [initial, restored, uri])
   const [error, setError] = useState<string | null>(null)
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | MobilePdfDownloadOutcome>('idle')
+  const [saveState, setSaveState] = useState<
+    { status: 'idle' | 'saving' } | MobilePdfDownloadOutcome
+  >({ status: 'idle' })
   const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(
@@ -63,27 +65,27 @@ export function MobileFilePdfPreview({
   )
 
   const save = async () => {
-    if (saveState === 'saving') {
+    if (saveState.status === 'saving') {
       return
     }
-    setSaveState('saving')
+    setSaveState({ status: 'saving' })
     const outcome = await savePreviewedPdf({ uri, fileName: fileName ?? 'document.pdf' })
     setSaveState(outcome)
     if (feedbackTimer.current) {
       clearTimeout(feedbackTimer.current)
     }
     feedbackTimer.current = setTimeout(
-      () => setSaveState('idle'),
-      outcome === 'failed-left-incomplete' ? LEFT_BEHIND_FEEDBACK_MS : SAVE_FEEDBACK_MS
+      () => setSaveState({ status: 'idle' }),
+      outcome.status === 'failed-left-incomplete' ? LEFT_BEHIND_FEEDBACK_MS : SAVE_FEEDBACK_MS
     )
   }
-  const saveFailed = saveState === 'failed' || saveState === 'failed-left-incomplete'
+  const saveFailed = saveState.status === 'failed' || saveState.status === 'failed-left-incomplete'
   const saveLabel =
-    saveState === 'saved'
+    saveState.status === 'saved'
       ? 'Saved'
       : saveFailed
         ? "Couldn't save"
-        : saveState === 'saving'
+        : saveState.status === 'saving'
           ? 'Saving…'
           : null
 
@@ -140,7 +142,7 @@ export function MobileFilePdfPreview({
             accessibilityRole="button"
             accessibilityLabel="Download PDF"
             onPress={() => void save()}
-            disabled={saveState === 'saving'}
+            disabled={saveState.status === 'saving'}
             hitSlop={8}
             style={({ pressed }) => ({
               flexDirection: 'row',
@@ -152,10 +154,10 @@ export function MobileFilePdfPreview({
               backgroundColor: pressed ? colors.bgRaised : colors.bg,
               borderWidth: 1,
               borderColor: colors.border,
-              opacity: saveState === 'saving' ? 0.6 : 1
+              opacity: saveState.status === 'saving' ? 0.6 : 1
             })}
           >
-            {saveState === 'saved' ? (
+            {saveState.status === 'saved' ? (
               <Check size={16} color={colors.text} strokeWidth={2.2} />
             ) : (
               <Download size={16} color={colors.text} strokeWidth={2.2} />
@@ -164,7 +166,7 @@ export function MobileFilePdfPreview({
           </Pressable>
         </View>
       </View>
-      {saveState === 'failed-left-incomplete' ? (
+      {saveState.status === 'failed-left-incomplete' ? (
         // Its own row: the sentence does not fit beside the button, and the empty PDF it names
         // is the user's to delete.
         <Text
@@ -178,7 +180,7 @@ export function MobileFilePdfPreview({
             backgroundColor: colors.bgPanel
           }}
         >
-          {`An incomplete ${suggestedPdfFileName(fileName ?? 'document.pdf')} is left where you chose to save it; delete it there`}
+          {`An incomplete ${saveState.fileName} is left where you chose to save it; delete it there`}
         </Text>
       ) : null}
       <Pdf

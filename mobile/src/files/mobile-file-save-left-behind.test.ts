@@ -253,7 +253,10 @@ describe('saving a file again after leaving its first save', () => {
     const heldWrite = new Promise<void>((resolve) => {
       finishWrite = resolve
     })
-    const target = { ...phone(), writeBase64: vi.fn(() => heldWrite) } satisfies MobileFileSaveTarget
+    const target = {
+      ...phone(),
+      writeBase64: vi.fn(() => heldWrite)
+    } satisfies MobileFileSaveTarget
     const run = createSaveToPhoneRunner(target)
 
     let sessionInFront = true

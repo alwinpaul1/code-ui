@@ -192,6 +192,22 @@ describe("saving into the picker's default Downloads root", () => {
     expect(outcome).toEqual({ status: 'failed', fileName: 'hello.txt', message })
     expect(notices.at(-1)).toBe(message)
   })
+
+  it('names the incomplete copy by the name the picker saved it under, not the one it offered', async () => {
+    // Renamed in the picker, or renamed by the provider because a hello.txt was already there
+    // (FileUtils.buildUniqueFile). The phone-storage provider's document ID carries the path.
+    const renamed =
+      'content://com.android.externalstorage.documents/document/primary%3ADownload%2Fhello%20(1).txt'
+    device.writeFailure = 'ENOSPC (No space left on device)'
+    device.undeletable.add(renamed)
+
+    const { notices } = await saveHello(renamed)
+
+    expect(notices.at(-1)).toBe(
+      "Couldn't save hello.txt: the phone could not write it (ENOSPC (No space left on device)). " +
+        'An incomplete hello (1).txt is left where you chose to save it; delete it there'
+    )
+  })
 })
 
 describe("the PDF viewer's Download into the same root", () => {
@@ -203,7 +219,7 @@ describe("the PDF viewer's Download into the same root", () => {
       fileName: 'papers/thesis.pdf'
     })
 
-    expect(outcome).toBe('saved')
+    expect(outcome).toEqual({ status: 'saved' })
     expect(device.documents.get(DOWNLOADS_URI)?.toString()).toBe('%PDF-1.4\n')
   })
 
@@ -216,7 +232,7 @@ describe("the PDF viewer's Download into the same root", () => {
       fileName: 'thesis.pdf'
     })
 
-    expect(outcome).toBe('failed')
+    expect(outcome).toEqual({ status: 'failed' })
     expect(device.documents.has(DOWNLOADS_URI)).toBe(false)
   })
 })

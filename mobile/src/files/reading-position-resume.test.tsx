@@ -37,7 +37,7 @@ vi.mock('./MobileFilePreviewSourceText', () => ({
 }))
 
 vi.mock('./mobile-pdf-download-device', () => ({
-  savePreviewedPdf: async () => 'saved'
+  savePreviewedPdf: async () => ({ status: 'saved' })
 }))
 
 vi.mock('../theme/theme-context', () => ({

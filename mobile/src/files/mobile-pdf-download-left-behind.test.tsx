@@ -18,17 +18,18 @@ vi.mock('react-native', () => ({
   useColorScheme: () => 'light'
 }))
 vi.mock('lucide-react-native', () => ({ Check: 'Icon', Download: 'Icon' }))
+const PICKED = 'content://com.android.providers.downloads.documents/document/9'
 const disk = vi.hoisted(() => ({
   documents: new Map<string, string>(),
-  refuseDelete: true
+  refuseDelete: true,
+  picked: ''
 }))
-const PICKED = 'content://com.android.providers.downloads.documents/document/9'
 vi.mock('expo-intent-launcher', () => ({
   ResultCode: { Success: -1 },
   startActivityAsync: async () => {
     // The picker makes the (empty) document the moment the user confirms it.
-    disk.documents.set(PICKED, '')
-    return { resultCode: -1, data: PICKED }
+    disk.documents.set(disk.picked, '')
+    return { resultCode: -1, data: disk.picked }
   }
 }))
 vi.mock('expo-file-system', () => ({
@@ -63,6 +64,7 @@ let tree: ReactTestRenderer | null = null
 beforeEach(() => {
   disk.documents.clear()
   disk.refuseDelete = true
+  disk.picked = PICKED
 })
 afterEach(() => {
   act(() => tree?.unmount())
@@ -134,6 +136,21 @@ describe('the PDF viewer Download when the provider will not take the file', () 
       const ink = styleOf(notice!).color as string
       const surface = surfaceUnder(notice!)
       expect(contrastRatio(ink, surface), `${ink} on ${surface}`).toBeGreaterThanOrEqual(4.5)
+    })
+  }
+
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`names the empty PDF by the name it was saved under, not the one offered (${scheme})`, async () => {
+      // Renamed in the picker, or by the provider because a paper.pdf was already there. The
+      // phone-storage provider's document ID carries the path.
+      disk.picked =
+        'content://com.android.externalstorage.documents/document/primary%3ADocuments%2Fpaper%20(1).pdf'
+      await tapDownload(scheme)
+
+      expect(shown()).toContain(
+        'An incomplete paper (1).pdf is left where you chose to save it; delete it there'
+      )
+      expect(shown()).not.toContain(LEFT_BEHIND)
     })
   }
 

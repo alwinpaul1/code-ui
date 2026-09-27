@@ -1,5 +1,6 @@
 // Pure: no React Native or Expo imports, so vitest runs it unmocked. The
 // device half (the Android picker and the writes) is mobile-file-save-device.ts.
+import { pickedDocumentName } from './android-picked-document-name'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import {
@@ -101,11 +102,13 @@ export async function saveDesktopFileToPhone(
       await target.remove(uri)
     } catch {
       // The picker made the document before the write; one that stays behind is empty or cut
-      // short under the name the user chose, and would read as the file. Say so.
+      // short under the name the user chose, and would read as the file. Say so, by that name
+      // when the picker's URI gives it: the user may have renamed it there.
+      const leftName = pickedDocumentName(uri) ?? fileName
       return {
         status: 'failed',
         fileName,
-        message: `${failed}. An incomplete ${fileName} is left where you chose to save it; delete it there`
+        message: `${failed}. An incomplete ${leftName} is left where you chose to save it; delete it there`
       }
     }
     return { status: 'failed', fileName, message: failed }

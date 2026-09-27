@@ -38,8 +38,8 @@ export async function savePreviewedPdf(input: {
   }
   try {
     await shareMobilePdf(input.uri, input.fileName)
-    return 'saved'
+    return { status: 'saved' }
   } catch {
-    return 'failed'
+    return { status: 'failed' }
   }
 }
