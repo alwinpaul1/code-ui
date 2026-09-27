@@ -7,6 +7,7 @@ import {
 import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
 import { AGENT_TUI_MAX_KEY_WRITE_BYTES } from './agent-tui-clear-write-chunks'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
@@ -60,12 +61,15 @@ export const hasControlCharacters = (text: string) =>
       (char.charCodeAt(0) < 32 && char !== '\n' && char !== '\t') || char.charCodeAt(0) === 127
   )
 
+// Any dialog that reads keys as answers, not only the one each reader names:
+// an Edit prompt's keys are answers too (2026-09-27).
 export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen) {
   if (
     screen.source !== 'screen' ||
     (agent === 'codex'
       ? codexPermissionFromScreen(screen.lines)
-      : claudePermissionFromScreen(screen.lines))
+      : claudePermissionFromScreen(screen.lines)) ||
+    terminalDialogOnScreen(screen.lines)
   ) {
     throw new Error('The agent input is unavailable. Try again when its dialog closes.')
   }

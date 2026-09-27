@@ -37,6 +37,7 @@ import {
 } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
+import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 
 // The image half of the 2026-09-25 report ("message not send disconnected"):
 // a photo, or a text send that first heals an orphaned paste, tapped while
@@ -81,6 +82,7 @@ describe('a photo sent while the relay re-dials', () => {
       // As use-mobile-session-image-attachments.ts builds it for each lane.
       enabled: structured ? gate.connState === 'connected' : gate.leaseReady,
       structuredNativeChat: structured,
+      refuseUnderDialog: readSendUnderDialogRefusal,
       showToast: vi.fn(),
       onSendError,
       baseSend,

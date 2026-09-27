@@ -525,7 +525,15 @@
             // once the chips have settled, and threads markup's re-uploading
             // mark to its hook (two of the three are those calls wrapped to
             // the formatter's 100 columns).
-            "max": 330,
+            // 2026-09-27: +15 for refusing a composer send while a dialog on
+            // screen would take its keys as answers (a subagent's prompt sat
+            // eight hours with "Yes" highlighted under a chat whose Enter would
+            // have approved it). The screen read and the dialog test live in
+            // mobile-native-chat-dialog-guard.ts; this file gains the injected
+            // look (its type, import, destructure and dependency) and the call
+            // before anything is written, which waits on the send gate first
+            // and has two ways out, a gate that gave up and a refusal it says.
+            "max": 345,
             "skipBlankLines": true,
             "skipComments": true
           }
