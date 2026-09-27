@@ -158,6 +158,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     controller = useMobileNativeChatController({
       client: host.client,
       connState: 'connected',
+      tabsLive: true,
       hostId: `host-win-${String(hostCount)}`,
       worktreeId: `repo-1::${FOLDER}`,
       activeSessionTab: tab as never,

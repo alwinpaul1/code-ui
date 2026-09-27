@@ -67,6 +67,9 @@ export type AgentStatusPromptState = {
   /** The line the chat logs for the last prompt it held back, or null when
    *  none was. */
   withheld: string | null
+  /** The line the chat logs for the last prompt it drew: which clock placed
+   *  it, and whether the chat watched it arrive. */
+  placed?: string | null
 }
 
 export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
@@ -89,7 +92,8 @@ export function observeAgentStatusPrompt(
   sessionKey: string | null,
   status: AgentStatusPromptSource | undefined,
   /** `firstRead`: the first status the phone has read since it reconnected,
-   *  which, like the first of a session, can carry a copy minutes old. */
+   *  or since the tab list the last visit cached, which, like the first of a
+   *  session, can carry a copy minutes old (use-agent-status-prompts.ts). */
   options: { firstRead?: boolean } = {}
 ): AgentStatusPromptState {
   if (sessionKey !== state.sessionKey) {
@@ -115,7 +119,10 @@ export function observeAgentStatusPrompt(
   }
   // Nor did it watch the first status after a reconnect arrive: a prompt taken
   // while the link was down came unseen, and the reconnect restamped
-  // `updatedAt` (use-agent-status-prompts.ts).
+  // `updatedAt` (use-agent-status-prompts.ts). Nor the host's first status
+  // after one the tab list the last visit cached: a prompt taken while the
+  // chat was closed came unseen, and that status's `updatedAt` is its last
+  // tool ping, which drew it at the tail (device, 2026-09-27).
   const found = firstOfSession || (options.firstRead === true && status != null)
   const text = typeof status?.prompt === 'string' ? status.prompt : ''
   if (text.trim().length === 0) {
@@ -192,7 +199,8 @@ export function observeAgentStatusPrompt(
   // current state's start.
   // After a reconnect, no earlier than the last status read before the drop:
   // the prompt came after it, and the run can have begun an hour before
-  // (review of a615bde2).
+  // (review of a615bde2). The same after the tab list the last visit cached:
+  // the last status read before is that visit's.
   const notBefore = !firstOfSession && options.firstRead === true ? readBefore : undefined
   const runStart = typeof run === 'number' ? Math.max(run, notBefore ?? run) : null
   const byStateStart =
@@ -212,10 +220,24 @@ export function observeAgentStatusPrompt(
     seenAt: Date.now()
   }
   const prompts = [...state.prompts, prompt].slice(-PROMPT_CAP)
+  const clockName =
+    typeof run === 'number'
+      ? notBefore !== undefined && notBefore > run
+        ? 'the last status read before it'
+        : 'the start of the run it came in'
+      : byStateStart
+        ? "the start of the pane's state"
+        : 'its status stamp'
+  const how = found
+    ? firstOfSession
+      ? "found on the chat's first status"
+      : 'found on the first status since a reconnect or the cached tab list'
+    : 'watched arriving'
+  const placed = `[desk-prompt] drawn: "${preview(text)}" (${how}) placed from ${at === null ? 'no time, at the tail' : `${new Date(at).toISOString()}, ${clockName}`}`
   // The subagent messages stay (`...state`): dropping them here took the
   // words off a "Message from" row the moment the person replied (review of
   // 2026-09-27).
-  return { ...state, last: text, prompts }
+  return { ...state, last: text, prompts, placed }
 }
 
 /**

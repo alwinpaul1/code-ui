@@ -248,3 +248,84 @@ describe('a desk prompt taken while the phone was away, after a null status on t
     ])
   })
 })
+
+// Device, 2026-09-27 (session 790eafa8): the session screen paints the tab
+// list the last visit cached before the host answers, so the chat's first
+// status of a session was that visit's. A message taken while the chat was
+// closed came on the host's first status, read as if the chat had watched it
+// arrive, and was timed by that status's stamp, the last tool ping before the
+// chat opened: it sat at the tail under the agent's reply to it.
+describe('a desk prompt taken while the chat was closed, opened on the cached tab list', () => {
+  const history = [{ state: 'done', prompt: 'earlier', startedAt: 500 }]
+  const cached = { state: 'working', prompt: 'run the migration', updatedAt: 3_600_000, stateStartedAt: 1_000, stateHistory: history }
+  function reader() {
+    let listed: readonly { text: string; at?: number }[] = []
+    let renderer!: ReactTestRenderer
+    function Chat({ status, live }: { status: AgentStatusPromptSource; live: boolean }) {
+      listed = useAgentStatusPrompts('sess-1', status, undefined, true, live).prompts
+      return null
+    }
+    return {
+      show(status: AgentStatusPromptSource, live: boolean) {
+        act(() => {
+          if (renderer) {
+            renderer.update(createElement(Chat, { status, live }))
+          } else {
+            renderer = create(createElement(Chat, { status, live }))
+          }
+        })
+      },
+      done() {
+        act(() => renderer.unmount())
+        return listed.map((prompt) => [prompt.text, prompt.at])
+      }
+    }
+  }
+
+  it('is timed by the run it came in, no earlier than the cached status, on the host’s first status', () => {
+    const chat = reader()
+    chat.show(cached, false)
+    chat.show({ ...cached, prompt: 'and keep the old table', updatedAt: 3_606_000 }, true)
+    expect(chat.done()).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 3_600_000]
+    ])
+  })
+
+  it('is timed by the run it came in when the cached status had no time and the run began after it', () => {
+    const chat = reader()
+    chat.show({ ...cached, updatedAt: undefined }, false)
+    chat.show({ ...cached, prompt: 'and keep the old table', updatedAt: 3_606_000 }, true)
+    expect(chat.done()).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 1_000]
+    ])
+  })
+
+  // The tab list keeps the cached objects when the host's first list is
+  // equal. A latch that waited for a new object would take the next prompt
+  // the chat does watch arrive for one it found, and time it early.
+  it('times the next prompt the chat watches arrive by its own stamp when the host’s first status repeated the cached one', () => {
+    const chat = reader()
+    chat.show(cached, false)
+    chat.show(cached, true)
+    chat.show({ ...cached, prompt: 'and keep the old table', updatedAt: 3_606_000 }, true)
+    expect(chat.done()).toEqual([
+      ['run the migration', 1_000],
+      ['and keep the old table', 3_606_000]
+    ])
+  })
+
+  it('says in the log how it placed it, and that the chat did not watch it arrive', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const chat = reader()
+    chat.show(cached, false)
+    chat.show({ ...cached, prompt: 'and keep the old table', updatedAt: 3_606_000 }, true)
+    chat.done()
+    expect(info.mock.calls.map((call) => String(call[0]))).toEqual([
+      '[desk-prompt] drawn: "run the migration" (found on the chat\'s first status) placed from 1970-01-01T00:00:01.000Z, the start of the run it came in',
+      '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list) placed from 1970-01-01T01:00:00.000Z, the last status read before it'
+    ])
+    info.mockRestore()
+  })
+})

@@ -125,7 +125,7 @@ export function useMobileNativeChatController(
   const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
     showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
     nativeChatStatus,
-    hudBeacon?.desktopPrompts, connState === 'connected'
+    hudBeacon?.desktopPrompts, connState === 'connected', args.tabsLive
   )
   const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
   const {
@@ -588,7 +588,7 @@ export function useMobileNativeChatController(
     readSeededLaunchDraft, nativeChatSessionOptions,
     nativeChatDesktopPrompts: tailPrompts, nativeChatAgentMessages: agentMessages, nativeChatStatusAgentMessages: statusAgentMessages,
     nativeChatScreenPrompts: activeChatStructured || connState !== 'connected' ? [] : screenSentPrompts,
-    nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
+    nativeChatScreenPeerNotices: activeChatStructured ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
     nativeChatContextWindow: liveHud.context, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,

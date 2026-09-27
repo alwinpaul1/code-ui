@@ -11,6 +11,18 @@ export function holdsWholeSession(
   return session.status === 'ready' && session.baseRetained !== true && session.wholeSession === true
 }
 
+/** Whether the chat shows the host's transcript as of now: read and settled,
+ *  not a tail kept over an empty re-subscribe, and not waiting for the replay
+ *  a new connection brings (the read stays 'ready' through a reconnect, and
+ *  until the replay lands the window lacks what was written while the phone
+ *  was away). What a row found on the screen is placed against
+ *  (use-screen-peer-notices.ts, 2026-09-27). */
+export function transcriptSettled(
+  session: Pick<MobileNativeChatSession, 'status' | 'baseRetained' | 'awaitingReplay'>
+): boolean {
+  return session.status === 'ready' && session.baseRetained !== true && session.awaitingReplay !== true
+}
+
 /**
  * Whether the chat session hook's window starts at the session's first row.
  * Only the host's own word sets it: `hasMore: false` on a fresh window, on a
@@ -35,6 +47,10 @@ export function holdsWholeSession(
  */
 export type WholeSessionTracker = {
   readonly whole: boolean
+  /** Whether a connection has come whose replay has not landed: pure, so a
+   *  render may ask it, and a connection only React has rendered so far
+   *  (`lastConnectedAt`) counts. */
+  awaitingReplay(lastConnectedAt?: number | null): boolean
   subscribed(): void
   connected(lastConnectedAt: number | null | undefined): void
   frame(
@@ -76,6 +92,9 @@ export function createWholeSessionTracker(connectedAt: number | null): WholeSess
   return {
     get whole() {
       return whole
+    },
+    awaitingReplay(lastConnectedAt) {
+      return replayPending || (typeof lastConnectedAt === 'number' && !seen.has(lastConnectedAt))
     },
     subscribed() {
       whole = false
