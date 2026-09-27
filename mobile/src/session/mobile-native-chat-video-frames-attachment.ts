@@ -20,11 +20,23 @@ export function isPendingNativeChatVideoFrame(attachment: PendingNativeChatImage
   return attachment.videoFrame !== undefined
 }
 
-/** One line per distinct video (by `groupId`), first frame in wins — a
- *  multi-select with two over-cap videos gets two lines. */
+/** One line per distinct video (by `groupId`). The frame count is how many
+ *  of that group are actually in `attachments` right now — not the planned
+ *  total each frame's own metadata still carries — so a group a cancel or a
+ *  failed upload left short of its plan is described as it really is
+ *  (2026-09-27 review: the note used to repeat the plan regardless). The
+ *  cadence and duration describe the source video itself and stay as
+ *  sampled, whatever the survivor count. */
 export function buildMobileNativeChatVideoFrameNotes(
   attachments: readonly PendingNativeChatImage[]
 ): string {
+  const actualTotalByGroup = new Map<string, number>()
+  for (const attachment of attachments) {
+    const groupId = attachment.videoFrame?.groupId
+    if (groupId) {
+      actualTotalByGroup.set(groupId, (actualTotalByGroup.get(groupId) ?? 0) + 1)
+    }
+  }
   const seen = new Set<string>()
   const lines: string[] = []
   for (const attachment of attachments) {
@@ -33,9 +45,11 @@ export function buildMobileNativeChatVideoFrameNotes(
       continue
     }
     seen.add(meta.groupId)
-    const frameWord = meta.total === 1 ? 'frame' : 'frames'
+    const total = actualTotalByGroup.get(meta.groupId) ?? meta.total
+    const frameWord = total === 1 ? 'frame' : 'frames'
+    const cadence = meta.intervalLabel ? `, ${meta.intervalLabel}` : ''
     lines.push(
-      `Frames from ${meta.sourceName} (${meta.durationLabel}, ${meta.total} ${frameWord}, ${meta.intervalLabel}). ` +
+      `Frames from ${meta.sourceName} (${meta.durationLabel}, ${total} ${frameWord}${cadence}). ` +
         `The video itself is ${meta.sourceSizeLabel}, over the ${UPLOAD_CAP_LABEL} the desktop accepts, so it was not sent.`
     )
   }

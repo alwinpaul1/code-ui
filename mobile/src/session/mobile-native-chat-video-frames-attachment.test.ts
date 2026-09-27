@@ -27,6 +27,10 @@ function frame(index: number, total: number): PendingNativeChatImage {
   }
 }
 
+function allFrames(total: number): PendingNativeChatImage[] {
+  return Array.from({ length: total }, (_, i) => frame(i + 1, total))
+}
+
 const pdf: PendingNativeChatImage = {
   id: 'f1',
   path: '/tmp/a.png',
@@ -46,8 +50,30 @@ describe('isPendingNativeChatVideoFrame', () => {
 
 describe('buildMobileNativeChatVideoFrameNotes', () => {
   it('states the video, its duration, the frame count and the cadence, exactly as decided', () => {
-    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20), frame(2, 20)])).toBe(
+    expect(buildMobileNativeChatVideoFrameNotes(allFrames(20))).toBe(
       'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 20 frames, every 6.7 s). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('counts the frames actually in the send, not the plan each one still carries from extraction', () => {
+    // 2026-09-27 review: a cancel or a failed upload can leave a group short
+    // of its plan; the note must say how many really made it, not repeat
+    // "20 frames" over two survivors. `intervalLabel`/`durationLabel` still
+    // describe the source video's own sampling, unaffected by the shortfall.
+    expect(buildMobileNativeChatVideoFrameNotes([frame(1, 20), frame(2, 20)])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 2 frames, every 6.7 s). ' +
+        'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
+    )
+  })
+
+  it('omits the cadence clause when the metadata carries none (a single-frame group)', () => {
+    const solo: PendingNativeChatImage = {
+      ...frame(1, 1),
+      videoFrame: { ...frame(1, 1).videoFrame!, intervalLabel: null }
+    }
+    expect(buildMobileNativeChatVideoFrameNotes([solo])).toBe(
+      'Frames from Screen_Recording_2026-09-27.mp4 (2 min 14 s, 1 frame). ' +
         'The video itself is 142 MB, over the 18 MB the desktop accepts, so it was not sent.'
     )
   })
