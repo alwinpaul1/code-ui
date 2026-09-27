@@ -107,10 +107,10 @@ describe('the font size the page-served text inputs carry', () => {
     expect(listStyles(TEST_THEME).commitInput.fontSize).toBe(typography.bodySize)
     expect(mobileDiffReviewControlStyles(TEST_THEME).composerInput.fontSize).toBe(typography.bodySize)
     expect(mobileBrowserPaneStyles(TEST_THEME).keyboardInput.fontSize).toBe(typography.bodySize)
-    expect(customKeyModalStyles.fieldInput.fontSize).toBe(typography.bodySize)
+    expect(customKeyModalStyles(TEST_THEME).fieldInput.fontSize).toBe(typography.bodySize)
     // The capture field beside it, which is the one input on this screen no seam touches.
-    expect(customKeyModalStyles.keyInput.fontSize).toBe(22)
-    expect(customKeyModalStyles.keyInput.fontSize).toBeGreaterThanOrEqual(
+    expect(customKeyModalStyles(TEST_THEME).keyInput.fontSize).toBe(22)
+    expect(customKeyModalStyles(TEST_THEME).keyInput.fontSize).toBeGreaterThanOrEqual(
       TEXT_INPUT_FONT_SIZE_FLOOR
     )
     expect(mobileSessionCommandInputStyles(TEST_THEME).textInput.fontSize).toBe(

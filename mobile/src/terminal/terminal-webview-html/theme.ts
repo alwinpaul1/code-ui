@@ -1,11 +1,13 @@
 import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-types'
-import { colors } from '../../theme/mobile-theme'
+import { darkColors } from '../../theme/tokens'
 
+// Tokyonight, fixed in both app schemes: the terminal document stays terminal-coloured (BRIEF).
+// `darkColors.terminalBg` equals `lightColors.terminalBg` on purpose.
 export const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
-  background: colors.terminalBg,
+  background: darkColors.terminalBg,
   foreground: '#c0caf5',
   cursor: '#c0caf5',
-  cursorAccent: colors.terminalBg,
+  cursorAccent: darkColors.terminalBg,
   selectionBackground: '#33467c',
   selectionForeground: '#c0caf5',
   black: '#15161e',

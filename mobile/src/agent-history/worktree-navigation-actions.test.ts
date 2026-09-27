@@ -7,6 +7,7 @@ vi.mock('react-native-svg', () => ({ default: vi.fn(), Path: vi.fn() }))
 
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { buildWorktreeNavigationActions } from './worktree-navigation-actions'
+import { lightColors } from '../theme/tokens'
 
 /** Every target these actions build, in the order they offer them. */
 function targetsFor(hostId: string, worktreeId = 'wt-1'): string[] {
@@ -17,7 +18,8 @@ function targetsFor(hostId: string, worktreeId = 'wt-1'): string[] {
     worktreeName: 'my worktree',
     hostCapabilities: [MOBILE_AI_VAULT_CAPABILITY],
     navigate: (target) => targets.push(target),
-    onDone: () => {}
+    onDone: () => {},
+    colors: lightColors
   })
   for (const action of actions) {
     action.onPress()
@@ -40,7 +42,8 @@ describe('the worktree row action sheet', () => {
       worktreeName: 'my worktree',
       hostCapabilities: [],
       navigate: () => {},
-      onDone: () => {}
+      onDone: () => {},
+      colors: lightColors
     })
     expect(actions.map((action) => action.label)).toEqual(['Source Control'])
   })

@@ -9,7 +9,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
+import { spacing } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
@@ -17,7 +18,7 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
 import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
-import { terminalSettingsScreenStyles as styles } from '../src/terminal/terminal-settings-screen-styles'
+import { terminalSettingsScreenStyles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
   loadTerminalAutocompleteEnabled,
@@ -98,13 +99,16 @@ function HostFitRow({
   client,
   hostName,
   ms,
-  onPress
+  onPress,
+  styles
 }: {
   client: RpcClient | null
   hostName: string
   ms: number | null | undefined
   onPress: () => void
+  styles: ReturnType<typeof terminalSettingsScreenStyles>
 }): React.JSX.Element {
+  const { colors } = useTheme()
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
@@ -124,6 +128,8 @@ function HostFitRow({
 export default function TerminalSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(terminalSettingsScreenStyles)
   const [hosts, setHosts] = useState<HostProfile[]>([])
   useEffect(() => {
     void loadHosts().then(setHosts)
@@ -294,6 +300,7 @@ export default function TerminalSettingsScreen() {
                     hostName={host.name}
                     ms={hostMs[host.id]}
                     onPress={() => setPickerHostId(host.id)}
+                    styles={styles}
                   />
                 </View>
               )
@@ -327,7 +334,7 @@ export default function TerminalSettingsScreen() {
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
               trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
+              thumbColor={colors.text}
             />
           </View>
         </View>

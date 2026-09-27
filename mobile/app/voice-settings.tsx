@@ -10,7 +10,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
-import { colors, spacing } from '../src/theme/mobile-theme'
+import { spacing } from '../src/theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { loadHosts } from '../src/transport/host-store'
 import type { HostProfile } from '../src/transport/types'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
@@ -18,7 +19,7 @@ import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import { VoiceSettingsSwitchRow } from '../src/components/VoiceSettingsSwitchRow'
-import { voiceSettingsStyles as styles } from '../src/components/voice-settings-styles'
+import { voiceSettingsStyles } from '../src/components/voice-settings-styles'
 import { useDictationSetupPoller } from '../src/dictation/use-dictation-setup-poller'
 import {
   deleteDictationModel,
@@ -42,6 +43,8 @@ type ModelBusyAction = { modelId: string; type: 'download' | 'select' | 'delete'
 export default function VoiceSettingsScreen(): React.JSX.Element {
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(voiceSettingsStyles)
 
   const [hosts, setHosts] = useState<HostProfile[]>([])
   useEffect(() => {

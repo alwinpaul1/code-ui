@@ -1,4 +1,4 @@
-import { colors } from '../../theme/mobile-theme'
+import { darkColors } from '../../theme/tokens'
 
 /**
  * The rules that style the document itself, which only the WebView's document may carry.
@@ -12,7 +12,7 @@ import { colors } from '../../theme/mobile-theme'
  */
 export const TERMINAL_DOCUMENT_ROOT_STYLE = `  * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body {
-    background: ${colors.terminalBg};
+    background: ${darkColors.terminalBg};
     overflow: hidden;
     width: 100%;
     height: 100%;
@@ -88,7 +88,7 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     width: 3px;
     min-height: 24px;
     border-radius: 999px;
-    background: ${colors.textSecondary};
+    background: ${darkColors.textSecondary};
     will-change: transform, height;
   }
   /* Why: selection overlay sits in unscaled viewport coords, above the

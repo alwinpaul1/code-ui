@@ -1,6 +1,6 @@
 import { GitBranch } from 'lucide-react-native'
 import type { ActionSheetAction } from '../components/ActionSheetModal'
-import { colors } from '../theme/mobile-theme'
+import type { ThemeColors } from '../theme/tokens'
 import { MOBILE_AI_VAULT_CAPABILITY } from './agent-history-capability'
 import { MobileAgentSessionHistoryIcon } from './MobileAgentSessionHistoryIcon'
 
@@ -11,6 +11,7 @@ type Args = {
   hostCapabilities: readonly string[]
   navigate: (target: string) => void
   onDone: () => void
+  colors: ThemeColors
 }
 
 // Why: builds the per-worktree "navigate to a screen" action-sheet actions
@@ -36,7 +37,7 @@ export function buildWorktreeNavigationActions(args: Args): ActionSheetAction[] 
     actions.push({
       label: 'Agent Session History',
       renderIcon: () =>
-        MobileAgentSessionHistoryIcon({ size: 16, color: colors.textSecondary, strokeWidth: 2 }),
+        MobileAgentSessionHistoryIcon({ size: 16, color: args.colors.textSecondary, strokeWidth: 2 }),
       onPress: () => {
         const params = new URLSearchParams({ name: args.worktreeName })
         args.navigate(

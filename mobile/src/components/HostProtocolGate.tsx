@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, type ReactNode } from 're
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import { useHostClient } from '../transport/client-context'
 import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
 
 type Props = {
@@ -23,6 +23,8 @@ export function useHostProtocolGates(): HostStatusGates {
 // Why: single choke point above every /h/[hostId] route so a blocked verdict replaces the
 // whole host UI (sidebar + detail stack) while the host list and other hosts stay usable.
 export function HostProtocolGate({ hostId, children }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(hostProtocolGateStyles)
   const { client, state } = useHostClient(hostId)
   const gates = useHostStatusGates({ hostId, client, connState: state })
   const { compatVerdict, statusPending } = gates
@@ -99,23 +101,25 @@ export function HostProtocolGate({ hostId, children }: Props) {
   )
 }
 
-const styles = StyleSheet.create({
-  pending: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase
-  },
-  // Stays mounted across the overlay toggling so the routes below keep their identity.
-  host: {
-    flex: 1
-  },
-  pendingOverlay: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    zIndex: 1000,
-    elevation: 1000
-  }
-})
+function hostProtocolGateStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    pending: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg
+    },
+    // Stays mounted across the overlay toggling so the routes below keep their identity.
+    host: {
+      flex: 1
+    },
+    pendingOverlay: {
+      ...StyleSheet.absoluteFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      zIndex: 1000,
+      elevation: 1000
+    }
+  })
+}

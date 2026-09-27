@@ -1,8 +1,10 @@
-import { colors } from '../../theme/mobile-theme'
+import { darkColors } from '../../theme/tokens'
 import type { TerminalDocumentScope, TerminalDocumentTheme } from './document-scope'
 
-/** The page background before a theme arrives, and the fallback when a theme omits one. */
-const TERMINAL_BACKGROUND_FALLBACK = colors.terminalBg
+/** The page background before a theme arrives, and the fallback when a theme omits one. Fixed, not
+ *  the live app theme: the terminal WebView stays Tokyonight-dark in both app schemes (BRIEF), and
+ *  `darkColors.terminalBg` equals `lightColors.terminalBg` on purpose. */
+const TERMINAL_BACKGROUND_FALLBACK = darkColors.terminalBg
 
 /** A terminal colour with no alpha: what the contrast maths works on. */
 export type TerminalDocumentRgb = { r: number; g: number; b: number }

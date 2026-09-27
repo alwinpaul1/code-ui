@@ -1,10 +1,13 @@
 import { View, Text, StyleSheet } from 'react-native'
 import { SquareTerminal } from 'lucide-react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 
 // Empty detail pane shown beside the worktree-list sidebar on wide
 // tablet/foldable layouts until the user opens a workspace.
 export function WorkspaceDetailPlaceholder() {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(workspaceDetailPlaceholderStyles)
   return (
     <View style={styles.container}>
       <View style={styles.icon}>
@@ -16,33 +19,35 @@ export function WorkspaceDetailPlaceholder() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    backgroundColor: colors.bgBase
-  },
-  icon: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgPanel,
-    marginBottom: spacing.lg
-  },
-  title: {
-    color: colors.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: spacing.xs
-  },
-  body: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    textAlign: 'center',
-    maxWidth: 320
-  }
-})
+function workspaceDetailPlaceholderStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.xl,
+      backgroundColor: colors.bg
+    },
+    icon: {
+      width: 56,
+      height: 56,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bgPanel,
+      marginBottom: spacing.lg
+    },
+    title: {
+      color: colors.text,
+      fontSize: 16,
+      fontWeight: '600',
+      marginBottom: spacing.xs
+    },
+    body: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      textAlign: 'center',
+      maxWidth: 320
+    }
+  })
+}

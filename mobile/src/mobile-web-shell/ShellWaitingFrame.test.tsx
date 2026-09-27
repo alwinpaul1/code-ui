@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import { colors } from '../theme/mobile-theme'
+import { darkColors, lightColors, type ThemeScheme } from '../theme/tokens'
 
 const fades = vi.hoisted(() => ({ stops: 0, finished: true }))
 
@@ -26,15 +26,25 @@ vi.mock('react-native', () => ({
     create: (styles: unknown) => styles,
     absoluteFill: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }
   },
-  Text: 'Text'
+  Text: 'Text',
+  useColorScheme: () => 'light'
 }))
 
 const { ShellPageCover } = await import('./ShellWaitingFrame')
+const { ThemeProvider } = await import('../theme/theme-context')
 
-function render(visible: boolean): ReactTestRenderer {
+function coverElement(visible: boolean, scheme: ThemeScheme) {
+  return (
+    <ThemeProvider initialPreference={scheme}>
+      {createElement(ShellPageCover, { label: 'Opening workspace', visible })}
+    </ThemeProvider>
+  )
+}
+
+function render(visible: boolean, scheme: ThemeScheme = 'dark'): ReactTestRenderer {
   let tree: ReactTestRenderer | null = null
   act(() => {
-    tree = create(createElement(ShellPageCover, { label: 'Opening workspace', visible }))
+    tree = create(coverElement(visible, scheme))
   })
   if (tree === null) {
     throw new Error('the cover never rendered')
@@ -66,12 +76,18 @@ describe('the frame the shell keeps over an unpainted page', () => {
     expect(cover(tree)).not.toBeNull()
   })
 
-  it('paints the app surface and never black, so an empty view is never a hole', () => {
-    // The whole defect in one assertion: what shows while the WebView draws nothing is this.
-    const background = coverBackground(render(true))
-    expect(background).toBe(colors.bgBase)
-    expect(background).not.toBe('#000000')
-  })
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)(
+    'paints the %s app surface and never black, so an empty view is never a hole',
+    (scheme, palette) => {
+      // The whole defect in one assertion: what shows while the WebView draws nothing is this.
+      const background = coverBackground(render(true, scheme))
+      expect(background).toBe(palette.bg)
+      expect(background).not.toBe('#000000')
+    }
+  )
 
   it('fills the whole page rather than a box around its label', () => {
     // This fork's divergence: the cover spreads `StyleSheet.absoluteFill`, where upstream spreads
@@ -94,7 +110,7 @@ describe('the frame the shell keeps over an unpainted page', () => {
   it('goes once the page reports a frame', () => {
     const tree = render(true)
     act(() => {
-      tree.update(createElement(ShellPageCover, { label: 'Opening workspace', visible: false }))
+      tree.update(coverElement(false, 'dark'))
     })
     expect(cover(tree)).toBeNull()
   })
@@ -105,7 +121,7 @@ describe('the frame the shell keeps over an unpainted page', () => {
     fades.finished = false
     const tree = render(true)
     act(() => {
-      tree.update(createElement(ShellPageCover, { label: 'Opening workspace', visible: false }))
+      tree.update(coverElement(false, 'dark'))
     })
     expect(cover(tree)?.props.pointerEvents).toBe('none')
     fades.finished = true

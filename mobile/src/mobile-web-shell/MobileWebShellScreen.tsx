@@ -16,7 +16,8 @@ import {
 } from '../../modules/orca-mobile-web-shell/src'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { ProtocolBlockScreen } from '../components/ProtocolBlockScreen'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import type { BridgeInitRoute } from './bridge/bridge-envelope'
 import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
 import type {
@@ -68,6 +69,7 @@ function updateNoticeMessage(notice: MobileWebShellUpdateNotice): string {
 }
 
 function Centered({ children }: { children: ReactNode }) {
+  const styles = useThemedStyles(mobileWebShellScreenStyles)
   return <View style={styles.centered}>{children}</View>
 }
 
@@ -80,6 +82,8 @@ function Waiting({ label }: { label: string }) {
 }
 
 function Fetching({ state }: { state: Extract<MobileWebShellSessionState, { kind: 'fetching' }> }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobileWebShellScreenStyles)
   return (
     <Centered>
       <ActivityIndicator color={colors.textSecondary} accessibilityLabel="Downloading workspace" />
@@ -98,6 +102,7 @@ function Failed({
   state: Extract<MobileWebShellSessionState, { kind: 'failed' }>
   onRetry: () => void
 }) {
+  const styles = useThemedStyles(mobileWebShellScreenStyles)
   // No retry for the fence, and none for an unread status: a device whose WebView cannot be
   // isolated will not grow one on a tap, and a retry re-reads the same settled gate it already has.
   const retryable = state.reason !== 'isolation-unavailable' && state.reason !== 'status-unreadable'
@@ -126,6 +131,7 @@ function DevFacts({
   state: Extract<MobileWebShellSessionState, { kind: 'ready' }>
   droppedBinaryFrames: number
 }) {
+  const styles = useThemedStyles(mobileWebShellScreenStyles)
   if (!isDevelopmentBuild()) {
     return null
   }
@@ -176,6 +182,7 @@ export function MobileWebShellScreen({
   onRouteParamClear,
   runtime
 }: MobileWebShellScreenProps) {
+  const styles = useThemedStyles(mobileWebShellScreenStyles)
   const insets = useSafeAreaInsets()
   // The page cannot see the IME for itself: edge-to-edge makes the manifest's `adjustResize` inert,
   // so the window never shrinks and `visualViewport` inside the WebView reads full height with the
@@ -418,63 +425,65 @@ export function MobileWebShellScreen({
   )
 }
 
-const styles = StyleSheet.create({
-  shellRoot: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  shellView: {
-    flex: 1
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  waitingLabel: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center'
-  },
-  progress: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: spacing.sm
-  },
-  failedMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: spacing.lg
-  },
-  retryButton: {
-    backgroundColor: colors.bgRaised,
-    paddingVertical: spacing.sm + 2,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.button
-  },
-  retryLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  pressed: {
-    opacity: 0.7
-  },
-  devFacts: {
-    position: 'absolute',
-    left: spacing.sm,
-    bottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel
-  },
-  devFactsText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted
-  }
-})
+function mobileWebShellScreenStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    shellRoot: {
+      flex: 1,
+      backgroundColor: colors.bg
+    },
+    shellView: {
+      flex: 1
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg
+    },
+    waitingLabel: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      marginTop: spacing.md,
+      textAlign: 'center'
+    },
+    progress: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      marginTop: spacing.sm
+    },
+    failedMessage: {
+      fontSize: typography.bodySize,
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: spacing.lg
+    },
+    retryButton: {
+      backgroundColor: colors.bgRaised,
+      paddingVertical: spacing.sm + 2,
+      paddingHorizontal: spacing.lg,
+      borderRadius: radii.button
+    },
+    retryLabel: {
+      fontSize: typography.bodySize,
+      fontWeight: '600',
+      color: colors.text
+    },
+    pressed: {
+      opacity: 0.7
+    },
+    devFacts: {
+      position: 'absolute',
+      left: spacing.sm,
+      bottom: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 2,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgPanel
+    },
+    devFactsText: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted
+    }
+  })
+}

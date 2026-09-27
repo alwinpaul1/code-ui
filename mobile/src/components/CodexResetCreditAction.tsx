@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { RotateCcw } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import type { CodexResetCreditSummary } from './codex-reset-credit'
 
 export function CodexResetCreditAction({
@@ -16,6 +17,8 @@ export function CodexResetCreditAction({
   disabled: boolean
   onPress: () => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(codexResetCreditActionStyles)
   return (
     <>
       <View style={styles.separator} />
@@ -46,9 +49,9 @@ export function CodexResetCreditAction({
           hitSlop={8}
         >
           {busy ? (
-            <ActivityIndicator size="small" color={colors.textPrimary} />
+            <ActivityIndicator size="small" color={colors.text} />
           ) : (
-            <RotateCcw size={14} color={colors.textPrimary} />
+            <RotateCcw size={14} color={colors.text} />
           )}
           <Text style={styles.buttonText}>{busy ? 'Resetting…' : 'Use reset'}</Text>
         </Pressable>
@@ -57,54 +60,56 @@ export function CodexResetCreditAction({
   )
 }
 
-const styles = StyleSheet.create({
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  copy: {
-    flex: 1,
-    gap: spacing.xs
-  },
-  title: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  subtitle: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  button: {
-    minHeight: 44,
-    width: 104,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised
-  },
-  buttonPressed: {
-    opacity: 0.72
-  },
-  buttonDisabled: {
-    opacity: 0.5
-  },
-  buttonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  }
-})
+function codexResetCreditActionStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: spacing.md
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    copy: {
+      flex: 1,
+      gap: spacing.xs
+    },
+    title: {
+      fontSize: typography.bodySize,
+      fontWeight: '500',
+      color: colors.text
+    },
+    subtitle: {
+      fontSize: typography.metaSize,
+      color: colors.textSecondary
+    },
+    button: {
+      minHeight: 44,
+      width: 104,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    buttonPressed: {
+      opacity: 0.72
+    },
+    buttonDisabled: {
+      opacity: 0.5
+    },
+    buttonText: {
+      fontSize: typography.metaSize,
+      fontWeight: '600',
+      color: colors.text
+    }
+  })
+}

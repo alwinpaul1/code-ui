@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Animated, Easing, StyleSheet, Text } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 
 /** What the shell calls the wait from the bytes being on disk to the page having a frame. */
 export const SHELL_OPENING_LABEL = 'Opening workspace'
@@ -14,6 +15,8 @@ export const SHELL_PAGE_COVER_FADE_MS = 220
 
 /** The shell's neutral frame: one spinner and what it is waiting on. */
 export function ShellWaitingFrame({ label }: { label: string }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(shellWaitingFrameStyles)
   return (
     <>
       <ActivityIndicator color={colors.textSecondary} accessibilityLabel={label} />
@@ -29,6 +32,7 @@ export function ShellWaitingFrame({ label }: { label: string }) {
  * never arrives strands a spinner over a usable page rather than a dead one.
  */
 export function ShellPageCover({ label, visible }: { label: string; visible: boolean }) {
+  const styles = useThemedStyles(shellWaitingFrameStyles)
   const opacity = useRef(new Animated.Value(1)).current
   const [mounted, setMounted] = useState(visible)
 
@@ -70,18 +74,20 @@ export function ShellPageCover({ label, visible }: { label: string; visible: boo
   )
 }
 
-const styles = StyleSheet.create({
-  cover: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bgBase,
-    paddingHorizontal: spacing.lg
-  },
-  label: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.md,
-    textAlign: 'center'
-  }
-})
+function shellWaitingFrameStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    cover: {
+      ...StyleSheet.absoluteFill,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.bg,
+      paddingHorizontal: spacing.lg
+    },
+    label: {
+      fontSize: typography.bodySize,
+      color: colors.textSecondary,
+      marginTop: spacing.md,
+      textAlign: 'center'
+    }
+  })
+}

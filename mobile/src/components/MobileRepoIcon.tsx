@@ -24,7 +24,7 @@ import {
 } from 'lucide-react-native'
 import { Image, StyleSheet, Text, View } from 'react-native'
 import type { MobileRenderableRepoIcon } from '../host-screen/host-screen-reply-schema'
-import { colors } from '../theme/mobile-theme'
+import { useTheme } from '../theme/theme-context'
 
 // The lucide names the desktop repo-icon picker offers (src/renderer/src/
 // components/repo/repo-icon.tsx). Mobile renders the same glyph so the project
@@ -63,7 +63,9 @@ type Props = {
 // Renders a repo/project icon matching the desktop sidebar: a custom image
 // (favicon/avatar/upload), an emoji, or a lucide glyph. Falls back to Folder,
 // the desktop default, so a project always shows an icon rather than a dot.
-export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSecondary }: Props) {
+export function MobileRepoIcon({ repoIcon, size = 14, color }: Props) {
+  const { colors } = useTheme()
+  const iconColor = color ?? colors.textSecondary
   if (repoIcon?.type === 'image') {
     return (
       <Image
@@ -79,7 +81,7 @@ export function MobileRepoIcon({ repoIcon, size = 14, color = colors.textSeconda
   const Icon = (repoIcon?.type === 'lucide' && REPO_LUCIDE_ICONS[repoIcon.name]) || Folder
   return (
     <View style={styles.glyph}>
-      <Icon size={size} color={color} strokeWidth={2} />
+      <Icon size={size} color={iconColor} strokeWidth={2} />
     </View>
   )
 }

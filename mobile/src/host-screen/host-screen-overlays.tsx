@@ -169,7 +169,8 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       worktreeName: actionTarget.displayName || actionTarget.repo,
                       hostCapabilities,
                       navigate: actions.navigateFromHostList,
-                      onDone: () => state.setActionTarget(null)
+                      onDone: () => state.setActionTarget(null),
+                      colors
                     }),
                     {
                       label: 'Sleep',

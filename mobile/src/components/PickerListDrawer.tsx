@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { spacing, typography } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { BottomDrawer } from './BottomDrawer'
 import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
@@ -27,6 +28,8 @@ export function PickerListDrawer<T extends PickerListItem>({
   onClose,
   renderIcon
 }: Props<T>) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(pickerListDrawerStyles)
   const [closing, setClosing] = useState(false)
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const drawerVisible = visible && !closing
@@ -102,7 +105,7 @@ export function PickerListDrawer<T extends PickerListItem>({
                   </Text>
                 ) : null}
               </View>
-              {selected && <Check size={14} color={colors.textPrimary} />}
+              {selected && <Check size={14} color={colors.text} />}
             </Pressable>
           )
         }}
@@ -112,58 +115,61 @@ export function PickerListDrawer<T extends PickerListItem>({
 }
 
 function PickerSeparator() {
+  const styles = useThemedStyles(pickerListDrawerStyles)
   return <View style={styles.separator} />
 }
 
-const styles = StyleSheet.create({
-  header: {
-    paddingHorizontal: spacing.xs,
-    paddingBottom: spacing.sm
-  },
-  title: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textMuted
-  },
-  group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    maxHeight: 420,
-    flexGrow: 0
-  },
-  emptyContent: {
-    minHeight: spacing.xl
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  item: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  itemPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  itemText: {
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  itemCopy: {
-    flex: 1,
-    minWidth: 0
-  },
-  itemDetail: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    marginTop: 1
-  },
-  itemTextSelected: {
-    fontWeight: '600'
-  }
-})
+function pickerListDrawerStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    header: {
+      paddingHorizontal: spacing.xs,
+      paddingBottom: spacing.sm
+    },
+    title: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.textMuted
+    },
+    group: {
+      backgroundColor: colors.bgPanel,
+      borderRadius: 12,
+      overflow: 'hidden',
+      maxHeight: 420,
+      flexGrow: 0
+    },
+    emptyContent: {
+      minHeight: spacing.xl
+    },
+    separator: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginHorizontal: spacing.md
+    },
+    item: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.md + 2
+    },
+    itemPressed: {
+      backgroundColor: colors.bgRaised
+    },
+    itemText: {
+      fontSize: typography.bodySize,
+      color: colors.text
+    },
+    itemCopy: {
+      flex: 1,
+      minWidth: 0
+    },
+    itemDetail: {
+      fontSize: typography.metaSize,
+      color: colors.textMuted,
+      marginTop: 1
+    },
+    itemTextSelected: {
+      fontWeight: '600'
+    }
+  })
+}
