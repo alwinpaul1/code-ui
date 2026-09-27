@@ -288,3 +288,33 @@ describe('Stage Reviewed Files when the send is lost', () => {
     expect(banner(rendered, 'Connection closed')).toEqual({ textColor: colors.text, border: colors.warning })
   })
 })
+
+// Open in Session awaited its request outside its try: only a refusal was
+// caught, and a lost send left nothing on the screen at all.
+describe('Open in Session when the send is lost', () => {
+  it('says why the file did not open', async () => {
+    const tab = host({ 'files.openDiff': () => Promise.reject(new Error('Connection closed')) })
+    const rendered = await render(tab)
+    await reviewAction(rendered, 'Open in Session')
+    expect(tab.calls('files.openDiff')).toHaveLength(1)
+    expect(banner(rendered, 'Connection closed')).not.toBeNull()
+    expect(openedSession).toBe(0)
+    expect(logged('[review-open]')).toEqual([expect.stringContaining('Connection closed')])
+    expect(unhandled).toEqual([])
+  })
+
+  it('still says something when the lost send carries no message', async () => {
+    const tab = host({ 'files.openDiff': () => Promise.reject(messageless()) })
+    const rendered = await render(tab)
+    await reviewAction(rendered, 'Open in Session')
+    expect(banner(rendered, 'Unable to open in session')).not.toBeNull()
+  })
+
+  it('still opens the session when the desktop takes it', async () => {
+    const tab = host({ 'files.openDiff': () => ok({ tab: { id: 'tab-9' } }) })
+    const rendered = await render(tab)
+    await reviewAction(rendered, 'Open in Session')
+    expect(openedSession).toBe(1)
+    expect(controller!.actionError).toBeNull()
+  })
+})

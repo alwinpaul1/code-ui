@@ -194,15 +194,29 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
       if (!client || !currentItem || currentItem.scope === 'branch') {
         return
       }
-      const response = await sourceFileDiffOpenRun.request(client, {
-        worktree: `id:${worktreeId}`,
-        relativePath: currentItem.filePath,
-        staged: currentItem.scope === 'staged'
-      })
+      const filePath = currentItem.filePath
+      let response
+      try {
+        response = await sourceFileDiffOpenRun.request(client, {
+          worktree: `id:${worktreeId}`,
+          relativePath: filePath,
+          staged: currentItem.scope === 'staged'
+        })
+      } catch (error) {
+        // A send the link lost. It was awaited outside any catch and rejected
+        // into the tap, leaving nothing on screen. No main behaviour to keep
+        // here, and an empty message would draw no banner, so it falls back.
+        const why = (error instanceof Error && error.message) || 'Unable to open in session'
+        console.warn(`[review-open] ${filePath} not opened: ${why}`)
+        setActionError(why)
+        return
+      }
       try {
         sourceFileDiffOpenRun.interpret(response)
       } catch (error) {
-        setActionError(refusedRpcMessageOrFallback(error, 'Unable to open in session'))
+        const why = refusedRpcMessageOrFallback(error, 'Unable to open in session')
+        console.warn(`[review-open] ${filePath} not opened: ${why}`)
+        setActionError(why)
         return
       }
       onOpenSession()
