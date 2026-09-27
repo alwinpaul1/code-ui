@@ -80,7 +80,8 @@ export function MobileCodeView({
       codeViewMetrics({
         lineCount: document.lines.length,
         maxColumns: document.maxColumns,
-        fontScale: fontScale ?? 1
+        fontScale: fontScale ?? 1,
+        foldable: document.folds.length > 0
       }),
     [document, fontScale]
   )
@@ -191,6 +192,7 @@ export function MobileCodeView({
           palette={theme.syntax}
           rowStyle={layout.rowStyle}
           numberOfLines={layout.numberOfLines}
+          foldColumn={metrics.foldWidth > 0}
           fold={
             region
               ? {

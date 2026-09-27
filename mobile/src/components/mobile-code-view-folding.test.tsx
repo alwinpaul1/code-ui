@@ -38,6 +38,7 @@ import {
 import { colorBracketPairs } from './mobile-syntax-brackets'
 import { splitSyntaxIntoLines } from './mobile-syntax-lines'
 import { highlightMobileCode } from '../session/mobile-file-syntax'
+import { codeViewMetrics } from './mobile-code-view-layout'
 import { contrastRatio } from '../test/contrast'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 
@@ -189,6 +190,27 @@ describe.each(['dark', 'light'] as const)('folding a block of code (%s)', (curre
     expect(contrastRatio(colour(marker), palette.surface)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(colour(marker), palette.selection)).toBeGreaterThanOrEqual(4.5)
     expect(contrastRatio(colour(glyph(row(r, 0), 'Unfold lines 1–5')), palette.surface)).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe('a file with nothing to fold', () => {
+  it('keeps the old gap after its line numbers, with no fold column', () => {
+    // Plain text and logs drew an empty toggle column (review, 2026-09-27).
+    const log = Array.from({ length: 30 }, (_, i) => `2026-09-27 01:0${i % 10} INFO request ${i} done`).join('\n')
+    const doc = buildMobileCodeDocument(log, 'plaintext')
+    expect(doc.folds).toEqual([])
+    const r = mount(doc)
+    const drawn = row(r, 0)
+    expect(drawn.root.findAll((node) => node.props.testID === 'code-fold-column')).toEqual([])
+    const metrics = codeViewMetrics({ lineCount: 30, maxColumns: doc.maxColumns, fontScale: 1, foldable: false })
+    // Two digits and the 14-point gap the gutter always had.
+    expect(metrics.gutterWidth).toBe(Math.ceil(2 * metrics.cellWidth + 14))
+    expect(flat(drawn.root.findAllByType('Text' as never)[0]!.props.style).width).toBe(metrics.gutterWidth)
+  })
+
+  it('keeps the column in a file with blocks, on rows that start none too', () => {
+    const r = mount(buildMobileCodeDocument(PYTHON, 'python'))
+    expect(row(r, 2).root.findAll((node) => node.props.testID === 'code-fold-column')).toHaveLength(1)
   })
 })
 

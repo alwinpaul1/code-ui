@@ -41,6 +41,7 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   highlightStyle,
   onLongPress,
   onPress,
+  foldColumn,
   fold
 }: MobileCodeLineInteraction & {
   number: number
@@ -55,6 +56,8 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
   rowStyle: StyleProp<ViewStyle>
   /** 1 while unwrapped: the row is exactly one line tall. */
   numberOfLines: 1 | undefined
+  /** The file has blocks to fold: every row keeps the toggles' column. */
+  foldColumn: boolean
   fold?: MobileCodeLineFold
 }) {
   return (
@@ -80,9 +83,9 @@ export const MobileCodeViewLine = memo(function MobileCodeViewLine({
             {fold.folded ? '▸' : '▾'}
           </Text>
         </Pressable>
-      ) : (
-        <View style={styles.foldColumn} />
-      )}
+      ) : foldColumn ? (
+        <View testID="code-fold-column" style={styles.foldColumn} />
+      ) : null}
       <View style={styles.code}>
         {Array.from({ length: guides }, (_, level) => (
           <View

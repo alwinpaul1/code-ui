@@ -8,6 +8,9 @@ export const CODE_VIEW_LINE_HEIGHT = 20
 const JETBRAINS_MONO_ADVANCE_EM = 0.6
 /** Space after the line numbers, before the fold toggles. */
 const NUMBER_GAP = 6
+/** Space after the line numbers in a file with nothing to fold: the gap the
+ *  gutter always had, so plain text and logs keep it (review, 2026-09-27). */
+const GUTTER_GAP = 14
 /** The fold toggles' column (▾/▸), between the numbers and the code: two
  *  cells and a little, so the glyph sits clear of the code. */
 const FOLD_COLUMN_CELLS = 2
@@ -46,17 +49,20 @@ export type CodeViewMetrics = {
 export function codeViewMetrics({
   lineCount,
   maxColumns,
-  fontScale
+  fontScale,
+  foldable = false
 }: {
   lineCount: number
   maxColumns: number
   fontScale: number
+  /** The file has blocks to fold: the gutter makes room for their toggles. */
+  foldable?: boolean
 }): CodeViewMetrics {
   const scale = fontScale > 0 ? fontScale : 1
   const cellWidth = CODE_VIEW_FONT_SIZE * JETBRAINS_MONO_ADVANCE_EM * scale
   const gutterDigits = Math.max(2, String(Math.max(lineCount, 1)).length)
-  const numberWidth = Math.ceil(gutterDigits * cellWidth + NUMBER_GAP)
-  const foldWidth = Math.ceil(FOLD_COLUMN_CELLS * cellWidth + FOLD_COLUMN_PAD)
+  const numberWidth = Math.ceil(gutterDigits * cellWidth + (foldable ? NUMBER_GAP : GUTTER_GAP))
+  const foldWidth = foldable ? Math.ceil(FOLD_COLUMN_CELLS * cellWidth + FOLD_COLUMN_PAD) : 0
   const gutterWidth = numberWidth + foldWidth
   // A line past the limit is cut and ends in a note; the row is as wide as
   // the longest note the file can need (no more characters are hidden than
