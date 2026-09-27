@@ -87,17 +87,11 @@ export function markdownProseScale(
   size: number,
   textScale: number
 ): { fontSize: number; lineHeight: number } | null {
-  if (textScale === 1) {
-    return null
-  }
-  return {
-    fontSize: size * textScale,
-    // The pill's 1px borders do NOT scale — a hairline stays a hairline — so at
-    // a small zoom they eat the gap the line height is there to provide. Adding
-    // them back keeps the clear air between two wrapped pills constant at every
-    // zoom instead of shrinking it away.
-    lineHeight: (size + MARKDOWN_PROSE_LINE_GAP) * textScale + 2 * MARKDOWN_CHIP_BORDER_WIDTH
-  }
+  // The pill's 1px borders do NOT scale — a hairline stays a hairline — so at
+  // a small zoom they eat the gap the line height is there to provide. Adding
+  // them back keeps the clear air between two wrapped pills constant at every
+  // zoom instead of shrinking it away (markdownZoomedLine).
+  return markdownZoomedLine(size, size + MARKDOWN_PROSE_LINE_GAP, textScale)
 }
 
 export type MarkdownChipScale = {
@@ -127,22 +121,21 @@ export function markdownChipScale(textScale: number): MarkdownChipScale | null {
 }
 
 /**
- * The room a table cell holding a pill leaves below its last line. A cell's
- * type keeps its size at a zoom while its pills grow, so a pill hangs out of
- * its line by its shift less the line's own room under the baseline, and the
- * table clips it (2026-09-14, a `54;1H` chip lost its bottom). The cell gives
- * that and a dp more, never less than a cell with no pill.
+ * A line of text at the reader's zoom: its size and line height scaled, and
+ * the pill's two 1 dp borders added back, which do not scale (as for prose,
+ * markdownProseScale). Headings and table cells used to keep their size at a
+ * zoom while their pills grew, and pills on two wrapped lines met from zoom
+ * 1.35 (review of c3e62696). Null when the reader has not zoomed.
  */
-export function markdownTableCellPillPadding(textScale: number): number {
-  const pill =
-    MARKDOWN_TABLE_CHIP_LINE_HEIGHT * textScale +
-    2 * MARKDOWN_CHIP_PADDING_VERTICAL * textScale +
-    2 * MARKDOWN_CHIP_BORDER_WIDTH
-  const shift = markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * textScale
-  const ascent = Math.max(INSTRUMENT_SANS_ASCENT * MARKDOWN_TABLE_CELL_FONT_SIZE, pill)
-  const descent = INSTRUMENT_SANS_DESCENT * MARKDOWN_TABLE_CELL_FONT_SIZE
-  const underBaseline = descent + (MARKDOWN_TABLE_CELL_LINE_HEIGHT - ascent - descent) / 2
-  return Math.max(MARKDOWN_TABLE_CELL_PADDING_BOTTOM, shift - underBaseline + 1)
+export function markdownZoomedLine(
+  fontSize: number,
+  lineHeight: number,
+  textScale: number
+): { fontSize: number; lineHeight: number } | null {
+  if (textScale === 1) {
+    return null
+  }
+  return { fontSize: fontSize * textScale, lineHeight: lineHeight * textScale + 2 * MARKDOWN_CHIP_BORDER_WIDTH }
 }
 
 /** What the pill actually paints, top to bottom, at a given zoom. */

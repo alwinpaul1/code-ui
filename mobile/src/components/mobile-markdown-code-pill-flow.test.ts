@@ -5,6 +5,8 @@ import { MobileMarkdown } from './MobileMarkdown'
 import {
   createPhone,
   earlyLineEnds,
+  flatStyle,
+  hostParent,
   sharedLines,
   type ModelLine,
   type PhoneAs
@@ -281,6 +283,43 @@ describe('what is remembered for a streaming reply', () => {
       settleMounted(360)
     }
     expect(rememberedPillTextCount() - before).toBe(1)
+  })
+})
+
+// Review of c3e62696: headings and a table cell's text kept their size at a
+// pinch zoom while their pills grew, so pills on two wrapped lines of an h4 to
+// h6 heading met from zoom 1.35, an h3 and a cell's from 1.5, an h2's from
+// 1.6 and an h1's from 1.8. Read off what is drawn, at every zoom: the gap
+// between pills on two lines, and each pill a dp inside its own line.
+describe('pills on wrapped heading and table cell lines', () => {
+  const ASCENT = 0.97
+  const DESCENT = 0.25
+  const CONTENT = '# One `x/y`\n\n## Two `x/y`\n\n### Three `x/y`\n\n#### Four `x/y`\n\n| Cell |\n| --- |\n| `x/y` |'
+
+  it.each([0.8, 1, 1.2, 1.35, 1.5, 1.6, 1.8])('keep apart and inside their lines at zoom %s', (textScale) => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: CONTENT, textScale }))
+    })
+    const problems: string[] = []
+    for (const pill of pills()) {
+      const line = flatStyle(hostParent(pill)!.props.style)
+      const box = flatStyle(pill.props.style)
+      const label = flatStyle(pill.findByType('Text' as never).props.style)
+      const height = Number(label.lineHeight) + 2 * Number(box.paddingVertical ?? 0) + 2 * Number(box.borderWidth ?? 0)
+      const shift = Number((box.transform as { translateY?: number }[] | undefined)?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0)
+      const fontSize = Number(line.fontSize)
+      const lineHeight = Number(line.lineHeight)
+      const ascent = Math.max(ASCENT * fontSize, height)
+      const underBaseline = DESCENT * fontSize + (lineHeight - ascent - DESCENT * fontSize) / 2
+      if (lineHeight - height < 2) {
+        problems.push(`${fontSize} dp line ${lineHeight}: pill ${height.toFixed(1)} leaves ${(lineHeight - height).toFixed(2)} dp to the pill below`)
+      }
+      if (underBaseline - shift < 1) {
+        problems.push(`${fontSize} dp line ${lineHeight}: pill bottom ${(underBaseline - shift).toFixed(2)} dp inside its line`)
+      }
+    }
+    expect(pills().length).toBe(5)
+    expect(problems).toEqual([])
   })
 })
 

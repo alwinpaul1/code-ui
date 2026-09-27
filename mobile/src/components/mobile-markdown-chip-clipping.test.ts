@@ -20,7 +20,7 @@ import {
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
   markdownChipBaselineShift,
   markdownProseScale,
-  markdownTableCellPillPadding
+  markdownZoomedLine
 } from './mobile-markdown-prose-scale'
 
 function themeFor(scheme: 'light' | 'dark'): Theme {
@@ -63,9 +63,9 @@ describe('an inline code chip inside a table', () => {
     // 2026-09-14, from the phone: a `54;1H` chip in a table row lost its top
     // and bottom. The chip is PAINTED lower than it is laid out so it sits
     // level with the text around it, and the table needs overflow:hidden for
-    // its rounded corners. What the cell must leave below its last line is
-    // what the pill hangs out of that line; a cell's text does not follow the
-    // zoom while its pills do (2026-09-27 review, and the arithmetic below).
+    // its rounded corners. A cell's text follows the zoom as its pills do
+    // (review of c3e62696), so the pill's bottom stays inside its own line,
+    // and the padding under the last line is room to spare.
     const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as {
       tableCell: Box & { fontSize: number; lineHeight: number }
       inlineCodeChip: Box
@@ -74,21 +74,19 @@ describe('an inline code chip inside a table', () => {
     expect(staticShift).toBe(MARKDOWN_INLINE_CHIP_BASELINE_SHIFT)
     for (const zoom of ZOOMS) {
       const pill = MARKDOWN_TABLE_CHIP_LINE_HEIGHT * zoom + 2 * MARKDOWN_CHIP_PADDING_VERTICAL * zoom + 2 * MARKDOWN_CHIP_BORDER_WIDTH
-      const shift =
-        zoom === 1 ? MARKDOWN_INLINE_CHIP_BASELINE_SHIFT : markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * zoom
-      const hang = shift - lineBottom(styles.tableCell.fontSize, styles.tableCell.lineHeight, pill)
-      expect(markdownTableCellPillPadding(zoom) - hang, `zoom ${zoom}`).toBeGreaterThanOrEqual(1)
+      const shift = markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * zoom
+      const cell = markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, zoom) ?? styles.tableCell
+      expect(lineBottom(cell.fontSize, cell.lineHeight, pill) - shift, `zoom ${zoom}`).toBeGreaterThanOrEqual(1)
     }
   })
 
   it.each(['dark', 'light'] as const)('leaves a table with no code as it was in %s', (scheme) => {
     // 2026-09-27 review: the pill's bigger shift had grown every cell's
-    // bottom padding, code or not. A pill no longer needs it at the reader's
-    // size; a cell without one keeps the 2 dp it has had since 2026-09-14.
+    // bottom padding, code or not. A pill no longer needs it; every cell
+    // keeps the 2 dp it has had since 2026-09-14.
     const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as { tableCell: Box }
     expect(styles.tableCell.paddingVertical).toBeUndefined()
     expect(styles.tableCell.paddingBottom).toBe(space.xs + 2)
-    expect(markdownTableCellPillPadding(1)).toBe(space.xs + 2)
   })
 })
 
@@ -153,15 +151,18 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
       // screenshot) — the cell's line height was BASE + 4 while a pill paints
       // BASE + 7. The invariant was right; it just was not asked about every
       // block a pill can land in, which is the whole lesson. Headings and
-      // cells keep their size at a zoom; they are checked at the reader's.
-      for (const [name, block, pill] of [
-        ['tableCell', styles.tableCell, pillAt(1, MARKDOWN_TABLE_CHIP_LINE_HEIGHT)],
-        ['heading', styles.heading, pillAt(1)],
-        ['headingLevel1', { ...styles.heading, ...styles.headingLevel1 }, pillAt(1)],
-        ['headingLevel2', { ...styles.heading, ...styles.headingLevel2 }, pillAt(1)],
-        ['headingLevel3', { ...styles.heading, ...styles.headingLevel3 }, pillAt(1)]
-      ] as const) {
-        check(name, block, pill, shiftAt(1))
+      // cells follow the zoom too since the review of c3e62696, when they
+      // were checked at the reader's size only and met from zoom 1.35.
+      for (const zoom of ZOOMS) {
+        for (const [name, block, pill] of [
+          ['tableCell', styles.tableCell, pillAt(zoom, MARKDOWN_TABLE_CHIP_LINE_HEIGHT)],
+          ['heading', styles.heading, pillAt(zoom)],
+          ['headingLevel1', { ...styles.heading, ...styles.headingLevel1 }, pillAt(zoom)],
+          ['headingLevel2', { ...styles.heading, ...styles.headingLevel2 }, pillAt(zoom)],
+          ['headingLevel3', { ...styles.heading, ...styles.headingLevel3 }, pillAt(zoom)]
+        ] as const) {
+          check(`${name} at ${zoom}`, markdownZoomedLine(block.fontSize, block.lineHeight, zoom) ?? block, pill, shiftAt(zoom))
+        }
       }
       expect(MARKDOWN_BASE_SIZE).toBe(styles.paragraph.fontSize)
     }

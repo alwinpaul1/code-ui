@@ -226,8 +226,8 @@ export function makeMarkdownStyles(theme: Theme) {
       paddingTop: space.xs,
       // 2 dp more below than above, as since 2026-09-14, when it was room for
       // the chip's shift under the table's clip. A pill now hangs inside its
-      // line at the reader's size; at a zoom a cell holding one takes what
-      // it hangs out (markdownTableCellPillPadding), and no other cell does.
+      // line, at every zoom: the cell's text follows the zoom as its pills do
+      // (markdownZoomedLine).
       paddingBottom: MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,

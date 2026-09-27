@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 import { codePillWidth, cutCodePills } from './mobile-markdown-code-chip-split'
 import { computeTableColumnWidths } from './mobile-markdown-table-layout'
-import { markdownTableCellPillPadding } from './mobile-markdown-prose-scale'
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -87,10 +86,11 @@ describe('code spans inside a table cell', () => {
     ])
   })
 
-  // 2026-09-27 review: at a zoom a cell's text keeps its size and its pills
-  // grow, so a pill hangs out of its line; the room for that goes to the
-  // cells that hold one, not to every cell.
-  it('gives a cell holding a pill room below it at the largest zoom, and no other cell', () => {
+  // Review of c3e62696: at a zoom a cell's text kept its size while its
+  // pills grew, so a pill hung out of its line, and cells holding one took
+  // extra room below for it. A cell's text follows the zoom now, as its
+  // column widths already did, and no cell needs the extra room.
+  it("sets a cell's text at the reader's zoom, so no cell needs extra room below for a pill", () => {
     act(() => {
       renderer = create(createElement(MobileMarkdown, { content: TABLE, textScale: 1.8 }))
     })
@@ -100,19 +100,12 @@ describe('code spans inside a table cell', () => {
         Array.isArray(node.props.style) &&
         node.props.style.some((s: unknown) => typeof s === 'object' && s !== null && 'width' in s)
     )
-    const bottom = (cell: ReactTestInstance) =>
-      Object.assign({}, ...(cell.props.style as object[]).filter(Boolean)).paddingBottom as number
-    const holding = cells.filter((cell) => cell.findAll((node: ReactTestInstance) => String(node.type) === 'View').length > 0)
-    const plain = cells.filter((cell) => !holding.includes(cell))
-    expect(holding.length).toBeGreaterThan(0)
-    expect(plain.length).toBeGreaterThan(0)
-    for (const cell of holding) {
-      expect(bottom(cell)).toBe(markdownTableCellPillPadding(1.8))
+    expect(cells.length).toBeGreaterThan(3)
+    for (const cell of cells) {
+      const style = Object.assign({}, ...(cell.props.style as object[]).filter(Boolean)) as { fontSize: number; paddingBottom: number }
+      expect(style.fontSize).toBeCloseTo(13 * 1.8, 6)
+      expect(style.paddingBottom).toBe(6)
     }
-    for (const cell of plain) {
-      expect(bottom(cell)).toBe(markdownTableCellPillPadding(1))
-    }
-    expect(markdownTableCellPillPadding(1.8)).toBeGreaterThan(markdownTableCellPillPadding(1))
   })
 })
 

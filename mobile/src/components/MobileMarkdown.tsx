@@ -30,7 +30,7 @@ import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-s
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { markdownProseScale, markdownTableCellPillPadding } from './mobile-markdown-prose-scale'
+import { markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 import {
   markdownDocumentKey,
@@ -93,6 +93,12 @@ function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void)
   if (route.kind === 'file' && onOpenFile) {
     onOpenFile(route.pathText)
   }
+}
+
+/** A heading's size and line height at the reader's zoom, over its level. */
+function headingZoom(styles: MarkdownStyles, level: number, textScale: number) {
+  const line = { ...styles.heading, ...headingScale(styles, level) }
+  return markdownZoomedLine(line.fontSize, line.lineHeight, textScale)
 }
 
 function headingScale(styles: MarkdownStyles, level: number): MarkdownStyles[keyof MarkdownStyles] | null {
@@ -338,7 +344,7 @@ function MobileMarkdownInner({
             <Fragment key={memberIndex}>
               {memberIndex > 0 ? '\n\n' : null}
               {member.type === 'heading' ? (
-                <Text style={[styles.heading, headingScale(styles, member.level)]}>
+                <Text style={[styles.heading, headingScale(styles, member.level), headingZoom(styles, member.level, textScale)]}>
                   {renderInline(styles, member.text, onOpenFile, pills)}
                 </Text>
               ) : member.type === 'rule' ? (
@@ -471,8 +477,10 @@ function MobileMarkdownInner({
                 style={[
                   styles.tableCell,
                   header ? styles.tableHeader : null,
-                  // A pill grows with the zoom and the cell's type does not.
-                  pills.mayHoldPills() ? { width, paddingBottom: markdownTableCellPillPadding(textScale) } : { width }
+                  { width },
+                  // The cell's text follows the zoom, as its column already
+                  // does (computeTableColumnWidths) and its pills do.
+                  markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, textScale)
                 ]}
                 textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
                 onTextLayout={pills.layoutReader()}

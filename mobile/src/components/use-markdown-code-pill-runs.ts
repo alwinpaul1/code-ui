@@ -164,8 +164,8 @@ export function useMarkdownCodePillRuns(
           ? remembered.get(rememberKey)
           : undefined
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
-    // A table cell is set at BASE - 2 and does not follow the zoom.
-    const proseSize = table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE * textScale
+    // A table cell is set at BASE - 2; both follow the zoom.
+    const proseSize = (table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
     const textScaleNow = textPillScale(current.fits)
