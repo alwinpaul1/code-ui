@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { observeScreenPeerNotices, withScreenPeerNotices, type ScreenPeerNotice, type ScreenRowBody } from './screen-peer-notices'
+import {
+  observeScreenPeerNotices,
+  withScreenPeerNotices,
+  type FoundPlacement,
+  type ScreenPeerNotice,
+  type ScreenRowBody
+} from './screen-peer-notices'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 
@@ -20,7 +26,11 @@ type Memory = { notices: readonly ScreenPeerNotice[]; lastRead?: { id: string; a
  * sticky HUD hold were both refs that died with the mount.
  */
 const memoryByScope = new Map<string, Memory>()
-const MEMORY_CAP = 32
+/** Scopes whose screen the chat has read. A scope it never read keeps no
+ *  entry: the overlay stays mounted under every tab and worktree the person
+ *  passes through, and when those took entries, a dozen visits evicted the
+ *  memory of a row the chat had watched arrive (review of ce17bce5). */
+const MEMORY_CAP = 64
 
 function recall(scopeKey: string | null): Memory {
   if (scopeKey === null) {
@@ -36,7 +46,7 @@ function recall(scopeKey: string | null): Memory {
 }
 
 function keep(scopeKey: string | null, memory: Memory): void {
-  if (scopeKey === null) {
+  if (scopeKey === null || (memory.notices.length === 0 && memory.lastRead === undefined)) {
     return
   }
   memoryByScope.delete(scopeKey)
@@ -49,8 +59,33 @@ function keep(scopeKey: string | null, memory: Memory): void {
   }
 }
 
-/** The found rows already logged, so each says so once. */
+/** The lines already logged, so each says so once. */
 const loggedFound = new Set<string>()
+
+/**
+ * Where a row the chat's first read of the screen found goes: after the last
+ * row the chat held when it last read the screen. The message came after that
+ * row, and nothing says how long after, so that row places it only while no
+ * prompt has started a turn since: with one, it may have come in any of those
+ * turns, and anchored at the last reading it drew turns early (review of
+ * ce17bce5). Nor when that row is not loaded, which drew it above the whole
+ * page. Refused then: not drawn, and the log says why.
+ */
+function foundPlacement(lastRead: Memory['lastRead'], folded: readonly NativeChatMessage[]): FoundPlacement {
+  if (lastRead === undefined) {
+    return { why: 'the chat holds no earlier reading of this session to place it by' }
+  }
+  const position = folded.findIndex((message) => message.id === lastRead.id)
+  if (position === -1) {
+    return { why: `the row the chat held when it last read the screen (${lastRead.id}) is not loaded` }
+  }
+  if (folded.slice(position + 1).some((message) => message.role === 'user')) {
+    return {
+      why: `a prompt started a turn since the chat last read the screen (after ${lastRead.id}), so it may have come in any of them`
+    }
+  }
+  return lastRead
+}
 
 export function resetScreenPeerNoticesForTests(): void {
   memoryByScope.clear()
@@ -72,8 +107,8 @@ export function resetScreenPeerNoticesForTests(): void {
  *  `rows` is null until the screen's first read since the chat began watching
  *  it (use-mobile-terminal-hud-observation.ts: a mount, a reconnect). A row
  *  new on that first read was painted before the chat looked: it is drawn
- *  after the last row the chat held when it last read the screen, and not at
- *  all when there is no such reading (observeScreenPeerNotices). */
+ *  after the last row the chat held when it last read the screen, or not at
+ *  all when that row cannot place it (foundPlacement). */
 export function useScreenPeerNotices(
   rows: readonly ScreenPeerRow[] | null,
   folded: readonly NativeChatMessage[],
@@ -104,7 +139,7 @@ export function useScreenPeerNotices(
       drawnTail !== undefined && drawnTail !== tail ? drawnTail.id : undefined,
       // The phone's clock, as before (the parameter's default).
       undefined,
-      first ? (memory.lastRead ?? null) : undefined
+      first ? foundPlacement(memory.lastRead, folded) : undefined
     )
     const lastRead = tail ? { id: tail.id, at: tail.timestamp ?? 0 } : memory.lastRead
     next = { notices, ...(lastRead ? { lastRead } : {}) }
@@ -113,27 +148,27 @@ export function useScreenPeerNotices(
   const notices = next.notices
   // One line for each row placed without having been watched arriving, or
   // not drawn: a row in the wrong place otherwise leaves nothing to go by.
+  // Keyed by the line, not the row: one drawn, then found again with nothing
+  // to place it by, must still say it is no longer drawn.
   const found = JSON.stringify(
     notices.flatMap((notice) =>
       notice.found === true
         ? [
-            [
-              `${scopeKey ?? ''}\0${notice.id}`,
-              notice.held === true
-                ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by`
-                : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
-            ]
+            notice.held === true
+              ? `[peer-row] not drawn: the row from @${notice.sender} was on the screen when the chat first read it, and ${notice.why ?? 'nothing places it'}`
+              : `[peer-row] drawn: the row from @${notice.sender} was on the screen when the chat first read it, not watched arriving; placed after ${notice.anchorId}, the last row the chat held when it last read the screen`
           ]
         : []
     )
   )
   useEffect(() => {
-    for (const [key, line] of JSON.parse(found) as [string, string][]) {
+    for (const line of JSON.parse(found) as string[]) {
+      const key = `${scopeKey ?? ''}\0${line}`
       if (!loggedFound.has(key)) {
         loggedFound.add(key)
         console.info(line)
       }
     }
-  }, [found])
+  }, [found, scopeKey])
   return useMemo(() => withScreenPeerNotices(folded, notices, { subagentRows, bodies }), [bodies, folded, notices, subagentRows])
 }

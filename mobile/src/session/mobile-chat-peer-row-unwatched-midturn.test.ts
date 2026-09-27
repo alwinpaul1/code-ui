@@ -24,12 +24,14 @@
 // phone's screenshot of the desktop terminal (peer-row-terminal.png); a tmux
 // capture of this row's form (Claude Code 2.1.278, 46 columns) is pinned in
 // mobile-terminal-peer-notices.test.ts.
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { peerNoticesFromScreen } from './mobile-terminal-peer-notices'
 import { landingHarness } from './mobile-chat-phone-photo-landing.test-support'
+import { resetScreenPeerNoticesForTests, useScreenPeerNotices } from './use-screen-peer-notices'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -226,5 +228,131 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     await showAt('17:40:00.000', ANSWERED, null)
     await showAt('17:40:01.000', ANSWERED, ROWS)
     expect(placement().rows).toBe(0)
+  })
+})
+
+// Independent review of ce17bce5 (2026-09-27), three findings, each reproduced
+// by a probe that failed on it. The hook alone, as the overlay mounts it: the
+// screen's rows (null until the chat's first read of a watch), the folded
+// chat, the stream scope.
+describe('rows found on the first screen read, after the review of the first fix', () => {
+  const row = (id: string, role: NativeChatMessage['role'], body: string, clock: string): NativeChatMessage => ({
+    id,
+    role,
+    blocks: [{ type: 'text', text: body }],
+    timestamp: at(clock),
+    source: 'transcript'
+  })
+  const U1 = row('u1', 'user', 'start the agents', '17:00:00.000')
+  const A1 = row('a1', 'assistant', 'Launched two agents.', '17:00:10.000')
+  const A1B = row('a1b', 'assistant', 'Waiting on the agents.', '17:00:40.000')
+  const U2 = row('u2', 'user', 'now fix the header', '17:05:00.000')
+  const A2 = row('a2', 'assistant', 'Header fixed.', '17:05:30.000')
+  const U3 = row('u3', 'user', 'and the footer', '17:10:00.000')
+  const A3 = row('a3', 'assistant', 'Footer fixed.', '17:10:30.000')
+  const U4 = row('u4', 'user', 'run the suite', '17:15:00.000')
+  const A4 = row('a4', 'assistant', 'Running the suite now.', '17:15:30.000')
+  const R = [{ sender: 'general-purpose' }]
+
+  type Props = { rows: ReturnType<typeof peerNoticesFromScreen> | null; folded: NativeChatMessage[]; scope: string }
+  function chat() {
+    let out: NativeChatMessage[] = []
+    let renderer: ReactTestRenderer | null = null
+    function Chat(props: Props) {
+      out = useScreenPeerNotices(props.rows, props.folded, props.scope, true)
+      return null
+    }
+    return {
+      show(props: Props) {
+        act(() => {
+          if (renderer) {
+            renderer.update(createElement(Chat, props))
+          } else {
+            renderer = create(createElement(Chat, props))
+          }
+        })
+      },
+      unmount() {
+        act(() => renderer?.unmount())
+        renderer = null
+      },
+      ids: () => out.map((message) => (agentMessageOf(message) ? `row:${agentMessageOf(message)!.sender}` : message.id))
+    }
+  }
+  const peerLines = (info: { mock: { calls: unknown[][] } }) =>
+    info.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[peer-row]'))
+
+  beforeEach(() => resetScreenPeerNoticesForTests())
+  afterEach(() => vi.restoreAllMocks())
+
+  // The chat read the screen after turn 1 and was left; three turns were
+  // worked at the desk and a row came in the last. It is on the screen now,
+  // so it is recent; anchored at the chat's last reading it drew three turns
+  // early.
+  it('does not draw a found row turns before where it came when prompts landed since the chat last read the screen, and says why', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.unmount()
+    const now = [U1, A1, U2, A2, U3, A3, U4, A4]
+    view.show({ rows: null, folded: now, scope: 'A' })
+    view.show({ rows: R, folded: now, scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'u3', 'a3', 'u4', 'a4'])
+    expect(peerLines(info)).toEqual([
+      '[peer-row] not drawn: the row from @general-purpose was on the screen when the chat first read it, and a prompt started a turn since the chat last read the screen (after a1), so it may have come in any of them'
+    ])
+  })
+
+  it('does not draw a found row above the whole page when the row the chat last read is not loaded', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.unmount()
+    const page = [U3, A3, U4, A4]
+    view.show({ rows: null, folded: page, scope: 'A' })
+    view.show({ rows: R, folded: page, scope: 'A' })
+    expect(view.ids()).toEqual(['u3', 'a3', 'u4', 'a4'])
+  })
+
+  // The overlay stays mounted while the person goes through other tabs and
+  // worktrees with the chat hidden; each is its own stream scope, read or not.
+  it('keeps a row the chat watched arrive after it rendered under many scopes it never read', () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.show({ rows: R, folded: [U1, A1, U2, A2], scope: 'A' })
+    for (let index = 0; index < 100; index += 1) {
+      view.show({ rows: null, folded: [], scope: `other-${index}` })
+    }
+    view.show({ rows: null, folded: [U1, A1, U2, A2, U3, A3], scope: 'A' })
+    view.show({ rows: R, folded: [U1, A1, U2, A2, U3, A3], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:general-purpose', 'u3', 'a3'])
+  })
+
+  // Degenerate: past the cap of scopes it read, the oldest memory goes. A row
+  // it drew is then found again with nothing to place it by, and not drawn;
+  // the log must say so, not only that it was once drawn.
+  it('says a row it drew is no longer drawn when it is found again with nothing to place it by', () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const view = chat()
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: [], folded: [U1, A1], scope: 'A' })
+    view.show({ rows: null, folded: [U1, A1], scope: 'A' })
+    view.show({ rows: R, folded: [U1, A1, A1B], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'row:general-purpose', 'a1b'])
+    for (let index = 0; index < 200; index += 1) {
+      view.show({ rows: null, folded: [U1], scope: `other-${index}` })
+      view.show({ rows: [], folded: [U1], scope: `other-${index}` })
+    }
+    view.show({ rows: null, folded: [U1, A1, A1B], scope: 'A' })
+    view.show({ rows: R, folded: [U1, A1, A1B], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'a1b'])
+    expect(peerLines(info)).toEqual([
+      '[peer-row] drawn: the row from @general-purpose was on the screen when the chat first read it, not watched arriving; placed after a1, the last row the chat held when it last read the screen',
+      '[peer-row] not drawn: the row from @general-purpose was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by'
+    ])
   })
 })

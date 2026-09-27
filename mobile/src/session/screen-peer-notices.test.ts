@@ -573,15 +573,15 @@ describe('a row on the chat’s first read of the screen since it began watching
   })
 
   it('is kept and never drawn when the chat holds no earlier reading, and is not counted again after', () => {
-    const held = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a3', 30, undefined, 100_000, null)
-    expect(held).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: null, sightedAt: 30, found: true, held: true }])
+    const held = observeScreenPeerNotices([], [{ sender: 'probe' }], 'a3', 30, undefined, 100_000, { why: 'no reading' })
+    expect(held).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', anchorId: null, sightedAt: 30, found: true, held: true, why: 'no reading' }])
     expect(withScreenPeerNotices(folded, held, { subagentRows: true })).toBe(folded)
     expect(observeScreenPeerNotices(held, [{ sender: 'probe' }], 'a3', 31)).toBe(held)
   })
 
   it('does not claim a landed transcript bubble when it is never drawn', () => {
     const landed = [...folded, peerRow('p1', 'code-ui-6f')]
-    const held = observeScreenPeerNotices([], [{ sender: 'code-ui-6f', body: 'Capture probe' }], 'a3', 30, undefined, 100_000, null)
+    const held = observeScreenPeerNotices([], [{ sender: 'code-ui-6f', body: 'Capture probe' }], 'a3', 30, undefined, 100_000, { why: 'no reading' })
     const live = observeScreenPeerNotices(held, [{ sender: 'code-ui-6f', body: 'Capture probe' }, { sender: 'code-ui-6f', body: 'Second' }], 'a3', 31)
     // The live one steps aside for the landed bubble; the held one draws nothing.
     expect(withScreenPeerNotices(landed, live).map((message) => message.id)).toEqual(['a1', 'a2', 'a3', 'p1'])
