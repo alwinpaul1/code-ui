@@ -16,7 +16,16 @@ import { scanBracketDepth, startBracketScan, type BracketScanState } from './mob
 import { colorBracketPairs } from './mobile-syntax-brackets'
 import { splitSyntaxIntoLines } from './mobile-syntax-lines'
 
-/** Monaco's default; the phone has no editorconfig to read. */
+/**
+ * Monaco's default; the phone has no editorconfig to read. One known
+ * difference: with indentation detection on, Monaco takes a space-indented
+ * file's indent (often 2) as its tab size too (guessIndentation), so a tab
+ * inside such a file is 2 columns there and 4 here, and its line's guides
+ * and folds can sit a level apart. Tab-indented files agree: Monaco keeps
+ * the default, 4. Kept at 4 (review, 2026-09-27): tabs in a space-indented
+ * file are rare, and the indent step (detectIndentStep) already follows the
+ * file for everything else.
+ */
 export const CODE_VIEW_TAB_WIDTH = 4
 
 /**
