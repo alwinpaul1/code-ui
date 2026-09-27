@@ -238,6 +238,14 @@ export function useMarkdownCodePillRuns(
       }
       rememberedHere.current.set(slot, { key: rememberKey, document, identity })
     }
+    // What this render draws is what is remembered, not only what a layout
+    // read as settled: the last re-cut often lays the lines out exactly as
+    // before, Fabric sends no lines it has sent, and a quarter of Texts never
+    // read as settled, so scrolled away and back they settled all over
+    // again (review of 63858e9e).
+    if (entry && entry === live) {
+      rememberSettled()
+    }
 
     const read = (event: CodePillTextLayout) => {
       const result = readPillFits({
