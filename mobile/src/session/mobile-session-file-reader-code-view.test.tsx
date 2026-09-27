@@ -41,7 +41,7 @@ vi.mock('../files/MobileFileMarkdownPreview', () => ({
   MobileFileMarkdownPreview: 'MobileFileMarkdownPreview'
 }))
 vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
-vi.mock('./mobile-session-styles', () => ({ styles: {} }))
+vi.mock('./mobile-session-styles', () => ({ styles: {}, sessionStyles: () => ({}) }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 
 // Sentinel palettes: every role a colour no real palette uses, so a span can
@@ -60,16 +60,20 @@ const SYNTAX = { light: sentinelPalette('A1'), dark: sentinelPalette('D1') }
 let scheme: 'light' | 'dark' = 'dark'
 vi.mock('../theme/theme-context', async () => {
   const tokens = await vi.importActual<typeof import('../theme/tokens')>('../theme/tokens')
+  const useTheme = () => ({
+    colors: tokens.colorsForScheme(scheme),
+    syntax: SYNTAX[scheme],
+    fonts: tokens.fontFamily,
+    space: tokens.space,
+    radius: tokens.radius,
+    type: tokens.type,
+    isDark: scheme === 'dark'
+  })
   return {
-    useTheme: () => ({
-      colors: tokens.colorsForScheme(scheme),
-      syntax: SYNTAX[scheme],
-      fonts: tokens.fontFamily,
-      space: tokens.space,
-      radius: tokens.radius,
-      type: tokens.type,
-      isDark: scheme === 'dark'
-    })
+    useTheme,
+    // The session styles this file reads through are a factory of the live theme, same as
+    // mobile-file-preview-styles.ts's, so a mocked theme-context needs to actually run it.
+    useThemedStyles: <T,>(factory: (theme: ReturnType<typeof useTheme>) => T) => factory(useTheme())
   }
 })
 

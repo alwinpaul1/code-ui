@@ -1,5 +1,6 @@
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
-import { colors, radii, spacing } from '../theme/mobile-theme'
+import { radii, spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
 import { browserAddressFieldStyles } from './browser-address-field-styles'
 import { compactMobileBrowserFileAddress } from './browser-url'
 
@@ -22,13 +23,16 @@ export function MobileBrowserAddressField({
   onSubmit,
   value
 }: Props): React.JSX.Element {
+  const { colors } = useTheme()
+  const fieldStyles = useThemedStyles(addressFieldHostStyles)
+  const addressStyles = useThemedStyles(browserAddressFieldStyles)
   const fileLabel = focused ? null : compactMobileBrowserFileAddress(value)
   const selection = focused ? undefined : { start: 0, end: 0 }
 
   return (
-    <View style={styles.field}>
+    <View style={fieldStyles.field}>
       <TextInput
-        style={browserAddressFieldStyles.input}
+        style={addressStyles.input}
         value={value}
         onChangeText={onChangeText}
         onFocus={onFocus}
@@ -50,12 +54,8 @@ export function MobileBrowserAddressField({
         editable={!disabled}
       />
       {fileLabel ? (
-        <View pointerEvents="none" style={styles.fileLabelHost}>
-          <Text
-            style={browserAddressFieldStyles.fileLabel}
-            numberOfLines={1}
-            ellipsizeMode="middle"
-          >
+        <View pointerEvents="none" style={fieldStyles.fileLabelHost}>
+          <Text style={addressStyles.fileLabel} numberOfLines={1} ellipsizeMode="middle">
             {fileLabel}
           </Text>
         </View>
@@ -64,17 +64,19 @@ export function MobileBrowserAddressField({
   )
 }
 
-const styles = StyleSheet.create({
-  field: {
-    flex: 1,
-    minWidth: 0,
-    height: 28
-  },
-  fileLabelHost: {
-    ...StyleSheet.absoluteFill,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised
-  }
-})
+function addressFieldHostStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    field: {
+      flex: 1,
+      minWidth: 0,
+      height: 28
+    },
+    fileLabelHost: {
+      ...StyleSheet.absoluteFill,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.sm,
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised
+    }
+  })
+}

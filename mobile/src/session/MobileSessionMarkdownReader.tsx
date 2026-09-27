@@ -4,9 +4,9 @@ import { Eye, Pencil, RefreshCw } from 'lucide-react-native'
 import { MobileRichMarkdownEditor } from '../components/MobileRichMarkdownEditor'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../theme/theme-context'
-import { styles } from './mobile-session-styles'
+import { sessionStyles } from './mobile-session-styles'
 import type { MarkdownDocState } from './mobile-session-route-types'
 import { markdownReadOnlyStatus, markdownSaveErrorStatus } from './mobile-markdown-disk-fallback'
 import { useScrollReadingPosition } from '../files/use-reading-position'
@@ -23,12 +23,11 @@ import type { MarkdownImageResolver } from '../components/markdown-image-source'
  * preview use — so a fenced block gets its scroller, a mermaid fence gets its
  * diagram, and a file path stays tappable. Edit hands over to the WebView.
  *
- * The reader paints its own page from the live theme (`surface`), and what
- * sits directly on that page follows it: the toggle, the loading spinner, a
- * read error. The pieces that paint their own static-dark fill keep the
- * static palette on purpose and read as dark islands in light mode: the
- * Retry button, the floating Copy/Refresh/Discard/Save bar, and the WYSIWYG
- * editor's WebView chrome. Porting those is its own pass.
+ * The whole reader — its page, the toggle bar, the loading spinner, a read
+ * error, the Retry button and the floating Copy/Refresh/Discard/Save bar —
+ * paints from the live theme (`sessionStyles`, through `useThemedStyles`).
+ * The one static-dark island left on purpose is the WYSIWYG editor's own
+ * WebView chrome, which is a separate component's pass.
  */
 type MarkdownViewMode = 'preview' | 'edit'
 
@@ -62,22 +61,23 @@ export function MarkdownReader({
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
   const [mode, setMode] = useState<MarkdownViewMode>('preview')
   const readingScroll = useScrollReadingPosition(readingPositionKey)
-  const theme = useTheme()
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sessionStyles)
   const modeStyles = useThemedStyles(markdownModeStyles)
   const effectiveKeyboardLift = Math.max(keyboardLift, webviewKeyboardInset)
   if (!doc || doc.status === 'loading') {
     return (
-      <View style={[styles.markdownState, modeStyles.surface]}>
-        <ActivityIndicator size="small" color={theme.colors.textSecondary} />
+      <View style={styles.markdownState}>
+        <ActivityIndicator size="small" color={colors.textSecondary} />
       </View>
     )
   }
   if (doc.status === 'error') {
     return (
-      <View style={[styles.markdownState, modeStyles.surface]}>
-        <Text style={[styles.markdownError, modeStyles.error]}>{doc.message}</Text>
+      <View style={styles.markdownState}>
+        <Text style={styles.markdownError}>{doc.message}</Text>
         <Pressable style={styles.markdownRefreshButton} onPress={onRefresh}>
-          <RefreshCw size={14} color={colors.textPrimary} />
+          <RefreshCw size={14} color={colors.text} />
           <Text style={styles.markdownRefreshText}>Retry</Text>
         </Pressable>
       </View>
@@ -97,7 +97,7 @@ export function MarkdownReader({
   const showFloatingActions = statusText || showRefresh || showCopy || showSave
 
   return (
-    <View style={[styles.markdownEditor, modeStyles.surface]}>
+    <View style={styles.markdownEditor}>
       <View style={modeStyles.bar}>
         {(['preview', 'edit'] as const).map((option) => {
           const selected = mode === option
@@ -113,7 +113,7 @@ export function MarkdownReader({
             >
               <Icon
                 size={14}
-                color={selected ? theme.colors.text : theme.colors.textSecondary}
+                color={selected ? colors.text : colors.textSecondary}
                 strokeWidth={2.2}
               />
               <Text style={[modeStyles.label, selected ? modeStyles.labelActive : null]}>
@@ -177,7 +177,7 @@ export function MarkdownReader({
             ) : null}
             {showRefresh ? (
               <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
-                <RefreshCw size={13} color={colors.textPrimary} />
+                <RefreshCw size={13} color={colors.text} />
                 <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
               </Pressable>
             ) : null}
@@ -197,7 +197,7 @@ export function MarkdownReader({
                 onPress={onSave}
               >
                 {doc.saving ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                  <ActivityIndicator size="small" color={colors.text} />
                 ) : (
                   <Text style={styles.markdownFloatingButtonText}>Save</Text>
                 )}
@@ -210,18 +210,10 @@ export function MarkdownReader({
   )
 }
 
+/** The mode toggle bar: new UI with no legacy counterpart in `mobile-session-styles`, so it keeps
+ *  its own small themed factory rather than growing the shared one for a single caller. */
 function markdownModeStyles({ colors, radius, space, type }: Theme) {
   return {
-    /** The reader's own page. The file tab's frame beneath it is on the
-     *  static dark palette, so without this a document opened as a dark
-     *  screen in light mode and the toggle bar sat in a dark gutter. */
-    surface: {
-      backgroundColor: colors.bg
-    },
-    /** A read error, on the reader's page rather than on the dark frame. */
-    error: {
-      color: colors.danger
-    },
     bar: {
       flexDirection: 'row' as const,
       alignSelf: 'flex-start' as const,

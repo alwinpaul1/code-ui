@@ -1,27 +1,31 @@
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import type { Theme } from '../theme/theme-context'
 
 /**
  * The address bar's input and its overlaid label, minus the one thing that is a platform answer.
  *
  * Shared because a `.web.ts` cannot import a value from the file it shadows, and two copies of a
  * style object is how the two platforms drift apart on everything except the difference that was
- * meant to be between them.
+ * meant to be between them. A factory of the live theme (not a plain object) so the platform
+ * siblings that build on it can stay themed too.
  */
-export const browserAddressFieldBase = {
-  input: {
-    flex: 1,
-    minWidth: 0,
-    borderRadius: radii.input,
-    backgroundColor: colors.bgRaised,
-    color: colors.textPrimary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 0,
-    includeFontPadding: false,
-    textAlignVertical: 'center',
-    fontFamily: typography.monoFamily
-  },
-  fileLabel: {
-    color: colors.textPrimary,
-    fontFamily: typography.monoFamily
-  }
-} as const
+export function browserAddressFieldBase({ colors }: Theme) {
+  return {
+    input: {
+      flex: 1,
+      minWidth: 0,
+      borderRadius: radii.input,
+      backgroundColor: colors.bgRaised,
+      color: colors.text,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: 0,
+      includeFontPadding: false,
+      textAlignVertical: 'center',
+      fontFamily: typography.monoFamily
+    },
+    fileLabel: {
+      color: colors.text,
+      fontFamily: typography.monoFamily
+    }
+  } as const
+}

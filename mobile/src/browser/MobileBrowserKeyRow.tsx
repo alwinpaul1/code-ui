@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { radii, spacing, typography } from '../theme/mobile-theme'
+import { useThemedStyles, type Theme } from '../theme/theme-context'
 
 const BROWSER_KEYS = ['Enter', 'Backspace', 'Tab', 'Escape'] as const
 
@@ -10,6 +11,7 @@ type Props = {
 }
 
 export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.Element {
+  const styles = useThemedStyles(keyRowStyles)
   return (
     <View style={styles.keyRow}>
       {BROWSER_KEYS.map((key) => (
@@ -33,34 +35,36 @@ export function MobileBrowserKeyRow({ disabled, onKeypress }: Props): React.JSX.
   )
 }
 
-const styles = StyleSheet.create({
-  keyRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingTop: spacing.xs
-  },
-  keyButton: {
-    minHeight: 30,
-    minWidth: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    backgroundColor: colors.bgRaised,
-    paddingHorizontal: spacing.sm
-  },
-  keyButtonPressed: {
-    backgroundColor: colors.borderSubtle
-  },
-  keyButtonText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: typography.monoFamily
-  },
-  disabled: {
-    opacity: 0.35
-  },
-  disabledText: {
-    color: colors.textMuted
-  }
-})
+function keyRowStyles({ colors }: Theme) {
+  return StyleSheet.create({
+    keyRow: {
+      flexDirection: 'row',
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+      paddingTop: spacing.xs
+    },
+    keyButton: {
+      minHeight: 30,
+      minWidth: 42,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised,
+      paddingHorizontal: spacing.sm
+    },
+    keyButtonPressed: {
+      backgroundColor: colors.border
+    },
+    keyButtonText: {
+      color: colors.textSecondary,
+      fontSize: 12,
+      fontFamily: typography.monoFamily
+    },
+    disabled: {
+      opacity: 0.35
+    },
+    disabledText: {
+      color: colors.textMuted
+    }
+  })
+}

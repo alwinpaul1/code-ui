@@ -7,7 +7,7 @@ import {
   type BrowserFrameLayerRefs
 } from './browser-frame-layer-flip'
 import type { FrameLayer } from './mobile-browser-frame-state'
-import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
+import { mobileBrowserPaneLayerStyles as styles } from './mobile-browser-pane-styles'
 
 type BrowserLayerHandlersArgs = BrowserFrameLayerRefs & {
   browserImageRefs: { current: [Image | null, Image | null] }

@@ -20,8 +20,8 @@ import {
 import { MobileHtmlPreview } from '../components/MobileHtmlPreview'
 import { MobileFileMarkdownPreview } from '../files/MobileFileMarkdownPreview'
 import type { MarkdownImageResolver } from '../components/markdown-image-source'
-import { colors } from '../theme/mobile-theme'
-import { styles } from './mobile-session-styles'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
+import { sessionStyles } from './mobile-session-styles'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type {
   DiffCommentActions,
@@ -58,6 +58,8 @@ export function FileReader({
    *  and then no long-press/selection UI is wired up at all. */
   onAskAboutLines?: (range: FileReaderLineRange | null) => void
 }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sessionStyles)
   const syntaxLanguage = useMemo(
     () => resolveMobileSyntaxLanguage(relativePath || title, language),
     [language, relativePath, title]

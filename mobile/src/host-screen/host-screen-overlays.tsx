@@ -6,7 +6,7 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import { ConfirmModal } from '../components/ConfirmModal'
 import { NewWorktreeModalController } from '../components/NewWorktreeModalController'
 import { PickerModal } from '../components/PickerModal'
-import { colors } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { hostNewWorktreeSessionRoute } from '../host-route-action-state'
 import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
 import {
@@ -14,10 +14,12 @@ import {
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../worktree/workspace-list-picker-options'
 import { isWorktreePinned } from '../worktree/workspace-list-sections'
-import { hostScreenStyles as styles } from './host-screen-styles'
+import { hostScreenStyles } from './host-screen-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
 export function HostScreenOverlays({ controller }: { controller: HostScreenController }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(hostScreenStyles)
   const {
     actions,
     catalog,
@@ -65,12 +67,12 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         <View style={styles.filterGroup}>
           <Pressable style={styles.filterRow} onPress={settings.toggleHideSleeping}>
             <Text style={styles.filterRowText}>Hide sleeping</Text>
-            {state.filters.hideSleeping && <Check size={14} color={colors.textPrimary} />}
+            {state.filters.hideSleeping && <Check size={14} color={colors.text} />}
           </Pressable>
           <View style={styles.filterSeparator} />
           <Pressable style={styles.filterRow} onPress={settings.toggleHideDefaultBranch}>
             <Text style={styles.filterRowText}>Hide default branch</Text>
-            {state.filters.hideDefaultBranch && <Check size={14} color={colors.textPrimary} />}
+            {state.filters.hideDefaultBranch && <Check size={14} color={colors.text} />}
           </Pressable>
           <View style={styles.filterSeparator} />
           {/* "Archived" (row #6 of the extension-port map): shows ONLY archived
@@ -78,7 +80,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
               toggleShowArchived's own comment for why it isn't synced. */}
           <Pressable style={styles.filterRow} onPress={settings.toggleShowArchived}>
             <Text style={styles.filterRowText}>Show archived</Text>
-            {state.filters.showArchived && <Check size={14} color={colors.textPrimary} />}
+            {state.filters.showArchived && <Check size={14} color={colors.text} />}
           </Pressable>
         </View>
 
@@ -98,7 +100,7 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
                       {repo.name}
                     </Text>
                     {state.filters.filterRepoIds.has(repo.id) && (
-                      <Check size={14} color={colors.textPrimary} />
+                      <Check size={14} color={colors.text} />
                     )}
                   </Pressable>
                 </View>

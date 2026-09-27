@@ -8,9 +8,10 @@ import {
   Image as ImageIcon
 } from 'lucide-react-native'
 import { triggerSelection } from '../platform/haptics'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { type FileExplorerRow, isMarkdownPath, type TreeNode } from './file-tree'
-import { fileExplorerStyles as styles } from './mobile-file-explorer-styles'
+import { fileExplorerStyles } from './mobile-file-explorer-styles'
 import { canPreviewMobileFileRow } from './mobile-file-preview-navigation'
 
 type Props = {
@@ -23,6 +24,8 @@ type Props = {
 
 export function MobileFileExplorerRow(props: Props) {
   const { item, expanded, onPreviewFile, onRetryDirectory, onToggleDirectory } = props
+  const { colors } = useTheme()
+  const styles = useThemedStyles(fileExplorerStyles)
 
   if (item.kind === 'loading') {
     return (
@@ -80,6 +83,8 @@ function TreeRow(props: {
   onToggleDirectory: (relativePath: string) => void
 }) {
   const { item, expanded, onPreviewFile, onToggleDirectory } = props
+  const { colors } = useTheme()
+  const styles = useThemedStyles(fileExplorerStyles)
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
   // Images render in the mobile viewer (via files.readPreview), so a binary

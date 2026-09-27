@@ -236,7 +236,10 @@ const HEAD_EFFECT_SHA256 = '45fd88101543aa8e804103aafbb6bd7c1cedffbcfc9f3676e087
 // Five FileReader bindings left with it: useTheme, the lineSelection pair, its
 // reset effect, the highlight-style memo, and the fileSyntax pair (the viewer
 // colours itself now). Nothing else in the family moved.
-const HEAD_CONTENT_HOOK_SHA256 = '15a1b1e35ee4c3fb901188f61194c2dee6b310e81098b45dec54858807fed6a9'
+// 2026-09-27 (theme sweep): MarkdownReader, DiffLineRow and FileReader each moved off the static
+// `mobile-theme` palette onto `useTheme()` + `useThemedStyles(sessionStyles)` — see the count
+// comment above.
+const HEAD_CONTENT_HOOK_SHA256 = 'f2c45e785e876b23f4a0e7ce2744fdead17607242b60cd555eea19d03dc98aa9'
 // 2026-09-06: Codex server creation now reports unsupported hosts instead of
 // falling back to a terminal (d3e102b); reviewed alongside image-paste ordering.
 // 2026-09-09: handleCreateTerminal resolves the HUD beacon launch config first.
@@ -402,7 +405,11 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 97 since 2026-09-26: the file tab's source view moved out of FileReader into MobileSessionFileSource
 // (the code viewer: no wrap, indent guides, themed colours), which is outside this family.
 // Its View and FlatList left with it.
-const HEAD_HOST_JSX_SHA256 = 'ff5cde7d96e6e239172814c5770f2e3cd4dee6dd446137901ff580203bf2241c'
+// 2026-09-27 (theme sweep): Same host record COUNT (97); MarkdownReader's own page and error
+// containers now carry their background straight off `styles.markdownState`/`styles.markdownEditor`
+// (both themed in mobile-session-frame-styles.ts) instead of an array merged with a local
+// `modeStyles.surface` override — those two Views' captured style expressions moved.
+const HEAD_HOST_JSX_SHA256 = '4553739f7c7aa13a4d322a342929ba66eaf4c8a5b85facea309f5a58de3e5de3'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -479,7 +486,11 @@ const HEAD_HOST_JSX_SHA256 = 'ff5cde7d96e6e239172814c5770f2e3cd4dee6dd446137901f
 // `byteLength` again, for the same reason as the preview's note above: the
 // file tab's notice (previewTruncatedText) names the cap, not a size the
 // phone is never told. Same record count (73); only those two records moved.
-const HEAD_LEAF_JSX_SHA256 = '54fee1a9c5707c1263d0d2cac63c3b95330376b915696279a4b32a074a436efa'
+// 2026-09-27 (theme sweep): several leaf icon `color` props moved off the static `mobile-theme`
+// palette (e.g. `colors.textPrimary`) onto the live `useTheme()` colours (`colors.text`) in
+// MarkdownReader, DiffLineRow and FileReader. Same record count (73); only those records' captured
+// expressions moved.
+const HEAD_LEAF_JSX_SHA256 = '1f72eea3ccc86a3412c8c3517636f9e778daa9265c6011f721e660ec9b9dcf93'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -925,7 +936,12 @@ describe('mobile session route extraction parity', () => {
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
     // 17 since 2026-09-26: FileReader's source view moved to MobileSessionFileSource.
-    expect(contentBindings).toHaveLength(17)
+    // 22 since 2026-09-27 (theme sweep): MarkdownReader takes `{ colors }` off
+    // `useTheme()` and its own `styles` off `useThemedStyles(sessionStyles)`
+    // (+1, alongside its existing `modeStyles`); DiffLineRow and FileReader each
+    // gain the same `{ colors }` + `styles` pair (+2 each) — both moved off the
+    // static dark-only `mobile-theme` import onto the live theme.
+    expect(contentBindings).toHaveLength(22)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
     expect(nestedFunctions).toHaveLength(13)
@@ -1035,6 +1051,9 @@ describe('mobile session route extraction parity', () => {
     // 74 since 2026-09-25: the surface mounts MobileFileTapMatchPicker, the
     // drawer a bare chat file name found in several folders is offered in.
     // 73 since 2026-09-26: its row and action bar out, MobileSessionFileSource in.
+    // Same leaf record COUNT (73) since 2026-09-27 (theme sweep): several leaf icon `color` props
+    // moved from the static `mobile-theme` palette to the live `colors` (e.g. `colors.textPrimary`
+    // -> `colors.text`), so their captured expressions changed without changing the count.
     expect(jsx.leaf).toHaveLength(73)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.

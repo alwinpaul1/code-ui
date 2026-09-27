@@ -5,13 +5,14 @@ import {
   MobileRichMarkdownEditor,
   type MobileRichMarkdownEditorHandle
 } from '../components/MobileRichMarkdownEditor'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
+import { useTheme, useThemedStyles } from '../theme/theme-context'
 import {
   resolveMarkdownFloatingActionsBottom,
   shouldShowMarkdownFloatingActions
 } from './markdown-floating-actions-layout'
 import type { MarkdownDocState } from './mobile-session-route-types'
-import { styles } from './mobile-session-styles'
+import { sessionStyles } from './mobile-session-styles'
 
 type Props = {
   documentId: string
@@ -34,6 +35,8 @@ export function MobileMarkdownReader({
   onDiscard,
   keyboardLift
 }: Props) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(sessionStyles)
   const editorRef = useRef<MobileRichMarkdownEditorHandle>(null)
   // Native Keyboard events under-report the WebView editor's covered area, so prefer the larger WebView-measured inset.
   const [webviewKeyboardInset, setWebviewKeyboardInset] = useState(0)
@@ -52,7 +55,7 @@ export function MobileMarkdownReader({
       <View style={styles.markdownState}>
         <Text style={styles.markdownError}>{doc.message}</Text>
         <Pressable style={styles.markdownRefreshButton} onPress={onRefresh}>
-          <RefreshCw size={14} color={colors.textPrimary} />
+          <RefreshCw size={14} color={colors.text} />
           <Text style={styles.markdownRefreshText}>Retry</Text>
         </Pressable>
       </View>
@@ -138,7 +141,7 @@ export function MobileMarkdownReader({
             ) : null}
             {showRefresh ? (
               <Pressable style={styles.markdownFloatingButton} onPress={onRefresh}>
-                <RefreshCw size={13} color={colors.textPrimary} />
+                <RefreshCw size={13} color={colors.text} />
                 <Text style={styles.markdownFloatingButtonText}>Refresh</Text>
               </Pressable>
             ) : null}
@@ -158,7 +161,7 @@ export function MobileMarkdownReader({
                 onPress={onSave}
               >
                 {doc.saving ? (
-                  <ActivityIndicator size="small" color={colors.textPrimary} />
+                  <ActivityIndicator size="small" color={colors.text} />
                 ) : (
                   <Text style={styles.markdownFloatingButtonText}>Save</Text>
                 )}

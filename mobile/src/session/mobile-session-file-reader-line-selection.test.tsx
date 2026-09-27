@@ -36,7 +36,7 @@ vi.mock('../components/MobileSyntaxSegments', () => ({
   MobileSyntaxSegments: 'MobileSyntaxSegments'
 }))
 vi.mock('./MobileSessionDiffLineRow', () => ({ DiffLineRow: 'DiffLineRow' }))
-vi.mock('./mobile-session-styles', () => ({ styles: {} }))
+vi.mock('./mobile-session-styles', () => ({ styles: {}, sessionStyles: () => ({}) }))
 vi.mock('./mobile-file-syntax', () => ({
   buildPlainMobileDiffSyntaxLines: () => [],
   canHighlightMobileLanguage: () => false,
@@ -67,8 +67,8 @@ const THEME_COLORS = {
     shadow: '#000000'
   }
 }
-vi.mock('../theme/theme-context', () => ({
-  useTheme: () => ({
+vi.mock('../theme/theme-context', () => {
+  const useTheme = () => ({
     colors: THEME_COLORS[scheme],
     syntax: scheme === 'dark' ? darkSyntaxPalette : lightSyntaxPalette,
     fonts: fontFamily,
@@ -77,7 +77,11 @@ vi.mock('../theme/theme-context', () => ({
     type: { label: { size: 13 } },
     isDark: scheme === 'dark'
   })
-}))
+  return {
+    useTheme,
+    useThemedStyles: <T,>(factory: (theme: ReturnType<typeof useTheme>) => T) => factory(useTheme())
+  }
+})
 
 import { FileReader } from './MobileSessionFileReader'
 import { darkSyntaxPalette, lightSyntaxPalette } from '../theme/syntax-palette'
