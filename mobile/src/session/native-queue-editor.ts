@@ -137,7 +137,7 @@ export async function recallNativeQueue(
   for (let attempt = 0; attempt < 20; attempt++) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen, true)
+    checkScreen(agent, screen, 'uncertain')
     const draft = draftOf(screen)
     if (!draft || draft === before.draft) {
       continue
@@ -177,7 +177,7 @@ export async function finishNativeQueueEdit(
   onReplaced?: (text: string) => void
 ): Promise<void> {
   const before = await io.read()
-  checkScreen(agent, before, true)
+  checkScreen(agent, before, 'in-input')
   if (draftOf(before) !== edit.draft) {
     throw new Error('The draft changed on desktop. Reopen the editor before saving.')
   }
@@ -238,7 +238,7 @@ async function confirmRemoved(
   for (let attempt = 0; attempt < 6 && Date.now() < deadline; attempt += 1) {
     await io.pause()
     const screen = await io.read()
-    checkScreen(agent, screen, true)
+    checkScreen(agent, screen, 'uncertain')
     if (!queueFromScreen(agent, screen).some((entry) => queueRowIsPendingSend(removed, entry))) {
       return
     }
@@ -302,7 +302,7 @@ async function rebuildQueue(
       cause instanceof Error
         ? cause.message
             .replace(
-              /\s*(?:Your input has been kept|The agent input has been preserved|It has not been submitted)\.?/gi,
+              /\s*(?:Your input has been kept|The agent input has been preserved|It has not been submitted|The message is in the agent input, unsent|The message may be in the agent input or still queued)\.?/gi,
               ''
             )
             .trim()

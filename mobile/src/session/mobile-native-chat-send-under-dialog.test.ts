@@ -250,9 +250,9 @@ describe('a queue edit while a prompt waits on screen', () => {
     expect(edit.text).toBe(text)
   })
 
-  // A real prompt that comes up once the message has left the queue cannot be
-  // typed past, and nothing can put the message back through it. Say where
-  // the message is instead of only that the input is unavailable.
+  // A real prompt that comes up once the recall key is out cannot be typed
+  // past, and nothing can put the message back through it. Whether the recall
+  // landed first is unknown, so say both places the message may be.
   it('says where the recalled message is when a prompt comes up after the recall', async () => {
     const reads = [
       screen(['• Queued follow-up inputs', '  ↳ push it', '    ⌥ + ↑ edit last queued message', '', '› Ask Codex to do anything']),
@@ -261,7 +261,7 @@ describe('a queue edit while a prompt waits on screen', () => {
     const write = vi.fn()
     await expect(
       recallNativeQueue({ read: async () => reads.shift() ?? reads[0]!, write, pause: async () => {} }, 'codex')
-    ).rejects.toThrow('The message is in the agent input, unsent.')
+    ).rejects.toThrow('A prompt came up on the desktop. The message may be in the agent input or still queued.')
     expect(write).toHaveBeenCalledExactlyOnceWith('\x1b[1;3A')
   })
 
