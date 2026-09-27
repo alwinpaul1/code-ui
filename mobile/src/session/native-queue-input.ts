@@ -86,7 +86,11 @@ export function checkScreen(agent: QueueEditorAgent, screen: QueueScreen, moment
       : claudePermissionFromScreen(screen.lines)) ||
     terminalDialogOnScreen(screen.lines, agent)
   ) {
-    throw new Error(PROMPT_REFUSAL[moment])
+    // Uncertain means a key is out that may have landed: to a rebuild that is
+    // a message the agent may already hold, not one that is lost.
+    throw moment === 'uncertain'
+      ? new QueueMaybeDeliveredError(PROMPT_REFUSAL[moment])
+      : new Error(PROMPT_REFUSAL[moment])
   }
 }
 export function queueFromScreen(agent: QueueEditorAgent, screen: QueueScreen) {

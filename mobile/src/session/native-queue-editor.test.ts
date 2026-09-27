@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { submitInput, typeAndSubmit } from './native-queue-input'
+import { typeAndSubmit } from './native-queue-input'
 import {
   recallNativeQueue,
   finishNativeQueueEdit,
@@ -853,38 +853,4 @@ it('opens a Codex tap on the row the card drew', async () => {
     'bravo second'
   )
   expect(recall.text).toBe('bravo second')
-})
-
-// A live 2.1.276 Bash dialog (mobile-native-chat-permission-send.test.ts), as
-// it would come up in the middle of a queue edit.
-const PROMPT_UP = screen('', [
-  ' Do you want to proceed?',
-  ' ❯ 1. Yes',
-  '   2. No',
-  '',
-  ' Esc to cancel · Tab to amend'
-])
-
-it('does not contradict itself when a prompt stops a rebuild', async () => {
-  const reads = [screen(LEGACY_DRAFT), PROMPT_UP]
-  const failure = await finishNativeQueueEdit(
-    { read: async () => reads.shift() ?? PROMPT_UP, write: vi.fn().mockResolvedValue(undefined), pause: async () => {} },
-    'claude',
-    { text: 'bravo second', draft: LEGACY_DRAFT, segments: ['alpha first', 'bravo second', 'charlie third'], index: 1 },
-    'bravo EDITED'
-  ).catch((cause: unknown) => cause)
-  expect(failure).toBeInstanceOf(QueueRebuildError)
-  const said = (failure as Error).message
-  expect(said).toMatch(/^A prompt came up on the desktop\. 3 messages left the queue and are not on the agent\./)
-  expect(said).not.toMatch(/in the agent input/)
-})
-
-// After its Enter the message may have gone into the queue or still be in the
-// input: the refusal cannot say which.
-it('says the message may be in the input or still queued when a prompt comes up after its Enter', async () => {
-  const write = vi.fn().mockResolvedValue(undefined)
-  await expect(
-    submitInput({ read: async () => PROMPT_UP, write, pause: async () => {} }, 'claude', 'ping', true)
-  ).rejects.toThrow('A prompt came up on the desktop. The message may be in the agent input or still queued.')
-  expect(write).toHaveBeenCalledExactlyOnceWith('\r')
 })

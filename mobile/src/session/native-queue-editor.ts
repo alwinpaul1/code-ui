@@ -302,7 +302,7 @@ async function rebuildQueue(
       cause instanceof Error
         ? cause.message
             .replace(
-              /\s*(?:Your input has been kept|The agent input has been preserved|It has not been submitted|The message is in the agent input, unsent|The message may be in the agent input or still queued)\.?/gi,
+              /\s*(?:Your input has been kept|The agent input has been preserved|It has not been submitted|The message is in the agent input, unsent)\.?/gi,
               ''
             )
             .trim()
