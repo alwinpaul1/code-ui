@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { colors, spacing } from '../theme/mobile-theme'
 import { triggerMediumImpact, triggerSelection } from '../platform/haptics'
+import { springFromAppleParams } from '../ui/alert/alert-motion'
 import {
   clampDragReorderIndex,
   dragReorderPositionsFromKeys,
@@ -23,7 +24,11 @@ import {
   type DragReorderPositions
 } from './drag-reorder-positions'
 
-const ROW_SPRING = { damping: 28, stiffness: 350 }
+// A row sliding to its new place. Ratio 1 at the response {damping 28,
+// stiffness 350} had at unit mass; with no mass named, Reanimated 4's default
+// of 4 made it a ratio of 0.37 and rows overshot their slot by about 28%
+// (drawer-spring.ts, spring-mass-census.test.ts).
+const ROW_SPRING = springFromAppleParams({ dampingRatio: 1, response: (2 * Math.PI) / Math.sqrt(350) })
 const LONG_PRESS_ACTIVATION_MS = 200
 // Why: joins row keys into a change-detection signature; NUL cannot occur in
 // a key, so the joined string is unambiguous.

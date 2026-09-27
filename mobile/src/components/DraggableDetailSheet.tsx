@@ -18,13 +18,13 @@ import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { draggableDetailSheetStyles as styles } from './draggable-detail-sheet-styles'
+import { DRAWER_SPRING } from './drawer-spring'
 import {
   resolveDraggableSheetHeights,
   resolveDraggableSheetSnap,
   type DraggableSheetSnap
 } from './draggable-detail-sheet-snap'
 
-const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Why: dragging past a rest (up past full, or the far side of a settle point)
 // resists rather than following the finger 1:1 — the same rubber-band touch
 // BottomDrawer uses, so both sheets feel like one family.
@@ -205,7 +205,7 @@ function MountedDraggableDetailSheet({
       })
       return
     }
-    translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, SPRING_CONFIG)
+    translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, DRAWER_SPRING)
     runOnJS(setSnap)(outcome)
   }
 
@@ -256,7 +256,7 @@ function MountedDraggableDetailSheet({
         contentDragCanDismiss.value = false
         contentDragStartY.value = 0
         if (translateY.value !== 0) {
-          translateY.value = withSpring(0, SPRING_CONFIG)
+          translateY.value = withSpring(0, DRAWER_SPRING)
         }
         return
       }

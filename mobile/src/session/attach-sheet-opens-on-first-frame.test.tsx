@@ -90,6 +90,9 @@ vi.mock('react-native-reanimated', async () => {
     useSharedValue: (initial: number) => React.useRef(timeline(initial)).current,
     useAnimatedStyle: <T,>(factory: () => T) => factory(),
     useAnimatedScrollHandler: () => () => {},
+    // The drawer holds its list at its top while the sheet is dragged (use-bottom-drawer-drag.ts).
+    useAnimatedRef: () => ({ current: null }),
+    scrollTo: () => {},
     withTiming: (to: number, config?: { duration?: number; easing?: (t: number) => number }) => ({
       timing: true,
       to,
