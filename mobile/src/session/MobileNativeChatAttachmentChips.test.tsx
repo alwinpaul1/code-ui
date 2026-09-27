@@ -19,6 +19,8 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
+    // The image viewer sends the keyboard away as it opens.
+    Keyboard: { dismiss: () => {} },
     Image: Object.assign((props: Record<string, unknown>) => React.createElement('Image', props), {
       getSize: vi.fn()
     }),

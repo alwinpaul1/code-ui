@@ -58,6 +58,10 @@ export function MobileNativeChatStatusLine({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`${count}. Open background tasks`}
+              // On release, unlike the composer's + and ring: this is where
+              // the user swipes with the keyboard up (the dock is box-none for
+              // it, device 2026-09-20), and a swipe that starts on the label
+              // must not open the sheet.
               onPress={openSheet}
               hitSlop={10}
             >

@@ -12,10 +12,13 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 export function ContextWindowRing({
   usedPercent,
   onPress,
+  onPressIn,
   size = 18
 }: {
   usedPercent: number
   onPress?: () => void
+  /** Touch-down, for a caller that opens its sheet before the finger lifts. */
+  onPressIn?: () => void
   size?: number
 }) {
   const { colors } = useTheme()
@@ -31,6 +34,7 @@ export function ContextWindowRing({
       accessibilityRole="button"
       hitSlop={10}
       onPress={onPress}
+      onPressIn={onPressIn}
       style={{
         flexShrink: 0,
         width: size + 8,

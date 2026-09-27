@@ -25,7 +25,7 @@ export function MobileNativeChatAgentRunSheet({
   const { colors, fonts, space, type } = useTheme()
   const title = `Ran ${entries.length} agent${entries.length === 1 ? '' : 's'}`
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} dismissKeyboardOnOpen>
       <View style={{ paddingBottom: space.md }} testID="agent-run-sheet">
         <MobileSheetTitleBar title={title} onClose={onClose} />
         {entries.map((entry, index) => {
