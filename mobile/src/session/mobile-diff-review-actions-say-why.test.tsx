@@ -112,6 +112,7 @@ function messageless(): Error {
 }
 
 const ok = (result: unknown): RpcResponse => ({ id: 'reply', ok: true, result })
+const refused = (message: string): RpcResponse => ({ id: 'reply', ok: false, error: { code: 'refused', message } })
 
 type Answer = (params: Record<string, unknown>) => RpcResponse | Promise<RpcResponse>
 
@@ -316,5 +317,59 @@ describe('Open in Session when the send is lost', () => {
     await reviewAction(rendered, 'Open in Session')
     expect(openedSession).toBe(1)
     expect(controller!.actionError).toBeNull()
+  })
+})
+
+// A failed save already says why on the banner, then rethrew into a `void`
+// tap with nowhere to go. The rejection is gone; the reason, the rollback and
+// the one log line stay.
+describe('a review save that fails', () => {
+  it('says why Mark Reviewed failed, and leaves no rejection behind', async () => {
+    review.snapshot = { ...(reviewedSnapshot(['src/a.ts']) as object), reviewState: { version: 1, files: {} } }
+    const tab = host({ 'worktree.set': () => refused('Workspace is locked') })
+    const rendered = await render(tab)
+    await press(rendered, labelled('Mark file reviewed'))
+    expect(tab.calls('worktree.set')).toHaveLength(1)
+    expect(banner(rendered, 'Workspace is locked')).not.toBeNull()
+    expect(controller!.showCompletion).toBe(false)
+    expect(unhandled).toEqual([])
+    expect(logged('[review-save]')).toEqual([expect.stringContaining('Workspace is locked')])
+  })
+
+  it.each([
+    ['Mark Unreviewed', null, () => controller!.markUnreviewed()],
+    ['Clear Sent Notes', null, () => controller!.clearSentNotes()],
+    [
+      'Save on a note',
+      () => {
+        controller!.openComposer(4)
+        controller!.setComposerBody('rename this')
+      },
+      () => controller!.saveComposer()
+    ],
+    ['Delete on a note', () => controller!.openEditComposer(NOTE), () => controller!.deleteComment()]
+  ] as const)('does not reject %s into its tap when the save fails', async (_name, prepare, run) => {
+    const tab = host({ 'worktree.set': () => refused('Workspace is locked') })
+    await render(tab)
+    if (prepare) {
+      act(() => prepare())
+    }
+    let outcome: unknown = 'not run'
+    await act(async () => {
+      outcome = await run().then(
+        () => 'resolved',
+        (error: unknown) => error
+      )
+      await settle()
+    })
+    expect(outcome).toBe('resolved')
+    expect(tab.calls('worktree.set')).toHaveLength(1)
+    expect(controller!.actionError).toBe('Workspace is locked')
+    expect(logged('[review-save]')).toEqual([expect.stringContaining('Workspace is locked')])
+    // A note whose save failed stays in its composer, text and all.
+    if (prepare) {
+      expect(controller!.composer).not.toBeNull()
+    }
+    expect(unhandled).toEqual([])
   })
 })

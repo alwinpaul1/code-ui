@@ -74,7 +74,12 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       return
     }
     const nextComments = clearSentMobileDiffComments(screenState.comments)
-    await saveCommentsAndReviewState(nextComments, screenState.reviewState)
+    try {
+      await saveCommentsAndReviewState(nextComments, screenState.reviewState)
+    } catch {
+      // Already rolled back, on the banner and in the log; the only caller
+      // is a `void` tap with nowhere to send a rejection.
+    }
   }, [saveCommentsAndReviewState, screenState])
 
   const markNotesSent = useCallback(
