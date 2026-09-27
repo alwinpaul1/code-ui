@@ -2,6 +2,8 @@ import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-
 import { AGENT_STATE_HISTORY_MAX } from '../../../src/shared/agent-status-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import type { DesktopPrompt } from './agent-hud-beacon'
+
+type HarnessStartedPlacement = NonNullable<DesktopPrompt['ifHarnessStarted']>
 import { parseStatusSubagentPreview, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 
 /**
@@ -159,13 +161,19 @@ export function observeAgentStatusPrompt(
   // claims its own copy, and without it claimed the desk's next one instead
   // (review of 784531ee).
   const run = typeof status?.state === 'string' && (found || status.state !== 'working') ? runItCameIn(status) : null
-  const why = typeof run === 'string' ? run : null
+  const why =
+    typeof run === 'string'
+      ? run
+      : typeof run === 'object' && run !== null
+        ? "it was carried past the end of a turn; it is placed only if the transcript shows a teammate's or another session's message started the turn after"
+        : null
   if (why !== null) {
     const held: DesktopPrompt = {
       nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
       text,
       ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
       heldBack: true,
+      ...(typeof run === 'object' && run !== null ? { ifHarnessStarted: run } : {}),
       seenAt: Date.now()
     }
     return {
@@ -222,20 +230,29 @@ export function observeAgentStatusPrompt(
  * sent during it. Walking back over the entries that carry it passes the
  * pauses where the agent asked (`waiting`, `blocked`), which are the same run.
  *
- * It stops at a `done` that carried it: the prompt outlived a turn, and the
- * next was started by something that keeps the cached prompt, a teammate's or
- * another session's message (76ba8f2f, 14:27:03), or by the same words sent
- * again. The status cannot tell those apart. It stops too when the walk
- * reaches the start of a full history (AGENT_STATE_HISTORY_MAX): the run it
- * came in may have been dropped.
+ * A `done` that carried it means the prompt outlived a turn, and the next was
+ * started by something that keeps the cached prompt: a teammate's or another
+ * session's message (76ba8f2f, 14:27:03), a subagent's hand-back, or the same
+ * words sent again. The status cannot tell those apart, so the walk goes on
+ * but only as a candidate (`crossings`): placed if the transcript shows a
+ * harness message started each next run (desk-prompt-harness-turns.ts), held
+ * otherwise. It stops when the walk reaches the start of a full history
+ * (AGENT_STATE_HISTORY_MAX): the run it came in may have been dropped.
  */
-function runItCameIn(status: NonNullable<AgentStatusPromptSource>): number | string {
+function runItCameIn(status: NonNullable<AgentStatusPromptSource>): number | HarnessStartedPlacement | string {
   const history = status.stateHistory ?? []
   const entries = [...history, { state: status.state ?? '', prompt: status.prompt ?? '', startedAt: status.stateStartedAt }]
+  const crossings: { after: number; before: number }[] = []
   let first = entries.length - 1
   while (first > 0 && entries[first - 1]!.prompt === status.prompt) {
-    if (entries[first - 1]!.state === 'done') {
-      return 'it was carried past the end of a turn, which a harness message or the same words sent again then started'
+    const previous = entries[first - 1]!
+    if (previous.state === 'done') {
+      const after = previous.startedAt
+      const before = entries[first]!.startedAt
+      if (typeof after !== 'number' || typeof before !== 'number' || !Number.isFinite(after) || !Number.isFinite(before)) {
+        return 'it was carried past the end of a turn, which a harness message or the same words sent again then started'
+      }
+      crossings.unshift({ after, before })
     }
     first -= 1
   }
@@ -246,7 +263,7 @@ function runItCameIn(status: NonNullable<AgentStatusPromptSource>): number | str
   if (entry.state !== 'working' || typeof entry.startedAt !== 'number' || !Number.isFinite(entry.startedAt)) {
     return 'no working run carried it first'
   }
-  return entry.startedAt
+  return crossings.length > 0 ? { at: entry.startedAt, crossings } : entry.startedAt
 }
 
 /** The start of a prompt, for the log line. */

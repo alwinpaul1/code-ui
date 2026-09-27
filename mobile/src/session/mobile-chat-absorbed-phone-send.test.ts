@@ -535,7 +535,9 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
     // typed in the later turn from the send carried over, and it gives no
     // time. 9f9aa4a0 drew it under "All tests pass.", below the answer of the
     // turn it was typed in, the shape of session 76ba8f2f's report. It is now
-    // held back (agent-status-prompts.ts, runItCameIn).
+    // held back (agent-status-prompts.ts, runItCameIn). The rows do not
+    // rescue it: a person's words ("now run the tests") started that later
+    // turn, not a harness message (desk-prompt-harness-turns.ts).
     it('does not draw the desk\u2019s repeat of a phone send under the later turn\u2019s answer when the chat comes back after that turn', async () => {
       await sendAndLetClaudeTakeIt({ prompts: hookCopy('17:04:15.110') })
       act(() => renderer?.unmount())

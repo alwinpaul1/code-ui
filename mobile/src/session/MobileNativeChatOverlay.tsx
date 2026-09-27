@@ -40,6 +40,7 @@ import { useMobileNativeChatStreamingBubble } from './use-mobile-native-chat-str
 import { CreatedFileCountProvider } from './MobileNativeChatCreatedFileCounts'
 import type { CreatedFileCountStore } from './mobile-native-chat-created-file-count-store'
 import { holdsWholeSession } from './mobile-native-chat-whole-session'
+import { placedByHarnessTurns } from './desk-prompt-harness-turns'
 const CLIPBOARD_POLL_MS = 3000
 
 const NO_PROMPTS: DesktopPrompt[] = []
@@ -201,7 +202,10 @@ export function MobileNativeChatOverlay({
   )
   // Prompts typed on the desktop never reach the phone through Orca; they
   // ride the HUD beacon instead (2026-09-13).
-  const desktopPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  // A held copy the transcript can now place goes to its run
+  // (desk-prompt-harness-turns.ts, 2026-09-27).
+  const statusAndBeaconPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
+  const desktopPrompts = useMemo(() => placedByHarnessTurns(statusAndBeaconPrompts, session.messages), [session.messages, statusAndBeaconPrompts])
   // The hook fires for the phone's own sends too, and those already have a
   // pending echo, so the hook's copy of one is left out (2026-09-13). The
   // phone's send keeps its photos and its send-time place; only a copy with

@@ -349,3 +349,62 @@ describe('a phone send Claude took mid-turn in a run that waited, after a remoun
     )
   })
 })
+
+// Combined review of 30c94116: the walk stopped at any `done` that carried the
+// prompt, so an ordinary mid-turn desk prompt with new words was dropped
+// whenever a teammate's, another session's or a subagent's message started
+// the next turn before the chat's first read, which with background agents is
+// most of the time. A teammate's or another session's message is a user row
+// the phone holds; one found at the start of that next run proves a harness
+// message started it, and the prompt belongs to the run before.
+describe('a desk message typed mid-turn, first read after a harness message started the next turn', () => {
+  const { show } = landingHarness(frames)
+  const P1 = 'now run the tests'
+  const P2 = 'and paste the failing names here'
+  const opening = userRow('u1', [P1], '07:00:00.000')
+  const a1 = agentRow('a1', 'Running the suite.', '07:00:40.000')
+  const answer = agentRow('a2', 'All tests pass.', '07:02:00.000')
+  const teammate = userRow(
+    't1',
+    ['Another Claude session sent a message:\n<teammate-message teammate_id="builder-select" color="pink" summary="report">\n(report)\n</teammate-message>'],
+    '07:05:00.000'
+  )
+  const reply = agentRow('a3', 'Noted, carrying on.', '07:05:10.000')
+  const status = {
+    state: 'working',
+    prompt: P2,
+    updatedAt: at('07:05:10.100'),
+    stateStartedAt: at('07:05:00.010'),
+    stateHistory: [
+      { state: 'done', prompt: 'earlier', startedAt: at('06:50:00.000') },
+      { state: 'working', prompt: P2, startedAt: at('07:00:00.000') },
+      { state: 'done', prompt: P2, startedAt: at('07:02:00.200') }
+    ]
+  }
+
+  it('is drawn once in the turn it was typed in, when the row of the message that started the next turn is held', async () => {
+    vi.setSystemTime(at('07:06:00.000'))
+    const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
+    const messages = [opening, a1, answer, teammate, reply]
+    await show('07:06:00.000', { messages, working: true, prompts })
+    await show('07:06:01.000', { messages, working: true, prompts })
+    const rows = rowIds(frames.at(-1)!)
+    expect(rows.filter((row) => row.text === P2)).toHaveLength(1)
+    const index = rows.findIndex((row) => row.text === P2)
+    expect(index).toBeGreaterThan(rows.findIndex((row) => row.id === 'u1'))
+    expect(index).toBeLessThan(rows.findIndex((row) => row.id === 'a2'))
+  })
+
+  // A subagent's report back to its own session leaves no row the phone holds
+  // (its hook copy is drawn from the beacon instead), so nothing proves which
+  // turn the prompt belongs to.
+  it('is not drawn when a subagent\u2019s hand-back, which leaves no row the phone holds, started the next turn before the chat\u2019s first read', async () => {
+    vi.setSystemTime(at('07:06:00.000'))
+    const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
+    const messages = [opening, a1, answer, reply]
+    await show('07:06:00.000', { messages, working: true, prompts })
+    await show('07:06:01.000', { messages, working: true, prompts })
+    expect(rowIds(frames.at(-1)!).filter((row) => row.text === P2)).toEqual([])
+  })
+})
+

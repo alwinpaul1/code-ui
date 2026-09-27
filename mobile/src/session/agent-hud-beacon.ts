@@ -49,6 +49,10 @@ export type AgentHudBeaconLimit = {
 /** `at`: epoch ms of the submission, when the source knows it (the transcript
  *  does; the beacon does not) — places the echo after the last row written
  *  before it when `anchorId` names a row the phone never holds. */
+/** `ifHarnessStarted` on a held copy: the start of the run it came in, and
+ *  each turn end the pane carried it past, with the start of the run after
+ *  it. It is placed there if the rows show a harness message started each of
+ *  those runs (desk-prompt-harness-turns.ts). */
 /** `seenAt` on a beacon copy: when the phone received it (a restored one from
  *  an older build: its record's last beacon, agent-hud-beacon-warm-start.ts). */
 /** `atStateStart`: `at` is when the pane's working run began, read at first
@@ -58,7 +62,7 @@ export type AgentHudBeaconLimit = {
  *  pane whose state began after it was taken. It has no `at`, pairs like any
  *  other copy (a phone send still claims its own), and is never drawn.
  *  `seenAt`: when the phone first read a status prompt, by the phone's clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; seenAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number }
 
 export type AgentHudBeacon = {
   agent: string

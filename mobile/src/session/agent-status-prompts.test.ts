@@ -257,8 +257,24 @@ describe('a prompt the tab status still carries after its turn', () => {
 
   it('is not drawn as a message sent when the turn ended, when the chat opens after it', () => {
     const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, DONE)
+    // Held, with where it would go if the transcript shows the three turns
+    // after it were started by the teammates' messages (13:46:47, 13:48:06,
+    // 14:27:03): the run it came in, 13:20:44 (desk-prompt-harness-turns.ts).
     expect(state.prompts).toEqual([
-      { nonce: `status:${SESSION}:x:0`, text: PROMPT, heldBack: true, seenAt: expect.any(Number) }
+      {
+        nonce: `status:${SESSION}:x:0`,
+        text: PROMPT,
+        heldBack: true,
+        ifHarnessStarted: {
+          at: T('13:20:44.026'),
+          crossings: [
+            { after: T('13:22:30.957'), before: T('13:46:47.262') },
+            { after: T('13:48:06.768'), before: T('13:48:06.780') },
+            { after: T('13:48:12.723'), before: T('14:27:03.037') }
+          ]
+        },
+        seenAt: expect.any(Number)
+      }
     ])
     // Seen, so the pings that keep carrying it are not new prompts either.
     expect(timing(observeAgentStatusPrompt(state, SESSION, { ...DONE, updatedAt: T('21:30:00.000') }))).toEqual(HELD)

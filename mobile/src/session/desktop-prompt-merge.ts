@@ -32,8 +32,11 @@ export function mergeDesktopPrompts(
 ): DesktopPrompt[] {
   const merged: DesktopPrompt[] = [...status]
   // A status copy held back (`heldBack`, agent-status-prompts.ts) still drops
-  // the beacon's: that has only the row it was typed after, and while the row
-  // is on a page not loaded it waits for it at the tail (2026-09-26).
+  // the beacon's copies of its words. That includes a desk resend's own copy,
+  // whose anchor could place it (combined review of 30c94116), and it is not
+  // recovered: the held copy can be placed later, once the rows show a harness
+  // message carried it (desk-prompt-harness-turns.ts, after this merge), and a
+  // beacon copy let through here would then draw the same message twice.
   const seen = new Set(status.map((prompt) => prompt.text))
   for (const prompt of beacon) {
     if (!seen.has(prompt.text) && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
