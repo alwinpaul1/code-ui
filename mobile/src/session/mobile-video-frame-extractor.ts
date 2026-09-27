@@ -248,24 +248,31 @@ function checkCancelled(signal: AbortSignal | undefined): void {
   }
 }
 
-/** For a raw native promise's rejection branch when nothing about the
- *  rejection itself is interesting — the race it was also given already
- *  turned it into the real, reported error; this is only here so a promise
- *  no one else awaits never surfaces an unhandled-rejection warning. */
-function noop(): void {}
-
 /** Resolves or rejects exactly as `promise` does, unless `signal` aborts or
- *  `timeoutMs` passes first — either one settles this race instead, and
- *  whichever loses is ignored (a `promise` that keeps running after losing
- *  the race, native code included, has nothing left listening to it). Shared
+ *  `timeoutMs` passes first — either one settles this race instead. Shared
  *  by the ready-wait and the per-frame native calls: neither has a contract
  *  that it ever settles by itself, and a signal that only got checked
- *  BETWEEN calls could never interrupt one already in flight. */
+ *  BETWEEN calls could never interrupt one already in flight.
+ *
+ *  `onLate`, given, is called with `promise`'s own value when it resolves
+ *  AFTER the race was already decided by the timeout or the signal —
+ *  `promise` (native code included) keeps running once it has lost, and a
+ *  resolution that arrives late may still be holding a resource (a native
+ *  thumbnail) that only ITS OWN caller knows how to free. This is checked
+ *  HERE, synchronously, inside the same callback that decides whether this
+ *  resolution wins the race — not via a caller's own SEPARATE `.then()` on
+ *  `promise` racing its own "did I already lose" flag, which can itself
+ *  lose that race: if the native result and the signal's abort land in the
+ *  SAME JS task, the caller's `.then()` (queued as a microtask the instant
+ *  `promise` resolves) can run BEFORE the abort has had a chance to flip
+ *  the flag, silently skipping the release the flag was there to trigger
+ *  (2026-09-27 review — a real, reproduced leak, not a theoretical one). */
 function raceAgainstSignalAndTimeout<T>(
   promise: Promise<T>,
   signal: AbortSignal | undefined,
   timeoutMs: number,
-  onTimeout: () => Error
+  onTimeout: () => Error,
+  onLate?: (value: T) => void
 ): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
@@ -286,7 +293,13 @@ function raceAgainstSignalAndTimeout<T>(
     }
     signal?.addEventListener('abort', onAbort)
     promise.then(
-      (value) => finish(() => resolve(value)),
+      (value) => {
+        if (settled) {
+          onLate?.(value)
+          return
+        }
+        finish(() => resolve(value))
+      },
       (error: unknown) => finish(() => reject(error))
     )
   })
@@ -338,33 +351,22 @@ export async function* extractVideoFrames(
     for (let i = 0; i < timestampsMs.length; i += 1) {
       checkCancelled(deps.signal)
       const timeSec = (timestampsMs[i] as number) / 1000
-      // The raw call, raced separately below: if it loses the race (a
-      // timeout or a cancel), the real native call may still be running and
-      // its thumbnails may still arrive later — `lostGenerateThumbnails`
-      // tells this handler whether that late arrival needs releasing (never,
-      // on the winning path: the array below is what the rest of this loop
-      // iteration actually uses) (2026-09-27 review).
-      let lostGenerateThumbnails = false
-      const rawGenerateThumbnails = player.generateThumbnails([timeSec], maxEdge)
-      rawGenerateThumbnails.then((lateThumbnails) => {
-        if (lostGenerateThumbnails) {
+      // A late arrival (this call lost the race — a timeout or a cancel —
+      // but the real native call kept running and eventually resolved
+      // anyway) still hands back thumbnails nothing else will ever read;
+      // `onLate` is what releases them, decided synchronously inside the
+      // race itself rather than a separate `.then()` racing its own flag.
+      const thumbnails = await raceAgainstSignalAndTimeout(
+        player.generateThumbnails([timeSec], maxEdge),
+        deps.signal,
+        stepTimeoutMs,
+        () => new VideoFrameExtractionError('Timed out reading a frame from this video'),
+        (lateThumbnails) => {
           for (const late of lateThumbnails) {
             late.release()
           }
         }
-      }, noop)
-      let thumbnails: VideoFrameThumbnail[]
-      try {
-        thumbnails = await raceAgainstSignalAndTimeout(
-          rawGenerateThumbnails,
-          deps.signal,
-          stepTimeoutMs,
-          () => new VideoFrameExtractionError('Timed out reading a frame from this video')
-        )
-      } catch (error) {
-        lostGenerateThumbnails = true
-        throw error
-      }
+      )
       const thumbnail = thumbnails[0]
       if (!thumbnail) {
         throw new VideoFrameExtractionError('Could not read a frame from this video')

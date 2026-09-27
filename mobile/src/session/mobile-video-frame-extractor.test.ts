@@ -579,4 +579,39 @@ describe('extractVideoFrames — per-frame stall', () => {
     generateResult.resolve([lateThumbnail])
     await vi.waitFor(() => expect(lateThumbnail.released).toBe(true))
   })
+
+  // Final-review nit (2026-09-27): the earlier release mechanism checked a
+  // "did I already lose the race" flag from a SEPARATE `.then()` registered
+  // on the raw native promise — a `.then()` queued as a microtask the
+  // instant that promise resolves, which can run BEFORE an abort fired in
+  // the SAME synchronous task (no `await` between resolve and abort) has
+  // had a chance to flip the flag. The result arrived, was silently
+  // unreleased, and leaked. `onLate` decides this synchronously inside the
+  // race itself instead, so the ordering of the two events cannot matter.
+  it('releases a thumbnail that resolved in the same task as the cancel that beat it', async () => {
+    const lateThumbnail = fakeThumbnail()
+    const generateResult = Promise.withResolvers<VideoFrameThumbnail[]>()
+    const controller = new AbortController()
+    const player = fakePlayer(10)
+    vi.spyOn(player, 'generateThumbnails').mockReturnValue(generateResult.promise)
+    const pending = collect(
+      extractVideoFrames('file:///clip.mp4', {
+        createPlayer: () => player,
+        encodeFrame: fakeEncoder,
+        signal: controller.signal
+      })
+    ).catch((error: unknown) => error)
+    // Let the generator actually reach the generateThumbnails call before
+    // resolving and aborting.
+    await vi.advanceTimersByTimeAsync(0)
+
+    // No `await` between these two — the native result and the cancel are
+    // both triggered within the SAME synchronous task.
+    generateResult.resolve([lateThumbnail])
+    controller.abort()
+
+    const result = await pending
+    expect(result).toBeInstanceOf(VideoFrameExtractionCancelledError)
+    await vi.waitFor(() => expect(lateThumbnail.released).toBe(true))
+  })
 })
