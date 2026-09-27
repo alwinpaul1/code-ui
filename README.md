@@ -62,12 +62,15 @@ upstream code; do not edit it here, re-vendor it from Orca instead.
 | Codex row showed "Session —" beside a live weekly bar | Usage meters draw only the windows the plan reports; ChatGPT plans can now carry a weekly limit and no 5-hour window. |
 | Composer stuck on "Waiting for terminal…" | After 6 s without the host's lease acknowledgement the composer unlocks and lets the host's own send verdict decide. |
 
-Screens that were not restyled yet keep Orca's dark palette in both modes:
-diff review, source control, file browser and preview, pull request panel,
-tasks, accounts, agent history, terminal, browser, voice and notification
-settings, troubleshooting and the connection log. They read from the legacy
-static palette in `mobile/src/theme/mobile-theme.ts`, which was retuned to the
-warm dark tokens so they blend in dark mode.
+Every screen follows the appearance setting (Settings -> Appearance: Light,
+Dark or System). The app's colours come from the live theme
+(`useTheme()` / `useThemedStyles()` over `mobile/src/theme/tokens.ts`); the
+old dark-only static palette in `mobile-theme.ts` was deleted on 2026-09-27,
+and `theme-scheme-pin-ratchet.test.ts` keeps a scheme-pinned palette out of app
+code. Three things stay the same in both modes on purpose, because the app
+does not draw them: the terminal's content (Tokyonight), the in-app
+browser's web page with the busy tint over it, and photos in the image
+viewer.
 
 ## Releases and in-app updates
 
