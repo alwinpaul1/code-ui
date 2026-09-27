@@ -35,8 +35,8 @@ export function useMobileNativeChatSessionOptionController(args: {
   /** The tab's terminal, so a new one forgets the old agent's statements. */
   terminalHandle?: string | null
   /** What stands in for the live pair on a Claude session that states no model
-   *  (use-claude-transcript-model.ts). Only the transcript reading labels the
-   *  pill: after a pick of the phone's own the snapshot already names it. */
+   *  (use-claude-transcript-model.ts): the model its transcript last recorded,
+   *  or nothing. */
   transcriptModel?: ClaudeModelFallback
   /** The user opened the model sheet: the one moment the fallback may ask. */
   onModelSheetOpen?: () => void

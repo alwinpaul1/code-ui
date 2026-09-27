@@ -1,5 +1,3 @@
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
-
 /**
  * The model a Claude session last answered with, as Claude Code's own
  * transcript recorded it, for a session that states no model any other way.
@@ -18,9 +16,9 @@ import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-se
  * `aiVault.listSessions` answers each session's `model` as the `message.model`
  * of the LAST assistant record in that session's own file
  * (session-scanner-primary-parsers.ts:159-168). Subagent transcripts are files
- * of their own, listed as separate rows with `subagent` set, so the parent's
- * row is the main chain. The clean fix is upstream: see
- * docs/mobile-model-from-transcript.md.
+ * of their own, which that list does not include (Orca lists them on demand,
+ * `listAiVaultSubagentSessionsInBackground`), so the session's row reads its
+ * main file. The clean fix is upstream: see docs/mobile-model-from-transcript.md.
  */
 export type TranscriptModel = {
   /** The id the record carries, e.g. `claude-opus-5-5`. */
@@ -37,11 +35,7 @@ export type ScannedTranscriptModel = TranscriptModel & { scannedAt: number }
 export type ModelPillPair = { model: string | null; label: string | null; effort: string | null }
 
 /** The model the pills fall back to when the agent itself says nothing. */
-export type ClaudeModelFallback =
-  | { kind: 'none' }
-  | { kind: 'transcript'; model: TranscriptModel }
-  /** The phone changed the model, and no scan yet covers a turn begun after it. */
-  | { kind: 'pick'; model: string }
+export type ClaudeModelFallback = { kind: 'none' } | { kind: 'transcript'; model: TranscriptModel }
 
 // Claude Code's ids put the family first (`claude-opus-5-5`, with a date or a
 // region around it on some routes); the 3.x line put the version first
@@ -92,8 +86,9 @@ function record(value: unknown): Record<string, unknown> | null {
  *
  * Only the row for exactly this session id: never the newest session in the
  * folder, which would state a model this tab never ran. Only Claude's own row,
- * not a subagent transcript (which shares the parent's id) and not another
- * agent's. The rows stay `unknown` until read here, as the history screen's
+ * not another agent's, and never a subagent transcript's row (which shares the
+ * parent's id); `listSessions` does not list those today, and one that ever
+ * reaches this list is skipped all the same. The rows stay `unknown` until read here, as the history screen's
  * reader leaves them (agent-history-reply-schema.ts); one that cannot be read
  * is skipped rather than failing the list.
  */
@@ -119,75 +114,44 @@ export function transcriptModelForSession(
  * The live pair — the beacon, or the badge on the user's own status line —
  * always wins; this is only what stands in for it.
  *
- * A model the phone itself just picked stands until the host has been scanned
- * after the first turn that STARTED after the pick had ended (`settledAt`, the
- * phone's clock, as `scannedAt` is). Claude Code applies a `/model` sent
- * mid-turn only when that turn ends, so a reply written after the pick can
- * still be the old model's; only a turn begun after it says what the switch
- * did. Once such a scan exists, what it says is what answered, whether or not
- * the switch took — a refused switch does not leave the pill on the pick.
+ * After a model pick of the phone's own the answer is nothing, until the host
+ * has been scanned after the first turn that STARTED after the pick had ended
+ * (`settledAt`, the phone's clock, as `scannedAt` is). Not the pick: a picked
+ * record is not the agent's word, and showing one is how "Fable Medium" came to
+ * be drawn on an Opus session (2026-09-18). Not the transcript's earlier
+ * reading either, which the switch may have replaced. And not a reply that
+ * merely came after the pick: Claude Code applies a `/model` sent mid-turn only
+ * when that turn ends, so the rest of that turn is still the old model. Once a
+ * turn begun after the pick has been scanned, what it says is what answered,
+ * whether or not the switch took.
  */
 export function resolveClaudeModelFallback(input: {
   liveModel: string | null
   transcript: ScannedTranscriptModel | null
-  pick: { model: string; settledAt: number | null } | null
+  /** The phone's own last pick in this chat, if any. */
+  pick: { settledAt: number | null } | null
 }): ClaudeModelFallback {
   const { liveModel, transcript, pick } = input
-  if (liveModel) {
+  if (liveModel || !transcript) {
     return { kind: 'none' }
   }
-  const answeredSincePick =
-    transcript !== null && pick?.settledAt != null && transcript.scannedAt >= pick.settledAt
-  if (pick && !answeredSincePick) {
-    return { kind: 'pick', model: pick.model }
+  if (pick && (pick.settledAt === null || transcript.scannedAt < pick.settledAt)) {
+    return { kind: 'none' }
   }
-  return transcript
-    ? { kind: 'transcript', model: { model: transcript.model, label: transcript.label } }
-    : { kind: 'none' }
-}
-
-function choiceLabel(
-  snapshot: readonly SessionOptionDescriptor[] | undefined,
-  value: string
-): string | null {
-  const model = snapshot?.find((descriptor) => descriptor.category === 'model')
-  if (model?.kind.type !== 'select') {
-    return null
-  }
-  return model.kind.choices.find((choice) => choice.value === value)?.label ?? null
+  return { kind: 'transcript', model: { model: transcript.model, label: transcript.label } }
 }
 
 /**
  * The pair the header pill reads: the live pair when there is one, else the
- * fallback. No effort ever comes with a fallback — the transcript does not
- * record one, and a pick's effort is the tracked record's, which the header
- * does not read (session-model-pill.ts).
+ * transcript's reading. No effort ever comes with the transcript's reading,
+ * which records none.
  */
 export function claudeModelPillPair(
   live: ModelPillPair,
-  fallback: ClaudeModelFallback,
-  snapshot?: readonly SessionOptionDescriptor[]
+  fallback: ClaudeModelFallback
 ): ModelPillPair {
-  if (live.model) {
+  if (live.model || fallback.kind === 'none') {
     return live
   }
-  switch (fallback.kind) {
-    case 'transcript':
-      return { model: fallback.model.model, label: fallback.model.label, effort: null }
-    case 'pick':
-      return {
-        model: fallback.model,
-        label:
-          choiceLabel(snapshot, fallback.model) ??
-          claudeTranscriptModelName(fallback.model) ??
-          fallback.model,
-        effort: null
-      }
-    case 'none':
-      return live
-    default: {
-      const unhandled: never = fallback
-      return unhandled
-    }
-  }
+  return { model: fallback.model.model, label: fallback.model.label, effort: null }
 }

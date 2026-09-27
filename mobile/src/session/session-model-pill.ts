@@ -6,8 +6,8 @@ import { effortDisplayLabel } from './mobile-claude-session-catalog'
  * `[Opus 5 (1M context) xhigh | Max 20x]` — and the phone's screen parser reads
  * exactly that back into the live pair. The VS Code extension reads the same
  * fact from the SDK's init message. Both are the agent's own word about itself,
- * and only the agent's own word may reach this pill (the one stand-in, below,
- * is the agent's own transcript).
+ * and only the agent's own word may reach this pill. The one stand-in, below,
+ * is still the agent's record, never the phone's.
  *
  * What it deliberately does NOT read: the session-options snapshot. That value
  * is the tracked record — a pick, a seed, a remembered value — and every
@@ -23,11 +23,13 @@ import { effortDisplayLabel } from './mobile-claude-session-catalog'
  * known is not to be filled in from somewhere else. The picker is untouched — a
  * model can still be chosen; the app just stops asserting one it has not heard.
  *
- * One exception, and it is still the agent's own word: a Claude session with no
- * beacon and no badge (a Windows host, 2026-09-27) is given the model its own
- * transcript recorded on its last reply, by name only, never an effort. The
- * controller passes that in as the pair (claude-transcript-model.ts); a live
- * pair always replaces it.
+ * The one stand-in: a Claude session with no beacon and no badge (a Windows
+ * host, 2026-09-27) is given the model its own transcript recorded on its last
+ * reply, as Orca's session scan (`aiVault.listSessions`) reports it, by name
+ * only, never an effort. After a model pick of the phone's own that reading is
+ * withheld until a turn begun after the pick has been scanned, and the pick
+ * itself is never shown here. The controller passes the reading in as the pair
+ * (use-claude-transcript-model.ts); a live pair always replaces it.
  */
 export type LiveModelPair = {
   model: string | null

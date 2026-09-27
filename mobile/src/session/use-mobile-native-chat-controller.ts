@@ -591,7 +591,7 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured || connState !== 'connected' ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: liveHud.context, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback, nativeChatSessionOptions?.controller.snapshot), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: liveHud.context, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }

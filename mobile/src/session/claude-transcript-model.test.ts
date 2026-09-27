@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
-import type { SessionOptionDescriptor } from '../../../src/shared/native-chat-session-options'
 import { historySession } from '../agent-history/agent-history-panel.test-support'
 import {
   claudeModelPillPair,
@@ -138,41 +137,31 @@ describe('which model the pill states when there is no live pair', () => {
     })
   })
 
-  it("shows the phone's own pick until a turn begun after it has ended and been scanned", () => {
-    // No turn has run under the pick yet.
+  it("shows nothing after the phone's own pick until a turn begun after it has been scanned", () => {
+    // The pill never states the phone's pick: a picked record is not the agent's
+    // word (the 2026-09-18 "Fable Medium" on an Opus session). Nor the model the
+    // transcript had before the pick, which the switch may have replaced.
     expect(
-      resolveClaudeModelFallback({
-        liveModel: null,
-        transcript,
-        pick: { model: 'sonnet', settledAt: null }
-      })
-    ).toEqual({ kind: 'pick', model: 'sonnet' })
+      resolveClaudeModelFallback({ liveModel: null, transcript, pick: { settledAt: null } })
+    ).toEqual({ kind: 'none' })
     // The turn ended, but the only scan predates it.
     expect(
-      resolveClaudeModelFallback({
-        liveModel: null,
-        transcript,
-        pick: { model: 'sonnet', settledAt: 2_000 }
-      })
-    ).toEqual({ kind: 'pick', model: 'sonnet' })
+      resolveClaudeModelFallback({ liveModel: null, transcript, pick: { settledAt: 2_000 } })
+    ).toEqual({ kind: 'none' })
     // Scanned after it: what answered, whether or not the switch took.
     expect(
       resolveClaudeModelFallback({
         liveModel: null,
         transcript: { ...transcript, scannedAt: 2_000 },
-        pick: { model: 'sonnet', settledAt: 2_000 }
+        pick: { settledAt: 2_000 }
       })
     ).toEqual({ kind: 'transcript', model: { model: 'claude-opus-5-5', label: 'Opus 5.5' } })
   })
 
-  it("keeps the phone's pick when the scan after it does not list the session", () => {
+  it('shows nothing when the scan after a pick does not list the session', () => {
     expect(
-      resolveClaudeModelFallback({
-        liveModel: null,
-        transcript: null,
-        pick: { model: 'sonnet', settledAt: 2_000 }
-      })
-    ).toEqual({ kind: 'pick', model: 'sonnet' })
+      resolveClaudeModelFallback({ liveModel: null, transcript: null, pick: { settledAt: 2_000 } })
+    ).toEqual({ kind: 'none' })
   })
 
   it('states nothing when there is no live pair, no scan and no pick', () => {
@@ -184,24 +173,6 @@ describe('which model the pill states when there is no live pair', () => {
 
 describe('the pair the header pill reads', () => {
   const nothing = { model: null, label: null, effort: null }
-  const snapshot: SessionOptionDescriptor[] = [
-    {
-      id: 'model',
-      label: 'Model',
-      category: 'model',
-      kind: {
-        type: 'select',
-        currentValue: 'sonnet',
-        choices: [
-          { value: 'sonnet', label: 'Sonnet' },
-          { value: 'opus', label: 'Opus' }
-        ]
-      },
-      valueSource: 'dispatched',
-      transport: 'catalog',
-      settable: true
-    }
-  ]
 
   it('is the live pair whenever there is one, effort included', () => {
     const live = { model: 'claude-opus-5', label: 'Opus 5 (1M context)', effort: 'xhigh' }
@@ -219,17 +190,6 @@ describe('the pair the header pill reads', () => {
         kind: 'transcript',
         model: { model: 'claude-opus-5-5', label: 'Opus 5.5' }
       })
-    ).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: null })
-  })
-
-  it("names the phone's pick by the sheet's own row label", () => {
-    expect(claudeModelPillPair(nothing, { kind: 'pick', model: 'sonnet' }, snapshot)).toEqual({
-      model: 'sonnet',
-      label: 'Sonnet',
-      effort: null
-    })
-    expect(
-      claudeModelPillPair(nothing, { kind: 'pick', model: 'claude-opus-5-5' }, snapshot)
     ).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: null })
   })
 

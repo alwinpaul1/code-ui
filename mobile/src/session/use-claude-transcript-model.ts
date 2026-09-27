@@ -126,7 +126,7 @@ export function useClaudeTranscriptModel(args: {
   })
   const progress = scopeKey ? pickProgress.get(scopeKey) : undefined
   const pick = pending
-    ? { model: pending.model, settledAt: progress?.pickAt === pending.at ? progress.settledAt : null }
+    ? { settledAt: progress?.pickAt === pending.at ? progress.settledAt : null }
     : null
 
   const transcript = quiet && sessionId ? peekClaudeTranscriptModel(hostId, sessionId) : null

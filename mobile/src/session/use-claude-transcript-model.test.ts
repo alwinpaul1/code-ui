@@ -157,24 +157,25 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(scans()).toBe(2)
   })
 
-  it("shows the phone's own pick, then asks once when the next turn ends, and not on the turns after", async () => {
+  it("shows nothing after the phone's own pick, then asks once when the next turn ends, and not on the turns after", async () => {
     render()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
     expect(scans()).toBe(1)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
 
-    // The phone switches to Sonnet at the idle prompt; the transcript still
-    // says Opus answered last.
+    // The phone switches to Sonnet at the idle prompt. The transcript still
+    // says Opus answered last, which the switch may have replaced, and the
+    // pick itself is not the agent's word: the pill states neither.
     notePendingModelPick(SCOPE, 'sonnet', null)
     render()
-    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
     expect(scans()).toBe(1)
 
     // The next prompt runs under Sonnet; that turn ending is the ask.
     model = 'claude-sonnet-5'
     render({ working: true })
     await advance(60_000)
-    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
     render({ working: false })
     await advance(0)
     expect(scans()).toBe(2)
@@ -191,7 +192,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(scans()).toBe(2)
   })
 
-  it('keeps a pick made mid-turn through the end of that turn, which Claude Code finishes on the old model', async () => {
+  it('shows nothing through the end of a turn a pick was made in, which Claude Code finishes on the old model', async () => {
     render()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
@@ -204,7 +205,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     render({ working: false })
     await advance(0)
     expect(scans()).toBe(1)
-    expect(latest?.fallback).toEqual({ kind: 'pick', model: 'sonnet' })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
 
     // The turn after it is the first to run under the switch.
     model = 'claude-sonnet-5'
@@ -215,18 +216,32 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Sonnet 5' } })
   })
 
-  it("stops showing a pick the agent refused once a turn after it has been scanned", async () => {
+  it('never shows a pick the agent refused, and shows what answered once a turn after it is scanned', async () => {
     render()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
     // The switch never took (a dismissed confirmation): the next reply is Opus.
     notePendingModelPick(SCOPE, 'sonnet', null)
     render()
+    expect(latest?.fallback).toEqual({ kind: 'none' })
     render({ working: true })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
     render({ working: false })
     await advance(0)
     expect(scans()).toBe(2)
     expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+  })
+
+  it("does not carry a pick made in one session into the next session in the same tab", async () => {
+    render()
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    notePendingModelPick(SCOPE, 'sonnet', null)
+    render()
+    // `/clear` in the same tab: a new session under the same scope.
+    const NEXT = '0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f'
+    render({ sessionId: NEXT })
+    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    expect(latest?.fallback).toEqual({ kind: 'none' })
   })
 
   it('keeps one answer object across renders, so the pickers are not rebuilt every render', async () => {

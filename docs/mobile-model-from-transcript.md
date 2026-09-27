@@ -27,8 +27,9 @@ checked against Orca origin/main 8d6fec597b (2026-09-23).
 the mobile allowlist in both Orca 1.4.205 (`orca-mobile-rpc-allowlist-1.4.205.json`)
 and origin/main. Each row's `model` is the `message.model` of the LAST assistant
 record in that session's own file (`session-scanner-primary-parsers.ts:159-168`).
-Subagent transcripts are separate files, listed as their own rows with
-`subagent` set. The phone already received this field on the history screen,
+Subagent transcripts are separate files that this list does not include. Orca
+lists them on demand through `listAiVaultSubagentSessionsInBackground`, so a
+session's row reads its main file. The phone already received this field on the history screen,
 through a loose reader, and read nothing from it.
 
 The call is expensive. Once the host's 60 s cache has lapsed, it scans every
@@ -55,22 +56,30 @@ under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
   no window size. A Claude id with a family the table does not know shows as
   the raw id.
 - **Priority:** the beacon or the badge always wins. After the phone's own
-  `/model`, the pill shows the pick until a scan is taken after the first turn
-  that began after the pick has ended. Claude Code applies a `/model` sent
-  mid-turn only when that turn ends, so that turn's reply is still the old
-  model. Once such a scan exists, it shows what answered, whether or not the
-  switch took. Both times are the phone's own clock.
+  `/model`, the fallback shows NOTHING. It never shows the pick, which is the
+  phone's record and not the agent's word (the "Fable Medium" on an Opus
+  session, 2026-09-18). It also does not show the earlier reading, which the
+  switch may have replaced. It stays blank until a scan is taken after the
+  first turn that began after the pick has ended. Claude Code applies a
+  `/model` sent mid-turn only when that turn ends, so that turn's reply is
+  still the old model. Once such a scan exists, it shows what answered, whether
+  or not the switch took. Both times are the phone's own clock. The composer's
+  own snapshot label, drawn when there is no pair at all, is unchanged.
 - **Failure:** a refused, timed-out or malformed reply shows nothing and logs
   one `[transcript-model]` line naming the host and the reason.
 
 **Known limits:**
 
 - The reading can be up to five minutes (and one host cache minute) old.
-- If the scan after a pick falls inside the five-minute budget, it is skipped,
-  and the pick stands until the next scan (the sheet opening, a reconnect or
-  the chat reopening).
-- A turn that runs while the chat is closed is not seen ending, so a pick
-  waits for the next turn the chat sees.
+- A turn that runs while the chat is closed is not seen ending, so after a pick
+  the fallback stays blank until the next turn the chat sees.
+- Unverified: the phone's own pick is a `/model` typed into the agent's
+  terminal. If Orca reports that command as a working→done cycle of its own,
+  the phone takes the cycle for the first turn after the pick. The scan at its
+  end would then read the model from before the switch and show it until the
+  next scan. The phone's working flag comes from Orca's status for the tab and
+  from the transcript's lead-turn end. Whether a local slash command moves
+  either has not been observed.
 - A legacy transcript that wrote sidechain records inline would feed a
   subagent's model into the parent row. Current Claude Code writes subagents
   to separate files.
