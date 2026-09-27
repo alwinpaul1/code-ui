@@ -63,11 +63,16 @@ export type CodePillFont = {
    *  from its own layout (mobile-markdown-code-pill-fit.ts); 1 until known.
    *  Padding and border are dp, and not scaled. */
   scale?: number
+  /** The room a pill with a frame this wide takes on its line: at a system
+   *  font size RN reserves more than the frame (PillMeasure.reserve). */
+  reserve?: (frame: number) => number
 }
 
-/** What one pill takes on the line: its text, its padding and border. */
+/** What one pill takes on the line: its text, its padding and border, and
+ *  at a system font size the room RN reserves for that. */
 export function codePillWidth(text: string, font: CodePillFont): number {
-  return codeTextWidth(text, font.fontSize) * (font.scale ?? 1) + font.insets
+  const frame = codeTextWidth(text, font.fontSize) * (font.scale ?? 1) + font.insets
+  return font.reserve ? font.reserve(frame) : frame
 }
 
 /** A pill after words must clear the room left by this much: Android rounds

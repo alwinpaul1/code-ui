@@ -64,6 +64,46 @@ export type PillMeasure = {
   textWidth: (piece: string) => number
   /** Padding and border, both sides: dp, which no font size scales. */
   insets: number
+  /** The room a pill with a frame this wide takes on its line, and back: RN
+   *  sizes an inline view's placeholder with toPixelFromSP of its frame
+   *  (TextLayoutManager.kt), so a system font size scales the room again,
+   *  though not the view. Left out, the room is the frame. */
+  reserve?: (frame: number) => number
+  frame?: (room: number) => number
+}
+
+/** The room a pill with this frame takes on its line. */
+function taken(measure: PillMeasure, frame: number): number {
+  return measure.reserve ? measure.reserve(frame) : frame
+}
+
+/**
+ * The scale at which pills with these text widths take `room` on their line
+ * together; NaN for no text. The room is not linear in the frame on Android
+ * 14's curve, so more than one pill is solved for by halving.
+ */
+function scaleTaking(texts: readonly number[], room: number, measure: PillMeasure): number {
+  const total = texts.reduce((sum, text) => sum + text, 0)
+  if (!(total > 0)) {
+    return Number.NaN
+  }
+  if (texts.length === 1) {
+    return ((measure.frame ? measure.frame(room) : room) - measure.insets) / total
+  }
+  if (!measure.reserve) {
+    return (room - texts.length * measure.insets) / total
+  }
+  const roomAt = (scale: number) => texts.reduce((sum, text) => sum + taken(measure, text * scale + measure.insets), 0)
+  let [low, high] = [0, SCALE_LIMITS[1] * 2]
+  for (let step = 0; step < 40; step += 1) {
+    const middle = (low + high) / 2
+    if (roomAt(middle) > room) {
+      high = middle
+    } else {
+      low = middle
+    }
+  }
+  return (low + high) / 2
 }
 
 /** The room a span's first piece is cut with, given what the layout taught it. */
@@ -83,17 +123,18 @@ export function pillFitScale(fit: PillFit | undefined, textScale = 1): number {
  * the Text has read. The system font size scales every pill alike, so a
  * short span that has never been alone on a line is cut as the long one
  * beside it reads; with every advance read from the font, what differs
- * between spans is kerning, which only makes this cut a little short. Until
- * anything is read, `guess`: the system font size (use-markdown-code-pill-runs.ts).
+ * between spans is kerning, which only makes this cut a little short. 1
+ * until anything is read: the estimate is priced at the size the text is
+ * drawn at, the system font size included (use-markdown-code-pill-runs.ts).
  */
-export function textPillScale(fits: ReadonlyMap<number, PillFit>, guess = 1): number {
+export function textPillScale(fits: ReadonlyMap<number, PillFit>): number {
   let most: number | undefined
   for (const fit of fits.values()) {
     if (fit.floor !== undefined) {
       most = Math.max(most ?? fit.floor, fit.floor)
     }
   }
-  return most ?? guess
+  return most ?? 1
 }
 
 const TOLERANCE = 1
@@ -108,6 +149,13 @@ const HANGING_SPACE = 8
  *  past its line: a pill wider than the whole line. */
 const LONE_WORD = /^[^\s\uFFFC]*\uFFFC[^\s\uFFFC]*$/
 const SCALE_LIMITS = [0.5, 2] as const
+/** How much narrower than the prose face's advances the words beside a pill
+ *  may be drawn. The one reading that lowers a pill's scale, off a line of
+ *  words that ends in it, prices them this much narrower, so it never reads
+ *  the pill narrower than it is: words drawn 11% narrower than priced (at
+ *  200% on Android 14, before the curve was modelled) read a pill 6% narrow,
+ *  set no floor, and cut it too long (review of 63858e9e). */
+const SOFT_MARGIN = 0.02
 
 function lineEnd(line: PillLayoutLine): number {
   return line.x + line.width
@@ -163,19 +211,22 @@ type Owner = { line: number; col: number; span: number; piece: number; text: str
  */
 function firstPieceDrawn(
   line: PillLayoutLine,
-  texts: { first: number; all: number; count: number },
+  texts: { first: number; each: readonly number[] },
   measure: PillMeasure,
   proseSize: number
 ): { width: number; glue: number; exact: boolean } | undefined {
   const text = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
-  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || !(texts.all > 0)) {
+  const drawnAs = scaleTaking(texts.each, lineEnd(line) - codeTextWidth(text.replaceAll(OBJECT_REPLACEMENT, ''), proseSize), measure)
+  if (text.indexOf(OBJECT_REPLACEMENT) !== 0 || Number.isNaN(drawnAs)) {
     return undefined
   }
   const word = /^\uFFFC[^\s\uFFFC]*/.exec(text)![0]
   const glue = codeTextWidth(word.slice(1), proseSize)
-  const pills = lineEnd(line) - codeTextWidth(text.replaceAll(OBJECT_REPLACEMENT, ''), proseSize)
-  const drawnAs = (pills - texts.count * measure.insets) / texts.all
-  return { width: drawnAs * texts.first + measure.insets + glue, glue, exact: text.slice(word.length).trim() === '' }
+  return {
+    width: taken(measure, drawnAs * texts.first + measure.insets) + glue,
+    glue,
+    exact: text.slice(word.length).trim() === ''
+  }
 }
 
 function sameCut(cut: CodePillCut, span: PillSpanDrawn): boolean {
@@ -221,26 +272,25 @@ function learnScale(
       // spaces; a soft-wrapped one counts them.
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
       const drawn = lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize)
-      ratios.push((drawn - measure.insets) / text)
+      ratios.push(scaleTaking([text], drawn, measure))
     }
-    // A run of this span's pieces side by side that starts its line: its
-    // continuation pieces, or its first piece and the next when both went
-    // down a line together, drawn narrower than the whole line they were cut
-    // to fill.
+    // A run of this span's pieces side by side on one line, cut for lines of
+    // their own and drawn narrow enough to share one: they fit in what the
+    // line holds less its words, priced a little narrow, so its scale is at
+    // most that. After a bullet or words too: a bubble as wide as a path
+    // drawn 10% narrow cut it in two, the two after the bullet were not read,
+    // and it swung between two widths (review of 63858e9e).
     const next = owners[index + 1]
     const previous = owners[index - 1]
-    const startsRun =
-      (owner.piece >= 1 || owner.col === 0) &&
-      next?.line === owner.line &&
-      !(previous?.line === owner.line && (previous.piece >= 1 || previous.col === 0))
-    if (startsRun) {
-      let texts = 0
-      let insets = 0
+    if (next?.line === owner.line && previous?.line !== owner.line) {
+      const texts: number[] = []
       for (let at = index; owners[at]?.line === owner.line; at += 1) {
-        texts += measure.textWidth(owners[at]!.text)
-        insets += measure.insets
+        texts.push(measure.textWidth(owners[at]!.text))
       }
-      caps.push((lineEnd(line) - insets) / texts)
+      // A line that ends in a newline reports its width without it.
+      const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
+      const words = codeTextWidth(beside.replaceAll(OBJECT_REPLACEMENT, ''), proseSize * (1 - SOFT_MARGIN))
+      caps.push(scaleTaking(texts, lineEnd(line) - words, measure))
     }
   })
   const read = ratios.length > 0 ? Math.max(...ratios) : undefined
@@ -257,7 +307,8 @@ function learnScale(
     const text = first ? measure.textWidth(first.text) : 0
     if (line && text > 0 && line.text.split(OBJECT_REPLACEMENT).length === 2 && /\uFFFC[^\s\uFFFC]*\s*$/.test(line.text)) {
       const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
-      const soft = (lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize) - measure.insets) / text
+      const words = codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize * (1 - SOFT_MARGIN))
+      const soft = scaleTaking([text], lineEnd(line) - words, measure)
       if (soft < (scale ?? textScale)) {
         scale = soft
       }
@@ -291,10 +342,8 @@ export function readPillFits(args: {
   measure: PillMeasure
   /** The Text's own type size, for the punctuation beside a pill. */
   proseSize: number
-  /** The scale a span is cut with before anything is read (textPillScale). */
-  guess?: number
 }): PillFitRead {
-  const { lines, spans, lineWidth, current, cut, measure, proseSize, guess = 1 } = args
+  const { lines, spans, lineWidth, current, cut, measure, proseSize } = args
   const at = placeholders(lines)
   const drawn = spans.reduce((sum, span) => sum + span.pieces.length, 0)
   if (at.length !== drawn || !(lineWidth > 0)) {
@@ -305,7 +354,7 @@ export function readPillFits(args: {
   let stale = false
   // Each span's pieces, and what its own lines read of its scale; then the
   // Text's scale from all of them, for the spans with none.
-  const heldTextScale = textPillScale(current.fits, guess)
+  const heldTextScale = textPillScale(current.fits)
   let offset = 0
   const learnt = spans.map((span, ordinal) => {
     const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[offset + piece]!, span: ordinal, piece, text }))
@@ -313,7 +362,7 @@ export function readPillFits(args: {
     const held = current.fits.get(ordinal)
     return { owners, held, ...learnScale(lines, owners, measure, held, proseSize, heldTextScale) }
   })
-  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])), guess)
+  const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])))
   const allOwners = learnt.flatMap(({ owners }) => owners)
   // What each span read of its scale, and nothing of its room: all a layout
   // broken to another width can say (see the end).
@@ -337,23 +386,15 @@ export function readPillFits(args: {
     if (!start) {
       return
     }
-    const scaled = (piece: string) => measure.textWidth(piece) * scale + measure.insets
+    const scaled = (piece: string) => taken(measure, measure.textWidth(piece) * scale + measure.insets)
     const above = lines[start.line - 1]
     if (start.col === 0 && above && !above.text.endsWith('\n')) {
       // It starts a line after a soft wrap: the line above says what it left.
       const room = lineWidth - lineEnd(above)
       const sameRoom = fit.room !== undefined && Math.abs(fit.room - room) <= TOLERANCE
       const onLine = allOwners.filter((owner) => owner.line === start.line)
-      const drawnFirst = firstPieceDrawn(
-        lines[start.line]!,
-        {
-          first: measure.textWidth(start.text),
-          all: onLine.reduce((sum, owner) => sum + measure.textWidth(owner.text), 0),
-          count: onLine.length
-        },
-        measure,
-        proseSize
-      )
+      const texts = { first: measure.textWidth(start.text), each: onLine.map((owner) => measure.textWidth(owner.text)) }
+      const drawnFirst = firstPieceDrawn(lines[start.line]!, texts, measure, proseSize)
       if (drawnFirst?.exact && drawnFirst.width <= room - TOLERANCE) {
         // It went down a line with room for it above: greedy breaking never
         // does that, so these lines were broken to another, narrower width.
@@ -368,16 +409,23 @@ export function readPillFits(args: {
       // shows at least that much narrower than the room. Drawn within that
       // of the room or past it, it went down because it is wider.
       const proven = drawnFirst !== undefined && drawnFirst.width > room - FIT_ROOM
-      if (!span.fresh && proven && sameCut(cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined), span)) {
+      // Cut for this very room: its pieces are the ones drawn. A span cut
+      // fresh for a room that fitted nothing, then cut for this one into the
+      // same whole pill, is that too: the tree is the same, Fabric lays
+      // nothing out again, and what is drawn is how that cut falls (review
+      // of 63858e9e: `git push` stayed down with 102 dp left above it).
+      const forRoom = cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined)
+      if (proven && !forRoom.fresh && sameCut({ ...forRoom, fresh: span.fresh }, span)) {
         // Capped at once to what fits drawn as this one was: a unit at a
         // time stalled, because a break moved inside two pieces that still
         // share their line lays the line out as before, and Fabric sends no
         // lines it has sent (review of 12e3b98e).
         const text = measure.textWidth(span.pieces[0]!)
-        const drawnAs = (drawnFirst.width - drawnFirst.glue - measure.insets) / text
+        const drawnAs = scaleTaking([text], drawnFirst.width - drawnFirst.glue, measure)
+        const roomFrame = measure.frame ? measure.frame(room - FIT_ROOM) : room - FIT_ROOM
         const fitsDrawn =
-          text > 0 && drawnAs > 0
-            ? (scale * (room - FIT_ROOM - measure.insets)) / drawnAs + measure.insets + FIT_ROOM
+          drawnAs > 0
+            ? taken(measure, (scale * (roomFrame - measure.insets)) / drawnAs + measure.insets) + FIT_ROOM
             : Infinity
         fit.below = Math.min(sameRoom ? (fit.below ?? Infinity) : Infinity, scaled(span.pieces[0]!), fitsDrawn)
         fit.room = room

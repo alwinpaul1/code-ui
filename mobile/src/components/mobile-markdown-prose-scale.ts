@@ -73,9 +73,32 @@ export const MARKDOWN_CHIP_INK_ROOM_BOTTOM = 2
  *  does. */
 const PIXEL_NUDGE = 1e-5
 
+const INSTRUMENT_SANS_ASCENT = 0.97
+const INSTRUMENT_SANS_DESCENT = 0.25
+/** How far the font's ink reaches past the 970 and 250 its line is built
+ *  from: the ring of Å to 986 above, a comma below to 296 (glyf of the
+ *  bundled TTF). */
+const INK_ABOVE = 0.986
+const INK_BELOW = 0.296
+/** Pixels on top of that for Android's whole-pixel type: font metrics
+ *  rounded (Paint.getFontMetricsInt), the odd pixel of a negative leading
+ *  taken off the descent (CustomLineHeightSpan), and the font size rounded
+ *  up to a pixel (TextAttributes.kt). One sufficed in the look test's model,
+ *  which leaves the last out. */
+const METRIC_PIXELS = 2
+
 /**
  * The pill's room for ink at `zoom`, each side in dp that come to a whole
- * number of pixels at `density`, at least MARKDOWN_CHIP_INK_ROOM_* of them.
+ * number of pixels at `density`, at least MARKDOWN_CHIP_INK_ROOM_* of them,
+ * and more where the line is tight on the type as drawn: `sp` turns the
+ * pill's sizes into dp at the system font size (android-font-scale.ts).
+ * Android 14 scales the line height on the same curve as the type, which at
+ * 150% to 200% leaves a line well short of the type's own 970 and 250 (at
+ * 200%, 28.5 dp of line for 26 dp of type); a line that short is centred on
+ * the type (CustomLineHeightSpan), so the ink runs past it by half the
+ * shortfall each side, and the ring of Å and a comma below were clipped by
+ * up to 5.5 px (review of 63858e9e). Sized for both the prose pill and the
+ * table pill, which share the style.
  *
  * Only then does the room below draw. Fabric gives a Text its padding as
  * floor(dp * density) pixels (FabricMountingManager.cpp), and Yoga rounds a
@@ -87,9 +110,24 @@ const PIXEL_NUDGE = 1e-5
  * densities 2.625, 2.75, 3 and 3.5 (review of 4c2732f4). The room above
  * draws either way.
  */
-export function markdownChipInkRoom(density: number, zoom = 1): { top: number; bottom: number } {
+export function markdownChipInkRoom(
+  density: number,
+  zoom = 1,
+  sp: (size: number) => number = (size) => size
+): { top: number; bottom: number } {
+  let top = MARKDOWN_CHIP_INK_ROOM_TOP * zoom
+  let bottom = MARKDOWN_CHIP_INK_ROOM_BOTTOM * zoom
+  for (const [size, line] of [
+    [MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT],
+    [MARKDOWN_TABLE_CHIP_FONT_SIZE, MARKDOWN_TABLE_CHIP_LINE_HEIGHT]
+  ] as const) {
+    const type = sp(size * zoom)
+    const short = Math.max(0, ((INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * type - sp(line * zoom)) / 2)
+    top = Math.max(top, (INK_ABOVE - INSTRUMENT_SANS_ASCENT) * type + short + METRIC_PIXELS / density)
+    bottom = Math.max(bottom, (INK_BELOW - INSTRUMENT_SANS_DESCENT) * type + short + METRIC_PIXELS / density)
+  }
   const whole = (dp: number) => (Math.ceil(dp * density - PIXEL_NUDGE) + PIXEL_NUDGE) / density
-  return { top: whole(MARKDOWN_CHIP_INK_ROOM_TOP * zoom), bottom: whole(MARKDOWN_CHIP_INK_ROOM_BOTTOM * zoom) }
+  return { top: whole(top), bottom: whole(bottom) }
 }
 /** A table cell's own type at no zoom; it follows the zoom as prose does
  *  (markdownZoomedLine). */
@@ -101,8 +139,6 @@ export const MARKDOWN_CHIP_PADDING_VERTICAL = 0
 export const MARKDOWN_CHIP_PADDING_HORIZONTAL = 4
 export const MARKDOWN_CHIP_BORDER_WIDTH = 1
 export const MARKDOWN_CHIP_RADIUS = 7
-const INSTRUMENT_SANS_ASCENT = 0.97
-const INSTRUMENT_SANS_DESCENT = 0.25
 
 /**
  * How far a pill is drawn below where Android lays it, so its text sits on

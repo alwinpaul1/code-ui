@@ -1,4 +1,5 @@
 import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { placeholderWidth, type Placeholder } from './android-font-scale.test-support'
 import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './instrument-sans-regular-advances'
 
 /**
@@ -20,7 +21,9 @@ import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './
  *   only when its host tree or its width changed (a new function for
  *   `onTextLayout` is not a change: ReactNativeAttributePayload), and
  *   ParagraphEventEmitter does not send a Text the lines it sent it last.
- *   The lines go to the handler the Text holds at that moment.
+ *   Lines are measured, sent and kept for that dedup only while the Text has
+ *   `onTextLayout` (ParagraphShadowNode.cpp). The lines go to the handler the
+ *   Text holds at that moment.
  */
 
 export type PhoneAs = {
@@ -30,7 +33,14 @@ export type PhoneAs = {
   fontScale?: number
   /** Kerning per pair of characters inside a pill, per 1000 em. */
   kern?: Readonly<Record<string, number>>
+  /** RN 0.86 TextLayoutManager.kt: an inline view's placeholder is its frame
+   *  converted with toPixelFromSP, so the system font size scales the room
+   *  it takes on its line again: linearly up to Android 13, through
+   *  FontScaleConverterFactory's curve from Android 14 (from 100 dp on,
+   *  not at all). The view itself is drawn at its frame. */
+  placeholder?: Placeholder
 }
+
 
 type Style = Record<string, unknown>
 export type ModelItem = { kind: 'char'; ch: string; width: number } | { kind: 'pill'; text: string; width: number }
@@ -92,7 +102,7 @@ function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: Mo
       const glyphs =
         chars.reduce((sum, ch) => sum + glyphWidth(ch, labelSize, String(labelStyle.fontFamily ?? '')), 0) +
         (kern * labelSize) / 1000
-      out.push({ kind: 'pill', text, width: glyphs * (as.pillError ?? 1) * system + inset })
+      out.push({ kind: 'pill', text, width: placeholderWidth(glyphs * (as.pillError ?? 1) * system + inset, as.placeholder) })
     } else {
       flatten(child, size, as, out)
     }
@@ -241,14 +251,18 @@ export function createPhone(current: () => ReactTestRenderer) {
   const passNow = (documentWidth: number, as: PhoneAs = {}): boolean => {
     const { text, event } = lines(documentWidth, as)
     const mounted = fiberOf(text).stateNode as object
-    const tree = JSON.stringify([documentWidth, as.textScale ?? 1, as.fontScale ?? 1, hostTree(text)])
+    const tree = JSON.stringify([documentWidth, as.textScale ?? 1, as.fontScale ?? 1, as.placeholder ?? null, hostTree(text)])
     const sent = JSON.stringify(event.nativeEvent.lines)
     const last = laidOut.get(mounted)
     if (last?.tree === tree) {
       return false
     }
+    if (typeof text.props.onTextLayout !== 'function') {
+      laidOut.set(mounted, { tree, sent: last?.sent ?? '' })
+      return false
+    }
     laidOut.set(mounted, { tree, sent })
-    if (last?.sent === sent || typeof text.props.onTextLayout !== 'function') {
+    if (last?.sent === sent) {
       return false
     }
     text.props.onTextLayout(event)
@@ -327,7 +341,14 @@ export function createPhone(current: () => ReactTestRenderer) {
 /** Nothing on the next line could have fitted at the end of this one. For a
  *  pill that means its first unbreakable piece (up to a slash or a space),
  *  and the punctuation glued after it when that is the whole pill. */
-export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, pillError = 1, fontScale = 1): string[] {
+export function earlyLineEnds(
+  lines: ModelLine[],
+  lineWidth: number,
+  scale = 1,
+  pillError = 1,
+  fontScale = 1,
+  placeholder?: Placeholder
+): string[] {
   const found: string[] = []
   lines.forEach((line, index) => {
     const next = lines[index + 1]
@@ -339,9 +360,11 @@ export function earlyLineEnds(lines: ModelLine[], lineWidth: number, scale = 1, 
     let need: number
     if (head.kind === 'pill') {
       const unit = /^[^/\s]*[/\s]?/.exec(head.text)![0]
-      need =
+      need = placeholderWidth(
         Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError * fontScale +
-        10 * scale
+          10 * scale,
+        placeholder
+      )
       if (unit.length === head.text.length) {
         for (const item of next.items.slice(1)) {
           if (item.kind !== 'char' || item.ch === ' ') {

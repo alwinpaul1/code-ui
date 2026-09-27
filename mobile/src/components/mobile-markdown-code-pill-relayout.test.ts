@@ -313,6 +313,25 @@ describe('a width turned back to again and again', () => {
 // Review of 216a856f: the chat list (FlashList 2.3.2, no per-item key in
 // MobileNativeChatView) recycles a cell for another message. The cell's
 // rooms were used for whatever it drew next at the same width.
+// Review of 63858e9e: a cut is remembered when a layout reads as settled,
+// and about a quarter of Texts never got that read: their last re-cut laid
+// the lines out exactly as before, and Fabric sends no lines it has sent.
+// Scrolled away and back they drew a first cut again and settled over.
+describe('a message scrolled away and back at the same width', () => {
+  it.each([380, 400, 440, 480, 560])('draws the pills it settled on at once, at %i dp', (width) => {
+    const content =
+      'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.'
+    mount(content, width)
+    device.settle(width)
+    const settled = device.pillTexts()
+    unmount()
+    mount(content, width)
+    expect(device.pillTexts()).toEqual(settled)
+    expect(device.settle(width).rounds).toBeLessThanOrEqual(1)
+    expect(device.pillTexts()).toEqual(settled)
+  })
+})
+
 describe('a recycled list cell', () => {
   it("draws the next message with that message's own settled pills at once", () => {
     const next = 'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/recycled-next` for this one.'
@@ -411,13 +430,13 @@ describe('a system font size change', () => {
     system.fontScale = 1.3
     mount(content, 360)
     // Nothing learnt at this size: cut to a whole line at it, as on a first
-    // mount.
+    // mount, the text 30% larger and the room RN reserves for it 30% more.
     expect(device.pillTexts()).toEqual(
       cutCodePills(
         '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe',
         360,
         360,
-        { fontSize: 14, insets: 10, scale: 1.3 },
+        { fontSize: 14 * 1.3, insets: 10, reserve: (frame) => frame * 1.3 },
         0,
         true
       ).pieces

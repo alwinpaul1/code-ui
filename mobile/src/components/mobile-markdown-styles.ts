@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { PixelRatio, StyleSheet } from 'react-native'
+import { systemSpScale } from './system-font-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
@@ -47,7 +48,7 @@ export function markdownScreenDensity(): number {
 
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
-  const inkRoom = markdownChipInkRoom(markdownScreenDensity())
+  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, systemSpScale().toDp)
   return StyleSheet.create({
     root: {
       gap: space.sm + 2

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { PixelRatio } from 'react-native'
+import { androidSpScale } from './android-font-scale'
 import { codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
   pillFitRoom,
@@ -11,6 +11,7 @@ import {
   type PillSpanDrawn,
   type TextPillFits
 } from './mobile-markdown-code-pill-fit'
+import { androidApiLevel, systemFontScale } from './system-font-scale'
 import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
@@ -67,20 +68,6 @@ export function resetRememberedPillCutsForTests(): void {
 }
 
 const NO_FITS: ReadonlyMap<number, PillFit> = new Map()
-
-/** The system font size (Settings > Display > Font size). All type is drawn
- *  that much larger, a pill's text and the words beside it, and its padding
- *  and border are not, so cuts learnt at one size are not another's; before
- *  anything is read, a pill is cut at it (review of 12e3b98e: cut at 1 and
- *  left to learn, every first layout at 130% ran its pills past the edge or
- *  down a line). 1 where the platform does not say. */
-function systemFontScale(): number {
-  try {
-    return PixelRatio.getFontScale()
-  } catch {
-    return 1
-  }
-}
 
 export type CodePillTextLayout = { nativeEvent: { lines: readonly PillLayoutLine[] } }
 
@@ -154,12 +141,30 @@ export function useMarkdownCodePillRuns(
   const visits = useRef(new Map<string, { width: number; visit: number }>())
   const chipScale = markdownChipScale(textScale)
   const factor = chipScale?.factor ?? 1
+  // The system font size (Settings > Display > Font size). A pill's text and
+  // the words beside it are drawn larger by it, through Android 14's curve
+  // where it has one, and its padding and border are not, so cuts learnt at
+  // one size are not another's; a pill is cut at it from the first layout
+  // (review of 12e3b98e: cut at 1 and left to learn, every first layout at
+  // 130% ran its pills past the edge or down a line; review of 63858e9e:
+  // priced linearly, at 200% on Android 14 the words read 11% wider than
+  // drawn and a path pill went down a line with 700 dp left above it).
   const fontScale = systemFontScale()
+  const sp = androidSpScale(fontScale, androidApiLevel())
+  // RN sizes an inline view's placeholder with toPixelFromSP of its frame
+  // (TextLayoutManager.kt), so at a system font size a pill takes more room
+  // on its line than it draws: the frame through the same conversion as
+  // text, linear up to Android 13 (30% more at 130%), and on Android 14's
+  // curve more for a short pill and none from 100 dp on (review of
+  // 63858e9e, which found the comment saying so gone).
+  const reserve = fontScale === 1 ? undefined : sp
 
   return (textKey, lineWidth, table) => {
     const font: CodePillFont = {
-      fontSize: (table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor,
-      insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH)
+      // A pill's text size in sp, drawn in dp at the system font size.
+      fontSize: sp.toDp((table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor),
+      insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH),
+      reserve: reserve?.toDp
     }
     const measured = lineWidth > 0
     const liveKey = `${textKey}|${lineWidth}`
@@ -177,10 +182,10 @@ export function useMarkdownCodePillRuns(
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
     // A table cell is set at BASE - 2; both follow the zoom and the system
     // font size.
-    const proseSize = (table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale * fontScale
+    const proseSize = sp.toDp((table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale)
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
-    const textScaleNow = textPillScale(current.fits, fontScale)
+    const textScaleNow = textPillScale(current.fits)
     const spans: PillSpanDrawn[] = []
     let backtick = false
     const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) =>
@@ -214,6 +219,14 @@ export function useMarkdownCodePillRuns(
       }
       rememberedHere.current.set(slot, { key: rememberKey, document, identity })
     }
+    // What this render draws is what is remembered, not only what a layout
+    // read as settled: the last re-cut often lays the lines out exactly as
+    // before, Fabric sends no lines it has sent, and a quarter of Texts never
+    // read as settled, so scrolled away and back they settled all over
+    // again (review of 63858e9e).
+    if (entry && entry === live) {
+      rememberSettled()
+    }
 
     const read = (event: CodePillTextLayout) => {
       const result = readPillFits({
@@ -222,9 +235,13 @@ export function useMarkdownCodePillRuns(
         lineWidth,
         current,
         cut: cutWith,
-        measure: { textWidth: (piece) => codeTextWidth(piece, font.fontSize), insets: font.insets },
-        proseSize,
-        guess: fontScale
+        measure: {
+          textWidth: (piece) => codeTextWidth(piece, font.fontSize),
+          insets: font.insets,
+          reserve: reserve?.toDp,
+          frame: reserve?.toSp
+        },
+        proseSize
       })
       switch (result.kind) {
         case 'unreadable':

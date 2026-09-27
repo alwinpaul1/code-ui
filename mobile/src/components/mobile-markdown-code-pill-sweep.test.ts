@@ -12,11 +12,18 @@ import {
 } from './mobile-markdown-code-pill-phone.test-support'
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
 
-/** The system font size (Settings > Display > Font size), as RN reads it. */
-const system = vi.hoisted(() => ({ fontScale: 1 }))
+/** The system font size (Settings > Display > Font size), as RN reads it,
+ *  and the Android API level, which decides whether sp scale on a curve. */
+const system = vi.hoisted(() => ({ fontScale: 1, api: 34 }))
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
   PixelRatio: { getFontScale: () => system.fontScale },
+  Platform: {
+    OS: 'android',
+    get Version() {
+      return system.api
+    }
+  },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -38,6 +45,7 @@ afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
   system.fontScale = 1
+  system.api = 34
   resetRememberedPillCutsForTests()
 })
 
@@ -260,7 +268,7 @@ describe('pills at a larger system font size, on a fresh phone', () => {
     [1.3, 1.035]
   ])('settles whole at %s, pill text drawn x%s beyond it, at every width', (fontScale, pillError) => {
     system.fontScale = fontScale
-    const as = { fontScale, pillError }
+    const as = { fontScale, pillError, placeholder: { system: fontScale, curve: true } }
     const found: string[] = []
     PARAGRAPHS.forEach((base, index) => {
       for (let n = 0; n <= LEAD.length; n += 6) {
@@ -274,7 +282,156 @@ describe('pills at a larger system font size, on a fresh phone', () => {
           const problems = [
             ...sharedLines(lines).map((text) => `shared "${text}"`),
             ...overflowingLines(lines, lineWidth),
-            ...earlyLineEnds(lines, lineWidth, 1, pillError, fontScale)
+            ...earlyLineEnds(lines, lineWidth, 1, pillError, fontScale, as.placeholder)
+          ]
+          found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
+          act(() => renderer?.unmount())
+          renderer = null
+          resetRememberedPillCutsForTests()
+        }
+      }
+    })
+    expect(found).toEqual([])
+  })
+})
+
+// Review of 63858e9e (F1): Android 14 turns sp into dp through a curve
+// (FontScaleConverterFactory), so at 200% the prose (15 sp) is drawn at 27 dp
+// and a pill's text (14 sp) at 26, where PixelRatio.getFontScale() says 2.
+// Priced linearly, at 30, the words beside a pill read 11% wider than drawn:
+// a path pill went down a line and left up to 700 dp empty above it. The
+// model draws prose and pill text at the curve's sizes; a pill's text is
+// kerned 3% narrower on top, or 3% wider.
+describe('pills at a large system font size on Android 14', () => {
+  const PARAGRAPHS = [
+    'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.',
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+  /** The curve's dp for 15 sp and 14 sp at each scale (the AOSP tables). */
+  const CURVE: Readonly<Record<string, readonly [number, number]>> = { '1.5': [22.5, 22], '1.8': [25.2, 24.4], '2': [27, 26] }
+  const drawnAt = (system: string, kern: number) => {
+    const [prose, pill] = CURVE[system]!
+    return {
+      fontScale: prose / 15,
+      pillError: (pill / 14 / (prose / 15)) * kern,
+      placeholder: { system: Number(system), curve: true }
+    }
+  }
+
+  it.each([860, 880, 780])('fills the line before a path pill at 200 per cent, %i dp', (width) => {
+    system.fontScale = 2
+    const as = drawnAt('2', 0.97)
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: PARAGRAPHS[1]! }))
+    })
+    act(() => device.layOutDocument(width))
+    const { lines, lineWidth } = device.settle(width, as)
+    expect([...sharedLines(lines), ...earlyLineEnds(lines, lineWidth, 1, as.pillError, as.fontScale, as.placeholder)]).toEqual([])
+  })
+
+  it.each([
+    ['1.5', 0.97],
+    ['1.8', 1],
+    ['2', 0.97],
+    ['2', 1.03]
+  ])('settles whole at %s, pill text kerned x%s, at every width', (scale, kern) => {
+    system.fontScale = Number(scale)
+    const as = drawnAt(scale, kern)
+    const found: string[] = []
+    PARAGRAPHS.forEach((base, index) => {
+      for (let n = 0; n <= LEAD.length; n += 6) {
+        const content = `${LEAD.slice(0, n).join(' ')}${n ? ' ' : ''}${base}`
+        for (let width = 300; width <= 900; width += 40) {
+          act(() => {
+            renderer = create(createElement(MobileMarkdown, { content }))
+          })
+          act(() => device.layOutDocument(width))
+          const { lines, lineWidth } = device.settle(width, as)
+          const problems = [
+            ...sharedLines(lines).map((text) => `shared "${text}"`),
+            ...overflowingLines(lines, lineWidth),
+            ...earlyLineEnds(lines, lineWidth, 1, as.pillError, as.fontScale, as.placeholder)
+          ]
+          found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
+          act(() => renderer?.unmount())
+          renderer = null
+          resetRememberedPillCutsForTests()
+        }
+      }
+    })
+    expect(found).toEqual([])
+  })
+})
+
+// Review of 63858e9e (F3): RN sizes an inline view's placeholder with
+// toPixelFromSP of the view's frame (TextLayoutManager.kt), so at a system
+// font size a pill takes more room on its line than it draws: 30% more at
+// 130% up to Android 13, and on Android 14's curve a short pill much more
+// and one of 100 dp or wider none. Priced at its frame, a pill cut to fill a
+// line did not fit it, and one cut for the room after words went down.
+describe("pills at a system font size, with the room RN reserves for them", () => {
+  const PARAGRAPHS = [
+    'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/chat-rows`. Branch `fix/chat-rows`, commits `68a160e5` and `06b32d5e` on top of `main` `4f46fd47`.',
+    'the fix lives in `mobile/src/components/use-markdown-code-pill-runs.ts` and `mobile/src/components/mobile-markdown-code-pill-fit.ts`, both of them.',
+    'Run `pnpm install` and `pnpm test` then `git push` to finish, with `a/b` and `x` beside them.'
+  ]
+  const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+  /** The curve's dp for 15 sp and 14 sp at each scale (the AOSP tables). */
+  const CURVE: Readonly<Record<string, readonly [number, number]>> = { '1.3': [19.5, 18.8], '2': [27, 26] }
+
+  // A span first cut fresh (nothing fitted the room it had), then given more
+  // room, was cut the same whole pill again, only not fresh: the same tree,
+  // which Fabric does not lay out again, so the pill stayed down with 102 dp
+  // left above it for its first 43.
+  it('moves a pill up when more room comes and it is cut the same', () => {
+    system.api = 33
+    system.fontScale = 1.3
+    const as = { fontScale: 1.3, pillError: 1.03, placeholder: { system: 1.3, curve: false } }
+    act(() => {
+      renderer = create(
+        createElement(MobileMarkdown, {
+          content: 'I checked this again after Run `pnpm install` and `pnpm test` then `git push` to finish.'
+        })
+      )
+    })
+    act(() => device.layOutDocument(400))
+    const { lines, lineWidth } = device.settle(400, as)
+    expect([...sharedLines(lines), ...earlyLineEnds(lines, lineWidth, 1, as.pillError, as.fontScale, as.placeholder)]).toEqual([])
+  })
+
+  it.each([
+    ['Android 13', 33, 1.15, 1],
+    ['Android 13', 33, 1.3, 1],
+    ['Android 13', 33, 1.3, 1.03],
+    ['Android 14', 34, 1.3, 1],
+    ['Android 14', 34, 2, 0.97],
+    ['Android 14', 34, 2, 1.03]
+  ] as const)('settles whole on %s (API %i) at %s, pill text kerned x%s, at every width', (_name, api, scale, kern) => {
+    system.api = api
+    system.fontScale = scale
+    const curve = api >= 34
+    const [prose, pill] = curve ? CURVE[String(scale)]! : [15 * scale, 14 * scale]
+    const as = {
+      fontScale: prose / 15,
+      pillError: (pill / 14 / (prose / 15)) * kern,
+      placeholder: { system: scale, curve }
+    }
+    const found: string[] = []
+    PARAGRAPHS.forEach((base, index) => {
+      for (let n = 0; n <= LEAD.length; n += 6) {
+        const content = `${LEAD.slice(0, n).join(' ')}${n ? ' ' : ''}${base}`
+        for (let width = 300; width <= 900; width += 40) {
+          act(() => {
+            renderer = create(createElement(MobileMarkdown, { content }))
+          })
+          act(() => device.layOutDocument(width))
+          const { lines, lineWidth } = device.settle(width, as)
+          const problems = [
+            ...sharedLines(lines).map((text) => `shared "${text}"`),
+            ...overflowingLines(lines, lineWidth),
+            ...earlyLineEnds(lines, lineWidth, 1, as.pillError, as.fontScale, as.placeholder)
           ]
           found.push(...problems.map((problem) => `${index} n${n} @${width}: ${problem}`))
           act(() => renderer?.unmount())

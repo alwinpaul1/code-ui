@@ -1,3 +1,4 @@
+import { androidSpScale } from './android-font-scale'
 import { cutLineNote, displayColumns } from './mobile-code-indent'
 
 /** Code text size and row height, before the phone's font scale. */
@@ -43,23 +44,29 @@ export type CodeViewMetrics = {
   contentWidth: number
 }
 
-/** The grid, from the file and the phone's font scale. React Native scales
- *  the font size and line height by `fontScale`, so the columns and rows the
- *  guides and list positions are computed on have to scale with them. */
+/** The grid, from the file and the phone's font scale. React Native turns
+ *  the font size and line height from sp into dp at `fontScale`, so the
+ *  columns and rows the guides and list positions are computed on have to
+ *  grow with them: linearly up to Android 13, and on Android 14's curve from
+ *  `apiLevel` 34, where at 200% the 13 sp code is 25 dp and its 20 sp line
+ *  34, not 26 and 40 (android-font-scale.ts). */
 export function codeViewMetrics({
   lineCount,
   maxColumns,
   fontScale,
+  apiLevel = 0,
   foldable = false
 }: {
   lineCount: number
   maxColumns: number
   fontScale: number
+  /** The Android API level (Platform.Version); 0 for linear. */
+  apiLevel?: number
   /** The file has blocks to fold: the gutter makes room for their toggles. */
   foldable?: boolean
 }): CodeViewMetrics {
-  const scale = fontScale > 0 ? fontScale : 1
-  const cellWidth = CODE_VIEW_FONT_SIZE * JETBRAINS_MONO_ADVANCE_EM * scale
+  const sp = androidSpScale(fontScale > 0 ? fontScale : 1, apiLevel)
+  const cellWidth = sp.toDp(CODE_VIEW_FONT_SIZE) * JETBRAINS_MONO_ADVANCE_EM
   const gutterDigits = Math.max(2, String(Math.max(lineCount, 1)).length)
   const numberWidth = Math.ceil(gutterDigits * cellWidth + (foldable ? NUMBER_GAP : GUTTER_GAP))
   const foldWidth = foldable ? Math.ceil(FOLD_COLUMN_CELLS * cellWidth + FOLD_COLUMN_PAD) : 0
@@ -75,7 +82,7 @@ export function codeViewMetrics({
     fontSize: CODE_VIEW_FONT_SIZE,
     lineHeight: CODE_VIEW_LINE_HEIGHT,
     cellWidth,
-    rowHeight: CODE_VIEW_LINE_HEIGHT * scale,
+    rowHeight: sp.toDp(CODE_VIEW_LINE_HEIGHT),
     gutterDigits,
     numberWidth,
     foldWidth,
