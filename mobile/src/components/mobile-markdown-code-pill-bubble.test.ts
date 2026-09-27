@@ -121,3 +121,40 @@ describe('a prompt bubble as wide as its one line', () => {
     expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth)]).toEqual([])
   })
 })
+
+// Review of 63858e9e: a bubble whose widest line is a list item or words
+// ending in a long path, drawn 8 to 14% narrower than estimated, swung
+// forever (65 of 540 in the review's sweep), remounting its Text at every
+// step. As wide as the whole path drawn, the bubble had no room for it by
+// the estimate, so it was cut in two; the two side by side, after the
+// bullet, made the bubble wider, where the path fitted whole and read as
+// settled; back at the narrower width nothing of that was known. The two
+// pieces on the line after the bullet were not read at all.
+describe('a prompt bubble whose widest line is a list item or words ending in a path', () => {
+  const TEXTS = [
+    '- `one`\n- `two/three`\n- `mobile/src/components/use-markdown-code-pill-runs.ts`',
+    '- `mobile/src/components/mobile-markdown-code-pill-fit.ts`',
+    'Use `mobile/src/components/use-markdown-code-pill-runs.ts`',
+    'See `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/code-pills`',
+    '1. `packages/some-package/src/components/Thing.tsx`'
+  ]
+  it.each([0.86, 0.9, 0.92, 0.95])('settles on one width with its pills drawn x%s', (pillError) => {
+    const found: string[] = []
+    TEXTS.forEach((text, index) => {
+      for (const max of [360, 400, 602]) {
+        mountPrompt(text)
+        const { width, widths } = device.settleBubble(max, { pillError })
+        if (width === -1) {
+          found.push(`${index} max ${max}: never holds, ${widths.slice(0, 4).join(' ')}`)
+        } else {
+          const { lines, lineWidth } = device.settle(width, { pillError })
+          found.push(...[...sharedLines(lines), ...overflowingLines(lines, lineWidth)].map((problem) => `${index} max ${max}: ${problem}`))
+        }
+        act(() => renderer?.unmount())
+        renderer = null
+        resetRememberedPillCutsForTests()
+      }
+    })
+    expect(found).toEqual([])
+  })
+})

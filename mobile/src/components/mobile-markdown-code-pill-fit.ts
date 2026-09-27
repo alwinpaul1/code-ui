@@ -274,22 +274,23 @@ function learnScale(
       const drawn = lineEnd(line) - codeTextWidth(beside.replace(OBJECT_REPLACEMENT, ''), proseSize)
       ratios.push(scaleTaking([text], drawn, measure))
     }
-    // A run of this span's pieces side by side that starts its line: its
-    // continuation pieces, or its first piece and the next when both went
-    // down a line together, drawn narrower than the whole line they were cut
-    // to fill.
+    // A run of this span's pieces side by side on one line, cut for lines of
+    // their own and drawn narrow enough to share one: they fit in what the
+    // line holds less its words, priced a little narrow, so its scale is at
+    // most that. After a bullet or words too: a bubble as wide as a path
+    // drawn 10% narrow cut it in two, the two after the bullet were not read,
+    // and it swung between two widths (review of 63858e9e).
     const next = owners[index + 1]
     const previous = owners[index - 1]
-    const startsRun =
-      (owner.piece >= 1 || owner.col === 0) &&
-      next?.line === owner.line &&
-      !(previous?.line === owner.line && (previous.piece >= 1 || previous.col === 0))
-    if (startsRun) {
+    if (next?.line === owner.line && previous?.line !== owner.line) {
       const texts: number[] = []
       for (let at = index; owners[at]?.line === owner.line; at += 1) {
         texts.push(measure.textWidth(owners[at]!.text))
       }
-      caps.push(scaleTaking(texts, lineEnd(line), measure))
+      // A line that ends in a newline reports its width without it.
+      const beside = line.text.endsWith('\n') ? line.text.trimEnd() : line.text
+      const words = codeTextWidth(beside.replaceAll(OBJECT_REPLACEMENT, ''), proseSize * (1 - SOFT_MARGIN))
+      caps.push(scaleTaking(texts, lineEnd(line) - words, measure))
     }
   })
   const read = ratios.length > 0 ? Math.max(...ratios) : undefined
