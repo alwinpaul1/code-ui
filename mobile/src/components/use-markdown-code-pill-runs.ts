@@ -1,5 +1,4 @@
 import { useRef, useState } from 'react'
-import { PixelRatio, Platform } from 'react-native'
 import { androidSpScale } from './android-font-scale'
 import { codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
@@ -12,6 +11,7 @@ import {
   type PillSpanDrawn,
   type TextPillFits
 } from './mobile-markdown-code-pill-fit'
+import { androidApiLevel, systemFontScale } from './system-font-scale'
 import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
@@ -68,33 +68,6 @@ export function resetRememberedPillCutsForTests(): void {
 }
 
 const NO_FITS: ReadonlyMap<number, PillFit> = new Map()
-
-/** The system font size (Settings > Display > Font size). A pill's text
- *  and the words beside it are drawn larger by it, through Android 14's
- *  curve where it has one (android-font-scale.ts), and its padding and
- *  border are not, so cuts learnt at one size are not another's; a pill is
- *  cut at it from the first layout (review of 12e3b98e: cut at 1 and left
- *  to learn, every first layout at 130% ran its pills past the edge or down
- *  a line; review of 63858e9e: priced linearly, at 200% on Android 14 the
- *  words read 11% wider than drawn and a path pill went down a line with
- *  700 dp left above it). 1 where the platform does not say. */
-function systemFontScale(): number {
-  try {
-    return PixelRatio.getFontScale()
-  } catch {
-    return 1
-  }
-}
-
-/** The Android API level, which decides whether sp scale on a curve; 0
- *  where the platform does not say (linear). */
-function androidApiLevel(): number {
-  try {
-    return Platform.OS === 'android' ? Number(Platform.Version) || 0 : 0
-  } catch {
-    return 0
-  }
-}
 
 export type CodePillTextLayout = { nativeEvent: { lines: readonly PillLayoutLine[] } }
 
@@ -168,6 +141,14 @@ export function useMarkdownCodePillRuns(
   const visits = useRef(new Map<string, { width: number; visit: number }>())
   const chipScale = markdownChipScale(textScale)
   const factor = chipScale?.factor ?? 1
+  // The system font size (Settings > Display > Font size). A pill's text and
+  // the words beside it are drawn larger by it, through Android 14's curve
+  // where it has one, and its padding and border are not, so cuts learnt at
+  // one size are not another's; a pill is cut at it from the first layout
+  // (review of 12e3b98e: cut at 1 and left to learn, every first layout at
+  // 130% ran its pills past the edge or down a line; review of 63858e9e:
+  // priced linearly, at 200% on Android 14 the words read 11% wider than
+  // drawn and a path pill went down a line with 700 dp left above it).
   const fontScale = systemFontScale()
   const sp = androidSpScale(fontScale, androidApiLevel())
   // RN sizes an inline view's placeholder with toPixelFromSP of its frame

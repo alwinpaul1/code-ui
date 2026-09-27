@@ -21,6 +21,7 @@ import {
   defaultCodeViewWrap
 } from './mobile-code-view-layout'
 import { makeCodeViewStyles } from './mobile-code-view-styles'
+import { androidApiLevel } from './system-font-scale'
 import { MobileCodeViewLine, type MobileCodeLineInteraction } from './MobileCodeViewLine'
 import { listIndexOfLine } from './mobile-code-folding'
 import { useCodeDocumentHighlight } from './use-code-document-highlight'
@@ -82,6 +83,7 @@ export function MobileCodeView({
         lineCount: document.lines.length,
         maxColumns: document.maxColumns,
         fontScale: fontScale ?? 1,
+        apiLevel: androidApiLevel(),
         foldable: document.folds.length > 0
       }),
     [document, fontScale]

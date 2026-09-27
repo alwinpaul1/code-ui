@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { PixelRatio, Platform, StyleSheet } from 'react-native'
-import { androidSpScale, type SpScale } from './android-font-scale'
+import { PixelRatio, StyleSheet } from 'react-native'
+import { systemSpScale } from './system-font-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
@@ -46,21 +46,9 @@ export function markdownScreenDensity(): number {
   }
 }
 
-/** How the system font size turns a pill's sizes in sp into dp, which its
- *  room for ink is sized from (markdownChipInkRoom); linear at 1 where the
- *  platform does not say. */
-export function markdownSpScale(): SpScale {
-  try {
-    const api = Platform.OS === 'android' ? Number(Platform.Version) || 0 : 0
-    return androidSpScale(PixelRatio.getFontScale(), api)
-  } catch {
-    return androidSpScale(1, 0)
-  }
-}
-
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
-  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, markdownSpScale().toDp)
+  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, systemSpScale().toDp)
   return StyleSheet.create({
     root: {
       gap: space.sm + 2

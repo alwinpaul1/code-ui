@@ -1,7 +1,8 @@
 import { Text, View } from 'react-native'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { markdownScreenDensity, markdownSpScale, type MarkdownStyles } from './mobile-markdown-styles'
+import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
+import { systemSpScale } from './system-font-scale'
 import {
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
@@ -40,7 +41,7 @@ export function MobileMarkdownCodeChip({
 }) {
   const selectable = useChatTextSelectable()
   // The room for ink grows with the type, in whole pixels (see the style).
-  const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, markdownSpScale().toDp) : null
+  const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
   return (
     <View
       // A plain object when the reader has not zoomed: an array per chip costs

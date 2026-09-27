@@ -21,6 +21,19 @@ describe('the code grid', () => {
     expect(metrics.rowHeight).toBeCloseTo(CODE_VIEW_LINE_HEIGHT * 1.3)
   })
 
+  // Review of 63858e9e (the same defect as the code pills'): from Android
+  // 14 sp scale on a curve, so at 200% the 13 sp code is 25 dp and its 20 sp
+  // line 34, where scaling by the font scale made them 26 and 40: rows 15%
+  // too tall for jumps and folds, and indent guides drifting off the code.
+  it('grows as Android 14 draws a large font size, on its curve', () => {
+    const at200 = codeViewMetrics({ lineCount: 40, maxColumns: 80, fontScale: 2, apiLevel: 34 })
+    expect(at200.cellWidth).toBeCloseTo(25 * 0.6)
+    expect(at200.rowHeight).toBeCloseTo(34)
+    // Linear up to Android 13, and below the curve's first scale.
+    expect(codeViewMetrics({ lineCount: 40, maxColumns: 80, fontScale: 2, apiLevel: 33 }).rowHeight).toBeCloseTo(40)
+    expect(codeViewMetrics({ lineCount: 40, maxColumns: 80, fontScale: 1.1, apiLevel: 34 }).rowHeight).toBeCloseTo(22)
+  })
+
   it('widens the gutter with the highest line number, never below two digits', () => {
     expect(codeViewMetrics({ lineCount: 0, maxColumns: 0, fontScale: 1 }).gutterDigits).toBe(2)
     expect(codeViewMetrics({ lineCount: 9, maxColumns: 0, fontScale: 1 }).gutterDigits).toBe(2)
