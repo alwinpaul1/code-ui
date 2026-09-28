@@ -95,12 +95,29 @@ export function formsView(props: Record<string, unknown>): boolean {
 /** A host node as the renderer shows it: its tag, props and host parent. */
 export type HostLike = { type: unknown; props: Record<string, unknown>; parent: HostLike | null }
 
+/** An Expo module's view: requireNativeViewManager names its host
+ *  `ViewManagerAdapter_<module>[_<view>]` (NativeViewManagerAdapter.native.tsx). */
+export function isExpoViewHost(node: HostLike): boolean {
+  return typeof node.type === 'string' && node.type.startsWith('ViewManagerAdapter_')
+}
+
+/** Whether a parent makes each of its children keep their own children
+ *  (ChildrenFormStackingContext). A View does with collapsableChildren={false}
+ *  (ViewShadowNode.cpp). expo-modules-core 57.0.16 reads the flag the other
+ *  way round (ExpoViewShadowNode.h, `if (viewProps.collapsableChildren)`), so
+ *  an Expo view does unless it is given collapsableChildren={false}. */
+function childrenKeepTheirs(parent: HostLike): boolean {
+  return isExpoViewHost(parent)
+    ? parent.props.collapsableChildren !== false
+    : parent.props.collapsableChildren === false
+}
+
 /** Whether a host node keeps its children as its own native subviews on
  *  Android: a View when it forms a stacking context, a Text never, any other
  *  host (a ScrollView's content view, a Pressable, a native leaf) always, and
- *  any node at all whose parent has collapsableChildren={false}. */
+ *  any node at all whose parent makes its children keep theirs. */
 export function keepsChildrenOnAndroid(node: HostLike, parent: HostLike | null): boolean {
-  if (parent?.props.collapsableChildren === false) {
+  if (parent && childrenKeepTheirs(parent)) {
     return true
   }
   if (node.type === 'View') {

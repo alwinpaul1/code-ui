@@ -30,6 +30,7 @@ import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-s
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
+import { MarkdownSelectionRoot } from './markdown-selection-copy'
 import { markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 import {
@@ -241,6 +242,8 @@ function renderInline(
               // without changing the text, and bumps only those.
               key={`${key}c${pieceIndex}:${text.length}:${version}`}
               piece={piece}
+              span={code}
+              pieceIndex={pieceIndex}
               styles={styles}
               chipScale={pills.chipScale}
               table={pills.table}
@@ -320,7 +323,7 @@ function MobileMarkdownInner({
     (url) => isRemoteImageUrl(url) || resolveImage !== undefined
   )
 
-  return (
+  const drawn = (
     <View
       style={styles.root}
       // A native view of the document's own, which everything it draws is
@@ -531,6 +534,9 @@ function MobileMarkdownInner({
       })}
     </View>
   )
+  // On Android, a native view around the document whose Texts copy a code
+  // pill as its words, not U+FFFC (markdown-selection-copy.android.tsx).
+  return <MarkdownSelectionRoot>{drawn}</MarkdownSelectionRoot>
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)

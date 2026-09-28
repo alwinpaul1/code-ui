@@ -1,0 +1,25 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcaselectioncopy'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcaselectioncopy'
+  defaultConfig {
+    consumerProguardFiles 'proguard-rules.pro'
+  }
+}
+
+dependencies {
+  // ReactViewGroup, UIManagerHelper, the inline-view placeholder span and R.id.view_tag_native_id.
+  // The version comes from the app's React Native, as for expo-video.
+  implementation 'com.facebook.react:react-android'
+  testImplementation 'junit:junit:4.13.2'
+}

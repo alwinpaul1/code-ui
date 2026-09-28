@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
+import { pillCopyNativeId } from './markdown-selection-copy'
 import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
 import { systemSpScale } from './system-font-scale'
 import {
@@ -20,17 +21,25 @@ import {
  * The pill is drawn over the prose Text as a separate view, and on Android a
  * React view consumes every touch that lands on it, so a hold on the pill
  * never reached the prose under it and selected nothing (2026-09-25). A
- * selection still cannot cross from the prose into a pill or out of it; the
- * message's copy button carries the whole reply.
+ * selection cannot run from the prose into the pill's own Text or out of it,
+ * but one in the prose that covers the pill copies it whole: on Android the
+ * pill's View carries its span on its nativeID, and a Copy puts that in place
+ * of the U+FFFC the prose Text holds for the pill (markdown-pill-copy-id.ts).
  */
 export function MobileMarkdownCodeChip({
   piece,
+  span,
+  pieceIndex,
   styles,
   chipScale,
   table,
   onPress
 }: {
   piece: string
+  /** The whole code span `piece` was cut from, which a Copy puts in place of the pill. */
+  span: string
+  /** This pill's place in its span: 0 for the first of the lines it crosses. */
+  pieceIndex: number
   styles: MarkdownStyles
   /** Pill sizes at the reader's zoom; null when they have not zoomed. */
   chipScale: MarkdownChipScale | null
@@ -44,6 +53,7 @@ export function MobileMarkdownCodeChip({
   const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
   return (
     <View
+      nativeID={pillCopyNativeId(span, pieceIndex)}
       // A plain object when the reader has not zoomed: an array per chip costs
       // an allocation on every render of every message, and it hides
       // `borderRadius` from anything reading the style.

@@ -73,7 +73,10 @@
             // Later that day +4: lists and quotes moved INTO the run as spans
             // (so a selection can cross them); their View branches went, the
             // span branches are a little longer.
-            "max": 420,
+            // 2026-09-28: +3 for a selection Copy that takes the pills: the
+            // document is wrapped in MarkdownSelectionRoot, and each pill is
+            // handed its span and its place in it (markdown-pill-copy-id.ts).
+            "max": 423,
             "skipBlankLines": true,
             "skipComments": true
           }
