@@ -12,16 +12,11 @@ import {
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
   MARKDOWN_CHIP_RADIUS,
-  MARKDOWN_HEADING_GAP,
-  MARKDOWN_LIST_ITEM_GAP,
-  MARKDOWN_PARAGRAPH_GAP,
-  MARKDOWN_PROSE_LINE_HEIGHT,
   MARKDOWN_TABLE_CELL_FONT_SIZE,
   MARKDOWN_TABLE_CELL_LINE_HEIGHT,
   MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
-  MARKDOWN_TYPE_SCALE,
   markdownChipInkRoom,
   markdownZoomedLine
 } from './mobile-markdown-prose-scale'
@@ -38,11 +33,6 @@ export function markdownScreenDensity(): number {
   }
 }
 
-/** A fence's type: 13 on 20, as before the prose was measured against the
- *  Claude app. */
-const MARKDOWN_CODE_SIZE = 13
-const MARKDOWN_CODE_LINE_HEIGHT = 20
-
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
   const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, systemSpScale().toDp)
@@ -53,42 +43,35 @@ export function makeMarkdownStyles(theme: Theme) {
     paragraph: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      // The Claude app's pitch (MARKDOWN_PROSE_LINE_HEIGHT). A wrapped inline
-      // code pill is an inline View whose only separation from the pill on
-      // the next line is this line height (Android ignores an inline View's
-      // vertical margins). See the collision invariant in
-      // mobile-markdown-chip-clipping.test.ts (2026-09-14).
-      lineHeight: MARKDOWN_PROSE_LINE_HEIGHT,
+      // +10, not +8: a wrapped inline code pill is an inline View whose only
+      // separation from the pill on the next line is this line height (Android
+      // ignores an inline View's vertical margins). See the collision invariant
+      // in mobile-markdown-chip-clipping.test.ts (2026-09-14).
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
-    /** The blank lines between blocks of a run of prose, each its own
-     *  paragraph at its own height (MARKDOWN_PARAGRAPH_GAP and the rest). */
-    paragraphGap: { lineHeight: MARKDOWN_PARAGRAPH_GAP },
-    listItemGap: { lineHeight: MARKDOWN_LIST_ITEM_GAP },
-    headingGap: { lineHeight: MARKDOWN_HEADING_GAP },
     // Headings carry the document's structure, and at ~40 columns a reader
     // scrolls past far more of them than on a desktop. One step of size per
     // level down to h3 is what makes a section boundary visible without a
-    // heading eating the screen; h4-h6 lean on weight alone. Scaled with the
-    // words since 2026-09-28 (MARKDOWN_TYPE_SCALE), line heights with them.
+    // heading eating the screen; h4-h6 lean on weight alone.
     heading: {
       fontFamily: fonts.semibold,
-      fontSize: 16 * MARKDOWN_TYPE_SCALE,
-      lineHeight: 24 * MARKDOWN_TYPE_SCALE,
+      fontSize: MARKDOWN_BASE_SIZE + 1,
+      lineHeight: MARKDOWN_BASE_SIZE + 9,
       color: colors.text,
       marginTop: space.xs
     },
     headingLevel1: {
-      fontSize: 22 * MARKDOWN_TYPE_SCALE,
-      lineHeight: 30 * MARKDOWN_TYPE_SCALE
+      fontSize: MARKDOWN_BASE_SIZE + 7,
+      lineHeight: MARKDOWN_BASE_SIZE + 15
     },
     headingLevel2: {
-      fontSize: 19 * MARKDOWN_TYPE_SCALE,
-      lineHeight: 28 * MARKDOWN_TYPE_SCALE
+      fontSize: MARKDOWN_BASE_SIZE + 4,
+      lineHeight: MARKDOWN_BASE_SIZE + 13
     },
     headingLevel3: {
-      fontSize: 17 * MARKDOWN_TYPE_SCALE,
-      lineHeight: 26 * MARKDOWN_TYPE_SCALE
+      fontSize: MARKDOWN_BASE_SIZE + 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 11
     },
     bold: {
       fontFamily: fonts.semibold,
@@ -170,7 +153,7 @@ export function makeMarkdownStyles(theme: Theme) {
     quoteText: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_PROSE_LINE_HEIGHT,
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
     codeBlock: {
@@ -188,20 +171,18 @@ export function makeMarkdownStyles(theme: Theme) {
       textTransform: 'uppercase',
       letterSpacing: 0.6
     },
-    // A fence keeps the size it had: the Claude app's measure was taken on
-    // prose (2026-09-28).
     codeText: {
       fontFamily: fonts.mono,
-      fontSize: MARKDOWN_CODE_SIZE,
-      lineHeight: MARKDOWN_CODE_LINE_HEIGHT,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.text
     },
     /** The line number beside a fence: dim, so the gutter reads as chrome and
      *  the eye stays on the code. Same weight the file reader's gutter uses. */
     codeGutter: {
       fontFamily: fonts.mono,
-      fontSize: MARKDOWN_CODE_SIZE,
-      lineHeight: MARKDOWN_CODE_LINE_HEIGHT,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.textMuted
     },
     codeTruncated: {
@@ -254,7 +235,7 @@ export function makeMarkdownStyles(theme: Theme) {
       paddingBottom: MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,
-      // The paragraph's line, the same headroom, and for the same reason:
+      // +10, the same headroom the paragraph carries, and for the same reason:
       // a cell is a block an inline code pill can wrap inside, and Android
       // ignores an inline View's vertical margins, so this line height is the
       // only separation there is. At +4 a Branch column that stacked two pills
@@ -270,7 +251,7 @@ export function makeMarkdownStyles(theme: Theme) {
     tableTruncated: {
       padding: space.sm,
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
       color: colors.textMuted
     },
     /** A list marker inside the prose run. The list was a column of row
@@ -278,7 +259,7 @@ export function makeMarkdownStyles(theme: Theme) {
      *  is spans now (2026-09-19). */
     listMarkerInline: {
       fontFamily: fonts.mono,
-      fontSize: 14 * MARKDOWN_TYPE_SCALE,
+      fontSize: MARKDOWN_BASE_SIZE - 1,
       color: colors.textSecondary
     },
     /** Kept for the chip-clipping fixture, which measures a list line. */
@@ -287,7 +268,7 @@ export function makeMarkdownStyles(theme: Theme) {
       minWidth: 0,
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_PROSE_LINE_HEIGHT,
+      lineHeight: MARKDOWN_BASE_SIZE + 10,
       color: colors.text
     },
     /** The notice row's divider (MobileNativeChatNoticeRow); the markdown

@@ -25,15 +25,14 @@ import {
   isIntrawordUnderscoreToken,
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
-import { renderListMarker } from './mobile-markdown-list-marker'
+import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
-import { MARKDOWN_TABLE_CELL_FONT_SIZE, markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
+import { markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 import {
   markdownDocumentKey,
@@ -74,6 +73,15 @@ const MAX_TABLE_ROWS = 40
  *  divider, which is what the source line is. */
 const RULE_TEXT = '─'.repeat(24)
 const MAX_TABLE_COLUMNS = 8
+/** Bullet per nesting level, so a sub-item reads as one even where the indent
+ *  alone is too narrow to see at ~40 columns. Deeper levels reuse the last. */
+const LIST_BULLETS = ['•', '◦', '▪']
+/** One level of list nesting inside the prose run, as text: a span cannot
+ *  carry a margin, so the indent is spaces. Four is about 16 px at the prose
+ *  size. Narrow on purpose: at ~40 columns a desktop-sized indent leaves a
+ *  third-level item too little room to read. */
+const LIST_INDENT_TEXT = '    '
+
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
 function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void): void {
@@ -87,6 +95,23 @@ function openMarkdownHref(href: string, onOpenFile?: (pathText: string) => void)
   if (route.kind === 'file' && onOpenFile) {
     onOpenFile(route.pathText)
   }
+}
+
+/** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
+ *  a box for a task item whichever list it sits in. */
+function listMarker(item: MobileMarkdownListItem): string {
+  // The rest of an item that a fence interrupted keeps the indent and takes no
+  // marker; a second bullet would read as a second item.
+  if (item.continuation) {
+    return ''
+  }
+  if (item.checked != null) {
+    return item.checked ? '☑' : '☐'
+  }
+  if (item.ordered) {
+    return `${item.number ?? 1}.`
+  }
+  return LIST_BULLETS[Math.min(item.depth, LIST_BULLETS.length - 1)]!
 }
 
 // Render a plain (non-token) text run, splitting out tappable file paths when
@@ -286,13 +311,6 @@ function MobileMarkdownInner({
   }
   const mermaidSourceOccurrences = new Map<string, number>()
   const heading = (level: number) => markdownHeadingStyle(styles, level, textScale)
-  // A blank line of its own height between blocks of a run, at the zoom: a
-  // paragraph's gap, a list item's, or the room before a heading
-  // (MARKDOWN_PARAGRAPH_GAP). It is its own paragraph, so its height is no
-  // line's but its own (see `end` below).
-  const gap = (style: { lineHeight: number }) => (
-    <Text style={textScale === 1 ? style : { lineHeight: style.lineHeight * textScale }}>{'\n'}</Text>
-  )
 
   // See mobile-markdown-prose-runs.ts for why the blocks group as they do.
   const runs = buildProseRuns(
@@ -324,7 +342,7 @@ function MobileMarkdownInner({
             const end = memberIndex < lastMember ? '\n' : null
             return (
               <Fragment key={memberIndex}>
-                {memberIndex > 0 ? gap(member.type === 'heading' ? styles.headingGap : styles.paragraphGap) : null}
+                {memberIndex > 0 ? '\n' : null}
                 {member.type === 'heading' ? (
                   <Text style={heading(member.level).style}>
                     {renderInline(styles, member.text, onOpenFile, pills, heading(member.level).words)}
@@ -333,14 +351,19 @@ function MobileMarkdownInner({
                 ) : member.type === 'rule' ? (
                   <Text style={styles.ruleText}>{RULE_TEXT}</Text>
                 ) : member.type === 'list' ? (
-                  member.items.map((item, itemIndex) => (
-                    <Fragment key={itemIndex}>
-                      {itemIndex > 0 ? '\n' : null}
-                      {itemIndex > 0 ? gap(styles.listItemGap) : null}
-                      {renderListMarker(item, styles)}
-                      {renderInline(styles, item.text, onOpenFile, pills, proseWords)}
-                    </Fragment>
-                  ))
+                  member.items.map((item, itemIndex) => {
+                    const marker = listMarker(item)
+                    return (
+                      <Fragment key={itemIndex}>
+                        {itemIndex > 0 ? '\n' : null}
+                        {LIST_INDENT_TEXT.repeat(item.depth)}
+                        {marker ? (
+                          <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
+                        ) : null}
+                        {renderInline(styles, item.text, onOpenFile, pills, proseWords)}
+                      </Fragment>
+                    )
+                  })
                 ) : member.type === 'image' ? (
                   <MobileMarkdownImage
                     alt={member.alt}
@@ -434,7 +457,7 @@ function MobileMarkdownInner({
             headers: block.headers,
             rows: visibleRows,
             columnCount,
-            fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE * textScale,
+            fontSize: (MARKDOWN_BASE_SIZE - 2) * textScale,
             horizontalPadding: styles.tableCell.paddingHorizontal
           })
           const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)

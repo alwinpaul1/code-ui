@@ -83,15 +83,13 @@ function fiberOf(node: ReactTestInstance): { key: string | null; stateNode: unkn
 
 /** The phone's view of one Text: characters at their span's size, and each
  *  inline View as one placeholder as wide as the pill it draws. */
-export function flattenForPhone(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[], family = ''): ModelItem[] {
+export function flattenForPhone(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[]): ModelItem[] {
   const size = Number(flatStyle(node.props.style).fontSize ?? fontSize)
-  // A list marker is set in JetBrains Mono.
-  const face = String(flatStyle(node.props.style).fontFamily ?? family)
   const system = as.fontScale ?? 1
   for (const child of node.children) {
     if (typeof child === 'string') {
       for (const ch of Array.from(child)) {
-        out.push({ kind: 'char', ch, width: glyphWidth(ch, size, face) * system })
+        out.push({ kind: 'char', ch, width: glyphWidth(ch, size) * system })
       }
     } else if (child.type === ('View' as never)) {
       // The bordered box may sit inside the View the Text holds.
@@ -108,7 +106,7 @@ export function flattenForPhone(node: ReactTestInstance, fontSize: number, as: P
         (kern * labelSize) / 1000
       out.push({ kind: 'pill', text, width: placeholderWidth(glyphs * (as.pillError ?? 1) * system + inset, as.placeholder) })
     } else {
-      flattenForPhone(child, size, as, out, face)
+      flattenForPhone(child, size, as, out)
     }
   }
   return out

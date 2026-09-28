@@ -42,11 +42,11 @@ describe('inline code chips', () => {
 
   it('splits a long path into pills that wrap, cut after the slash like the Claude app', () => {
     const root = render('APK at `~/Desktop/code-ui-android-v0.5.17-139.apk` for you.')
-    // A 240 dp line: a pill's text is 0.9 of words set at 13.875 sp now
-    // (2026-09-28), and at the 280 dp a Text is cut to before it is measured
-    // this path fits whole.
+    // A 260 dp line: the pill's text is set from the words' size now (0.9
+    // of it, 2026-09-28), and at the 280 dp a Text is cut to before it is
+    // measured this path fits whole.
     const document = root.findAll((node) => typeof node.props.onLayout === 'function')[0]!
-    act(() => document.props.onLayout({ nativeEvent: { layout: { width: 240, height: 40, x: 0, y: 0 } } }))
+    act(() => document.props.onLayout({ nativeEvent: { layout: { width: 260, height: 40, x: 0, y: 0 } } }))
     const chips = root.findAll((node) => node.type === 'View' && node.props.style?.borderRadius === 7)
     expect(chips.map((chip) => chip.findByType('Text' as never).children.join(''))).toEqual([
       '~/Desktop/',

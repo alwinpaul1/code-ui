@@ -185,8 +185,8 @@ export function useMarkdownCodePillRuns(
           ? remembered.get(rememberKey)
           : undefined
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
-    // A table cell's own type or the prose's; both follow the zoom and the
-    // system font size.
+    // A table cell is set at BASE - 2; both follow the zoom and the system
+    // font size.
     const proseSize = sp.toDp(baseSize)
     // How much larger than the Text's own a span's pill and words are drawn,
     // in dp: 1 but in a heading, whose pills are set from its size.

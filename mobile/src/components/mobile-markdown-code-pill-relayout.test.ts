@@ -3,7 +3,6 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 import { cutCodePills } from './mobile-markdown-code-chip-split'
-import { MARKDOWN_CHIP_FONT_SIZE } from './mobile-markdown-prose-scale'
 import {
   createPhone,
   earlyLineEnds,
@@ -418,16 +417,10 @@ describe('a system font size change', () => {
     const content =
       'Worktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-first` and the fix in `mobile/src/components/use-markdown-code-pill-runs.ts` today.'
     mount(content, 360)
-    // As RN lays it out: a pill's room on its line is its frame through
-    // toPixelFromSP, 30% more at 130% up to Android 13 (use-markdown-code-
-    // pill-runs.ts). Left out, this passed only while the widths happened to
-    // fall so; at 13.875 sp (2026-09-28) two pieces the cut kept apart for
-    // that room shared a line the model did not reserve.
-    const as = { fontScale: 1.3, placeholder: { system: 1.3, curve: false } }
-    const first = device.lines(360, as)
+    const first = device.lines(360, { fontScale: 1.3 })
     expect([...overflowingLines(first.lines, first.lineWidth), ...sharedLines(first.lines)]).toEqual([])
-    const { lines, lineWidth } = device.settle(360, as)
-    expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth), ...earlyLineEnds(lines, lineWidth, 1, 1, 1.3, as.placeholder)]).toEqual([])
+    const { lines, lineWidth } = device.settle(360, { fontScale: 1.3 })
+    expect([...sharedLines(lines), ...overflowingLines(lines, lineWidth), ...earlyLineEnds(lines, lineWidth, 1, 1, 1.3)]).toEqual([])
   })
 
   it('does not reuse the pills learnt at the old size', () => {
@@ -444,7 +437,7 @@ describe('a system font size change', () => {
         '/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/font-size-probe',
         360,
         360,
-        { fontSize: MARKDOWN_CHIP_FONT_SIZE * 1.3, insets: 10, reserve: (frame) => frame * 1.3 },
+        { fontSize: 14 * 1.3, insets: 10, reserve: (frame) => frame * 1.3 },
         0,
         true
       ).pieces
