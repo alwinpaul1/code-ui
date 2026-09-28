@@ -101,11 +101,13 @@ describe("an agent's run is judged by the roster, not by a list of shells", () =
 })
 
 describe("an agent's own notification against a roster row", () => {
-  // Orca re-creates a one-shot agent's row on every SubagentStart, so a
-  // resumed agent's row starts after the notification of its previous run. A
-  // row that started before the notification is the run the notification
-  // ended: a phantom Orca kept because it missed the SubagentStop (it was down
-  // when the agent finished, and restored the row from its snapshot).
+  // Orca re-creates a one-shot agent's row at a SubagentStart once the row
+  // has left, so a resumed agent's row starts after the notification of its
+  // previous run (a row Orca kept through a resume is the case in
+  // mobile-background-tasks-resumed-agent.test.ts). A row that started before
+  // the notification is the run the notification ended: a phantom Orca kept
+  // because it missed the SubagentStop (it was down when the agent finished,
+  // and restored the row from its snapshot).
   const notified = (id: string, iso: string) => ({
     id: `note-${id}`,
     role: 'user' as const,

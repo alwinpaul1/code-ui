@@ -91,14 +91,15 @@ type AgentCall = { description: string | null; title: string; startedAt: number 
 
 /** Put each agent launch under its own call where Claude Code has said which
  *  is which, and settle the ones that already reported in the foreground.
- *  Mutates the reader's own maps, which it builds fresh on every walk. */
+ *  Mutates the reader's own maps, which it builds fresh on every walk, and
+ *  returns the descriptions it went by (`confirmedAgentDescriptions`). */
 export function settleAgentLaunches(
   launches: Map<string, Launch>,
   notifications: Map<string, Notification>,
   messages: readonly NativeChatMessage[],
   subagents: readonly AgentSubagentSnapshot[] | undefined,
   position: number
-): void {
+): Map<string, string> {
   const calls: AgentCall[] = []
   for (const message of messages) {
     for (const block of message.blocks) {
@@ -120,7 +121,7 @@ export function settleAgentLaunches(
   }
   const confirmed = confirmedAgentDescriptions(messages, subagents)
   if (confirmed.size === 0) {
-    return
+    return confirmed
   }
   const taken = new Set<number>()
   for (const launch of launches.values()) {
@@ -135,4 +136,5 @@ export function settleAgentLaunches(
       launch.startedAt = call.startedAt
     }
   }
+  return confirmed
 }

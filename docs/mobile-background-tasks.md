@@ -305,10 +305,47 @@ and changed 38 times; the sources, one by one:
 
 - An agent the host tracks runs while the roster lists it. Neither beacon
   list judges an agent. A notification outranks the row only when it was
-  written after the row started: Orca re-creates a row at every
-  SubagentStart, so a resumed agent's row starts after its last
-  notification, and a row that started before it is a phantom Orca kept
-  after missing the SubagentStop.
+  written after the row started: a row that started before it is a phantom
+  Orca kept after missing the SubagentStop.
+- A resume starts a new run. SendMessage's result says so as JSON,
+  `{"success":true,"message":"Resuming agent a38e168","resumedAgentId":…}`
+  (Claude Code 2.1.281–2.1.283), and an ending from before it belongs to the
+  run it followed (`mobile-background-task-resumes.ts`). Orca only re-creates
+  a row, with a new start, when the row had left: on 2026-09-28 a38e… stalled
+  at 13:34 with no SubagentStop, the lead resumed it at 16:28, and its row
+  still read 12:18, so the reader took the 13:34 failure for the end of the
+  running run and the status row showed no task. The resumed run ends at its
+  next notification or TaskStop, or when the roster drops its row. An id-only
+  finished list (`done=`, earlier windows' endings) cannot say which run it
+  names, so against a roster row it ends nothing; with no host status at all
+  it does end the run, since a resumed run that finishes mid-turn has its
+  notification dropped by Orca's reader and would otherwise show for ever.
+  A resume counts only when its `resumedAgentId` is the agent a SendMessage
+  of the same step addressed (by id, or `a<name>-<hex>` by name) and that
+  call still waits for its result. A step is the stretch of calls and
+  results between two messages with no tool block (the lead's reply, the
+  next prompt, an interruption); calls and results interleave in it in any
+  order, since a result can land before a later call of the same response.
+  A command's printout of a resume passes only while a SendMessage to that
+  very agent waits in the step; one beside a send to another agent is
+  refused and logged. A queued message ("Message queued for delivery to …")
+  starts no run. A result that claims a resume in another shape is not
+  counted and is logged once; a teammate's resume names no task id and is
+  left to the roster.
+  Known limits:
+  - A resumed run that stalls again, sending no SubagentStop, reads as
+    running until Orca drops the row it kept, because `done=` names only the
+    id and ends nothing against a row; a first run has the same gap.
+  - A resume is missed, and the count stays what it was before resumes were
+    read, when a message with no tool block sits between the SendMessage
+    call and its result: one holding only text, or one with no blocks at
+    all. Either ends the step.
+  - A SendMessage whose result is not a resume of its agent keeps waiting
+    until the step ends: a queued message ("Message queued for delivery"),
+    a failed send, or a result record that never reaches the reader. A
+    printout of that same agent's resume JSON later in the step then counts
+    as its resume. Queued sends to running agents are routine, so this is
+    the likeliest way in; it still needs that exact agent's resume printed.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
   (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca
