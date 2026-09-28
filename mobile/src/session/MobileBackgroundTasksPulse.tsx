@@ -10,11 +10,12 @@ const AnimatedSvg = Animated.createAnimatedComponent(Svg)
  *  beside the status line's words. Earlier tries — a lucide star that turned,
  *  then a hand-rolled dot — read as no icon at all on the device.
  *
- *  It breathes only beside "Working". Beside "4 running tasks" with the turn
- *  over it stands still: the user's recording of the Claude app (2026-09-26)
- *  shows that star keep one shape for 10.5 s, with no fade, scale or turn. The
- *  scale and opacity run on the native driver, so a busy turn costs it
- *  nothing. */
+ *  It breathes while anything runs: beside "Working", and beside "N running
+ *  tasks" once the turn is over (the user, 2026-09-28: "No breathing effect for
+ *  claude logo in bg running task"; it had stood still there to match a
+ *  2026-09-26 recording of the Claude app). It stands still under reduced
+ *  motion. The scale and opacity run on the native driver, so a busy turn costs
+ *  it nothing. */
 export function MobileBackgroundTasksPulse({ color, breathing }: { color: string; breathing: boolean }) {
   const wave = useRef(new Animated.Value(0)).current
   // Still while motion is reduced or not yet known, and whenever the line has

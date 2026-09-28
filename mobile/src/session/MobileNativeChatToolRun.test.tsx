@@ -496,10 +496,13 @@ describe('a finished run row as the Claude app draws it: sentence, pill, chevron
     expect(minus!.color).toBe(palette.diffDelText)
     expect(minus!.backgroundColor).toBe(palette.diffDelBg)
     for (const segment of [plus!, minus!]) {
-      // The row's own size, and tight like the inline code pills.
-      expect(segment.fontSize).toBe(sentence.fontSize)
-      expect(segment.paddingHorizontal).toBeLessThanOrEqual(5)
-      expect(segment.paddingVertical ?? 0).toBeLessThanOrEqual(1)
+      // 2026-09-28, the user: "reduce the size of lines written and number of lines removed pill".
+      // Smaller than the sentence it follows, and tighter than an inline code pill, so it reads
+      // as a tag beside the words rather than a second line of them.
+      expect(segment.fontSize).toBeLessThan(sentence.fontSize)
+      expect(segment.fontSize).toBeGreaterThanOrEqual(Math.round(sentence.fontSize * 0.8))
+      expect(segment.paddingHorizontal).toBeLessThanOrEqual(4)
+      expect(segment.paddingVertical ?? 0).toBe(0)
       expect(segment.margin ?? segment.marginHorizontal ?? 0).toBe(0)
     }
   }
