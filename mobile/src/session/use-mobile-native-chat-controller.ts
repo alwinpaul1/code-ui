@@ -70,7 +70,7 @@ export function useMobileNativeChatController(
   const {
     activeChatAgent,
     activeChatAgentRef,
-    activeChatResolution, activeChatIdentity,
+    activeChatResolution, activeChatIdentity, activeChatAgentStatus, activeChatPromptStatus, activeChatSessionIdentity,
     activeChatSessionId,
     activeChatStructured,
     activeTabAgentWorking,
@@ -124,7 +124,7 @@ export function useMobileNativeChatController(
   // (agent-status-prompts.ts, 2026-09-19).
   const { prompts: tailPrompts, agentMessages: statusAgentMessages } = useAgentStatusPrompts(
     showNativeChat && !activeChatStructured ? (activeChatSessionId ?? null) : null,
-    nativeChatStatus,
+    activeChatPromptStatus,
     hudBeacon?.desktopPrompts, connState === 'connected', args.tabsLive
   )
   const agentMessages = useBeaconAgentMessages(hudBeacon, activeHandle)
@@ -164,7 +164,7 @@ export function useMobileNativeChatController(
   // Not gated on chat visibility: the streaming gate must tell hidden from ended.
   // Orca's `working` outlives the lead's turn while a background agent runs,
   // and the transcript is what says that turn is over (claude-lead-turn-ended.ts).
-  const nativeChatLeadTurnEnded = claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeSessionTab?.agentStatus)
+  const nativeChatLeadTurnEnded = claudeLeadTurnEnded(activeChatResolution?.agent ?? null, nativeChatSession.messages, activeChatAgentStatus)
   const nativeChatStreamLive = activeChatStructured ? structuredNativeChat.isWorking : activeTabAgentWorking && !nativeChatLeadTurnEnded
   const nativeChatAgentWorking =
     nativeChatStreamLive && (activeChatStructured || activeChatResolution != null)
@@ -196,10 +196,10 @@ export function useMobileNativeChatController(
     sessionId: activeChatSessionId,
     agent: activeChatResolution?.agent ?? null,
     phase: nativeChatHudPhase(nativeChatAgentWorking, nativeChatStatus?.state, nativeChatStatus?.interrupted),
-    agentStatus: activeSessionTab?.agentStatus ?? null
+    agentStatus: activeChatAgentStatus
   })
   // Model and effort as one pair, from one source; see the module's comment.
-  const claudeReported = reportedModelPair(liveHud, activeSessionTab?.agentStatus)
+  const claudeReported = reportedModelPair(liveHud, activeChatAgentStatus)
   // No beacon and no badge (a Windows host, a tab launched before the flag): what the transcript last answered with.
   const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeReported.model, beacon: hudBeacon !== null, agentWorking: nativeChatAgentWorking })
   const isCodexChat = activeChatResolution?.agent === 'codex'
@@ -211,7 +211,7 @@ export function useMobileNativeChatController(
   // what a window showed ending, the last host status (use-active-tab-task-report.ts).
   const backgroundTaskReportWithScreen = useActiveTabTaskReport({
     report: backgroundTaskReport, handle: activeHandle, sessionId: activeChatSessionId, agent: activeChatResolution?.agent ?? null,
-    messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready' && !nativeChatSession.baseRetained, agentStatus: activeSessionTab?.agentStatus ?? null,
+    messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready' && !nativeChatSession.baseRetained, agentStatus: activeChatAgentStatus,
     onScreenShellCount: hudObservation?.runningShellCount ?? null, screenTaskCompletions
   })
 
@@ -389,7 +389,7 @@ export function useMobileNativeChatController(
     activeChatResolution?.agent ?? null,
     hostId,
     worktreeId,
-    activeSessionTab?.agentStatus?.model,
+    activeChatAgentStatus?.model,
     hudObservation ? { modelId: hudObservation.modelId, effort: hudObservation.effort } : null
   )
   // composerFocusRequest: bumped once per "Ask about lines" tap, after the
@@ -423,7 +423,7 @@ export function useMobileNativeChatController(
       reportedModel: isCodexChat
         ? codexModel.model
         : isOmpChat
-          ? (activeSessionTab?.agentStatus?.model ?? null)
+          ? (activeChatAgentStatus?.model ?? null)
           : claudeReported.model,
       reportedEffort: isCodexChat ? codexModel.effort : isOmpChat ? null : claudeReported.effort,
       // The agent's own name for it, so the pill can say "Opus 4.8.5" rather
@@ -432,7 +432,7 @@ export function useMobileNativeChatController(
       // Codex resolves its own model elsewhere and has no launch-record path
       // here, so its report is always the live one; so is OMP's, see above.
       reportedModelSource: isCodexChat || isOmpChat ? 'live' : claudeReported.source,
-      modelSwitchCommand: isOmpChat ? activeSessionTab?.agentStatus?.modelSwitchCommand : undefined,
+      modelSwitchCommand: isOmpChat ? activeChatAgentStatus?.modelSwitchCommand : undefined,
       transcriptModel: transcriptModel.fallback, onModelSheetOpen: transcriptModel.requestScan,
       terminalHandle: activeHandle,
       openRequest: modelSheetRequest,
@@ -545,7 +545,7 @@ export function useMobileNativeChatController(
     nativeChatAgentWorking,
     nativeChatLeadTurnEnded,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
-    nativeChatAgentStatus: activeSessionTab?.agentStatus ?? null,
+    nativeChatAgentStatus: activeChatAgentStatus, nativeChatSessionIdentity: activeChatSessionIdentity,
     nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
     nativeChatBackgroundTasks: activeChatStructured
       ? structuredNativeChat.backgroundTasks

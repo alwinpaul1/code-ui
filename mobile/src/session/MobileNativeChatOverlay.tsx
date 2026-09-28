@@ -397,7 +397,7 @@ export function MobileNativeChatOverlay({
         turnThinking={controller.nativeChatTurnThinking}
         workingStartedAt={controller.nativeChatWorkingStartedAt}
         settledTurns={controller.nativeChatSettledTurns}
-        agentStatus={controller.nativeChatAgentStatus}
+        agentStatus={controller.nativeChatAgentStatus} sessionIdentity={controller.nativeChatSessionIdentity}
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
         spinner={controller.nativeChatSpinner ?? null}

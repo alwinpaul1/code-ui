@@ -5,6 +5,7 @@ import {
   type NativeChatEmptyStateCopy
 } from '../../../src/shared/native-chat-empty-state'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { NativeChatSessionIdentity } from './native-chat-kept-session'
 
 export type MobileNativeChatEmptyStateCopy = NativeChatEmptyStateCopy & {
   /** A muted line under the invitation saying why there is nothing to read,
@@ -18,6 +19,9 @@ export type MobileNativeChatEmptyStateEvidence = {
   agentStatus?: AgentStatusEntry | null
   /** Rows the last read returned, before noise and folding. */
   transcriptMessageCount?: number
+  /** The session the chat reads, and the one a nested agent's status named
+   *  instead (native-chat-kept-session.ts). Absent: the status's own session. */
+  sessionIdentity?: NativeChatSessionIdentity | null
 }
 
 /** How much of a session id the line names: enough to tell two sessions apart

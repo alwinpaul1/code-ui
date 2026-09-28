@@ -34,6 +34,13 @@ import { Txt } from '../ui/Txt'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { sessionModelPillLabel } from './session-model-pill'
+import {
+  nativeChatKeptSessionKey,
+  ownTabStatus,
+  readSessionId,
+  useFreshNativeChatBeaconSession,
+  useNativeChatTabStatusReading
+} from './native-chat-kept-session-store'
 
 /** The active session's model label: the agent's own word, or null. Reads the
  *  live pair and not the snapshot — see session-model-pill.ts for the 2026-09-18
@@ -282,6 +289,8 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     <TabActivityBadge
                       handle={t.terminal}
                       status={t.agentStatus ?? null}
+                      keptKey={nativeChatKeptSessionKey(hostId, t.id, terminalAgentId)}
+                      agent={terminalAgentId}
                       active={active}
                       leadTurnEnded={active && controller.nativeChatController.nativeChatLeadTurnEnded}
                     />
@@ -352,21 +361,32 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
  *  status; see session-tab-activity.ts. */
 function TabActivityBadge({
   handle,
-  status,
+  status: reported,
+  keptKey,
+  agent,
   active,
   leadTurnEnded
 }: {
   handle: string | null
   status: AgentStatusEntry | null
+  /** Where the session the tab's own agent last named is kept. */
+  keptKey: string
+  agent: string
   active: boolean
   /** The active tab's chat says the lead's own turn is over. */
   leadTurnEnded: boolean
 }) {
   const { isDark } = useTheme()
   const beacon = useAgentHudBeacon(active ? handle : null)
+  // A nested agent's status (a Grok launched from Claude's Bash tool,
+  // 2026-09-28) is not this agent's word: no dot from it, which Orca keeps
+  // `working` long after the parent's turn ended (native-chat-kept-session.ts).
+  const painting = useFreshNativeChatBeaconSession(beacon, agent, active ? handle : null)
+  const reading = useNativeChatTabStatusReading(keptKey, agent, reported, painting)
+  const status = ownTabStatus(reading, reported)
   // The tab's own session, whatever view it is in: the beacon may only retire
-  // the dot for the session the host says this pane is running.
-  const activity = sessionTabActivity(status, beacon, active, status?.providerSession?.id ?? null)
+  // the dot for the session this pane is running.
+  const activity = sessionTabActivity(status, beacon, active, readSessionId(reading, status?.providerSession?.id ?? null))
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)

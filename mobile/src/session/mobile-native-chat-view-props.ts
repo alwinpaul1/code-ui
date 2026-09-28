@@ -14,6 +14,7 @@ import type {
   AgentSessionSlashCommand
 } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { NativeChatSessionIdentity } from './native-chat-kept-session'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
@@ -61,6 +62,9 @@ export type MobileNativeChatViewProps = {
   settledTurns?: NativeChatSettledTurns | null
   /** The pane's live hook status; retires background tasks whose completion never reached the transcript. */
   agentStatus?: AgentStatusEntry | null
+  /** The session the chat reads (its transcript is where a subagent's lives),
+   *  and the one a nested agent's status named instead, for the empty state. */
+  sessionIdentity?: NativeChatSessionIdentity | null
   /** Task ids the tab's HUD beacon reports finished, for the same reconciliation. */
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   /** The host's own background-task roster, on the structured lane. When the

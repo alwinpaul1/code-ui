@@ -495,7 +495,11 @@ const HEAD_HOST_JSX_SHA256 = '4553739f7c7aa13a4d322a342929ba66eaf4c8a5b85facea30
 // expressions moved.
 // 2026-09-27 (theme pass 2): DiffLineRow's <MobileSyntaxSegments> gains `palette={syntax}`. Same
 // 73 records; reverting that one file restores the previous hash.
-const HEAD_LEAF_JSX_SHA256 = '0992a61601d3679f32e3f5f748952ef75edbda8a734b2bd3ecc6ce3866825bff'
+// 2026-09-28: MobileSessionHeader's <TabActivityBadge> call gains `keptKey` and
+// `agent`, so a nested agent's status on the pane (a Grok launched from
+// Claude's Bash tool) draws no dot (native-chat-kept-session.ts). Same 73
+// records; only that record moved.
+const HEAD_LEAF_JSX_SHA256 = 'c520130153bfbdd674468a4c94f09cf353de44e81cbcdbc6799440d828356472'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
