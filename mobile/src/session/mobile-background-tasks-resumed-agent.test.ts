@@ -287,6 +287,48 @@ describe('what the review of this fix found (2026-09-28)', () => {
     expect(runningIds(messages, AFTER_RESUME, pane([RESUMED_AGENT_ROSTER_ROW]))).toEqual([ID])
   })
 
+  it('does not take a printout for a resume while a SendMessage to another agent is pending', () => {
+    const turn: NativeChatMessage = { id: 'parallel-printout', role: 'assistant', timestamp: at('2026-09-28T18:00:00.000Z'), source: 'transcript', blocks: [
+      { type: 'tool-call', name: 'SendMessage', input: { to: 'a07ea6f616a8e32a1', message: '[message]', summary: '[summary]', type: 'message' } },
+      { type: 'tool-call', name: 'Bash', input: { command: "jq '.toolUseResult' record.json" } }
+    ] }
+    const result = (id: string, output: string): NativeChatMessage => ({ id, role: 'user', timestamp: at('2026-09-28T18:00:01.000Z'), source: 'transcript', blocks: [{ type: 'tool-result', output }] })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const messages = [...launchRecords(), notificationRecord('2026-09-28T17:05:00.000Z', COMPLETED_NOTIFICATION), turn, result('printout', printedResume), result('queued', QUEUED_RESULT)]
+    expect(runningIds(messages, LATER, null)).toEqual([])
+    expect(runningIds(messages, LATER, pane([RESUMED_AGENT_ROSTER_ROW]))).toEqual([])
+    expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([
+      `[background-tasks] not counted as a resumed agent (message printout): ${ID} is not the agent any SendMessage waiting in this step addressed`
+    ])
+  })
+
+  it('counts a named agent the lead resumed by its name', () => {
+    // A named agent's id is `a<name>-<hex>`; the lead addresses it by name.
+    const named = 'areviewer-0123456789abcdef'
+    const output = JSON.stringify({ success: true, message: 'Resuming agent reviewer', resumedAgentId: named })
+    const messages = sendMessageRecords(RESUMED_AGENT_TIMES.resumeCall, RESUMED_AGENT_TIMES.resumed, output, '[summary]', 'reviewer')
+
+    expect(runningIds(messages, AFTER_RESUME, null)).toEqual([named])
+    // A name that is only the start of another name is not the same agent.
+    const other = sendMessageRecords(RESUMED_AGENT_TIMES.resumeCall, RESUMED_AGENT_TIMES.resumed, output, '[summary]', 'review')
+    expect(runningIds(other, AFTER_RESUME, null)).toEqual([])
+  })
+
+  it('does not take a printout for a resume an hour after a SendMessage whose result never landed', () => {
+    // The send to this very agent left no result (a record the reader
+    // dropped, a session killed mid-call); the turn ended with the lead's
+    // reply, and the next turn ran the printout.
+    const leaked: NativeChatMessage = { id: 'leaked-send', role: 'assistant', timestamp: at('2026-09-28T17:10:00.000Z'), source: 'transcript', blocks: [
+      { type: 'tool-call', name: 'SendMessage', input: { to: ID, message: '[message]', summary: '[summary]', type: 'message' } }
+    ] }
+    const reply: NativeChatMessage = { id: 'lead-reply', role: 'assistant', timestamp: at('2026-09-28T17:10:30.000Z'), source: 'transcript', blocks: [{ type: 'text', text: '[reply]' }] }
+    const messages = [...launchRecords(), notificationRecord('2026-09-28T17:05:00.000Z', COMPLETED_NOTIFICATION), leaked, reply, ...command('2026-09-28T18:10:00.000Z', printedResume)]
+    const inAnHour = at('2026-09-28T18:11:00.000Z')
+
+    expect(runningIds(messages, inAnHour, null)).toEqual([])
+    expect(runningIds(messages, inAnHour, pane([RESUMED_AGENT_ROSTER_ROW]))).toEqual([])
+  })
+
   it('stops counting a resumed subagent with no host status once an id-only list names it', () => {
     // With no host status nothing can see the resumed run end mid-turn (Orca's
     // reader drops that notification), and the beacon's `done=` cannot say

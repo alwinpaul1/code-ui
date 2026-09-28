@@ -320,11 +320,20 @@ and changed 38 times; the sources, one by one:
   names, so against a roster row it ends nothing; with no host status at all
   it does end the run, since a resumed run that finishes mid-turn has its
   notification dropped by Orca's reader and would otherwise show for ever.
-  A resume is read only off a result that can answer a SendMessage still
-  unanswered in the turn, never off a command that printed one. A queued
-  message ("Message queued for delivery to …") starts no run. A result that
-  claims a resume in another shape is not counted and is logged once; a
-  teammate's resume names no task id and is left to the roster.
+  A resume counts only when its `resumedAgentId` is the agent a SendMessage
+  of the same step addressed (by id, or `a<name>-<hex>` by name) and that
+  call still waits for its result. A step is the calls and then their
+  results; it ends at the next call after a result, or at any message with
+  no tool block, so a call whose result never landed stops waiting. A
+  command's printout of a resume passes only in the same step as a
+  SendMessage to that very agent; one beside a send to another agent is
+  refused and logged. A queued message ("Message queued for delivery to …")
+  starts no run. A result that claims a resume in another shape is not
+  counted and is logged once; a teammate's resume names no task id and is
+  left to the roster.
+  Known limit: a resumed run that stalls again, sending no SubagentStop, reads
+  as running until Orca drops the row it kept, because `done=` names only the
+  id and ends nothing against a row; a first run has the same gap.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
   (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca

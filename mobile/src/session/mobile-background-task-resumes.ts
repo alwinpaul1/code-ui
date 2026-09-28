@@ -1,4 +1,5 @@
-import { truncate, type Launch, type Notification } from './mobile-background-task-transcript'
+import { isToolCallBlock, isToolResultBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { readString, truncate, type Launch, type Notification } from './mobile-background-task-transcript'
 
 // ─── An agent the lead resumed, as the lead's own transcript records it ─────
 //
@@ -42,12 +43,11 @@ const PLAIN_RESUMING = /^\s*Resuming agent\s/
 const OPENS_OBJECT = /^\s*\{/
 const AGENT_ID = /^[A-Za-z0-9_-]+$/
 
-/** Reads one tool result as a SendMessage resume. Null for a result that does
- *  not claim to resume an agent — a queued message, a failed send — and a
- *  refusal, with the reason, for one that claims a resume in a shape these
- *  builds never write. The caller asks only about results that can answer a
- *  SendMessage call (one is still unanswered in the turn): a command that
- *  prints a resume's JSON is not a resume. */
+/** Reads one tool result as a SendMessage resume, whatever produced it. Null
+ *  for a result that does not claim to resume an agent — a queued message, a
+ *  failed send — and a refusal, with the reason, for one that claims a resume
+ *  in a shape these builds never write. Whether the result answers a
+ *  SendMessage at all is `readSendMessageResume`'s question. */
 export function readAgentResume(output: string): AgentResumeReading | null {
   if (PLAIN_RESUMING.test(output)) {
     return { kind: 'refused', why: 'the result says "Resuming agent" as plain text; Claude Code 2.1.281-2.1.283 write it as JSON' }
@@ -87,6 +87,79 @@ export function readAgentResume(output: string): AgentResumeReading | null {
   return { kind: 'resumed', id: resumedAgentId }
 }
 
+/** What the reader's walk has seen of SendMessage: the resumes it read, and
+ *  the calls of the current step that still wait for a result, each as the
+ *  names it addressed (`to`, `recipient`). A step is one run of
+ *  calls and then their results: Orca's reader hands each parallel call and
+ *  each result over as its own message, and the results can come back in any
+ *  order. The step ends at the next call once a result has landed, or at any
+ *  message with no tool block (the lead's reply, the next prompt, an
+ *  interruption), so a call whose result never landed does not stay waiting
+ *  into a later turn. */
+export type ResumeTracker = { resumes: Map<string, AgentResume>; targets: string[][]; resultsLanded: boolean }
+
+export function createResumeTracker(): ResumeTracker {
+  return { resumes: new Map(), targets: [], resultsLanded: false }
+}
+
+/** Called once per message, before its blocks. */
+export function trackMessage(sends: ResumeTracker, message: NativeChatMessage): void {
+  if (!message.blocks.some((block) => isToolCallBlock(block) || isToolResultBlock(block))) {
+    sends.targets = []
+    sends.resultsLanded = false
+  }
+}
+
+/** Called for every tool call. */
+export function trackCall(sends: ResumeTracker, name: string, input: unknown): void {
+  if (sends.resultsLanded) {
+    sends.targets = []
+    sends.resultsLanded = false
+  }
+  if (name === 'SendMessage') {
+    sends.targets.push([readString(input, 'to'), readString(input, 'recipient')].filter((target): target is string => target !== null))
+  }
+}
+
+/** Whether a call addressed to `target` resumed `id`: by id, or by the name a
+ *  named agent's `a<name>-<hex>` id carries. */
+function addresses(target: string, id: string): boolean {
+  return target === id || (id.startsWith(`a${target}-`) && /^[0-9a-f]+$/i.test(id.slice(target.length + 2)))
+}
+
+/** Called for every tool result, with where its message sits: records the
+ *  resume of an agent a waiting SendMessage of this step addressed, taking
+ *  that call off the wait, and logs a refused one. A result read while no
+ *  SendMessage waits is not asked about at all, and one whose resumed agent
+ *  no waiting call addressed is refused: a command beside a SendMessage to
+ *  another agent can print a resume's JSON. What still passes is a printout of
+ *  the very agent a waiting call addressed, in the same step. */
+export function trackResult(sends: ResumeTracker, output: string, messageId: string, place: AgentResume): void {
+  const reading = readSendMessageResume(sends, output)
+  if (reading?.kind === 'resumed') {
+    sends.resumes.set(reading.id, place)
+  } else if (reading) {
+    logRefusedResume(messageId, reading.why)
+  }
+}
+
+function readSendMessageResume(sends: ResumeTracker, output: string): AgentResumeReading | null {
+  sends.resultsLanded = true
+  if (sends.targets.length === 0) {
+    return null
+  }
+  const reading = readAgentResume(output)
+  if (reading?.kind !== 'resumed') {
+    return reading
+  }
+  const index = sends.targets.findIndex((targets) => targets.some((target) => addresses(target, reading.id)))
+  if (index === -1) {
+    return { kind: 'refused', why: `${reading.id} is not the agent any SendMessage waiting in this step addressed` }
+  }
+  sends.targets.splice(index, 1)
+  return reading
+}
+
 /** Refusals remembered, oldest forgotten first. Far above the results that
  *  answer a SendMessage in any one window, so a window never cycles through
  *  it and re-logs on every render. */
@@ -95,7 +168,7 @@ const logged = new Set<string>()
 
 /** One line per refused result, however often the reader runs over it.
  *  `messageId` is the transcript message that holds the result. */
-export function logRefusedResume(messageId: string, why: string): void {
+function logRefusedResume(messageId: string, why: string): void {
   const key = `${messageId}\n${why}`
   if (logged.has(key)) {
     return

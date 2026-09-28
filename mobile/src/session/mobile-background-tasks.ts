@@ -44,8 +44,8 @@ import {
   type Notification,
   type PendingCall
 } from './mobile-background-task-transcript'
-import { confirmedAgentDescriptions, settleAgentLaunches } from './mobile-background-task-agent-titles'
-import { applyAgentResumes, logRefusedResume, readAgentResume, type AgentResume } from './mobile-background-task-resumes'
+import { settleAgentLaunches } from './mobile-background-task-agent-titles'
+import { applyAgentResumes, createResumeTracker, trackCall, trackMessage, trackResult } from './mobile-background-task-resumes'
 import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
@@ -198,14 +198,16 @@ export function deriveBackgroundTasks(
   const pending: PendingCall[] = []
   const launches = new Map<string, Launch>()
   const notifications = new Map<string, Notification>()
-  const resumes = new Map<string, AgentResume>()
+  const sends = createResumeTracker()
   let position = 0
   for (const message of messages) {
     position += 1
     let text = ''
+    trackMessage(sends, message)
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
         pending.push({ name: block.name, input: block.input, startedAt: message.timestamp })
+        trackCall(sends, block.name, block.input)
         // Why: stopping a task is the one completion the transcript records
         // even mid-turn — the model asked for it, so the call itself is there.
         const stoppedId = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
@@ -213,11 +215,6 @@ export function deriveBackgroundTasks(
           notifications.set(stoppedId, { status: 'stopped', summary: null, at: position, timestamp: message.timestamp })
         }
       } else if (isToolResultBlock(block)) {
-        // Asked before the pairing below takes a call: a turn's parallel
-        // results can come back swapped, so the resume is read off whichever
-        // result says it while a SendMessage of the turn is unanswered — and
-        // never off a command that printed one.
-        const answersSendMessage = pending.some((call) => call.name === 'SendMessage')
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
         // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts), save
         // that an Agent call waits for an Agent-shaped result.
@@ -226,14 +223,12 @@ export function deriveBackgroundTasks(
         if (launch && !launches.has(launch.id)) {
           launches.set(launch.id, launch)
         }
-        // A SendMessage that resumed a stopped agent starts a new run of it
+        // A SendMessage that resumed a stopped agent starts a new run of it.
+        // Read off whichever result names the agent a waiting SendMessage of
+        // this step addressed, not off the call the pairing above hands it:
+        // parallel results come back in any order
         // (`mobile-background-task-resumes.ts`).
-        const resume = answersSendMessage ? readAgentResume(block.output) : null
-        if (resume?.kind === 'resumed') {
-          resumes.set(resume.id, { at: position, timestamp: message.timestamp })
-        } else if (resume) {
-          logRefusedResume(message.id, resume.why)
-        }
+        trackResult(sends, block.output, message.id, { at: position, timestamp: message.timestamp })
       } else if (isTextBlock(block)) {
         text += block.text
       }
@@ -250,17 +245,13 @@ export function deriveBackgroundTasks(
   }
   // Results land in the order launches were acknowledged, not the order of
   // the calls, so parallel agents are re-paired by what Claude Code says.
-  settleAgentLaunches(launches, notifications, messages, hostStatus?.subagents, position + 1)
-  let confirmed: Map<string, string> | null = null
+  const confirmed = settleAgentLaunches(launches, notifications, messages, hostStatus?.subagents, position + 1)
   applyAgentResumes({
     launches,
     notifications,
-    resumes,
+    resumes: sends.resumes,
     lastPosition: position,
-    describe: (id) => {
-      confirmed ??= confirmedAgentDescriptions(messages, hostStatus?.subagents)
-      return confirmed.get(id) ?? hostStatus?.subagents?.find((row) => row.id === id)?.agentType?.trim()
-    }
+    describe: (id) => confirmed.get(id) ?? hostStatus?.subagents?.find((row) => row.id === id)?.agentType?.trim()
   })
   // Only an id, no time: against a roster row it cannot end a resumed run
   // (`endedThisRun` needs a time); with no host status it does, because then
