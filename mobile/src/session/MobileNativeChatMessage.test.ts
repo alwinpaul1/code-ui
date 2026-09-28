@@ -144,6 +144,52 @@ describe('MobileNativeChatMessage', () => {
     expect(bubble.props.accessibilityHint).toMatch(/hold to copy/i)
   })
 
+  // 2026-09-28, the user: "Why i copy text markdown things come ** ** '''
+  // fix it". The reply's Copy control put the Markdown source on the
+  // clipboard, so a pasted reply carried every `**`, backtick and fence the
+  // screen had drawn as bold, pills and a code block.
+  it('copies a reply as the words it shows, without its Markdown marks', async () => {
+    const clipboard = await import('expo-clipboard')
+    vi.mocked(clipboard.setStringAsync).mockClear()
+    const tree = render(
+      toolMessage([
+        {
+          type: 'text',
+          text: [
+            '## Summary',
+            '',
+            '**Fixed.** Only `cdk deploy` runs *once*.',
+            '',
+            '```bash',
+            'cd mobile && npx vitest run',
+            '```',
+            '',
+            '- see [the docs](https://example.com/docs)'
+          ].join('\n')
+        },
+        { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+        { type: 'tool-result', output: 'ok' },
+        { type: 'text', text: 'Done: `ok`.' }
+      ])
+    )
+    act(() => {
+      tree.root.findByProps({ accessibilityLabel: 'Copy message' }).props.onPress()
+    })
+    expect(clipboard.setStringAsync).toHaveBeenCalledWith(
+      [
+        'Summary',
+        '',
+        'Fixed. Only cdk deploy runs once.',
+        '',
+        'cd mobile && npx vitest run',
+        '',
+        '• see the docs (https://example.com/docs)',
+        '',
+        'Done: ok.'
+      ].join('\n')
+    )
+  })
+
   it('does not make the prompt text a selection target, so the hold reaches the bubble', () => {
     const tree = render(userMessage([{ type: 'text', text: 'run the full gate' }]))
     const selectable = tree.root

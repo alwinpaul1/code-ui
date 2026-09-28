@@ -1,4 +1,5 @@
 import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { markdownPlainText } from '../components/markdown-plain-text'
 
 /** Concatenate a message's text blocks into a single copyable string. Tool
  *  calls/results and image refs are skipped — Copy is for the agent's prose. */
@@ -8,6 +9,17 @@ export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): strin
     .map((b) => b.text)
     .join('\n\n')
     .trim()
+}
+
+/** What a reply's Copy puts on the clipboard: each text block as the words
+ *  MobileMarkdown draws for it, not its Markdown source. A sent prompt is
+ *  drawn as typed, so its hold copies `nativeChatMessageText`. */
+export function nativeChatReplyPlainText(blocks: readonly NativeChatBlock[]): string {
+  return blocks
+    .filter(isTextBlock)
+    .map((b) => markdownPlainText(b.text))
+    .filter((text) => text !== '')
+    .join('\n\n')
 }
 
 /** Pinch-to-zoom font bounds. Default 1 means no visible change until pinched. */
