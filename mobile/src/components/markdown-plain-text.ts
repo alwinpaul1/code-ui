@@ -30,7 +30,7 @@ const DATA_URL = /^data:/i
  *  `<…>` destination never gets here: the preview's HTML cleanup takes it for
  *  a tag first, on screen too.) */
 function destination(href: string): string {
-  return href.trim().replace(/\s+("[^"]*"|'[^']*')$/, '')
+  return href.trim().replace(/\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')$/, '')
 }
 
 /** A link's words, with the address after them when it is a web one the

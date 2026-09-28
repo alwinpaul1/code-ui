@@ -101,6 +101,8 @@ describe('markdownPlainText', () => {
   it('leaves a link title out of the address it pastes', () => {
     expect(markdownPlainText('[docs](https://x.dev "The docs")')).toBe('docs (https://x.dev)')
     expect(markdownPlainText("[docs](https://x.dev 'The docs')")).toBe('docs (https://x.dev)')
+    expect(markdownPlainText('[t](https://x.dev "a \\"b\\" c")')).toBe('t (https://x.dev)')
+    expect(markdownPlainText('[a](https://x.dev/a"b")')).toBe('a (https://x.dev/a"b")')
   })
 
   it('keeps a whole address that has a space in it', () => {
