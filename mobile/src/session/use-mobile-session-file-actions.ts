@@ -44,7 +44,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
       hostId,
       worktreeId,
       worktreeName: routeWorktreeName,
-      nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+      nativeChatSessionId: nativeChatController.nativeChatSessionIdentity?.sessionId ?? resolveMobileNativeChatFileSessionId(activeSessionTab),
       activeHandleRef,
       terminalCwdRef,
       openBrowser: (url) => void handleCreateBrowserRef.current?.(url),
@@ -64,7 +64,7 @@ export function useMobileSessionFileActions(scope: MobileSessionTerminalSendActi
     client,
     hostId,
     worktreeId,
-    nativeChatSessionId: resolveMobileNativeChatFileSessionId(activeSessionTab),
+    nativeChatSessionId: nativeChatController.nativeChatSessionIdentity?.sessionId ?? resolveMobileNativeChatFileSessionId(activeSessionTab),
     getActiveSessionTabId: () => activeSessionTabIdRef.current
   })
 

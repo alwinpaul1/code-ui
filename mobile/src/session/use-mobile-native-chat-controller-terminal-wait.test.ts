@@ -163,6 +163,11 @@ describe('what the chat says while the agent waits on a prompt', () => {
     return null
   }
 
+  const OWN_TRANSCRIPT: Record<string, string> = {
+    claude: '/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/session-1.jsonl',
+    codex: '/Users/me/.codex/sessions/2026/09/27/rollout-2026-09-27T10-00-00-session-1.jsonl'
+  }
+
   async function show(lines: string[] | null, agent = 'claude', state = 'working', status = {}) {
     screen = lines
     const tab = {
@@ -170,7 +175,9 @@ describe('what the chat says while the agent waits on a prompt', () => {
       id: 'tab-1',
       terminal: 'term-1',
       launchAgent: agent,
-      agentStatus: { state, agentType: agent, providerSession: { id: 'session-1' }, ...status },
+      // The transcript path each agent's own hooks name; a session with none
+      // reads as a nested agent's (native-chat-kept-session.ts).
+      agentStatus: { state, agentType: agent, providerSession: { id: 'session-1', transcriptPath: OWN_TRANSCRIPT[agent] }, ...status },
       isActive: true
     }
     await act(async () => {

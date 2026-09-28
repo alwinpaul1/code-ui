@@ -207,7 +207,9 @@ describe('a desk message on the host’s first tab status after the tabs the las
     updatedAt,
     stateStartedAt: 1_000,
     stateHistory: [{ state: 'done', prompt: 'earlier', startedAt: 500 }],
-    providerSession: { id: OWN }
+    // Claude's hooks name their transcript; a session with none is a nested
+    // agent's, whose prompts the chat does not draw (native-chat-kept-session.ts).
+    providerSession: { id: OWN, transcriptPath: `/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/${OWN}.jsonl` }
   })
 
   function Harness({ agentStatus, tabsLive }: { agentStatus: ReturnType<typeof status>; tabsLive: boolean }): null {

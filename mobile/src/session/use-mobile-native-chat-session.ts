@@ -16,7 +16,7 @@ import {
 } from '../transport/stale-after-reconnect'
 import {
   applyMobileNativeChatStreamFrame,
-  type MobileNativeChatStreamFrame
+  readNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 import { createWholeSessionTracker } from './mobile-native-chat-whole-session'
 
@@ -237,7 +237,8 @@ export function useMobileNativeChatSession(args: {
           return
         }
         frameSeen = true
-        const frame = raw as MobileNativeChatStreamFrame
+        // Also hands on the frame's turn marker, which the kept-session store takes from a Codex rollout (native-chat-kept-session.ts).
+        const frame = readNativeChatStreamFrame(raw, agent, sessionId)
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,

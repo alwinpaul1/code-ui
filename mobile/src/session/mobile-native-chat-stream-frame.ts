@@ -2,6 +2,7 @@ import { applyAppend, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMerger } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { noteLiveRowsArrived } from './mid-turn-written-before'
+import { noteNativeChatTranscriptTurn } from './native-chat-kept-session-store'
 
 export type MobileNativeChatStreamFrame = {
   type?: string
@@ -14,6 +15,10 @@ export type MobileNativeChatStreamFrame = {
   pending?: boolean
   error?: string
   message?: string
+  /** The newest turn marker Orca found in the frame's records: a prompt opens
+   *  a turn (`working`), a terminal stop or an interrupt closes it
+   *  (`completed`, `interrupted`). Absent when the frame holds none. */
+  lifecycle?: { state?: string } | null
 }
 
 export type AppliedMobileNativeChatFrame =
@@ -33,6 +38,24 @@ export type AppliedMobileNativeChatFrame =
        *  the read open — the real snapshot follows on the same subscription. */
       pending?: boolean
     }
+
+/**
+ * A frame off the `nativeChat.subscribe` stream, as the session hook reads it.
+ * Its `lifecycle`, when it carries one, goes to the kept-session store, which
+ * takes a Codex rollout's task markers as the session's turn (a chat will not
+ * move off a session running a tool) and ignores Claude's
+ * (native-chat-kept-session-state.ts). An absent frame is handed back as is,
+ * for the reader to refuse as it always has.
+ */
+export function readNativeChatStreamFrame(
+  raw: unknown,
+  agent: string | null,
+  sessionId: string | null
+): MobileNativeChatStreamFrame {
+  const frame = raw as MobileNativeChatStreamFrame
+  noteNativeChatTranscriptTurn(agent, sessionId, frame?.lifecycle)
+  return frame
+}
 
 function replayRetainedTailStart(
   merger: NativeChatMerger,

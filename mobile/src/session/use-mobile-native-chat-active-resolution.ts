@@ -1,6 +1,16 @@
-import { useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { useAgentHudBeacon } from './agent-hud-beacon'
+import {
+  nativeChatStatusReadingLogLine,
+  type NativeChatSessionIdentity,
+  type NativeChatStatusReading
+} from './native-chat-kept-session'
+import {
+  nativeChatKeptSessionKey,
+  useFreshNativeChatBeaconSession,
+  useNativeChatTabStatusReading
+} from './native-chat-kept-session-store'
 import { chatDefaultAgent } from './mobile-session-view-default'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
@@ -43,6 +53,17 @@ export function useMobileNativeChatActiveResolution(args: {
   activeChatIdentity: ReturnType<typeof resolveMobileNativeChat>
   activeTabAgentWorking: boolean
   nativeChatStatus: MobileNativeChatTab['agentStatus'] | null
+  /** The tab's status as the chat may use it: null while it is a nested
+   *  agent's (native-chat-kept-session.ts), so it drives no Working row, no
+   *  model, no tasks. Everything in the chat reads this, not the raw status. */
+  activeChatAgentStatus: NonNullable<MobileNativeChatTab['agentStatus']> | null
+  /** The raw status, for the desk-prompt reader only: its own session check
+   *  refuses a nested agent's prompt, and it must still SEE that prompt, or
+   *  the same text coming back with the agent's own status reads as new. */
+  activeChatPromptStatus: NonNullable<MobileNativeChatTab['agentStatus']> | null
+  /** The session the chat reads, whichever view the tab shows, and the one a
+   *  nested agent's status named instead, when one did. */
+  activeChatSessionIdentity: NativeChatSessionIdentity | null
   sourceIdentity: string
   streamIdentity: string
   streamScopeKey: string
@@ -64,8 +85,9 @@ export function useMobileNativeChatActiveResolution(args: {
     viewResolved
   } = useMobileSessionViewMode({ hostId, worktreeId })
   const terminalPeekActive = activeSessionTabId != null && peekedTerminalTabId === activeSessionTabId
-  const beaconAgent = useAgentHudBeacon(activeHandle)?.agent ?? null
-  const chatIdentity =
+  const beacon = useAgentHudBeacon(activeHandle)
+  const beaconAgent = beacon?.agent ?? null
+  const reportedIdentity =
     activeSessionTab != null
       ? resolveMobileNativeChat(
           activeSessionTab,
@@ -73,6 +95,24 @@ export function useMobileNativeChatActiveResolution(args: {
           beaconAgent
         )
       : null
+  // Whose word the status is. A nested agent (Grok launched from Claude's Bash
+  // tool, 2026-09-28) posts as this pane; its session is not the chat's, and
+  // the session the tab's own agent last named is kept instead.
+  const tabStatus = activeSessionTab?.agentStatus ?? null
+  const onTerminal = activeSessionTab?.type === 'terminal'
+  const readAgent = onTerminal ? (reportedIdentity?.agent ?? null) : null
+  const keptKey =
+    readAgent && activeSessionTabId ? nativeChatKeptSessionKey(hostId, activeSessionTabId, readAgent) : null
+  const painting = useFreshNativeChatBeaconSession(beacon, readAgent, activeHandle)
+  const reading = useNativeChatTabStatusReading(keptKey, readAgent, tabStatus, painting)
+  const chatIdentity = reportedIdentity ? withReadSession(reportedIdentity, reading) : null
+  const readingLog = nativeChatStatusReadingLogLine(readAgent, reading)
+  useEffect(() => {
+    if (readingLog !== null) {
+      console.warn(readingLog)
+    }
+  }, [readingLog])
+  const chatStatus = reading.kind === 'nested' ? null : tabStatus
   // The agent that decides the DEFAULT view, which a hand-started one does not:
   // see `chatDefaultAgent`. An explicit toggle is an override and still wins.
   const defaultViewAgent = chatDefaultAgent(chatIdentity?.agent, chatIdentity?.source)
@@ -97,13 +137,15 @@ export function useMobileNativeChatActiveResolution(args: {
   const activeChatSessionId = activeChatResolution?.sessionId ?? null
   const activeChatStructured =
     activeChatResolution != null && activeSessionTab?.type === 'agent-session'
-  const activeTabStatus = activeSessionTab?.agentStatus
+  const activeTabStatus = chatStatus
   const activeTabAgentWorking =
     activeTabStatus?.state === 'working' && activeTabStatus.workingMode !== 'monitoring'
   const nativeChatStatus = activeChatResolution && !activeChatStructured ? activeTabStatus : null
   const routeKey = `${hostId}\0${worktreeId}\0${activeSessionTabId ?? ''}`
   const streamIdentity = `${routeKey}\0${activeChatSessionId ?? ''}\0${activeHandle ?? ''}`
-  const providerSessionId = activeSessionTab?.agentStatus?.providerSession?.id ?? ''
+  // The session the chat reads, so a peek at the terminal keeps the scope the
+  // chat had, a nested agent's status or not.
+  const providerSessionId = chatIdentity?.sessionId ?? tabStatus?.providerSession?.id ?? ''
   const streamScopeKey = `${routeKey}\0${activeChatSessionId ?? providerSessionId}\0${activeHandle ?? ''}`
 
   return {
@@ -125,8 +167,40 @@ export function useMobileNativeChatActiveResolution(args: {
     activeChatIdentity: chatIdentity,
     activeTabAgentWorking,
     nativeChatStatus,
+    activeChatAgentStatus: chatStatus,
+    activeChatPromptStatus:
+      activeChatResolution && !activeChatStructured && !(reading.kind === 'nested' && reading.read === null)
+        ? tabStatus
+        : null,
+    activeChatSessionIdentity: chatIdentity
+      ? {
+          sessionId: chatIdentity.sessionId,
+          transcriptPath: chatIdentity.transcriptPath,
+          nestedSessionId: reading.kind === 'nested' ? reading.nestedSessionId : null
+        }
+      : null,
     sourceIdentity: encodeNativeChatTranscriptIdentity([hostId, worktreeId]),
     streamIdentity,
     streamScopeKey
   }
+}
+
+/** The chat's identity with the session the reading says to read: the kept
+ *  one over a nested agent's, the kept transcript for the kept session named
+ *  bare, and the status's own otherwise. */
+function withReadSession(
+  identity: NonNullable<ReturnType<typeof resolveMobileNativeChat>>,
+  reading: NativeChatStatusReading
+): NonNullable<ReturnType<typeof resolveMobileNativeChat>> {
+  if (reading.kind === 'own') {
+    return { ...identity, sessionId: reading.sessionId, transcriptPath: reading.transcriptPath }
+  }
+  if (reading.kind === 'nested') {
+    // With nothing better to read, the session as reported, minus a path that
+    // is not this agent's.
+    return reading.read
+      ? { ...identity, sessionId: reading.read.sessionId, transcriptPath: reading.read.transcriptPath }
+      : { ...identity, sessionId: reading.nestedSessionId, transcriptPath: null }
+  }
+  return identity
 }

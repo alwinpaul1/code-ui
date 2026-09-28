@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import type { NativeChatSessionIdentity } from './native-chat-kept-session'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { agentRunState } from './mobile-native-chat-agent-run'
 import { MobileNativeChatAgentRunSheet } from './MobileNativeChatAgentRunSheet'
@@ -20,6 +21,7 @@ export function MobileNativeChatTasksProvider({
   agent,
   agentWorking,
   agentStatus,
+  sessionIdentity,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
@@ -33,6 +35,9 @@ export function MobileNativeChatTasksProvider({
   agent?: string | null
   agentWorking: boolean
   agentStatus?: AgentStatusEntry | null
+  /** The session the chat reads: its transcript is the parent of a
+   *  subagent's, whatever a nested agent's status names (native-chat-kept-session.ts). */
+  sessionIdentity?: NativeChatSessionIdentity | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string, report?: (message: string) => void) => void
@@ -45,7 +50,8 @@ export function MobileNativeChatTasksProvider({
   const [sheetOpen, setSheetOpen] = useState(false)
   const [openRunBlocks, setOpenRunBlocks] = useState<readonly NativeChatBlock[] | null>(null)
   const running = useMobileRunningTasks({ messages, agentStatus, backgroundTaskReport, hostBackgroundTasks })
-  const parentTranscriptPath = agentStatus?.providerSession?.transcriptPath ?? null
+  const parentTranscriptPath =
+    sessionIdentity?.transcriptPath ?? agentStatus?.providerSession?.transcriptPath ?? null
   const openTranscript = useCallback(
     (agentId: string, title: string, isRunning: boolean) => {
       const target = subagentTranscriptTarget({
@@ -93,6 +99,7 @@ export function MobileNativeChatTasksProvider({
           messages={messages}
           agent={agent}
           agentStatus={agentStatus ?? null}
+          parentTranscriptPath={parentTranscriptPath}
           backgroundTaskReport={backgroundTaskReport}
           hostBackgroundTasks={hostBackgroundTasks}
           onStopTask={onStopTask}

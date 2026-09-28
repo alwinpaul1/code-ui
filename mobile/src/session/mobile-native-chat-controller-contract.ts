@@ -7,6 +7,7 @@ import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
+import type { NativeChatSessionIdentity } from './native-chat-kept-session'
 import type {
   TerminalHudContextWindow,
   TerminalHudObservation,
@@ -96,8 +97,11 @@ export type MobileNativeChatController = {
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */
   nativeChatCanStop: boolean
-  /** The pane's live hook status, for reconciling background tasks the transcript cannot retire. */
+  /** The pane's live hook status, for reconciling background tasks the transcript cannot retire.
+   *  Null while it is a nested agent's, not the chat agent's (native-chat-kept-session.ts). */
   nativeChatAgentStatus: AgentStatusEntry | null
+  /** The session the chat reads, and a nested agent's it does not; null for a tab with no chat. */
+  nativeChatSessionIdentity: NativeChatSessionIdentity | null
   /** Task ids the active tab's HUD beacon reports finished; see agent-hud-beacon.ts. */
   nativeChatBackgroundTaskReport: ActiveTabBackgroundTaskReport
   /** The host's own background-task roster on the structured lane. `undefined`

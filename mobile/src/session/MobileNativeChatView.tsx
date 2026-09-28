@@ -61,7 +61,7 @@ export function MobileNativeChatView({
   turnThinking = false,
   workingStartedAt,
   settledTurns,
-  agentStatus,
+  agentStatus, sessionIdentity,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopBackgroundTask,
@@ -297,7 +297,7 @@ export function MobileNativeChatView({
   // The session named is the one chat asked for: `resolveMobileNativeChat`
   // takes it from this same status, in the same render.
   const emptyState = mobileNativeChatEmptyState(status, agent ?? null, error, {
-    agentStatus,
+    agentStatus, sessionIdentity,
     transcriptMessageCount: messages.length
   })
   const showLoading = status === 'loading' && messages.length === 0
@@ -306,7 +306,7 @@ export function MobileNativeChatView({
 
   return (
     <MobileNativeChatTasksProvider
-      messages={messages} agent={agent} agentStatus={agentStatus}
+      messages={messages} agent={agent} agentStatus={agentStatus} sessionIdentity={sessionIdentity}
       backgroundTaskReport={backgroundTaskReport} hostBackgroundTasks={hostBackgroundTasks}
       agentWorking={agentWorking === true}
       onStopTask={onStopBackgroundTask}

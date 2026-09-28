@@ -695,7 +695,9 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeSessionTab: {
         ...chatTab,
         id: activeTab.id,
-        agentStatus: { agentType: 'claude', providerSession: { id: activeTab.sessionId } }
+        // Each session names its own transcript, as Claude's hooks do; one
+        // naming none reads as a nested agent's (native-chat-kept-session.ts).
+        agentStatus: { agentType: 'claude', providerSession: { id: activeTab.sessionId, transcriptPath: `/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/${activeTab.sessionId}.jsonl` } }
       } as never,
       activeSessionTabId: activeTab.id,
       activeHandleRef: { current: 'term-1' },
@@ -964,7 +966,9 @@ describe('useMobileNativeChatController streaming scope', () => {
       workingMode: undefined as 'monitoring' | undefined,
       agentType: 'claude',
       lastAssistantMessage: 'Partial reply',
-      providerSession: { id: 'session-1' }
+      // Claude's hooks name their transcript; a session with none is a nested
+      // agent's, and draws no Working row (native-chat-kept-session.ts).
+      providerSession: { id: 'session-1', transcriptPath: '/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/session-1.jsonl' }
     },
     isActive: true
   }
