@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react-native'
-import type { StyleProp, ViewStyle } from 'react-native'
+import { View, type StyleProp, type ViewStyle } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from './PressScale'
 
@@ -71,13 +71,17 @@ export function IconButton({
           justifyContent: 'center',
           backgroundColor: background,
           borderWidth: variant === 'outline' ? 1 : 0,
-          borderColor: colors.border,
-          opacity: disabled ? 0.5 : 1
+          borderColor: colors.border
         },
         style
       ]}
     >
-      <Icon size={iconSize ?? Math.round(size * 0.5)} color={iconColor} strokeWidth={2} />
+      {/* The disabled dim sits on the glyph, not on the pressable: this button
+          dims on press, so PressScale's style keeps an opacity (1 at rest)
+          after this one, and an opacity here never painted (2026-09-28). */}
+      <View style={{ opacity: disabled ? 0.5 : 1 }}>
+        <Icon size={iconSize ?? Math.round(size * 0.5)} color={iconColor} strokeWidth={2} />
+      </View>
     </PressScale>
   )
 }
