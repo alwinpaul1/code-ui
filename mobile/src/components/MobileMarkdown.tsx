@@ -23,13 +23,15 @@ import {
   isIntrawordUnderscoreToken,
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
-import { parseMobileMarkdown, type MobileMarkdownListItem } from './mobile-markdown-parser'
+import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { listMarker } from './mobile-markdown-list-marker'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
+import { MarkdownSelectionRoot } from './markdown-selection-copy'
 import { markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
 import {
@@ -71,9 +73,6 @@ const MAX_TABLE_ROWS = 40
  *  divider, which is what the source line is. */
 const RULE_TEXT = '─'.repeat(24)
 const MAX_TABLE_COLUMNS = 8
-/** Bullet per nesting level, so a sub-item reads as one even where the indent
- *  alone is too narrow to see at ~40 columns. Deeper levels reuse the last. */
-const LIST_BULLETS = ['•', '◦', '▪']
 /** One level of list nesting inside the prose run, as text: a span cannot
  *  carry a margin, so the indent is spaces. Four is about 16 px at the prose
  *  size. Narrow on purpose: at ~40 columns a desktop-sized indent leaves a
@@ -102,23 +101,6 @@ function headingStyle(styles: MarkdownStyles, level: number, textScale: number) 
     level <= 1 ? styles.headingLevel1 : level === 2 ? styles.headingLevel2 : level === 3 ? styles.headingLevel3 : null
   const line = { ...styles.heading, ...scale }
   return [styles.heading, scale, markdownZoomedLine(line.fontSize, line.lineHeight, textScale)]
-}
-
-/** `3.` for an ordered item that starts at 3, the level's bullet otherwise, and
- *  a box for a task item whichever list it sits in. */
-function listMarker(item: MobileMarkdownListItem): string {
-  // The rest of an item that a fence interrupted keeps the indent and takes no
-  // marker; a second bullet would read as a second item.
-  if (item.continuation) {
-    return ''
-  }
-  if (item.checked != null) {
-    return item.checked ? '☑' : '☐'
-  }
-  if (item.ordered) {
-    return `${item.number ?? 1}.`
-  }
-  return LIST_BULLETS[Math.min(item.depth, LIST_BULLETS.length - 1)]!
 }
 
 // Render a plain (non-token) text run, splitting out tappable file paths when
@@ -241,6 +223,7 @@ function renderInline(
               // without changing the text, and bumps only those.
               key={`${key}c${pieceIndex}:${text.length}:${version}`}
               piece={piece}
+              span={code} pieceIndex={pieceIndex}
               styles={styles}
               chipScale={pills.chipScale}
               table={pills.table}
@@ -320,18 +303,16 @@ function MobileMarkdownInner({
     (url) => isRemoteImageUrl(url) || resolveImage !== undefined
   )
 
-  return (
+  const drawn = (
     <View
       style={styles.root}
-      // A native view of the document's own, which everything it draws is
-      // mounted into. On Android a Text keeps none of its inline Views, and a
-      // View with only a gap and onLayout is flattened, so the pills and
-      // Texts were mounted one by one into whatever stacking view held the
-      // document (a chat list cell). Containment after an unexplained Fabric
-      // "remove from a view that is not a ViewGroup" crash (2026-09-28): no
-      // View between the two flattens today, but if one ever did it would
-      // move them one by one, the kind of move react-native#57800 suspects.
-      // Now they only move with this view (mobile-markdown-pill-native-parent.test.tsx).
+      // A native view of the document's own, which everything it draws mounts
+      // into. On Android a Text keeps none of its inline Views and a View with
+      // only a gap and onLayout is flattened, so pills and Texts were mounted one
+      // by one into whatever held the document (a chat list cell). Containment
+      // after an unexplained Fabric "remove from a view that is not a ViewGroup"
+      // crash (2026-09-28): they now move only with this view, never one by one
+      // (react-native#57800; mobile-markdown-pill-native-parent.test.tsx).
       collapsable={false}
       onLayout={(event) => setContentWidth(Math.round(event.nativeEvent.layout.width))}
     >
@@ -531,6 +512,7 @@ function MobileMarkdownInner({
       })}
     </View>
   )
+  return <MarkdownSelectionRoot>{drawn}</MarkdownSelectionRoot>
 }
 
 export const MobileMarkdown = memo(MobileMarkdownInner)
