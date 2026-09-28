@@ -1,5 +1,6 @@
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
+import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type {
   TerminalHudContextWindow,
@@ -166,8 +167,11 @@ export type MobileNativeChatViewProps = {
   /** Stable key for the ask card. Dismissal state lives in the controller (it
    *  must survive this subtree unmounting on a chat↔terminal toggle). */
   askKey?: string | null
+  /** When this phone's answer was accepted; the card shows it sent until the
+   *  agent's hook row lets go of the question. */
+  askSentAt?: number | null
   /** Hide the answered/dismissed ask until a different question arrives. */
-  onDismissAsk?: () => void
+  onDismissAsk?: (outcome?: AskDismissOutcome) => void
   /** Deliver the ask answer as per-question selections; the send hook turns them
    *  into selector keystrokes (Claude) or pasted label text (other agents). */
   onAnswerAsk?: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>

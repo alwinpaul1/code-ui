@@ -9,6 +9,10 @@ export type MobileNativeChatPrompts = {
   permission: ReturnType<typeof detectAgentPermission>
   question: ReturnType<typeof parseAgentQuestion>
   detectedAsk: ReturnType<typeof parseAskFromStatus>
+  /** The question the hook row itself shows as pending: a waiting/blocked row
+   *  that carries it. Once an answer from this phone lands, this going away is
+   *  the agent taking it; the transcript's copy lingers until its result row. */
+  liveAsk: ReturnType<typeof parseAskFromStatus>
   ask: ReturnType<typeof parseAskFromStatus>
 }
 
@@ -68,16 +72,18 @@ export function useMobileNativeChatPrompts(args: {
   )
   const askFromMessages = askFromStatus ? null : resolvedAsk
   const detectedAsk = askFromStatus ?? askFromMessages
+  const liveAsk = enabled && blocked ? askFromStatus : null
 
   return {
     permission,
     question,
     detectedAsk: enabled ? detectedAsk : null,
+    liveAsk,
     // Only the status payload needs the paused gate the approval envelope uses:
     // it outlives its answer, so a working/done agent must not surface one. The
     // transcript fallback clears itself when the tool result lands, and it is the
     // only source left once the hook row goes stale and projects to `done` with
     // no interactivePrompt — gating it too strands a genuinely pending question.
-    ask: enabled ? ((blocked ? askFromStatus : null) ?? askFromMessages) : null
+    ask: enabled ? (liveAsk ?? askFromMessages) : null
   }
 }

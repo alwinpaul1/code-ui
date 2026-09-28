@@ -218,7 +218,7 @@ export function useMobileNativeChatController(
   const {
     permission: reportedNativeChatPermission,
     question: legacyQuestion,
-    detectedAsk: nativeChatDetectedAsk,
+    detectedAsk: nativeChatDetectedAsk, liveAsk: nativeChatLiveAsk,
     ask: nativeChatAskPrompt
   } = useMobileNativeChatPrompts({
     enabled: activeChatResolution != null && !activeChatStructured,
@@ -242,12 +242,12 @@ export function useMobileNativeChatController(
     nativeChatSession.status === 'ready' ||
     (nativeChatSession.status === 'error' && nativeChatSession.messages.length > 0)
   const {
-    askKey: nativeChatAskKey,
+    askKey: nativeChatAskKey, askSentAt: nativeChatAskSentAt,
     showAsk: showNativeChatAsk,
     dismissAsk: dismissNativeChatAsk
   } = useMobileNativeChatAskDismiss({
     ask: nativeChatAskPrompt,
-    detectedAsk: nativeChatDetectedAsk,
+    detectedAsk: nativeChatDetectedAsk, liveAsk: nativeChatLiveAsk,
     scopeKey: activeSessionTabId,
     sessionKey: activeChatSessionId,
     observing: showNativeChat && (nativeChatDetectedAsk != null || nativeChatTranscriptSettled)
@@ -561,7 +561,7 @@ export function useMobileNativeChatController(
     nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogKind: terminalDialogKind, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
     openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
-    nativeChatAskKey,
+    nativeChatAskKey, nativeChatAskSentAt,
     dismissNativeChatAsk,
     handleNativeChatAnswerAsk: answerAsk,
     handleNativeChatCancelAsk: cancelAsk,

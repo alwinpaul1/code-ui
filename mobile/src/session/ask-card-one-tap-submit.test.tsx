@@ -146,9 +146,10 @@ afterEach(() => {
 
 function Chat({ messages }: { messages: NativeChatMessage[] }): React.JSX.Element | null {
   const prompts = useMobileNativeChatPrompts({ enabled: true, status, messages, transcriptLoading: false })
-  const { askKey, showAsk, dismissAsk } = useMobileNativeChatAskDismiss({
+  const { askKey, showAsk, dismissAsk, askSentAt } = useMobileNativeChatAskDismiss({
     ask: prompts.ask,
     detectedAsk: prompts.detectedAsk,
+    liveAsk: prompts.liveAsk,
     scopeKey: 'tab-1',
     sessionKey: 'session-1',
     observing: true
@@ -157,6 +158,7 @@ function Chat({ messages }: { messages: NativeChatMessage[] }): React.JSX.Elemen
     <MobileNativeChatPromptCard
       ask={showAsk ? prompts.ask : null}
       askKey={askKey}
+      askSentAt={askSentAt}
       onDismissAsk={dismissAsk}
       onAnswerAsk={async (_prompt: AskPrompt, selections: AskAnswerSelection[]) => {
         answers.push(selections)
@@ -251,6 +253,17 @@ describe.each(SEQUENCES)('the ask card when $name', ({ before, between }) => {
   })
 })
 
+/** Any of the ask card: its button (Submit, Sending…) or its Sent status. */
+function askCard(): ReactTestInstance | null {
+  return (
+    renderer!.root.findAll(
+      (node) =>
+        (isHost(node, 'Button') && node.props.variant === 'accent') ||
+        (isHost(node, 'View') && node.props.testID === 'ask-sent')
+    )[0] ?? null
+  )
+}
+
 describe('the ask card after its answer lands', () => {
   it('goes away and does not come back when Claude reports the answer', async () => {
     const messages = [ASK_CALL]
@@ -258,14 +271,17 @@ describe('the ask card after its answer lands', () => {
     hook(LEAD_ASKS, messages)
     pick('Yes, push to PR 1100')
     await tapSubmitOnce()
-    expect(card(), 'the card lingers after an accepted answer').toBeNull()
+    // Accepted, not yet taken: it stays up as sent, with no live Submit on it
+    // (ask-card-submit-feedback.test.tsx drives that state).
+    expect(card(), 'a live Submit after an accepted answer').toBeNull()
+    expect(askCard()?.props.testID).toBe('ask-sent')
     hook({ ...LEAD_ASKS, hook_event_name: 'PostToolUse', tool_response: 'Yes, push to PR 1100' }, messages)
-    expect(card()).toBeNull()
+    expect(askCard(), 'the card outlived the row that took the answer').toBeNull()
     const answered: NativeChatMessage[] = [
       ASK_CALL,
       { id: 'tool-result', role: 'tool', timestamp: 2, source: 'transcript', blocks: [{ type: 'tool-result', output: 'Yes' }] }
     ]
     render(answered)
-    expect(card()).toBeNull()
+    expect(askCard()).toBeNull()
   })
 })

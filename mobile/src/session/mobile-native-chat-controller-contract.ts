@@ -4,6 +4,7 @@ import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { BeaconAgentMessage, StatusSubagentMessage } from './mobile-native-chat-agent-messages'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
+import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileNativeChatTab } from './mobile-native-chat-eligibility'
@@ -130,8 +131,12 @@ export type MobileNativeChatController = {
   nativeChatAsk: ReturnType<typeof parseAskFromStatus>
   /** Stable key for the current ask card (keys the card component). */
   nativeChatAskKey: string | null
-  /** Hide the current ask until a genuinely different question arrives. */
-  dismissNativeChatAsk: () => void
+  /** When this phone's answer to the shown ask was accepted, while its card
+   *  shows it as sent (the hook row still has the question); else null. */
+  nativeChatAskSentAt: number | null
+  /** Hide the current ask until a genuinely different question arrives; an
+   *  'answered' one stays up as sent until the hook row lets go of it. */
+  dismissNativeChatAsk: (outcome?: AskDismissOutcome) => void
   handleNativeChatAnswerAsk: (
     prompt: AskPrompt,
     selections: AskAnswerSelection[]
