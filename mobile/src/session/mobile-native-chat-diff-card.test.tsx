@@ -23,6 +23,16 @@ vi.mock('../components/DraggableDetailSheet', async () => {
       visible ? React.createElement('DraggableDetailSheet', null, header, children) : null
   }
 })
+// The tool sheet this renders now draws Markdown prose inputs through MobileMarkdown, whose
+// imports this file's react-native mock cannot load; the sheet's Markdown is tested in
+// MobileNativeChatToolDetailSheet.test.tsx.
+vi.mock('../components/MobileMarkdown', async () => {
+  const React = await import('react')
+  return {
+    MobileMarkdown: ({ content }: { content: string }) => React.createElement('Text', null, content)
+  }
+})
+
 vi.mock('react-native', () => ({
   Animated: {
     View: 'View',

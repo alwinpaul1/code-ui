@@ -25,6 +25,13 @@ vi.mock('react-native', () => ({
 // Same reason `MobileBackgroundTasksSheet.test.tsx` mocks out `BottomDrawer`:
 // the drawer shell pulls in reanimated's Flow-typed RN internals, which Node
 // cannot parse, and the content under test never touches it.
+vi.mock('../components/MobileMarkdown', async () => {
+  const { createElement: h } = await import('react')
+  return {
+    MobileMarkdown: (props: { content: string; textScale?: number }) =>
+      h('MobileMarkdown', { content: props.content, textScale: props.textScale })
+  }
+})
 vi.mock('../components/DraggableDetailSheet', () => ({
   DraggableDetailSheet: 'DraggableDetailSheet'
 }))
@@ -161,6 +168,23 @@ describe('tool detail body: Inputs and Output', () => {
     act(() => renderer?.unmount())
     renderer = null
   })
+
+  it.each(['light', 'dark'] as const)(
+    "draws a SendMessage's message as Markdown, not as raw marks, in %s",
+    (scheme) => {
+      const pair = {
+        ...SEND_MESSAGE_PAIR,
+        call: { ...SEND_MESSAGE_PAIR.call!, input: { to: 'a4a57562399d1a73c', message: '1. **CONFIRMED:** `a.ts:220`', summary: 's', type: 'message' } }
+      } as NativeChatToolPair
+      renderer = renderTree(createElement(ToolDetailBody, { pair }), scheme)
+      const markdown = renderer.root.findAllByType('MobileMarkdown' as never)
+      expect(markdown.map((node) => node.props.content)).toEqual(['1. **CONFIRMED:** `a.ts:220`'])
+      // The other inputs stay plain text rows.
+      const plain = renderer.root.findAllByType('Text' as never).map((node) => node.props.children)
+      expect(plain).toContain('a4a57562399d1a73c')
+      expect(plain).not.toContain('1. **CONFIRMED:** `a.ts:220`')
+    }
+  )
 
   it('lists every input by name, alphabetically, the evidenced SendMessage order', () => {
     renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }))

@@ -175,6 +175,32 @@ describe('sheet eligibility: which rows open the sheet vs. keep their own card',
   })
 })
 
+// 2026-09-28, the user on a "Messaged @…" sheet: "Fix the formatting". A SendMessage's message
+// arrived as Markdown (**bold**, `code`, lists) and the sheet drew the marks as text.
+describe('input rows that are prose render as Markdown', () => {
+  const sendMessage = { to: 'a4a57562399d1a73c', message: '1. **CONFIRMED:** `a.ts:220`', content: 'A fresh re-review…', summary: 's', type: 'message' }
+
+  it('marks a SendMessage message and content as Markdown, and nothing else of it', () => {
+    const rows = toolDetailInputRows(sendMessage, 'SendMessage')
+    expect(rows.filter((row) => row.isMarkdown).map((row) => row.name)).toEqual(['content', 'message'])
+  })
+
+  it("marks an Agent's prompt as Markdown", () => {
+    const rows = toolDetailInputRows({ description: 'd', prompt: '## Task\n- one', subagent_type: 'general-purpose' }, 'Agent')
+    expect(rows.filter((row) => row.isMarkdown).map((row) => row.name)).toEqual(['prompt'])
+  })
+
+  it('keeps a command, and any field of a tool it does not know, as plain text', () => {
+    expect(toolDetailInputRows({ command: 'ls **x**' }, 'Bash').some((row) => row.isMarkdown)).toBe(false)
+    expect(toolDetailInputRows({ message: '**x**' }, 'SomethingElse').some((row) => row.isMarkdown)).toBe(false)
+    expect(toolDetailInputRows(sendMessage).some((row) => row.isMarkdown)).toBe(false)
+  })
+
+  it('never marks an object value as Markdown', () => {
+    expect(toolDetailInputRows({ message: { a: 1 } }, 'SendMessage')[0]!.isMarkdown).toBeUndefined()
+  })
+})
+
 describe('input rows: name -> value, sorted, matching the evidence order', () => {
   it('lists a SendMessage-shaped input alphabetically by key', () => {
     const rows = toolDetailInputRows({
