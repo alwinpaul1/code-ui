@@ -18,6 +18,14 @@ import { markdownChipGeometry, markdownChipInkRoom, type MarkdownChipScale } fro
  * drawn up so its text sits on the words' baseline. Its text is set from the
  * words around it, a paragraph's, a heading's or a cell's.
  *
+ * The frame carries its height and nothing else, so Fabric flattens it and
+ * mounts the pill as the native view, with the pill's own bounds and shift
+ * (ViewShadowNode.cpp: a transform or a border forms a view, a height does
+ * not). The shift was the frame's, which made the frame a native view as
+ * short as itself; Android hit-tests a child only inside its parent
+ * (ViewGroup.dispatchTouchEvent), and a hold on the lower 40% of a pill, 69%
+ * at 200%, fell through to the prose under it (review of 2ebd5ce6).
+ *
  * Its Text is selectable on its own, under the same scroll gate as the prose.
  * The pill is drawn over the prose Text as a separate view, and on Android a
  * React view consumes every touch that lands on it, so a hold on the pill
@@ -49,22 +57,21 @@ export function MobileMarkdownCodeChip({
   // The room for ink grows with the type, in whole pixels (see the style).
   const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, sp.toDp, [[geometry.fontSize, geometry.lineHeight]])
   return (
-    <View style={{ height: geometry.frame, transform: [{ translateY: geometry.shift }] }}>
+    <View style={{ height: geometry.frame }}>
       <View
-        // A plain object when the reader has not zoomed: it keeps
-        // `borderRadius` in reach of anything reading the style.
-        style={
-          chipScale
-            ? [
-                styles.inlineCodeChip,
-                {
-                  paddingVertical: chipScale.paddingVertical,
-                  paddingHorizontal: chipScale.paddingHorizontal,
-                  borderRadius: chipScale.borderRadius
-                }
-              ]
-            : styles.inlineCodeChip
-        }
+        // One plain object: it keeps `borderRadius` in reach of anything
+        // reading the style.
+        style={{
+          ...styles.inlineCodeChip,
+          ...(chipScale
+            ? {
+                paddingVertical: chipScale.paddingVertical,
+                paddingHorizontal: chipScale.paddingHorizontal,
+                borderRadius: chipScale.borderRadius
+              }
+            : null),
+          transform: [{ translateY: geometry.shift }]
+        }}
       >
         <Text
           selectable={selectable}

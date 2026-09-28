@@ -192,7 +192,8 @@ const SP_IS_DP: SpToDp = { toDp: (value) => value, toSp: (value) => value }
 /**
  * How a pill sits on a line of words `size` sp, at the system font size
  * `sp`: its text's size and line (sp), the height of the frame Android lays
- * out for it (dp), and how far the pill is drawn from that frame's top.
+ * out for it (dp), and how far the pill is drawn from where that frame's top
+ * would put it.
  *
  * RN hangs an inline view's placeholder from its line's baseline
  * (TextLayoutManager: top = baseline - height), and the placeholder's height
@@ -213,11 +214,14 @@ const SP_IS_DP: SpToDp = { toDp: (value) => value, toSp: (value) => value }
  * frame is given through sp's inverse, since RN sizes the placeholder with
  * toPixelFromSP of the frame.
  *
- * Given the words' line height too (sp), a pill that would reach within
- * MARKDOWN_CHIP_LINE_MARGIN of its line's edge is drawn up or down to keep
- * that clear, off the baseline by as little: Android 14's curve at 200%
- * leaves an h2's line 1.17 times its type, and a pill on the baseline ran
- * 0.4 dp out of the bottom of it.
+ * Given the words' line height too (sp), the pill keeps
+ * MARKDOWN_CHIP_LINE_MARGIN inside its line. Taller than its line less that
+ * each side, its text is set smaller to fit: Android 14's curve at 150% to
+ * 200% leaves an h1's line a dp and a half over its pill, and the pill ran
+ * 0.23 dp from each edge of it, half a dp from a pill on the next line
+ * (review of 2ebd5ce6). Then it is drawn up or down as little as keeps the
+ * margin, off the baseline: at 200% a pill on an h2's baseline ran 0.4 dp
+ * out of the bottom of its line.
  */
 export type MarkdownChipGeometry = {
   fontSize: number
@@ -233,31 +237,29 @@ export function markdownChipGeometry(
   sp: SpToDp = SP_IS_DP,
   wordsLineHeight?: number
 ): MarkdownChipGeometry {
-  const fontSize = size * MARKDOWN_CHIP_TEXT_RATIO
-  const lineHeight = fontSize * MARKDOWN_CHIP_LINE_RATIO
+  const edge = MARKDOWN_CHIP_BORDER_WIDTH + MARKDOWN_CHIP_PADDING_VERTICAL
+  let fontSize = size * MARKDOWN_CHIP_TEXT_RATIO
+  let lineHeight = fontSize * MARKDOWN_CHIP_LINE_RATIO
+  const lineBox = wordsLineHeight === undefined ? undefined : sp.toDp(wordsLineHeight)
+  if (lineBox !== undefined && sp.toDp(lineHeight) > lineBox - 2 * (MARKDOWN_CHIP_LINE_MARGIN + edge)) {
+    lineHeight = sp.toSp(Math.max(0, lineBox - 2 * (MARKDOWN_CHIP_LINE_MARGIN + edge)))
+    fontSize = lineHeight / MARKDOWN_CHIP_LINE_RATIO
+  }
   const words = sp.toDp(size)
   const text = sp.toDp(fontSize)
   const line = sp.toDp(lineHeight)
   const placeholder = (INSTRUMENT_SANS_ASCENT - INSTRUMENT_SANS_DESCENT) * words
-  const edge = MARKDOWN_CHIP_BORDER_WIDTH + MARKDOWN_CHIP_PADDING_VERTICAL
   const baseline = edge + INSTRUMENT_SANS_ASCENT * text + (line - (INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * text) / 2
   let shift = placeholder - baseline
-  if (wordsLineHeight !== undefined) {
+  if (lineBox !== undefined) {
     // The words' line, shared out around their ascent and descent
     // (CustomLineHeightSpan), and the pill's box, about the baseline.
-    const lineBox = sp.toDp(wordsLineHeight)
     const lineAbove = INSTRUMENT_SANS_ASCENT * words + (lineBox - (INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * words) / 2
     const lineBelow = lineBox - lineAbove
     const boxAbove = baseline
     const boxBelow = line + 2 * edge - baseline
-    const room = lineBox - 2 * MARKDOWN_CHIP_LINE_MARGIN - (boxAbove + boxBelow)
-    if (room < 0) {
-      // No room for the margin: centred in the line.
-      shift += (lineBelow - lineAbove - (boxBelow - boxAbove)) / 2
-    } else {
-      shift -= Math.max(0, boxBelow - (lineBelow - MARKDOWN_CHIP_LINE_MARGIN))
-      shift += Math.max(0, boxAbove - (lineAbove - MARKDOWN_CHIP_LINE_MARGIN))
-    }
+    shift -= Math.max(0, boxBelow - (lineBelow - MARKDOWN_CHIP_LINE_MARGIN))
+    shift += Math.max(0, boxAbove - (lineAbove - MARKDOWN_CHIP_LINE_MARGIN))
   }
   return { fontSize, lineHeight, frame: sp.toSp(placeholder), shift }
 }

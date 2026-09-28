@@ -305,13 +305,14 @@ describe('pills on wrapped heading and table cell lines', () => {
     const problems: string[] = []
     for (const pill of pills()) {
       // The frame the Text holds, hung from the baseline, and the bordered
-      // pill inside it, drawn from the frame's top (MobileMarkdownCodeChip).
+      // pill inside it, drawn from the frame's top by its own shift
+      // (MobileMarkdownCodeChip).
       const line = flatStyle(hostParent(pill)!.props.style)
       const frame = flatStyle(pill.props.style)
       const box = flatStyle(pill.findAll((node) => node !== pill && node.type === ('View' as never))[0]!.props.style)
       const label = flatStyle(pill.findByType('Text' as never).props.style)
       const height = Number(label.lineHeight) + 2 * Number(box.paddingVertical ?? 0) + 2 * Number(box.borderWidth ?? 0)
-      const shift = Number((frame.transform as { translateY?: number }[] | undefined)?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0)
+      const shift = Number((box.transform as { translateY?: number }[] | undefined)?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0)
       const fontSize = Number(line.fontSize)
       const lineHeight = Number(line.lineHeight)
       const ascent = Math.max(ASCENT * fontSize, Number(frame.height))

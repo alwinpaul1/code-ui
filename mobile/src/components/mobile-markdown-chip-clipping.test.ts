@@ -8,6 +8,7 @@ vi.mock('react-native', () => ({
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
 import type { Theme } from '../theme/theme-context'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
+import { androidSpScale, type SpScale } from './android-font-scale'
 import { makeMarkdownStyles } from './mobile-markdown-styles'
 import {
   MARKDOWN_BASE_SIZE,
@@ -53,14 +54,24 @@ const ZOOMS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8]
  * (CustomLineHeightSpan), and the pill is drawn from the frame's top by its
  * shift (markdownChipGeometry, MobileMarkdownCodeChip).
  */
-function pillInLine(fontSize: number, lineHeight: number) {
-  const geometry = markdownChipGeometry(fontSize, undefined, lineHeight)
-  const ascent = Math.max(ASCENT * fontSize, geometry.frame)
-  const baseline = ascent + (lineHeight - ascent - DESCENT * fontSize) / 2
-  const top = baseline - geometry.frame + geometry.shift
-  const height = geometry.lineHeight + 2 * MARKDOWN_CHIP_PADDING_VERTICAL + 2 * MARKDOWN_CHIP_BORDER_WIDTH
-  return { top, bottom: top + height, height }
+function pillInLine(fontSize: number, lineHeight: number, sp: SpScale = androidSpScale(1, 34)) {
+  // In dp at the system font size: RN turns the type, the line and the
+  // placeholder (the frame through toPixelFromSP) through the same curve.
+  const geometry = markdownChipGeometry(fontSize, sp, lineHeight)
+  const words = sp.toDp(fontSize)
+  const line = sp.toDp(lineHeight)
+  const placeholder = sp.toDp(geometry.frame)
+  const ascent = Math.max(ASCENT * words, placeholder)
+  const baseline = ascent + (line - ascent - DESCENT * words) / 2
+  const top = baseline - placeholder + geometry.shift
+  const height = sp.toDp(geometry.lineHeight) + 2 * MARKDOWN_CHIP_PADDING_VERTICAL + 2 * MARKDOWN_CHIP_BORDER_WIDTH
+  return { top, bottom: top + height, height, line }
 }
+
+/** The system font sizes a pill is checked at: none, and Android 14's curve
+ *  from 130% to 200% (review of 2ebd5ce6: this ran with sp as dp alone,
+ *  and an h1's pill filled its line at 150% to 200%). */
+const SYSTEM = [1, 1.3, 1.5, 1.8, 2].map((scale) => [scale, androidSpScale(scale, 34)] as const)
 
 describe('an inline code chip inside a table', () => {
   it.each(['dark', 'light'] as const)('is not sliced off by the table clip at any zoom in %s', (scheme) => {
@@ -78,9 +89,11 @@ describe('an inline code chip inside a table', () => {
     expect(styles.inlineCodeChip.transform).toBeUndefined()
     for (const zoom of ZOOMS) {
       const cell = markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, zoom) ?? styles.tableCell
-      const pill = pillInLine(cell.fontSize, cell.lineHeight)
-      expect(pill.top, `zoom ${zoom}`).toBeGreaterThanOrEqual(1)
-      expect(cell.lineHeight - pill.bottom, `zoom ${zoom}`).toBeGreaterThanOrEqual(1)
+      for (const [scale, sp] of SYSTEM) {
+        const pill = pillInLine(cell.fontSize, cell.lineHeight, sp)
+        expect(pill.top, `zoom ${zoom} at ${scale * 100}%`).toBeGreaterThanOrEqual(1 - 1e-6)
+        expect(pill.line - pill.bottom, `zoom ${zoom} at ${scale * 100}%`).toBeGreaterThanOrEqual(1 - 1e-6)
+      }
     }
   })
 
@@ -134,10 +147,13 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
       const check = (name: string, block: Block) => {
         // Set from the words around it since 2026-09-28: a heading's pill is
         // a heading's size.
-        const pill = pillInLine(block.fontSize, block.lineHeight)
-        expect(block.lineHeight - pill.height, `${name}: pill over pill`).toBeGreaterThanOrEqual(MIN_GAP)
-        expect(pill.top, `${name}: pill inside its line, above`).toBeGreaterThanOrEqual(MIN_MARGIN)
-        expect(block.lineHeight - pill.bottom, `${name}: pill inside its line, below`).toBeGreaterThanOrEqual(MIN_MARGIN)
+        for (const [scale, sp] of SYSTEM) {
+          const pill = pillInLine(block.fontSize, block.lineHeight, sp)
+          const at = `${name} at ${scale * 100}%`
+          expect(pill.line - pill.height, `${at}: pill over pill`).toBeGreaterThanOrEqual(MIN_GAP - 1e-6)
+          expect(pill.top, `${at}: pill inside its line, above`).toBeGreaterThanOrEqual(MIN_MARGIN - 1e-6)
+          expect(pill.line - pill.bottom, `${at}: pill inside its line, below`).toBeGreaterThanOrEqual(MIN_MARGIN - 1e-6)
+        }
       }
       // The prose zooms, and its line height with it (markdownProseScale).
       for (const zoom of ZOOMS) {
