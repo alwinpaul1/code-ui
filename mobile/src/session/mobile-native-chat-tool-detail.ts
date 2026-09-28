@@ -107,6 +107,18 @@ export type ToolDetailInputRow = {
   /** Object/array values print as indented JSON; the sheet gives them a mono
    *  block instead of the plain-text style a string value gets. */
   isObject: boolean
+  /** Prose the agent wrote as Markdown (a SendMessage's message, an Agent's
+   *  prompt): the sheet renders it, rather than drawing `**` and backticks as
+   *  text (the user, 2026-09-28: "Fix the formatting"). Set only when true. */
+  isMarkdown?: true
+}
+
+/** The inputs of each tool that carry Markdown prose. Everything else, a Bash
+ *  `command` above all, stays literal text. */
+const MARKDOWN_INPUTS: Readonly<Record<string, readonly string[]>> = {
+  SendMessage: ['content', 'message'],
+  Agent: ['prompt'],
+  Task: ['prompt']
 }
 
 function parseJsonIfLikely(value: string): unknown {
@@ -155,12 +167,16 @@ function formatInputValue(value: unknown): { value: string; isObject: boolean } 
  *  alphabetical, not the order SendMessage's schema declares them in. A call
  *  whose input is not a named record (a bare string, an array, a number)
  *  still gets one row rather than an empty Inputs section. */
-export function toolDetailInputRows(input: unknown): ToolDetailInputRow[] {
+export function toolDetailInputRows(input: unknown, toolName?: string | null): ToolDetailInputRow[] {
   const record = normalizeInputRecord(input)
   if (record) {
+    const markdownNames = (toolName ? MARKDOWN_INPUTS[toolName] : undefined) ?? []
     return Object.keys(record)
       .sort((a, b) => a.localeCompare(b))
-      .map((name) => boundedRow(name, record[name]))
+      .map((name) => {
+        const row = boundedRow(name, record[name])
+        return !row.isObject && markdownNames.includes(name) ? { ...row, isMarkdown: true as const } : row
+      })
   }
   if (input === null || input === undefined || input === '') {
     return []

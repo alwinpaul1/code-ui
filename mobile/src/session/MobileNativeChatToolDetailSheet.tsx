@@ -4,6 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import { DraggableDetailSheet } from '../components/DraggableDetailSheet'
+import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import {
@@ -86,7 +87,7 @@ export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
 }
 
 export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
-  const rows = toolDetailInputRows(pair.call?.input)
+  const rows = toolDetailInputRows(pair.call?.input, pair.call?.name)
   const output = pair.result?.output ?? null
   return (
     <View style={{ gap: 20 }}>
@@ -113,7 +114,11 @@ function InputRow({ row }: { row: ToolDetailInputRow }) {
       <Txt variant="caption" tone="muted">
         {row.name}
       </Txt>
-      <Txt variant={row.isObject ? 'mono' : 'body'}>{row.value}</Txt>
+      {row.isMarkdown ? (
+        <MobileMarkdown content={row.value} />
+      ) : (
+        <Txt variant={row.isObject ? 'mono' : 'body'}>{row.value}</Txt>
+      )}
     </View>
   )
 }
