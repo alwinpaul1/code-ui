@@ -371,37 +371,91 @@ describe('a Claude chat whose pane a nested agent posts hooks for, with no beaco
     expect(lastSubscription().sessionId).toBe(RESTARTED)
   })
 
-  it('takes the transcript’s own turn marker as the end of the turn when the status still says working', async () => {
-    // Orca holds a Claude pane `working` after the lead's Stop while a
-    // subagent runs; the transcript's terminal stop says the lead is done.
-    const tab = await mountClaudeTab('tab-transcript-turn')
-    tab.show(CLAUDE)
-    const store = await freshStore()
-    act(() => store.noteNativeChatTranscriptTurn('claude', CLAUDE_SESSION, { state: 'completed' }))
-    tab.show(CLAUDE_CLEARED)
-
-    expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
-  })
-
-  it('moves to the new session once it finishes a turn of its own, when the kept one died mid-turn', async () => {
-    // The kept Claude was killed mid-turn and never said its turn ended; the
-    // new one is a real session. Orca does not let a nested agent report a
-    // `done`, so the new session's own finished turn is the way out.
+  it('moves to the new session once it starts a second turn, when the kept one died mid-turn', async () => {
+    // The kept Claude was killed mid-turn and never said its turn ended (Orca
+    // installs no SessionEnd for Claude); the new one is a real session. A
+    // nested `claude -p` runs one prompt and exits, so a second turn of the
+    // new session is the way out. Its first finished turn is not: a nested
+    // Claude's Stop reaches the pane too.
     const tab = await mountClaudeTab('tab-dead-mid-turn')
     tab.show(CLAUDE)
     tab.show(CLAUDE_CLEARED)
     expect(lastSubscription().sessionId).toBe(CLAUDE_SESSION)
-    tab.show({
-      ...CLAUDE_CLEARED,
-      state: 'done',
-      sessionBoundary: undefined,
-      prompt: 'where were we',
-      lastAssistantMessage: 'We were re-running the cancelled jobs.',
-      updatedAt: 1790554000000
-    })
+    const first = { ...CLAUDE_CLEARED, sessionBoundary: undefined, prompt: 'where were we' }
+    tab.show({ ...first, state: 'working', updatedAt: 1790553500000 })
+    tab.show({ ...first, state: 'done', lastAssistantMessage: 'We were re-running the cancelled jobs.', updatedAt: 1790554000000 })
+    expect(lastSubscription().sessionId).toBe(CLAUDE_SESSION)
+    tab.show({ ...first, state: 'working', prompt: 'carry on', updatedAt: 1790554100000 })
 
     expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
-    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f: it finished a turn of its own')
+    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f: it started a second turn of its own')
+  })
+
+  // Review of b97b00d6: Orca suppresses a nested agent's `done` only when its
+  // type differs from the pane's (resolveAgentStatusIdentity,
+  // src/shared/agent-status-identity.ts). A nested Claude in a Claude pane
+  // reports its Stop, and the chat moved to it, then back on the parent's
+  // PostToolUse: A, then N, then A, in the middle of A's Bash call.
+  it('keeps the chat on the parent through a nested claude -p’s whole run, its Stop included', async () => {
+    const NESTED = '3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6b'
+    const nested = (state: string, extra: Status = {}): Status => ({
+      ...CLAUDE,
+      state,
+      prompt: 'check the queue for cancelled jobs',
+      updatedAt: 1790549300000 + Object.keys(extra).length + (state === 'done' ? 2000 : 1000),
+      providerSession: {
+        key: 'session_id',
+        id: NESTED,
+        transcriptPath: `/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/${NESTED}.jsonl`
+      },
+      ...extra
+    })
+    const tab = await mountClaudeTab('tab-nested-claude-stop')
+    tab.show(CLAUDE)
+    tab.show(nested('done', { sessionBoundary: true }))
+    tab.show(nested('working'))
+    tab.show(nested('done', { lastAssistantMessage: 'Two jobs were cancelled.' }))
+    tab.show({ ...CLAUDE, toolName: 'Bash', updatedAt: 1790549400000 })
+
+    expect(subscribed.map((entry) => entry.sessionId)).not.toContain(NESTED)
+    expect(lastSubscription().sessionId).toBe(CLAUDE_SESSION)
+  })
+
+  // Review of b97b00d6: Orca reads a Claude assistant row with a null
+  // stop_reason and prose or thinking as `completed`
+  // (transcript-turn-lifecycle.ts; its own test "treats Claude assistant rows
+  // with omitted stop_reason and content as completed"), and Claude Code
+  // writes a turn's blocks as separate rows. A note before a tool call then
+  // read as the end of the turn, and no later `working` status undid it.
+  it('does not take a Claude transcript’s prose marker for the end of a turn its status says is running', async () => {
+    const NESTED = '3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6c'
+    const tab = await mountClaudeTab('tab-prose-marker')
+    tab.show(CLAUDE)
+    const store = await freshStore()
+    act(() => store.noteNativeChatTranscriptTurn('claude', CLAUDE_SESSION, { state: 'completed' }))
+    tab.show({ ...CLAUDE, toolName: 'Bash', updatedAt: 1790549350000 })
+    tab.show({
+      ...CLAUDE,
+      updatedAt: 1790549360000,
+      providerSession: {
+        key: 'session_id',
+        id: NESTED,
+        transcriptPath: `/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/${NESTED}.jsonl`
+      }
+    })
+
+    expect(lastSubscription().sessionId).toBe(CLAUDE_SESSION)
+  })
+
+  // Review of b97b00d6: a Claude parked on a question runs no tool, so nothing
+  // nested can start under it. Quit there and restarted by hand, the new
+  // session was held off the chat for its whole first turn.
+  it('moves to a restarted claude when the last one was parked on a question', async () => {
+    const tab = await mountClaudeTab('tab-restart-from-question')
+    tab.show({ ...CLAUDE, state: 'waiting', toolName: 'AskUserQuestion' })
+    tab.show(CLAUDE_CLEARED)
+
+    expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
   })
 
   it('draws none of a status that names no transcript when nothing was ever kept for the tab', async () => {
@@ -562,6 +616,27 @@ describe('a Codex chat whose pane a nested agent posts hooks for', () => {
 // last run can say which session is Claude's. Last in the file: it resets the
 // module registry.
 describe('the first status after a restart is the nested one', () => {
+  it('follows a new session that names its transcript on the first status after a restart', async () => {
+    // Nothing the phone heard before the restart says the kept session is mid
+    // turn, so a /clear made while the phone was closed is followed at once,
+    // as before the kept session existed.
+    const first = await import('./use-mobile-native-chat-controller')
+    mounted = mountController(first.useMobileNativeChatController, { id: 'tab-cleared-while-closed', launchAgent: null })
+    mounted.show(CLAUDE)
+    mounted.unmount()
+    await new Promise((resolve) => setTimeout(resolve, 700))
+
+    vi.resetModules()
+    const { hydrateSessionCaches } = await import('./session-caches-hydrate')
+    await hydrateSessionCaches()
+    const second = await import('./use-mobile-native-chat-controller')
+    subscribed.length = 0
+    mounted = mountController(second.useMobileNativeChatController, { id: 'tab-cleared-while-closed', launchAgent: null })
+    mounted.show({ ...CLAUDE_CLEARED, state: 'working', sessionBoundary: undefined, prompt: 'new work' })
+
+    expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
+  })
+
   it('keeps the Claude session it saw on the tab before the app restarted', async () => {
     const first = await import('./use-mobile-native-chat-controller')
     mounted = mountController(first.useMobileNativeChatController, { id: 'tab-paper-review-restart', launchAgent: null })

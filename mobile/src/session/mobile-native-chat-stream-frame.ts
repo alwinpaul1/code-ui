@@ -41,9 +41,10 @@ export type AppliedMobileNativeChatFrame =
 
 /**
  * A frame off the `nativeChat.subscribe` stream, as the session hook reads it.
- * Its `lifecycle`, when it carries one, goes to the kept-session store as the
- * session's turn: a chat will not move off a session whose turn is still
- * running (native-chat-kept-session.ts). An absent frame is handed back as is,
+ * Its `lifecycle`, when it carries one, goes to the kept-session store, which
+ * takes a Codex rollout's task markers as the session's turn (a chat will not
+ * move off a session running a tool) and ignores Claude's
+ * (native-chat-kept-session-state.ts). An absent frame is handed back as is,
  * for the reader to refuse as it always has.
  */
 export function readNativeChatStreamFrame(

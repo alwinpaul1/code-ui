@@ -237,7 +237,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         frameSeen = true
-        // Also hands on the transcript's own word on its lead turn (native-chat-kept-session.ts).
+        // Also hands on the frame's turn marker, which the kept-session store takes from a Codex rollout (native-chat-kept-session.ts).
         const frame = readNativeChatStreamFrame(raw, agent, sessionId)
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,

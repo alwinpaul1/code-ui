@@ -61,7 +61,9 @@ function emptyConversationDetail(
     const kept = `Another agent started in this tab reported session ${nestedId.slice(0, SESSION_ID_SHOWN_CHARS)}. The chat stays on ${agentLabel}'s own session ${readId.slice(0, SESSION_ID_SHOWN_CHARS)}`
     return status === 'awaiting-transcript'
       ? `${kept}, which the desktop has no transcript for.`
-      : `${kept}, which the desktop read and sent no messages for.`
+      : evidence.transcriptMessageCount === 0
+        ? `${kept}, which the desktop read and sent no messages for.`
+        : undefined
   }
   if (nestedId !== null && status === 'awaiting-transcript') {
     // A nested agent's status with nothing kept to read instead: the chat

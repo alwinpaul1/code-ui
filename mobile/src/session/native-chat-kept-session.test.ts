@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   nativeChatStatusReadingLogLine,
   readNativeChatTabStatus,
@@ -16,6 +16,9 @@ import {
   type NativeChatTabStatus
 } from './native-chat-kept-session-store'
 import { readNativeChatStreamFrame } from './mobile-native-chat-stream-frame'
+import { consumeAgentHudBeacons, getAgentHudBeacon, resetAgentHudBeacons } from './agent-hud-beacon'
+import { resetBeaconWatches } from './agent-hud-beacon-liveness'
+import { useFreshNativeChatBeaconSession } from './native-chat-kept-session-store'
 
 const CLAUDE_SESSION = '76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b'
 const CLAUDE_TRANSCRIPT = `/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/${CLAUDE_SESSION}.jsonl`
@@ -101,12 +104,44 @@ describe('whose word a tab status is, for a Claude chat', () => {
     expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: 'other-agent', writer: 'codex' } })
   })
 
-  it.each([
-    ['the kept turn is running', 'working' as const, 'mid-turn'],
-    ['nothing has said how the kept turn stands', null, 'turn-unknown']
-  ])('keeps the session when a new one names its transcript while %s', (_label, keptTurn, reason) => {
-    const reading = read({ keptTurn, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT }, state: 'working' })
-    expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: reason } })
+  it('keeps the session when a new one names its transcript while the kept one runs a tool', () => {
+    const reading = read({ keptTurn: 'working', providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT }, state: 'working' })
+    expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: 'mid-turn' } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toBe(
+      '[native-chat] kept session 76ba8f2f over 0c1d2e3f: it appeared while 76ba8f2f was mid-turn (a nested agent on this pane)'
+    )
+  })
+
+  it('follows a new session naming its transcript when nothing has said the kept one runs a tool', () => {
+    // A cold start knows no turn; nothing known is not evidence of a nested run.
+    expect(read({ keptTurn: null, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })).toMatchObject({
+      kind: 'own',
+      switched: { from: CLAUDE_SESSION, why: 'nothing said 76ba8f2f was mid-turn' }
+    })
+  })
+
+  it('follows a new session that started a second turn, while the kept one still reads as running', () => {
+    expect(
+      read({ keptTurn: 'working', secondTurn: true, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    ).toMatchObject({ kind: 'own', switched: { why: 'it started a second turn of its own' } })
+  })
+
+  it('does not take a finished first turn of the new session as leave to move', () => {
+    const reading = read({
+      keptTurn: 'working',
+      providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT },
+      state: 'done'
+    })
+    expect(reading.kind).toBe('nested')
+  })
+
+  it('reads a session naming its transcript as nested when a fresh beacon names another, even with nothing kept', () => {
+    const reading = read({ kept: null, painting: CLAUDE_SESSION, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(reading).toMatchObject({
+      kind: 'nested',
+      read: { sessionId: CLAUDE_SESSION, transcriptPath: null },
+      reason: { kind: 'painting' }
+    })
   })
 
   it('moves to a new session naming its transcript once the kept turn has ended', () => {
@@ -115,16 +150,6 @@ describe('whose word a tab status is, for a Claude chat', () => {
       sessionId: NEXT_SESSION,
       switched: { from: CLAUDE_SESSION, why: "76ba8f2f's turn had ended" }
     })
-  })
-
-  it('does not take a session boundary as a finished turn of the new session', () => {
-    const reading = read({
-      keptTurn: 'working',
-      providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT },
-      state: 'done',
-      sessionBoundary: true
-    })
-    expect(reading.kind).toBe('nested')
   })
 
   it('lets a fresh beacon pick the session over a status naming none, and allow a switch to the one it names', () => {
@@ -191,25 +216,58 @@ describe('the kept-session store', () => {
     expect(latest).toMatchObject({ kind: 'nested', read: KEPT })
   })
 
-  it('hears the kept session’s turn end from its transcript stream, and then lets a new session in', () => {
+  it('does not hear a Claude transcript’s turn markers: Orca reads a mid-turn note as `completed`', () => {
     show({ state: 'working', providerSession: { id: CLAUDE_SESSION, transcriptPath: CLAUDE_TRANSCRIPT } })
-    const next = { state: 'done', sessionBoundary: true, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } }
-    show(next)
-    expect(latest?.kind).toBe('nested')
-
     act(() => {
       readNativeChatStreamFrame({ type: 'appended', messages: [], lifecycle: { state: 'completed' } }, 'claude', CLAUDE_SESSION)
     })
-    expect(latest).toMatchObject({ kind: 'own', sessionId: NEXT_SESSION })
+    show({ state: 'done', sessionBoundary: true, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(latest).toMatchObject({ kind: 'nested', reason: { kind: 'mid-turn' } })
   })
 
-  it('takes a prompt marker on the transcript stream as the turn running again', () => {
-    show({ state: 'done', providerSession: { id: CLAUDE_SESSION, transcriptPath: CLAUDE_TRANSCRIPT } })
-    act(() => {
-      readNativeChatStreamFrame({ type: 'appended', messages: [], lifecycle: { state: 'working' } }, 'claude', CLAUDE_SESSION)
-    })
-    show({ state: 'working', providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+  it('counts a later status of the session over an earlier word on its turn', () => {
+    show({ state: 'done', updatedAt: 1, providerSession: { id: CLAUDE_SESSION, transcriptPath: CLAUDE_TRANSCRIPT } })
+    show({ state: 'working', updatedAt: 2, providerSession: { id: CLAUDE_SESSION, transcriptPath: CLAUDE_TRANSCRIPT } })
+    show({ state: 'working', updatedAt: 3, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
     expect(latest).toMatchObject({ kind: 'nested', reason: { kind: 'mid-turn' } })
+  })
+
+  describe('on a Codex tab, whose rollout marks its turns with explicit task events', () => {
+    const CODEX = '019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b'
+    const ROLLOUT = `/Users/me/.codex/sessions/2026/09/27/rollout-2026-09-27T21-40-11-${CODEX}.jsonl`
+    const NEXT = '019a2b3d-0000-7000-8000-000000000001'
+    const NEXT_ROLLOUT = `/Users/me/.codex/sessions/2026/09/28/rollout-2026-09-28T01-02-03-${NEXT}.jsonl`
+    function CodexProbe({ status }: { status: NativeChatTabStatus }): null {
+      latest = useNativeChatTabStatusReading(nativeChatKeptSessionKey('host-mac', 'tab-codex-store', 'codex'), 'codex', status)
+      return null
+    }
+    function showCodex(status: NativeChatTabStatus) {
+      act(() => {
+        if (renderer) {
+          renderer.update(createElement(CodexProbe, { status }))
+        } else {
+          renderer = create(createElement(CodexProbe, { status }))
+        }
+      })
+    }
+
+    it('hears the task-complete marker as the end of the turn, and lets a new thread in', () => {
+      showCodex({ state: 'working', updatedAt: 1, providerSession: { id: CODEX, transcriptPath: ROLLOUT } })
+      act(() => {
+        readNativeChatStreamFrame({ type: 'appended', messages: [], lifecycle: { state: 'completed' } }, 'codex', CODEX)
+      })
+      showCodex({ state: 'working', updatedAt: 2, providerSession: { id: NEXT, transcriptPath: NEXT_ROLLOUT } })
+      expect(latest).toMatchObject({ kind: 'own', sessionId: NEXT })
+    })
+
+    it('hears the task-started marker as the turn running again', () => {
+      showCodex({ state: 'done', updatedAt: 1, providerSession: { id: CODEX, transcriptPath: ROLLOUT } })
+      act(() => {
+        readNativeChatStreamFrame({ type: 'appended', messages: [], lifecycle: { state: 'working' } }, 'codex', CODEX)
+      })
+      showCodex({ state: 'working', updatedAt: 2, providerSession: { id: NEXT, transcriptPath: NEXT_ROLLOUT } })
+      expect(latest).toMatchObject({ kind: 'nested', reason: { kind: 'mid-turn' } })
+    })
   })
 
   it('hands an absent or markerless frame back untouched, and hears nothing from it', () => {
@@ -217,5 +275,62 @@ describe('the kept-session store', () => {
     const frame = { type: 'snapshot', messages: [] }
     expect(readNativeChatStreamFrame(frame, 'claude', CLAUDE_SESSION)).toBe(frame)
     expect(readNativeChatStreamFrame({ type: 'snapshot', lifecycle: { state: 'bogus' } }, null, null)).toMatchObject({ type: 'snapshot' })
+  })
+})
+
+// Review of b97b00d6: the freshness clock froze while no beacon was being
+// judged, and the arrival was read at render, so the first frame after a tab
+// came back judged a beacon silent for a minute as fresh: long enough to
+// re-point a nested status's read and clear the list.
+describe('the fresh-beacon check', () => {
+  const ESC = '\u001b'
+  const BEL = '\u0007'
+  let renderer: ReactTestRenderer | null = null
+  const seen: (string | null)[] = []
+
+  function Probe({ agent }: { agent: string | null }): null {
+    seen.push(useFreshNativeChatBeaconSession(getAgentHudBeacon('term-9'), agent, 'term-9'))
+    return null
+  }
+
+  function show(agent: string | null) {
+    act(() => {
+      if (renderer) {
+        renderer.update(createElement(Probe, { agent }))
+      } else {
+        renderer = create(createElement(Probe, { agent }))
+      }
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ now: 1_790_549_000_000 })
+    resetAgentHudBeacons()
+    resetBeaconWatches()
+    seen.length = 0
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('names the session of a beacon that beat within its window', () => {
+    consumeAgentHudBeacons('term-9', `${ESC}]7777;CUIHUD1 agent=claude sid=${CLAUDE_SESSION} hb=5 model=m${BEL}`)
+    show('claude')
+    expect(seen.at(-1)).toBe(CLAUDE_SESSION)
+  })
+
+  it('never names a beacon silent past its window, not even on the first frame back', () => {
+    consumeAgentHudBeacons('term-9', `${ESC}]7777;CUIHUD1 agent=claude sid=${CLAUDE_SESSION} hb=5 model=m${BEL}`)
+    show('claude')
+    // The tab shows another agent for a minute; the beacon says nothing.
+    show(null)
+    act(() => {
+      vi.setSystemTime(1_790_549_060_000)
+    })
+    seen.length = 0
+    show('claude')
+    expect(seen).not.toContain(CLAUDE_SESSION)
   })
 })

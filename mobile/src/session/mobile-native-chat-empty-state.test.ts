@@ -103,6 +103,20 @@ describe('mobileNativeChatEmptyState', () => {
     )
   })
 
+  it('says nothing about a kept session whose rows came and all folded away', () => {
+    expect(
+      mobileNativeChatEmptyState('ready', 'claude', undefined, {
+        agentStatus: null,
+        transcriptMessageCount: 3,
+        sessionIdentity: {
+          sessionId: '76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b',
+          transcriptPath: '/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b.jsonl',
+          nestedSessionId: '5690de4f-8d81-4478-b1ae-5ec01e15451b'
+        }
+      })?.detail
+    ).toBeUndefined()
+  })
+
   it('says which session the chat stayed on when the kept one reads empty under a nested status', () => {
     expect(
       mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, {

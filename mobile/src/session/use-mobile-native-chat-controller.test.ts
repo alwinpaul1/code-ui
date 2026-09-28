@@ -695,11 +695,9 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
       activeSessionTab: {
         ...chatTab,
         id: activeTab.id,
-        // A restart starts at an idle prompt: the last session's turn had
-        // ended, and each session names its own transcript, as Claude's hooks
-        // do. Without either the chat keeps the last session
-        // (native-chat-kept-session.ts).
-        agentStatus: { state: 'done', agentType: 'claude', providerSession: { id: activeTab.sessionId, transcriptPath: `/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/${activeTab.sessionId}.jsonl` } }
+        // Each session names its own transcript, as Claude's hooks do; one
+        // naming none reads as a nested agent's (native-chat-kept-session.ts).
+        agentStatus: { agentType: 'claude', providerSession: { id: activeTab.sessionId, transcriptPath: `/Users/me/.claude/projects/-Users-me-Desktop-Project-Code-UI/${activeTab.sessionId}.jsonl` } }
       } as never,
       activeSessionTabId: activeTab.id,
       activeHandleRef: { current: 'term-1' },
