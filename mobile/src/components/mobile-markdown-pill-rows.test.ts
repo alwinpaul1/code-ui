@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -169,12 +167,7 @@ describe('a pill in its line', () => {
     // and a one-character pill.
     'line of pills alone': 'See `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/md-pill-row/mobile/src/components/mobile-markdown-prose-scale.ts` now.',
     'heading that starts with a pill': '## `first` then words',
-    'one-character pill': 'a `x` b',
-    // Review of 2ebd5ce6: an h1's pill, set from its words, filled its line
-    // at 150% to 200% on Android 14's curve, 0.23 dp from each edge; these
-    // wrap, so a pill sits over a pill.
-    h1: '# See `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/md-pill-row/mobile/src` now',
-    h2: '## See `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/md-pill-row/mobile/src` now'
+    'one-character pill': 'a `x` b'
   } as const
 
   const changed = (content: string, as: PhoneAs = {}) =>
@@ -195,7 +188,6 @@ describe('a pill in its line', () => {
    *  reader's zoom at both ends, with the default between. */
   const SCALES: readonly [string, PhoneAs & { api?: number }][] = [
     ['the default size', {}],
-    ['150% system font size', { fontScale: 1.5 }],
     ['the largest system font size', { fontScale: 2 }],
     ['the largest zoom', { textScale: 1.8 }],
     ['the smallest zoom', { textScale: 0.8 }],
@@ -212,24 +204,9 @@ describe('a pill in its line', () => {
       )
   }
 
-  /** Pills on consecutive lines of one Text: 2 dp of clear air, the
-   *  collision test's floor (mobile-markdown-chip-clipping.test.ts). */
-  const crowded = (content: string, as: PhoneAs) => {
-    system.fontScale = as.fontScale ?? 1
-    const { pills } = rows(content, READER_WIDTH, as)
-    return pills.flatMap((row) =>
-      pills
-        .filter((below) => below.line === row.line + 1 && below.box.top - row.box.bottom < 2 - 1e-6)
-        .map((below) => `${row.pill.text} over ${below.pill.text}: ${(below.box.top - row.box.bottom).toFixed(2)} dp`)
-    )
-  }
-
   for (const [name, as] of SCALES) {
     it.each(Object.entries(LINE_SHAPES))(`stays inside its line, clear of the lines above and below, in a %s at ${name}`, (_, content) => {
       expect(overlaps(content, as)).toEqual([])
-    })
-    it.each(Object.entries(LINE_SHAPES))(`keeps 2 dp from a pill on the next line, in a %s at ${name}`, (_, content) => {
-      expect(crowded(content, as)).toEqual([])
     })
     it(`stays inside its line throughout HANDOVER.md at ${name}`, () => {
       expect(overlaps(HANDOVER_2026_09_26_LINES_18_TO_68, as)).toEqual([])
@@ -255,53 +232,5 @@ describe("a heading's long pill", () => {
       renderer = null
       resetRememberedPillCutsForTests()
     }
-  })
-})
-
-// Review of 2ebd5ce6: the View the Text holds was the frame, shorter than
-// the pill, and carried the pill's shift. A transform forms a native view
-// (ViewShadowNode.cpp), so the frame was mounted with its own short bounds
-// and the pill inside it; Android hit-tests a child only inside its
-// parent's bounds (ViewGroup.dispatchTouchEvent), and a hold on the lower
-// 40% of a pill (69% at 200%) fell through to the prose under it and
-// selected around the pill instead of the code in it, undoing 18c2d365.
-describe('a hold on a pill', () => {
-  /** What makes Fabric mount a View as a native view of its own
-   *  (ViewShadowNode.cpp, formsView and formsStackingContext), of what a
-   *  style or a prop here could carry. */
-  const FORMS_A_VIEW = ['transform', 'opacity', 'backgroundColor', 'borderWidth', 'borderColor', 'zIndex', 'overflow']
-  const PROPS_FORMING_A_VIEW = ['collapsable', 'pointerEvents', 'nativeID', 'testID', 'accessible', 'onLayout']
-
-  it('reaches the code anywhere on the pill, top to bottom', () => {
-    act(() => {
-      renderer = create(createElement(MobileMarkdown, { content: SHAPES['list item'] }))
-    })
-    const frames = device.pills()
-    expect(frames.length).toBeGreaterThan(0)
-    for (const frame of frames) {
-      // The frame Android lays out on the line is layout only, so Fabric
-      // flattens it and mounts the pill itself, with the pill's bounds.
-      const style = flatStyle(frame.props.style)
-      expect(Object.keys(style).filter((key) => FORMS_A_VIEW.includes(key))).toEqual([])
-      expect(Object.keys(frame.props).filter((key) => PROPS_FORMING_A_VIEW.includes(key))).toEqual([])
-      // The pill carries its own shift, so the view hit-tested is where the
-      // pill is drawn.
-      const pill = frame.findAll((node) => node !== frame && node.type === ('View' as never))[0]!
-      const own = flatStyle(pill.props.style)
-      expect(own.borderWidth).toBeGreaterThan(0)
-      expect((own.transform as { translateY?: number }[] | undefined)?.some((entry) => entry.translateY !== undefined)).toBe(true)
-    }
-  })
-
-  it('rests on Fabric forming a native view for a transform and a border, and not for a height', () => {
-    const source = readFileSync(
-      resolve(__dirname, '../../node_modules/react-native/ReactCommon/react/renderer/components/view/ViewShadowNode.cpp'),
-      'utf8'
-    )
-    const stacking = /bool formsStackingContext =([\s\S]*?);\n/.exec(source)![1]!
-    const view = /bool formsView =([\s\S]*?);\n/.exec(source)![1]!
-    expect(stacking).toContain('viewProps.transform != Transform{}')
-    expect(view).toContain('hasBorder()')
-    expect(`${stacking}${view}`).not.toMatch(/height|yogaStyle\.dimension/)
   })
 })

@@ -192,7 +192,7 @@ function renderInline(
           : undefined
       if (isInlineCodeChip(code)) {
         // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
-        const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex), words)
+        const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex), words.fontSize)
         pieces.forEach((piece, pieceIndex) => {
           parts.push(
             <MobileMarkdownCodeChip
