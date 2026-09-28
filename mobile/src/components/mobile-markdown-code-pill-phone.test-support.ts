@@ -1,6 +1,7 @@
 import { act, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { placeholderWidth, type Placeholder } from './android-font-scale.test-support'
 import { INSTRUMENT_SANS_ASCII_ADVANCE, INSTRUMENT_SANS_OTHER_ADVANCE } from './instrument-sans-regular-advances'
+import * as sizes from './mobile-markdown-prose-scale'
 
 /**
  * A model of the phone for code pill tests. There is no layout engine under
@@ -82,16 +83,19 @@ function fiberOf(node: ReactTestInstance): { key: string | null; stateNode: unkn
 
 /** The phone's view of one Text: characters at their span's size, and each
  *  inline View as one placeholder as wide as the pill it draws. */
-function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[]): ModelItem[] {
+export function flattenForPhone(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: ModelItem[], family = ''): ModelItem[] {
   const size = Number(flatStyle(node.props.style).fontSize ?? fontSize)
+  // A list marker is set in JetBrains Mono.
+  const face = String(flatStyle(node.props.style).fontFamily ?? family)
   const system = as.fontScale ?? 1
   for (const child of node.children) {
     if (typeof child === 'string') {
       for (const ch of Array.from(child)) {
-        out.push({ kind: 'char', ch, width: glyphWidth(ch, size) * system })
+        out.push({ kind: 'char', ch, width: glyphWidth(ch, size, face) * system })
       }
     } else if (child.type === ('View' as never)) {
-      const box = flatStyle(child.props.style)
+      // The bordered box may sit inside the View the Text holds.
+      const box = flatStyle((child.findAll((node) => flatStyle(node.props.style).borderWidth !== undefined)[0] ?? child).props.style)
       const label = child.findByType('Text' as never)
       const text = label.children.join('')
       const labelStyle = flatStyle(label.props.style)
@@ -104,7 +108,7 @@ function flatten(node: ReactTestInstance, fontSize: number, as: PhoneAs, out: Mo
         (kern * labelSize) / 1000
       out.push({ kind: 'pill', text, width: placeholderWidth(glyphs * (as.pillError ?? 1) * system + inset, as.placeholder) })
     } else {
-      flatten(child, size, as, out)
+      flattenForPhone(child, size, as, out, face)
     }
   }
   return out
@@ -234,7 +238,7 @@ export function createPhone(current: () => ReactTestRenderer) {
   const lines = (documentWidth: number, as: PhoneAs = {}) => {
     const text = measuredText()
     const lineWidth = textWidth(text, documentWidth)
-    const laid = layOut(flatten(text, 15 * (as.textScale ?? 1), as, []), lineWidth)
+    const laid = layOut(flattenForPhone(text, sizes.MARKDOWN_BASE_SIZE * (as.textScale ?? 1), as, []), lineWidth)
     const event = { nativeEvent: { lines: laid.map(({ items: _items, ink: _ink, ...line }) => line) } }
     return { text, lines: laid, lineWidth, event }
   }
@@ -361,8 +365,8 @@ export function earlyLineEnds(
     if (head.kind === 'pill') {
       const unit = /^[^/\s]*[/\s]?/.exec(head.text)![0]
       need = placeholderWidth(
-        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError * fontScale +
-          10 * scale,
+        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, sizes.MARKDOWN_CHIP_FONT_SIZE * scale), 0) * pillError * fontScale +
+          2 * (sizes.MARKDOWN_CHIP_PADDING_HORIZONTAL * scale + sizes.MARKDOWN_CHIP_BORDER_WIDTH),
         placeholder
       )
       if (unit.length === head.text.length) {
@@ -375,7 +379,7 @@ export function earlyLineEnds(
       }
     } else {
       const word = /^\S+/.exec(next.text)?.[0] ?? ''
-      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, 15 * scale), 0) * fontScale
+      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, sizes.MARKDOWN_BASE_SIZE * scale), 0) * fontScale
     }
     if (need <= room - 2) {
       found.push(`line ${index} "${line.text}" left ${room.toFixed(1)} dp for "${next.text.slice(0, 12)}" (${need.toFixed(1)} dp)`)

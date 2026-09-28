@@ -8,18 +8,13 @@ vi.mock('react-native', () => ({
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
 import type { Theme } from '../theme/theme-context'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
-import {
-  MARKDOWN_INLINE_CHIP_BASELINE_SHIFT,
-  makeMarkdownStyles
-} from './mobile-markdown-styles'
+import { androidSpScale, type SpScale } from './android-font-scale'
+import { makeMarkdownStyles } from './mobile-markdown-styles'
 import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
-  MARKDOWN_CHIP_FONT_SIZE,
-  MARKDOWN_CHIP_LINE_HEIGHT,
   MARKDOWN_CHIP_PADDING_VERTICAL,
-  MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
-  markdownChipBaselineShift,
+  markdownChipGeometry,
   markdownProseScale,
   markdownZoomedLine
 } from './mobile-markdown-prose-scale'
@@ -52,33 +47,53 @@ const DESCENT = 0.25
 /** The reader's pinch zoom runs from 0.8 to 1.8 (FONT_SCALE_MIN/MAX). */
 const ZOOMS = [0.8, 0.9, 1, 1.1, 1.25, 1.4, 1.6, 1.8]
 
-/** How far below the baseline the bottom of a line's box sits, when a pill
- *  of `pill` dp takes the line's ascent: its descent and half the leftover. */
-function lineBottom(fontSize: number, lineHeight: number, pill: number): number {
-  const ascent = Math.max(ASCENT * fontSize, pill)
-  const descent = DESCENT * fontSize
-  return descent + (lineHeight - ascent - descent) / 2
+/**
+ * Where a pill is drawn in a line of words `fontSize` on `lineHeight`, from
+ * the line's top: its frame hangs from the baseline, no taller than the
+ * words' ascent, so the line is shared out around the words alone
+ * (CustomLineHeightSpan), and the pill is drawn from the frame's top by its
+ * shift (markdownChipGeometry, MobileMarkdownCodeChip).
+ */
+function pillInLine(fontSize: number, lineHeight: number, sp: SpScale = androidSpScale(1, 34)) {
+  // In dp at the system font size: RN turns the type, the line and the
+  // placeholder (the frame through toPixelFromSP) through the same curve.
+  const geometry = markdownChipGeometry(fontSize, sp, lineHeight)
+  const words = sp.toDp(fontSize)
+  const line = sp.toDp(lineHeight)
+  const placeholder = sp.toDp(geometry.frame)
+  const ascent = Math.max(ASCENT * words, placeholder)
+  const baseline = ascent + (line - ascent - DESCENT * words) / 2
+  const top = baseline - placeholder + geometry.shift
+  const height = sp.toDp(geometry.lineHeight) + 2 * MARKDOWN_CHIP_PADDING_VERTICAL + 2 * MARKDOWN_CHIP_BORDER_WIDTH
+  return { top, bottom: top + height, height, line }
 }
+
+/** The system font sizes a pill is checked at: none, and Android 14's curve
+ *  from 130% to 200% (review of 2ebd5ce6: this ran with sp as dp alone,
+ *  and an h1's pill filled its line at 150% to 200%). */
+const SYSTEM = [1, 1.3, 1.5, 1.8, 2].map((scale) => [scale, androidSpScale(scale, 34)] as const)
 
 describe('an inline code chip inside a table', () => {
   it.each(['dark', 'light'] as const)('is not sliced off by the table clip at any zoom in %s', (scheme) => {
     // 2026-09-14, from the phone: a `54;1H` chip in a table row lost its top
-    // and bottom. The chip is PAINTED lower than it is laid out so it sits
-    // level with the text around it, and the table needs overflow:hidden for
-    // its rounded corners. A cell's text follows the zoom as its pills do
-    // (review of c3e62696), so the pill's bottom stays inside its own line,
-    // and the padding under the last line is room to spare.
+    // and bottom. The chip is PAINTED away from where it is laid out so it
+    // sits level with the text around it, and the table needs
+    // overflow:hidden for its rounded corners. A cell's text follows the
+    // zoom as its pills do (review of c3e62696), so the pill stays inside
+    // its own line, and the padding under the last line is room to spare.
     const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as {
       tableCell: Box & { fontSize: number; lineHeight: number }
       inlineCodeChip: Box
     }
-    const staticShift = styles.inlineCodeChip.transform?.find((entry) => entry.translateY !== undefined)?.translateY
-    expect(staticShift).toBe(MARKDOWN_INLINE_CHIP_BASELINE_SHIFT)
+    // The pill's own style carries no shift: each pill's frame does.
+    expect(styles.inlineCodeChip.transform).toBeUndefined()
     for (const zoom of ZOOMS) {
-      const pill = MARKDOWN_TABLE_CHIP_LINE_HEIGHT * zoom + 2 * MARKDOWN_CHIP_PADDING_VERTICAL * zoom + 2 * MARKDOWN_CHIP_BORDER_WIDTH
-      const shift = markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * zoom
       const cell = markdownZoomedLine(styles.tableCell.fontSize, styles.tableCell.lineHeight, zoom) ?? styles.tableCell
-      expect(lineBottom(cell.fontSize, cell.lineHeight, pill) - shift, `zoom ${zoom}`).toBeGreaterThanOrEqual(1)
+      for (const [scale, sp] of SYSTEM) {
+        const pill = pillInLine(cell.fontSize, cell.lineHeight, sp)
+        expect(pill.top, `zoom ${zoom} at ${scale * 100}%`).toBeGreaterThanOrEqual(1 - 1e-6)
+        expect(pill.line - pill.bottom, `zoom ${zoom} at ${scale * 100}%`).toBeGreaterThanOrEqual(1 - 1e-6)
+      }
     }
   })
 
@@ -106,6 +121,10 @@ describe('an inline code chip inside a table', () => {
 // lines move together and the gap between them is the line height less one
 // pill's height. The shift's own risk is the other direction: it must not push
 // a pill out of the bottom of its own line, into the words below.
+//
+// 2026-09-28: a pill's text is set from its words, so a heading's pill is a
+// heading's size, and it hangs from a frame no taller than the words' ascent
+// (markdownChipGeometry): read here from where it is drawn in its line.
 describe('a wrapped inline code chip does not collide with the pill on the next line', () => {
   const MIN_GAP = 2
   /** 2026-09-27 review: the unrounded shift left an h4 heading's pill 0.04 dp
@@ -125,17 +144,16 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
         listText: Block
         quoteText: Block
       }
-      const pillAt = (zoom: number, lineHeight = MARKDOWN_CHIP_LINE_HEIGHT) =>
-        lineHeight * zoom + 2 * MARKDOWN_CHIP_PADDING_VERTICAL * zoom + 2 * MARKDOWN_CHIP_BORDER_WIDTH
-      // Unrounded: the static style rounds it, the zoomed one does not.
-      const shiftAt = (zoom: number) => markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * zoom
-      const check = (name: string, block: Block, pill: number, shift: number) => {
-        expect(block.lineHeight - pill, `${name}: pill over pill`).toBeGreaterThanOrEqual(MIN_GAP)
-        // A line holding a pill takes the pill's height as its ascent; the
-        // pill's bottom, `shift` under the baseline, must stay inside it.
-        expect(lineBottom(block.fontSize, block.lineHeight, pill) - shift, `${name}: pill inside its line`).toBeGreaterThanOrEqual(
-          MIN_MARGIN
-        )
+      const check = (name: string, block: Block) => {
+        // Set from the words around it since 2026-09-28: a heading's pill is
+        // a heading's size.
+        for (const [scale, sp] of SYSTEM) {
+          const pill = pillInLine(block.fontSize, block.lineHeight, sp)
+          const at = `${name} at ${scale * 100}%`
+          expect(pill.line - pill.height, `${at}: pill over pill`).toBeGreaterThanOrEqual(MIN_GAP - 1e-6)
+          expect(pill.top, `${at}: pill inside its line, above`).toBeGreaterThanOrEqual(MIN_MARGIN - 1e-6)
+          expect(pill.line - pill.bottom, `${at}: pill inside its line, below`).toBeGreaterThanOrEqual(MIN_MARGIN - 1e-6)
+        }
       }
       // The prose zooms, and its line height with it (markdownProseScale).
       for (const zoom of ZOOMS) {
@@ -145,7 +163,7 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
           quoteText: styles.quoteText
         })) {
           const scaled = markdownProseScale(block.fontSize, zoom) ?? block
-          check(`${name} at ${zoom}`, scaled, pillAt(zoom), shiftAt(zoom))
+          check(`${name} at ${zoom}`, scaled)
         }
       }
       // tableCell joins the list on 2026-09-15. A table's Branch column stacked
@@ -156,14 +174,14 @@ describe('a wrapped inline code chip does not collide with the pill on the next 
       // cells follow the zoom too since the review of c3e62696, when they
       // were checked at the reader's size only and met from zoom 1.35.
       for (const zoom of ZOOMS) {
-        for (const [name, block, pill] of [
-          ['tableCell', styles.tableCell, pillAt(zoom, MARKDOWN_TABLE_CHIP_LINE_HEIGHT)],
-          ['heading', styles.heading, pillAt(zoom)],
-          ['headingLevel1', { ...styles.heading, ...styles.headingLevel1 }, pillAt(zoom)],
-          ['headingLevel2', { ...styles.heading, ...styles.headingLevel2 }, pillAt(zoom)],
-          ['headingLevel3', { ...styles.heading, ...styles.headingLevel3 }, pillAt(zoom)]
+        for (const [name, block] of [
+          ['tableCell', styles.tableCell],
+          ['heading', styles.heading],
+          ['headingLevel1', { ...styles.heading, ...styles.headingLevel1 }],
+          ['headingLevel2', { ...styles.heading, ...styles.headingLevel2 }],
+          ['headingLevel3', { ...styles.heading, ...styles.headingLevel3 }]
         ] as const) {
-          check(`${name} at ${zoom}`, markdownZoomedLine(block.fontSize, block.lineHeight, zoom) ?? block, pill, shiftAt(zoom))
+          check(`${name} at ${zoom}`, markdownZoomedLine(block.fontSize, block.lineHeight, zoom) ?? block)
         }
       }
       expect(MARKDOWN_BASE_SIZE).toBe(styles.paragraph.fontSize)

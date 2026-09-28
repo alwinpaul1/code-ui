@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MARKDOWN_BASE_SIZE,
+  MARKDOWN_PROSE_LINE_HEIGHT,
   markdownChipFootprint,
   markdownChipScale,
   markdownProseScale
@@ -21,7 +22,7 @@ describe('prose and its inline pills at every zoom', () => {
   it('keeps a line tall enough for a pill at every zoom', () => {
     for (const zoom of ZOOMS) {
       const prose = markdownProseScale(MARKDOWN_BASE_SIZE, zoom)
-      const lineHeight = prose?.lineHeight ?? MARKDOWN_BASE_SIZE + 10
+      const lineHeight = prose?.lineHeight ?? MARKDOWN_PROSE_LINE_HEIGHT
       expect(
         lineHeight,
         `zoom ${zoom}: line ${lineHeight} vs pill ${markdownChipFootprint(zoom)}`
@@ -42,12 +43,13 @@ describe('prose and its inline pills at every zoom', () => {
     expect(markdownChipScale(1)).toBe(null)
   })
 
-  it('uses the prose gap the static style uses, not a smaller one', () => {
-    // The +10 is the pill's headroom; recomputing it as +8 is what shipped. The
-    // +2 is the pill's two 1px borders, which do not scale and would otherwise
-    // eat that headroom at small zooms.
+  it('uses the prose line height the static style uses, not a smaller one', () => {
+    // The line is the pill's headroom; recomputing it as the size + 8 is what
+    // shipped. The +2 is the pill's two 1px borders, which do not scale and
+    // would otherwise eat that headroom at small zooms. The line is the
+    // Claude app's pitch since 2026-09-28 (MARKDOWN_PROSE_LINE_HEIGHT).
     const prose = markdownProseScale(MARKDOWN_BASE_SIZE, 2)
-    expect(prose!.lineHeight).toBe((MARKDOWN_BASE_SIZE + 10) * 2 + 2)
+    expect(prose!.lineHeight).toBeCloseTo(MARKDOWN_PROSE_LINE_HEIGHT * 2 + 2, 9)
   })
 
   it('reads a degenerate zoom without collapsing the line', () => {

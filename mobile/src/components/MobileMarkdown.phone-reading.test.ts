@@ -87,7 +87,9 @@ describe('an 80-column document read on a phone', () => {
       node.children
         .map((child) => (typeof child === 'string' ? child : inOrder(child)))
         .join('')
-    expect(inOrder(run)).toBe('•  outer\n    ◦  inner')
+    // A space before each marker and two after, and the list item gap: the
+    // Claude app's bullet and words (2026-09-28).
+    expect(inOrder(run)).toBe(' •  outer\n\n     ◦  inner')
   })
 
   it('scrolls a code fence sideways rather than wrapping the command', () => {
@@ -106,7 +108,8 @@ describe('heading levels on a narrow screen', () => {
     const tree = render('# One\n\n## Two\n\n### Three\n\n#### Four')
     const sizes = new Map<string, number>()
     for (const node of tree.root.findAllByType('Text' as never)) {
-      const text = flatten(node)
+      // A heading holds the newline that ends it (MobileMarkdown.tsx).
+      const text = flatten(node).trimEnd()
       if (['One', 'Two', 'Three', 'Four'].includes(text)) {
         sizes.set(text, flattenStyle(node.props.style).fontSize as number)
       }
