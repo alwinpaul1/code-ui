@@ -87,9 +87,7 @@ describe('an 80-column document read on a phone', () => {
       node.children
         .map((child) => (typeof child === 'string' ? child : inOrder(child)))
         .join('')
-    // A space before each marker and two after, and the list item gap: the
-    // Claude app's bullet and words (2026-09-28).
-    expect(inOrder(run)).toBe(' •  outer\n\n     ◦  inner')
+    expect(inOrder(run)).toBe('•  outer\n    ◦  inner')
   })
 
   it('scrolls a code fence sideways rather than wrapping the command', () => {

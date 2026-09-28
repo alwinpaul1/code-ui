@@ -3,7 +3,6 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 import { codePillWidth, cutCodePills } from './mobile-markdown-code-chip-split'
-import { MARKDOWN_TABLE_CELL_FONT_SIZE, MARKDOWN_TABLE_CHIP_FONT_SIZE } from './mobile-markdown-prose-scale'
 import { computeTableColumnWidths } from './mobile-markdown-table-layout'
 
 vi.mock('react-native', () => ({
@@ -57,26 +56,19 @@ describe('code spans inside a table cell', () => {
     return out
   }
 
-  // A cell's pill is set from the cell's own type (0.9 of its 12 dp since
-  // 2026-09-28), with the prose pill's 4 dp padding and 1 dp border a side;
-  // its line is the cell less its 8 dp of padding a side and its 1 dp right
-  // border.
-  const CELL_PILL = { fontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE, insets: 10 }
+  // A cell's pill is set at the cell's own 13 dp, with the prose pill's 4 dp
+  // padding and 1 dp border a side; its line is the cell less its 8 dp of
+  // padding a side and its 1 dp right border.
+  const CELL_PILL = { fontSize: 13, insets: 10 }
   const inner = (cellWidth: number) => cellWidth - 16 - 1
 
   it('cuts each span to what its own cell can hold, never the paragraph line', () => {
     const chips = cellChipTexts()
     expect(chips.length).toBeGreaterThan(3)
     for (const chip of chips) {
-      // A span no layout has read yet is tried whole when it would fit drawn
-      // 5% narrower than estimated (GUESS_MARGIN in mobile-markdown-code-
-      // chip-split.ts), and the cell's own layout says how it sits; at the
-      // 12 dp cells of 2026-09-28 `mobile-hosted-review-service.ts` is one.
-      // Cut to the paragraph's line, as in the bug, it is a third too wide.
-      expect(
-        codePillWidth(chip.text, { ...CELL_PILL, scale: 0.95 }),
-        `${chip.text} in a ${chip.cellWidth} dp cell`
-      ).toBeLessThanOrEqual(inner(chip.cellWidth))
+      expect(codePillWidth(chip.text, CELL_PILL), `${chip.text} in a ${chip.cellWidth} dp cell`).toBeLessThanOrEqual(
+        inner(chip.cellWidth) - 1
+      )
     }
   })
 
@@ -85,7 +77,7 @@ describe('code spans inside a table cell', () => {
       headers: ['Call'],
       rows: [['`git.generateCommitMessage`']],
       columnCount: 1,
-      fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,
+      fontSize: 13,
       horizontalPadding: 8
     })
     const room = inner(callColumn!)
@@ -111,7 +103,7 @@ describe('code spans inside a table cell', () => {
     expect(cells.length).toBeGreaterThan(3)
     for (const cell of cells) {
       const style = Object.assign({}, ...(cell.props.style as object[]).filter(Boolean)) as { fontSize: number; paddingBottom: number }
-      expect(style.fontSize).toBeCloseTo(MARKDOWN_TABLE_CELL_FONT_SIZE * 1.8, 6)
+      expect(style.fontSize).toBeCloseTo(13 * 1.8, 6)
       expect(style.paddingBottom).toBe(6)
     }
   })

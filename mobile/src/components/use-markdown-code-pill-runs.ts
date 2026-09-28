@@ -15,14 +15,12 @@ import { androidApiLevel, systemFontScale } from './system-font-scale'
 import {
   MARKDOWN_BASE_SIZE,
   MARKDOWN_CHIP_BORDER_WIDTH,
+  MARKDOWN_CHIP_FONT_SIZE,
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
-  MARKDOWN_CHIP_TEXT_RATIO,
-  MARKDOWN_TABLE_CELL_FONT_SIZE,
-  markdownChipGeometry,
+  MARKDOWN_TABLE_CHIP_FONT_SIZE,
   markdownChipScale,
   type MarkdownChipScale
 } from './mobile-markdown-prose-scale'
-import type { MarkdownWords } from './mobile-markdown-styles'
 
 /** The line a span is cut to before the document has been measured. */
 const UNMEASURED_LINE_ROOM = 280
@@ -81,11 +79,8 @@ export type CodePillRun = {
    *  whether a code span may be in it (a backtick) before one closes. */
   noteSource: (source: string) => void
   /** The pieces of the next span in this Text, in document order, and the
-   *  version its pills are keyed by. `after`: the text that follows it.
-   *  `words`: the type size and line height of the words around it, in sp
-   *  at the zoom (a heading's, in a run of prose); the Text's own when left
-   *  out. */
-  cut: (code: string, after: string, words?: MarkdownWords) => { pieces: string[]; version: number }
+   *  version its pills are keyed by. `after`: the text that follows it. */
+  cut: (code: string, after: string) => { pieces: string[]; version: number }
   /** Whether this Text may hold a pill, asked once its children are drawn:
    *  it has a backtick. Decided that early so a streaming paragraph does not
    *  change how it breaks its lines when its first span closes. */
@@ -165,12 +160,9 @@ export function useMarkdownCodePillRuns(
   const reserve = fontScale === 1 ? undefined : sp
 
   return (textKey, lineWidth, table) => {
-    // The Text's own type size in sp at the zoom: a table cell's, or prose.
-    const baseSize = (table ? MARKDOWN_TABLE_CELL_FONT_SIZE : MARKDOWN_BASE_SIZE) * textScale
     const font: CodePillFont = {
-      // A pill's text size in sp, set from its words' (MARKDOWN_CHIP_TEXT_RATIO),
-      // drawn in dp at the system font size.
-      fontSize: sp.toDp(baseSize * MARKDOWN_CHIP_TEXT_RATIO),
+      // A pill's text size in sp, drawn in dp at the system font size.
+      fontSize: sp.toDp((table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor),
       insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH),
       reserve: reserve?.toDp
     }
@@ -188,27 +180,16 @@ export function useMarkdownCodePillRuns(
           ? remembered.get(rememberKey)
           : undefined
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
-    // A table cell's own type or the prose's; both follow the zoom and the
-    // system font size.
-    const proseSize = sp.toDp(baseSize)
-    // How much larger than the Text's own a span's pill and words are drawn,
-    // in dp: 1 but in a heading, whose pills are set from its size, and
-    // smaller than that where its line is too short for it
-    // (markdownChipGeometry).
-    const emFor = (words: MarkdownWords | undefined) => {
-      if (words === undefined) {
-        return { em: 1, proseEm: 1 }
-      }
-      const em = sp.toDp(markdownChipGeometry(words.fontSize, sp, words.lineHeight).fontSize) / font.fontSize
-      return { em: Math.abs(em - 1) < 1e-9 ? 1 : em, proseEm: words.fontSize === baseSize ? 1 : sp.toDp(words.fontSize) / proseSize }
-    }
+    // A table cell is set at BASE - 2; both follow the zoom and the system
+    // font size.
+    const proseSize = sp.toDp((table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale)
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
     const textScaleNow = textPillScale(current.fits)
     const spans: PillSpanDrawn[] = []
     let backtick = false
-    const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean, em = 1) =>
-      cutCodePills(code, firstRoom, lineRoom, { ...font, fontSize: font.fontSize * em, scale }, glue, guessed)
+    const cutWith = (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) =>
+      cutCodePills(code, firstRoom, lineRoom, { ...font, scale }, glue, guessed)
     if (measured && !firstWidths.current.has(textKey)) {
       firstWidths.current.set(textKey, lineWidth)
     }
@@ -306,14 +287,13 @@ export function useMarkdownCodePillRuns(
       noteSource: (source) => {
         backtick ||= source.includes('`')
       },
-      cut: (code, after, words) => {
+      cut: (code, after) => {
         const ordinal = spans.length
         const fit = current.fits.get(ordinal)
         const room = pillFitRoom(fit, lineRoom)
-        const { em, proseEm } = emFor(words)
-        const glue = codeTextWidth(GLUE.exec(after)![0], proseSize * proseEm)
-        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit, textScaleNow), glue, fit?.floor === undefined, em)
-        spans.push({ code, pieces, room, fresh, glue, em, proseEm })
+        const glue = codeTextWidth(GLUE.exec(after)![0], proseSize)
+        const { pieces, fresh } = cutWith(code, room, pillFitScale(fit, textScaleNow), glue, fit?.floor === undefined)
+        spans.push({ code, pieces, room, fresh, glue })
         return { pieces, version: entry?.versions[ordinal] ?? 0 }
       },
       mayHoldPills: () => backtick || spans.length > 0,

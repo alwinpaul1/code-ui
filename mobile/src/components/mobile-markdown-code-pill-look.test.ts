@@ -17,7 +17,7 @@ import { darkColors, fontFamily, lightColors, radius, space, type } from '../the
 import type { Theme } from '../theme/theme-context'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 import { androidSpScale } from './android-font-scale'
-import { markdownChipGeometry, markdownChipInkRoom, markdownZoomedLine } from './mobile-markdown-prose-scale'
+import { markdownChipInkRoom } from './mobile-markdown-prose-scale'
 import { makeMarkdownStyles } from './mobile-markdown-styles'
 
 function themeFor(scheme: 'light' | 'dark'): Theme {
@@ -57,10 +57,6 @@ type Box = {
 type Styles = {
   paragraph: TextStyle
   tableCell: TextStyle
-  heading: TextStyle
-  headingLevel1: TextStyle
-  headingLevel2: TextStyle
-  headingLevel3: TextStyle
   inlineCodeChip: Box
   inlineCodeChipText: TextStyle
   inlineCodeChipTextTable: TextStyle
@@ -124,16 +120,14 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
   const chip = styles.inlineCodeChip
   const label = styles.inlineCodeChipText
 
-  // 2026-09-28, a screenshot of the Claude Android app: its pill's text is
-  // 0.85 of its words (x-height 17 px to 20, ascender 25 to 29). Code UI's
-  // words wrap where its narrower face wraps, and at 0.9 of them its pill's
-  // text is the Claude pill's own size: 6.4 dp of x-height in both.
-  it("is set in the paragraph's own face at 0.9 of its size, and a cell's pill at 0.9 of the cell's", () => {
+  it("is set in the paragraph's own face, the same size or one step smaller", () => {
     expect(label.fontFamily).toBe(styles.paragraph.fontFamily)
-    expect(label.fontSize / styles.paragraph.fontSize).toBeCloseTo(0.9, 6)
+    expect(styles.paragraph.fontSize - label.fontSize).toBeGreaterThanOrEqual(0)
+    expect(styles.paragraph.fontSize - label.fontSize).toBeLessThanOrEqual(1)
     // A table cell is smaller type; its pill follows the cell, not the paragraph.
     expect(styles.inlineCodeChipTextTable.fontFamily ?? label.fontFamily).toBe(styles.tableCell.fontFamily)
-    expect(styles.inlineCodeChipTextTable.fontSize / styles.tableCell.fontSize).toBeCloseTo(0.9, 6)
+    expect(styles.tableCell.fontSize - styles.inlineCodeChipTextTable.fontSize).toBeGreaterThanOrEqual(0)
+    expect(styles.tableCell.fontSize - styles.inlineCodeChipTextTable.fontSize).toBeLessThanOrEqual(1)
   })
 
   it('keeps the blue text on a faint themed pill', () => {
@@ -189,28 +183,17 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
       screen.api = api
       const sp = androidSpScale(fontScale, api)
       const styles = makeMarkdownStyles(themeFor(scheme)) as unknown as Styles
-      // Every line a pill is set in (its text from its words' since
-      // 2026-09-28), and the pill each draws: its type and line from
-      // markdownChipGeometry and its room for ink from them, as
-      // MobileMarkdownCodeChip draws it (review of 2ebd5ce6: this read the
-      // stylesheet's room, which the chip no longer uses).
-      const lines = [
-        ['prose', styles.paragraph],
-        ['table', styles.tableCell],
-        ['h1', { ...styles.heading, ...styles.headingLevel1 }],
-        ['h2', { ...styles.heading, ...styles.headingLevel2 }],
-        ['h3', { ...styles.heading, ...styles.headingLevel3 }],
-        ['h4', styles.heading]
-      ] as const
-      for (const [name, words] of lines) {
+      for (const [name, text] of [
+        ['prose', styles.inlineCodeChipText],
+        ['table', { ...styles.inlineCodeChipText, ...styles.inlineCodeChipTextTable }]
+      ] as const) {
         for (const zoom of [0.8, 0.9, 1, 1.25, 1.5, 1.8]) {
-          // The zoom scales the words (markdownZoomedLine), and the system
-          // font size turns sp into dp; the room for ink is dp.
-          const line = markdownZoomedLine(words.fontSize, words.lineHeight, zoom) ?? words
-          const text = markdownChipGeometry(line.fontSize, sp, line.lineHeight)
-          const room = markdownChipInkRoom(density, 1, sp.toDp, [[text.fontSize, text.lineHeight]])
-          const px = sp.toDp(text.fontSize) * density
-          const { above, below } = drawnRoom(px, sp.toDp(text.lineHeight) * density, room, density)
+          // The zoom scales the pill's type (MobileMarkdownCodeChip), and the
+          // system font size turns that sp into dp; the room for ink is dp.
+          const room =
+            zoom === 1 ? { top: text.paddingTop ?? 0, bottom: text.paddingBottom ?? 0 } : markdownChipInkRoom(density, zoom, sp.toDp)
+          const px = sp.toDp(text.fontSize * zoom) * density
+          const { above, below } = drawnRoom(px, sp.toDp(text.lineHeight * zoom) * density, room, density)
           // The font's ink: 986 above the baseline (the ring of Å), 296 below
           // (a comma below), per 1000 em (glyf of the bundled TTF).
           const at = `${name} zoom ${zoom} font ${fontScale} on API ${api}`
@@ -236,21 +219,19 @@ describe.each(['light', 'dark'] as const)('an inline code pill in %s', (scheme) 
     }
   })
 
-  it("sits the code on the paragraph's baseline, from a frame no taller than the words' ascent", () => {
-    // RN hangs an inline view's frame from the baseline (top = baseline -
-    // height). The frame is the words' ascent less their descent, and the
-    // pill is drawn `shift` from its top: the pill's own baseline, that far
-    // down the frame and its text's line into the pill, is the words'.
-    const words = styles.paragraph.fontSize
-    const geometry = markdownChipGeometry(words)
-    expect(geometry.frame).toBeLessThan(ASCENT * words)
-    const pillBaseline =
-      -geometry.frame +
-      geometry.shift +
+  it("sits the code on the paragraph's baseline, or half a dp above it, never below", () => {
+    // Android hangs an inline view's bottom on the baseline, so the pill's
+    // own text sits above it by the pill's border, padding, and the part of
+    // its line below its baseline. The pill is moved down by that, less half
+    // a dp that keeps a dp of the line below every pill (mobile-markdown-
+    // prose-scale.ts, and the collision test).
+    const shift = chip.transform?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0
+    const onBaseline =
       (chip.borderWidth ?? 0) +
       (chip.paddingVertical ?? 0) +
-      ASCENT * label.fontSize +
+      DESCENT * label.fontSize +
       (label.lineHeight - (ASCENT + DESCENT) * label.fontSize) / 2
-    expect(pillBaseline).toBeCloseTo(0, 6)
+    expect(shift).toBeLessThanOrEqual(onBaseline)
+    expect(onBaseline - shift).toBeLessThanOrEqual(0.5)
   })
 })
