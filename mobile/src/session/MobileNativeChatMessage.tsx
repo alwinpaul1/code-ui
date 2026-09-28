@@ -16,7 +16,7 @@ import {
   useChatMessageStyles,
   type ChatMessageStyles
 } from './mobile-native-chat-message-styles'
-import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { nativeChatMessageText, nativeChatReplyPlainText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
@@ -248,7 +248,10 @@ function MobileNativeChatMessageImpl({
   )
 
   const handleCopy = (): void => {
-    const text = nativeChatMessageText(message.blocks)
+    // A prompt copies as typed, unless it is drawn as Markdown (the subagent
+    // transcript's task prompts); then it copies what it draws, like a reply.
+    const text =
+      isUser && !promptsAsMarkdown ? nativeChatMessageText(message.blocks) : nativeChatReplyPlainText(message.blocks)
     if (!text) {
       return
     }

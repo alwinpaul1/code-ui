@@ -1,5 +1,14 @@
 export type MarkdownInlineMatch = { 0: string; index: number; end: number }
 
+/** The inline tokens a chat reply draws besides links and code spans:
+ *  strike, bold, italic and bare URLs. One source for the renderer and for the
+ *  reply's plain-text copy (markdown-plain-text.ts), so a mark the screen
+ *  draws as style is never left on the clipboard. A fresh regex per call: the
+ *  matcher moves its `lastIndex`. */
+export function markdownInlineTokenPattern(): RegExp {
+  return /(~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
+}
+
 /** Merge a global non-link regex with links; search starts must advance between calls. */
 export function createMarkdownInlineMatcher(
   text: string,

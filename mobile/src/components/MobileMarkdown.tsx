@@ -1,6 +1,7 @@
 import {
   codeSpanContent,
   createMarkdownInlineMatcher,
+  markdownInlineTokenPattern,
   type MarkdownInlineMatch
 } from './markdown-inline-matcher'
 import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
@@ -146,12 +147,7 @@ function renderInline(
   const parts: ReactNode[] = []
   pills.noteSource(text)
   // Code spans are found by backtick run inside the matcher, not here.
-  const pattern = createMarkdownInlineMatcher(
-    text,
-    /(~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
-    true,
-    true
-  )
+  const pattern = createMarkdownInlineMatcher(text, markdownInlineTokenPattern(), true, true)
   let pendingStart = 0
   let match: MarkdownInlineMatch | null
 
