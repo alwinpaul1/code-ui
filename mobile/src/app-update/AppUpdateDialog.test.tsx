@@ -201,7 +201,9 @@ function textOf(node: ReactTestInstance): string {
 
 /** The bullet markers the notes draw: one span per list item. */
 function bullets(root: ReactTestInstance): ReactTestInstance[] {
-  return root.findAll((node) => node.type === 'Text' && node.props.children === '•  ')
+  // The marker Text holds the bullet alone; its spacing is the words' own
+  // spaces around it (MobileMarkdown, 2026-09-28).
+  return root.findAll((node) => node.type === 'Text' && node.props.children === '•')
 }
 
 function buttons(root: ReactTestInstance): ReactTestInstance[] {

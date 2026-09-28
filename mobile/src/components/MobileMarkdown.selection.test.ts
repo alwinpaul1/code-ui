@@ -178,8 +178,9 @@ describe('agent prose the reader wants to copy', () => {
     const flat = inOrder(selectableTexts[0]!)
     expect(flat).toContain('Checked on the device:')
     expect(flat).toContain('left it when the turn took it.')
-    // The bullets are still bullets when copied.
-    expect(flat).toMatch(/•\s+Queue box is empty of the old stale entries\.\n•\s+A phone send/)
+    // The bullets are still bullets when copied, a blank line between items
+    // since they have the Claude app's gap between them (2026-09-28).
+    expect(flat).toMatch(/•\s+Queue box is empty of the old stale entries\.\n\n\s*•\s+A phone send/)
     expect(inOrder(selectableTexts[1]!)).toBe('The row it writes is pinned by a test using the real transcript row.')
     expect(inOrder(selectableTexts[2]!)).toContain('Not checked live: tapping Send now on the phone.')
   })

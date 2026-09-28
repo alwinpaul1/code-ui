@@ -1,20 +1,38 @@
+/**
+ * Markdown's type beside the Claude Android app (2026-09-28, the same reply
+ * in both, screenshots of 1015 px from the phone's 1080). The Claude app set
+ * a line every 57.5 px, 21.75 dp, where Code UI set 67; and fitted more on
+ * each: its face is narrower than Instrument Sans, and Code UI wrapped a word
+ * or so sooner on most lines. So the words are MARKDOWN_TYPE_SCALE of what
+ * they were, the size at which a reply wraps where the Claude app wraps it
+ * (six lines of seven in the two paragraphs measured; the seventh cannot
+ * match in this face, mobile-markdown-claude-measure.test.ts), headings,
+ * cells and list markers alike, and a line of prose is MARKDOWN_LEADING_SCALE
+ * of what it was, the Claude app's pitch. Both are factors, so the system
+ * font size and the reader's zoom scale them as before.
+ */
+export const MARKDOWN_TYPE_SCALE = 0.925
+export const MARKDOWN_LEADING_SCALE = 0.87
+
 /** Prose base size. Declared HERE, not imported from the style sheet, so this
  *  module stays free of react-native and its invariants can be tested as plain
- *  arithmetic; the style sheet imports it back. */
-export const MARKDOWN_BASE_SIZE = 15
+ *  arithmetic; the style sheet imports it back. 15 before 2026-09-28. */
+export const MARKDOWN_BASE_SIZE = 15 * MARKDOWN_TYPE_SCALE
 
 /**
- * Prose and inline-chip sizes at the reader's pinch zoom.
+ * A line of prose: 25 dp (the words' size + 10) before 2026-09-28, the
+ * Claude app's pitch since.
  *
- * Two things went wrong when this lived inline in the component (device
+ * Prose and inline-chip sizes move together at the reader's pinch zoom. Two
+ * things went wrong when this lived inline in the component (device
  * screenshot, 2026-09-15: chips drawn on top of the words beside them).
  *
  * The line height was recomputed as `(size + 8) * scale`, quietly overriding
- * the `+10` the static paragraph style carries. That `+10` is not a taste: it is
- * the gap an inline code pill needs, because Android ignores an inline View's
- * vertical margins and the line height is the only separation there is. The
- * collision test pinned it on the STATIC styles, so nothing noticed the scaled
- * path breaking the same invariant.
+ * the `+10` the static paragraph style carried. That headroom is not a
+ * taste: it is the gap an inline code pill needs, because Android ignores an
+ * inline View's vertical margins and the line height is the only separation
+ * there is. The collision test pinned it on the STATIC styles, so nothing
+ * noticed the scaled path breaking the same invariant.
  *
  * And the pill did not scale at all. Its text and padding are fixed, so at any
  * zoom the prose moved and the pill did not — too big beside shrunken text, and
@@ -22,7 +40,19 @@ export const MARKDOWN_BASE_SIZE = 15
  *
  * So both move together, by the same factor, keeping the same headroom.
  */
-export const MARKDOWN_PROSE_LINE_GAP = 10
+export const MARKDOWN_PROSE_LINE_HEIGHT = 25 * MARKDOWN_LEADING_SCALE
+
+/**
+ * The room between blocks of one run of prose, each a blank line that
+ * height (MobileMarkdown): a whole 25 dp line before 2026-09-28. The Claude
+ * app leaves 17.5 px more between paragraphs than between lines (6.6 dp) and
+ * 8.5 px more between list items (3.2 dp). Before a heading it leaves more:
+ * the Claude share would set a heading as close to the paragraph above it as
+ * to its own section, so a heading keeps three quarters of a line.
+ */
+export const MARKDOWN_PARAGRAPH_GAP = MARKDOWN_PROSE_LINE_HEIGHT * 0.3
+export const MARKDOWN_LIST_ITEM_GAP = MARKDOWN_PROSE_LINE_HEIGHT * 0.15
+export const MARKDOWN_HEADING_GAP = MARKDOWN_PROSE_LINE_HEIGHT * 0.75
 
 /**
  * Inline code, as the Claude app draws it: the words' own face on a faint
@@ -54,10 +84,10 @@ export const MARKDOWN_CHIP_TEXT_RATIO = 0.9
 export const MARKDOWN_CHIP_LINE_RATIO = 16.5 / 14
 export const MARKDOWN_CHIP_FONT_SIZE = MARKDOWN_BASE_SIZE * MARKDOWN_CHIP_TEXT_RATIO
 export const MARKDOWN_CHIP_LINE_HEIGHT = MARKDOWN_CHIP_FONT_SIZE * MARKDOWN_CHIP_LINE_RATIO
-/** A table cell's own type at no zoom; it follows the zoom as prose does
- *  (markdownZoomedLine), and its pills are set from it. */
-export const MARKDOWN_TABLE_CELL_FONT_SIZE = MARKDOWN_BASE_SIZE - 2
-export const MARKDOWN_TABLE_CELL_LINE_HEIGHT = MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP
+/** A table cell's own type at no zoom (13 before 2026-09-28); it follows the
+ *  zoom as prose does (markdownZoomedLine), and its pills are set from it. */
+export const MARKDOWN_TABLE_CELL_FONT_SIZE = 13 * MARKDOWN_TYPE_SCALE
+export const MARKDOWN_TABLE_CELL_LINE_HEIGHT = MARKDOWN_PROSE_LINE_HEIGHT
 export const MARKDOWN_TABLE_CHIP_FONT_SIZE = MARKDOWN_TABLE_CELL_FONT_SIZE * MARKDOWN_CHIP_TEXT_RATIO
 export const MARKDOWN_TABLE_CHIP_LINE_HEIGHT = MARKDOWN_TABLE_CHIP_FONT_SIZE * MARKDOWN_CHIP_LINE_RATIO
 /** 2 dp more below a cell's text than above it, as since 2026-09-14. */
@@ -240,7 +270,7 @@ export function markdownProseScale(
   // a small zoom they eat the gap the line height is there to provide. Adding
   // them back keeps the clear air between two wrapped pills constant at every
   // zoom instead of shrinking it away (markdownZoomedLine).
-  return markdownZoomedLine(size, size + MARKDOWN_PROSE_LINE_GAP, textScale)
+  return markdownZoomedLine(size, (size * MARKDOWN_PROSE_LINE_HEIGHT) / MARKDOWN_BASE_SIZE, textScale)
 }
 
 export type MarkdownChipScale = {
