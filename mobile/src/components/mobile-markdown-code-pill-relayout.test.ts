@@ -7,7 +7,6 @@ import {
   createPhone,
   earlyLineEnds,
   flatStyle,
-  hostParent,
   overflowingLines,
   sharedLines,
   type ModelLine
@@ -506,8 +505,7 @@ describe('an image link beside a pill in the same run', () => {
   it('is text, not a view, so the run reads its pills', () => {
     mount('A figure: ![plot](fig/plot.png)\n\nWorktree: `/Users/alwinpaul/Desktop/Project/Code UI/.claude/worktrees/figure-run` here.', 360)
     const run = device.measuredText()
-    // The Views the run's Text holds: one frame per pill, the pill inside it.
-    const views = run.findAll((node) => node.type === ('View' as never) && hostParent(node)?.type === ('Text' as never))
+    const views = run.findAll((node) => node.type === ('View' as never))
     expect(views.length).toBe(device.pills().length)
     expect(views.length).toBeGreaterThan(0)
     const { lines, lineWidth } = device.settle(360)

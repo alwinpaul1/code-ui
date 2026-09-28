@@ -17,10 +17,23 @@ import {
   MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
   MARKDOWN_TABLE_CHIP_FONT_SIZE,
   MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
-  markdownChipInkRoom,
-  markdownZoomedLine
+  markdownChipBaselineShift,
+  markdownChipInkRoom
 } from './mobile-markdown-prose-scale'
 export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
+
+/** How far an inline code chip is painted BELOW its layout box, so its text
+ *  sits on the paragraph's baseline, or half a dp above it
+ *  (markdownChipBaselineShift). It is a
+ *  transform, so layout does not know about it: any ancestor that clips (the
+ *  table, which needs `overflow: hidden` for its rounded corners) cuts the
+ *  chip off unless it leaves this much room. A chip in a table cell was sliced
+ *  across the middle (2026-09-14). Not rounded: a transform takes a fraction
+ *  of a dp, and the zoomed chip uses the same value scaled. */
+export const MARKDOWN_INLINE_CHIP_BASELINE_SHIFT = markdownChipBaselineShift(
+  MARKDOWN_CHIP_FONT_SIZE,
+  MARKDOWN_CHIP_LINE_HEIGHT
+)
 
 /** The screen's pixels per dp, which a pill's room for ink is counted in
  *  (markdownChipInkRoom); 3 where the platform does not say. */
@@ -104,22 +117,25 @@ export function makeMarkdownStyles(theme: Theme) {
     // No margins: an inline View's margins do nothing on Android. Fabric lays
     // the View at its placeholder's origin with its border-box size
     // (ParagraphShadowNode::layout), so the space around a pill is the
-    // paragraph's own space character, as around a word. The pill hangs in a
-    // frame Android lays out instead of it, and is drawn up to sit on the
-    // words' baseline (markdownChipGeometry, MobileMarkdownCodeChip).
+    // paragraph's own space character, as around a word.
     inlineCodeChip: {
       backgroundColor: colors.codeSpanBg,
       borderWidth: MARKDOWN_CHIP_BORDER_WIDTH,
       borderColor: colors.codeSpanBorder,
       borderRadius: MARKDOWN_CHIP_RADIUS,
       paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL,
-      paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL
+      paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL,
+      // Android hangs an inline View's bottom on the baseline, which left the
+      // pill's text riding above the words beside it (2026-09-12, "peak" sat
+      // above its sentence; 2026-09-26, beside the Claude app's). This moves
+      // the pill's text down to half a dp above the paragraph's baseline
+      // (MARKDOWN_CHIP_LIFT).
+      transform: [{ translateY: MARKDOWN_INLINE_CHIP_BASELINE_SHIFT }]
     },
-    // The words' own face, set from their size (MARKDOWN_CHIP_TEXT_RATIO): a
-    // paragraph's pill here, and each pill from its own words in
-    // MobileMarkdownCodeChip. JetBrains Mono read wider and heavier than the
-    // words around it (2026-09-26). The line is the glyphs' own height and
-    // no more (mobile-markdown-prose-scale.ts).
+    // The paragraph's own face, one step smaller, as the Claude app sets it
+    // (2026-09-26); JetBrains Mono read wider and heavier than the words
+    // around it. The line is the glyphs' own height and no more
+    // (mobile-markdown-prose-scale.ts).
     inlineCodeChipText: {
       fontFamily: fonts.regular,
       fontSize: MARKDOWN_CHIP_FONT_SIZE,
@@ -281,21 +297,6 @@ export function makeMarkdownStyles(theme: Theme) {
 }
 
 export type MarkdownStyles = ReturnType<typeof makeMarkdownStyles>
-
-/** The type size and line height of a run of words, in sp at the zoom: a
- *  code pill among them is set from them (markdownChipGeometry). */
-export type MarkdownWords = { fontSize: number; lineHeight: number }
-
-/** A heading's style over its level, with its size and line height at the
- *  reader's zoom, and those as the words its code pills are set from. */
-export function markdownHeadingStyle(styles: MarkdownStyles, level: number, textScale: number) {
-  const scale =
-    level <= 1 ? styles.headingLevel1 : level === 2 ? styles.headingLevel2 : level === 3 ? styles.headingLevel3 : null
-  const line = { ...styles.heading, ...scale }
-  const zoomed = markdownZoomedLine(line.fontSize, line.lineHeight, textScale)
-  const words: MarkdownWords = zoomed ?? line
-  return { style: [styles.heading, scale, zoomed], words }
-}
 
 export function useMarkdownStyles(): MarkdownStyles {
   const theme = useTheme()

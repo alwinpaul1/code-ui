@@ -11,7 +11,6 @@ import {
   type ModelLine,
   type PhoneAs
 } from './mobile-markdown-code-pill-phone.test-support'
-import { MARKDOWN_CHIP_INK_ROOM_BOTTOM, MARKDOWN_CHIP_INK_ROOM_TOP } from './mobile-markdown-prose-scale'
 import { resetRememberedPillCutsForTests, rememberedPillTextCount } from './use-markdown-code-pill-runs'
 
 vi.mock('react-native', () => ({
@@ -304,24 +303,20 @@ describe('pills on wrapped heading and table cell lines', () => {
     })
     const problems: string[] = []
     for (const pill of pills()) {
-      // The frame the Text holds, hung from the baseline, and the bordered
-      // pill inside it, drawn from the frame's top (MobileMarkdownCodeChip).
       const line = flatStyle(hostParent(pill)!.props.style)
-      const frame = flatStyle(pill.props.style)
-      const box = flatStyle(pill.findAll((node) => node !== pill && node.type === ('View' as never))[0]!.props.style)
+      const box = flatStyle(pill.props.style)
       const label = flatStyle(pill.findByType('Text' as never).props.style)
       const height = Number(label.lineHeight) + 2 * Number(box.paddingVertical ?? 0) + 2 * Number(box.borderWidth ?? 0)
-      const shift = Number((frame.transform as { translateY?: number }[] | undefined)?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0)
+      const shift = Number((box.transform as { translateY?: number }[] | undefined)?.find((entry) => entry.translateY !== undefined)?.translateY ?? 0)
       const fontSize = Number(line.fontSize)
       const lineHeight = Number(line.lineHeight)
-      const ascent = Math.max(ASCENT * fontSize, Number(frame.height))
-      const baseline = ascent + (lineHeight - ascent - DESCENT * fontSize) / 2
-      const top = baseline - Number(frame.height) + shift
+      const ascent = Math.max(ASCENT * fontSize, height)
+      const underBaseline = DESCENT * fontSize + (lineHeight - ascent - DESCENT * fontSize) / 2
       if (lineHeight - height < 2) {
         problems.push(`${fontSize} dp line ${lineHeight}: pill ${height.toFixed(1)} leaves ${(lineHeight - height).toFixed(2)} dp to the pill below`)
       }
-      if (top < 1 || lineHeight - (top + height) < 1) {
-        problems.push(`${fontSize} dp line ${lineHeight}: pill from ${top.toFixed(2)} to ${(top + height).toFixed(2)} dp`)
+      if (underBaseline - shift < 1) {
+        problems.push(`${fontSize} dp line ${lineHeight}: pill bottom ${(underBaseline - shift).toFixed(2)} dp inside its line`)
       }
     }
     expect(pills().length).toBe(5)
@@ -336,14 +331,12 @@ describe("a zoomed pill's room for ink", () => {
     })
     for (const pill of pills()) {
       const label = flatStyle(pill.findByType('Text' as never).props.style)
-      // 1.25 and 2 dp at 14 sp, per sp of the pill's text since its text is
-      // set from its words (2026-09-28).
       for (const [side, room] of [
-        ['paddingTop', MARKDOWN_CHIP_INK_ROOM_TOP],
-        ['paddingBottom', MARKDOWN_CHIP_INK_ROOM_BOTTOM]
+        ['paddingTop', 1.25],
+        ['paddingBottom', 2]
       ] as const) {
         const px = Number(label[side]) * 2.625
-        expect(px).toBeGreaterThanOrEqual(room * Number(label.fontSize) * 2.625 - 1e-6)
+        expect(px).toBeGreaterThanOrEqual(room * textScale * 2.625)
         expect(Math.abs(px - Math.round(px))).toBeLessThan(1e-4)
       }
       expect(label.marginTop).toBe(-Number(label.paddingTop))

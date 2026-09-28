@@ -10,17 +10,7 @@ import {
   type ModelLine,
   type PhoneAs
 } from './mobile-markdown-code-pill-phone.test-support'
-import { spToDp } from './android-font-scale.test-support'
-import { MARKDOWN_BASE_SIZE, MARKDOWN_CHIP_FONT_SIZE } from './mobile-markdown-prose-scale'
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
-
-/** The curve's dp for the prose's size and a pill's at a scale (the AOSP
- *  tables, android-font-scale.test-support.ts): 27 and 26 dp at 200% when
- *  they were 15 and 14 sp. */
-const curveDp = (scale: number): readonly [number, number] => [
-  spToDp(MARKDOWN_BASE_SIZE, scale, true),
-  spToDp(MARKDOWN_CHIP_FONT_SIZE, scale, true)
-]
 
 /** The system font size (Settings > Display > Font size), as RN reads it,
  *  and the Android API level, which decides whether sp scale on a curve. */
@@ -319,11 +309,13 @@ describe('pills at a large system font size on Android 14', () => {
     'run `cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs` before committing.'
   ]
   const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+  /** The curve's dp for 15 sp and 14 sp at each scale (the AOSP tables). */
+  const CURVE: Readonly<Record<string, readonly [number, number]>> = { '1.5': [22.5, 22], '1.8': [25.2, 24.4], '2': [27, 26] }
   const drawnAt = (system: string, kern: number) => {
-    const [prose, pill] = curveDp(Number(system))
+    const [prose, pill] = CURVE[system]!
     return {
-      fontScale: prose / MARKDOWN_BASE_SIZE,
-      pillError: (pill / MARKDOWN_CHIP_FONT_SIZE / (prose / MARKDOWN_BASE_SIZE)) * kern,
+      fontScale: prose / 15,
+      pillError: (pill / 14 / (prose / 15)) * kern,
       placeholder: { system: Number(system), curve: true }
     }
   }
@@ -386,6 +378,8 @@ describe("pills at a system font size, with the room RN reserves for them", () =
     'Run `pnpm install` and `pnpm test` then `git push` to finish, with `a/b` and `x` beside them.'
   ]
   const LEAD = 'I checked this again after the last review and it reads the same way on the phone as on the desktop today'.split(' ')
+  /** The curve's dp for 15 sp and 14 sp at each scale (the AOSP tables). */
+  const CURVE: Readonly<Record<string, readonly [number, number]>> = { '1.3': [19.5, 18.8], '2': [27, 26] }
 
   // A span first cut fresh (nothing fitted the room it had), then given more
   // room, was cut the same whole pill again, only not fresh: the same tree,
@@ -418,10 +412,10 @@ describe("pills at a system font size, with the room RN reserves for them", () =
     system.api = api
     system.fontScale = scale
     const curve = api >= 34
-    const [prose, pill] = curve ? curveDp(scale) : [MARKDOWN_BASE_SIZE * scale, MARKDOWN_CHIP_FONT_SIZE * scale]
+    const [prose, pill] = curve ? CURVE[String(scale)]! : [15 * scale, 14 * scale]
     const as = {
-      fontScale: prose / MARKDOWN_BASE_SIZE,
-      pillError: (pill / MARKDOWN_CHIP_FONT_SIZE / (prose / MARKDOWN_BASE_SIZE)) * kern,
+      fontScale: prose / 15,
+      pillError: (pill / 14 / (prose / 15)) * kern,
       placeholder: { system: scale, curve }
     }
     const found: string[] = []

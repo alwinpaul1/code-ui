@@ -32,10 +32,6 @@ export type PillSpanDrawn = {
   fresh: boolean
   /** The width of what is glued to its end ("`path`."), cut with it. */
   glue: number
-  /** How much wider than the Text's own its pill's text and its words are
-   *  drawn: a heading's, in a run of prose. 1 when left out. */
-  em?: number
-  proseEm?: number
 }
 
 /**
@@ -341,20 +337,13 @@ export function readPillFits(args: {
   lineWidth: number
   current: TextPillFits
   /** `guessed`: the span has read nothing of its own scale
-   *  (mobile-markdown-code-chip-split.ts); `em`: the span's. */
-  cut: (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean, em?: number) => CodePillCut
+   *  (mobile-markdown-code-chip-split.ts). */
+  cut: (code: string, firstRoom: number, scale: number, glue: number, guessed: boolean) => CodePillCut
   measure: PillMeasure
   /** The Text's own type size, for the punctuation beside a pill. */
   proseSize: number
 }): PillFitRead {
-  const { lines, spans, lineWidth, current, cut, measure: textMeasure, proseSize: textProseSize } = args
-  // A span is read at its own size: a heading's pills and words are drawn
-  // larger than the Text's own, by its `em`.
-  const measureOf = (span: PillSpanDrawn): PillMeasure =>
-    span.em === undefined || span.em === 1
-      ? textMeasure
-      : { ...textMeasure, textWidth: (piece) => textMeasure.textWidth(piece) * span.em! }
-  const proseOf = (span: PillSpanDrawn) => textProseSize * (span.proseEm ?? 1)
+  const { lines, spans, lineWidth, current, cut, measure, proseSize } = args
   const at = placeholders(lines)
   const drawn = spans.reduce((sum, span) => sum + span.pieces.length, 0)
   if (at.length !== drawn || !(lineWidth > 0)) {
@@ -371,7 +360,7 @@ export function readPillFits(args: {
     const owners: Owner[] = span.pieces.map((text, piece) => ({ ...at[offset + piece]!, span: ordinal, piece, text }))
     offset += span.pieces.length
     const held = current.fits.get(ordinal)
-    return { owners, held, ...learnScale(lines, owners, measureOf(span), held, proseOf(span), heldTextScale) }
+    return { owners, held, ...learnScale(lines, owners, measure, held, proseSize, heldTextScale) }
   })
   const textScale = textPillScale(new Map(learnt.map(({ floor }, ordinal) => [ordinal, { floor }])))
   const allOwners = learnt.flatMap(({ owners }) => owners)
@@ -397,8 +386,6 @@ export function readPillFits(args: {
     if (!start) {
       return
     }
-    const measure = measureOf(span)
-    const proseSize = proseOf(span)
     const scaled = (piece: string) => taken(measure, measure.textWidth(piece) * scale + measure.insets)
     const above = lines[start.line - 1]
     if (start.col === 0 && above && !above.text.endsWith('\n')) {
@@ -427,7 +414,7 @@ export function readPillFits(args: {
       // same whole pill, is that too: the tree is the same, Fabric lays
       // nothing out again, and what is drawn is how that cut falls (review
       // of 63858e9e: `git push` stayed down with 102 dp left above it).
-      const forRoom = cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined, span.em)
+      const forRoom = cut(span.code, pillFitRoom({ room, below: fit.below }, lineWidth), scale, span.glue, floor === undefined)
       if (proven && !forRoom.fresh && sameCut({ ...forRoom, fresh: span.fresh }, span)) {
         // Capped at once to what fits drawn as this one was: a unit at a
         // time stalled, because a break moved inside two pieces that still
@@ -487,7 +474,7 @@ export function readPillFits(args: {
   const firstChanged = spans.findIndex((span, ordinal) => {
     const fit = next.get(ordinal)
     return !sameCut(
-      cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit, textScale), span.glue, fit?.floor === undefined, span.em),
+      cut(span.code, pillFitRoom(fit, lineWidth), pillFitScale(fit, textScale), span.glue, fit?.floor === undefined),
       span
     )
   })
