@@ -33,8 +33,10 @@ function linkText(label: string, href: string): string {
 }
 
 /** One run of inline Markdown as the words it draws: the marks around bold,
- *  italic, strike and code dropped, links read as `linkText`. Mirrors
- *  MobileMarkdown's `renderInline` token for token. */
+ *  italic, strike and code dropped, links read as `linkText`. Finds the same
+ *  tokens as MobileMarkdown's `renderInline`, with one difference: the
+ *  renderer draws a link's label as written, so "[`app.ts`](…)" shows its
+ *  backticks, and the copy takes them off too. */
 function inlinePlainText(text: string): string {
   const pattern = createMarkdownInlineMatcher(text, markdownInlineTokenPattern(), true, true)
   let out = ''
