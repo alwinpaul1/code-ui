@@ -82,6 +82,7 @@ describe('markdownPlainText', () => {
 
   it('copies an image as its words and address', () => {
     expect(markdownPlainText('![chart](https://x.dev/c.png)')).toBe('chart (https://x.dev/c.png)')
+    expect(markdownPlainText('![chart](//x.dev/c.png)')).toBe('chart (//x.dev/c.png)')
   })
 
   // The chat has no way to load a file beside the reply, so it draws the alt
@@ -99,6 +100,14 @@ describe('markdownPlainText', () => {
 
   it('leaves a link title out of the address it pastes', () => {
     expect(markdownPlainText('[docs](https://x.dev "The docs")')).toBe('docs (https://x.dev)')
+    expect(markdownPlainText("[docs](https://x.dev 'The docs')")).toBe('docs (https://x.dev)')
+  })
+
+  it('keeps a whole address that has a space in it', () => {
+    expect(markdownPlainText('[a](https://x.dev/my file)')).toBe('a (https://x.dev/my file)')
+    expect(markdownPlainText('[mail](mailto:a@b.c?subject=Hello World)')).toBe(
+      'mail (mailto:a@b.c?subject=Hello World)'
+    )
   })
 
   it('copies a table as tab-separated rows, marks off each cell', () => {

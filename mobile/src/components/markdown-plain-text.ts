@@ -25,10 +25,12 @@ const WEB_HREF = /^(https?:|mailto:)/i
 const DATA_URL = /^data:/i
 
 /** A link's destination without its title: `https://x.dev "The docs"` is
- *  `https://x.dev`. (An `<…>` destination never gets here: the preview's HTML
- *  cleanup takes it for a tag first, on screen too.) */
+ *  `https://x.dev`. Only a quoted title comes off; the link on screen opens
+ *  an address with a space in it whole, so the copy keeps it whole too. (An
+ *  `<…>` destination never gets here: the preview's HTML cleanup takes it for
+ *  a tag first, on screen too.) */
 function destination(href: string): string {
-  return href.trim().split(/\s+/)[0]!
+  return href.trim().replace(/\s+("[^"]*"|'[^']*')$/, '')
 }
 
 /** A link's words, with the address after them when it is a web one the
@@ -52,7 +54,8 @@ function imagePlainText(alt: string, url: string): string {
     return alt
   }
   if (isRemoteImageUrl(address)) {
-    return linkText(alt, address)
+    // `//x.dev/a.png` is a web image too, though it names no scheme.
+    return alt && alt !== address ? `${alt} (${address})` : address
   }
   return alt ? `${alt}\n${address}` : address
 }
