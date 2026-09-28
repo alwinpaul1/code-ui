@@ -340,9 +340,12 @@ and changed 38 times; the sources, one by one:
     read, when a message with no tool block sits between the SendMessage
     call and its result: one holding only text, or one with no blocks at
     all. Either ends the step.
-  - A SendMessage whose result record never reaches the reader keeps waiting
-    until the step ends, so a printout of that same agent later in the step
-    counts as its resume.
+  - A SendMessage whose result is not a resume of its agent keeps waiting
+    until the step ends: a queued message ("Message queued for delivery"),
+    a failed send, or a result record that never reaches the reader. A
+    printout of that same agent's resume JSON later in the step then counts
+    as its resume. Queued sends to running agents are routine, so this is
+    the likeliest way in; it still needs that exact agent's resume printed.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
   (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca

@@ -94,8 +94,10 @@ export function readAgentResume(output: string): AgentResumeReading | null {
  *  next prompt, an interruption), so a call whose result never landed does
  *  not stay waiting into a later turn. Orca's reader hands each parallel call
  *  and each result over as its own message, and they interleave in any
- *  order: a result can land before a later call of the same response. A
- *  call's own result ends only its own wait. */
+ *  order: a result can land before a later call of the same response. Only a
+ *  resume of the agent a call addressed ends that call's wait; a result that
+ *  is not one (queued, failed, or never recorded) leaves it waiting until the
+ *  step ends. */
 export type ResumeTracker = { resumes: Map<string, AgentResume>; targets: string[][]; resumedThisStep: Set<string> }
 
 export function createResumeTracker(): ResumeTracker {
