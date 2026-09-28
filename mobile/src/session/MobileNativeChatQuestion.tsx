@@ -38,7 +38,12 @@ export function MobileNativeChatQuestion({
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
   const [freeText, setFreeText] = useState('')
   const [sending, setSending] = useState(false)
+  // Accepted: this card has no dismissal and stays up until the hook row moves
+  // on, so it keeps every control dead from here. A second tap would type a
+  // second answer into whatever the agent draws next (2026-09-28).
+  const [sent, setSent] = useState(false)
   const sendingRef = useRef(false)
+  const locked = sending || sent
   const allowOther = question.allowOther !== false
 
   const hasOptions = question.options.length > 0
@@ -47,6 +52,9 @@ export function MobileNativeChatQuestion({
   // Keyed by position, not by label: an agent may repeat a label inside one
   // question, and label-keyed selection makes both rows toggle as one.
   const toggle = (optionIndex: number): void => {
+    if (locked) {
+      return
+    }
     setSelectedOptionIndexes((prev) =>
       prev.includes(optionIndex)
         ? prev.filter((index) => index !== optionIndex)
@@ -60,10 +68,18 @@ export function MobileNativeChatQuestion({
     }
     sendingRef.current = true
     setSending(true)
+    let accepted = false
     try {
-      return await onAnswer(text)
+      accepted = await onAnswer(text)
+      return accepted
     } finally {
-      sendingRef.current = false
+      // A refusal has already said why (every false the send path returns is
+      // reported), so the card goes back at once; an accepted answer keeps it.
+      if (accepted) {
+        setSent(true)
+      } else {
+        sendingRef.current = false
+      }
       setSending(false)
     }
   }
@@ -101,8 +117,8 @@ export function MobileNativeChatQuestion({
     }
   }
 
-  const canSubmitMulti = selectedOptionIndexes.length > 0 && !sending
-  const canSendFreeText = allowOther && trimmedFreeText.length > 0 && !sending
+  const canSubmitMulti = selectedOptionIndexes.length > 0 && !locked
+  const canSendFreeText = allowOther && trimmedFreeText.length > 0 && !locked
 
   // Stable keys for option rows even if an agent repeats a label.
   const optionRows = useMemo(
@@ -145,12 +161,18 @@ export function MobileNativeChatQuestion({
             hitSlop={8}
             style={{ width: 28, height: 28, alignItems: 'center', justifyContent: 'center' }}
             onPress={() => void onCancel(question.prompt)}
-            disabled={sending}
+            disabled={locked}
           >
             <X size={16} color={colors.textMuted} />
           </Pressable>
         ) : null}
       </View>
+
+      {locked ? (
+        <Txt variant="caption" tone="secondary" accessibilityLiveRegion="polite">
+          {sent ? 'Answer sent · waiting for agent' : 'Sending answer…'}
+        </Txt>
+      ) : null}
 
       {hasOptions ? (
         <ScrollView
@@ -179,6 +201,7 @@ export function MobileNativeChatQuestion({
                   borderColor: isSelected ? colors.accent : colors.border
                 })}
                 onPress={() => (question.multiSelect ? toggle(optIndex) : answerSingle(optIndex))}
+                disabled={locked}
               >
                 {question.multiSelect ? (
                   <View
@@ -241,6 +264,7 @@ export function MobileNativeChatQuestion({
             }}
             value={freeText}
             onChangeText={setFreeText}
+            editable={!locked}
             placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}

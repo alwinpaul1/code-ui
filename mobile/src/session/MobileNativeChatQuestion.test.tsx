@@ -201,3 +201,91 @@ describe('MobileNativeChatQuestion', () => {
     expect(light).not.toBe(dark)
   })
 })
+
+// The same shape as the ask card's (ask-card-submit-feedback.test.tsx): this
+// card has no dismissal, so it stays up until the hook row moves on, and an
+// accepted answer used to hand every row back. A single-select row answers on
+// the tap itself, so a second tap before the row moved sent a second answer.
+describe('the question card between the tap and the agent taking the answer', () => {
+  let renderer: ReactTestRenderer | null = null
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    colorScheme = 'light'
+  })
+
+  const pickOne = {
+    question: 'Which branch should I push?',
+    options: ['main', 'fix/ask-submit-feedback'],
+    multiSelect: false,
+    allowOther: true,
+    optionTokens: ['1', '2']
+  }
+
+  /** The option rows: host Pressables in the button role (single-select). */
+  function optionRows(tree: ReactTestRenderer) {
+    return tree.root.findAll(
+      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityRole === 'button'
+    )
+  }
+
+  function captions(tree: ReactTestRenderer): { text: string; color: unknown }[] {
+    return tree.root
+      .findAllByType('Text' as never)
+      .filter((node) => typeof node.props.children === 'string')
+      .map((node) => ({
+        text: node.props.children as string,
+        color: ([] as { color?: unknown }[]).concat(node.props.style ?? []).map((entry) => entry?.color).find(Boolean)
+      }))
+  }
+
+  it('does not send the answer twice when an option is tapped again before the card goes', async () => {
+    const onAnswer = vi.fn(async () => true)
+    renderer = renderQuestion(pickOne, onAnswer)
+    const rows = optionRows(renderer)
+    await act(async () => rows[0]!.props.onPress())
+    // The test renderer does not drop taps on a disabled Pressable, so these
+    // also prove the handlers refuse; the disabled flags are checked after.
+    const again = optionRows(renderer)
+    await act(async () => again[1]!.props.onPress())
+    const reply = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+    act(() => renderer!.root.findByType('TextInput' as never).props.onChangeText('the other one'))
+    await act(async () => reply.props.onPress())
+
+    expect(onAnswer).toHaveBeenCalledTimes(1)
+    expect(onAnswer).toHaveBeenCalledWith('1')
+    expect(again[1]!.props.disabled, 'the rows came back live after an accepted answer').toBe(true)
+  })
+
+  it.each(['light', 'dark'] as const)('says Sending, then Sent and waiting, in %s ink', async (scheme) => {
+    let settle: (accepted: boolean) => void = () => undefined
+    renderer = renderQuestion(
+      pickOne,
+      () =>
+        new Promise<boolean>((resolve) => {
+          settle = resolve
+        }),
+      scheme
+    )
+    const palette = scheme === 'dark' ? darkColors : lightColors
+    const rows = optionRows(renderer)
+    await act(async () => {
+      rows[0]!.props.onPress()
+    })
+    expect(captions(renderer)).toContainEqual({ text: 'Sending answer…', color: palette.textSecondary })
+    await act(async () => settle(true))
+    expect(captions(renderer)).toContainEqual({ text: 'Answer sent · waiting for agent', color: palette.textSecondary })
+  })
+
+  it('gives the rows back at once when the answer is refused', async () => {
+    const onAnswer = vi.fn(async () => false)
+    renderer = renderQuestion(pickOne, onAnswer)
+    const rows = () => optionRows(renderer!)
+    await act(async () => rows()[0]!.props.onPress())
+    expect(rows()[1]!.props.disabled).toBeFalsy()
+    expect(captions(renderer).map((caption) => caption.text)).not.toContain('Answer sent · waiting for agent')
+    await act(async () => rows()[1]!.props.onPress())
+    expect(onAnswer).toHaveBeenCalledTimes(2)
+  })
+})
