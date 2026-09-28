@@ -513,7 +513,10 @@
             // case that pins the menu to the tab's own chat while the tab
             // shows its terminal.
             // 2026-09-27: +4 for `tabsLive: true` in each harness's args.
-            "max": 851,
+            // 2026-09-28: +13 for the case that pins an answered ask card up
+            // as sent until the hook row lets go of the question (its
+            // `liveAsk` stand-in and reset come with it).
+            "max": 864,
             "skipBlankLines": true,
             "skipComments": true
           }

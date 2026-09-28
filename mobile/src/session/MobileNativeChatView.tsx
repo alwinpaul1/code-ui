@@ -115,7 +115,7 @@ export function MobileNativeChatView({
   onNeedSkills,
   sessionOptions,
   ask,
-  askKey,
+  askKey, askSentAt,
   onDismissAsk,
   onAnswerAsk,
   onCancelAsk,
@@ -422,7 +422,7 @@ export function MobileNativeChatView({
           height is measured with the dock, which is what the list's spacer
           clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
-        ask={ask} askKey={askKey} onDismissAsk={onDismissAsk}
+        ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
         {...{ question, onAnswerQuestion }}
         {...{ permission, onRespondPermission, onRespondPermissionWithComment, terminalWait, onOpenTerminal }}

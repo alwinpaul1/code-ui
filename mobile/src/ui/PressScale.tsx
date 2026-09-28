@@ -28,11 +28,22 @@ export function PressScale({
   ...rest
 }: PressScaleProps) {
   const pressed = useSharedValue(0)
+  // Opacity only when the press dims. This style sits after the caller's, and
+  // Reanimated keeps its first-render values in that slot, so a resting
+  // `opacity: 1` here painted over every caller's own opacity: no disabled
+  // Button, Chip or FAB ever dimmed (a Submit waiting on its send looked live
+  // and dead at once, 2026-09-28). `pressedOpacity` is fixed per call site, so
+  // the style's keys never change after the first render. A caller that does
+  // dim on press (IconButton) still loses an opacity on its own style, so it
+  // dims its content instead.
   const animatedStyle = useAnimatedStyle(
-    () => ({
-      transform: [{ scale: 1 - pressed.value * (1 - pressedScale) }],
-      opacity: 1 - pressed.value * (1 - pressedOpacity)
-    }),
+    () =>
+      pressedOpacity === 1
+        ? { transform: [{ scale: 1 - pressed.value * (1 - pressedScale) }] }
+        : {
+            transform: [{ scale: 1 - pressed.value * (1 - pressedScale) }],
+            opacity: 1 - pressed.value * (1 - pressedOpacity)
+          },
     // Named so the mapper has inputs where no Babel closure is written (the web bundle).
     [pressed, pressedScale, pressedOpacity]
   )

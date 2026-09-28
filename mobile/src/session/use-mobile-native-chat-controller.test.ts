@@ -70,6 +70,7 @@ const promptsState = {
   permission: null as unknown,
   question: null as unknown,
   detectedAsk: null as unknown,
+  liveAsk: null as unknown,
   ask: null as unknown
 }
 
@@ -745,6 +746,7 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     controller = null
     promptsState.ask = null
     promptsState.detectedAsk = null
+    promptsState.liveAsk = null
     setTranscript('ready', 0)
     viewMode.isTabChatView = () => true
     activeTab.id = 'tab-1'
@@ -948,6 +950,21 @@ describe('useMobileNativeChatController ask dismissal across a transcript reload
     step()
 
     expect(controller?.nativeChatAsk).toBeNull()
+  })
+
+  it('keeps an answered card up as sent until the hook row lets go of the question', () => {
+    // The hook row's copy, not the transcript's: that one lingers until the
+    // result row lands, and would hold a taken answer on screen as unanswered.
+    promptsState.liveAsk = PROMPT
+    step()
+    act(() => controller?.dismissNativeChatAsk('answered'))
+    expect(controller?.nativeChatAsk).not.toBeNull()
+    expect(controller?.nativeChatAskSentAt).toEqual(expect.any(Number))
+
+    promptsState.liveAsk = null
+    step()
+    expect(controller?.nativeChatAsk).toBeNull()
+    expect(controller?.nativeChatAskSentAt).toBeNull()
   })
 })
 

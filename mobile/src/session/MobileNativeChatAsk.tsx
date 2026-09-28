@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { notificationPlainText } from '../notifications/notification-plain-text'
 import { Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native'
@@ -16,15 +16,32 @@ type Props = {
    *  option's stable number instead of pasted label text (STA-1860). */
   onAnswer: (selections: AskAnswerSelection[]) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  /** When the controller recorded this card's answer as accepted, so the sent
+   *  state survives the card remounting (a chat↔terminal toggle). */
+  sentAt?: number | null
 }
 
 // Sentinel index for the free-text "Other…" row (never a real option index).
 const OTHER = -1
 
+/**
+ * How long an accepted answer waits for the hook row to let go of the question
+ * before the card says it is still waiting. After the last key is acknowledged,
+ * the agent's PostToolUse hook goes to the desktop and the status comes back
+ * over the relay: one relayed leg (a ~250 ms floor, measured behind the VPN on
+ * 2026-09-11) plus the agent's own handling, well under a second on a healthy
+ * link. Codex's request_user_input lets go the same way (its PostToolUse). 3 s is
+ * several times that, so a normal hand-off never shows the line, and it is
+ * still short of a network change, where the relay takes 5–8 s to migrate and
+ * re-handshake (docs/network-measurements-2026-09-06.md) and the wait is
+ * genuinely unexplained to the phone. Saying so then is the truth.
+ */
+export const ASK_SENT_WAIT_MS = 3_000
+
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
  *  question per step with tabs across the top, a Next button that advances (Send
  *  on the last step), and a Cancel that dismisses the prompt. */
-export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
+export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
   // 400 was a fixed guess: with the keyboard up on a short phone it grew the
   // dock past the viewport and clipped the card's own question off the top,
@@ -35,10 +52,21 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
-  const [submitting, setSubmitting] = useState(false)
-  const submittingRef = useRef(false)
+  const [busy, setBusy] = useState<'sending' | 'cancelling' | null>(null)
+  const busyRef = useRef(false)
+  // Once the host accepts the answer the card never takes another: a second
+  // send types into whatever the agent draws next (a Bash approval reads a
+  // digit as its answer). The controller's record covers a remount; this
+  // covers the rest.
+  const [acceptedAt, setAcceptedAt] = useState<number | null>(null)
+  const answeredAt = sentAt ?? acceptedAt
+  const waitingLong = useSentWaitElapsed(answeredAt)
+  const locked = busy !== null || answeredAt !== null
 
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
+    if (locked) {
+      return
+    }
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[qi] ?? []
@@ -82,41 +110,48 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [otherText, prompt.questions, selections]
   )
-  const canAdvance = !submitting && (isLast ? allAnswered : currentAnswered)
+  const canAdvance = !locked && (isLast ? allAnswered : currentAnswered)
 
   const submit = async (): Promise<void> => {
-    if (!allAnswered || submittingRef.current) {
+    if (!allAnswered || busyRef.current || answeredAt !== null) {
       return
     }
-    submittingRef.current = true
-    setSubmitting(true)
+    busyRef.current = true
+    setBusy('sending')
+    let accepted = false
     try {
-      await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
+      accepted = await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
     } finally {
-      submittingRef.current = false
-      setSubmitting(false)
+      // A refusal has already said why (the send path reports every false), so
+      // the tap goes back at once. An accepted answer keeps the ref held.
+      if (accepted) {
+        setAcceptedAt(Date.now())
+      } else {
+        busyRef.current = false
+      }
+      setBusy(null)
     }
   }
 
   const advance = async (): Promise<void> => {
     if (isLast) {
       await submit()
-    } else {
+    } else if (!locked) {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
   }
 
   const cancel = async (): Promise<void> => {
-    if (submittingRef.current || !onCancel) {
+    if (busyRef.current || answeredAt !== null || !onCancel) {
       return
     }
-    submittingRef.current = true
-    setSubmitting(true)
+    busyRef.current = true
+    setBusy('cancelling')
     try {
       await onCancel()
     } finally {
-      submittingRef.current = false
-      setSubmitting(false)
+      busyRef.current = false
+      setBusy(null)
     }
   }
 
@@ -165,8 +200,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
                   backgroundColor: active ? colors.text : colors.bgRaised
                 }}
                 onPress={() => setIndex(i)}
+                disabled={locked}
                 accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
+                accessibilityState={{ selected: active, disabled: locked }}
               >
                 <Txt
                   variant="caption"
@@ -204,6 +240,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             description={opt.description}
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
+            disabled={locked}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
@@ -211,6 +248,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           label="Other…"
           selected={otherSelected}
           multi={q.multiSelect}
+          disabled={locked}
           onPress={() => toggle(index, OTHER, q.multiSelect)}
         />
         {otherSelected ? (
@@ -233,6 +271,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
             }}
             value={otherText[index]}
             onChangeText={(v) => setOther(index, v)}
+            editable={!locked}
             placeholder="Type your answer"
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}
@@ -256,22 +295,97 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           borderTopColor: colors.border
         }}
       >
-        <Button label="Cancel" variant="ghost" size="sm" disabled={submitting} onPress={() => void cancel()} />
-        {total > 1 ? (
+        {/* Sent: Cancel would write Escape into a turn the agent may already
+            have started, so it goes, and the slot says what the card waits on. */}
+        {answeredAt === null ? (
+          <Button label="Cancel" variant="ghost" size="sm" disabled={locked} onPress={() => void cancel()} />
+        ) : (
+          <Txt
+            variant="caption"
+            tone="secondary"
+            style={{ flexShrink: 1 }}
+            accessibilityLiveRegion="polite"
+          >
+            {waitingLong ? ASK_SENT_WAITING_LINE : ''}
+          </Txt>
+        )}
+        {total > 1 && answeredAt === null ? (
           <Txt variant="caption" tone="muted">
             {index + 1}/{total}
           </Txt>
         ) : null}
-        <Button
-          label={isLast ? 'Submit' : 'Next'}
-          variant="accent"
-          size="sm"
-          disabled={!canAdvance}
-          onPress={() => void advance()}
-        />
+        {answeredAt === null ? (
+          <Button
+            label={busy === 'sending' ? 'Sending…' : isLast ? 'Submit' : 'Next'}
+            variant="accent"
+            size="sm"
+            // While sending the spinner is the feedback; Button keeps a loading
+            // one pressable-dead without dimming it to look like a missed tap.
+            disabled={!canAdvance && busy !== 'sending'}
+            loading={busy === 'sending'}
+            onPress={() => void advance()}
+          />
+        ) : (
+          // A status, not a dead button: a disabled Button paints at half
+          // strength, and this is the one word on the card the user must read.
+          <View
+            testID="ask-sent"
+            accessible
+            accessibilityLabel="Answer sent"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.xs,
+              height: 36,
+              paddingHorizontal: space.md,
+              borderRadius: radius.pill,
+              backgroundColor: colors.bgRaised
+            }}
+          >
+            <Check size={14} color={colors.success} strokeWidth={2.6} />
+            <Txt variant="label" weight="semibold" tone="secondary">
+              Sent
+            </Txt>
+          </View>
+        )}
       </View>
     </View>
   )
+}
+
+/** The caption an answered card shows once it has waited ASK_SENT_WAIT_MS. */
+export const ASK_SENT_WAITING_LINE = 'Sent — waiting for the agent to take it'
+
+// The answer whose wait was last logged: a card remounted past the wait (a
+// chat↔terminal toggle) must not log the same answer again.
+let waitLoggedFor: number | null = null
+
+/** True once `sentAt` is ASK_SENT_WAIT_MS old. Logs one line per answer when it
+ *  turns, so one the agent never took leaves a trace saying where it stopped. */
+function useSentWaitElapsed(sentAt: number | null): boolean {
+  const [elapsedFor, setElapsedFor] = useState<number | null>(null)
+  useEffect(() => {
+    if (sentAt === null) {
+      return
+    }
+    const remaining = ASK_SENT_WAIT_MS - (Date.now() - sentAt)
+    const turn = (): void => {
+      if (waitLoggedFor !== sentAt) {
+        waitLoggedFor = sentAt
+        console.warn(
+          `[ask] answer accepted ${Date.now() - sentAt} ms ago; the hook row still shows the question pending, so the card waits (no resend offered)`
+        )
+      }
+      setElapsedFor(sentAt)
+    }
+    if (remaining <= 0) {
+      turn()
+      return
+    }
+    const timer = setTimeout(turn, remaining)
+    return () => clearTimeout(timer)
+  }, [sentAt])
+  return sentAt !== null && elapsedFor === sentAt
 }
 
 function OptionRow({
@@ -279,12 +393,15 @@ function OptionRow({
   description,
   selected,
   multi,
+  disabled = false,
   onPress
 }: {
   label: string
   description?: string
   selected: boolean
   multi?: boolean
+  /** Sending or sent: the answer on its way out can no longer change. */
+  disabled?: boolean
   onPress: () => void
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
@@ -302,8 +419,9 @@ function OptionRow({
         marginBottom: space.xs + 2
       })}
       onPress={onPress}
+      disabled={disabled}
       accessibilityRole={multi ? 'checkbox' : 'radio'}
-      accessibilityState={{ checked: selected }}
+      accessibilityState={{ checked: selected, disabled }}
     >
       {/* Multi-select reads as a checkbox (square); single-select as a radio (circle). */}
       <View
