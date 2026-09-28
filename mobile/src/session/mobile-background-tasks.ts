@@ -44,7 +44,8 @@ import {
   type Notification,
   type PendingCall
 } from './mobile-background-task-transcript'
-import { settleAgentLaunches } from './mobile-background-task-agent-titles'
+import { confirmedAgentDescriptions, settleAgentLaunches } from './mobile-background-task-agent-titles'
+import { applyAgentResumes, logRefusedResume, readAgentResume, type AgentResume } from './mobile-background-task-resumes'
 import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
@@ -186,7 +187,8 @@ const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
 const SUMMARY_MAX = 160
 
 /** Split the transcript's background work into what is still running and what
- *  has reported back. Pure: `now` is the only clock, so tests set it. */
+ *  has reported back. Pure: `now` is the only clock, so tests set it. The one
+ *  side effect is a console line, once per result, for a resume it refuses. */
 export function deriveBackgroundTasks(
   messages: readonly NativeChatMessage[],
   now: number,
@@ -196,6 +198,7 @@ export function deriveBackgroundTasks(
   const pending: PendingCall[] = []
   const launches = new Map<string, Launch>()
   const notifications = new Map<string, Notification>()
+  const resumes = new Map<string, AgentResume>()
   let position = 0
   for (const message of messages) {
     position += 1
@@ -210,6 +213,11 @@ export function deriveBackgroundTasks(
           notifications.set(stoppedId, { status: 'stopped', summary: null, at: position, timestamp: message.timestamp })
         }
       } else if (isToolResultBlock(block)) {
+        // Asked before the pairing below takes a call: a turn's parallel
+        // results can come back swapped, so the resume is read off whichever
+        // result says it while a SendMessage of the turn is unanswered — and
+        // never off a command that printed one.
+        const answersSendMessage = pending.some((call) => call.name === 'SendMessage')
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
         // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts), save
         // that an Agent call waits for an Agent-shaped result.
@@ -217,6 +225,14 @@ export function deriveBackgroundTasks(
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
           launches.set(launch.id, launch)
+        }
+        // A SendMessage that resumed a stopped agent starts a new run of it
+        // (`mobile-background-task-resumes.ts`).
+        const resume = answersSendMessage ? readAgentResume(block.output) : null
+        if (resume?.kind === 'resumed') {
+          resumes.set(resume.id, { at: position, timestamp: message.timestamp })
+        } else if (resume) {
+          logRefusedResume(message.id, resume.why)
         }
       } else if (isTextBlock(block)) {
         text += block.text
@@ -235,6 +251,20 @@ export function deriveBackgroundTasks(
   // Results land in the order launches were acknowledged, not the order of
   // the calls, so parallel agents are re-paired by what Claude Code says.
   settleAgentLaunches(launches, notifications, messages, hostStatus?.subagents, position + 1)
+  let confirmed: Map<string, string> | null = null
+  applyAgentResumes({
+    launches,
+    notifications,
+    resumes,
+    lastPosition: position,
+    describe: (id) => {
+      confirmed ??= confirmedAgentDescriptions(messages, hostStatus?.subagents)
+      return confirmed.get(id) ?? hostStatus?.subagents?.find((row) => row.id === id)?.agentType?.trim()
+    }
+  })
+  // Only an id, no time: against a roster row it cannot end a resumed run
+  // (`endedThisRun` needs a time); with no host status it does, because then
+  // nothing else can (`mobile-background-task-resumes.ts`).
   for (const id of options.finishedTaskIds ?? []) {
     if (!notifications.has(id)) {
       notifications.set(id, { status: 'completed', summary: null, at: position + 1, timestamp: null })
@@ -319,9 +349,12 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
     const notification = notifications.get(launch.id)
     // An agent the host tracks is running exactly while its roster says so:
     // a notification may be an earlier run's, since Claude Code notes "the
-    // same task-id may notify more than once" when the lead resumes an agent,
-    // and Orca re-creates the row, with a new start, at every SubagentStart.
-    // A row that started before the notification is the run it ended.
+    // same task-id may notify more than once" when the lead resumes an agent.
+    // Orca gives a row a new start at SubagentStart only when the row had
+    // left, so a row that started before the notification is the run it
+    // ended. A row Orca kept (a stalled run sends no SubagentStop) keeps its
+    // first start through a resume; the lead's resume already dropped the
+    // notification from before it (`applyAgentResumes`).
     // Not for a named agent or a teammate (`a<name>-<hex>`): Orca only idles
     // such a row at a stop and flips the same row back on a resume, first
     // start and all, so its start says nothing about which run ended.

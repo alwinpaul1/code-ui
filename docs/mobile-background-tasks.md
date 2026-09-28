@@ -305,10 +305,26 @@ and changed 38 times; the sources, one by one:
 
 - An agent the host tracks runs while the roster lists it. Neither beacon
   list judges an agent. A notification outranks the row only when it was
-  written after the row started: Orca re-creates a row at every
-  SubagentStart, so a resumed agent's row starts after its last
-  notification, and a row that started before it is a phantom Orca kept
-  after missing the SubagentStop.
+  written after the row started: a row that started before it is a phantom
+  Orca kept after missing the SubagentStop.
+- A resume starts a new run. SendMessage's result says so as JSON,
+  `{"success":true,"message":"Resuming agent a38e168","resumedAgentId":…}`
+  (Claude Code 2.1.281–2.1.283), and an ending from before it belongs to the
+  run it followed (`mobile-background-task-resumes.ts`). Orca only re-creates
+  a row, with a new start, when the row had left: on 2026-09-28 a38e… stalled
+  at 13:34 with no SubagentStop, the lead resumed it at 16:28, and its row
+  still read 12:18, so the reader took the 13:34 failure for the end of the
+  running run and the status row showed no task. The resumed run ends at its
+  next notification or TaskStop, or when the roster drops its row. An id-only
+  finished list (`done=`, earlier windows' endings) cannot say which run it
+  names, so against a roster row it ends nothing; with no host status at all
+  it does end the run, since a resumed run that finishes mid-turn has its
+  notification dropped by Orca's reader and would otherwise show for ever.
+  A resume is read only off a result that can answer a SendMessage still
+  unanswered in the turn, never off a command that printed one. A queued
+  message ("Message queued for delivery to …") starts no run. A result that
+  claims a resume in another shape is not counted and is logged once; a
+  teammate's resume names no task id and is left to the roster.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
   (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca
