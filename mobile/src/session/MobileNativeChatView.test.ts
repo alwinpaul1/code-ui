@@ -270,8 +270,10 @@ describe('MobileNativeChatView', () => {
         }
       ).props.emptyState?.detail
     await render({ status: 'awaiting-transcript', agent: 'claude', agentStatus })
+    // Claude's own hooks always name a transcript: one that named none is most
+    // likely an agent started in the tab (2026-09-28, native-chat-kept-session.ts).
     expect(detail()).toBe(
-      'The desktop has no transcript for session ad1e3053, and no transcript file was named for it.'
+      "Session ad1e3053 is most likely another agent's, started in this tab: its status named no transcript file, where Claude's own always name one, and the desktop has no Claude transcript for it."
     )
     await update({ status: 'ready', agent: 'claude', agentStatus, messages: [] })
     expect(detail()).toBe('The desktop read session ad1e3053 and sent no messages.')

@@ -62,14 +62,60 @@ describe('mobileNativeChatEmptyState', () => {
     // Without a path the host searches by id under its own Claude home, which
     // on this machine is not where Claude writes (CLAUDE_CONFIG_DIR is set per
     // launch, not for Orca). The line has to tell that apart from a missing file.
+    // An agent with no rule about its hooks' paths keeps the plain line.
+    const idOnly = {
+      ...PANE_1037_STATUS,
+      agentType: 'omp' as const,
+      providerSession: { key: 'session_id' as const, id: 'ad1e3053-f9ac-40be-80be-8f33a800e9b1' }
+    }
+    expect(
+      mobileNativeChatEmptyState('awaiting-transcript', 'omp', undefined, { agentStatus: idOnly })
+        ?.detail
+    ).toBe('The desktop has no transcript for session ad1e3053, and no transcript file was named for it.')
+  })
+
+  // 2026-09-28: a Grok launched from Claude's Bash tool posted as the pane, and
+  // "no transcript file was named for it" was all the empty chat said. Claude
+  // Code's own hooks always name a transcript, so a Claude status that names
+  // none most likely came from an agent started inside the tab.
+  it('names the likely cause when a Claude session’s status named no transcript', () => {
     const idOnly = {
       ...PANE_1037_STATUS,
       providerSession: { key: 'session_id' as const, id: 'ad1e3053-f9ac-40be-80be-8f33a800e9b1' }
     }
     expect(
-      mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, { agentStatus: idOnly })
-        ?.detail
-    ).toBe('The desktop has no transcript for session ad1e3053, and no transcript file was named for it.')
+      mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, { agentStatus: idOnly })?.detail
+    ).toBe(
+      "Session ad1e3053 is most likely another agent's, started in this tab: its status named no transcript file, where Claude's own always name one, and the desktop has no Claude transcript for it."
+    )
+  })
+
+  it('names the likely cause when the chat withheld a nested status and kept nothing to read instead', () => {
+    // The chat does not hand the view a nested agent's status, so the session
+    // identity is the only evidence here.
+    expect(
+      mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, {
+        agentStatus: null,
+        sessionIdentity: { sessionId: '5690de4f-8d81-4478-b1ae-5ec01e15451b', transcriptPath: null, nestedSessionId: '5690de4f-8d81-4478-b1ae-5ec01e15451b' }
+      })?.detail
+    ).toBe(
+      "Session 5690de4f is most likely another agent's, started in this tab: its status named no transcript file, where Claude's own always name one, and the desktop has no Claude transcript for it."
+    )
+  })
+
+  it('says which session the chat stayed on when the kept one reads empty under a nested status', () => {
+    expect(
+      mobileNativeChatEmptyState('awaiting-transcript', 'claude', undefined, {
+        agentStatus: null,
+        sessionIdentity: {
+          sessionId: '76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b',
+          transcriptPath: '/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Thesis/76ba8f2f-3727-4cbb-bfc4-3f09fba4d67b.jsonl',
+          nestedSessionId: '5690de4f-8d81-4478-b1ae-5ec01e15451b'
+        }
+      })?.detail
+    ).toBe(
+      "Another agent started in this tab reported session 5690de4f. The chat stays on Claude's own session 76ba8f2f, which the desktop has no transcript for."
+    )
   })
 
   it('says the desktop sent nothing when a session that has taken turns reads empty', () => {

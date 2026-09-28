@@ -24,6 +24,11 @@ export type MobileNativeChatEmptyStateEvidence = {
   sessionIdentity?: NativeChatSessionIdentity | null
 }
 
+/** Agents whose own hooks name their transcript on every event, so a status
+ *  of theirs that names none is most likely another agent's
+ *  (native-chat-kept-session.ts). */
+const NAMES_ITS_TRANSCRIPT: ReadonlySet<string> = new Set(['claude', 'codex'])
+
 /** How much of a session id the line names: enough to tell two sessions apart
  *  at a glance and to find the id in the desktop's own records. */
 const SESSION_ID_SHOWN_CHARS = 8
@@ -44,8 +49,26 @@ function sessionHasTakenTurns(status: AgentStatusEntry): boolean {
 
 function emptyConversationDetail(
   status: MobileNativeChatStatus,
+  agent: string | null,
+  agentLabel: string,
   evidence: MobileNativeChatEmptyStateEvidence
 ): string | undefined {
+  const nestedId = evidence.sessionIdentity?.nestedSessionId ?? null
+  const readId = evidence.sessionIdentity?.sessionId ?? null
+  if (nestedId !== null && readId !== null && readId !== nestedId) {
+    // The pane's status is a nested agent's, and the chat reads the session the
+    // tab's own agent last named; that read is what came back empty.
+    const kept = `Another agent started in this tab reported session ${nestedId.slice(0, SESSION_ID_SHOWN_CHARS)}. The chat stays on ${agentLabel}'s own session ${readId.slice(0, SESSION_ID_SHOWN_CHARS)}`
+    return status === 'awaiting-transcript'
+      ? `${kept}, which the desktop has no transcript for.`
+      : `${kept}, which the desktop read and sent no messages for.`
+  }
+  if (nestedId !== null && status === 'awaiting-transcript') {
+    // A nested agent's status with nothing kept to read instead: the chat
+    // withholds that status (so `agentStatus` is empty here) and asks for its
+    // session as reported, which the desktop has no transcript for.
+    return nestedSessionDetail(nestedId, agentLabel)
+  }
   const agentStatus = evidence.agentStatus
   if (!agentStatus) {
     // No status for this pane yet: a tab the phone just launched. Nothing is
@@ -53,7 +76,8 @@ function emptyConversationDetail(
     return undefined
   }
   const session = agentStatus.providerSession
-  const shortId = session?.id.slice(0, SESSION_ID_SHOWN_CHARS)
+  const shortId = (readId ?? session?.id)?.slice(0, SESSION_ID_SHOWN_CHARS)
+  const transcriptNamed = Boolean(evidence.sessionIdentity?.transcriptPath ?? session?.transcriptPath)
   if (status === 'waiting-session') {
     return 'The desktop reports this pane but not which session runs in it, so there is no transcript to read.'
   }
@@ -61,8 +85,14 @@ function emptyConversationDetail(
     return undefined
   }
   if (status === 'awaiting-transcript') {
-    return session?.transcriptPath
-      ? `The desktop has no transcript for session ${shortId}.`
+    if (transcriptNamed) {
+      return `The desktop has no transcript for session ${shortId}.`
+    }
+    // 2026-09-28: a Grok launched from Claude's Bash tool posted as the pane,
+    // and "no transcript file was named for it" was all the phone could say.
+    // The agent's own hooks always name one, so the likely cause is worth saying.
+    return agent !== null && NAMES_ITS_TRANSCRIPT.has(agent)
+      ? nestedSessionDetail(shortId, agentLabel)
       : `The desktop has no transcript for session ${shortId}, and no transcript file was named for it.`
   }
   // `ready`: the read settled. With rows that all folded away it did send
@@ -70,6 +100,12 @@ function emptyConversationDetail(
   return evidence.transcriptMessageCount === 0
     ? `The desktop read session ${shortId} and sent no messages.`
     : undefined
+}
+
+/** A session whose status named no transcript, on an agent whose own hooks
+ *  always name one: most likely an agent started inside the tab. */
+function nestedSessionDetail(sessionId: string, agentLabel: string): string {
+  return `Session ${sessionId.slice(0, SESSION_ID_SHOWN_CHARS)} is most likely another agent's, started in this tab: its status named no transcript file, where ${agentLabel}'s own always name one, and the desktop has no ${agentLabel} transcript for it.`
 }
 
 /** The centered empty-state copy for a chat with no messages, mirroring the
@@ -96,7 +132,7 @@ export function mobileNativeChatEmptyState(
     case 'awaiting-transcript':
     case 'ready': {
       const copy = formatNativeChatEmptyStateCopy('empty', agentLabel)
-      const detail = emptyConversationDetail(status, evidence)
+      const detail = emptyConversationDetail(status, agent, agentLabel, evidence)
       return detail ? { ...copy, detail } : copy
     }
     case 'error': {
