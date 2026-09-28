@@ -4,6 +4,7 @@ import {
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
 import { isIntrawordUnderscoreToken, trimAutolinkTrailingPunctuation } from './markdown-inline-token-rules'
+import { isRemoteImageUrl } from './markdown-image-source'
 import { listMarker } from './mobile-markdown-list-marker'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
@@ -21,15 +22,39 @@ import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-ht
 // link went.
 
 const WEB_HREF = /^(https?:|mailto:)/i
+const DATA_URL = /^data:/i
+
+/** A link's destination without its title: `https://x.dev "The docs"` is
+ *  `https://x.dev`. (An `<…>` destination never gets here: the preview's HTML
+ *  cleanup takes it for a tag first, on screen too.) */
+function destination(href: string): string {
+  return href.trim().split(/\s+/)[0]!
+}
 
 /** A link's words, with the address after them when it is a web one the
  *  words do not already spell. A file link's path is the app's to open, not
  *  the reader's to paste. */
 function linkText(label: string, href: string): string {
-  if (!WEB_HREF.test(href) || label === href) {
-    return label || href
+  const address = destination(href)
+  if (!WEB_HREF.test(address) || label === address) {
+    return label || address
   }
-  return label ? `${label} (${href})` : href
+  return label ? `${label} (${address})` : address
+}
+
+/** An image block as MobileMarkdownImage draws it in a chat, which has no way
+ *  to load a file beside the reply: a web image as its words and address, a
+ *  `data:` one as its words alone (its address is the picture itself), and a
+ *  file one as its words with the path under them, the fallback it draws. */
+function imagePlainText(alt: string, url: string): string {
+  const address = destination(url)
+  if (DATA_URL.test(address)) {
+    return alt
+  }
+  if (isRemoteImageUrl(address)) {
+    return linkText(alt, address)
+  }
+  return alt ? `${alt}\n${address}` : address
 }
 
 /** One run of inline Markdown as the words it draws: the marks around bold,
@@ -53,7 +78,7 @@ function inlinePlainText(text: string): string {
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
-      out += linkText(image[1] || 'image', image[2]!)
+      out += DATA_URL.test(destination(image[2]!)) ? image[1] || 'image' : linkText(image[1] || 'image', image[2]!)
     } else if (link) {
       out += linkText(inlinePlainText(link[1]!), link[2]!)
     } else if (/^https?:\/\//i.test(token)) {
@@ -91,7 +116,7 @@ function blockPlainText(block: MobileMarkdownBlock): string {
         })
         .join('\n')
     case 'image':
-      return block.url ? linkText(block.alt, block.url) : block.alt
+      return block.url ? imagePlainText(block.alt, block.url) : block.alt
     case 'table':
       return [block.headers, ...block.rows].map((row) => row.map(inlinePlainText).join('\t')).join('\n')
     case 'rule':

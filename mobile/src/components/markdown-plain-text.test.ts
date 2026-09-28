@@ -84,6 +84,23 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('![chart](https://x.dev/c.png)')).toBe('chart (https://x.dev/c.png)')
   })
 
+  // The chat has no way to load a file beside the reply, so it draws the alt
+  // text with the path under it (MobileMarkdownImage's fallback).
+  it('keeps the path a file image shows under its words', () => {
+    expect(markdownPlainText('Plot:\n\n![fig](fig/plot.svg)')).toBe('Plot:\n\nfig\nfig/plot.svg')
+    expect(markdownPlainText('![](fig/plot.svg)')).toBe('fig/plot.svg')
+  })
+
+  it('copies a data: image as its words, never its data', () => {
+    const blob = `data:image/png;base64,${'A'.repeat(2000)}`
+    expect(markdownPlainText(`![](${blob})`)).toBe('')
+    expect(markdownPlainText(`![logo](${blob})`)).toBe('logo')
+  })
+
+  it('leaves a link title out of the address it pastes', () => {
+    expect(markdownPlainText('[docs](https://x.dev "The docs")')).toBe('docs (https://x.dev)')
+  })
+
   it('copies a table as tab-separated rows, marks off each cell', () => {
     expect(markdownPlainText('| Name | Size |\n| --- | --- |\n| `a.ts` | **2 KB** |')).toBe(
       'Name\tSize\na.ts\t2 KB'

@@ -248,7 +248,10 @@ function MobileNativeChatMessageImpl({
   )
 
   const handleCopy = (): void => {
-    const text = isUser ? nativeChatMessageText(message.blocks) : nativeChatReplyPlainText(message.blocks)
+    // A prompt copies as typed, unless it is drawn as Markdown (the subagent
+    // transcript's task prompts); then it copies what it draws, like a reply.
+    const text =
+      isUser && !promptsAsMarkdown ? nativeChatMessageText(message.blocks) : nativeChatReplyPlainText(message.blocks)
     if (!text) {
       return
     }
