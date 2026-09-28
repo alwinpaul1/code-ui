@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -60,3 +60,16 @@ vi.mock('./src/platform/haptics', () => ({
   triggerError: () => undefined,
   triggerEdgeBump: () => undefined
 }))
+
+// Why: the session a chat tab keeps over a nested agent's status, and each
+// session's turn, live in a module-level store that outlives a mount on
+// purpose (native-chat-kept-session.ts). Test cases reuse one host and tab id
+// across sessions, so a case read the session an earlier case kept: shuffled,
+// use-mobile-native-chat-controller.test.ts failed two cases (review of
+// b97b00d6). Reset before every case. Imported, not held: after a
+// vi.resetModules this is the instance the case itself loads, and the state
+// module carries no import heavier than the storage the mock above serves.
+beforeEach(async () => {
+  const { resetNativeChatKeptSessionsForTests } = await import('./src/session/native-chat-kept-session-state')
+  resetNativeChatKeptSessionsForTests()
+})
