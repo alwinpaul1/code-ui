@@ -4,6 +4,7 @@ import path from 'node:path'
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer, type ReactTestRendererJSON } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { formsStackingContext, formsView } from '../test/android-fabric-native-parent.test-support'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 
@@ -99,82 +100,6 @@ vi.mock('../components/BottomDrawer', async () => {
 
 type Scheme = 'light' | 'dark'
 type HostNode = ReactTestRendererJSON
-type Style = Record<string, unknown>
-
-/** Every prop Fabric parses into ViewEvents; any of them makes a stacking context. */
-const VIEW_EVENT_PROP =
-  /^on(Click|Pointer|Touch|Responder|StartShouldSetResponder|MoveShouldSetResponder|ShouldBlockNativeResponder)/
-
-function flattenStyle(style: unknown): Style {
-  if (Array.isArray(style)) {
-    return Object.assign({}, ...style.map(flattenStyle)) as Style
-  }
-  return style && typeof style === 'object' ? (style as Style) : {}
-}
-
-/** `formsStackingContext` from ViewShadowNode::initialize, React Native 0.86.3
- *  (ReactCommon/react/renderer/components/view/ViewShadowNode.cpp), plus the
- *  Android host trait (`elevation`). Only a View that forms one keeps its
- *  children as its own native subviews; any other View's children are
- *  flattened into the nearest ancestor that does
- *  (mounting/internal/sliceChildShadowNodeViewPairs.cpp, `areChildrenFlattened`). */
-function formsStackingContext(props: Record<string, unknown>): boolean {
-  const style = flattenStyle(props.style)
-  const pointerEvents = props.pointerEvents ?? style.pointerEvents
-  const transform = style.transform
-  return (
-    props.collapsable === false ||
-    pointerEvents === 'none' ||
-    pointerEvents === 'box-only' ||
-    Boolean(props.nativeID) ||
-    props.accessible === true ||
-    (style.opacity !== undefined && style.opacity !== 1) ||
-    (Array.isArray(transform) ? transform.length > 0 : Boolean(transform)) ||
-    // RN's default position is relative, so any zIndex counts unless static.
-    (style.zIndex !== undefined && style.position !== 'static') ||
-    style.display === 'none' ||
-    (style.overflow !== undefined && style.overflow !== 'visible') ||
-    Object.keys(props).some((key) => VIEW_EVENT_PROP.test(key)) ||
-    (style.shadowColor !== undefined && style.shadowColor !== 'transparent') ||
-    props.accessibilityElementsHidden === true ||
-    props.accessibilityViewIsModal === true ||
-    (props.importantForAccessibility !== undefined && props.importantForAccessibility !== 'auto') ||
-    props.removeClippedSubviews === true ||
-    (style.cursor !== undefined && style.cursor !== 'auto') ||
-    Boolean(style.filter) ||
-    (style.mixBlendMode !== undefined && style.mixBlendMode !== 'normal') ||
-    style.isolation === 'isolate' ||
-    (style.elevation !== undefined && style.elevation !== 0) ||
-    (Array.isArray(props.accessibilityOrder) && props.accessibilityOrder.length > 0)
-  )
-}
-
-const BORDER_WIDTH_STYLE = /^border(Top|Right|Bottom|Left|Start|End|Horizontal|Vertical|Block|BlockStart|BlockEnd|Inline|InlineStart|InlineEnd)?Width$/
-
-/** `formsView` from the same function: whether the View exists natively at
- *  all. One that does not is flattened away and its children hoisted. */
-function formsView(props: Record<string, unknown>): boolean {
-  const style = flattenStyle(props.style)
-  const hasItems = (value: unknown) => (Array.isArray(value) ? value.length > 0 : Boolean(value))
-  return (
-    formsStackingContext(props) ||
-    (style.backgroundColor !== undefined && style.backgroundColor !== 'transparent') ||
-    Object.keys(style).some((key) => BORDER_WIDTH_STYLE.test(key) && style[key] !== undefined) ||
-    Boolean(props.testID) ||
-    hasItems(style.boxShadow) ||
-    hasItems(style.experimental_backgroundImage ?? style.backgroundImage) ||
-    (typeof style.outlineWidth === 'number' && style.outlineWidth > 0) ||
-    // Android's host traits.
-    props.nativeBackgroundAndroid !== undefined ||
-    props.nativeForegroundAndroid !== undefined ||
-    props.focusable === true ||
-    props.hasTVPreferredFocus === true ||
-    props.needsOffscreenAlphaCompositing === true ||
-    props.renderToHardwareTextureAndroid === true ||
-    props.screenReaderFocusable === true
-  )
-}
-
 /** The mocked host tags are plain strings React's element types do not list. */
 function isHost(node: { type: unknown }, tag: string): boolean {
   return node.type === tag

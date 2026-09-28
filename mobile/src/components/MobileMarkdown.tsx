@@ -323,6 +323,16 @@ function MobileMarkdownInner({
   return (
     <View
       style={styles.root}
+      // A native view of the document's own, which everything it draws is
+      // mounted into. On Android a Text keeps none of its inline Views, and a
+      // View with only a gap and onLayout is flattened, so the pills and
+      // Texts were mounted one by one into whatever stacking view held the
+      // document (a chat list cell). Containment after an unexplained Fabric
+      // "remove from a view that is not a ViewGroup" crash (2026-09-28): no
+      // View between the two flattens today, but if one ever did it would
+      // move them one by one, the kind of move react-native#57800 suspects.
+      // Now they only move with this view (mobile-markdown-pill-native-parent.test.tsx).
+      collapsable={false}
       onLayout={(event) => setContentWidth(Math.round(event.nativeEvent.layout.width))}
     >
       {runs.map((run) => {
