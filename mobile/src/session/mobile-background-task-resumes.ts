@@ -89,33 +89,29 @@ export function readAgentResume(output: string): AgentResumeReading | null {
 
 /** What the reader's walk has seen of SendMessage: the resumes it read, and
  *  the calls of the current step that still wait for a result, each as the
- *  names it addressed (`to`, `recipient`). A step is one run of
- *  calls and then their results: Orca's reader hands each parallel call and
- *  each result over as its own message, and the results can come back in any
- *  order. The step ends at the next call once a result has landed, or at any
- *  message with no tool block (the lead's reply, the next prompt, an
- *  interruption), so a call whose result never landed does not stay waiting
- *  into a later turn. */
-export type ResumeTracker = { resumes: Map<string, AgentResume>; targets: string[][]; resultsLanded: boolean }
+ *  names it addressed (`to`, `recipient`). A step is the stretch of calls and
+ *  results between two messages with no tool block (the lead's reply, the
+ *  next prompt, an interruption), so a call whose result never landed does
+ *  not stay waiting into a later turn. Orca's reader hands each parallel call
+ *  and each result over as its own message, and they interleave in any
+ *  order: a result can land before a later call of the same response. A
+ *  call's own result ends only its own wait. */
+export type ResumeTracker = { resumes: Map<string, AgentResume>; targets: string[][]; resumedThisStep: Set<string> }
 
 export function createResumeTracker(): ResumeTracker {
-  return { resumes: new Map(), targets: [], resultsLanded: false }
+  return { resumes: new Map(), targets: [], resumedThisStep: new Set() }
 }
 
 /** Called once per message, before its blocks. */
 export function trackMessage(sends: ResumeTracker, message: NativeChatMessage): void {
   if (!message.blocks.some((block) => isToolCallBlock(block) || isToolResultBlock(block))) {
     sends.targets = []
-    sends.resultsLanded = false
+    sends.resumedThisStep.clear()
   }
 }
 
 /** Called for every tool call. */
 export function trackCall(sends: ResumeTracker, name: string, input: unknown): void {
-  if (sends.resultsLanded) {
-    sends.targets = []
-    sends.resultsLanded = false
-  }
   if (name === 'SendMessage') {
     sends.targets.push([readString(input, 'to'), readString(input, 'recipient')].filter((target): target is string => target !== null))
   }
@@ -144,7 +140,6 @@ export function trackResult(sends: ResumeTracker, output: string, messageId: str
 }
 
 function readSendMessageResume(sends: ResumeTracker, output: string): AgentResumeReading | null {
-  sends.resultsLanded = true
   if (sends.targets.length === 0) {
     return null
   }
@@ -154,9 +149,14 @@ function readSendMessageResume(sends: ResumeTracker, output: string): AgentResum
   }
   const index = sends.targets.findIndex((targets) => targets.some((target) => addresses(target, reading.id)))
   if (index === -1) {
-    return { kind: 'refused', why: `${reading.id} is not the agent any SendMessage waiting in this step addressed` }
+    // A printout of the agent can take its call's place before the real
+    // result lands; the agent counts either way, so nothing is refused.
+    return sends.resumedThisStep.has(reading.id)
+      ? null
+      : { kind: 'refused', why: `${reading.id} is not the agent any SendMessage waiting in this step addressed` }
   }
   sends.targets.splice(index, 1)
+  sends.resumedThisStep.add(reading.id)
   return reading
 }
 

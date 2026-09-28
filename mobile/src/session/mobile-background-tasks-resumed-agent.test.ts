@@ -329,6 +329,76 @@ describe('what the review of this fix found (2026-09-28)', () => {
     expect(runningIds(messages, inAnHour, pane([RESUMED_AGENT_ROSTER_ROW]))).toEqual([])
   })
 
+  // One message per call and per result, as Orca's reader hands them over.
+  const single = (id: string, role: NativeChatMessage['role'], iso: string, block: NativeChatMessage['blocks'][number]): NativeChatMessage => ({
+    id,
+    role,
+    timestamp: at(iso),
+    source: 'transcript',
+    blocks: [block]
+  })
+  const sendTo = (id: string, iso: string, to: string) =>
+    single(id, 'assistant', iso, { type: 'tool-call', name: 'SendMessage', input: { to, message: '[message]', summary: '[summary]', type: 'message' } })
+  const bashCall = (id: string, iso: string) => single(id, 'assistant', iso, { type: 'tool-call', name: 'Bash', input: { command: "jq '.toolUseResult' record.json" } })
+  const resultOf = (id: string, iso: string, output: string) => single(id, 'user', iso, { type: 'tool-result', output })
+
+  it('reads a resume whose result lands after a call the same response made once an earlier result was in', () => {
+    // Read and SendMessage called, the Read's result in, then a Bash call,
+    // then the SendMessage's result: a tool executor that streams calls runs
+    // the first while the response is still being written.
+    const messages = [
+      ...launchRecords(),
+      notificationRecord(),
+      single('read-call', 'assistant', '2026-09-28T16:28:09.000Z', { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/notes.md' } }),
+      sendTo('send-call', RESUMED_AGENT_TIMES.resumeCall, ID),
+      resultOf('read-result', '2026-09-28T16:28:10.000Z', '1\t[notes]'),
+      bashCall('bash-call', '2026-09-28T16:28:11.000Z'),
+      resultOf('send-result', RESUMED_AGENT_TIMES.resumed, RESUME_RESULT),
+      resultOf('bash-result', '2026-09-28T16:28:14.000Z', 'On branch main')
+    ]
+
+    expect(runningIds(messages, AFTER_RESUME, null)).toEqual([ID])
+    expect(runningIds(messages, AFTER_RESUME, pane([RESUMED_AGENT_ROSTER_ROW]))).toEqual([ID])
+  })
+
+  it('counts a printout of an agent as its resume after a dropped SendMessage result to it, with no reply between (known limit)', () => {
+    // The send's result record never reached the reader, and no message
+    // without a tool block followed it before the printout. Pinned so a
+    // change here is seen: it needs a dropped record, and it is the same
+    // family as a printout in the step of a live send to that agent.
+    const messages = [
+      ...launchRecords(),
+      notificationRecord('2026-09-28T17:05:00.000Z', COMPLETED_NOTIFICATION),
+      sendTo('dropped-send', '2026-09-28T17:10:00.000Z', ID),
+      bashCall('status-call', '2026-09-28T17:10:05.000Z'),
+      resultOf('status-result', '2026-09-28T17:10:06.000Z', 'On branch main'),
+      bashCall('printout-call', '2026-09-28T17:10:10.000Z'),
+      resultOf('printout-result', '2026-09-28T17:10:11.000Z', printedResume)
+    ]
+
+    expect(runningIds(messages, LATER, null)).toEqual([ID])
+  })
+
+  it('says nothing about a resume of an agent this step already counted', () => {
+    // A printout of the agent took the waiting call's place before the real
+    // result landed, while a send to another agent still waited; the agent
+    // counts either way, so no line claims otherwise.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const messages = [
+      ...launchRecords(),
+      notificationRecord(),
+      sendTo('send-call', RESUMED_AGENT_TIMES.resumeCall, ID),
+      sendTo('other-send-call', RESUMED_AGENT_TIMES.resumeCall, 'a07ea6f616a8e32a1'),
+      bashCall('bash-call', RESUMED_AGENT_TIMES.resumeCall),
+      resultOf('printout-result', '2026-09-28T16:28:12.000Z', printedResume),
+      resultOf('send-result', RESUMED_AGENT_TIMES.resumed, RESUME_RESULT),
+      resultOf('other-send-result', RESUMED_AGENT_TIMES.resumed, QUEUED_RESULT)
+    ]
+
+    expect(runningIds(messages, AFTER_RESUME, null)).toEqual([ID])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
   it('stops counting a resumed subagent with no host status once an id-only list names it', () => {
     // With no host status nothing can see the resumed run end mid-turn (Orca's
     // reader drops that notification), and the beacon's `done=` cannot say

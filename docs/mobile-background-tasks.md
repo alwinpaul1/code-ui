@@ -322,18 +322,27 @@ and changed 38 times; the sources, one by one:
   notification dropped by Orca's reader and would otherwise show for ever.
   A resume counts only when its `resumedAgentId` is the agent a SendMessage
   of the same step addressed (by id, or `a<name>-<hex>` by name) and that
-  call still waits for its result. A step is the calls and then their
-  results; it ends at the next call after a result, or at any message with
-  no tool block, so a call whose result never landed stops waiting. A
-  command's printout of a resume passes only in the same step as a
-  SendMessage to that very agent; one beside a send to another agent is
+  call still waits for its result. A step is the stretch of calls and
+  results between two messages with no tool block (the lead's reply, the
+  next prompt, an interruption); calls and results interleave in it in any
+  order, since a result can land before a later call of the same response.
+  A command's printout of a resume passes only while a SendMessage to that
+  very agent waits in the step; one beside a send to another agent is
   refused and logged. A queued message ("Message queued for delivery to …")
   starts no run. A result that claims a resume in another shape is not
   counted and is logged once; a teammate's resume names no task id and is
   left to the roster.
-  Known limit: a resumed run that stalls again, sending no SubagentStop, reads
-  as running until Orca drops the row it kept, because `done=` names only the
-  id and ends nothing against a row; a first run has the same gap.
+  Known limits:
+  - A resumed run that stalls again, sending no SubagentStop, reads as
+    running until Orca drops the row it kept, because `done=` names only the
+    id and ends nothing against a row; a first run has the same gap.
+  - A resume is missed, and the count stays what it was before resumes were
+    read, when a message with no tool block sits between the SendMessage
+    call and its result: one holding only text, or one with no blocks at
+    all. Either ends the step.
+  - A SendMessage whose result record never reaches the reader keeps waiting
+    until the step ends, so a printout of that same agent later in the step
+    counts as its resume.
 - Each roster row the loaded window never showed launched is placed once,
   the first time the phone sees it with a window loaded
   (`mobile-background-task-memory.ts`). Orca's `startedAt` is when Orca
