@@ -171,13 +171,20 @@ describe('the status line above the composer', () => {
     return star.findAllByType('Svg' as never)[0]?.props.style
   }
 
-  // 2026-09-26, the user's recording of the Claude app, "4 running tasks" with
-  // the turn over: the star kept one shape the whole 10.5 s, with no fade, no
-  // scale and no turn, and the words never moved. The phone's star breathed.
-  it('keeps the star still beside the running-task count once the turn is over', () => {
+  // 2026-09-28, the user: "No breathing effect for claude logo in bg running task". The star
+  // stood still beside "N running tasks" to match a 2026-09-26 recording of the Claude app; the
+  // user wants it to breathe while background work runs, as it does beside Working.
+  it('breathes the star beside the running-task count while background tasks run', () => {
     mocks.reduced = false
     const drawn = draw({ runningCount: 4, working: false })
     expect(drawn.texts).toEqual(['4 running tasks'])
+    expect(mocks.loops).toBe(1)
+    expect(starStyle()).toBeDefined()
+  })
+
+  it('keeps the star still beside the running-task count when motion is reduced', () => {
+    mocks.reduced = true
+    draw({ runningCount: 4, working: false })
     expect(mocks.loops).toBe(0)
     expect(starStyle()).toBeUndefined()
   })

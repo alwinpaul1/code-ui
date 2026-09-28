@@ -9,19 +9,23 @@ const pill = StyleSheet.create({
     flexDirection: 'row',
     flexShrink: 0,
     overflow: 'hidden',
-    borderRadius: 6
+    borderRadius: 5
   },
-  // As tight as the inline code pills (mobile-markdown-styles.ts).
+  // Tighter than an inline code pill: a tag beside the sentence, not a second line of it (the
+  // user, 2026-09-28: "reduce the size of lines written and number of lines removed pill").
   segment: {
-    paddingHorizontal: 5,
-    paddingVertical: 1
+    paddingHorizontal: 4,
+    paddingVertical: 0
   }
 })
 
+/** The pill's type against the sentence it follows: a step down, so it reads as a tag. */
+const DIFF_PILL_TYPE_SCALE = 0.85
+
 /** docs/claude-app-parity.md item 3: the run header's "+A −R" line count, as
  *  the Claude app draws it (2026-09-26): one rounded pill, green "+A" on a
- *  green tint joined to red "−R" on a red tint, right after the sentence, in
- *  the sentence's own type. The same diff tokens `MobileNativeChatDiffCard`'s
+ *  green tint joined to red "−R" on a red tint, right after the sentence, a
+ *  step smaller than the sentence's own type. The same diff tokens `MobileNativeChatDiffCard`'s
  *  header uses, so the two read as one system. "+0 −0" is still a whole pill. */
 export function ToolRunDiffChip({
   stat,
@@ -31,7 +35,11 @@ export function ToolRunDiffChip({
   styles: ChatMessageStyles
 }): React.JSX.Element {
   const { colors } = useTheme()
-  const type = { fontFamily: styles.toolRunLabel.fontFamily, fontSize: styles.toolRunLabel.fontSize }
+  const sentenceSize = styles.toolRunLabel.fontSize ?? 13
+  const type = {
+    fontFamily: styles.toolRunLabel.fontFamily,
+    fontSize: Math.round(sentenceSize * DIFF_PILL_TYPE_SCALE)
+  }
   return (
     <View testID="tool-run-diff-chip" style={pill.pill}>
       <Text
