@@ -24,8 +24,10 @@ import {
  * (2026-09-29, the user: "I can't move that copy thingy sideways to copy
  * other things"). So the View is `box-none` and its Text is not selectable:
  * neither consumes the touch natively, the hold falls to the prose Text under
- * it, and that selection starts on the pill's U+FFFC with handles that run
- * across the paragraph. A Copy puts the pill's words in place of the U+FFFC:
+ * it, and Android selects the character nearest the finger: the pill's U+FFFC
+ * from its left half, the character after it from its right half (Editor.
+ * selectCurrentWord finds no word there). Either way the handles run across
+ * the paragraph. A Copy puts the pill's words in place of the U+FFFC:
  * the pill's View carries its span on its nativeID (markdown-pill-copy-id.ts).
  * The Text is still the JS touch target, since React Native's hit test skips
  * only the `box-none` View itself, so a file pill opens on a tap.

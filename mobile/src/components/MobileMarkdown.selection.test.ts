@@ -277,8 +277,9 @@ describe('while the list is scrolling', () => {
 // drew them a line low. Now the pill lets the touch through instead
 // (`pointerEvents="box-none"`: ReactViewGroup.onTouchEvent returns false, and
 // its Text, not selectable, is not clickable either), so the hold lands on
-// the prose Text under it, which selects the pill's U+FFFC with handles that
-// run across the whole paragraph. A Copy puts the pill's words in its place
+// the prose Text under it, which selects the character nearest the finger
+// (the pill's U+FFFC, or the one after it from the pill's right half) with
+// handles that run across the whole paragraph. A Copy puts the pill's words in its place
 // (markdown-pill-copy-id.ts). The Text stays the JS touch target
 // (TouchTargetHelper honours box-none), so a file pill still opens on a tap.
 // What only the device shows: the handles moving past the pill.
