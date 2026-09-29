@@ -22,7 +22,8 @@ import { parseStatusSubagentPreview, type StatusSubagentMessage } from './mobile
  * opening a `tail -F` terminal on the desktop — a tab the user saw and did
  * not want. What the hook path cannot give: the field is capped at
  * AGENT_STATUS_MAX_FIELD_LENGTH characters (a longer prompt arrives cut,
- * and is drawn as cut), and the queue itself is not in the status, so the
+ * and is drawn as cut unless the prompt hook's copy of it carries the rest,
+ * desktop-prompt-merge.ts), and the queue itself is not in the status, so the
  * queue box reads the screen alone.
  *
  * Nor is the prompt always this turn's. It is the last one a PERSON sent:

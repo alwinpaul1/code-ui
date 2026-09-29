@@ -144,19 +144,43 @@ export function standIn(stamped: string): NonNullable<AgentStatusPromptSource> {
 export function statusReader() {
   let renderer: ReactTestRenderer | null = null
   const last = { prompts: [] as DesktopPrompt[] }
-  function Reader({ status, connected, live, shown }: { status: AgentStatusPromptSource; connected: boolean; live: boolean; shown: boolean }) {
+  function Reader({
+    status,
+    connected,
+    live,
+    shown,
+    beacon
+  }: {
+    status: AgentStatusPromptSource
+    connected: boolean
+    live: boolean
+    shown: boolean
+    beacon: readonly DesktopPrompt[] | undefined
+  }) {
     // The controller hands the reader no session while the tab shows its
     // terminal (use-mobile-native-chat-controller.ts).
-    last.prompts = useAgentStatusPrompts(shown ? SESSION : null, status, undefined, connected, live).prompts
+    last.prompts = useAgentStatusPrompts(shown ? SESSION : null, status, beacon, connected, live).prompts
     return null
   }
   return {
     read(
       status: AgentStatusPromptSource,
-      { connected = true, live = true, shown = true }: { connected?: boolean; live?: boolean; shown?: boolean } = {}
+      {
+        connected = true,
+        live = true,
+        shown = true,
+        beacon
+      }: {
+        connected?: boolean
+        live?: boolean
+        shown?: boolean
+        /** The prompt hook's copies the terminal's beacon carried so far
+         *  (the controller's `hudBeacon.desktopPrompts`), oldest first. */
+        beacon?: readonly DesktopPrompt[]
+      } = {}
     ): DesktopPrompt[] {
       act(() => {
-        const element = createElement(Reader, { status, connected, live, shown })
+        const element = createElement(Reader, { status, connected, live, shown, beacon })
         if (renderer) {
           renderer.update(element)
         } else {
@@ -192,6 +216,14 @@ export function drawn(props: Record<string, unknown>): { id: string; role: strin
 }
 export const oneLine = (body: string) => body.replace(/\s+/g, ' ').trim()
 
+/** The prompt hook's copy of a submission as the beacon store holds it
+ *  (agent-hud-beacon.ts): the hook's pid for a nonce, the words as typed (cut
+ *  at 2,000 bytes, which no fixture here reaches), the text row it was typed
+ *  after (`at=`), and when the phone received it. */
+export function beaconCopy(nonce: string, words: string, anchorId: string, received: string): DesktopPrompt {
+  return { nonce, text: words, cut: false, anchorId, seenAt: at(received) }
+}
+
 /** The chat as the report's tests draw it, into `frames`, on the agent
  *  `agent()` names. Call it inside a describe: it hooks each case. */
 export function midturnChat(frames: Record<string, unknown>[], agent: () => 'claude' | 'codex') {
@@ -203,7 +235,10 @@ export function midturnChat(frames: Record<string, unknown>[], agent: () => 'cla
     prompts: DesktopPrompt[],
     working = true,
     /** The rows the agent's queue box lists, as the screen reader took them. */
-    queued: string[] = []
+    queued: string[] = [],
+    /** Whether the tab was launched with the prompt hook (`hk=1` on its
+     *  beacon), so every prompt it took while the phone listened was beaconed. */
+    { promptHook }: { promptHook?: boolean } = {}
   ): Promise<void> {
     const delta = at(clock) - Date.now()
     if (delta > 0) {
@@ -212,8 +247,8 @@ export function midturnChat(frames: Record<string, unknown>[], agent: () => 'cla
       })
     }
     // Twice: the witness memory settles on the render after it stores.
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued })
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, promptHook })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent: agent(), queued, promptHook })
   }
   /** The rows the chat's queue box draws, as their words. */
   function queueBox(): string[] {

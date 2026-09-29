@@ -87,3 +87,31 @@ describe('two long desk messages that agree for their first 200 characters', () 
     expect(mergeDesktopPrompts([statusSecond], beacon).map((prompt) => prompt.nonce)).toEqual(['status:s:1000:0', '9001'])
   })
 })
+
+// W1 of the review of fix/midturn-gaps (2026-09-29): drawn and remembered as
+// the field's 200-character cut, a long message matched neither the queue
+// box's whole reading of it nor its row, and came back as two once the chat
+// had closed before the box listed it.
+describe('a status copy the field cut, and the hook copy of the same message', () => {
+  const words = `${'make the retry path log every failure with its attempt number, '.repeat(4)}and the last one`
+  const cutCopy: DesktopPrompt = { nonce: 'status:s:1000:0', text: words.replace(/\s+/g, ' ').slice(0, 200), cut: true, at: 1000, seenAt: 1000 }
+
+  it('carries the words as typed, with its own nonce and time', () => {
+    const merged = mergeDesktopPrompts([cutCopy], [{ nonce: '9001', text: words, cut: false, anchorId: 'a1', seenAt: 1100 }])
+    expect(merged).toEqual([{ ...cutCopy, text: words, cut: false }])
+  })
+
+  it('stays cut when the hook cut the words too, at 2,000 bytes', () => {
+    const long = `${words} ${'x'.repeat(2000)}`
+    const merged = mergeDesktopPrompts([cutCopy], [{ nonce: '9001', text: long.slice(0, 2000), cut: true, seenAt: 1100 }])
+    expect(merged.map((prompt) => [prompt.nonce, prompt.cut, prompt.text.length])).toEqual([['status:s:1000:0', true, 2000]])
+  })
+
+  // Degenerate: a whole status copy, and one with no twin, are left as they are.
+  it('leaves a whole status copy and a cut one with no twin as they were', () => {
+    const whole: DesktopPrompt = { nonce: 'status:s:1000:1', text: 'fix the\n\nqueue'.replace(/\s+/g, ' '), at: 1000, seenAt: 1000 }
+    expect(mergeDesktopPrompts([whole], [{ nonce: '9002', text: 'fix the\n\nqueue', seenAt: 1000 }])).toEqual([whole])
+    expect(mergeDesktopPrompts([cutCopy], [])).toEqual([cutCopy])
+  })
+})
+

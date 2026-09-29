@@ -31,7 +31,21 @@ export function mergeDesktopPrompts(
   status: readonly DesktopPrompt[],
   beacon: readonly DesktopPrompt[]
 ): DesktopPrompt[] {
-  const merged: DesktopPrompt[] = [...status]
+  const twins = foldedTwins(status, beacon)
+  const twinOf = new Map([...twins].map(([prompt, copy]) => [copy, prompt]))
+  // A status copy the field cut stands for the message as typed: its twin's
+  // words (up to 2,000 bytes, `cut` when the hook shortened them). Drawn and
+  // remembered as the 200-character cut, it matched neither the queue box's
+  // whole reading of the message nor its row, and a message the chat closed
+  // on before the box listed it came back as two, cut and whole (W1 of the
+  // review of fix/midturn-gaps, 2026-09-29). The status copy keeps its nonce
+  // and its time; only the words come from the twin.
+  const merged: DesktopPrompt[] = status.map((copy) => {
+    const twin = twinOf.get(copy)
+    return twin !== undefined && copy.cut === true && twin.text.length > copy.text.length
+      ? { ...copy, text: twin.text, cut: twin.cut === true }
+      : copy
+  })
   // The two copies of one message are told by the status's own folding: it
   // keeps a prompt on one line and cuts it at 200 characters
   // (normalizePromptField), while the beacon keeps the words as typed, up to
@@ -47,7 +61,6 @@ export function mergeDesktopPrompts(
   // carried it (desk-prompt-harness-turns.ts, after this merge), and a twin
   // let through would then draw the message twice.
   const seen = new Set(status.map((prompt) => prompt.text))
-  const twins = foldedTwins(status, beacon)
   for (const prompt of beacon) {
     const twin = seen.has(prompt.text) || twins.has(prompt)
     if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
@@ -59,12 +72,13 @@ export function mergeDesktopPrompts(
 
 /**
  * The beacon copies a status copy stands for by the status's folding, one
- * each, nearest pair first by when the phone read them. Taken from the beacon
+ * each, nearest pair first by when the phone read them, each with the status
+ * copy it pairs with. Taken from the beacon
  * side in list order, an older message of the same first 200 characters took
  * the status copy after a remount, and the message the status carried was
  * kept beside it, drawn twice (review of 08813139).
  */
-function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopPrompt[]): Set<DesktopPrompt> {
+function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopPrompt[]): Map<DesktopPrompt, DesktopPrompt> {
   const pairs: { copy: DesktopPrompt; prompt: DesktopPrompt; distance: number; order: number }[] = []
   beacon.forEach((prompt, index) => {
     const folded = normalizePromptField(prompt.text)
@@ -78,11 +92,11 @@ function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopP
   })
   pairs.sort((a, b) => a.distance - b.distance || a.order - b.order)
   const paired = new Set<DesktopPrompt>()
-  const twins = new Set<DesktopPrompt>()
+  const twins = new Map<DesktopPrompt, DesktopPrompt>()
   for (const { copy, prompt } of pairs) {
     if (!paired.has(copy) && !twins.has(prompt)) {
       paired.add(copy)
-      twins.add(prompt)
+      twins.set(prompt, copy)
     }
   }
   return twins
