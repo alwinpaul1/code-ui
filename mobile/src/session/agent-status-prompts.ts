@@ -66,6 +66,14 @@ export type AgentStatusPromptState = {
    *  A prompt first seen on the first read after a reconnect came after it. */
   readAt?: number
   prompts: readonly DesktopPrompt[]
+  /** How many nonces this session has given out, to held and drawn prompts
+   *  alike: the last part of the next one. Never cut with `prompts`
+   *  (PROMPT_CAP). Numbered by the list's length, every prompt past the cap
+   *  got the same number as the one before it, so two placed by the same run
+   *  start, or any two held back, shared a nonce, which the echoes key
+   *  everything by (review of 2026-09-30). A new session starts it over, as
+   *  it does the list. */
+  issued: number
   /** The subagent messages the status carried, in the order it did: never
    *  desktop prompts, but the only words of one a tab without the prompt
    *  hook gets (parseStatusSubagentPreview). */
@@ -88,6 +96,7 @@ export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
   read: false,
   last: null,
   prompts: [],
+  issued: 0,
   withheld: null
 }
 
@@ -164,7 +173,7 @@ export function observeAgentStatusPrompt(
     // posts as this pane (2026-09-19). On the way back the row carried that
     // session's text with this session's id, and a reset to null took it as a
     // new prompt of this chat.
-    state = { sessionKey, read: false, last: state.last, prompts: [], agentMessages: [], withheld: null }
+    state = { sessionKey, read: false, last: state.last, prompts: [], issued: 0, agentMessages: [], withheld: null }
   }
   if (sessionKey === null) {
     return state
@@ -272,7 +281,7 @@ export function observeAgentStatusPrompt(
         : null
   if (why !== null) {
     const held: DesktopPrompt = {
-      nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
+      nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.issued}`,
       text,
       ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
       heldBack: true,
@@ -283,6 +292,7 @@ export function observeAgentStatusPrompt(
       ...state,
       last: text,
       prompts: [...state.prompts, held].slice(-PROMPT_CAP),
+      issued: state.issued + 1,
       withheld: `[desk-prompt] not drawn: "${preview(text)}" was read on a ${status?.state} pane (${why}) and the status holds no time for it; it draws only from a transcript row, which a message sent mid-turn does not have`
     }
   }
@@ -306,7 +316,7 @@ export function observeAgentStatusPrompt(
   const foundRun = !found && standIn !== undefined && status?.state === 'working' ? runItCameIn(status) : null
   const foundAt = typeof foundRun === 'number' ? Math.max(foundRun, standIn?.notBefore ?? foundRun) : undefined
   const prompt: DesktopPrompt = {
-    nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
+    nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.issued}`,
     text,
     ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
@@ -341,7 +351,7 @@ export function observeAgentStatusPrompt(
   // The subagent messages stay (`...state`): dropping them here took the
   // words off a "Message from" row the moment the person replied (review of
   // 2026-09-27).
-  return { ...state, last: text, prompts, placed }
+  return { ...state, last: text, prompts, issued: state.issued + 1, placed }
 }
 
 /**
@@ -392,7 +402,9 @@ function runItCameIn(status: NonNullable<AgentStatusPromptSource>): number | Har
   return crossings.length > 0 ? { at: entry.startedAt, crossings } : entry.startedAt
 }
 
-/** The start of a prompt, for the log line. */
+/** The start of a prompt, for the log line. Counted and cut in code points,
+ *  so the cut never leaves half an emoji at the end of the line. */
 function preview(text: string): string {
-  return text.length > 32 ? `${text.slice(0, 32)}…` : text
+  const points = Array.from(text)
+  return points.length > 32 ? `${points.slice(0, 32).join('')}…` : text
 }

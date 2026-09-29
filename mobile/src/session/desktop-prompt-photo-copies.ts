@@ -56,7 +56,9 @@ function statusCopyKey(prompt: DesktopPrompt): string | null {
   if (!prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX)) {
     return null
   }
-  // `status:<session>:<time>:<index>`
+  // `status:<session>:<time or x>:<n>`, n counting the prompts the session
+  // was given before it (agent-status-prompts.ts, `issued`): the session is
+  // what comes before the last two colons.
   const rest = prompt.nonce.slice(STATUS_PROMPT_NONCE_PREFIX.length)
   const session = rest.slice(0, rest.lastIndexOf(':', rest.lastIndexOf(':') - 1))
   return session ? `${session}\0${photoCopyText(prompt)}` : null
