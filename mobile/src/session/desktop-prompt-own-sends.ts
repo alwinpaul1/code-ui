@@ -45,7 +45,15 @@ import { phoneClockAllowanceMs } from './mid-turn-written-before'
 const key = (text: string) =>
   withShortSkillToken(normalizeNativeChatUserText(asPaintedPrompt(withoutPasteWrappers(text))))
 
-type PendingCopy = { id: string; text: string; images?: string[]; sentAt?: number; markersBefore?: number }
+type PendingCopy = {
+  id: string
+  text: string
+  images?: string[]
+  sentAt?: number
+  markersBefore?: number
+  /** Where the bubble is drawn: for a witness, the row it was drawn after. */
+  baselineTailMessageId?: string | null
+}
 
 export type HookPairing = {
   /** Pending copies that give way to the hook's timed copy of them. */
@@ -215,8 +223,15 @@ export function pairPendingWithHookPrompts(
     const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, () => true)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
-    if (timed.length > 0) {
-      claim(own ?? timed[0]!, false)
+    const pick = own ?? timed[0]
+    if (pick !== undefined && witnessOfTheRun(item, prompts[pick]!, messages)) {
+      // The witness's own place stands: it was drawn where the message
+      // arrived, and a copy timed only by its run's start is a bound below
+      // that. Stepping aside for it lost the message after a remount, when
+      // that start is on a page the chat has not loaded (gap B).
+      claim(pick, true)
+    } else if (pick !== undefined) {
+      claim(pick, false)
       steppedAside.add(item.id)
     } else if (candidates[0] !== undefined) {
       // Its own prompt first: claimed, that echo is hidden. Another copy of
@@ -233,6 +248,42 @@ export function pairPendingWithHookPrompts(
     }
   })
   return { steppedAside, standIns, photoCopies }
+}
+
+/** How far before its run's start a witness's row may be stamped and still be
+ *  that run's: a message sent before the agent wrote anything in the run sits
+ *  under the prompt that opened it, which Claude Code stamps just before the
+ *  state's start Orca records (mobile-chat-desk-prompt-unwatched-midturn.test.ts). */
+const WITNESS_RUN_SLACK_MS = 5_000
+
+/**
+ * Whether a witness (a message the phone drew and remembered, `desk-` or
+ * `absorbed-`) was drawn in the run a copy of its words was found in: the row
+ * it was drawn after was written in that run, or just before it. Only a copy
+ * timed by its run's start (`atStateStart`) is judged, since that time is a
+ * bound below the message and the witness's place is the message's own. A
+ * copy with a time of its own is the message watched arriving, and the
+ * witness gives way to it as before; so does it to a copy from a later run,
+ * which the same words sent again or carried past a turn end cannot be told
+ * apart by. A send the phone restored with no send time is not a witness:
+ * its place was a guess.
+ *
+ * Gap B of the final review of fix/midturn-prompt-at-end (2026-09-29): after
+ * a remount the first status found the last mid-turn message and timed it by
+ * its run's start, 05:08, on a page the chat had not loaded, so that copy was
+ * not drawn; the witness gave way to it, and the message vanished.
+ */
+function witnessOfTheRun(item: PendingCopy, copy: DesktopPrompt, messages: readonly NativeChatMessage[]): boolean {
+  if (!isWitnessId(item.id) || copy.atStateStart !== true || copy.at === undefined) {
+    return false
+  }
+  const anchor = item.baselineTailMessageId
+  const row = anchor ? messages.find((message) => message.id === anchor) : undefined
+  return row?.timestamp != null && row.timestamp >= copy.at - WITNESS_RUN_SLACK_MS
+}
+
+function isWitnessId(id: string): boolean {
+  return id.startsWith('desk-') || id.startsWith('absorbed-')
 }
 
 /** How long after a send the hook's copy of it can be timed: twice the 15 s

@@ -542,6 +542,30 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     })
   }
 
+  // Gap B of the final review of fix/midturn-prompt-at-end: after the chat
+  // remounts (a relaunch, a tab switch back), the first status finds the last
+  // message and times it by its run's start, 05:08, on a page the chat has not
+  // loaded, so that copy is not drawn; and the message's stored bubble, which
+  // the phone drew where it arrived, gave way to it. Nothing was drawn.
+  for (const kind of ['claude', 'codex'] as const) {
+    it(`keeps a mid-turn message where it was drawn after the chat remounts, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+      agent = kind
+      const reader = statusReader()
+      await watchTheTurn(reader)
+      expectSentWhereItArrived()
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:48:00.000'))
+      const prompts = again.read(done(SECOND_SEND))
+      await showAt('05:48:00.100', WHOLE_TURN, prompts, false)
+      await showAt('05:48:01.000', WHOLE_TURN, prompts, false)
+      expectSentWhereItArrived()
+      again.unmount()
+      unmount()
+    })
+  }
+
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.
   it('draws nothing under the reply of a turn that had no mid-turn message', async () => {
