@@ -617,9 +617,12 @@ keyed by the record's uuid: tool calls, tool results, and thinking as text.
 The exclusion is kept anyway. A text row is held whichever reading is right,
 while a tool-row anchor is found only if those rows reach the phone under that
 uuid, which no device has shown since 2026-09-15, and changing it moves every
-mid-turn desk message. The cost: a message typed after a call, with no text
-since, is drawn above that call (usually one), where the Claude app draws it
-below. A device check settles it. The same decoder draws nothing for a
+mid-turn desk message. It cost this: a message typed after a call, with no
+text since, drew above that call (usually one), where the Claude app draws it
+below. Since 2026-09-29 the hook also sends when it ran (`ts=`, below), and the
+phone moves the message below every row written before then, so only a tab
+whose hook sends no time still pays it. A device check settles the exclusion
+itself. The same decoder draws nothing for a
 record whose only block is `redacted_thinking`, `server_tool_use` or
 `web_search_tool_result`, which is why a row must also carry text, an image
 or a string prompt.
@@ -653,6 +656,49 @@ rows. It is not fixed: the Windows Claude flag is 30,766 characters, and with
 the 2,000 reserved for the host that is 32,766, one short of the 32,767 cap
 (2026-09-29), so any fix there has to pay for itself; and that path has never
 run on Windows.
+
+### Beacon field `ts` (when the prompt was typed, 2026-09-29)
+
+`ts=<epoch seconds>` rides the same beacon: `date +%s` when the hook ran, by
+the desk's clock, the clock the transcript's rows are stamped by. On Claude
+Code 2.1.284 `UserPromptSubmit` fires at the enqueue, 21 ms after the Enter, so
+it is when the prompt was typed. A `date` that prints anything but digits
+(one without `%s`) sends no `ts=`, and the phone takes nine to eleven digits
+only. The phone keeps it as `typedAt` (epoch ms, the start of that second),
+apart from a status copy's `at`: `at` also pairs a copy with the phone's own
+sends, and this changes only where a hook copy is drawn
+(`use-desktop-prompt-echoes.ts`).
+
+Why it exists: "All 3 prompts stacked together with no responses in between
+them" (the phone, 2026-09-29). When the chat does not hold the row `at=` names,
+the copy had nothing else to go by and was drawn where the chat first saw it.
+After a sleep the phone reads every beacon of the turn at once and its first
+page is the turn's tail, so the rows the copies name are on the page above, and
+every copy was first seen on the same last reply: they settled under it, in a
+row. With a time:
+
+- A copy whose named row is not held goes after the last row written at or
+  before its second. One typed before every row of a page, with earlier rows
+  not loaded, is not drawn under that page: it is drawn where it was typed when
+  the page above loads.
+- A copy whose named row is held still follows every row written at least a
+  second before it as those rows load, so it sits below the calls made between
+  Claude's last words and the send, as the Claude app draws it.
+- The chat's stored copy of a drawn message (the witness memory) gives way to
+  its own hook copy when that copy has a time, as it gives way to a status
+  copy, so a row that loads late still moves the message, and the stored copy's
+  old place does not break the tool fold.
+- Three prompts typed during one long call have no row between their times,
+  so they stay three in a row, after that call.
+
+A copy with no time (a tab launched before this) whose named row is not held is
+still drawn where the chat first saw it, and the chat logs that once
+(`[desk-prompt] drawn where first seen: …`), so a stack of those can be told
+from a placement bug. Such a tab gets `ts=` when its agent restarts. The
+PowerShell hook sends no `ts=` (see above: no room, and Windows gets no flag).
+Tested against the day's real records (`mobile-chat-stacked-desk-prompts.test.ts`)
+and by running the hook itself under sh, bash and dash
+(`agent-hud-prompt-hook.test.ts`); not yet seen on a device.
 
 ### The prompt hook's copy as evidence (2026-09-29)
 

@@ -878,3 +878,64 @@ describe('a message sent a moment before the rows under it were written', () => 
     expect(latest[0]!.baselineTailMessageId).toBe('list-hook-events')
   })
 })
+
+// 2026-09-29, "All 3 prompts stacked together with no responses in between
+// them": the prompt hook now says when it ran, by the desk's clock (`typedAt`,
+// from `ts=`), which places a copy whose named row the chat does not hold.
+// Rows here are stamped 1000, 2000 and 3000 ms; the desk clock stamps both.
+describe('a beacon copy that says when it was typed', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const row = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
+  function Paged({ prompts, raw, hasEarlier }: { prompts: readonly DesktopPrompt[]; raw: readonly NativeChatMessage[]; hasEarlier: boolean }) {
+    latest = useDesktopPromptEchoes(prompts, raw, raw, hasEarlier, true)
+    return null
+  }
+  const draw = (prompts: DesktopPrompt[], raw: NativeChatMessage[], hasEarlier = false) => {
+    act(() => {
+      if (renderer) {
+        renderer.update(createElement(Paged, { prompts, raw, hasEarlier }))
+      } else {
+        renderer = create(createElement(Paged, { prompts, raw, hasEarlier }))
+      }
+    })
+  }
+
+  it('sits after the last row written before it when the row it names is not held', () => {
+    draw([{ nonce: 'typed-1', text: 'typed', anchorId: 'not-held', typedAt: 2500, seenAt: Date.now() }], [row('t1', 1000), row('t2', 2000), row('t3', 3000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['t2'])
+  })
+
+  it('is not drawn under a page it was typed before, while earlier rows are not loaded', () => {
+    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('p1', 1000)], true)
+    expect(latest).toEqual([])
+    // The page above loads: it goes where it was typed.
+    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('p0', 100), row('p1', 1000)], true)
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['p0'])
+  })
+
+  it('leads a whole chat whose only row was written after it', () => {
+    draw([{ nonce: 'typed-3', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('o1', 1000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual([null])
+  })
+
+  it('is drawn at the end of an empty chat, then where it was typed once rows load', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'typed-4', text: 'typed', anchorId: 'not-held', typedAt: 1500, seenAt: Date.now() }]
+    draw(prompts, [])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual([null])
+    draw(prompts, [row('e1', 1000), row('e2', 2000), row('e3', 3000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['e1'])
+  })
+
+  // Found long after it arrived (a relaunch restores it from the warm start):
+  // a copy with no time was held back while its row was not loaded, and with
+  // every row loaded it was never drawn. With a time it has a place.
+  it('is placed by its time when found long after it arrived, not refused', () => {
+    const longAgo = Date.now() - 11 * 60_000
+    draw([{ nonce: 'typed-5', text: 'typed', anchorId: 'not-held', typedAt: 2500, seenAt: longAgo }], [row('f1', 1000), row('f2', 2000), row('f3', 3000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['f2'])
+  })
+})

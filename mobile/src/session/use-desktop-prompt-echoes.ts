@@ -156,6 +156,7 @@ export function useDesktopPromptEchoes(
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   const refused: DesktopPrompt[] = []
+  const drawnWhereFirstSeen: DesktopPrompt[] = []
   const rowBefore = (at: number | undefined) => lastRowBefore(rawMessages, at)
   for (const prompt of prompts) {
     // A status copy held back for want of a time pairs with the phone's sends
@@ -169,11 +170,20 @@ export function useDesktopPromptEchoes(
       }
       continue
     }
+    // By the desk's clock: the status's time, or the prompt hook's own (`ts=`).
+    const when = deskTimeOf(prompt)
+    // A copy whose named row is not held (the status names none), timed before
+    // every held row, with earlier rows not loaded, was typed on a page above:
+    // it is drawn when that page loads, not under this one's last reply. After
+    // a sleep every copy of a turn was first seen at once on the turn's tail
+    // page, and each settled under its last reply, all in a row (reported
+    // 2026-09-29, "All 3 prompts stacked together with no responses in between
+    // them").
     if (
       hasEarlier &&
       rememberedAnchor(prompt.nonce) === undefined &&
-      prompt.anchorId === undefined &&
-      lastRowBefore(rawMessages, prompt.at) === null
+      (prompt.anchorId === undefined || !rawMessages.some((message) => message.id === prompt.anchorId)) &&
+      lastRowBefore(rawMessages, when) === null
     ) {
       continue
     }
@@ -242,7 +252,7 @@ export function useDesktopPromptEchoes(
       // written before it is where it belongs. Without this the wait ran out and the echo
       // fell to the arrival tail, three turns under the reply that answered
       // it (device, 2026-09-19).
-      const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, prompt.at) : undefined
+      const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, when) : undefined
       const afterStandIn = prompt.foundAt === undefined ? undefined : placeAfterStandIn(prompt, rawMessages, promptHook, rowBefore)
       if (afterStandIn === STAND_IN_WAIT) {
         // Drawn where it was first seen meanwhile, not settled, and not
@@ -259,14 +269,17 @@ export function useDesktopPromptEchoes(
         // above "All 9 tests pass…", sent 1.6 s after it, and the message drew
         // above the reply (2026-09-23). Still follow any row written before the
         // send once it loads — the same clock, the desktop's, on both sides.
-        if (prompt.at !== undefined) {
-          timedByNonce.set(prompt.nonce, prompt.at)
+        // The hook's copy names its last TEXT row, so this also moves it below
+        // the calls written after those words and before the send, where the
+        // Claude app draws it.
+        if (when !== undefined) {
+          timedByNonce.set(prompt.nonce, when)
         }
       } else if (timedRow !== undefined) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, timedRow)
-        if (prompt.at !== undefined) {
-          timedByNonce.set(prompt.nonce, prompt.at)
+        if (when !== undefined) {
+          timedByNonce.set(prompt.nonce, when)
         }
       } else if (beaconed === undefined) {
         // An older hook names no row; the arrival tail is all there is.
@@ -297,6 +310,14 @@ export function useDesktopPromptEchoes(
     }
     const placement =
       settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
+    // Drawn where the chat first saw it, for want of anything better: the row
+    // it names is not held and it has no time. The chat remembers that place
+    // (the witness memory), so several such copies read at once stay in a row
+    // under one reply, which is what the stack of 2026-09-29 looks like. The
+    // log says so once, so a stack can be told from a placement bug.
+    if (settled === undefined && placement !== null && !waitingForItsCopy && prompt.anchorId !== undefined && when === undefined) {
+      drawnWhereFirstSeen.push(prompt)
+    }
     echoes.push({
       id: deskEchoId(prompt.nonce),
       // The RAW text, marker and all. It is what this echo is matched against
@@ -315,16 +336,20 @@ export function useDesktopPromptEchoes(
   // With every row loaded, a copy still held names a row the transcript does
   // not have (a record Orca draws nothing for, such as an `isMeta` row): it
   // will not be drawn, and the log says so once (2026-09-27).
-  const refusals = JSON.stringify(
-    refused.map((prompt) => [
-      prompt.nonce,
+  const refusals = JSON.stringify([
+    ...refused.map((prompt) => [
+      `not-drawn:${prompt.nonce}`,
       `[desk-prompt] not drawn: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" was found long after it arrived, and the row it was typed after (${prompt.anchorId}) is not in the transcript`
+    ]),
+    ...drawnWhereFirstSeen.map((prompt) => [
+      `first-seen:${prompt.nonce}`,
+      `[desk-prompt] drawn where first seen: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" names a row the chat does not hold (${prompt.anchorId}), and its hook sent no time (a tab launched before the hook said when it ran), so nothing places it closer`
     ])
-  )
+  ])
   useEffect(() => {
-    for (const [nonce, line] of JSON.parse(refusals) as [string, string][]) {
-      if (!loggedRefusals.has(nonce)) {
-        loggedRefusals.add(nonce)
+    for (const [key, line] of JSON.parse(refusals) as [string, string][]) {
+      if (!loggedRefusals.has(key)) {
+        loggedRefusals.add(key)
         console.warn(line)
       }
     }
@@ -332,13 +357,14 @@ export function useDesktopPromptEchoes(
   return useStableEchoes(echoes)
 }
 
-/** The refusals already logged, so each says so once. */
+/** The lines already logged, by kind and nonce, so each says so once. */
 const loggedRefusals = new Set<string>()
 
 /**
  * Whether a beacon copy is one the chat found long after it arrived, with the
- * row it was typed after not held. The beacon names that row and gives no
- * time, so while the row is on a page not loaded there is nowhere to draw it:
+ * row it was typed after not held and no time to place it by (a hook from
+ * before `ts=`). The beacon names that row and nothing else, so while the row
+ * is on a page not loaded there is nowhere to draw it:
  * waiting for it drew the copy at the tail, and after the wait it stayed there
  * for good (2026-09-27, the beacon's side of session 76ba8f2f's 13:20 prompt;
  * a relaunch restores 40 such copies). It is drawn once the row loads. A row
@@ -355,7 +381,7 @@ const loggedRefusals = new Set<string>()
 function foundWithoutItsRow(prompt: DesktopPrompt, rawMessages: readonly NativeChatMessage[]): boolean {
   return (
     prompt.anchorId !== undefined &&
-    prompt.at === undefined &&
+    deskTimeOf(prompt) === undefined &&
     arrivedLongAgo(prompt.seenAt) &&
     !anchorByNonce.has(prompt.nonce) &&
     !provisionalByNonce.has(prompt.nonce) &&
@@ -368,6 +394,17 @@ function foundWithoutItsRow(prompt: DesktopPrompt, rawMessages: readonly NativeC
  *  found then, not seen arrive, and the tail is no place for it. */
 export function arrivedLongAgo(seenAt: number | undefined): boolean {
   return typeof seenAt === 'number' && Date.now() - seenAt > TIMED_ANCHOR_OPEN_MS
+}
+
+/** When a copy was typed, by the desk clock the rows are stamped by: the
+ *  status's time (`at`), else the prompt hook's own (`typedAt`, `ts=`). The
+ *  hook's is a whole second, the start of the second it ran. A stored value
+ *  that is not a number is none. */
+function deskTimeOf(prompt: DesktopPrompt): number | undefined {
+  if (prompt.at !== undefined) {
+    return prompt.at
+  }
+  return typeof prompt.typedAt === 'number' && Number.isFinite(prompt.typedAt) ? prompt.typedAt : undefined
 }
 
 /** The bubble id of a hook prompt's echo. */

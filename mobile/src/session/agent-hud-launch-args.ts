@@ -643,9 +643,12 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // anyway. A text row is held whichever reading is right, while a tool-row
   // anchor is found only if those rows reach the phone under that uuid, which
   // no device has shown since the report above, and changing it moves every
-  // mid-turn desk message. The cost: a message typed after a call, with no
-  // text since, is drawn above that call (usually one), where the Claude app
-  // draws it below. See docs/mobile-agent-hud.md, "Beacon field `at`".
+  // mid-turn desk message. It cost this: a message typed after a call, with
+  // no text since, drew above that call (usually one), where the Claude app
+  // draws it below. Since 2026-09-29 the hook also says when it ran (`ts=`,
+  // below), and the phone moves the message below the rows written before
+  // then; a tab whose hook sends no time still pays it. See
+  // docs/mobile-agent-hud.md, "Beacon field `at`".
   // A row is skipped by its content block's `"type":`, never by the word
   // alone. Claude Code 2.1.284 writes the message's `"stop_reason":"tool_use"`
   // into every record of a turn that goes on to call a tool, text records

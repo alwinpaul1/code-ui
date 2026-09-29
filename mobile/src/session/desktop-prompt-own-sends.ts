@@ -235,7 +235,15 @@ export function pairPendingWithHookPrompts(
     }
     const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, notLater)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
-    const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
+    // Its own hook copy, when the hook said the second it ran (`ts=`): that
+    // copy places itself by the rows written before it, and keeps doing so as
+    // rows load late. The witness stored its first place, and held there, a
+    // message that reached the phone before the call written before it stayed
+    // above that call for good (2026-09-29).
+    const ownTyped = candidates.find(
+      (index) => deskEchoId(prompts[index]!.nonce) === item.id && typeof prompts[index]!.typedAt === 'number'
+    )
+    const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id) ?? ownTyped
     const pick = own ?? timed[0]
     if (pick !== undefined && witnessOfTheRun(item, prompts[pick]!, messages)) {
       // The witness's own place stands: it was drawn where the message
