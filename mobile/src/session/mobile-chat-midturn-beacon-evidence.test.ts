@@ -58,6 +58,11 @@ vi.mock('./MobileNativeChatView', async () => {
 const hooked = { promptHook: true }
 /** Over the status's 200 characters: the status carries its first 200. */
 const BASE = `${SECOND_SEND} issue, and also please check whether the session list on the account page still shows the ended sessions after a refresh`
+/** The row a bubble of these words is drawn after, for each such bubble. */
+const drawnAfter = (words: string) => {
+  const rows = drawn(frames.at(-1)!)
+  return rows.flatMap((row, index) => (row.role === 'user' && row.text === oneLine(words) ? [rows[index - 1]?.id] : []))
+}
 /** The user bubbles that carry the long messages' opening words. */
 const longBubbles = () =>
   drawn(frames.at(-1)!)
@@ -180,6 +185,47 @@ describe('a long desk message, with the prompt hook’s copy of it', () => {
     await showAt('05:48:00.100', WHOLE_TURN, prompts, false, [], hooked)
     await showAt('05:48:01.000', WHOLE_TURN, prompts, false, [], hooked)
     expect(longBubbles()).toEqual([oneLine(one), oneLine(two)])
+    again.unmount()
+    unmount()
+  })
+
+  // The hook's copy of the first never reached the phone (it was typed
+  // before the phone listened to the terminal, or the chunk was lost), so a
+  // status copy may pair only with a hook copy that reached the phone by the
+  // time it did, give or take the two streams' lag: the second's copy,
+  // minutes later, is a submission of its own. Paired with it, the first
+  // took the second's words and the second was drawn nowhere.
+  it('draws the first by its status cut and the second whole when the phone never got the first one’s hook copy, and after the chat comes back', async () => {
+    agent = 'claude'
+    const one = `${BASE}, first on staging`
+    const two = `${BASE}, then on production with the new flag`
+    const hookTwo = beaconCopy('71004', two, WRITTEN_AFTER_SECOND, '05:39:29.100')
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(one, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+    await showAt('05:37:40.000', WHOLE_TURN.slice(0, -5), prompts, true, [], hooked)
+    vi.setSystemTime(at('05:39:30.000'))
+    prompts = reader.read(working(two, '05:39:29.000'), { beacon: [hookTwo] })
+    await showAt('05:39:30.100', WHOLE_TURN.slice(0, -4), prompts, true, [two], hooked)
+    await showAt('05:39:31.000', WHOLE_TURN.slice(0, -4), prompts, true, [two], hooked)
+    await showAt('05:40:00.000', WHOLE_TURN.slice(0, -4), prompts, true, [], hooked)
+    expect(longBubbles()).toEqual([oneLine(normalizePromptField(one)), oneLine(two)])
+    expect(drawnAfter(normalizePromptField(one))).toEqual([WRITTEN_BEFORE_SECOND])
+    expect(drawnAfter(two)).toEqual([WRITTEN_AFTER_SECOND])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:48:00.000'))
+    prompts = again.read(done(two), { beacon: [hookTwo] })
+    await showAt('05:48:00.100', WHOLE_TURN, prompts, false, [], hooked)
+    await showAt('05:48:01.000', WHOLE_TURN, prompts, false, [], hooked)
+    expect(longBubbles()).toEqual([oneLine(normalizePromptField(one)), oneLine(two)])
+    expect(drawnAfter(normalizePromptField(one))).toEqual([WRITTEN_BEFORE_SECOND])
+    expect(drawnAfter(two)).toEqual([WRITTEN_AFTER_SECOND])
     again.unmount()
     unmount()
   })

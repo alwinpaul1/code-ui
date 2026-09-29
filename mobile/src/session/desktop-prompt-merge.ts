@@ -83,7 +83,7 @@ function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopP
   beacon.forEach((prompt, index) => {
     const folded = normalizePromptField(prompt.text)
     for (const copy of status) {
-      if (copy.text === folded && folded !== prompt.text) {
+      if (copy.text === folded && folded !== prompt.text && !arrivedAfter(prompt, copy)) {
         const distance =
           typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
         pairs.push({ copy, prompt, distance, order: index })
@@ -100,4 +100,23 @@ function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopP
     }
   }
   return twins
+}
+
+/** How long after the phone read a status copy the hook's copy of the same
+ *  submission can still reach it: the two travel separate streams (the tab
+ *  status and the terminal's bytes), a moment apart as a rule. */
+const TWIN_LAG_MS = 30_000
+
+/**
+ * Whether a hook copy reached the phone well after it read the status copy,
+ * which makes it a later submission and never that copy's twin. The status
+ * reader makes a copy only when the pane's prompt changes, so a second
+ * message that shares the first's first 200 characters, or its words, gets
+ * none of its own. Paired with the first's status copy because the phone
+ * never got the first's hook copy, it was dropped, and the first was drawn
+ * with the second's words in the first's place (review of W1's fix,
+ * 2026-09-29). A copy with no arrival time pairs as before.
+ */
+function arrivedAfter(prompt: DesktopPrompt, copy: DesktopPrompt): boolean {
+  return typeof prompt.seenAt === 'number' && typeof copy.seenAt === 'number' && prompt.seenAt - copy.seenAt > TWIN_LAG_MS
 }

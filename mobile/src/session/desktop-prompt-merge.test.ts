@@ -107,6 +107,23 @@ describe('a status copy the field cut, and the hook copy of the same message', (
     expect(merged.map((prompt) => [prompt.nonce, prompt.cut, prompt.text.length])).toEqual([['status:s:1000:0', true, 2000]])
   })
 
+  // Review of W1's fix: the phone never got the first message's hook copy,
+  // and the status made no copy of the second, which shares its first 200
+  // characters. The second's hook copy, read well after the status copy, is
+  // a submission of its own: paired, the first took its words and it was
+  // drawn nowhere.
+  it('pairs only with a hook copy that reached the phone within 30 s of the status copy', () => {
+    const later = `${words}, and one more`
+    expect(mergeDesktopPrompts([cutCopy], [{ nonce: '9003', text: later, seenAt: 1000 + 30_001 }])).toEqual([
+      cutCopy,
+      { nonce: '9003', text: later, seenAt: 1000 + 30_001 }
+    ])
+    expect(mergeDesktopPrompts([cutCopy], [{ nonce: '9003', text: later, seenAt: 1000 + 30_000 }]).map((prompt) => prompt.text)).toEqual([later])
+    // One found after it arrived, and one with no arrival time, pair as before.
+    expect(mergeDesktopPrompts([cutCopy], [{ nonce: '9003', text: later, seenAt: 10 }]).map((prompt) => prompt.text)).toEqual([later])
+    expect(mergeDesktopPrompts([cutCopy], [{ nonce: '9003', text: later }]).map((prompt) => prompt.text)).toEqual([later])
+  })
+
   // Degenerate: a whole status copy, and one with no twin, are left as they are.
   it('leaves a whole status copy and a cut one with no twin as they were', () => {
     const whole: DesktopPrompt = { nonce: 'status:s:1000:1', text: 'fix the\n\nqueue'.replace(/\s+/g, ' '), at: 1000, seenAt: 1000 }
