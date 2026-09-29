@@ -8,7 +8,9 @@ import {
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 import { isTitleStandIn } from './agent-status-stand-in'
 import {
+  BACKGROUND_CLAIM_MS,
   namesItsTranscript,
+  phoneOwnership,
   readNativeChatTabStatus,
   type NativeChatStatusReading
 } from './native-chat-kept-session'
@@ -16,6 +18,7 @@ import {
   keepNativeChatSession,
   keptSession,
   noteTurn,
+  phoneTerminalSends,
   readTurn,
   statusTurn,
   subscribe
@@ -25,6 +28,7 @@ export {
   hydrateNativeChatKeptSessions,
   nativeChatKeptSessionKey,
   noteNativeChatTranscriptTurn,
+  notePhoneTerminalSend,
   resetNativeChatKeptSessionsForTests
 } from './native-chat-kept-session-state'
 
@@ -51,7 +55,12 @@ export function useNativeChatTabStatusReading(
   /** The session a fresh beacon of the chat agent names on this terminal. */
   painting: string | null = null,
   /** The tab's `turnCompletedAt` (agent-status-stand-in.ts). */
-  turnCompletedAt: number | null = null
+  turnCompletedAt: number | null = null,
+  /** `handle`: the tab's terminal, which the phone's own sends are kept by.
+   *  `watching`: the link is up and the tab list is the host's own. A cached
+   *  list can be hours old: from it no turn is noted as holding background
+   *  work, and the turn it shows reads as it did before that rule. */
+  { handle = null, watching = true }: { handle?: string | null; watching?: boolean } = {}
 ): NativeChatStatusReading {
   const getKept = useCallback(() => keptSession(key), [key])
   const keptNow = useSyncExternalStore(subscribe, getKept, getKept)
@@ -60,7 +69,19 @@ export function useNativeChatTabStatusReading(
     () => (agent && keptId ? (readTurn(agent, keptId)?.turn ?? null) : null),
     [agent, keptId]
   )
-  const keptTurn = useSyncExternalStore(subscribe, getKeptTurn, getKeptTurn)
+  const recordedKeptTurn = useSyncExternalStore(subscribe, getKeptTurn, getKeptTurn)
+  const getKeptStamp = useCallback(
+    () => (agent && keptId ? (readTurn(agent, keptId)?.stamp ?? null) : null),
+    [agent, keptId]
+  )
+  const keptStamp = useSyncExternalStore(subscribe, getKeptStamp, getKeptStamp)
+  const statusAt = status?.updatedAt ?? null
+  // A claim to background work older than Orca keeps the row that made it
+  // is no longer the host's word (BACKGROUND_CLAIM_MS).
+  const keptTurn =
+    recordedKeptTurn === 'background' && keptStamp !== null && statusAt !== null && statusAt - keptStamp > BACKGROUND_CLAIM_MS
+      ? 'ended'
+      : recordedKeptTurn
   const statusId = status?.providerSession?.id?.trim() || null
   const getSecondTurn = useCallback(
     () => (agent && statusId ? readTurn(agent, statusId)?.secondTurn === true : false),
@@ -72,6 +93,8 @@ export function useNativeChatTabStatusReading(
     [agent, statusId]
   )
   const holdsBackground = useSyncExternalStore(subscribe, getHoldsBackground, getHoldsBackground)
+  const getPhoneSends = useCallback(() => phoneTerminalSends(handle), [handle])
+  const phoneSends = useSyncExternalStore(subscribe, getPhoneSends, getPhoneSends)
   const reading = readNativeChatTabStatus({
     agent,
     providerSession: status?.providerSession,
@@ -81,6 +104,7 @@ export function useNativeChatTabStatusReading(
     keptTurn,
     secondTurn,
     holdsBackground,
+    phoneOwned: phoneOwnership(status, phoneSends),
     painting
   })
   const keepId = reading.kind === 'own' ? (reading.keep?.sessionId ?? null) : null
@@ -91,8 +115,9 @@ export function useNativeChatTabStatusReading(
     }
   }, [key, keepId, keepPath])
   // Every status is its own session's word on that session's turn, whoever
-  // the chat reads: noted per event (`updatedAt`), so a later status always
-  // stands over an earlier word.
+  // the chat reads: noted per event (`updatedAt`), so a later status stands
+  // over an earlier word, save a title stand-in over the all-clear of its own
+  // turn (native-chat-kept-session-state.ts `noteTurn`).
   const noted =
     namesItsTranscript(agent) && statusId
       ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary, {
@@ -100,15 +125,14 @@ export function useNativeChatTabStatusReading(
           titleStandIn: status ? isTitleStandIn(status) : false
         })
       : null
-  const notedTurn = noted?.turn ?? null
+  const notedTurn = noted?.turn === 'background' && !watching ? 'ended' : (noted?.turn ?? null)
   const notedFinished = noted?.finishedOne ?? false
   const notedFromStandIn = noted?.fromStandIn ?? false
-  const statusAt = status?.updatedAt ?? null
   useEffect(() => {
     if (agent && statusId && notedTurn) {
-      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn)
+      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn, turnCompletedAt)
     }
-  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt])
+  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt, turnCompletedAt])
   return reading
 }
 

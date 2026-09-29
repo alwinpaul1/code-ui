@@ -290,6 +290,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                       handle={t.terminal}
                       status={t.agentStatus ?? null}
                       turnCompletedAt={t.turnCompletedAt ?? null}
+                      watching={connState === 'connected' && controller.terminalsLoaded}
                       keptKey={nativeChatKeptSessionKey(hostId, t.id, terminalAgentId)}
                       agent={terminalAgentId}
                       active={active}
@@ -364,6 +365,7 @@ function TabActivityBadge({
   handle,
   status: reported,
   turnCompletedAt,
+  watching,
   keptKey,
   agent,
   active,
@@ -373,6 +375,8 @@ function TabActivityBadge({
   status: AgentStatusEntry | null
   /** The tab's lead-turn end (agent-status-stand-in.ts). */
   turnCompletedAt: number | null
+  /** The link is up and the tab list is the host's own. */
+  watching: boolean
   /** Where the session the tab's own agent last named is kept. */
   keptKey: string
   agent: string
@@ -386,7 +390,7 @@ function TabActivityBadge({
   // 2026-09-28) is not this agent's word: no dot from it, which Orca keeps
   // `working` long after the parent's turn ended (native-chat-kept-session.ts).
   const painting = useFreshNativeChatBeaconSession(beacon, agent, active ? handle : null)
-  const reading = useNativeChatTabStatusReading(keptKey, agent, reported, painting, turnCompletedAt)
+  const reading = useNativeChatTabStatusReading(keptKey, agent, reported, painting, turnCompletedAt, { handle, watching })
   const status = ownTabStatus(reading, reported)
   // The tab's own session, whatever view it is in: the beacon may only retire
   // the dot for the session this pane is running.

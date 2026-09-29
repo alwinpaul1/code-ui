@@ -114,7 +114,10 @@ export function useMobileNativeChatActiveResolution(args: {
   const keptKey =
     readAgent && activeSessionTabId ? nativeChatKeptSessionKey(hostId, activeSessionTabId, readAgent) : null
   const painting = useFreshNativeChatBeaconSession(beacon, readAgent, activeHandle)
-  const reading = useNativeChatTabStatusReading(keptKey, readAgent, tabStatus, painting, activeSessionTab?.turnCompletedAt ?? null)
+  const reading = useNativeChatTabStatusReading(keptKey, readAgent, tabStatus, painting, activeSessionTab?.turnCompletedAt ?? null, {
+    handle: activeHandle,
+    watching
+  })
   const chatIdentity = reportedIdentity ? withReadSession(reportedIdentity, reading) : null
   const readingLog = nativeChatStatusReadingLogLine(readAgent, reading)
   useEffect(() => {

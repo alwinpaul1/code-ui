@@ -89,11 +89,10 @@ vi.mock('./use-mobile-native-chat-file-search', () => ({
 
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { resetBeaconWatches } from './agent-hud-beacon-liveness'
-import { resetNativeChatKeptSessionsForTests } from './native-chat-kept-session-store'
+import { notePhoneTerminalSend, resetNativeChatKeptSessionsForTests } from './native-chat-kept-session-store'
 import { useMobileNativeChatController, type MobileNativeChatController } from './use-mobile-native-chat-controller'
 
 type Status = Record<string, unknown>
-type Agent = 'claude' | 'codex'
 
 const PANE = 'facefdf7-0000-4000-8000-000000000000:e52d973b-0000-4000-8000-000000000000'
 const PROJECT = '/Users/alwinpaul/.claude/projects/-Users-alwinpaul-Desktop-Project-Code-UI'
@@ -168,11 +167,11 @@ describe('a Claude chat after its turn ended with background work running', () =
   let logged: string[] = []
   const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
 
-  function Chat({ tab }: { tab: Status }): null {
+  function Chat({ tab, tabsLive }: { tab: Status; tabsLive: boolean }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState: 'connected',
-      tabsLive: true,
+      tabsLive,
       hostId: 'host-mac',
       worktreeId: 'code-ui::main',
       activeSessionTab: tab as never,
@@ -188,19 +187,19 @@ describe('a Claude chat after its turn ended with background work running', () =
     return null
   }
   /** The tab as the host sends it, and the session the chat then reads. */
-  function show(status: Status, turnCompletedAt?: number, agent: Agent = 'claude'): string | null {
+  function show(status: Status, turnCompletedAt?: number, { tabsLive = true }: { tabsLive?: boolean } = {}): string | null {
     // One tab object per snapshot, as the host sends one.
     const tab: Status = {
       type: 'terminal',
       id: 'tab-1',
       terminal: 'term-1',
       launchAgent: null,
-      agentStatus: { ...status, agentType: status.agentType ?? agent },
+      agentStatus: { ...status, agentType: status.agentType ?? 'claude' },
       isActive: true,
       ...(turnCompletedAt === undefined ? {} : { turnCompletedAt })
     }
     act(() => {
-      const element = createElement(Chat, { tab })
+      const element = createElement(Chat, { tab, tabsLive })
       if (renderer) {
         renderer.update(element)
       } else {
@@ -329,6 +328,94 @@ describe('a Claude chat after its turn ended with background work running', () =
 
   it('switches on the first session the tab ever names, with nothing kept to hold', () => {
     expect(show(sessionStart(NESTED, TURN_END))).toBe(NESTED)
+  })
+
+  // ─── The review of 9c615a2a ────────────────────────────────────────────────
+
+  /** With no renderer row, Orca's last resort for a pane whose agent left
+   *  (`buildPtyMobileAgentStatus`) has the title stand-in's exact shape, and
+   *  the tab keeps the turn end for 30 minutes after the live row. */
+  const LEFT_WITH_IDENTITY: Status = { ...LEAD_STAND_IN, updatedAt: TURN_END + 5_000, stateStartedAt: TURN_END + 5_000 }
+
+  it('follows a restarted claude that takes the prompt this phone sent, after the lead left following a turn that held background work', () => {
+    show(LEAD_WORKING)
+    show(LEAD_BACKGROUND, TURN_END)
+    show(LEFT_WITH_IDENTITY, TURN_END)
+    expect(show(sessionStart(CLEARED, TURN_END + 20_000))).toBe(LEAD)
+    // The phone sends it, and the status that took it comes half a second later.
+    act(() => notePhoneTerminalSend('term-1', 'where were we', TURN_END + 20_500))
+    expect(show(turnOf(CLEARED, 'working', TURN_END + 21_000, { prompt: 'where were we' }))).toBe(CLEARED)
+    expect(logged).toContain("[native-chat] switched session 5f2d8c61 to 0c1d2e3f (rule phone-prompt): it took the prompt this phone sent to the terminal")
+  })
+
+  it('follows the new session a /clear this phone sent starts, background work or not', () => {
+    show(LEAD_WORKING)
+    show(LEAD_BACKGROUND, TURN_END)
+    act(() => notePhoneTerminalSend('term-1', '/clear', TURN_END + 19_500))
+    expect(show(sessionStart(CLEARED, TURN_END + 20_000))).toBe(CLEARED)
+    expect(logged).toContain("[native-chat] switched session 5f2d8c61 to 0c1d2e3f (rule phone-reset): it started right after this phone sent /clear")
+  })
+
+  // The limit the phone cannot see past: a restart typed at the desk after
+  // the lead left holding background work looks like a nested run until the
+  // new session starts a second turn, or the beacon names it.
+  it('waits for a desk-driven restart’s second turn when the lead left after a turn that held background work (a limit)', () => {
+    show(LEAD_WORKING)
+    show(LEAD_BACKGROUND, TURN_END)
+    show(LEFT_WITH_IDENTITY, TURN_END)
+    expect(show(sessionStart(CLEARED, TURN_END + 20_000))).toBe(LEAD)
+    expect(show(turnOf(CLEARED, 'working', TURN_END + 21_000))).toBe(LEAD)
+    expect(show(turnOf(CLEARED, 'done', TURN_END + 30_000, { lastAssistantMessage: 'Here.' }))).toBe(LEAD)
+    expect(show(turnOf(CLEARED, 'working', TURN_END + 40_000, { prompt: 'next' }))).toBe(CLEARED)
+  })
+
+  // …but not for ever. Orca drops a hook row, and the turn end on the tab
+  // with it, 30 minutes after it took the row; the lead's claim to background
+  // work lasts no longer, judged on the host's clock (the stamp's and the new
+  // session's own). Without this a desk-driven one-turn session after the
+  // lead left stayed off the chat until the app restarted.
+  it('leaves a lead that left holding background work once 30 minutes have passed since its turn ended', () => {
+    show(LEAD_WORKING)
+    show(LEAD_BACKGROUND, TURN_END)
+    show(LEFT_WITH_IDENTITY, TURN_END)
+    expect(show(sessionStart(CLEARED, TURN_END + 29 * 60_000))).toBe(LEAD)
+    expect(show(turnOf(CLEARED, 'working', TURN_END + 31 * 60_000))).toBe(CLEARED)
+    expect(logged).toContain("[native-chat] switched session 5f2d8c61 to 0c1d2e3f (rule turn-ended): 5f2d8c61's turn had ended")
+  })
+
+  // The tab list the last visit cached can be hours old: no turn is noted as
+  // background from it (base read the same row as a finished turn).
+  it('follows a /clear at once after a cold start whose cached tab list held a turn end with background work', () => {
+    show(LEAD_WORKING, undefined, { tabsLive: false })
+    show(LEAD_STAND_IN, TURN_END, { tabsLive: false })
+    expect(show(sessionStart(CLEARED, TURN_END + 3_600_000))).toBe(CLEARED)
+  })
+
+  // A nested run that backgrounds work of its own ends its turn held by it;
+  // that is no /clear while the lead is still mid-turn.
+  it('does not follow a nested run holding background work of its own while the lead is mid-turn', () => {
+    show(LEAD_WORKING)
+    show(sessionStart(NESTED, TURN_END + 1_000))
+    show(turnOf(NESTED, 'working', TURN_END + 2_000))
+    const heldByItsOwn = turnOf(NESTED, 'working', TURN_END + 9_000, { workingMode: 'monitoring', lastAssistantMessage: 'Started it.' })
+    expect(show(heldByItsOwn, TURN_END + 9_000)).toBe(LEAD)
+  })
+
+  // The phone missed the turn that started the background work (asleep, on
+  // another worktree); what it has is an earlier turn's end and the stand-in.
+  it('stays on the lead’s session when the phone saw only an earlier turn’s end and then the stand-in of one that held background work', () => {
+    show({ ...LEAD_WORKING, state: 'done', toolName: undefined, updatedAt: TURN_END - 600_000 })
+    expect(show(LEAD_STAND_IN, TURN_END)).toBe(LEAD)
+    nestedRun()
+  })
+
+  it('follows a /clear at once after the background work finished, through a stand-in carrying the finished turn’s stamp', () => {
+    show(LEAD_WORKING)
+    show(LEAD_BACKGROUND, TURN_END)
+    // The shell finished: Orca's all-clear `done`, which keeps the turn's stamp.
+    show({ ...LEAD_BACKGROUND, state: 'done', workingMode: undefined, updatedAt: TURN_END + 30_000 }, TURN_END)
+    show({ ...LEAD_STAND_IN, updatedAt: TURN_END + 31_000 }, TURN_END)
+    expect(show(sessionStart(CLEARED, TURN_END + 60_000))).toBe(CLEARED)
   })
 })
 

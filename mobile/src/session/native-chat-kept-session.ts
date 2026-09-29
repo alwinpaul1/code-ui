@@ -1,3 +1,5 @@
+import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
+import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-types'
 import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-agent'
 
 /**
@@ -51,7 +53,22 @@ import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-
  *   keeps the background tasks (Claude Code 2.1.284's clearConversation keeps
  *   every backgrounded task): the way out is the new session's own first Stop
  *   held by that work, which says the pane's work is its own and which a
- *   nested run never has, or its second turn.
+ *   nested run never has, or its second turn. The claim lasts as long as
+ *   Orca keeps the row that made it, 30 minutes on the host's clock
+ *   (BACKGROUND_CLAIM_MS); a tab list cached by the last visit makes none;
+ *   and a nested run holding work of its own takes nothing from a lead still
+ *   mid-turn. What it cannot tell apart: a claude restarted at the desk after
+ *   the lead left holding background work (Orca's last resort for the pane
+ *   has the stand-in's shape) waits for its second turn, the beacon, the
+ *   phone's own word below, or those 30 minutes; and a nested run started by
+ *   work still running after them is followed.
+ * - The phone's own word. This phone knows what it wrote to the terminal. A
+ *   new session taking a prompt the phone sent is the terminal's own agent
+ *   (a nested run never reads the phone's keystrokes), and one that starts
+ *   right after the phone sent `/clear` (or `/new`, `/reset`, `/resume`) is
+ *   the pane's next session. Either moves the chat whatever the kept turn
+ *   says: a restart after the lead left holding background work reads like
+ *   a nested run otherwise, until its second turn.
  * - The beacon, where there is one. Claude's status line writes the session
  *   of the process painting the terminal every few seconds. Fresh, it picks
  *   the session over a status naming no transcript, and it allows a switch to
@@ -71,12 +88,20 @@ export type NativeChatKeptSession = {
   transcriptPath: string
 }
 
-/** Whether a session's lead turn is running a tool, as far as the phone has
- *  heard: only then can an agent be started inside it. */
+/** Where a session's lead turn is, as far as the phone has heard: running a
+ *  tool (`working`), over with background work still running (`background`),
+ *  or over (`ended`). An agent can be started inside it in the first two. */
 export type NativeChatTurn = 'working' | 'background' | 'ended'
 
 /** Which rule let the chat follow a new session, for the log line. */
-export type NativeChatSwitchRule = 'beacon' | 'turn-ended' | 'turn-unknown' | 'second-turn' | 'holds-background'
+export type NativeChatSwitchRule =
+  | 'beacon'
+  | 'phone-prompt'
+  | 'phone-reset'
+  | 'turn-ended'
+  | 'turn-unknown'
+  | 'second-turn'
+  | 'holds-background'
 
 export type NativeChatStatusReading =
   /** The chat agent's own status. `keep` is what to remember for the tab,
@@ -134,6 +159,10 @@ export type NativeChatStatusEvidence = {
    *  background work still running: it holds that work, as the session a
    *  `/clear` left does, and a nested run never does. */
   holdsBackground?: boolean
+  /** What this phone wrote to the terminal says the status's session is the
+   *  pane's own: it took the phone's prompt, or began right after the phone
+   *  sent a session command. */
+  phoneOwned?: 'prompt' | 'reset' | null
   /** The session a fresh beacon of the chat agent names on this terminal. */
   painting: string | null
 }
@@ -193,6 +222,12 @@ function switchRule(
   if (painting === sessionId) {
     return { rule: 'beacon', why: `the ${agent} beacon on this terminal names it` }
   }
+  if (evidence.phoneOwned === 'prompt') {
+    return { rule: 'phone-prompt', why: 'it took the prompt this phone sent to the terminal' }
+  }
+  if (evidence.phoneOwned === 'reset') {
+    return { rule: 'phone-reset', why: 'it started right after this phone sent /clear' }
+  }
   if (keptTurn === 'ended') {
     return { rule: 'turn-ended', why: `${shortSessionId(keptId)}'s turn had ended` }
   }
@@ -202,11 +237,60 @@ function switchRule(
   if (evidence.secondTurn === true) {
     return { rule: 'second-turn', why: 'it started a second turn of its own' }
   }
-  if (evidence.holdsBackground === true) {
+  // Only over a kept turn that ended with background work: a /clear comes
+  // from an idle prompt, while a nested run backgrounding work of its own can
+  // end its turn held by it under a lead still mid-turn.
+  if (keptTurn === 'background' && evidence.holdsBackground === true) {
     return {
       rule: 'holds-background',
       why: `${shortSessionId(sessionId)}'s own turn ended with the pane's background work still running`
     }
+  }
+  return null
+}
+
+/** How long a turn's claim to background work lasts: Orca drops a hook row,
+ *  and the turn end it carries on the tab, 30 minutes after it took the row
+ *  (`Jne` in the 1.4.216 app.asar). Past that the claim is stale on Orca's
+ *  own terms, judged on the host's clock: the stamp against the new status. */
+export const BACKGROUND_CLAIM_MS = 30 * 60_000
+
+/** How far apart the phone's clock (a send) and the host's (a status) may
+ *  put one moment, and how long after a send a status can still be its. */
+const PHONE_HOST_SKEW_MS = 60_000
+const PHONE_PROMPT_TAKEN_WITHIN_MS = 10 * 60_000
+const PHONE_RESET_TAKEN_WITHIN_MS = 2 * 60_000
+/** Commands that end the pane's session and start the next one. */
+const SESSION_COMMAND = /^\/(clear|new|reset|resume)(\s|$)/
+
+/**
+ * Whether what this phone wrote to the terminal says a status's session is
+ * the pane's own: a `working` status whose prompt is one the phone sent (the
+ * prompt hook's copy, folded and cut as Orca stores it), or a session
+ * boundary that came right after the phone sent a session command.
+ */
+export function phoneOwnership(
+  status: { state?: string | null; prompt?: string | null; sessionBoundary?: boolean | null; updatedAt?: number | null } | null,
+  sends: readonly { text: string; at: number }[]
+): 'prompt' | 'reset' | null {
+  const at = status?.updatedAt
+  if (!status || typeof at !== 'number') {
+    return null
+  }
+  const within = (sentAt: number, window: number) => at >= sentAt - PHONE_HOST_SKEW_MS && at - sentAt <= window + PHONE_HOST_SKEW_MS
+  const prompt = (status.prompt ?? '').trim()
+  if (status.state === 'working' && prompt.length > 0) {
+    const cut = prompt.length >= AGENT_STATUS_MAX_FIELD_LENGTH - 1
+    const took = sends.some((send) => {
+      const sent = normalizePromptField(send.text)
+      return within(send.at, PHONE_PROMPT_TAKEN_WITHIN_MS) && (sent === prompt || (cut && sent.startsWith(prompt)))
+    })
+    if (took) {
+      return 'prompt'
+    }
+  }
+  if (status.sessionBoundary === true && sends.some((send) => SESSION_COMMAND.test(send.text.trim()) && within(send.at, PHONE_RESET_TAKEN_WITHIN_MS))) {
+    return 'reset'
   }
   return null
 }

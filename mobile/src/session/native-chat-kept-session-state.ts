@@ -19,7 +19,13 @@ const kept = createPersistedMap<NativeChatKeptSession>({
  *  runs a tool now, whether it has finished a turn, and whether it started
  *  another after that. Not persisted: after a restart nothing is known, and
  *  nothing known is not evidence of a running turn (native-chat-kept-session.ts). */
-export type TurnRecord = { turn: NativeChatTurn; finished: boolean; secondTurn: boolean }
+export type TurnRecord = {
+  turn: NativeChatTurn
+  finished: boolean
+  secondTurn: boolean
+  /** The tab's turn-end stamp the last note came with, if any. */
+  stamp?: number | null
+}
 const turns = new Map<string, TurnRecord>()
 const TURNS_KEPT = 128
 const listeners = new Set<() => void>()
@@ -70,22 +76,30 @@ export function noteTurn(
   sessionId: string,
   turn: NativeChatTurn,
   finishedOne: boolean,
-  fromStandIn = false
+  fromStandIn = false,
+  stamp: number | null = null
 ): void {
   const key = turnKey(agent, sessionId)
   const previous = turns.get(key)
-  if (fromStandIn && turn === 'background' && previous?.turn === 'ended') {
-    // A hook row already said the turn ended with nothing left (the
-    // all-clear `done`, which keeps the turn's stamp on the tab): Orca's
-    // title stand-in after it says nothing about background work.
+  if (fromStandIn && turn === 'background' && previous?.turn === 'ended' && stamp !== null && previous.stamp === stamp) {
+    // A hook row already ended this very turn with nothing left (the all-clear
+    // `done`, which keeps the turn's stamp on the tab): Orca's title stand-in
+    // after it says nothing about background work. An `ended` from an earlier
+    // turn (another stamp, or none) is no such word.
     return
   }
   const next: TurnRecord = {
     turn,
     finished: previous?.finished === true || finishedOne,
-    secondTurn: previous?.secondTurn === true || (previous?.finished === true && turn === 'working')
+    secondTurn: previous?.secondTurn === true || (previous?.finished === true && turn === 'working'),
+    stamp
   }
-  if (previous?.turn === next.turn && previous.finished === next.finished && previous.secondTurn === next.secondTurn) {
+  if (
+    previous?.turn === next.turn &&
+    previous.finished === next.finished &&
+    previous.secondTurn === next.secondTurn &&
+    (previous.stamp ?? null) === stamp
+  ) {
     return
   }
   turns.delete(key)
@@ -161,6 +175,33 @@ export function statusTurn(
   return { turn: 'ended', finishedOne: sessionBoundary !== true, fromStandIn }
 }
 
+/** What this phone wrote to a terminal, newest last, by terminal handle: a
+ *  prompt only this terminal's own agent can take, and a session command
+ *  that starts the pane's next session (native-chat-kept-session.ts). */
+export type PhoneTerminalSend = { text: string; at: number }
+const phoneSends = new Map<string, readonly PhoneTerminalSend[]>()
+const PHONE_SENDS_KEPT = 8
+const PHONE_SEND_HANDLES_KEPT = 32
+
+export function notePhoneTerminalSend(handle: string | null, text: string, at: number): void {
+  if (!handle || text.trim().length === 0) {
+    return
+  }
+  const sends = [...(phoneSends.get(handle) ?? []), { text, at }].slice(-PHONE_SENDS_KEPT)
+  phoneSends.delete(handle)
+  phoneSends.set(handle, sends)
+  while (phoneSends.size > PHONE_SEND_HANDLES_KEPT) {
+    phoneSends.delete(phoneSends.keys().next().value!)
+  }
+  notify()
+}
+
+const NO_PHONE_SENDS: readonly PhoneTerminalSend[] = []
+
+export function phoneTerminalSends(handle: string | null): readonly PhoneTerminalSend[] {
+  return (handle ? phoneSends.get(handle) : undefined) ?? NO_PHONE_SENDS
+}
+
 export function readTurn(agent: string, sessionId: string): TurnRecord | null {
   return turns.get(turnKey(agent, sessionId)) ?? null
 }
@@ -171,6 +212,7 @@ export async function hydrateNativeChatKeptSessions(): Promise<void> {
 }
 
 export function resetNativeChatKeptSessionsForTests(): void {
+  phoneSends.clear()
   kept.reset()
   turns.clear()
   notify()
