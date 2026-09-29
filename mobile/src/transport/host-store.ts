@@ -175,6 +175,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   let updatedExistingHost = false
   let cleanupIntentRecordedBeforeMetadata = false
   let tokenCommittedBeforeMetadata = false
+  let membershipChanged = false
   try {
     await mutateStoredHosts(async (hosts) => {
       const index = hosts.findIndex((h) => h.id === stored.id)
@@ -209,6 +210,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         await commitDeviceToken(stored.id, validated.deviceToken)
         tokenCommittedBeforeMetadata = true
       }
+      membershipChanged = !hostListLoads.sameHostIdSet(hosts, next)
       return next
     })
   } catch (error) {
@@ -222,6 +224,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     throw error
   }
+  hostListLoads.noteHostMembershipIf(membershipChanged)
   if (!tokenCommittedBeforeMetadata) {
     // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
@@ -258,8 +261,10 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 
 export async function removeHost(hostId: string): Promise<void> {
   let cleanupIntentRecorded = false
+  let removedRow = false
   try {
     await mutateStoredHosts(async (hosts) => {
+      removedRow = hosts.some((h) => h.id === hostId)
       try {
         await recordHostCredentialCleanupIntent(hostId)
         cleanupIntentRecorded = true
@@ -274,6 +279,7 @@ export async function removeHost(hostId: string): Promise<void> {
     }
     throw error
   }
+  hostListLoads.noteHostMembershipIf(removedRow)
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostOverlay(hostId)

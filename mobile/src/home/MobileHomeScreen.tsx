@@ -31,7 +31,8 @@ import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
 import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
-import { MobileHomeEmptyState } from './MobileHomeEmptyState'
+import { homeBodyKind } from './home-body-kind'
+import { MobileHomeBody } from './MobileHomeBody'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
@@ -90,8 +91,8 @@ export function MobileHomeScreen() {
     if (host.credentialStatus === 'missing') {
       data.router.push('/pair-scan')
     } else if (host.credentialStatus === 'temporarily-unavailable') {
-      void loadHostCatalog()
-        .then(data.setHostCatalog)
+      void data
+        .recheckHostCatalog()
         .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
     } else {
       data.router.push(`/h/${host.id}`)
@@ -121,52 +122,56 @@ export function MobileHomeScreen() {
     }
   }
 
+  const bodyKind = homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length)
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
-      {data.hostCatalog.length === 0 ? (
-        <MobileHomeEmptyState
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          isWideLayout={isWideLayout}
-          onPairDesktop={() => data.router.push('/pair-scan')}
-        />
-      ) : (
-        <MobileHomeHostList
-          autoConnectHostIds={data.autoConnectHostIds}
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          footer={
-            <MobileHomeListFooter
-              accountsHosts={data.accountsHosts}
-              connectedHosts={data.connectedHosts}
-              primaryHost={data.primaryHost}
-              primaryTaskProviders={data.primaryTaskProviders}
-              resumeCard={data.resumeCard}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
-              onOpenAccounts={openMobileAccounts}
-              onOpenResume={openResume}
-              onOpenTasks={openTasks}
-              onPairDesktop={() => data.router.push('/pair-scan')}
-            />
-          }
-          hostAttempts={data.hostAttempts}
-          hostLastConnected={data.hostLastConnected}
-          onRefreshAccounts={() => void data.refreshAccounts()}
-          refreshingAccounts={data.refreshingAccounts}
-          hostConnections={data.hostConnections}
-          hosts={data.sortedHostCatalog}
-          hostStates={data.hostStates}
-          isWideLayout={isWideLayout}
-          worktreeInfo={data.worktreeInfo}
-          onOpen={openHost}
-          onLongPress={(host) => {
-            triggerMediumImpact()
-            openHostActions(host)
-          }}
-          onOpenActions={openHostActions}
-        />
-      )}
+      <MobileHomeBody
+        kind={bodyKind}
+        pair={{
+          bottomInset: insets.bottom,
+          contentMaxWidth,
+          isWideLayout,
+          onPairDesktop: () => data.router.push('/pair-scan')
+        }}
+        hostList={
+          <MobileHomeHostList
+            autoConnectHostIds={data.autoConnectHostIds}
+            bottomInset={insets.bottom}
+            contentMaxWidth={contentMaxWidth}
+            footer={
+              <MobileHomeListFooter
+                accountsHosts={data.accountsHosts}
+                connectedHosts={data.connectedHosts}
+                primaryHost={data.primaryHost}
+                primaryTaskProviders={data.primaryTaskProviders}
+                resumeCard={data.resumeCard}
+                onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+                onOpenAccounts={openMobileAccounts}
+                onOpenResume={openResume}
+                onOpenTasks={openTasks}
+                onPairDesktop={() => data.router.push('/pair-scan')}
+              />
+            }
+            hostAttempts={data.hostAttempts}
+            hostLastConnected={data.hostLastConnected}
+            onRefreshAccounts={() => void data.refreshAccounts()}
+            refreshingAccounts={data.refreshingAccounts}
+            hostConnections={data.hostConnections}
+            hosts={data.sortedHostCatalog}
+            hostStates={data.hostStates}
+            isWideLayout={isWideLayout}
+            worktreeInfo={data.worktreeInfo}
+            onOpen={openHost}
+            onLongPress={(host) => {
+              triggerMediumImpact()
+              openHostActions(host)
+            }}
+            onOpenActions={openHostActions}
+          />
+        }
+      />
       <HomeUpdateSurface />
       <ActionSheetModal
         visible={actionTarget != null}

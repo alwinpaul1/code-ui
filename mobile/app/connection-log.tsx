@@ -8,7 +8,7 @@ import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check } from 'lucide-react-native'
 import { spacing, typography } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../src/theme/theme-context'
-import { loadHosts } from '../src/transport/host-store'
+import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
 import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
 import {
@@ -40,7 +40,7 @@ import {
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
 import { useNow } from '../src/hooks/use-now'
-import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
+import type { ConnectionLogEntry } from '../src/transport/types'
 
 // Why: getSnapshot must be referentially stable when there's no data —
 // a fresh [] per call would make useSyncExternalStore re-render forever.
@@ -57,22 +57,10 @@ export default function ConnectionLogScreen() {
   const params = useLocalSearchParams<{ hostId?: string }>()
   const insets = useSafeAreaInsets()
   const routeKey = useMemo((): DiagnosticsRouteKey => ({}), [params.hostId])
-  const [hosts, setHosts] = useState<HostProfile[]>([])
+  const loadedHosts = useLoadedHosts()
+  const { hosts, loaded: hostsLoaded } = loadedHosts
   const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
-
-  useEffect(() => {
-    let stale = false
-    void loadHosts().then((loaded) => {
-      if (stale) {
-        return
-      }
-      setHosts(loaded)
-    })
-    return () => {
-      stale = true
-    }
-  }, [])
 
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((h) => h.id === selectedId) ?? null
@@ -209,9 +197,11 @@ export default function ConnectionLogScreen() {
             rows={timeline}
           />
         </>
-      ) : (
-        <Text style={styles.emptyText}>No paired hosts.</Text>
-      )}
+      ) : hostsLoaded ? (
+        <Text style={styles.emptyText}>
+          {emptyHostsNoticeCopy(loadedHosts, 'No paired hosts.')}
+        </Text>
+      ) : null}
     </View>
   )
 }

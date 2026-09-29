@@ -16,12 +16,16 @@ import {
   useOpenNotificationRoute
 } from '../src/notifications/use-open-notification-route'
 import { loadHostCatalog } from '../src/transport/host-store'
+import { shouldHideSplash, useHostCatalogWarmup } from '../src/transport/use-host-catalog-warmup'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 import { useAppFonts } from '../src/theme/fonts'
 import { ThemeProvider, useTheme } from '../src/theme/theme-context'
 import { hydrateSessionCaches } from '../src/session/session-caches-hydrate'
-import { askBackgroundDeliveryPowerOnOpen, getBackgroundLinkWatcher } from '../src/background/background-link'
+import {
+  askBackgroundDeliveryPowerOnOpen,
+  getBackgroundLinkWatcher
+} from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
 import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
@@ -74,6 +78,9 @@ function ThemedRoot() {
   // loading fails (then the fallback stack renders rather than a hung splash).
   const [fontsLoaded, fontError] = useAppFonts()
   const fontsReady = fontsLoaded || fontError !== null
+  // Why: without this the splash lifts onto a blank body while the Keychain is
+  // read. Capped at about a second inside the hook, so it can never hang.
+  const catalogReady = useHostCatalogWarmup()
 
   useEffect(() => {
     // Why here: a foreground service may only be started from the foreground,
@@ -267,10 +274,10 @@ function ThemedRoot() {
   // actual, correctly typeset app content.
   const layoutReadyRef = useRef(false)
   const hideSplashIfReady = useCallback(() => {
-    if (layoutReadyRef.current && fontsReady) {
+    if (shouldHideSplash({ layoutReady: layoutReadyRef.current, fontsReady, catalogReady })) {
       void SplashScreen.hideAsync()
     }
-  }, [fontsReady])
+  }, [fontsReady, catalogReady])
   useEffect(() => {
     hideSplashIfReady()
   }, [hideSplashIfReady])

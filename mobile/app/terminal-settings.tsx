@@ -11,8 +11,7 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
-import { loadHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
+import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
@@ -130,10 +129,8 @@ export default function TerminalSettingsScreen() {
   const insets = useSafeAreaInsets()
   const { colors } = useTheme()
   const styles = useThemedStyles(terminalSettingsScreenStyles)
-  const [hosts, setHosts] = useState<HostProfile[]>([])
-  useEffect(() => {
-    void loadHosts().then(setHosts)
-  }, [])
+  const loadedHosts = useLoadedHosts()
+  const { hosts, loaded: hostsLoaded } = loadedHosts
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients } = useFocusedSettingsHostClients(hostIds)
   const hostClientsById = useMemo(
@@ -282,10 +279,13 @@ export default function TerminalSettingsScreen() {
       >
         <Text style={styles.groupHeading}>WHEN YOU LEAVE THE APP</Text>
 
-        {hosts.length === 0 ? (
+        {!hostsLoaded ? null : hosts.length === 0 ? (
           <View style={[styles.section, styles.sectionTopGap]}>
             <Text style={styles.emptyText}>
-              No paired desktops yet. Pair one to control terminal behavior.
+              {emptyHostsNoticeCopy(
+                loadedHosts,
+                'No paired desktops yet. Pair one to control terminal behavior.'
+              )}
             </Text>
           </View>
         ) : (

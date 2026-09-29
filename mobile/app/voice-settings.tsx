@@ -12,8 +12,7 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
-import { loadHosts } from '../src/transport/host-store'
-import type { HostProfile } from '../src/transport/types'
+import { useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import type { RpcClient } from '../src/transport/rpc-client'
 import { BottomDrawer } from '../src/components/BottomDrawer'
@@ -46,10 +45,7 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useThemedStyles(voiceSettingsStyles)
 
-  const [hosts, setHosts] = useState<HostProfile[]>([])
-  useEffect(() => {
-    void loadHosts().then(setHosts)
-  }, [])
+  const { hosts } = useLoadedHosts()
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients, focused: routeFocused } = useFocusedSettingsHostClients(hostIds)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
