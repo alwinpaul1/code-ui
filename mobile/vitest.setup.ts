@@ -61,6 +61,24 @@ vi.mock('./src/platform/haptics', () => ({
   triggerEdgeBump: () => undefined
 }))
 
+// Why: a chat code block has a Copy button (MobileMarkdownCodeHeader), which
+// put two packages under every test that renders Markdown, and neither loads
+// under Node. lucide-react-native's ESM entry fails ("./context.mjs does not
+// provide an export named 'LucideProvider'"), and expo-clipboard reaches
+// expo-modules-core's EventEmitter, which is the reason every test that
+// draws an icon or copies text mocks them. These stand in for the two icons
+// the Markdown tree draws, as host tags a test can find by type, and for a
+// pasteboard that takes every write. A test that asserts what was copied, or
+// draws other icons, mocks the module locally, which takes priority.
+vi.mock('lucide-react-native', () => ({ Check: 'Check', Copy: 'Copy' }))
+vi.mock('expo-clipboard', () => ({
+  setStringAsync: async () => true,
+  getStringAsync: async () => '',
+  hasStringAsync: async () => false,
+  hasImageAsync: async () => false,
+  getImageAsync: async () => null
+}))
+
 // Why: the session a chat tab keeps over a nested agent's status, and each
 // session's turn, live in a module-level store that outlives a mount on
 // purpose (native-chat-kept-session.ts). Test cases reuse one host and tab id

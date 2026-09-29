@@ -2,6 +2,7 @@ import { ScrollView, Text, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MarkdownCodeHeader } from './MobileMarkdownCodeHeader'
 import { MobileSyntaxLine } from './MobileSyntaxSegments'
 import { gutterWidthForLines } from './mobile-syntax-lines'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
@@ -49,7 +50,12 @@ export function renderMarkdownCodeBlock({
           const gutterWidth = gutterWidthForLines(code.lines.length)
           return (
             <View key={index} style={styles.codeBlock}>
-              {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
+              <MarkdownCodeHeader
+                language={block.language}
+                code={block.text}
+                closed={block.closed}
+                styles={styles}
+              />
               {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
                   command or an indented block shreds it, and a reader who
                   wants to copy a line needs the line. */}

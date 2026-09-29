@@ -120,6 +120,96 @@ describe('parseMobileMarkdown', () => {
     )
   })
 
+  // Review of the chat code block's Copy button (2026-09-29): only a fence at
+  // the margin, opened by exactly three backticks and a bare word, skipped the
+  // HTML pass. Every other fence lost its tags, its entities and its blank
+  // lines before the parser saw it, so the block drew damaged code and Copy
+  // put it on the clipboard. A fence under a list item is the commonest one an
+  // agent writes.
+  it.each([
+    ['under a list item', ['1. Render it:', '', '   ```tsx', '   return <View style={s.row}>', '     <Text>{label}</Text>', '   </View>', '   ```']],
+    ['on the list marker line', ['- ```sh', '  echo "a &amp; b" > out.txt', '  ```']],
+    ['with tildes', ['~~~html', '<div class="x">hi</div>', '~~~']],
+    ['with a title in its info string', ['```html title="a.html"', '<details><summary>x</summary>body</details>', '```']],
+    ['with four backticks around a fence', ['````md', '```html', '<b>kept</b>', '```', '````']],
+    ['with blank lines and trailing spaces', ['- step', '', '  ```sh', '  echo one  ', '', '', '', '  echo <two>', '  ```']]
+  ])('leaves a fence %s exactly as written', (_shape, lines) => {
+    const source = lines.join('\n')
+    expect(normalizeMobileMarkdownPreviewHtml(source)).toBe(source)
+  })
+
+  it('still strips HTML from the prose around a protected fence', () => {
+    const source = ['<p>Before</p>', '', '- step', '', '  ```tsx', '  <View />', '  ```', '', '<p>After</p>'].join('\n')
+    expect(normalizeMobileMarkdownPreviewHtml(source)).toBe(
+      ['Before', '', '- step', '', '  ```tsx', '  <View />', '  ```', '', 'After'].join('\n')
+    )
+  })
+
+  // Second review (2026-09-29): a line marked does not open as a fence, or a
+  // fence marked has already ended, started or kept a protected region, and
+  // every tag after it reached the screen and "Copy message" raw.
+  it.each([
+    ['an indented code block holding only a fence run', ['    ```', '', '<p align="center"><b>Logo</b></p>', '', 'The end &amp; more.']],
+    ['a paragraph line indented four spaces', ['Intro', '    ```js', '<b>bold</b>', '', '<p>After</p>']],
+    ['an unclosed list fence the next item ends', ['- ```sh', '  echo hi', '- next <b>item</b>', '', '<p>After</p>']],
+    ['a list item whose text starts with a fence run', ['- ``` is the fence marker', '- <b>bold</b> item', '', '<p>After</p>']],
+    ['a fence nested under a list item, unclosed, then prose at the margin', ['1. step', '', '   ```sh', '   echo hi', 'After <b>the list</b>.', '', '<p>After</p>']]
+  ])('strips the HTML after %s', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(lines.join('\n'))
+    expect(normalized).not.toMatch(/<\/?(?:b|p)\b/)
+    expect(normalized).not.toContain('&amp;')
+  })
+
+  // Third review (2026-09-29): a leading tab was counted as one column, where
+  // marked expands it to the next multiple of four.
+  it('keeps a fence after a tab-separated list marker exactly, and strips what follows', () => {
+    const fenced = ['1.\t```html', '\t<b>x</b>', '\t```']
+    expect(normalizeMobileMarkdownPreviewHtml([...fenced, '', '<p>After</p>'].join('\n'))).toBe(
+      [...fenced, '', 'After'].join('\n')
+    )
+  })
+
+  it.each([
+    ['a tab-indented fence run in prose', ['Intro', '', '\t```', '', '<b>bold</b>', '', '<p>After</p>']],
+    ['a tab-indented fence run inside a margin fence', ['```md', '\t```', '<b>x</b>', '```', '', '<p>After</p>']]
+  ])('reads %s the way marked does', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(lines.join('\n'))
+    expect(normalized).not.toContain('<p>')
+    if (lines[0] === '```md') {
+      expect(normalized).toContain('```md\n\t```\n<b>x</b>\n```')
+    } else {
+      expect(normalized).not.toContain('<b>')
+    }
+  })
+
+  // Fourth review (2026-09-29): an indented code block went through the HTML
+  // pass in every version, so `<div>x</div>` drew and Copy copied `x`.
+  it.each([
+    ['at the margin', ['Run:', '', '    <div class="x">hi</div>', '    a &amp; b']],
+    ['after a wide list marker gap', ['-     ```html', '      <b>x</b>', '      ```']]
+  ])('leaves an indented code block %s exactly as written', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml([...lines, '', '<p>After</p>'].join('\n'))
+    expect(normalized).toBe([...lines, '', 'After'].join('\n'))
+  })
+
+  it('still strips README HTML indented inside a paragraph tag', () => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(
+      ['<p align="center">', '    <img src="logo.png" alt="Logo">', '    <b>Orca</b>', '</p>'].join('\n')
+    )
+    expect(normalized).not.toMatch(/<\/?(?:img|b|p)\b/)
+    expect(normalized).toContain('Orca')
+  })
+
+  it('keeps a deeper fence run inside a list fence as code, not as its closer', () => {
+    const fenced = ['  ```md', '  text', '      ```', '  <b>still code</b>', '  ```']
+    const normalized = normalizeMobileMarkdownPreviewHtml(['- step', '', ...fenced, '', '<p>After</p>'].join('\n'))
+    expect(normalized).toBe(['- step', '', ...fenced, '', 'After'].join('\n'))
+  })
+
+  it('does not take a triple-backtick span on one line for a fence', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('```a<b>c```\n\n<p>After</p>')).toBe('```a<b>c```\n\nAfter')
+  })
+
   it('preserves non-tag angle bracket prose while stripping known HTML tags', () => {
     expect(normalizeMobileMarkdownPreviewHtml('1 < 2 and 3 > 1')).toBe('1 < 2 and 3 > 1')
     expect(normalizeMobileMarkdownPreviewHtml('Array<string> in prose')).toBe(

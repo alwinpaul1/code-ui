@@ -5,6 +5,7 @@ import {
   replaceMobileMarkdownPairedMarkupTags,
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
+import { markdownCodeRanges } from './markdown-code-ranges'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -222,7 +223,12 @@ function codePlaceholderPrefix(content: string): string {
   return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
-function protectMarkdownCode(content: string): {
+function protectMarkdownCode(
+  content: string,
+  /** Indented code blocks too, which only a whole document can tell apart
+   *  from indented HTML (markdown-code-ranges.ts). */
+  indentedCode = false
+): {
   protectedText: string
   codeSpans: string[]
   placeholderPrefix: string
@@ -237,19 +243,14 @@ function protectMarkdownCode(content: string): {
 
   const lines = content.split('\n')
   const protectedLines: string[] = []
+  const blocks = markdownCodeRanges(lines, { indentedCode })
   let index = 0
   while (index < lines.length) {
     const line = lines[index] ?? ''
-    if (/^```[A-Za-z0-9_-]*\s*$/.test(line)) {
-      const start = index
-      index += 1
-      while (index < lines.length && !/^```\s*$/.test(lines[index] ?? '')) {
-        index += 1
-      }
-      if (index < lines.length) {
-        index += 1
-      }
-      protectedLines.push(store(lines.slice(start, index).join('\n')))
+    const blockEnd = blocks.get(index)
+    if (blockEnd !== undefined) {
+      protectedLines.push(store(lines.slice(index, blockEnd).join('\n')))
+      index = blockEnd
       continue
     }
 
@@ -274,7 +275,8 @@ function restoreMarkdownCode(
 
 export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   const { protectedText, codeSpans, placeholderPrefix } = protectMarkdownCode(
-    content.replace(/\r\n?/g, '\n')
+    content.replace(/\r\n?/g, '\n'),
+    true
   )
   let next = protectedText
 
