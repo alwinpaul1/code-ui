@@ -16,15 +16,16 @@ function code(path: string): string {
 describe('a screen that words an empty host list as a claim waits for the read', () => {
   it('the home screen decides its body through homeBodyKind, not hostCatalog.length', () => {
     const src = code('./home/MobileHomeScreen.tsx')
-    expect(src).toContain('homeBodyKind(data.hostCatalogLoaded')
+    expect(src).toMatch(/homeBodyKind\(\s*data\.hostCatalogLoaded/)
     expect(src).not.toMatch(/hostCatalog\.length\s*===\s*0/)
   })
 
   it('the home screen hands the body its kind unchanged, not a re-derived one', () => {
     const src = code('./home/MobileHomeScreen.tsx')
-    // The whole derivation line, to its end: a suffix like `=== 'hosts' ? 'hosts' : 'pair'` fails it.
+    // The whole derivation, to the end of its line: a suffix like `=== 'hosts' ? 'hosts' : 'pair'`
+    // fails it. The read failure is an input: without it a failed read is drawn as "none".
     expect(src).toMatch(
-      /^\s*const bodyKind = homeBodyKind\(data\.hostCatalogLoaded, data\.hostCatalog\.length\)\s*$/m
+      /^\s*const bodyKind = homeBodyKind\(\s*data\.hostCatalogLoaded,\s*data\.hostCatalog\.length,\s*data\.hostCatalogFailed\s*\)\s*$/m
     )
     expect(src).toMatch(/kind=\{bodyKind\}/)
     // A re-mapped kind (loading drawn as the pairing screen) is the launch flash again.
@@ -51,7 +52,7 @@ describe('a screen that words an empty host list as a claim waits for the read',
     walk(join(root, 'app'))
     walk(join(root, 'src'))
     // These two seed [] on purpose and carry their own "loaded" flag.
-    const owners = ['src/transport/use-loaded-hosts.ts', 'src/home/use-mobile-home-data.ts']
+    const owners = ['src/transport/use-loaded-hosts.ts', 'src/home/use-home-host-catalog.ts']
     const offenders = files
       .filter((file) => !owners.some((owner) => file.endsWith(owner)))
       .filter((file) => {
@@ -73,6 +74,12 @@ describe('a screen that words an empty host list as a claim waits for the read',
     const src = code('./home/MobileHomeScreen.tsx')
     expect(src).toMatch(/data\s*\.recheckHostCatalog\(\)/)
     expect(src).not.toMatch(/loadHostCatalog\(\)\s*\.then\(data\.setHostCatalog\)/)
+  })
+
+  it('the failed-read home body takes its colours from the theme, not a literal', () => {
+    const src = code('./home/MobileHomeCatalogFailedState.tsx')
+    expect(src).toMatch(/useTheme\(\)/)
+    expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b|rgba?\(/)
   })
 
   it('the loading home body and the theme background come from the theme, not a literal', () => {

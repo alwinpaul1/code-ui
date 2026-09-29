@@ -122,7 +122,11 @@ export function MobileHomeScreen() {
     }
   }
 
-  const bodyKind = homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length)
+  const bodyKind = homeBodyKind(
+    data.hostCatalogLoaded,
+    data.hostCatalog.length,
+    data.hostCatalogFailed
+  )
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
@@ -135,6 +139,7 @@ export function MobileHomeScreen() {
           isWideLayout,
           onPairDesktop: () => data.router.push('/pair-scan')
         }}
+        onRetryRead={data.retryHostCatalog}
         hostList={
           <MobileHomeHostList
             autoConnectHostIds={data.autoConnectHostIds}
