@@ -126,6 +126,9 @@ watched publishing a roster to this phone. The fallback is the safe direction
      remaining approximation.
    - `null` status (no hooks for this pane, an older host) trusts the
      transcript alone.
+   - Orca does not always send the hook row. Where it sends a status built
+     from the terminal title instead, the readers read the pane's last hook
+     row through it; see "Orca's title stand-in" below.
 
 ## Tests
 
@@ -431,3 +434,132 @@ bridged. If Codex fires SubagentStart for a child's own child on the lead's
 pane, that row is counted: nothing the phone reads can place a Codex row. Not
 verified: none of the 12 rollouts on this machine (codex-cli 0.153.4) ever
 spawned a sub-agent.
+
+## Orca's title stand-in (2026-09-29)
+
+Reported from the phone: "there are background processes running but the
+chat UI doesn't show that". No "N running tasks", nothing running in the
+sheet, while the desk's footer listed them.
+
+Orca 1.4.216's mobile projection (`renewMobileAgentStatusFromPtyTitle` in
+Orca's orca-runtime.ts, `SEa` in the 1.4.216 app.asar) sends a status built
+from the terminal title in place of the pane's hook row when the title
+changed after the row and the two disagree, or when the row is over 30
+minutes old. It carries the title's state (`done` for an idle title), the
+row's identity fields, `prompt: ''`, `stateHistory: []`, and nothing else:
+no roster, no working mode.
+
+That can happen at the end of every Claude turn. Claude Code animates its
+title only while a turn loads, and its Stop hooks run inside that turn, so
+the Stop row can reach Orca before the idle title (`✳ …`); any later title
+change does the same. With background work running, the row
+says `working` (`monitoring` for shells) and carries the roster; the phone
+was sent a `done` with no roster in its place, until the next hook. A `done`
+retires every shell and drops every roster row, so the count and the sheet
+went empty for as long as the lead sat idle. Over a long tool call the same
+stand-in, `working`, took the roster away mid-turn and restarted the run
+boundary.
+
+The task readers (the count, the sheet, the task memory, the run clock) now
+read the pane's last hook row through a stand-in
+(`mobile/src/session/agent-status-stand-in.ts`), but only when the phone can
+know that row still stands:
+
+- the phone watched the pane since the row: same pane, link up, the host's
+  own tab list rather than the one the last visit cached;
+- the row carries a prompt or a history, so it is told from a stand-in
+  (Orca's headless builder sends hook rows with neither, and there a real
+  "no roster" row has the stand-in's shape);
+- the stand-in copies at least one of the row's `terminalHandle`,
+  `worktreeId`, `tabId`, `terminalTitle` (the `done` Orca sends under a
+  shell title once the agent has left copies none), and names the same agent
+  and session;
+- through a `done`, only while Orca says background work outlived the lead's
+  turn.
+
+The last rule is there because the row the phone last saw is often not the
+Stop row. Orca coalesces the phone's tab snapshots (50 ms, at most 250 ms)
+and builds each from its state at the flush, and every spinner frame
+restamps the title, so a plain Stop row becomes a `working` stand-in on the
+next frame and a `done` one when the title goes idle. The row held is then
+the turn's last tool row, which says the lead was working, not what outlived
+the turn: held through the `done`, a shell that finished mid-turn (its
+notification an attachment Orca's reader drops, no beacon) stayed "running"
+while the lead sat idle (the review of 09aa69a0). What does say it is the
+tab's `turnCompletedAt`: Orca's hook listener stamps it on the row that holds
+the pane `working` after the lead's Stop because background work is still
+registered (vendored `claude-events.ts`), and Orca carries it on the TAB from
+the live hook row, past its own stand-in, until that row is 30 minutes old.
+The phone's tab comparison now counts it, or a frame where only it changed
+never reached the chat.
+
+With no such stamp the `done` is read as it comes, which is also what
+retires the work of an agent that exited after a turn that held none: with
+no renderer row for the pane, Orca's last resort (`buildPtyMobileAgentStatus`,
+"what retires the card once the agent exits") is a `done` with the title
+stand-in's exact shape.
+
+The task memory no longer reads a stand-in's missing roster as a roster with
+no one on it. It did, after a reconnect or on any stand-in read as it came:
+every row the loaded window never showed launched lost the benefit of the
+doubt, and when the next hook row listed it again it read as a reviewer's and
+stayed hidden until it stopped. What the stand-in hid can still be read off
+the first hook row after it: Orca drops a stopped subagent's row and starts
+it afresh, so a doubted row back with another start stopped and was resumed
+while the roster went unseen, and it keeps no doubt (a teammate's row keeps
+its start, so its doubt stands). Only across a stand-in: with every hook row
+seen, a new start is no stop. A `claude -p` the lead runs from its Bash tool
+posts as the pane, and its SessionStart and its events naming another
+session make Orca delete the pane's rows and re-create the lead's running
+agents with new starts, while the phone keeps the nested run's statuses
+from the task readers. The cost: when a stand-in does fall between that
+re-creation and the next hook row the phone reads, or Orca re-lists rows
+with new starts after losing its own roster (a restart with no saved
+snapshot), a doubted row of the lead's loses the doubt.
+
+Every change to background work fires a hook (a launch is a tool call, an
+agent's end is SubagentStop, a shell's end starts a turn), and a hook row
+newer than the title takes the pane back, so the held row is the host's
+latest word for as long as the phone watches. Otherwise the stand-in is read
+as it comes, as before: after a tab switch, a reconnect, or a relaunch, the
+tasks leave the count until the next hook row. The Working row, Stop and the
+prompt reader keep reading the stand-in.
+
+Known limits:
+
+- Thirty minutes after the pane's last hook row, Orca drops the row and its
+  `turnCompletedAt` from the tab, and a lead idle that long with only a shell
+  running (nothing fires a hook) loses the shell from the count again.
+- An agent that exits after a turn that held background work keeps that
+  work listed until the watch breaks or those 30 minutes pass. A silent
+  beacon is no sign of an exit: Claude unmounts its status line, and the
+  beat, under every picker and dialog, and a terminal keeps the last beacon
+  of a process long gone. A rule built on it (8c71e9fd) dropped the work
+  of an idle lead with `/tasks` open on the desk, and of a hand-started
+  `claude -c` in a terminal a phone-launched Claude had used (its re-review).
+- Orca stamps the turn end for Claude only, so on a Codex tab a `done`
+  stand-in is read as it comes and a sub-agent that outlived the lead's turn
+  leaves the count while it stands. The `working` stand-in over a long tool
+  call is read through on both.
+- The watch is taken per render. A row applied in the same render as the
+  stand-in after it (a burst after a stalled JS thread), or published during
+  a relay-to-direct cutover that replays the subscription on a link that
+  stayed up, is never seen, and the older row is read until the next hook
+  row. When the row missed is the all-clear `done`, which carries that
+  turn's `turnCompletedAt` too, until the lead's next turn or those 30
+  minutes.
+- The subagent run clock still restarts after a stand-in read as it comes;
+  4853532e on fix/midturn-residuals keeps it.
+
+Not watched live. The stand-in's fields are read off Orca's source and the
+1.4.216 asar, and the order of the Stop row and the idle title off how
+Claude Code 2.1.284 runs a turn; no phone has been seen receiving these
+statuses, and the connected tablet has no Code UI installed.
+
+Also found, not fixed: Claude Code 2.1.284's footer pill names only a list
+of one kind in its own words ("N shells", "N shells, M monitors", "1
+monitor"); a mix of kinds reads "N background tasks" (`Lwe` in the 2.1.284
+binary). `parseClaudeRunningShellCount` reads only "N shells", so a mixed
+pill gives the phone no footer count to pad from. No real screen of that
+pill has been captured, so the parser is left alone.
+

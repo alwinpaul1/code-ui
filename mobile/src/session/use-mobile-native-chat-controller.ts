@@ -71,7 +71,7 @@ export function useMobileNativeChatController(
   const {
     activeChatAgent,
     activeChatAgentRef,
-    activeChatResolution, activeChatIdentity, activeChatAgentStatus, activeChatPromptStatus, activeChatSessionIdentity,
+    activeChatResolution, activeChatIdentity, activeChatAgentStatus, activeChatTaskStatus, activeChatPromptStatus, activeChatSessionIdentity,
     activeChatSessionId,
     activeChatStructured,
     activeTabAgentWorking,
@@ -94,7 +94,7 @@ export function useMobileNativeChatController(
     activeSessionTabId,
     activeHandle,
     activeHandleRef,
-    nativeChatTranscriptIsLocalReadable
+    nativeChatTranscriptIsLocalReadable, watching: connState === 'connected' && args.tabsLive
   })
 
   const { structuredSession: structuredNativeChat, session: nativeChatSession } =
@@ -212,7 +212,7 @@ export function useMobileNativeChatController(
   // what a window showed ending, the last host status (use-active-tab-task-report.ts).
   const backgroundTaskReportWithScreen = useActiveTabTaskReport({
     report: backgroundTaskReport, handle: activeHandle, sessionId: activeChatSessionId, agent: activeChatResolution?.agent ?? null,
-    messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready' && !nativeChatSession.baseRetained, agentStatus: activeChatAgentStatus,
+    messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready' && !nativeChatSession.baseRetained, agentStatus: activeChatTaskStatus,
     onScreenShellCount: hudObservation?.runningShellCount ?? null, screenTaskCompletions
   })
 
@@ -552,7 +552,7 @@ export function useMobileNativeChatController(
     nativeChatAgentWorking,
     nativeChatLeadTurnEnded,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
-    nativeChatAgentStatus: activeChatAgentStatus, nativeChatSessionIdentity: activeChatSessionIdentity,
+    nativeChatAgentStatus: activeChatTaskStatus, nativeChatSessionIdentity: activeChatSessionIdentity,
     nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
     nativeChatBackgroundTasks: activeChatStructured
       ? structuredNativeChat.backgroundTasks

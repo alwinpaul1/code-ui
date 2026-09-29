@@ -39,6 +39,8 @@ export type MobileTerminalSessionTab = {
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Orca's lead-turn end while background work keeps the pane working. */
+  turnCompletedAt?: number
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -151,6 +153,7 @@ function mobileSessionTabEqual(
         // still has to reach the chat composer.
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        a.turnCompletedAt === b.turnCompletedAt &&
         a.launchAgent === b.launchAgent &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         mobileTerminalThemesEqual(a.terminalTheme, b.terminalTheme)

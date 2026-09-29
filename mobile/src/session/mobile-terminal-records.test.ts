@@ -159,6 +159,28 @@ describe('mobile terminal records', () => {
     expect(mobileSessionTabsEqual([seeded], [{ ...seeded, launchDraftCreatedAt: 2 }])).toBe(false)
   })
 
+  // Orca's lead-turn end rides the tab, not its status, and can come or go
+  // under a title stand-in that did not change: that frame must reach the
+  // task readers, or they keep holding background work Orca has let go of
+  // (agent-status-stand-in.ts).
+  it('lets a frame through whose only change is the lead-turn end Orca carries on the tab', () => {
+    const base: MobileTerminalSessionTab = {
+      type: 'terminal',
+      id: 'term-1::leaf-1',
+      parentTabId: 'term-1',
+      leafId: 'leaf-1',
+      title: 'Claude',
+      status: 'ready',
+      terminal: 'pty-1',
+      isActive: true
+    }
+    const gated: MobileTerminalSessionTab = { ...base, turnCompletedAt: 1_790_000_000_000 }
+
+    expect(mobileSessionTabsEqual([gated], [base])).toBe(false)
+    expect(mobileSessionTabsEqual([base], [gated])).toBe(false)
+    expect(mobileSessionTabsEqual([gated], [{ ...gated }])).toBe(true)
+  })
+
   it('treats terminal agent-status changes as session-tab changes', () => {
     const base: MobileTerminalSessionTab = {
       type: 'terminal',
