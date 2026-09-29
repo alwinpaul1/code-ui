@@ -415,9 +415,7 @@
             // list itself lives in agent-hud-beacon-agent-messages.ts.
             // 2026-09-27: 342 for rememberAgentMessagePlacement, which has to
             // reach the store's own map, listeners and warm-start write.
-            // 2026-09-29: 344. The prompt beacon's `ts=` read into `typedAt`
-            // (the parameter and its digits check).
-            "max": 344,
+            "max": 342,
             "skipBlankLines": true,
             "skipComments": true
           }
