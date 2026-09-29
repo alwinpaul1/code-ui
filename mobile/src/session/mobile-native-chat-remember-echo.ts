@@ -178,7 +178,7 @@ export function rememberHeldWitnesses(
         typeof send.sentAt === 'number' &&
         Number.isFinite(send.sentAt) &&
         witness.at >= send.sentAt &&
-        preferredStoredReading(send, witness) !== null
+        preferredStoredReading(send, { ...witness, witnessedAt: witness.at }) !== null
     )
     if (!copyOfSend) {
       next = rememberEchoInPending(
@@ -202,7 +202,7 @@ function isWitnessed(id: string): boolean {
 
 /** A copy the store holds or is about to: a witness is stamped with when
  *  the phone saw it. */
-type StoredReading = { id: string; text: string; witnessedAt?: number }
+type StoredReading = { id: string; text: string; witnessedAt?: number; sentAt?: number }
 
 /** Stands for a phone send compared by its words alone. */
 const SEND_ID = 'pending-send'
@@ -245,43 +245,65 @@ function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' |
  * fix/midturn-gaps, 2026-09-29). Only a `desk-` copy: a phone send is its
  * words as sent, however long.
  *
- * Seen together, because the words cannot tell. Two long messages that share
- * their first 200 characters have the same cut copy, and the tab status's
- * reader makes one copy of the pair, the first's. Merged into the second's
- * box reading minutes later, the first message's copy was freed, the second
- * paired with it, and one of the two was not drawn (round 3 of the same
- * review). A copy and a reading of one message reach the phone within the
- * relay's latency of each other, the hook's copy and the box's row both
- * written when the agent takes the Enter; so only witnesses stored within
- * CUT_COPY_SEEN_WITH_MS of each other merge. Past it both are kept: a long
- * message whose two readings came further apart than that is drawn twice,
- * which beats losing the other message. A witness from a build that kept no
- * time merges with nothing this way. A phone send is timed against its
- * witnesses by withoutWitnessesOfSends instead.
+ * Seen together (seenTogether), because the words cannot tell. Two long
+ * messages that share their first 200 characters have the same cut copy, and
+ * the tab status's reader makes one copy of the pair, the first's. Merged
+ * into the second's box reading minutes later, the first message's copy was
+ * freed, the second paired with it, and one of the two was not drawn (round 3
+ * of the same review).
  */
 function cutStatusCopyOf(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
   const [ka, kb] = [storedKey(a.text), storedKey(b.text)]
-  const verdict =
-    a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)
-      ? 'b'
-      : b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)
-        ? 'a'
-        : null
-  return verdict !== null && seenTogether(a, b) ? verdict : null
+  if (a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)) {
+    return seenTogether(a, b) ? 'b' : null
+  }
+  if (b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)) {
+    return seenTogether(b, a) ? 'a' : null
+  }
+  return null
 }
 
-/** How far apart a status copy and a reading of one message may be stored. */
+/** How long after a status copy a longer reading of the same message may
+ *  first be stored. */
 const CUT_COPY_SEEN_WITH_MS = 30_000
 
-function seenTogether(a: StoredReading, b: StoredReading): boolean {
-  if (!isWitnessed(a.id) || !isWitnessed(b.id)) {
-    return true
+/**
+ * Whether a cut status copy (`desk-`) and a longer reading are copies of one
+ * message, by when the phone stored each.
+ *
+ * The copy stored first, and the reading within CUT_COPY_SEEN_WITH_MS of it:
+ * the hook's copy and the box's row are both written when the agent takes the
+ * Enter, and reach the phone within the relay's latency of each other. Later
+ * than that, the reading is a later message that shares the copy's first 200
+ * characters, which the tab status's reader makes no copy of.
+ *
+ * The copy stored after the reading: always. The status reader makes a copy
+ * when the field's words change, so a copy that comes after a longer reading
+ * of its words is that reading's own, however late: its echo is held while the
+ * box lists the message and first drawn when the agent takes it, minutes
+ * later, and one that came back after being merged away is drawn again then
+ * too. Timed by the window both ways, a long message that waited in the box
+ * more than 30 s was stored and drawn twice for good (round 4 of the review).
+ *
+ * A phone send is merged only with a copy seen at or after it left the phone,
+ * the rule withoutWitnessesOfSends times its witnesses by: read back beside a
+ * later send that began with its first 200 characters, an earlier desk
+ * message's copy was dropped as the send's own (round 4). A witness stored by
+ * a build that kept no time merges with nothing this way.
+ */
+function seenTogether(copy: StoredReading, reading: StoredReading): boolean {
+  if (!isWitnessed(reading.id)) {
+    // withoutWitnessesOfSends compares a send by its words alone (SEND_ID):
+    // it has timed the pair already.
+    return (
+      reading.id === SEND_ID ||
+      (typeof reading.sentAt === 'number' && typeof copy.witnessedAt === 'number' && copy.witnessedAt >= reading.sentAt)
+    )
   }
-  return (
-    typeof a.witnessedAt === 'number' &&
-    typeof b.witnessedAt === 'number' &&
-    Math.abs(a.witnessedAt - b.witnessedAt) <= CUT_COPY_SEEN_WITH_MS
-  )
+  if (typeof copy.witnessedAt !== 'number' || typeof reading.witnessedAt !== 'number') {
+    return false
+  }
+  return copy.witnessedAt >= reading.witnessedAt || reading.witnessedAt - copy.witnessedAt <= CUT_COPY_SEEN_WITH_MS
 }
 
 /** The words preferredWitnessReading compares. */

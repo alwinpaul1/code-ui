@@ -6,6 +6,7 @@
 // and the reviews of fix/midturn-gaps, 2026-09-29.
 
 import { describe, expect, it, vi } from 'vitest'
+import { act } from 'react-test-renderer'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { AgentStatusPromptSource } from './agent-status-prompts'
@@ -55,7 +56,7 @@ vi.mock('./MobileNativeChatView', async () => {
 
 describe('a mid-turn message the queue box lists', () => {
   let agent: 'claude' | 'codex' = 'claude'
-  const { unmount, showAt, queueBox, where } = midturnChat(frames, () => agent)
+  const { unmount, drafts, showAt, queueBox, where } = midturnChat(frames, () => agent)
 
   // Found with gap 2: the queue box took a message the chat had drawn out of
   // the chat when it listed a later one whose words are the first's less the
@@ -498,6 +499,78 @@ describe('a mid-turn message the queue box lists', () => {
     await showAt('05:39:30.100', WHOLE_TURN.slice(0, -4), prompts, true, [two])
     await showAt('05:39:31.000', WHOLE_TURN.slice(0, -4), prompts, true, [two])
     await showAt('05:40:00.000', WHOLE_TURN.slice(0, -3), prompts, true, [])
+    expect(users()).toEqual([normalizePromptField(one), oneLine(two)])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:48:00.000'))
+    prompts = again.read(done(two))
+    await showAt('05:48:00.100', WHOLE_TURN, prompts, false)
+    await showAt('05:48:01.000', WHOLE_TURN, prompts, false)
+    expect(users()).toEqual([normalizePromptField(one), oneLine(two)])
+    again.unmount()
+    unmount()
+  })
+
+  // Round 4 of the review of fix/midturn-gaps: the copy the tab status cut and
+  // the box's whole reading of one long message, stored minutes apart. While
+  // the box lists the message its echo is held, so its copy is first stored,
+  // or stored again, when Claude takes it.
+  for (const when of ['in the same read as its status copy', 'a beat after its status copy'] as const) {
+    it(`draws a long desk message the box listed ${when} once after Claude takes it minutes later, and after the chat comes back`, async () => {
+      agent = 'claude'
+      const long = `${SECOND_SEND} issue, and also please check whether the session list on the account page still shows the ended sessions after a refresh, first on staging`
+      const drawnOf = () => drawn(frames.at(-1)!).filter((row) => row.role === 'user' && row.text.startsWith(oneLine(SECOND_SEND).slice(0, 60)))
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(long, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, when === 'a beat after its status copy' ? [] : [long])
+      await showAt('05:36:36.000', BEFORE_SECOND, prompts, true, [long])
+      await showAt('05:37:30.000', BEFORE_SECOND, prompts, true, [long])
+      // Taken mid-turn at 05:38:40.
+      await showAt('05:38:41.000', WHOLE_TURN.slice(0, -4), prompts, true, [])
+      await showAt('05:38:45.000', WHOLE_TURN.slice(0, -4), prompts, true, [])
+      expect(drawnOf()).toHaveLength(1)
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:48:00.000'))
+      prompts = again.read(done(long))
+      await showAt('05:48:00.100', WHOLE_TURN, prompts, false)
+      await showAt('05:48:01.000', WHOLE_TURN, prompts, false)
+      expect(drawnOf().map((row) => row.text)).toEqual([oneLine(long)])
+      again.unmount()
+      unmount()
+    })
+  }
+
+  // Round 4 of the review of fix/midturn-gaps: a phone send that begins with
+  // the first 200 characters of an earlier desk message is not that message.
+  it('keeps a long desk message after the chat comes back when a later phone send begins with its first 200 characters', async () => {
+    agent = 'claude'
+    const base = `${SECOND_SEND} issue, and also please check whether the session list on the account page still shows the ended sessions after a refresh`
+    const one = `${base}, first on staging`
+    const two = `${base}, then on production with the new flag`
+    const users = () => drawn(frames.at(-1)!).filter((row) => row.role === 'user').map((row) => row.text)
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(one, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+    await showAt('05:37:40.000', WHOLE_TURN.slice(0, -5), prompts)
+    vi.setSystemTime(at('05:39:10.000'))
+    const origin = drafts()!.captureSendOrigin(two)!
+    await act(async () => {
+      drafts()!.acceptSend(origin, two, [], undefined)
+    })
+    await showAt('05:39:11.000', WHOLE_TURN.slice(0, -4), prompts, true, [two])
+    await showAt('05:39:40.000', WHOLE_TURN.slice(0, -4), prompts, true, [])
+    await showAt('05:39:45.000', WHOLE_TURN.slice(0, -4), prompts, true, [])
     expect(users()).toEqual([normalizePromptField(one), oneLine(two)])
     reader.unmount()
     unmount()

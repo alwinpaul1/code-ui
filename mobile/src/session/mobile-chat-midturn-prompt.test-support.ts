@@ -195,7 +195,7 @@ export const oneLine = (body: string) => body.replace(/\s+/g, ' ').trim()
 /** The chat as the report's tests draw it, into `frames`, on the agent
  *  `agent()` names. Call it inside a describe: it hooks each case. */
 export function midturnChat(frames: Record<string, unknown>[], agent: () => 'claude' | 'codex') {
-  const { show, unmount } = landingHarness(frames)
+  const { show, unmount, drafts } = landingHarness(frames)
   /** The chat drawn at this time of the day of the report. */
   async function showAt(
     clock: string,
@@ -263,5 +263,5 @@ export function midturnChat(frames: Record<string, unknown>[], agent: () => 'cla
     expect(second.at[0]!).toBeLessThan(row(WRITTEN_AFTER_SECOND))
     expect(second.at[0]!).toBeLessThan(second.reply)
   }
-  return { unmount, showAt, queueBox, where, watchTheTurn, expectSentWhereItArrived }
+  return { unmount, drafts, showAt, queueBox, where, watchTheTurn, expectSentWhereItArrived }
 }

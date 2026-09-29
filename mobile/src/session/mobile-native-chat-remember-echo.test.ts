@@ -184,6 +184,29 @@ describe('two hook copies whose words differ by a last word', () => {
       expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', statusCut, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
     })
 
+    // Round 4 of the review: the copy's echo is held while the box lists the
+    // message, so it is first stored, or stored again after it was merged
+    // away, when the agent takes it, minutes after the box's reading.
+    it('is one message when the copy is stored after the whole reading, however late', () => {
+      const withWhole = rememberEchoInPending({}, 'k', boxId, whole, 'a2', [], 'd', 1_000)
+      expect(rememberEchoInPending(withWhole, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd', 181_000)).toBe(withWhole)
+      const later = [
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 1_000 },
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 181_000 }
+      ]
+      expect(sweepWitnessedEchoes(later).map((item) => item.id)).toEqual([boxId])
+    })
+
+    // Round 4 of the review: a phone send that begins with the copy's words is
+    // that message only when the copy was seen at or after it left the phone.
+    it('is read back beside a later phone send that begins with its words, and as the send when seen after it', () => {
+      const send = { ...stored('pending-1', whole, 'a2'), sentAt: 5_000 }
+      const copyBefore = { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 }
+      const copyAfter = { ...copyBefore, witnessedAt: 6_000 }
+      expect(sweepWitnessedEchoes([send, copyBefore]).map((item) => item.id)).toEqual(['pending-1', 'desk-status:s:1:0'])
+      expect(sweepWitnessedEchoes([send, copyAfter]).map((item) => item.id)).toEqual(['pending-1'])
+    })
+
     // Degenerate: a copy one short of the field is not cut, and a phone send
     // of that length is its words as sent.
     it('is two messages when the shorter copy is not a cut one, or is a phone send', () => {
