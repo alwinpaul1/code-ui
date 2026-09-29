@@ -6,6 +6,7 @@ import {
   isBeaconWrittenOff
 } from './agent-hud-beacon-liveness'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
+import { isTitleStandIn } from './agent-status-stand-in'
 import {
   namesItsTranscript,
   readNativeChatTabStatus,
@@ -33,6 +34,8 @@ export type NativeChatTabStatus = {
   sessionBoundary?: boolean | null
   updatedAt?: number | null
   providerSession?: { id?: string | null; transcriptPath?: string | null } | null
+  prompt?: string | null
+  stateHistory?: readonly unknown[] | null
 } | null
 
 /**
@@ -46,7 +49,9 @@ export function useNativeChatTabStatusReading(
   agent: string | null,
   status: NativeChatTabStatus,
   /** The session a fresh beacon of the chat agent names on this terminal. */
-  painting: string | null = null
+  painting: string | null = null,
+  /** The tab's `turnCompletedAt` (agent-status-stand-in.ts). */
+  turnCompletedAt: number | null = null
 ): NativeChatStatusReading {
   const getKept = useCallback(() => keptSession(key), [key])
   const keptNow = useSyncExternalStore(subscribe, getKept, getKept)
@@ -62,6 +67,11 @@ export function useNativeChatTabStatusReading(
     [agent, statusId]
   )
   const secondTurn = useSyncExternalStore(subscribe, getSecondTurn, getSecondTurn)
+  const getHoldsBackground = useCallback(
+    () => (agent && statusId ? readTurn(agent, statusId)?.turn === 'background' : false),
+    [agent, statusId]
+  )
+  const holdsBackground = useSyncExternalStore(subscribe, getHoldsBackground, getHoldsBackground)
   const reading = readNativeChatTabStatus({
     agent,
     providerSession: status?.providerSession,
@@ -70,6 +80,7 @@ export function useNativeChatTabStatusReading(
     kept: keptNow,
     keptTurn,
     secondTurn,
+    holdsBackground,
     painting
   })
   const keepId = reading.kind === 'own' ? (reading.keep?.sessionId ?? null) : null
@@ -82,15 +93,22 @@ export function useNativeChatTabStatusReading(
   // Every status is its own session's word on that session's turn, whoever
   // the chat reads: noted per event (`updatedAt`), so a later status always
   // stands over an earlier word.
-  const noted = namesItsTranscript(agent) && statusId ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary) : null
+  const noted =
+    namesItsTranscript(agent) && statusId
+      ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary, {
+          turnCompletedAt,
+          titleStandIn: status ? isTitleStandIn(status) : false
+        })
+      : null
   const notedTurn = noted?.turn ?? null
   const notedFinished = noted?.finishedOne ?? false
+  const notedFromStandIn = noted?.fromStandIn ?? false
   const statusAt = status?.updatedAt ?? null
   useEffect(() => {
     if (agent && statusId && notedTurn) {
-      noteTurn(agent, statusId, notedTurn, notedFinished)
+      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn)
     }
-  }, [agent, statusId, notedTurn, notedFinished, statusAt])
+  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt])
   return reading
 }
 

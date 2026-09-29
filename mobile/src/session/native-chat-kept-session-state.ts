@@ -65,9 +65,21 @@ export function turnKey(agent: string, sessionId: string): string {
   return `${agent}\u0000${sessionId}`
 }
 
-export function noteTurn(agent: string, sessionId: string, turn: NativeChatTurn, finishedOne: boolean): void {
+export function noteTurn(
+  agent: string,
+  sessionId: string,
+  turn: NativeChatTurn,
+  finishedOne: boolean,
+  fromStandIn = false
+): void {
   const key = turnKey(agent, sessionId)
   const previous = turns.get(key)
+  if (fromStandIn && turn === 'background' && previous?.turn === 'ended') {
+    // A hook row already said the turn ended with nothing left (the
+    // all-clear `done`, which keeps the turn's stamp on the tab): Orca's
+    // title stand-in after it says nothing about background work.
+    return
+  }
   const next: TurnRecord = {
     turn,
     finished: previous?.finished === true || finishedOne,
@@ -109,22 +121,44 @@ export function noteNativeChatTranscriptTurn(
   }
 }
 
-/** A session's own status on the turn: running a tool while `working` (not
- *  monitoring background work); not while it waits on a dialog, where no tool
- *  runs. A `done` that is not a session boundary, or monitoring, is a
- *  finished turn. */
+/** What else the phone knows about a status, for the turn it says. */
+export type StatusTurnEvidence = {
+  /** The tab's `turnCompletedAt`: Orca's word that the lead's turn ended
+   *  while background work kept the pane `working`. */
+  turnCompletedAt?: number | null
+  /** The status is Orca's title stand-in (agent-status-stand-in.ts) that
+   *  copied the row's identity: its `done` is the title's, not the host's. */
+  titleStandIn?: boolean
+}
+
+/** A session's own status on the turn: running a tool while `working`; its
+ *  turn over with background work still running (`monitoring`, or `working`
+ *  under Orca's turn end, which a title stand-in's `done` hides); not while
+ *  it waits on a dialog, where no tool runs. A `done` that is not a session
+ *  boundary is a finished turn. */
 export function statusTurn(
   state: string | null | undefined,
   workingMode: string | null | undefined,
-  sessionBoundary: boolean | null | undefined
-): { turn: NativeChatTurn; finishedOne: boolean } | null {
+  sessionBoundary: boolean | null | undefined,
+  evidence: StatusTurnEvidence = {}
+): { turn: NativeChatTurn; finishedOne: boolean; fromStandIn: boolean } | null {
+  const gated = evidence.turnCompletedAt != null
+  const fromStandIn = evidence.titleStandIn === true
   if (state === 'working') {
-    return workingMode === 'monitoring' ? { turn: 'ended', finishedOne: true } : { turn: 'working', finishedOne: false }
+    return workingMode === 'monitoring' || gated
+      ? { turn: 'background', finishedOne: true, fromStandIn }
+      : { turn: 'working', finishedOne: false, fromStandIn }
   }
   if (state === 'blocked' || state === 'waiting') {
-    return { turn: 'ended', finishedOne: false }
+    return { turn: 'ended', finishedOne: false, fromStandIn }
   }
-  return state === 'done' ? { turn: 'ended', finishedOne: sessionBoundary !== true } : null
+  if (state !== 'done') {
+    return null
+  }
+  if (sessionBoundary !== true && gated && fromStandIn) {
+    return { turn: 'background', finishedOne: true, fromStandIn }
+  }
+  return { turn: 'ended', finishedOne: sessionBoundary !== true, fromStandIn }
 }
 
 export function readTurn(agent: string, sessionId: string): TurnRecord | null {

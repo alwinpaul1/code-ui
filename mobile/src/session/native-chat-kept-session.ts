@@ -41,6 +41,17 @@ import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-
  *   reads a prose or thinking row with no stop reason as `completed`, and
  *   Claude writes one row per block, so a note before a tool call reads as an
  *   end. A Codex rollout's explicit task events are.
+ * - The background work. A nested agent can also start from a process the
+ *   lead left running in the background: a `claude -p` in a script a
+ *   background shell runs. So a lead whose turn ended while background work
+ *   still runs (Orca holds its pane `working`, `monitoring` for shells, and
+ *   stamps the turn end on the tab) is treated like one mid-turn, and the
+ *   chat stayed on the nested session otherwise, with the lead's reply and
+ *   its tasks off the screen (2026-09-29). A `/clear` then waits too, as it
+ *   keeps the background tasks (Claude Code 2.1.284's clearConversation keeps
+ *   every backgrounded task): the way out is the new session's own first Stop
+ *   held by that work, which says the pane's work is its own and which a
+ *   nested run never has, or its second turn.
  * - The beacon, where there is one. Claude's status line writes the session
  *   of the process painting the terminal every few seconds. Fresh, it picks
  *   the session over a status naming no transcript, and it allows a switch to
@@ -62,7 +73,10 @@ export type NativeChatKeptSession = {
 
 /** Whether a session's lead turn is running a tool, as far as the phone has
  *  heard: only then can an agent be started inside it. */
-export type NativeChatTurn = 'working' | 'ended'
+export type NativeChatTurn = 'working' | 'background' | 'ended'
+
+/** Which rule let the chat follow a new session, for the log line. */
+export type NativeChatSwitchRule = 'beacon' | 'turn-ended' | 'turn-unknown' | 'second-turn' | 'holds-background'
 
 export type NativeChatStatusReading =
   /** The chat agent's own status. `keep` is what to remember for the tab,
@@ -73,7 +87,7 @@ export type NativeChatStatusReading =
       sessionId: string
       transcriptPath: string | null
       keep: NativeChatKeptSession | null
-      switched: { from: string; why: string } | null
+      switched: { from: string; why: string; rule: NativeChatSwitchRule } | null
     }
   /** A nested agent's status: the chat reads `read` instead, or, with nothing
    *  better (`null`), the status's session with no transcript path. */
@@ -91,6 +105,7 @@ type NestedReason =
   | { kind: 'painting' }
   | { kind: 'other-agent'; writer: 'claude' | 'codex' }
   | { kind: 'mid-turn' }
+  | { kind: 'background' }
 
 type ProviderSessionLike = { id?: string | null; transcriptPath?: string | null } | null | undefined
 
@@ -115,6 +130,10 @@ export type NativeChatStatusEvidence = {
   /** The status's session has finished a turn and started another: a
    *  nested `claude -p` runs one prompt and exits. */
   secondTurn?: boolean
+  /** The status's session has ended a turn of its own with the pane's
+   *  background work still running: it holds that work, as the session a
+   *  `/clear` left does, and a nested run never does. */
+  holdsBackground?: boolean
   /** The session a fresh beacon of the chat agent names on this terminal. */
   painting: string | null
 }
@@ -155,20 +174,41 @@ export function readNativeChatTabStatus(evidence: NativeChatStatusEvidence): Nat
   // A different session, naming its own transcript: a /clear, a restart, or a
   // nested run of the same agent, which can only start while the kept session
   // runs a tool. Nothing saying so (a cold start) is not evidence of it.
-  const why =
-    painting === sessionId
-      ? `the ${agent} beacon on this terminal names it`
-      : keptTurn === 'ended'
-        ? `${shortSessionId(kept.sessionId)}'s turn had ended`
-        : keptTurn === null
-          ? `nothing said ${shortSessionId(kept.sessionId)} was mid-turn`
-          : evidence.secondTurn === true
-            ? 'it started a second turn of its own'
-            : null
-  if (why !== null) {
-    return { kind: 'own', sessionId, transcriptPath, keep, switched: { from: kept.sessionId, why } }
+  const switched = switchRule(evidence, sessionId, kept.sessionId)
+  if (switched !== null) {
+    return { kind: 'own', sessionId, transcriptPath, keep, switched: { from: kept.sessionId, ...switched } }
   }
-  return { kind: 'nested', nestedSessionId: sessionId, read: readOwn(kept.sessionId), reason: { kind: 'mid-turn' } }
+  const reason: NestedReason = keptTurn === 'background' ? { kind: 'background' } : { kind: 'mid-turn' }
+  return { kind: 'nested', nestedSessionId: sessionId, read: readOwn(kept.sessionId), reason }
+}
+
+/** The rule that lets the chat follow a new session naming its own
+ *  transcript away from the kept one, and why, or null when none does. */
+function switchRule(
+  evidence: NativeChatStatusEvidence,
+  sessionId: string,
+  keptId: string
+): { why: string; rule: NativeChatSwitchRule } | null {
+  const { agent, keptTurn, painting } = evidence
+  if (painting === sessionId) {
+    return { rule: 'beacon', why: `the ${agent} beacon on this terminal names it` }
+  }
+  if (keptTurn === 'ended') {
+    return { rule: 'turn-ended', why: `${shortSessionId(keptId)}'s turn had ended` }
+  }
+  if (keptTurn === null) {
+    return { rule: 'turn-unknown', why: `nothing said ${shortSessionId(keptId)} was mid-turn` }
+  }
+  if (evidence.secondTurn === true) {
+    return { rule: 'second-turn', why: 'it started a second turn of its own' }
+  }
+  if (evidence.holdsBackground === true) {
+    return {
+      rule: 'holds-background',
+      why: `${shortSessionId(sessionId)}'s own turn ended with the pane's background work still running`
+    }
+  }
+  return null
 }
 
 /** The first eight characters: enough to tell two sessions apart in a log and
@@ -185,7 +225,7 @@ export function shortSessionId(sessionId: string): string {
 export function nativeChatStatusReadingLogLine(agent: string | null, reading: NativeChatStatusReading): string | null {
   if (reading.kind === 'own') {
     return reading.switched
-      ? `[native-chat] switched session ${shortSessionId(reading.switched.from)} to ${shortSessionId(reading.sessionId)}: ${reading.switched.why}`
+      ? `[native-chat] switched session ${shortSessionId(reading.switched.from)} to ${shortSessionId(reading.sessionId)} (rule ${reading.switched.rule}): ${reading.switched.why}`
       : null
   }
   if (reading.kind !== 'nested') {
@@ -203,7 +243,9 @@ export function nativeChatStatusReadingLogLine(agent: string | null, reading: Na
         ? `the ${agent} beacon on this terminal names ${kept} (a nested agent on this pane)`
         : reading.reason.kind === 'other-agent'
           ? `the new session is a ${reading.reason.writer} transcript, not ${agent}'s (a nested agent on this pane)`
-          : `it appeared while ${kept} was mid-turn (a nested agent on this pane)`
+          : reading.reason.kind === 'background'
+            ? `it appeared while ${kept}'s background work ran (a nested agent on this pane)`
+            : `it appeared while ${kept} was mid-turn (a nested agent on this pane)`
   return `[native-chat] kept session ${kept} over ${nested}: ${why}`
 }
 

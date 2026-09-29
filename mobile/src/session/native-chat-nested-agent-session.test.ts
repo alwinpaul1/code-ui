@@ -350,7 +350,7 @@ describe('a Claude chat whose pane a nested agent posts hooks for, with no beaco
       sessionId: CLEARED_SESSION,
       transcriptPath: (CLAUDE_CLEARED.providerSession as { transcriptPath: string }).transcriptPath
     })
-    expect(logged).toContain("[native-chat] switched session 76ba8f2f to 0c1d2e3f: 76ba8f2f's turn had ended")
+    expect(logged).toContain("[native-chat] switched session 76ba8f2f to 0c1d2e3f (rule turn-ended): 76ba8f2f's turn had ended")
   })
 
   it('re-points to a restarted claude in the same tab, once the last one’s turn had ended', async () => {
@@ -388,7 +388,7 @@ describe('a Claude chat whose pane a nested agent posts hooks for, with no beaco
     tab.show({ ...first, state: 'working', prompt: 'carry on', updatedAt: 1790554100000 })
 
     expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
-    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f: it started a second turn of its own')
+    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f (rule second-turn): it started a second turn of its own')
   })
 
   // Review of b97b00d6: Orca suppresses a nested agent's `done` only when its
@@ -516,7 +516,7 @@ describe('the beacon of the Claude painting the terminal', () => {
     tab.show(CLAUDE_CLEARED)
 
     expect(lastSubscription().sessionId).toBe(CLEARED_SESSION)
-    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f: the claude beacon on this terminal names it')
+    expect(logged).toContain('[native-chat] switched session 76ba8f2f to 0c1d2e3f (rule beacon): the claude beacon on this terminal names it')
   })
 
   it('does not take the session of a beacon the liveness watch has written off', async () => {

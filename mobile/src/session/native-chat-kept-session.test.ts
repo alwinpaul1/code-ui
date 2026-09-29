@@ -163,6 +163,34 @@ describe('whose word a tab status is, for a Claude chat', () => {
     ).toMatchObject({ kind: 'own', switched: { why: 'the claude beacon on this terminal names it' } })
   })
 
+  // 2026-09-29: a lead whose turn ended with background work running can
+  // still have a nested agent start under it, from that background work.
+  it('keeps the session whose turn ended with background work running, over a new one naming its transcript', () => {
+    const reading = read({ keptTurn: 'background', providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: 'background' } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toBe(
+      "[native-chat] kept session 76ba8f2f over 0c1d2e3f: it appeared while 76ba8f2f's background work ran (a nested agent on this pane)"
+    )
+  })
+
+  it('follows a new session whose own turn ended holding the pane’s background work, as a /clear’s does', () => {
+    const reading = read({ keptTurn: 'background', holdsBackground: true, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(reading).toMatchObject({ kind: 'own', sessionId: NEXT_SESSION, switched: { from: CLAUDE_SESSION, rule: 'holds-background' } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toBe(
+      "[native-chat] switched session 76ba8f2f to 0c1d2e3f (rule holds-background): 0c1d2e3f's own turn ended with the pane's background work still running"
+    )
+  })
+
+  it.each([
+    ['beacon', { keptTurn: 'background' as const, painting: NEXT_SESSION }],
+    ['turn-ended', { keptTurn: 'ended' as const }],
+    ['turn-unknown', { keptTurn: null }],
+    ['second-turn', { keptTurn: 'background' as const, secondTurn: true }]
+  ])('names the rule that let it switch in the log line: %s', (rule, evidence) => {
+    const reading = read({ ...evidence, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toMatch(new RegExp(`^\\[native-chat\\] switched session 76ba8f2f to 0c1d2e3f \\(rule ${rule}\\): `))
+  })
+
   it('keeps the beacon’s session when a new one names its transcript but the painting process is still the old one', () => {
     const reading = read({ keptTurn: 'ended', painting: CLAUDE_SESSION, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
     expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: 'painting' } })
