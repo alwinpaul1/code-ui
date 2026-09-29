@@ -114,6 +114,15 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('> quoted **text**')).toBe('quoted text')
   })
 
+  // Review, 2026-09-30: the HTML pass rewrote the code of a fence inside a
+  // quote, so the Copy held "**x** &" for `<b>x</b> &amp;`. The quote still
+  // draws a fence as its source (quotedText), so only the code is pinned here.
+  it('copies the code of a fence inside a quote as written', () => {
+    expect(markdownPlainText('> ```\n> <b>x</b> &amp;\n> ```')).toContain('<b>x</b> &amp;')
+    expect(markdownPlainText('> ```tsx\n> <Text>a</Text>\n> ```')).toContain('<Text>a</Text>')
+    expect(markdownPlainText('> > ```\n> > <b>x</b>\n> > ```')).toContain('<b>x</b>')
+  })
+
   it('writes the markers the screen draws for bullets, numbers and tasks', () => {
     expect(markdownPlainText('- one')).toBe('• one')
     expect(markdownPlainText('3. three\n4. four')).toBe('3. three\n4. four')

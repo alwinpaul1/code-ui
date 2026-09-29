@@ -206,6 +206,31 @@ describe('parseMobileMarkdown', () => {
     expect(normalized).toBe(['- step', '', ...fenced, '', 'After'].join('\n'))
   })
 
+  // Review, 2026-09-30 (two reviewers): a fence inside a quote was not
+  // protected, so `<b>x</b>` became `**x**`, `<Text>` was stripped and
+  // `&amp;` decoded, on screen and in the Copy.
+  it.each([
+    ['a quote', ['> ```', '> <b>x</b> &amp;', '> ```']],
+    ['a quote, with a language', ['> ```tsx', '> <Text>a</Text>', '> ```']],
+    ['a quote with no space after the marker', ['>```', '><b>x</b>', '>```']],
+    ['a quote inside a quote', ['> > ```html', '> > <div>a &amp; b</div>', '> > ```']],
+    ['a quote inside a list item', ['- step', '  > ```', '  > <b>x</b>', '  > ```']]
+  ])('keeps the code of a fence inside %s exactly, and strips the HTML after it', (_shape, lines) => {
+    expect(normalizeMobileMarkdownPreviewHtml([...lines, '', '<p>After</p>'].join('\n'))).toBe(
+      [...lines, '', 'After'].join('\n')
+    )
+  })
+
+  it('ends an unclosed quoted fence at the first line out of the quote', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('> ```\n> <b>x</b>\n<b>y</b>')).toBe('> ```\n> <b>x</b>\n**y**')
+    expect(normalizeMobileMarkdownPreviewHtml('> ```')).toBe('> ```')
+    expect(normalizeMobileMarkdownPreviewHtml('> ```\n> ```\n\n<b>after</b>')).toBe('> ```\n> ```\n\n**after**')
+  })
+
+  it('still strips HTML from quoted prose', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('> <b>x</b> &amp; y')).toBe('> **x** & y')
+  })
+
   it('does not take a triple-backtick span on one line for a fence', () => {
     expect(normalizeMobileMarkdownPreviewHtml('```a<b>c```\n\n<p>After</p>')).toBe('```a<b>c```\n\nAfter')
   })
