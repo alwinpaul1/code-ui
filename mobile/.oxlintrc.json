@@ -388,10 +388,7 @@
             // (agent-hud-channel.ts), beside the OSC `w` the Windows branch keeps.
             // +3 the same day for `hostTakesAgentHudFlag`: no flag reaches a
             // Windows host, whose PowerShell 5.1 broke the `--settings` JSON.
-            // 2026-09-29: 321. The prompt hook says when it ran (`ts=`, a
-            // `date +%s` and its digits check), which places a desk copy whose
-            // named row the phone does not hold.
-            "max": 321,
+            "max": 319,
             "skipBlankLines": true,
             "skipComments": true
           }

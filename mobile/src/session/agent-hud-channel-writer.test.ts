@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeAgentHudChannelText, encodeAgentHudChannelFrame } from './agent-hud-channel'
-import { AGENT_HUD_TTY_WRITE } from './agent-hud-launch-args'
+import { AGENT_HUD_TTY_WRITE } from './agent-hud-tty-write'
 
 /** The shells Claude Code and Codex hand the writer to: macOS `sh` is bash 3.2
  *  in POSIX mode, `bash` whatever is on PATH, and dash where it exists (Debian's

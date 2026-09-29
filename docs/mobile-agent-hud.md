@@ -98,7 +98,7 @@ variable (bash uses `\001` internally), and a `tr -d "\n"` drops any newline
 a `sed` adds, which would move the cursor. With no `od` or no `cksum` the frame
 comes out empty or fails its checksum, and the phone ignores it. The code is
 `agent-hud-channel.ts` (the phone's decoder and a reference encoder) and
-`AGENT_HUD_TTY_WRITE` in `agent-hud-launch-args.ts` (the writer). A test holds
+`AGENT_HUD_TTY_WRITE` in `agent-hud-tty-write.ts` (the writer). A test holds
 the writer's bytes to the encoder's under `sh`, bash and dash.
 
 Why these four bytes, checked against both parsers' source rather than from
