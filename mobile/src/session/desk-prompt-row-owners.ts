@@ -23,9 +23,9 @@ import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat
  * placed by the text row it names (`at=`), and a status copy stands for one
  * when the merge paired it with its hook copy (`hookTwin`).
  *
- * A row belongs to the latest hook submission of its words typed before it
- * that no later row of the words took.
- * That row lands no copy of the words from an earlier submission: one that
+ * A row belongs to a hook submission of its words when it comes straight
+ * after the row the submission names, as a prompt typed with the agent idle
+ * does. That row lands no copy of the words from an earlier submission: one that
  * reached the phone more than HOOK_TWIN_LAG_MS before the owner did, typed
  * before the row the owner names. Every other copy lands on it as before, so
  * without the hook's copies (a Codex tab, a Windows host, a tab launched
@@ -90,9 +90,8 @@ function timedPosition(raw: readonly NativeChatMessage[], at: number | undefined
   return found
 }
 
-/** The hook submission each user row is, by row id: the latest of its words
- *  typed before it that no later row of them took. A row no such submission
- *  came before is no one's. */
+/** The hook submission each user row is, by row id: one of its words typed
+ *  after the row just before it. Any other row is no one's. */
 export function rowOwners(
   prompts: readonly Pick<DesktopPrompt, 'nonce' | 'text' | 'anchorId' | 'seenAt' | 'hookTwin'>[],
   raw: readonly NativeChatMessage[],
@@ -113,29 +112,28 @@ export function rowOwners(
   if (byKey.size === 0) {
     return owners
   }
-  const rowsByKey = new Map<string, number[]>()
+  // A row is a submission's only when it comes straight after the row the
+  // submission names: a prompt typed with the agent idle is written at once,
+  // with nothing between it and the text it was typed after. A message
+  // queued mid-turn gets its row, if ever, when Claude dequeues it at the
+  // turn's end, rows later; given such a row by the latest submission typed
+  // before it, the row Claude wrote for the first of two queued messages of
+  // the same words went to the second, still queued, and the first was
+  // remembered as not landed by its own row, for good (review of 099b7eb0).
   raw.forEach((message, index) => {
-    const key = message.role === 'user' ? rowKeyOf(message) : ''
-    if (byKey.has(key)) {
-      rowsByKey.set(key, [...(rowsByKey.get(key) ?? []), index])
+    if (message.role !== 'user' || index === 0) {
+      return
     }
-  })
-  // Latest row first, each taking the latest submission typed before it that
-  // no later row took: the rows go to the latest submissions, and the earlier
-  // ones are the messages Claude took mid-turn, which get none. Two messages
-  // of the same words still queued at a turn's end are dequeued as a row each,
-  // the first first; the latest-before rule alone gave both rows to the
-  // second, and the first was drawn beside its own row.
-  for (const [key, indexes] of rowsByKey) {
-    const open = [...byKey.get(key)!].sort((a, b) => a.position - b.position || (a.arrival ?? -Infinity) - (b.arrival ?? -Infinity))
-    for (const index of indexes.toReversed()) {
-      const pick = open.findLastIndex((submission) => submission.position < index)
-      if (pick !== -1) {
-        owners.set(raw[index]!.id, open[pick]!)
-        open.splice(pick, 1)
+    let owner: HookSubmission | undefined
+    for (const submission of byKey.get(rowKeyOf(message)) ?? []) {
+      if (submission.position === index - 1 && (owner === undefined || (submission.arrival ?? -Infinity) > (owner.arrival ?? -Infinity))) {
+        owner = submission
       }
     }
-  }
+    if (owner !== undefined) {
+      owners.set(message.id, owner)
+    }
+  })
   return owners
 }
 

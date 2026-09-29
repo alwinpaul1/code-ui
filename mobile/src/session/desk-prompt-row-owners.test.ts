@@ -24,28 +24,29 @@ const midTurn: DesktopPrompt = { nonce: 'status:s:1:0', text: 'go on', at: 10, s
 const nextTurn: DesktopPrompt = { nonce: '502', text: 'go on', anchorId: 'a3', seenAt: 200_000 }
 
 describe('whose row a user row of desk words is', () => {
-  it('is the latest hook submission of its words typed before it', () => {
+  it('is the hook submission typed straight after the row before it', () => {
     const owners = rowOwners([midTurn, nextTurn], rows, words)
     expect(owners.get('u4')).toEqual({ nonce: '502', position: 2, arrival: 200_000 })
-  })
-
-  it('is the status copy’s, by its hook copy, when that is the latest', () => {
-    expect(rowOwners([midTurn], rows, words).get('u4')).toEqual({ nonce: 'status:s:1:0', position: 0, arrival: 1_000 })
+    // The status copy's hook copy, the same way.
+    const twin: DesktopPrompt = { ...midTurn, hookTwin: { nonce: '501', anchorId: 'a3', seenAt: 1_000 } }
+    expect(rowOwners([twin], rows, words).get('u4')).toEqual({ nonce: 'status:s:1:0', position: 2, arrival: 1_000 })
   })
 
   it('is no one’s with no hook copy, a row it names that is not held, or a row before every submission', () => {
-    expect(rowOwners([{ ...midTurn, hookTwin: undefined }], rows, words).size).toBe(0)
+    expect(rowOwners([{ ...nextTurn, anchorId: undefined }], rows, words).size).toBe(0)
     expect(rowOwners([{ ...nextTurn, anchorId: 'gone' }], rows, words).size).toBe(0)
     const early = [row('u0', 'user', 'go on'), ...rows]
     expect(rowOwners([nextTurn], early, words).has('u0')).toBe(false)
   })
 
-  // Two submissions of the same words still queued at a turn's end: Claude
-  // dequeues each as a row, the first first, and each row is its own.
-  it('gives each of two rows of the words its own submission, the latest row the latest', () => {
+  // Review of 099b7eb0: a message queued mid-turn gets its row when Claude
+  // dequeues it at the turn's end, rows after the text it was typed after.
+  // Given to the latest submission typed before it, the first of two queued
+  // messages of the same words was held off its own row for good.
+  it('is no one’s when rows came between it and the row the submission names', () => {
     const queued = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('u3', 'user', 'go on'), row('a4', 'assistant', 'ok'), row('u5', 'user', 'go on')]
-    const owners = rowOwners([midTurn, { ...nextTurn, anchorId: 'a2' }], queued, words)
-    expect([owners.get('u3')?.nonce, owners.get('u5')?.nonce]).toEqual(['status:s:1:0', '502'])
+    const owners = rowOwners([midTurn, { ...nextTurn, anchorId: 'a1' }], queued, words)
+    expect(owners.size).toBe(0)
   })
 
   // Degenerate: nothing to go by.

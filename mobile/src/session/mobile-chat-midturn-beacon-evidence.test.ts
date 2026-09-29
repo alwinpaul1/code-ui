@@ -458,7 +458,7 @@ for (const [label, WORDS] of [
     // The same words sent twice in one turn, both still queued when it ended:
     // Claude dequeues each as a turn's row, the first first. Each row is its
     // own submission's, not both the later one's.
-    it('draws two messages of the same words both dequeued at the turn end as their two rows only', async () => {
+    it('draws two messages of the same words both dequeued at the turn end as their two rows only, and after the chat comes back', async () => {
       agent = 'claude'
       const later = beaconCopy('71105', WORDS, WRITTEN_AFTER_SECOND, '05:38:10.050')
       const laterRow = user('1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e', WORDS, '05:47:21.000')
@@ -481,6 +481,19 @@ for (const [label, WORDS] of [
       await showAt('05:47:41.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, laterRow, laterAnswer], prompts, false, [], hooked)
       expect(placesOf(WORDS)).toEqual([LAST_REPLY, DEQUEUED_ANSWER.id])
       reader.unmount()
+      unmount()
+      // Review of 099b7eb0: while the first one's row was the only row of the
+      // words, it went to the second, still queued, and the box's witness of
+      // the first remembered it as not its own: drawn beside both rows once
+      // the chat came back.
+      const again = statusReader()
+      vi.setSystemTime(at('05:52:00.000'))
+      prompts = again.read({ ...dequeuedRun('05:47:40.500'), state: 'done', stateStartedAt: at('05:47:40.500') }, { beacon: [first, later] })
+      const rows = [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, laterRow, laterAnswer]
+      await showAt('05:52:00.100', rows, prompts, false, [], hooked)
+      await showAt('05:52:01.000', rows, prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY, DEQUEUED_ANSWER.id])
+      again.unmount()
       unmount()
     })
 
