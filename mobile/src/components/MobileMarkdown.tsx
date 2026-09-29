@@ -199,7 +199,7 @@ function renderInline(
           ? () => onOpenFile(normalizeFilePath(code.trim()))
           : undefined
       if (isInlineCodeChip(code)) {
-        // A pill of its own, selectable on its own; see MobileMarkdownCodeChip.
+        // A pill of its own; a hold on it selects the prose under it (MobileMarkdownCodeChip).
         const { pieces, version } = pills.cut(code, text.slice(pattern.lastIndex))
         pieces.forEach((piece, pieceIndex) => {
           parts.push(

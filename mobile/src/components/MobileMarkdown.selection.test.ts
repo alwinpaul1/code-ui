@@ -268,10 +268,20 @@ describe('while the list is scrolling', () => {
 // reader holds prose with a pill in it and wants the Claude app's Copy).
 // The pill is a View drawn over the prose, and on Android a React view
 // consumes every touch that lands on it (ReactViewGroup.onTouchEvent), so
-// the prose Text under it never sees the hold. The pill's own Text is a
-// separate native view (the View breaks the text ancestry), so it is the
-// one that has to be selectable. What only the device shows: Android
-// selecting inside the pill, with handles and Copy / Select all.
+// the prose Text under it never saw the hold.
+//
+// The first fix made the pill's own Text selectable, and that selection was
+// the pill's alone (2026-09-29, the user's recording, "when i copy a pill and
+// I can't move that copy thingy sideways to copy other things"): the pill's
+// Text is a separate native view, its handles cannot leave it, and Android
+// drew them a line low. Now the pill lets the touch through instead
+// (`pointerEvents="box-none"`: ReactViewGroup.onTouchEvent returns false, and
+// its Text, not selectable, is not clickable either), so the hold lands on
+// the prose Text under it, which selects the pill's U+FFFC with handles that
+// run across the whole paragraph. A Copy puts the pill's words in its place
+// (markdown-pill-copy-id.ts). The Text stays the JS touch target
+// (TouchTargetHelper honours box-none), so a file pill still opens on a tap.
+// What only the device shows: the handles moving past the pill.
 describe('holding a code pill', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -279,11 +289,9 @@ describe('holding a code pill', () => {
     renderer = null
   })
 
-  function pillTexts(
-    content: string,
-    selectable: boolean,
-    onOpenFile?: (path: string) => void
-  ): ReactTestInstance[] {
+  type Pill = { view: ReactTestInstance; text: ReactTestInstance; prose: ReactTestInstance }
+
+  function pills(content: string, selectable: boolean, onOpenFile?: (path: string) => void): Pill[] {
     act(() => {
       renderer = create(
         createElement(
@@ -302,41 +310,56 @@ describe('holding a code pill', () => {
       }
       return parent
     }
+    // The prose a hold falls through to: the outermost Text holding the pill,
+    // which is the paragraph's own native text view.
+    const outermostText = (node: ReactTestInstance): ReactTestInstance => {
+      let prose = node
+      for (let parent = hostParent(node); parent && parent.type === ('Text' as never); parent = hostParent(parent)) {
+        prose = parent
+      }
+      return prose
+    }
     return renderer!.root
       .findAll((node) => node.type === ('View' as never) && hostParent(node)?.type === ('Text' as never))
-      .map((pill) => pill.findByType('Text' as never))
+      .map((view) => ({ view, text: view.findByType('Text' as never), prose: outermostText(view) }))
   }
 
-  it('selects the code inside the pill, as the prose around it does', () => {
-    const [pill] = pillTexts('Run `pnpm install --frozen-lockfile` from the repo root.', true)
-    expect(pill!.children.join('')).toBe('pnpm install --frozen-lockfile')
-    expect(pill!.props.selectable).toBe(true)
+  const reachesProse = ({ view, text, prose }: Pill) => [
+    view.props.pointerEvents,
+    text.props.selectable ?? false,
+    prose.props.selectable
+  ]
+
+  it('lets a hold on a pill reach the paragraph under it, so the selection can run past the pill', () => {
+    const [pill] = pills('Committed (`99e534e`). The results are complete.', true)
+    expect(pill!.text.children.join('')).toBe('99e534e')
+    expect(reachesProse(pill!)).toEqual(['box-none', false, true])
   })
 
-  it('selects a pill in a bullet and in a table cell too', () => {
-    const pills = pillTexts(
+  it('does the same for a pill in a bullet and in a table cell', () => {
+    const found = pills(
       ['- run `orca search` on the desktop', '', '| Stage | Resolver |', '| --- | --- |', '| base | `pip` |'].join('\n'),
       true
     )
-    expect(pills.map((pill) => [pill.children.join(''), pill.props.selectable])).toEqual([
-      ['orca search', true],
-      ['pip', true]
+    expect(found.map((pill) => [pill.text.children.join(''), ...reachesProse(pill)])).toEqual([
+      ['orca search', 'box-none', false, true],
+      ['pip', 'box-none', false, true]
     ])
   })
 
-  it('still opens a file named in a pill on a tap, and selects it on a hold', () => {
+  it('still opens a file named in a pill on a tap, with the hold going to the paragraph', () => {
     const opened: string[] = []
-    const [pill] = pillTexts('See `mobile/src/session/use-mobile-chat-following.ts` for the rule.', true, (path) =>
+    const [pill] = pills('See `mobile/src/session/use-mobile-chat-following.ts` for the rule.', true, (path) =>
       opened.push(path)
     )
-    expect(pill!.props.selectable).toBe(true)
-    act(() => pill!.props.onPress())
+    expect(reachesProse(pill!)).toEqual(['box-none', false, true])
+    act(() => pill!.text.props.onPress())
     expect(opened).toEqual(['mobile/src/session/use-mobile-chat-following.ts'])
   })
 
   it('is not selectable while a fling is in flight, the 2026-09-12 rule', () => {
-    const [pill] = pillTexts('Run `pnpm install` from the repo root.', false)
-    expect(pill!.props.selectable).toBe(false)
+    const [pill] = pills('Run `pnpm install` from the repo root.', false)
+    expect(reachesProse(pill!)).toEqual(['box-none', false, false])
   })
 })
 

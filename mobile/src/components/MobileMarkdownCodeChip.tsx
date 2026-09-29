@@ -1,5 +1,4 @@
 import { Text, View } from 'react-native'
-import { useChatTextSelectable } from './chat-text-selectable-context'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
 import { pillCopyNativeId } from './markdown-selection-copy'
 import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
@@ -17,14 +16,19 @@ import {
  * line it crosses, the first cut to the room left on its line
  * (mobile-markdown-code-chip-split.ts).
  *
- * Its Text is selectable on its own, under the same scroll gate as the prose.
- * The pill is drawn over the prose Text as a separate view, and on Android a
- * React view consumes every touch that lands on it, so a hold on the pill
- * never reached the prose under it and selected nothing (2026-09-25). A
- * selection cannot run from the prose into the pill's own Text or out of it,
- * but one in the prose that covers the pill copies it whole: on Android the
- * pill's View carries its span on its nativeID, and a Copy puts that in place
- * of the U+FFFC the prose Text holds for the pill (markdown-pill-copy-id.ts).
+ * A hold on the pill is the prose's. The pill is drawn over the prose Text
+ * as a separate view, and on Android a React view consumes every touch that
+ * lands on it, so a hold on the pill never reached the prose and selected
+ * nothing (2026-09-25). Making the pill's own Text selectable gave a
+ * selection that could not leave the pill, its handles drawn a line low
+ * (2026-09-29, the user: "I can't move that copy thingy sideways to copy
+ * other things"). So the View is `box-none` and its Text is not selectable:
+ * neither consumes the touch natively, the hold falls to the prose Text under
+ * it, and that selection starts on the pill's U+FFFC with handles that run
+ * across the paragraph. A Copy puts the pill's words in place of the U+FFFC:
+ * the pill's View carries its span on its nativeID (markdown-pill-copy-id.ts).
+ * The Text is still the JS touch target, since React Native's hit test skips
+ * only the `box-none` View itself, so a file pill opens on a tap.
  */
 export function MobileMarkdownCodeChip({
   piece,
@@ -48,12 +52,12 @@ export function MobileMarkdownCodeChip({
   /** Opens the file a path pill names; a tap, never a hold (markdown-link-hold.ts). */
   onPress?: () => void
 }) {
-  const selectable = useChatTextSelectable()
   // The room for ink grows with the type, in whole pixels (see the style).
   const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
   return (
     <View
       nativeID={pillCopyNativeId(span, pieceIndex)}
+      pointerEvents="box-none"
       // A plain object when the reader has not zoomed: an array per chip costs
       // an allocation on every render of every message, and it hides
       // `borderRadius` from anything reading the style.
@@ -72,7 +76,6 @@ export function MobileMarkdownCodeChip({
       }
     >
       <Text
-        selectable={selectable}
         style={[
           styles.inlineCodeChipText,
           table ? styles.inlineCodeChipTextTable : null,
