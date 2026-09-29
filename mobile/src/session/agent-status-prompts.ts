@@ -80,7 +80,7 @@ export type AgentStatusPromptState = {
    *  the cached tab list) was Orca's stand-in, which says nothing about the
    *  prompt, until a status that does: with the bound a prompt found then
    *  cannot be older than, after a reconnect. */
-  standIn?: { notBefore?: number }
+  standIn?: { notBefore?: number; at: number }
 }
 
 export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
@@ -217,7 +217,7 @@ export function observeAgentStatusPrompt(
   // (use-desktop-prompt-echoes.ts).
   const standIn = state.standIn
   if (found && status != null && !readsPrompt) {
-    state = { ...state, standIn: firstOfSession || readBefore === undefined ? {} : { notBefore: readBefore } }
+    state = { ...state, standIn: { at: Date.now(), ...(firstOfSession || readBefore === undefined ? {} : { notBefore: readBefore }) } }
   } else if (readsPrompt && standIn !== undefined) {
     state = { ...state, standIn: undefined }
   }
@@ -310,7 +310,7 @@ export function observeAgentStatusPrompt(
     text,
     ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
-    ...(foundAt !== undefined ? { foundAt } : {}),
+    ...(foundAt !== undefined && standIn !== undefined ? { foundAt, standInAt: standIn.at } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).
     ...(byStateStart ? { atStateStart: true as const } : {}),

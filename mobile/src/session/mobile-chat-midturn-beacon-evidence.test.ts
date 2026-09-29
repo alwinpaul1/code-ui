@@ -648,6 +648,86 @@ describe('a message on the first status after Orca’s stand-in', () => {
     })
   }
 
+  // The review of 5d17a9d0. The chat opens on the stand-in at 05:36:26, and
+  // the message is typed at 05:36:35 in a run that began at 05:36:10.
+  const upTo = (clock: string) => WHOLE_TURN.filter((row) => row.timestamp! <= at(clock))
+  async function openEarlyOnStandIn(reader: ReturnType<typeof statusReader>): Promise<void> {
+    vi.setSystemTime(at('05:36:26.000'))
+    const prompts = reader.read({ ...standIn('05:36:25.500'), state: 'working' })
+    await showAt('05:36:26.100', BEFORE_SECOND, prompts, true, [], hooked)
+  }
+
+  // B1: its hook copy comes 6 s after its status copy, past the wait, when
+  // the copy has been placed as found; it moves where the hook copy says.
+  it('draws a message typed after the chat opened where it was sent when its hook copy comes after the wait', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await openEarlyOnStandIn(reader)
+    vi.setSystemTime(at('05:36:35.000'))
+    let prompts = reader.read(run('05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+    await showAt('05:36:40.500', BEFORE_SECOND, prompts, true, [], hooked)
+    vi.setSystemTime(at('05:36:41.000'))
+    prompts = reader.read(run('05:36:34.891'), { beacon: [hookCopy('05:36:41.000')] })
+    await showAt('05:36:41.100', BEFORE_SECOND, prompts, true, [], hooked)
+    await showAt('05:37:40.000', upTo('05:37:38.938'), prompts, true, [], hooked)
+    expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
+    reader.unmount()
+    unmount()
+  })
+
+  // B2: its hook copy came with it but names a row the phone does not hold.
+  // Reaching the phone after the stand-in, it was heard as it was typed, and
+  // the status's ping places it, as any watched copy.
+  it('draws a message typed after the chat opened where it was sent when its hook copy names a row the phone does not hold', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await openEarlyOnStandIn(reader)
+    vi.setSystemTime(at('05:36:35.000'))
+    const copy = beaconCopy('73002', SECOND_SEND, 'aaaaaaaa-0000-4000-8000-000000000001', '05:36:35.050')
+    const prompts = reader.read(run('05:36:34.891'), { beacon: [copy] })
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+    await showAt('05:36:41.000', BEFORE_SECOND, prompts, true, [], hooked)
+    await showAt('05:37:40.000', upTo('05:37:38.938'), prompts, true, [], hooked)
+    expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
+    reader.unmount()
+    unmount()
+  })
+
+  // B4 and E1: the chat comes back. During the wait the echo is drawn where
+  // it was first seen and not remembered there; after it, a copy found on the
+  // chat's first status goes after its hook copy's row, and with none the
+  // remembered one stays in its run.
+  for (const withCopy of [true, false]) {
+    it(`keeps a message where it was placed after the chat comes back${withCopy ? ', left during the wait, with its hook copy' : ', with no hook copy'}`, async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      if (withCopy) {
+        await openEarlyOnStandIn(reader)
+        vi.setSystemTime(at('05:36:35.000'))
+        const prompts = reader.read(run('05:36:34.891'))
+        await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+      } else {
+        await openOnStandIn(reader, hooked)
+        vi.setSystemTime(at('05:40:05.100'))
+        const prompts = reader.read(run('05:40:05.000'))
+        await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
+        await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
+        expect(placesOf(SECOND_SEND)).toEqual([BEFORE_FIRST[0]!.id])
+      }
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:42:00.000'))
+      const prompts = again.read(run('05:41:59.000'), withCopy ? { beacon: [hookCopy('05:36:36.000')] } : {})
+      await showAt('05:42:00.100', UP_TO_05_40, prompts, true, [], hooked)
+      await showAt('05:42:10.000', UP_TO_05_40, prompts, true, [], hooked)
+      expect(placesOf(SECOND_SEND)).toEqual(withCopy ? [WRITTEN_BEFORE_SECOND] : [BEFORE_FIRST[0]!.id])
+      again.unmount()
+      unmount()
+    })
+  }
+
   // The limit, pinned. With no hook (a Codex tab, a Windows host, a Claude
   // tab launched without it) a message taken before the chat opened and one
   // typed after reach the reader in the same shape, and it is drawn by the
