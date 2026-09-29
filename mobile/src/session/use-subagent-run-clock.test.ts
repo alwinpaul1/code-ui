@@ -8,14 +8,16 @@ import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-typ
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { formatBackgroundTaskElapsed } from './mobile-background-task-labels'
-import { advanceSubagentRunClock, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
+import { advanceSubagentRunClock, markSubagentRosterUnseen, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
 
 const NOW = Date.parse('2026-09-29T15:00:00Z')
 const pane = { paneKey: 'pane-1', prompt: 'go', stateHistory: [{ state: 'done' as const, prompt: '', startedAt: NOW - 80 * 60_000 }] }
 const agent = { id: 'a1', description: 'Sweep', agentType: 'general-purpose', state: 'working' as const, startedAt: NOW - 75 * 60_000 }
-/** Orca's stand-in, built from the terminal title when its hook row is stale
- *  (Orca 1.4.216's title-only status): the pane's key and state, no prompt,
- *  no history, no roster. */
+/** Orca's stand-in, built from the terminal title in place of the pane's hook
+ *  row when the title changed after the row and they disagree, or the row is
+ *  over 30 minutes old (Orca 1.4.216's title-only status;
+ *  agent-status-stand-in.ts): the pane's key and state, no prompt, no
+ *  history, no roster. */
 const standIn = { paneKey: 'pane-1', prompt: '', stateHistory: [] }
 
 describe('a roster subagent’s run clock', () => {
@@ -69,9 +71,25 @@ describe('a roster subagent’s run clock', () => {
     expect(formatBackgroundTaskElapsed(tasks.running[0]?.elapsedMs ?? null)).toBe('1h 15m')
   })
 
-  // Degenerate: a stand-in before the phone has any clock for the pane, and
+  // A stand-in the task reader read through never reaches the clock: the
+  // readers are handed the held row, the same object. The reader tells the
+  // clock instead (agent-status-stand-in.ts), and a reader that mounts then,
+  // the sheet opened over the held row, must not take that row for a new
+  // roster and clear the mark.
+  it('times a subagent resumed behind a stand-in read through from its resume, with the sheet opened in between', () => {
+    const held = { ...pane, subagents: [agent] }
+    advanceSubagentRunClock(held, NOW - 75 * 60_000 + 2_000)
+    markSubagentRosterUnseen('pane-1')
+    advanceSubagentRunClock(held, NOW - 5 * 60_000)
+    const resumed = { ...agent, startedAt: NOW - 15_000 }
+    expect(advanceSubagentRunClock({ ...pane, subagents: [resumed] }, NOW - 10_000)?.get('a1')).toBe(NOW - 15_000)
+  })
+
+  // Degenerate: a mark for a pane the clock has never read, and a stand-in
+  // before the phone has any clock for the pane, and
   // a status with no pane at all.
-  it('has no clock from a stand-in alone, or from a status with no pane', () => {
+  it('has no clock from a stand-in or a mark alone, or from a status with no pane', () => {
+    markSubagentRosterUnseen('pane-1')
     expect(advanceSubagentRunClock(standIn, NOW)).toBeUndefined()
     expect(advanceSubagentRunClock({ subagents: [agent] }, NOW)).toBeUndefined()
   })
@@ -92,7 +110,7 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
   const paneKey = makePaneKey('tab-1', '44444444-4444-4444-8444-444444444444')
   const at = (clock: string) => Date.parse(`2026-09-29T${clock}Z`)
 
-  function hostRows(): { first: AgentSubagentSnapshot[]; afterNested: AgentSubagentSnapshot[]; stops: number } {
+  function hostRows(): { first: AgentSubagentSnapshot[]; afterNested: AgentSubagentSnapshot[]; later: AgentSubagentSnapshot[]; stops: number } {
     const state = createHookListenerState()
     let stops = 0
     const event = (clock: string, payload: Record<string, unknown>) => {
@@ -104,10 +122,12 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     const started = event('08:45:00.000', { hook_event_name: 'SubagentStart', session_id: LEAD, agent_id: X, agent_type: 'general-purpose' })
     event('09:59:00.000', { hook_event_name: 'SessionStart', session_id: 'session-nested', source: 'startup' })
     event('09:59:10.000', { hook_event_name: 'UserPromptSubmit', session_id: 'session-nested', prompt: 'nested' })
-    const later = event('09:59:30.000', { hook_event_name: 'PreToolUse', session_id: LEAD, agent_id: X, tool_name: 'Read' })
+    const afterNested = event('09:59:30.000', { hook_event_name: 'PreToolUse', session_id: LEAD, agent_id: X, tool_name: 'Read' })
+    const later = event('10:10:08.000', { hook_event_name: 'PreToolUse', session_id: LEAD, agent_id: X, tool_name: 'Grep' })
     return {
       first: (started?.payload.subagents ?? []) as AgentSubagentSnapshot[],
-      afterNested: (later?.payload.subagents ?? []) as AgentSubagentSnapshot[],
+      afterNested: (afterNested?.payload.subagents ?? []) as AgentSubagentSnapshot[],
+      later: (later?.payload.subagents ?? []) as AgentSubagentSnapshot[],
       stops
     }
   }
@@ -133,6 +153,7 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     expect(rows.stops).toBe(0)
     expect(rows.first.find((row) => row.id === X)?.startedAt).toBe(at('08:45:00.000'))
     expect(rows.afterNested.find((row) => row.id === X)?.startedAt).toBe(at('09:59:30.000'))
+    expect(rows.later.find((row) => row.id === X)?.startedAt).toBe(at('09:59:30.000'))
   })
 
   it('keeps timing the subagent from the start the phone watched, not from its re-creation', () => {
@@ -141,6 +162,20 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     const clock = advanceSubagentRunClock(lead(rows.afterNested), at('09:59:40.000'))
     expect(clock?.get(X)).toBe(at('08:45:00.000'))
     expect(shown(clock, rows.afterNested, at('10:00:00.000'))).toBe('1h 15m')
+  })
+
+  // The review of 7e632bbb (its finding 1): after the re-creation the host's
+  // start stays 09:59:30 for the rest of the run while the clock keeps 08:45.
+  // A later stand-in (a reconnect, a tab switch back) then took that same,
+  // unmoved start for a resume, timed from the phone's now: "0s", the user's
+  // symptom again. A start is new only against the last roster read.
+  it('keeps timing it from the start the phone watched through a later stand-in, the host’s start unmoved since', () => {
+    const rows = hostRows()
+    advanceSubagentRunClock(lead(rows.first), at('08:45:02.000'))
+    advanceSubagentRunClock(lead(rows.afterNested), at('09:59:40.000'))
+    advanceSubagentRunClock({ paneKey, prompt: '', stateHistory: [] }, at('10:10:05.000'))
+    const clock = advanceSubagentRunClock(lead(rows.later), at('10:10:10.000'))
+    expect(shown(clock, rows.later, at('10:10:10.000'))).toBe('1h 25m')
   })
 
   // The cost, shared with the task memory (163ceb78): a stand-in between the

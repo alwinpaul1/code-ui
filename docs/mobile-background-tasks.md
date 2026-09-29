@@ -518,19 +518,39 @@ with new starts after losing its own roster (a restart with no saved
 snapshot), a doubted row of the lead's loses the doubt.
 
 The subagent run clock (`mobile-subagent-runs.ts`, `use-subagent-run-clock.ts`)
-reads the same status and follows the same rule. It never takes a stand-in
-for a roster: one read as it comes is skipped, and one read through is the
-held row, so a subagent keeps its run through either. A row back with a later
-start is a new run only when a stand-in read as it comes hid the roster since
-the clock last read one: the lead resumed the subagent by SendMessage and the
-phone did not see it stop. A stop the phone does see is a roster without the
-row, and the resume after it is a new run anyway. With every roster seen, a
-later start is the nested claude's re-creation, and the run goes on: timed
-from it, the sheet read "30s" beside the desk's "1h 15m" (the cross-branch
-review of 2f526916 and 163ceb78). The costs are the memory's: a stand-in
-between a re-creation and the next hook row times the run from the
-re-creation, and a subagent resumed after a stop the phone never rendered
-while it watched keeps its first run's start.
+reads the same status. It never takes a stand-in for a roster: one read as it
+comes is skipped, and one read through is the held row, so a subagent keeps
+its run through either. A row whose host start moved since the last roster
+the clock read is a new run, timed from that start, only when a stand-in hid
+the roster since: the lead resumed the subagent by SendMessage and the phone
+did not see it stop. A stop the phone does see is a roster without the row,
+and the resume after it is a new run anyway. With every roster seen, a moved
+start is the nested claude's re-creation and the run goes on: timed from it,
+the sheet read "30s" beside the desk's "1h 15m" (the cross-branch review of
+2f526916 and 163ceb78). The clock compares with the last roster read, not
+with the run it kept, because a re-created start stays for the rest of the
+run: compared with the kept start, the next stand-in turned it into a resume
+timed from the phone's clock, "0s" (the review of 7e632bbb).
+
+The clock is told of a stand-in the task reader reads through, which it never
+sees itself (`markSubagentRosterUnseen`), because such a stand-in can hide a
+stop on an ordinary path. When the idle lead's last subagent stops, its
+SubagentStop row is the all-clear `done`, and the spinner title of the turn
+Claude wakes the lead for lands after it, inside Orca's flush, so the phone
+is sent a `working` stand-in in its place. A nested run's statuses, and the
+stand-ins over them, name the nested session and reach no task reader, so
+they neither end a run nor hide the roster.
+
+Its costs:
+- A stand-in read between a nested claude's re-creation and the next hook row
+  the phone reads (the lead's own row, which clears it, usually comes first)
+  times the run from the re-creation, as the task memory drops its doubt.
+- The clock reads nothing while the chat shows another tab, is closed, or the
+  link is down, and the first status back can be a hook row: a subagent
+  resumed in that gap keeps its first run. Taking such a gap as a hidden
+  roster would time every subagent a nested claude re-created while the user
+  was away from its re-creation. The sheet times a subagent by this clock only
+  when the loaded window holds neither its launch nor the lead's resume of it.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
@@ -563,9 +583,9 @@ Known limits:
   row. When the row missed is the all-clear `done`, which carries that
   turn's `turnCompletedAt` too, until the lead's next turn or those 30
   minutes.
-- The run clock's two costs, above: a nested claude's re-creation across a
-  stand-in read as it comes restarts the run, and a resume after a stop the
-  phone never rendered keeps the first run.
+- The run clock's costs, above: a nested claude's re-creation with a
+  stand-in read after it restarts the run, and a subagent resumed while the
+  chat read nothing keeps its first run.
 
 Not watched live. The stand-in's fields are read off Orca's source and the
 1.4.216 asar, and the order of the Stop row and the idle title off how

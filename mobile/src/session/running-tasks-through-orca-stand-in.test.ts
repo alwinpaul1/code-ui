@@ -526,14 +526,88 @@ describe('background work the chat shows while Orca stands in the pane status', 
     expect(runs?.get(AGENT)).toBe(at('09:59:45.000'))
   })
 
-  // A limit, pinned: a stop the phone never rendered while it watched (the
-  // row applied in one render with the next, agent-status-stand-in.ts), then
-  // a resume. The stand-in was read through, so the clock cannot tell this
-  // from the nested claude's re-creation above, and keeps the first run.
-  it('keeps the first run for an agent resumed after a stop the phone never rendered while it watched (a limit)', () => {
+  // The review of 7e632bbb (its finding 3): the stop is lost on an ordinary
+  // path while the phone watches. The agent was the idle lead's last
+  // background work, so its SubagentStop row is the all-clear `done`; Claude
+  // wakes the lead with the agent's notification and the spinner title lands
+  // after that row, inside Orca's flush, so Orca sends a `working` stand-in in
+  // its place, read through. The clock never saw the stand-in (the held row
+  // is what the task readers read), and kept the first run.
+  it('times an agent resumed after a stop row the spinner title stood in for, while the phone watched, from its resume', () => {
+    const TURN_END = { turnCompletedAt: at('08:45:10.000') }
+    vi.setSystemTime(at('08:45:12.000'))
+    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:10.000'), ...TURN_END }), TURN_END)
+    show('claude', standIn('claude', 'tab-1', 'done', '08:45:10.300'), TURN_END)
+    vi.setSystemTime(at('09:59:41.000'))
+    show('claude', standIn('claude', 'tab-1', 'working', '09:59:40.100'), TURN_END)
+    vi.setSystemTime(at('10:00:00.000'))
+    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('09:59:45.000'))), updatedAt: at('09:59:45.100') }))
+    expect(runs?.get(AGENT)).toBe(at('09:59:45.000'))
+  })
+
+  // The nested run's own statuses reach the chat: its SessionStart row and its
+  // prompt row name another session, and a spinner stand-in over them copies
+  // that session. The task readers read none of them (the 'nested' reading),
+  // so they neither end the run nor hide the roster.
+  const NESTED = { key: 'session_id' as const, id: '9c1f4e22-8a7b-4d10-b3e5-6f0a2c9d8e71', transcriptPath: '/x/9c1f4e22-8a7b-4d10-b3e5-6f0a2c9d8e71.jsonl' }
+  /** Another tab's own Claude session. */
+  const otherTab = (clock: string) =>
+    hookRow('claude', 'tab-2', { providerSession: { key: 'session_id' as const, id: '3b7a0d55-1e2f-4c9a-8b6d-7e5f4a3c2b10', transcriptPath: '/y/3b7a0d55-1e2f-4c9a-8b6d-7e5f4a3c2b10.jsonl' }, updatedAt: at(clock) })
+  const firstRun = () => hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:01.000') })
+  const recreated = (updated: string) => hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('09:59:30.000'))), updatedAt: at(updated) })
+  it('keeps timing the lead’s agent from its first start with the nested run’s statuses in between', () => {
     vi.setSystemTime(at('08:45:02.000'))
-    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:01.000') }))
-    show('claude', standIn('claude', 'tab-1', 'working', '09:30:00.000'))
+    show('claude', firstRun())
+    vi.setSystemTime(at('09:59:00.100'))
+    show('claude', hookRow('claude', 'tab-1', { state: 'done', sessionBoundary: true, prompt: '', providerSession: NESTED, updatedAt: at('09:59:00.000') }))
+    expect(controller?.nativeChatAgentStatus).toBeNull()
+    vi.setSystemTime(at('09:59:10.100'))
+    show('claude', hookRow('claude', 'tab-1', { state: 'working', prompt: 'nested', providerSession: NESTED, updatedAt: at('09:59:10.000') }))
+    vi.setSystemTime(at('09:59:20.300'))
+    show('claude', { ...standIn('claude', 'tab-1', 'working', '09:59:20.200'), providerSession: NESTED } as AgentStatusEntry)
+    vi.setSystemTime(at('09:59:30.100'))
+    show('claude', recreated('09:59:30.000'))
+    expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
+  })
+
+  // The review of 7e632bbb (its finding 1): after the re-creation the host's
+  // start stays 09:59:30. A stand-in read as it comes after a reconnect, or
+  // after a switch back from another tab, took that unmoved start for a
+  // resume, timed from the phone's now: "0s".
+  it.each([
+    ['a reconnect', { connState: 'disconnected' as const }, 'working' as const, {}],
+    ['a switch back from another tab', { tab: 'tab-2' }, 'done' as const, { turnCompletedAt: at('09:59:50.000') }]
+  ])('keeps timing the lead’s agent from its first start after the nested claude, through %s to a stand-in', (_label, gap, state, turnEnd) => {
+    vi.setSystemTime(at('08:45:02.000'))
+    show('claude', firstRun())
+    vi.setSystemTime(at('10:00:00.000'))
+    show('claude', { ...recreated('09:59:50.000'), ...turnEnd }, turnEnd)
+    expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
+    vi.setSystemTime(at('10:05:00.000'))
+    if ('tab' in gap) {
+      show('claude', otherTab('10:05:00.000'), { tab: 'tab-2' })
+    } else {
+      show('claude', { ...recreated('09:59:50.000'), ...turnEnd }, { ...gap, ...turnEnd })
+    }
+    vi.setSystemTime(at('10:10:05.000'))
+    show('claude', standIn('claude', 'tab-1', state, '10:10:04.000'), turnEnd)
+    vi.setSystemTime(at('10:10:10.000'))
+    show('claude', { ...recreated('10:10:08.000'), ...turnEnd }, turnEnd)
+    expect(runTime(AGENT, '10:10:10.000')).toBe('1h 25m')
+  })
+
+  // A limit, pinned (the review of 7e632bbb, its finding 2): the clock reads
+  // nothing while the chat shows another tab, is closed, or the link is down,
+  // and the first status back can be a hook row. An agent resumed in that gap
+  // keeps its first run. Taking such a gap as a hidden roster would time every
+  // agent a nested claude re-created while the user was away from its
+  // re-creation, and the sheet times an agent by this clock only when the
+  // loaded window holds neither its launch nor the lead's resume of it.
+  it('keeps the first run for an agent resumed while the chat showed another tab (a limit)', () => {
+    vi.setSystemTime(at('08:45:02.000'))
+    show('claude', firstRun())
+    vi.setSystemTime(at('09:00:00.000'))
+    show('claude', otherTab('09:00:00.000'), { tab: 'tab-2' })
     vi.setSystemTime(at('10:00:00.000'))
     show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('09:59:45.000'))), updatedAt: at('09:59:59.000') }))
     expect(runs?.get(AGENT)).toBe(at('08:45:00.000'))

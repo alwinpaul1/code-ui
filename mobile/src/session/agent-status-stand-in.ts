@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+import { markSubagentRosterUnseen } from './use-subagent-run-clock'
 
 // ─── Orca's title stand-in, and what the task readers read through it ────────
 //
@@ -85,6 +86,16 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 //   its status line, and the beat, under every picker and dialog, and a
 //   terminal keeps the last beacon of a process that is long gone (the
 //   re-review of 8c71e9fd, which dropped that rule).
+//
+// The run clock is told of every stand-in, read through or not. Read through,
+// the held row names the same subagents with the same starts, and the clock
+// never sees the stand-in; but a stand-in can hide a stop. The idle lead's
+// last subagent stops, its SubagentStop row is the all-clear `done`, and the
+// spinner title of the turn Claude wakes the lead for lands after it, inside
+// Orca's flush, so the phone is sent a `working` stand-in in its place. When
+// the lead's next row lists the subagent resumed with a new start, the clock
+// takes it for a new run only because a stand-in hid the roster (the review of
+// 7e632bbb; mobile-subagent-runs.ts).
 
 /** Every field the title stand-in carries. A status with any other field is a
  *  hook row. */
@@ -180,5 +191,10 @@ export function useTaskReaderStatus(
   useEffect(() => {
     watchRef.current = watch
   }, [watch])
+  useEffect(() => {
+    if (status?.paneKey && isOrcaStandIn(status)) {
+      markSubagentRosterUnseen(status.paneKey)
+    }
+  }, [status])
   return read
 }
