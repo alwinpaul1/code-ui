@@ -9,7 +9,7 @@ import { observeSubagentRuns, type LastRosterRead, type SubagentRunClock } from 
  * count observes the same status while the chat is open, so the clock keeps
  * counting between openings. Bounded by the panes seen this launch.
  */
-const clocks = new Map<string, { runs: SubagentRunClock; lastRead: LastRosterRead; read: RosterStatus }>()
+const clocks = new Map<string, { runs: SubagentRunClock; lastRead: LastRosterRead }>()
 const CLOCK_CAP = 64
 
 type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
@@ -21,12 +21,11 @@ type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
  * and state, no prompt, no history and no `subagents` (the title-only branch
  * of Orca 1.4.216's status projection; agent-status-stand-in.ts). The clock
  * reads the task readers' status, which is the held hook row through a
- * stand-in while the phone watched the pane, so one reaches it here only when
- * read as it comes; the task reader reports the others
- * (`markSubagentRosterUnseen`). Read as a roster it emptied the clock, and the
- * next real status brought every subagent still running back as just
- * started: the sheet read seconds beside the desk's "1h 15m" (the user,
- * 2026-09-29). Skipped, it marks the pane's roster unseen
+ * stand-in while the phone watched the pane, so one reaches it only when read
+ * as it comes, as it reaches the task memory. Read as a roster it emptied the
+ * clock, and the next real status brought every subagent still running back
+ * as just started: the sheet read seconds beside the desk's "1h 15m" (the
+ * user, 2026-09-29). Skipped, it marks the pane's roster unseen
  * (mobile-subagent-runs.ts).
  */
 function isStandIn(status: RosterStatus): boolean {
@@ -39,10 +38,7 @@ function isStandIn(status: RosterStatus): boolean {
 }
 
 /** Advance the pane's clock by this snapshot and return it. Pure per snapshot:
- *  the same status read again changes nothing, so both readers may call it,
- *  and a reader that mounts while a stand-in is read through (the held row)
- *  does not take that row for a new roster, which would clear the stand-in's
- *  mark. */
+ *  the same roster observed twice changes nothing, so both readers may call it. */
 export function advanceSubagentRunClock(
   status: RosterStatus | null | undefined,
   now: number
@@ -52,11 +48,10 @@ export function advanceSubagentRunClock(
     return undefined
   }
   const pane = clocks.get(key)
-  if (pane?.read === status) {
-    return pane.runs
-  }
   if (isStandIn(status)) {
-    markSubagentRosterUnseen(key)
+    if (pane && !pane.lastRead.unseen) {
+      clocks.set(key, { ...pane, lastRead: { ...pane.lastRead, unseen: true } })
+    }
     return pane?.runs
   }
   const next = observeSubagentRuns(pane?.runs ?? null, status.subagents, now, pane?.lastRead)
@@ -72,17 +67,8 @@ export function advanceSubagentRunClock(
       clocks.delete(oldest.value)
     }
   }
-  clocks.set(key, { runs: next, lastRead: { hostStarts, unseen: false }, read: status })
+  clocks.set(key, { runs: next, lastRead: { hostStarts, unseen: false } })
   return next
-}
-
-/** A stand-in hid the pane's roster: said by the task reader for one it read
- *  through, which the clock never sees (agent-status-stand-in.ts). */
-export function markSubagentRosterUnseen(paneKey: string): void {
-  const pane = clocks.get(paneKey)
-  if (pane && !pane.lastRead.unseen) {
-    clocks.set(paneKey, { ...pane, lastRead: { ...pane.lastRead, unseen: true } })
-  }
 }
 
 export function useSubagentRunClock(status: RosterStatus | null | undefined): SubagentRunClock | undefined {

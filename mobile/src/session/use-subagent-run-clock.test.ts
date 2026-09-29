@@ -8,7 +8,8 @@ import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-typ
 import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { formatBackgroundTaskElapsed } from './mobile-background-task-labels'
-import { advanceSubagentRunClock, markSubagentRosterUnseen, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
+import { RESUMED_AGENT_ID, RESUMED_AGENT_ROSTER_ROW, RESUMED_AGENT_TIMES, resumeRecords } from './fixtures/claude-resumed-agent-2.1.283'
+import { advanceSubagentRunClock, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
 
 const NOW = Date.parse('2026-09-29T15:00:00Z')
 const pane = { paneKey: 'pane-1', prompt: 'go', stateHistory: [{ state: 'done' as const, prompt: '', startedAt: NOW - 80 * 60_000 }] }
@@ -71,25 +72,26 @@ describe('a roster subagent’s run clock', () => {
     expect(formatBackgroundTaskElapsed(tasks.running[0]?.elapsedMs ?? null)).toBe('1h 15m')
   })
 
-  // A stand-in the task reader read through never reaches the clock: the
-  // readers are handed the held row, the same object. The reader tells the
-  // clock instead (agent-status-stand-in.ts), and a reader that mounts then,
-  // the sheet opened over the held row, must not take that row for a new
-  // roster and clear the mark.
-  it('times a subagent resumed behind a stand-in read through from its resume, with the sheet opened in between', () => {
-    const held = { ...pane, subagents: [agent] }
-    advanceSubagentRunClock(held, NOW - 75 * 60_000 + 2_000)
-    markSubagentRosterUnseen('pane-1')
-    advanceSubagentRunClock(held, NOW - 5 * 60_000)
-    const resumed = { ...agent, startedAt: NOW - 15_000 }
-    expect(advanceSubagentRunClock({ ...pane, subagents: [resumed] }, NOW - 10_000)?.get('a1')).toBe(NOW - 15_000)
+  // What the clock's limits reach (the review of 7e632bbb): it times a roster
+  // row only when the loaded window holds neither its launch nor the lead's
+  // resume of it. A resume the clock missed, behind a stand-in read through
+  // or while the chat read nothing, is timed from the lead's own SendMessage
+  // while that is loaded (Claude Code 2.1.283's records), whatever the clock
+  // kept; only once the window has moved past it does the kept start show.
+  it('times a resumed subagent from the lead’s resume in the loaded window, whatever the clock kept', () => {
+    const row = { ...RESUMED_AGENT_ROSTER_ROW, startedAt: Date.parse(RESUMED_AGENT_TIMES.resumed) }
+    const kept = new Map([[RESUMED_AGENT_ID, Date.parse(RESUMED_AGENT_TIMES.launched)]])
+    const now = Date.parse('2026-09-28T16:38:13.351Z')
+    const time = (messages: ReturnType<typeof resumeRecords>) =>
+      formatBackgroundTaskElapsed(
+        deriveBackgroundTasks(messages, now, { state: 'working', subagents: [row] }, { subagentRuns: kept }).running.find((task) => task.id === RESUMED_AGENT_ID)?.elapsedMs ?? null
+      )
+    expect({ loaded: time(resumeRecords()), movedPast: time([]) }).toEqual({ loaded: '10m 0s', movedPast: '4h 19m' })
   })
 
-  // Degenerate: a mark for a pane the clock has never read, and a stand-in
-  // before the phone has any clock for the pane, and
+  // Degenerate: a stand-in before the phone has any clock for the pane, and
   // a status with no pane at all.
-  it('has no clock from a stand-in or a mark alone, or from a status with no pane', () => {
-    markSubagentRosterUnseen('pane-1')
+  it('has no clock from a stand-in alone, or from a status with no pane', () => {
     expect(advanceSubagentRunClock(standIn, NOW)).toBeUndefined()
     expect(advanceSubagentRunClock({ subagents: [agent] }, NOW)).toBeUndefined()
   })

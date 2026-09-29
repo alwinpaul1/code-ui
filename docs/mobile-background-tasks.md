@@ -521,32 +521,33 @@ The subagent run clock (`mobile-subagent-runs.ts`, `use-subagent-run-clock.ts`)
 reads the same status. It never takes a stand-in for a roster: one read as it
 comes is skipped, and one read through is the held row, so a subagent keeps
 its run through either. A row whose host start moved since the last roster
-the clock read is a new run, timed from that start, only when a stand-in hid
-the roster since: the lead resumed the subagent by SendMessage and the phone
-did not see it stop. A stop the phone does see is a roster without the row,
-and the resume after it is a new run anyway. With every roster seen, a moved
-start is the nested claude's re-creation and the run goes on for as long as
-the nested claude runs: timed from it, the sheet read "30s" beside the desk's
-"1h 15m" (the cross-branch review of 2f526916 and 163ceb78). The clock
-compares with the last roster read, not
-with the run it kept, because a re-created start stays for the rest of the
-run: compared with the kept start, the next stand-in turned it into a resume
-timed from the phone's clock, "0s" (the review of 7e632bbb).
+the clock read is a new run, timed from that start, only when a stand-in read
+as it comes hid the roster since, the rule the task memory keeps: the lead
+resumed the subagent by SendMessage and the phone did not see it stop. A stop
+the phone does see is a roster without the row, and the resume after it is a
+new run anyway. With every roster seen, a moved start is the nested claude's
+re-creation and the run goes on for as long as the nested claude runs: timed
+from it, the sheet read "30s" beside the desk's "1h 15m" (the cross-branch
+review of 2f526916 and 163ceb78). The clock compares with the last roster
+read, not with the run it kept, because a re-created start stays for the
+rest of the run: compared with the kept start, the next stand-in turned it
+into a resume timed from the phone's clock, "0s" (the review of 7e632bbb).
 
-The clock is told of a stand-in the task reader reads through while the tab
-carries Orca's turn end, which it never sees itself
-(`markSubagentRosterUnseen`), because there such a stand-in can hide a stop.
-When the idle lead's last subagent stops, its SubagentStop row is the
+A stand-in the task reader reads through never reaches the clock, the held
+row does, and the clock is not told of one. Such a stand-in can hide a stop:
+when the idle lead's last subagent stops, its SubagentStop row is the
 all-clear `done`, and the spinner title of the turn Claude wakes the lead for
 lands after it, inside Orca's flush, so the phone is sent a `working`
-stand-in in its place. Mid-turn a stand-in read through hides no stop: after
-a permission prompt on the Bash that runs a nested `claude -p`, a `working`
-stand-in stands over the lead's own `waiting` row, and marked it turned the
-nested run's re-creation into a resume, "30s" (the review of 078a79b9). Every
-lead event rewrites the turn end, so the tab carries one only while the lead
-sits idle after a turn its background work outlived. A nested run's statuses,
-and the stand-ins over them, name the nested session and reach no task
-reader, so they neither end a run nor hide the roster.
+stand-in in its place. Telling the clock of every read-through stand-in
+turned the nested run's re-creation into a resume wherever a stand-in fell
+before it: after a permission prompt on the Bash that runs `claude -p` (a
+`working` stand-in over the lead's own `waiting` row), or for a background
+`claude -p` started after the lead's turn (its `done` stand-in). Telling it
+only under Orca's turn end still did the second, and missed the hidden stop
+after an interrupted turn, which Orca stamps no turn end on (the reviews of
+078a79b9 and f69b5253). A nested run's statuses, and the stand-ins over them,
+name the nested session and reach no task reader, so they neither end a run
+nor hide the roster.
 
 Its costs:
 - The nested case holds only while the nested claude runs. The lead's first
@@ -561,12 +562,18 @@ Its costs:
 - A stand-in read as it comes before a nested claude's re-creation, after the
   lead's last roster read (a reconnect or a tab switch back), times the run
   from the re-creation, as the task memory drops its doubt.
+- A subagent resumed after a stop hidden behind a stand-in read through (the
+  woken lead above, after a finished or an interrupted turn) keeps its first
+  run.
 - The clock reads nothing while the chat shows another tab, is closed, or the
   link is down, and the first status back can be a hook row: a subagent
   resumed in that gap keeps its first run. Taking such a gap as a hidden
   roster would time every subagent a nested claude re-created while the user
-  was away from its re-creation. The sheet times a subagent by this clock only
-  when the loaded window holds neither its launch nor the lead's resume of it.
+  was away from its re-creation.
+
+The two kept first runs show only once the loaded window has moved past the
+lead's resume: the sheet times a subagent by this clock only when the window
+holds neither its launch nor the lead's SendMessage that resumed it.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
@@ -601,8 +608,8 @@ Known limits:
   minutes.
 - The run clock's costs, above: the nested case holds only while the nested
   claude runs, a re-creation behind a stand-in read as it comes restarts the
-  run, and a subagent resumed while the chat read nothing keeps its first
-  run.
+  run, and a subagent resumed after a stop hidden behind a stand-in read
+  through, or while the chat read nothing, keeps its first run.
 
 Not watched live. The stand-in's fields are read off Orca's source and the
 1.4.216 asar, and the order of the Stop row and the idle title off how

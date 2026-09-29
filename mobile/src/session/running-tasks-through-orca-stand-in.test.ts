@@ -528,14 +528,21 @@ describe('background work the chat shows while Orca stands in the pane status', 
     expect(runs?.get(AGENT)).toBe(at('09:59:45.000'))
   })
 
-  // The review of 7e632bbb (its finding 3): the stop is lost on an ordinary
-  // path while the phone watches. The agent was the idle lead's last
+  // A limit, pinned (the review of 7e632bbb, its finding 3): a stop can hide
+  // behind a stand-in read through. The agent was the idle lead's last
   // background work, so its SubagentStop row is the all-clear `done`; Claude
   // wakes the lead with the agent's notification and the spinner title lands
   // after that row, inside Orca's flush, so Orca sends a `working` stand-in in
-  // its place, read through. The clock never saw the stand-in (the held row
-  // is what the task readers read), and kept the first run.
-  it('times an agent resumed after a stop row the spinner title stood in for, while the phone watched, from its resume', () => {
+  // its place, read through; the same after an interrupted turn, which Orca
+  // stamps no turn end on. The lead's first row lists the agent resumed, and
+  // the clock, which never sees a stand-in read through, keeps the first run.
+  // Telling it of one broke the nested case wherever a stand-in fell before
+  // the nested run (a permission prompt on the Bash that runs it, or a
+  // background `claude -p` after the lead's turn), and limiting that to
+  // Orca's turn end missed the interrupted turn (the reviews of 078a79b9 and
+  // f69b5253). The kept start shows only once the loaded window has moved
+  // past the lead's resume (use-subagent-run-clock.test.ts).
+  it('keeps the first run for an agent resumed after a stop row the spinner title stood in for, while the phone watched (a limit)', () => {
     const TURN_END = { turnCompletedAt: at('08:45:10.000') }
     vi.setSystemTime(at('08:45:12.000'))
     show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:10.000'), ...TURN_END }), TURN_END)
@@ -544,7 +551,7 @@ describe('background work the chat shows while Orca stands in the pane status', 
     show('claude', standIn('claude', 'tab-1', 'working', '09:59:40.100'), TURN_END)
     vi.setSystemTime(at('10:00:00.000'))
     show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('09:59:45.000'))), updatedAt: at('09:59:45.100') }))
-    expect(runs?.get(AGENT)).toBe(at('09:59:45.000'))
+    expect(runs?.get(AGENT)).toBe(at('08:45:00.000'))
   })
 
   // The nested run's own statuses reach the chat: its SessionStart row and its
@@ -576,8 +583,8 @@ describe('background work the chat shows while Orca stands in the pane status', 
   // asks permission. The PermissionRequest row (`waiting`, the agent at its
   // first start) is the lead's last roster read; on approval the spinner title
   // lands after it and disagrees, so Orca stands a `working` title in for it,
-  // read through. No stop can hide there (the lead is mid-turn, no turn end on
-  // the tab), and the re-creation in the nested run is no resume.
+  // read through. It says nothing of the roster, and the re-creation in the
+  // nested run is no resume.
   it('keeps timing the lead’s agent from its first start across a nested claude behind a permission prompt', () => {
     vi.setSystemTime(at('08:45:02.000'))
     show('claude', firstRun())
@@ -592,6 +599,34 @@ describe('background work the chat shows while Orca stands in the pane status', 
     show('claude', hookRow('claude', 'tab-1', { state: 'done', sessionBoundary: true, prompt: '', providerSession: NESTED, updatedAt: at('09:59:00.000') }))
     vi.setSystemTime(at('09:59:30.100'))
     show('claude', recreated('09:59:30.000'))
+    expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
+  })
+
+  // The review of f69b5253 (R3-2): the lead ends its turn with the agent
+  // running and a background Bash that runs `claude -p` later. The idle
+  // title's `done` stand-in is read through under Orca's turn end; the agent
+  // makes no call before the nested SessionStart, and the beacon names the
+  // lead, so the nested statuses are the nested run's. A read-through stand-in
+  // says nothing of the roster, and the re-creation is no resume.
+  it('keeps timing the lead’s agent across a background nested claude that starts after the lead’s turn ended', () => {
+    const TURN_END = { turnCompletedAt: at('08:45:10.000') }
+    vi.setSystemTime(at('08:45:02.000'))
+    show('claude', firstRun())
+    vi.setSystemTime(at('08:45:10.100'))
+    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:10.000'), ...TURN_END }), TURN_END)
+    vi.setSystemTime(at('08:45:10.400'))
+    show('claude', standIn('claude', 'tab-1', 'done', '08:45:10.300'), TURN_END)
+    expect(controller?.nativeChatAgentStatus?.subagents?.map((row) => row.id)).toEqual([AGENT])
+    vi.setSystemTime(at('09:58:58.000'))
+    act(() => {
+      consumeAgentHudBeacons('term-tab-1', BEACON)
+    })
+    show('claude', standIn('claude', 'tab-1', 'done', '08:45:10.300'), TURN_END)
+    vi.setSystemTime(at('09:59:00.100'))
+    show('claude', hookRow('claude', 'tab-1', { state: 'done', sessionBoundary: true, prompt: '', providerSession: NESTED, updatedAt: at('09:59:00.000') }), TURN_END)
+    expect(controller?.nativeChatAgentStatus).toBeNull()
+    vi.setSystemTime(at('09:59:30.100'))
+    show('claude', { ...recreated('09:59:30.000'), ...TURN_END }, TURN_END)
     expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
   })
 
