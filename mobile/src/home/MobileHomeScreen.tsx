@@ -32,7 +32,7 @@ import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
 import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
 import { homeBodyKind } from './home-body-kind'
-import { MobileHomeEmptyState } from './MobileHomeEmptyState'
+import { MobileHomeBody } from './MobileHomeBody'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
@@ -127,49 +127,51 @@ export function MobileHomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
-      {bodyKind === 'loading' ? null : bodyKind === 'pair' ? (
-        <MobileHomeEmptyState
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          isWideLayout={isWideLayout}
-          onPairDesktop={() => data.router.push('/pair-scan')}
-        />
-      ) : (
-        <MobileHomeHostList
-          autoConnectHostIds={data.autoConnectHostIds}
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          footer={
-            <MobileHomeListFooter
-              accountsHosts={data.accountsHosts}
-              connectedHosts={data.connectedHosts}
-              primaryHost={data.primaryHost}
-              primaryTaskProviders={data.primaryTaskProviders}
-              resumeCard={data.resumeCard}
-              onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
-              onOpenAccounts={openMobileAccounts}
-              onOpenResume={openResume}
-              onOpenTasks={openTasks}
-              onPairDesktop={() => data.router.push('/pair-scan')}
-            />
-          }
-          hostAttempts={data.hostAttempts}
-          hostLastConnected={data.hostLastConnected}
-          onRefreshAccounts={() => void data.refreshAccounts()}
-          refreshingAccounts={data.refreshingAccounts}
-          hostConnections={data.hostConnections}
-          hosts={data.sortedHostCatalog}
-          hostStates={data.hostStates}
-          isWideLayout={isWideLayout}
-          worktreeInfo={data.worktreeInfo}
-          onOpen={openHost}
-          onLongPress={(host) => {
-            triggerMediumImpact()
-            openHostActions(host)
-          }}
-          onOpenActions={openHostActions}
-        />
-      )}
+      <MobileHomeBody
+        kind={bodyKind}
+        pair={{
+          bottomInset: insets.bottom,
+          contentMaxWidth,
+          isWideLayout,
+          onPairDesktop: () => data.router.push('/pair-scan')
+        }}
+        hostList={
+          <MobileHomeHostList
+            autoConnectHostIds={data.autoConnectHostIds}
+            bottomInset={insets.bottom}
+            contentMaxWidth={contentMaxWidth}
+            footer={
+              <MobileHomeListFooter
+                accountsHosts={data.accountsHosts}
+                connectedHosts={data.connectedHosts}
+                primaryHost={data.primaryHost}
+                primaryTaskProviders={data.primaryTaskProviders}
+                resumeCard={data.resumeCard}
+                onCreateWorkspace={(hostId) => data.router.push(hostNewWorktreeRoute(hostId))}
+                onOpenAccounts={openMobileAccounts}
+                onOpenResume={openResume}
+                onOpenTasks={openTasks}
+                onPairDesktop={() => data.router.push('/pair-scan')}
+              />
+            }
+            hostAttempts={data.hostAttempts}
+            hostLastConnected={data.hostLastConnected}
+            onRefreshAccounts={() => void data.refreshAccounts()}
+            refreshingAccounts={data.refreshingAccounts}
+            hostConnections={data.hostConnections}
+            hosts={data.sortedHostCatalog}
+            hostStates={data.hostStates}
+            isWideLayout={isWideLayout}
+            worktreeInfo={data.worktreeInfo}
+            onOpen={openHost}
+            onLongPress={(host) => {
+              triggerMediumImpact()
+              openHostActions(host)
+            }}
+            onOpenActions={openHostActions}
+          />
+        }
+      />
       <HomeUpdateSurface />
       <ActionSheetModal
         visible={actionTarget != null}
