@@ -4,8 +4,11 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
-import { parseAgentHudBeaconPayload, unescapeJsonStringBody } from './agent-hud-beacon'
+import { parseAgentHudBeaconPayload } from './agent-hud-beacon'
 import { decodeAgentHudChannelText } from './agent-hud-channel'
+import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
+import { promptHookBody } from './agent-hud-prompt-hook.test-support'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function runHook(payload: Record<string, unknown>, transcript?: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-prompt-'))
@@ -29,16 +32,18 @@ function runHook(payload: Record<string, unknown>, transcript?: string): string 
   }
 }
 
-const BEL = String.fromCharCode(7)
+/** The words the phone reads off the hook's beacon, through the phone's own
+ *  parser. This decoded the body with decodeURIComponent of its own until
+ *  2026-09-30, which agreed with the reader's second decode and so could not
+ *  see it. */
+function promptOf(beacon: string): string | undefined {
+  return parseAgentHudBeaconPayload(beacon)?.desktopPrompt?.text
+}
 
-function promptOf(beacon: string): string {
-  const after = beacon.slice(beacon.indexOf('up=') + 3)
-  const ended = after.includes(BEL) ? after.slice(0, after.indexOf(BEL)) : after
-  // The payload is space-separated `key=value`, and the body's own spaces are
-  // `%20`: the value ends at the next space (`ts=` follows it since 2026-09-29).
-  const value = ended.includes(' ') ? ended.slice(0, ended.indexOf(' ')) : ended
-  const cut = value.indexOf(':')
-  return unescapeJsonStringBody(decodeURIComponent(value.slice(cut + 1)))
+/** The raw body the hook wrote after `up=<pid>:`, up to the next field. */
+function bodyOf(beacon: string): string {
+  const value = /\bup=[0-9]+:(\S*)/.exec(beacon)?.[1]
+  return value ?? ''
 }
 
 // 2026-09-13: a prompt typed on the desktop while a turn runs is stored as an
@@ -121,6 +126,47 @@ describe('the desktop prompt hook', () => {
       env: { ...process.env, CUIHUD_TTY: '/nonexistent/tty' }
     })
     expect(out).toBe('')
+  })
+})
+
+// Review of 2026-09-30. The hook percent-encodes `%`, space and `;` so the
+// words fit the beacon's `key=value` grammar, and the parser undoes exactly
+// those three. The reader then ran decodeURIComponent over the body a second
+// time, so any `%XX` the person typed was decoded again: `a%20b` came out
+// `a b`, and `%41` came out `A`. The copy then no longer matched its own
+// transcript row, which is how a desk message is retired.
+describe('a desktop prompt with a percent sign in it', () => {
+  const TYPED = [
+    'open https://x.com/a%20b now',
+    'the code %41 here',
+    '%20',
+    '%',
+    '%%',
+    '100%',
+    'a % then %zz and %4',
+    'a%5Cnb',
+    'done %E2%9C%93',
+    'line one%0Aline two',
+    '50%3B off; 20%25 more'
+  ]
+
+  it.each(TYPED)('reaches the phone byte for byte as typed: %s', (typed) => {
+    expect(parseAgentHudBeaconPayload(runHook({ prompt: typed }))?.desktopPrompt?.text).toBe(typed)
+  })
+
+  // The fixtures elsewhere build this body by hand (promptHookBody); it must
+  // be the one the hook writes, or they test a beacon no host sends.
+  it('is written the way the fixtures build it', () => {
+    const typed = 'fix "the dock"; 100% done\nC:\\Users\\a%20b\t\u00e9 \u{1F600}'
+    expect(bodyOf(runHook({ prompt: typed }))).toBe(promptHookBody(typed))
+  })
+
+  it('is retired by its own transcript row', () => {
+    const typed = 'open https://x.com/a%20b now'
+    const copy = parseAgentHudBeaconPayload(runHook({ prompt: typed }))?.desktopPrompt
+    expect(copy).toBeTruthy()
+    const row: NativeChatMessage = { id: 'u1', role: 'user', blocks: [{ type: 'text', text: typed }], timestamp: 0, source: 'transcript' }
+    expect(withoutLandedDesktopPrompts([copy!], [row])).toEqual([])
   })
 })
 

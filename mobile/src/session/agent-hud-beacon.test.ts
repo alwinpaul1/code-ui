@@ -181,6 +181,20 @@ describe('what the payload is allowed to say', () => {
     expect(beacon?.modelLabel).toBe('Opus 5 (1M;big)')
   })
 
+  // Review of 2026-09-30: the desk prompt's body was decoded a second time
+  // after the three codes the hook writes, so `%41` typed at the desk came
+  // out `A`. The old OSC frame, which tabs launched before the C0 channel
+  // still write, and the channel frame carry the same payload. The payload is
+  // what the hook writes for "the code %41 here" (agent-hud-prompt-hook.test.ts
+  // runs the hook itself).
+  it.each([
+    ['the old OSC frame', `${ESC}]7777;CUIHUD1 agent=claude up=41:the%20code%20%2541%20here${BEL}`],
+    ['the C0 channel frame', encodeAgentHudChannelFrame('CUIHUD1 agent=claude up=41:the%20code%20%2541%20here')]
+  ])('keeps a percent escape typed at the desk as typed, on %s', (_frame, bytes) => {
+    consumeAgentHudBeacons('percent', bytes)
+    expect(getAgentHudBeacon('percent')?.desktopPrompt?.text).toBe('the code %41 here')
+  })
+
   it('drops a rate-limit window whose reset time the agent did not know', () => {
     const beacon = parseAgentHudBeaconPayload('CUIHUD1 agent=claude h5=12:0 d7=nope')
     expect(beacon?.limits).toEqual([{ name: 'Session', usedPercent: 12, resetsAt: null }])
