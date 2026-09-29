@@ -26,6 +26,15 @@
  *
  * An indented code block is code as well, and it went through the HTML pass
  * in every version before this: `    <div>x</div>` drew and copied as `x`.
+ *
+ * A quote is a container too, and a `>` line was read as paragraph text, so a
+ * fence inside a quote went through the HTML pass the way a list fence had:
+ * `<b>x</b>` drew and copied as `**x**`, and `<Text>a</Text>` as `a` (review,
+ * 2026-09-30). A quote's lines, markers off, are now read as a document of
+ * their own, as marked reads them, and whatever code is found there is
+ * protected where it sits. The quote ends at its first line without a
+ * marker, and so does any fence left open in it: a line that leaves the
+ * quote is never code of a fence inside it.
  */
 
 /** A list item's marker, then the spaces or tabs before its content. */
@@ -35,6 +44,14 @@ const FENCE_RUN = /(`{3,}|~{3,})(.*)$/y
 /** `---`, `* * *`, `___`: a rule, which `- - -` must not be read as an item. */
 const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/
+/**
+ * How many quotes deep their fences are looked for. Each level reads its
+ * quote's lines once more, so a document of nothing but `> > > …` would cost
+ * a pass per marker; past this depth a quote's lines are paragraph text, as
+ * every quote's were before. The parser refuses 200 levels outright
+ * (RUNAWAY_NESTING in mobile-markdown-parser.ts), and no reply nests near 32.
+ */
+const QUOTE_DEPTH_LIMIT = 32
 
 /** The column after `text` read from `column`, a tab moving to the next
  *  multiple of four as CommonMark expands it (marked does the same). */
@@ -148,6 +165,19 @@ function indentedCodeEnd(lines: readonly string[], index: number, container: num
   return end
 }
 
+/** A line of the quote whose marker sits `container` to three columns in,
+ *  as the quote's own text: the indent, the `>` and the one space or tab
+ *  after it off, as marked takes them. Null for a line that is not the
+ *  quote's. */
+function quotedLine(line: string, container: number): string | null {
+  const start = lineStart(line)
+  if (line[start.index] !== '>' || start.column < container || start.column - container >= 4) {
+    return null
+  }
+  const after = start.index + 1
+  return line.slice(line[after] === ' ' || line[after] === '\t' ? after + 1 : after)
+}
+
 export type MarkdownCodeRangeOptions = {
   /**
    * Indented code blocks as well as fences. Only for a whole document: a
@@ -164,6 +194,15 @@ export type MarkdownCodeRangeOptions = {
 export function markdownCodeRanges(
   lines: readonly string[],
   options: MarkdownCodeRangeOptions = {}
+): Map<number, number> {
+  return codeRanges(lines, options, 0)
+}
+
+function codeRanges(
+  lines: readonly string[],
+  options: MarkdownCodeRangeOptions,
+  /** How many quotes these lines sit inside. */
+  quoteDepth: number
 ): Map<number, number> {
   const ranges = new Map<number, number>()
   // The content columns of the list items still open, innermost last.
@@ -215,6 +254,31 @@ export function markdownCodeRanges(
       // Four columns past its item right after paragraph text: that
       // paragraph's next line, whatever it looks like.
       index += 1
+      continue
+    }
+    if (line[start.index] === '>' && quoteDepth < QUOTE_DEPTH_LIMIT) {
+      // A quote marker is never a lazy line: it closes every item it is not
+      // indented into, and its quote runs to the first line without one.
+      closeItemsPast(start.column)
+      const container = items.at(-1) ?? 0
+      const quoted: string[] = []
+      let cursor = index
+      while (cursor < lines.length) {
+        const text = quotedLine(lines[cursor] ?? '', container)
+        if (text === null) {
+          break
+        }
+        quoted.push(text)
+        cursor += 1
+      }
+      // The quote's code sits on the same lines, and ends inside the quote.
+      for (const [first, end] of codeRanges(quoted, options, quoteDepth + 1)) {
+        ranges.set(index + first, index + end)
+      }
+      // What follows may continue the quote's last paragraph lazily, as a
+      // `>` line was always read.
+      inParagraph = true
+      index = cursor
       continue
     }
     if (THEMATIC_BREAK.test(line)) {

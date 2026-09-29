@@ -4,9 +4,19 @@ export type MarkdownInlineMatch = { 0: string; index: number; end: number }
  *  strike, bold, italic and bare URLs. One source for the renderer and for the
  *  reply's plain-text copy (markdown-plain-text.ts), so a mark the screen
  *  draws as style is never left on the clipboard. A fresh regex per call: the
- *  matcher moves its `lastIndex`. */
+ *  matcher moves its `lastIndex`.
+ *
+ *  A bold span may hold whole italic spans of its own character: `***x***`
+ *  is bold around `*x*`, and `**a *b* c**` bold around `*b*`. The renderer
+ *  reads a bold token's inside again, so the italic draws by itself. A bold
+ *  span that could hold no star drew `***x***` as `*`, bold x, `*`, and put
+ *  the stars on the clipboard too (review, 2026-09-30). An inner italic must
+ *  start on a character that is not a space, so `Name: *** Date: ***` and
+ *  `___ Date: ___`, blanks to fill in, stay as they were. Every alternative
+ *  inside the group starts on a different character, so the pattern stays
+ *  linear. */
 export function markdownInlineTokenPattern(): RegExp {
-  return /(~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
+  return /(~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
 }
 
 /** Merge a global non-link regex with links; search starts must advance between calls. */

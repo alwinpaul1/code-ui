@@ -7,7 +7,7 @@ import { isIntrawordUnderscoreToken, trimAutolinkTrailingPunctuation } from './m
 import { isRemoteImageUrl } from './markdown-image-source'
 import { listMarker } from './mobile-markdown-list-marker'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 
 // A reply's Copy put its Markdown SOURCE on the clipboard, so a pasted reply
 // carried every `**`, backtick and fence the screen had drawn as bold, pills
@@ -136,7 +136,8 @@ function blockPlainText(block: MobileMarkdownBlock): string {
 /** A Markdown document as the plain text MobileMarkdown draws for it, blocks
  *  a blank line apart. Empty for a document that draws nothing. */
 export function markdownPlainText(content: string): string {
-  const text = content.trim()
+  // The same document MobileMarkdown draws, first line's indent and all.
+  const text = markdownDocumentSource(content)
   if (!text) {
     return ''
   }
