@@ -277,6 +277,14 @@ const CUT_COPY_SEEN_WITH_MS = 30_000
  * than that, the reading is a later message that shares the copy's first 200
  * characters, which the tab status's reader makes no copy of.
  *
+ * What that costs, and why it stands: when the chat closes in the second
+ * between a long message's echo and the first box read that lists it, and
+ * comes back more than 30 s later with the message still queued, the two are
+ * kept apart: the cut copy is drawn beside the box row while it waits, and
+ * cut and whole once the agent takes it (round 5 of the review; main draws
+ * it once). The store cannot tell that from the two messages above, and of
+ * the two outcomes a message drawn twice beats one lost.
+ *
  * The copy stored after the reading: always. The status reader makes a copy
  * when the field's words change, so a copy that comes after a longer reading
  * of its words is that reading's own, however late: its echo is held while the
