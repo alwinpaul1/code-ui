@@ -45,7 +45,7 @@ export function useQueuedDeskWitnesses(
       continue
     }
     const key = normalizeNativeChatUserText(asPaintedPrompt(entry))
-    if (key.length === 0) {
+    if (key.length === 0 || landedRowOf(key, rawMessages)) {
       continue
     }
     const byKey = sightings.current.byKey
@@ -64,6 +64,25 @@ export function useQueuedDeskWitnesses(
     }
   }
   return out
+}
+
+/**
+ * Whether the transcript already holds a user row of these words. A box read
+ * that still lists a message whose row has landed is one taken just before
+ * the read (the chat opened as Claude dequeued it at a turn's end); stored
+ * then, it counted that row as an older one of its words, waited for a
+ * second, and was drawn under its own row for good (round 2 of the review of
+ * fix/midturn-gaps). The same words queued again after an older prompt of
+ * them are not stored either, and are drawn as before this was added.
+ */
+function landedRowOf(key: string, rawMessages: readonly NativeChatMessage[]): boolean {
+  return rawMessages.some(
+    (message) =>
+      message.role === 'user' &&
+      normalizeNativeChatUserText(
+        asPaintedPrompt(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' '))
+      ) === key
+  )
 }
 
 /**

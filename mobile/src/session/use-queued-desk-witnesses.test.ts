@@ -54,6 +54,16 @@ describe('a message the queue box lists', () => {
     expect(read(['first'], [row('a1')]).map((witness) => witness.anchorId)).toEqual(['a1'])
   })
 
+  // Round 2 of the review of fix/midturn-gaps: the chat opened as Claude
+  // dequeued a message at a turn's end, and its first box read still listed
+  // it with its row already in the transcript. Remembered then, it was drawn
+  // a second time under its own row.
+  it('is not remembered when the transcript already holds its row, and is when a user row of other words is there', () => {
+    const read = reader()
+    const typed: NativeChatMessage = { id: 'u1', role: 'user', blocks: [{ type: 'text', text: 'check  the\nlogs' }], timestamp: 1, source: 'transcript' }
+    expect(read(['check the logs', 'and the build'], [row('a1'), typed]).map((witness) => witness.text)).toEqual(['and the build'])
+  })
+
   it('starts over for another chat', () => {
     const read = reader()
     read(['check the logs'], [row('a1')], 'one')

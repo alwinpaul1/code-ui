@@ -382,4 +382,20 @@ describe('a mid-turn message the queue box lists', () => {
     unmount()
   })
 
+  // The chat opens as Claude dequeues a message at the turn's end: its first
+  // box read still lists the message, and the transcript already holds the
+  // row Claude dequeued it as.
+  it('draws a desk message dequeued at the turn end once when the chat first sees it in a box read older than its row', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:46:54.600'))
+    const prompts = reader.read(dequeuedRun('05:46:54.400'))
+    await showAt('05:46:54.700', [...WHOLE_TURN, DEQUEUED], prompts, true, [SECOND_SEND])
+    await showAt('05:46:55.300', [...WHOLE_TURN, DEQUEUED], prompts, true, [])
+    await showAt('05:47:21.000', [...WHOLE_TURN, DEQUEUED, ANSWER], prompts, true, [])
+    expect(where(SECOND_SEND).at).toHaveLength(1)
+    reader.unmount()
+    unmount()
+  })
+
 })
