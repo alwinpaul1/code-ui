@@ -180,15 +180,39 @@ export function joinedLineBetween(
     if (lines.length < 2 || lines.length > JOINED_LINES_CAP || isKnownHarnessInjectedUserTurnText(text)) {
       return false
     }
-    for (let first = 0; first < lines.length; first += 1) {
-      for (let last = first; last < lines.length; last += 1) {
-        if ((first > 0 || last < lines.length - 1) && keyOf(lines.slice(first, last + 1).join('\n')) === key) {
-          return true
-        }
+    return someRunOfLinesIs(lines, key, keyOf)
+  })
+}
+
+/**
+ * Whether some run of the lines, short of all of them, has the key. Each line
+ * is keyed once and a run grows only while its lines' keys are the start of
+ * the key: keying every run's joined text cost 1.3 s a call for a 200-line
+ * paste between the copies, on the render path (the review of 4409aa51, P1).
+ * The key collapses whitespace, so a run's key is its lines' keys joined by a
+ * space; a key that reads across lines differently (a wrapper split over
+ * them) is confirmed on the joined text, and one that never matches the
+ * lines' keys is read as no dequeue, which keeps the copy drawn.
+ */
+function someRunOfLinesIs(lines: readonly string[], key: string, keyOf: (text: string) => string): boolean {
+  const lineKeys = lines.map(keyOf)
+  for (let first = 0; first < lines.length; first += 1) {
+    if (lineKeys[first] === '' || !key.startsWith(lineKeys[first])) {
+      continue
+    }
+    let joined = ''
+    for (let last = first; last < lines.length; last += 1) {
+      const part = lineKeys[last]
+      joined = part === '' ? joined : joined === '' ? part : `${joined} ${part}`
+      if (!key.startsWith(joined)) {
+        break
+      }
+      if (joined === key && (first > 0 || last < lines.length - 1) && keyOf(lines.slice(first, last + 1).join('\n')) === key) {
+        return true
       }
     }
-    return false
-  })
+  }
+  return false
 }
 
 /** Beyond this many lines a row is read as no dequeue. */

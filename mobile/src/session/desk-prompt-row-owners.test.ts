@@ -118,6 +118,9 @@ describe('a joined row between a copy and a later row of its words', () => {
     expect(joinedLineBetween(between, 0, 3, 'go on', words, none)).toBe(true)
     const several = [row('a1', 'assistant', 'one'), row('u2', 'user', 'go on\n\nand then stop\nthe rest'), row('u4', 'user', 'go on and then stop')]
     expect(joinedLineBetween(several, 0, 2, 'go on and then stop', words, none)).toBe(true)
+    // A run that starts like the words and parts from them, then the words.
+    const falseStart = [row('a1', 'assistant', 'one'), row('u2', 'user', 'go on\nand stop\ngo on\nand then stop'), row('u4', 'user', 'go on and then stop')]
+    expect(joinedLineBetween(falseStart, 0, 2, 'go on and then stop', words, none)).toBe(true)
   })
 
   // A prompt that merely has the words inside a line, the whole row (the
