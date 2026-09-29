@@ -54,11 +54,13 @@ export function observeSubagentRuns(
     // memory). Against the last roster read, not the run the clock kept: the
     // re-created start stays for the rest of the run, and a later stand-in
     // took it for a resume timed from the phone's now, "0s" (the review of
-    // 7e632bbb).
+    // 7e632bbb). Only a run whose start the clock knew: one first seen already
+    // running stays unknown, as a re-created one would read "30s" (the review
+    // of 824b3fdf).
     const lastStart = lastRead?.hostStarts.get(snapshot.id)
     if (
       lastRead?.unseen === true &&
-      previous?.has(snapshot.id) &&
+      typeof previous?.get(snapshot.id) === 'number' &&
       typeof lastStart === 'number' &&
       typeof snapshot.startedAt === 'number' &&
       snapshot.startedAt > lastStart

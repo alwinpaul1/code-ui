@@ -182,6 +182,19 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     expect(shown(clock, rows.later, at('10:10:10.000'))).toBe('1h 25m')
   })
 
+  // The review of 824b3fdf (R4-1): a subagent the phone first saw already
+  // running has an unknown start, drawn as no time. A stand-in read as it
+  // comes, then the nested claude's re-creation: a start the clock never knew
+  // cannot have been ended, and timed from the re-creation it read "30s".
+  it('keeps a start it never knew unknown across the re-creation, a stand-in read as it comes between', () => {
+    const rows = hostRows()
+    expect(advanceSubagentRunClock(lead(rows.first), at('09:30:00.000'))?.get(X)).toBeNull()
+    advanceSubagentRunClock({ paneKey, prompt: '', stateHistory: [] }, at('09:58:50.000'))
+    const clock = advanceSubagentRunClock(lead(rows.afterNested), at('09:59:30.100'))
+    expect(clock?.get(X)).toBeNull()
+    expect(shown(clock, rows.afterNested, at('10:00:00.000'))).toBeNull()
+  })
+
   // The cost, shared with the task memory (163ceb78): a stand-in between the
   // re-creation and the next hook row reads as a stop the phone did not see,
   // and the run is timed from the re-creation.

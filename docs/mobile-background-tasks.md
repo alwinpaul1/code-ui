@@ -572,8 +572,12 @@ Its costs:
   was away from its re-creation.
 
 The two kept first runs show only once the loaded window has moved past the
-lead's resume: the sheet times a subagent by this clock only when the window
-holds neither its launch nor the lead's SendMessage that resumed it.
+lead's resume, or when the resume reader misses it (its own limit: a message
+with no tool block between the SendMessage call and its result): the sheet
+times a subagent by this clock only when the window holds neither its launch
+nor the lead's SendMessage that resumed it. A subagent the phone first saw
+already running has no start to restart from, and a moved start leaves it
+unknown, as on main.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
