@@ -517,6 +517,21 @@ re-creation and the next hook row the phone reads, or Orca re-lists rows
 with new starts after losing its own roster (a restart with no saved
 snapshot), a doubted row of the lead's loses the doubt.
 
+The subagent run clock (`mobile-subagent-runs.ts`, `use-subagent-run-clock.ts`)
+reads the same status and follows the same rule. It never takes a stand-in
+for a roster: one read as it comes is skipped, and one read through is the
+held row, so a subagent keeps its run through either. A row back with a later
+start is a new run only when a stand-in read as it comes hid the roster since
+the clock last read one: the lead resumed the subagent by SendMessage and the
+phone did not see it stop. A stop the phone does see is a roster without the
+row, and the resume after it is a new run anyway. With every roster seen, a
+later start is the nested claude's re-creation, and the run goes on: timed
+from it, the sheet read "30s" beside the desk's "1h 15m" (the cross-branch
+review of 2f526916 and 163ceb78). The costs are the memory's: a stand-in
+between a re-creation and the next hook row times the run from the
+re-creation, and a subagent resumed after a stop the phone never rendered
+while it watched keeps its first run's start.
+
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
 newer than the title takes the pane back, so the held row is the host's
@@ -548,8 +563,9 @@ Known limits:
   row. When the row missed is the all-clear `done`, which carries that
   turn's `turnCompletedAt` too, until the lead's next turn or those 30
   minutes.
-- The subagent run clock still restarts after a stand-in read as it comes;
-  4853532e on fix/midturn-residuals keeps it.
+- The run clock's two costs, above: a nested claude's re-creation across a
+  stand-in read as it comes restarts the run, and a resume after a stop the
+  phone never rendered keeps the first run.
 
 Not watched live. The stand-in's fields are read off Orca's source and the
 1.4.216 asar, and the order of the Stop row and the idle title off how

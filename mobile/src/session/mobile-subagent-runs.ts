@@ -25,20 +25,30 @@ const FRESH_START_MS = 60_000
 export function observeSubagentRuns(
   previous: SubagentRunClock | null,
   subagents: readonly AgentSubagentSnapshot[] | undefined,
-  now: number
+  now: number,
+  /** A status since the previous roster said nothing of it (Orca's stand-in):
+   *  a row may have stopped and come back meanwhile. */
+  rosterUnseen = false
 ): Map<string, number | null> {
   const next = new Map<string, number | null>()
   for (const snapshot of subagents ?? []) {
     if (snapshot.state === 'idle') {
       continue
     }
-    // A row the host started again after the one the clock kept (the lead
-    // resumed the subagent by SendMessage, same id, and Orca stamped the
-    // row anew): a new run, from the new start (the review of b75a42e6, K1:
-    // "1h 0m" beside a run of 20 s, when the status between said nothing
-    // the clock would take as the end of the first run).
+    // A row with a later start than the clock kept, when the roster went
+    // unseen since: it stopped and the lead resumed it by SendMessage (same
+    // id; Orca drops a stopped row and stamps its return anew), a new run
+    // from the new start (the review of b75a42e6, K1: "1h 0m" beside a run
+    // of 20 s). A stop the phone sees is a roster without the row, which
+    // ends the run anyway. With the roster seen throughout, a later start is
+    // no stop: a nested `claude -p` in the pane makes Orca re-create the
+    // lead's running rows with new starts (vendored claude-events.ts), and
+    // timed from that the sheet read "30s" beside the desk's "1h 15m" (the
+    // cross-branch review of 2f526916 and 163ceb78, which found the same for
+    // the task memory).
     const kept = previous?.get(snapshot.id)
-    const restarted = typeof kept === 'number' && typeof snapshot.startedAt === 'number' && snapshot.startedAt > kept
+    const restarted =
+      rosterUnseen && typeof kept === 'number' && typeof snapshot.startedAt === 'number' && snapshot.startedAt > kept
     if (previous?.has(snapshot.id) && !restarted) {
       next.set(snapshot.id, kept ?? null)
       continue

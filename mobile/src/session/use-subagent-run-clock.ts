@@ -11,19 +11,23 @@ import { observeSubagentRuns, type SubagentRunClock } from './mobile-subagent-ru
  */
 const clocks = new Map<string, SubagentRunClock>()
 const CLOCK_CAP = 64
+/** Panes whose roster a stand-in hid since the clock last read one. */
+const rosterUnseen = new Set<string>()
 
 type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
   Partial<Pick<AgentStatusEntry, 'paneKey' | 'prompt' | 'stateHistory' | 'sessionBoundary'>>
 
 /**
  * Whether a status is Orca's stand-in, which says nothing of the roster: built
- * from the terminal title when the pane's hook row is stale, as over a long
- * tool call, with the pane's key and state, no prompt, no history and no
- * `subagents` (the title-only branch of Orca 1.4.216's status projection,
- * read in its app.asar 2026-09-29; agent-status-prompts.ts has the same
- * shape). Read as a roster it emptied the clock, and the next real status
+ * from the terminal title in place of the pane's hook row, with the pane's key
+ * and state, no prompt, no history and no `subagents` (the title-only branch
+ * of Orca 1.4.216's status projection; agent-status-stand-in.ts). The clock
+ * reads the task readers' status, which is the held hook row through a
+ * stand-in while the phone watched the pane, so one reaches it only when read
+ * as it comes. Read as a roster it emptied the clock, and the next real status
  * brought every subagent still running back as just started: the sheet read
- * seconds beside the desk's "1h 15m" (the user, 2026-09-29).
+ * seconds beside the desk's "1h 15m" (the user, 2026-09-29). Skipped, it marks
+ * the pane's roster unseen (mobile-subagent-runs.ts).
  */
 function isStandIn(status: RosterStatus): boolean {
   return (
@@ -46,13 +50,19 @@ export function advanceSubagentRunClock(
   }
   const previous = clocks.get(key) ?? null
   if (isStandIn(status)) {
+    if (previous !== null) {
+      rosterUnseen.add(key)
+    }
     return previous ?? undefined
   }
-  const next = observeSubagentRuns(previous, status.subagents, now)
+  const unseen = rosterUnseen.has(key)
+  rosterUnseen.delete(key)
+  const next = observeSubagentRuns(previous, status.subagents, now, unseen)
   if (!clocks.has(key) && clocks.size >= CLOCK_CAP) {
     const oldest = clocks.keys().next()
     if (!oldest.done) {
       clocks.delete(oldest.value)
+      rosterUnseen.delete(oldest.value)
     }
   }
   clocks.set(key, next)
@@ -75,4 +85,5 @@ export function useSubagentRunClock(status: RosterStatus | null | undefined): Su
 /** Test seam. */
 export function resetSubagentRunClocksForTest(): void {
   clocks.clear()
+  rosterUnseen.clear()
 }
