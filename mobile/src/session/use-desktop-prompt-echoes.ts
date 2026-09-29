@@ -198,10 +198,12 @@ export function useDesktopPromptEchoes(
       const later = lastRowBefore(rawMessages, at - WRITTEN_BEFORE_SLACK_MS)
       // Closed by the transcript's own clock, not the phone's: once a held
       // row was written this long after the prompt, the rows before it are
-      // all in and there is nothing left to load.
-      const closed = rawMessages.some(
-        (message) => message.timestamp !== null && message.timestamp - at >= TIMED_ANCHOR_OPEN_MS
-      )
+      // all in and there is nothing left to load. Not while earlier rows are
+      // unloaded: a tail page read after a sleep holds rows ten minutes after
+      // the prompt and none of the rows before it (review of 15fcfbea).
+      const closed =
+        !hasEarlier &&
+        rawMessages.some((message) => message.timestamp !== null && message.timestamp - at >= TIMED_ANCHOR_OPEN_MS)
       if (
         typeof later === 'string' &&
         later !== current &&
@@ -219,6 +221,7 @@ export function useDesktopPromptEchoes(
     // the bottom for good; wait for a row to anchor on (2026-09-13).
     const newest = rawMessages.at(-1)
     let waitingForItsCopy = false
+    let unsettledPlace: string | null | undefined
     const late = prompt.foundAt === undefined ? undefined : replaceFoundByLateTwin(prompt, rawMessages, rowBefore)
     if (late !== undefined) {
       rememberAnchor(prompt.nonce, late)
@@ -271,10 +274,17 @@ export function useDesktopPromptEchoes(
         // send once it loads — the same clock, the desktop's, on both sides.
         // The hook's copy names its last TEXT row, so this also moves it below
         // the calls written after those words and before the send, where the
-        // Claude app draws it.
+        // Claude app draws it: those stamped a second before the start of its
+        // second, for a hook's whole-second `typedAt`.
         if (when !== undefined) {
           timedByNonce.set(prompt.nonce, when)
         }
+      } else if (timedRow !== undefined && !readSettled) {
+        // The rows of a read that has not settled can be the transcript kept
+        // from before a sleep: a place among them is drawn for now and not
+        // kept, or the fresh page closed the follow and every copy of the turn
+        // stayed after the kept tail, in a row (review of 15fcfbea).
+        unsettledPlace = timedRow
       } else if (timedRow !== undefined) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, timedRow)
@@ -289,8 +299,11 @@ export function useDesktopPromptEchoes(
         waitsByNonce.set(prompt.nonce, waited)
         if (waited > ANCHOR_WAIT_READINGS) {
           waitsByNonce.delete(prompt.nonce)
-          // Where it has been drawn all along, not the tail now.
+          // Where it has been drawn all along, not the tail now. Several such
+          // copies read at once stay in a row under one reply, which is what
+          // the stack of 2026-09-29 looks like, so the log says why, once.
           rememberAnchor(prompt.nonce, firstSeenAfter)
+          drawnWhereFirstSeen.push(prompt)
         }
       }
     }
@@ -309,15 +322,7 @@ export function useDesktopPromptEchoes(
       provisionalByNonce.set(prompt.nonce, null)
     }
     const placement =
-      settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
-    // Drawn where the chat first saw it, for want of anything better: the row
-    // it names is not held and it has no time. The chat remembers that place
-    // (the witness memory), so several such copies read at once stay in a row
-    // under one reply, which is what the stack of 2026-09-29 looks like. The
-    // log says so once, so a stack can be told from a placement bug.
-    if (settled === undefined && placement !== null && !waitingForItsCopy && prompt.anchorId !== undefined && when === undefined) {
-      drawnWhereFirstSeen.push(prompt)
-    }
+      settled !== undefined ? settled : unsettledPlace !== undefined ? unsettledPlace : (provisionalByNonce.get(prompt.nonce) ?? null)
     echoes.push({
       id: deskEchoId(prompt.nonce),
       // The RAW text, marker and all. It is what this echo is matched against
@@ -330,7 +335,10 @@ export function useDesktopPromptEchoes(
       expectedOccurrence: 0,
       baselineTailMessageId: placement,
       baselineResolved: true,
-      ...(waitingForItsCopy ? { provisional: true } : {})
+      // Not kept by the witness memory until it settles: stored at once, the
+      // place a copy waits at became its place for good, and the row it names
+      // loading a reading later could no longer move it (2026-09-29).
+      ...(waitingForItsCopy || settled === undefined ? { provisional: true } : {})
     })
   }
   // With every row loaded, a copy still held names a row the transcript does
@@ -343,7 +351,7 @@ export function useDesktopPromptEchoes(
     ]),
     ...drawnWhereFirstSeen.map((prompt) => [
       `first-seen:${prompt.nonce}`,
-      `[desk-prompt] drawn where first seen: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" names a row the chat does not hold (${prompt.anchorId}), and its hook sent no time (a tab launched before the hook said when it ran), so nothing places it closer`
+      `[desk-prompt] drawn where first seen: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" names a row the chat did not hold through its wait (${prompt.anchorId}), and ${deskTimeOf(prompt) === undefined ? 'its hook sent no time (a tab launched before the hook said when it ran)' : 'no row the chat holds carries a time'}, so nothing placed it closer`
     ])
   ])
   useEffect(() => {
@@ -398,13 +406,18 @@ export function arrivedLongAgo(seenAt: number | undefined): boolean {
 
 /** When a copy was typed, by the desk clock the rows are stamped by: the
  *  status's time (`at`), else the prompt hook's own (`typedAt`, `ts=`). The
- *  hook's is a whole second, the start of the second it ran. A stored value
- *  that is not a number is none. */
+ *  hook's is a whole second, the start of the second it ran. */
 function deskTimeOf(prompt: DesktopPrompt): number | undefined {
-  if (prompt.at !== undefined) {
-    return prompt.at
-  }
-  return typeof prompt.typedAt === 'number' && Number.isFinite(prompt.typedAt) ? prompt.typedAt : undefined
+  return prompt.at ?? typedAtOf(prompt)
+}
+
+/** The hook's `typedAt` when it is a time the beacon writes: whole seconds, in
+ *  ms, from nine to eleven digits of them. The warm start restores a stored
+ *  copy's fields unchecked, and seconds or 0 there moved a remembered message
+ *  to the top of the chat (review of 15fcfbea). */
+export function typedAtOf(prompt: DesktopPrompt): number | undefined {
+  const typed = prompt.typedAt
+  return typeof typed === 'number' && Number.isInteger(typed) && typed % 1000 === 0 && typed >= 1e11 && typed < 1e14 ? typed : undefined
 }
 
 /** The bubble id of a hook prompt's echo. */

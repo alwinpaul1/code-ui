@@ -27,8 +27,9 @@ import { decodeAgentHudChannelText } from './agent-hud-channel'
 // device has shown that since. It cost this: a message typed after a call,
 // with no text since, drew above that call (usually one), where the Claude
 // app draws it below. The hook's `ts=` (2026-09-29) now moves it below the rows
-// written before it was typed (mobile-chat-stacked-desk-prompts.test.ts); a
-// tab whose hook sends no time still pays it.
+// stamped a second before the start of the second it ran
+// (mobile-chat-stacked-desk-prompts.test.ts); a call within about two seconds
+// of the send, or a tab whose hook sends no time, still pays it.
 function row(uuid: string, type: 'user' | 'assistant', contentType: string): string {
   const content =
     contentType === 'string'

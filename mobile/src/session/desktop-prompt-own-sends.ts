@@ -6,7 +6,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
-import { deskEchoId } from './use-desktop-prompt-echoes'
+import { deskEchoId, typedAtOf } from './use-desktop-prompt-echoes'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
@@ -241,7 +241,7 @@ export function pairPendingWithHookPrompts(
     // message that reached the phone before the call written before it stayed
     // above that call for good (2026-09-29).
     const ownTyped = candidates.find(
-      (index) => deskEchoId(prompts[index]!.nonce) === item.id && typeof prompts[index]!.typedAt === 'number'
+      (index) => deskEchoId(prompts[index]!.nonce) === item.id && typedAtOf(prompts[index]!) !== undefined
     )
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id) ?? ownTyped
     const pick = own ?? timed[0]

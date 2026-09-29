@@ -620,8 +620,9 @@ uuid, which no device has shown since 2026-09-15, and changing it moves every
 mid-turn desk message. It cost this: a message typed after a call, with no
 text since, drew above that call (usually one), where the Claude app draws it
 below. Since 2026-09-29 the hook also sends when it ran (`ts=`, below), and the
-phone moves the message below every row written before then, so only a tab
-whose hook sends no time still pays it. A device check settles the exclusion
+phone moves the message below the rows stamped a second or more before the
+start of that second, so it pays it only for a call made within about two
+seconds of the send, and a tab whose hook sends no time still pays it in full. A device check settles the exclusion
 itself. The same decoder draws nothing for a
 record whose only block is `redacted_thinking`, `server_tool_use` or
 `web_search_tool_result`, which is why a row must also carry text, an image
@@ -678,21 +679,33 @@ every copy was first seen on the same last reply: they settled under it, in a
 row. With a time:
 
 - A copy whose named row is not held goes after the last row written at or
-  before its second. One typed before every row of a page, with earlier rows
-  not loaded, is not drawn under that page: it is drawn where it was typed when
-  the page above loads.
-- A copy whose named row is held still follows every row written at least a
-  second before it as those rows load, so it sits below the calls made between
-  Claude's last words and the send, as the Claude app draws it.
+  before the start of its second. One typed before every row of a page, with
+  earlier rows not loaded, is not drawn under that page: it is drawn where it
+  was typed when the page above loads. A place found among the rows of a read
+  that has not settled (the transcript the chat kept from before a sleep) is
+  drawn for now and not kept, and the following below stays open while
+  earlier rows are not loaded, or the copies of a turn stayed after the kept
+  tail, in a row (review of 15fcfbea).
+- A copy whose named row is held follows the rows stamped at least a second
+  before the start of its second (`typedAt` minus 1 s, the slack a status
+  copy's exact time gets) as those rows load, so it sits below the calls made
+  between Claude's last words and the send, as the Claude app draws it, except
+  one made within about the last two seconds.
 - The chat's stored copy of a drawn message (the witness memory) gives way to
   its own hook copy when that copy has a time, as it gives way to a status
   copy, so a row that loads late still moves the message, and the stored copy's
-  old place does not break the tool fold.
+  old place does not break the tool fold. A copy still waiting for its row is
+  not stored until it settles, so the row loading a reading later moves it,
+  time or no time; stored at once, its waiting place was final.
+- A stored `typedAt` the beacon could not have written (not whole seconds in
+  the nine-to-eleven-digit range) is no time: the warm start restores fields
+  unchecked.
 - Three prompts typed during one long call have no row between their times,
   so they stay three in a row, after that call.
 
 A copy with no time (a tab launched before this) whose named row is not held is
-still drawn where the chat first saw it, and the chat logs that once
+drawn where the chat first saw it while it waits. If the row does not come
+within the wait it settles there, and the chat logs that once
 (`[desk-prompt] drawn where first seen: …`), so a stack of those can be told
 from a placement bug. Such a tab gets `ts=` when its agent restarts. The
 PowerShell hook sends no `ts=` (see above: no room, and Windows gets no flag).

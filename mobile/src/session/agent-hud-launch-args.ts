@@ -646,8 +646,9 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // mid-turn desk message. It cost this: a message typed after a call, with
   // no text since, drew above that call (usually one), where the Claude app
   // draws it below. Since 2026-09-29 the hook also says when it ran (`ts=`,
-  // below), and the phone moves the message below the rows written before
-  // then; a tab whose hook sends no time still pays it. See
+  // below), and the phone moves the message below the rows stamped a second
+  // before the start of that second, so only a call within about two seconds
+  // of the send, or a tab whose hook sends no time, still pays it. See
   // docs/mobile-agent-hud.md, "Beacon field `at`".
   // A row is skipped by its content block's `"type":`, never by the word
   // alone. Claude Code 2.1.284 writes the message's `"stop_reason":"tool_use"`

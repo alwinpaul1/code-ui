@@ -882,14 +882,17 @@ describe('a message sent a moment before the rows under it were written', () => 
 // 2026-09-29, "All 3 prompts stacked together with no responses in between
 // them": the prompt hook now says when it ran, by the desk's clock (`typedAt`,
 // from `ts=`), which places a copy whose named row the chat does not hold.
-// Rows here are stamped 1000, 2000 and 3000 ms; the desk clock stamps both.
+// The desk clock stamps both the rows and the hook's second.
 describe('a beacon copy that says when it was typed', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
   })
-  const row = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
+  // Whole seconds of 2026-09-29, as the hook sends them; the rows' stamps are
+  // offsets from the same start.
+  const T0 = Date.parse('2026-09-29T05:36:00.000Z')
+  const row = (id: string, offset: number): NativeChatMessage => ({ ...assistant(id), timestamp: T0 + offset })
   function Paged({ prompts, raw, hasEarlier }: { prompts: readonly DesktopPrompt[]; raw: readonly NativeChatMessage[]; hasEarlier: boolean }) {
     latest = useDesktopPromptEchoes(prompts, raw, raw, hasEarlier, true)
     return null
@@ -905,29 +908,38 @@ describe('a beacon copy that says when it was typed', () => {
   }
 
   it('sits after the last row written before it when the row it names is not held', () => {
-    draw([{ nonce: 'typed-1', text: 'typed', anchorId: 'not-held', typedAt: 2500, seenAt: Date.now() }], [row('t1', 1000), row('t2', 2000), row('t3', 3000)])
+    draw([{ nonce: 'typed-1', text: 'typed', anchorId: 'not-held', typedAt: T0 + 2000, seenAt: Date.now() }], [row('t1', 1000), row('t2', 2000), row('t3', 3000)])
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['t2'])
   })
 
   it('is not drawn under a page it was typed before, while earlier rows are not loaded', () => {
-    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('p1', 1000)], true)
+    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: T0, seenAt: Date.now() }], [row('p1', 1000)], true)
     expect(latest).toEqual([])
     // The page above loads: it goes where it was typed.
-    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('p0', 100), row('p1', 1000)], true)
+    draw([{ nonce: 'typed-2', text: 'typed', anchorId: 'not-held', typedAt: T0, seenAt: Date.now() }], [row('p0', -1000), row('p1', 1000)], true)
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['p0'])
   })
 
   it('leads a whole chat whose only row was written after it', () => {
-    draw([{ nonce: 'typed-3', text: 'typed', anchorId: 'not-held', typedAt: 500, seenAt: Date.now() }], [row('o1', 1000)])
+    draw([{ nonce: 'typed-3', text: 'typed', anchorId: 'not-held', typedAt: T0, seenAt: Date.now() }], [row('o1', 1000)])
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual([null])
   })
 
   it('is drawn at the end of an empty chat, then where it was typed once rows load', () => {
-    const prompts: DesktopPrompt[] = [{ nonce: 'typed-4', text: 'typed', anchorId: 'not-held', typedAt: 1500, seenAt: Date.now() }]
+    const prompts: DesktopPrompt[] = [{ nonce: 'typed-4', text: 'typed', anchorId: 'not-held', typedAt: T0 + 1000, seenAt: Date.now() }]
     draw(prompts, [])
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual([null])
     draw(prompts, [row('e1', 1000), row('e2', 2000), row('e3', 3000)])
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['e1'])
+  })
+
+  // The warm start restores a stored copy's fields unchecked: a `typedAt` the
+  // beacon never writes is no time at all, not the start of the epoch.
+  it('treats a stored typedAt that is not a time as no time', () => {
+    draw([{ nonce: 'typed-6', text: 'typed', anchorId: 'not-held', typedAt: 0, seenAt: Date.now() }], [row('z1', 1000), row('z2', 2000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['z2'])
+    draw([{ nonce: 'typed-7', text: 'typed', anchorId: 'not-held', typedAt: 1790660194, seenAt: Date.now() }], [row('z1', 1000), row('z2', 2000)])
+    expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['z2'])
   })
 
   // Found long after it arrived (a relaunch restores it from the warm start):
@@ -935,7 +947,47 @@ describe('a beacon copy that says when it was typed', () => {
   // every row loaded it was never drawn. With a time it has a place.
   it('is placed by its time when found long after it arrived, not refused', () => {
     const longAgo = Date.now() - 11 * 60_000
-    draw([{ nonce: 'typed-5', text: 'typed', anchorId: 'not-held', typedAt: 2500, seenAt: longAgo }], [row('f1', 1000), row('f2', 2000), row('f3', 3000)])
+    draw([{ nonce: 'typed-5', text: 'typed', anchorId: 'not-held', typedAt: T0 + 2000, seenAt: longAgo }], [row('f1', 1000), row('f2', 2000), row('f3', 3000)])
     expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['f2'])
+  })
+})
+
+// Review of 15fcfbea: the "drawn where first seen" line fired on the first
+// reading a copy with no time waited, and most such copies find their row a
+// reading later. It is said when the wait runs out, where it is true.
+describe('the log line for a copy drawn where it was first seen', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.restoreAllMocks()
+  })
+  const row = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
+
+  it('is not written for a copy that finds its named row on the next reading', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const copy: DesktopPrompt[] = [{ nonce: 'log-1', text: 'typed at the desk', anchorId: 'n2', seenAt: Date.now() }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts: copy, raw: [row('n1', 1000)] }))
+    })
+    act(() => {
+      renderer!.update(createElement(Probe, { prompts: copy, raw: [row('n1', 1000), row('n2', 2000)] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('n2')
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('drawn where first seen'))).toEqual([])
+  })
+
+  it('is written once when the wait runs out with the row never held', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const copy: DesktopPrompt[] = [{ nonce: 'log-2', text: 'typed at the desk', anchorId: 'never', seenAt: Date.now() }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts: copy, raw: [row('m1', 1000)] }))
+    })
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts: copy, raw: [row('m1', 1000)] }))
+      })
+    }
+    expect(warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('drawn where first seen'))).toHaveLength(1)
   })
 })

@@ -14,7 +14,9 @@
 // says when it ran, by the desk's clock (`ts=`), which places each copy among
 // the rows by the time they were written, or above a page it came before.
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act } from 'react-test-renderer'
 import { parseAgentHudBeaconPayload, type DesktopPrompt } from './agent-hud-beacon'
+import { landingHarness } from './mobile-chat-phone-photo-landing.test-support'
 import {
   at,
   FIRST_SEND,
@@ -24,6 +26,9 @@ import {
   WRITTEN_AFTER_SECOND,
   WHOLE_TURN,
   LAST_REPLY,
+  OPENING,
+  OPENING_ROW,
+  user,
   drawn,
   oneLine,
   midturnChat
@@ -170,11 +175,104 @@ describe('mid-turn desk messages the phone read all at once after a sleep', () =
       await showAt(`05:47:${String(10 + beat).padStart(2, '0')}.000`, TAIL_PAGE, copies, false)
     }
     expect(where(SECOND_SEND).at).toHaveLength(1)
-    console.log('WARNS', JSON.stringify(warn.mock.calls.map((call) => String(call[0]).slice(0, 120))), JSON.stringify(drawn(frames.at(-1)!).map((row) => `${row.role}:${row.id.slice(0, 10)}`)), frames.length)
     const lines = warn.mock.calls.map((call) => String(call[0])).filter((line) => line.includes('[desk-prompt] drawn where first seen'))
     expect(lines).toHaveLength(1)
     expect(lines[0]).toContain('Password changes now end only pa')
     expect(lines[0]).toContain(WRITTEN_BEFORE_SECOND)
     expect(lines[0]).toContain('sent no time')
+  })
+})
+
+// Found by the review of 15fcfbea (2026-09-29). After a sleep the chat
+// subscribes again and, until the new read lands, shows the transcript it
+// kept from before the sleep, unsettled. Copies read in that window were
+// placed by their time among the kept rows and remembered there; the first
+// fresh page (the turn's tail) then closed their follow, since it holds rows
+// written ten minutes after them, and both stayed after the kept tail, in a
+// row: the report's picture again, on the path the chat takes most.
+describe('mid-turn desk messages first read over the transcript kept from before a sleep', () => {
+  const { show, unmount, drafts } = landingHarness(frames)
+  afterEach(() => {
+    unmount()
+    vi.restoreAllMocks()
+  })
+  const OPENING_USER = user(OPENING_ROW, OPENING, '05:08:00.467')
+  const drawnAfter = (body: string) => {
+    const rows = drawn(frames.at(-1)!)
+    const index = rows.findIndex((row) => row.role === 'user' && row.text === oneLine(body))
+    return { index, after: rows[index - 1]?.id }
+  }
+  const twice = async (tick: Parameters<typeof show>[1]) => {
+    await show('00:00:00.000', tick)
+    await show('00:00:00.000', tick)
+  }
+
+  it('are drawn where each was sent once the page above loads, not after the kept rows', async () => {
+    vi.setSystemTime(at('05:47:10.000'))
+    const copies = [
+      hookCopy('72101', FIRST_SEND, BEFORE_FIRST[0]!.id, '05:36:01.523', '05:47:10.000'),
+      hookCopy('72102', SECOND_SEND, WRITTEN_BEFORE_SECOND, '05:36:34.891', '05:47:10.000')
+    ]
+    // What the chat held when the phone slept: the turn's opening prompt.
+    await twice({ messages: [OPENING_USER], prompts: copies, loading: true, hasMore: false, working: false })
+    for (let beat = 0; beat < 5; beat += 1) {
+      await twice({ messages: TAIL_PAGE, prompts: copies, hasMore: true, working: false })
+    }
+    // On the fresh tail page neither is drawn: both belong on the page above,
+    // not at the top of this one, where the place kept from the stale rows put
+    // them.
+    expect(drawn(frames.at(-1)!).filter((row) => row.role === 'user')).toEqual([])
+    await twice({ messages: [OPENING_USER, ...WHOLE_TURN], prompts: copies, hasMore: true, working: false })
+    expect(drawnAfter(FIRST_SEND).after).toBe(BEFORE_FIRST[0]!.id)
+    expect(drawnAfter(SECOND_SEND).after).toBe(WRITTEN_BEFORE_SECOND)
+  })
+
+  // The same, with the kept rows holding the words the message names but not
+  // the call written after them: it is placed after those words, and the
+  // first fresh page (the tail, earlier rows not loaded) must not end its
+  // following the rows written before it, or it stayed above the call.
+  it('still follows the call written before it when the kept rows held only the words it names', async () => {
+    vi.setSystemTime(at('05:47:10.000'))
+    const copies = [hookCopy('72202', SECOND_SEND, WRITTEN_BEFORE_SECOND, '05:36:34.891', '05:47:10.000')]
+    const kept = WHOLE_TURN.slice(0, WHOLE_TURN.findIndex((row) => row.id === WRITTEN_BEFORE_SECOND) + 1)
+    await twice({ messages: [OPENING_USER, ...kept], prompts: copies, loading: true, hasMore: false, working: false })
+    for (let beat = 0; beat < 5; beat += 1) {
+      await twice({ messages: TAIL_PAGE, prompts: copies, hasMore: true, working: false })
+    }
+    await twice({ messages: [OPENING_USER, ...WHOLE_TURN], prompts: copies, hasMore: true, working: false })
+    expect(drawnAfter(SECOND_SEND).after).toBe(WRITTEN_BEFORE_SECOND)
+    expect(drawn(frames.at(-1)!).some((row) => row.id === THE_CALL)).toBe(false)
+  })
+
+  // Also from that review: the warm start restores a stored copy's fields
+  // unchecked, so a `typedAt` the beacon never writes (seconds, or 0) is
+  // not a time. It must not make the remembered message give way to it.
+  it.each([
+    ['seconds instead of ms', 1790660194],
+    ['zero', 0]
+  ])('keeps a remembered message in its place when a stored copy has a typedAt that is not a time (%s)', async (_label, typedAt) => {
+    vi.setSystemTime(at('05:47:10.000'))
+    const rows = [OPENING_USER, ...WHOLE_TURN]
+    const nonce = typedAt === 0 ? '74102' : '74101'
+    const copy: DesktopPrompt = { nonce, text: SECOND_SEND, cut: false, anchorId: 'e1111111-1111-4111-8111-111111111111', seenAt: at('05:36:35.000'), typedAt }
+    await show('00:00:00.000', { messages: rows, prompts: [], hasMore: false, working: false })
+    await act(async () => {
+      drafts()!.rememberEcho(`desk-${nonce}`, SECOND_SEND, WRITTEN_BEFORE_SECOND)
+    })
+    await twice({ messages: rows, prompts: [copy], hasMore: false, working: false })
+    expect(drawnAfter(SECOND_SEND).after).toBe(WRITTEN_BEFORE_SECOND)
+  })
+
+  // A tab launched before `ts=`: its copy names the row it was typed after,
+  // and the phone often has the beacon a reading before that row. The chat
+  // drew the copy at its tail meanwhile and remembered that place at once,
+  // so when the row came the message stayed above it. It moves there now.
+  it('moves a copy with no time after the row it names when that row loads a reading later', async () => {
+    vi.setSystemTime(at('05:36:35.000'))
+    const copies = [hookCopy('76101', SECOND_SEND, WRITTEN_BEFORE_SECOND, null, '05:36:35.000')]
+    const beforeTheWords = WHOLE_TURN.slice(0, WHOLE_TURN.findIndex((row) => row.id === WRITTEN_BEFORE_SECOND))
+    await twice({ messages: beforeTheWords, prompts: copies, hasMore: true })
+    await twice({ messages: [...beforeTheWords, WHOLE_TURN.find((row) => row.id === WRITTEN_BEFORE_SECOND)!], prompts: copies, hasMore: true })
+    expect(drawnAfter(SECOND_SEND).after).toBe(WRITTEN_BEFORE_SECOND)
   })
 })
