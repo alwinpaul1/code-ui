@@ -1,3 +1,4 @@
+import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { BackgroundTaskKind } from './mobile-background-tasks'
 
 // The transcript-reading half of the background-task reader: the exact
@@ -117,8 +118,10 @@ export function agentTitle(input: unknown): string {
   return named ? truncate(named) : 'Agent'
 }
 
+/** Cut at TITLE_MAX code units, never through an emoji: a cut between its two
+ *  halves drew a broken glyph before the ellipsis. */
 export function truncate(value: string): string {
-  return value.length <= TITLE_MAX ? value : `${value.slice(0, TITLE_MAX - 1).trimEnd()}…`
+  return value.length <= TITLE_MAX ? value : `${cutWholeCharacters(value, TITLE_MAX - 1).trimEnd()}…`
 }
 
 export function readString(input: unknown, key: string): string | null {

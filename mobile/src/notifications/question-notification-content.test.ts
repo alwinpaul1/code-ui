@@ -100,6 +100,55 @@ describe('turning a question into what the shade shows', () => {
     expect(content.body).toContain(`1 ${sixty}`)
   })
 
+  // The cap counts UTF-16 code units, and an emoji is two. A cut between them
+  // put half an emoji, a broken glyph, on the button before the ellipsis.
+  describe('a choice label with an emoji at the twenty-character cap', () => {
+    const LONE_HALF = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+    const buttonLabel = (label: string): string | undefined =>
+      questionNotificationContent(
+        {
+          questions: [
+            { question: 'Ship it?', multiSelect: false, options: [{ label }, { label: 'Not yet' }] }
+          ]
+        },
+        AT
+      ).actions[0]?.label
+
+    it('keeps a rocket emoji whole on the button when it straddles the cut', () => {
+      // "Deploy to staging " is 18 code units: the rocket sits on 18 and 19.
+      const label = buttonLabel('Deploy to staging 🚀 and tell QA')
+      expect(label).not.toMatch(LONE_HALF)
+      expect(label).toBe('Deploy to staging …')
+    })
+
+    it('keeps an emoji that ends just before the cut', () => {
+      expect(buttonLabel('Deploy to staging🚀 and tell QA')).toBe('Deploy to staging🚀…')
+    })
+
+    it('shows a label of exactly twenty code units whole, and cuts one a unit over', () => {
+      expect(buttonLabel('Deploy to staging 🚀')).toBe('Deploy to staging 🚀')
+      const over = buttonLabel('Deploy to staging 🚀!')
+      expect(over).not.toMatch(LONE_HALF)
+      expect(over).toBe('Deploy to staging …')
+    })
+
+    it('still offers no button for an empty label', () => {
+      const content = questionNotificationContent(
+        {
+          questions: [{ question: 'Ship it?', multiSelect: false, options: [{ label: '' }, { label: 'No' }] }]
+        },
+        AT
+      )
+      expect(content.actions.map((action) => action.label)).toEqual(['Answer'])
+    })
+
+    it('cuts a label made only of emoji between two of them', () => {
+      const label = buttonLabel('🚀'.repeat(12))
+      expect(label).not.toMatch(LONE_HALF)
+      expect(label).toBe(`${'🚀'.repeat(9)}…`)
+    })
+  })
+
   /**
    * When the choices cannot be made from three buttons — more than three
    * options, a multi-select, or several questions — the one button opens the

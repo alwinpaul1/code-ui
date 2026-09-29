@@ -1,6 +1,7 @@
 import { notificationPlainText } from './notification-plain-text'
 import type { DesktopNotificationSource } from './notification-routing'
 import { NOTIFICATION_STATUS_ICONS, type NotificationStatusIcon } from './notification-status-icon'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 
 export type PresentedNotification = {
   title: string
@@ -122,8 +123,10 @@ function summarize(body: string, headline: string | undefined): string {
   if (text.length <= BODY_LIMIT) {
     return text
   }
-  const cut = text.slice(0, BODY_LIMIT)
+  // Whole characters only: with no space to cut at, the cut is made at the
+  // limit itself, and an emoji or a bold/code letter there is two code units.
+  const cut = cutWholeCharacters(text, BODY_LIMIT)
   const sentenceEnd = Math.max(cut.lastIndexOf('. '), cut.lastIndexOf('.\n'), cut.lastIndexOf('\n\n'))
   const end = sentenceEnd > BODY_LIMIT / 2 ? sentenceEnd + 1 : cut.lastIndexOf(' ')
-  return `${cut.slice(0, end > 0 ? end : BODY_LIMIT).trimEnd()}…`
+  return `${cut.slice(0, end > 0 ? end : cut.length).trimEnd()}…`
 }

@@ -13,6 +13,7 @@ import {
 } from '../terminal/terminal-accessory-keys'
 import { customKeyModalStyles } from './CustomKeyModal.styles'
 import { persistMirrored } from '../storage/mirrored-storage-keys'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
@@ -185,7 +186,8 @@ export function CustomKeyModal({ visible, onClose, onKeysChanged, onManageShortc
   }, [addKey, shortcutKey, shortcutModifiers])
 
   const handleMacroSave = useCallback(() => {
-    const label = macroLabel.trim() || macroText.trim().slice(0, 12)
+    // Named after the command's first 12 code units, never half an emoji.
+    const label = macroLabel.trim() || cutWholeCharacters(macroText.trim(), 12)
     const text = macroText
     if (!label || !text) {
       return

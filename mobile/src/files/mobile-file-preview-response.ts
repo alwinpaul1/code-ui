@@ -1,4 +1,5 @@
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { RpcFailure } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
@@ -91,7 +92,8 @@ export function previewError(message: string): MobileFilePreviewResult {
   }
   // Why: the raw text is the only clue when a new read path fails on a host
   // this build was not tested against; keep it visible instead of a blank label.
-  const detail = message.trim().slice(0, 140)
+  // Cut whole characters only: half an emoji from a path drew a broken glyph.
+  const detail = cutWholeCharacters(message.trim(), 140)
   const generic = detail.length === 0 || normalized === 'unable to load preview'
   return {
     status: 'error',
