@@ -26,12 +26,12 @@ import {
 import { hostEndpointLabel } from '../transport/host-endpoint-label'
 import { resolveHomeHostConnectionState } from '../transport/home-host-auto-connect'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
-import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
 import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
 import { homeBodyKind } from './home-body-kind'
+import { removeHomeHost } from './home-host-removal'
 import { MobileHomeBody } from './MobileHomeBody'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
@@ -107,19 +107,18 @@ export function MobileHomeScreen() {
     }
   }
 
-  async function handleRemove(): Promise<void> {
+  function handleRemove(): void {
     if (!confirmRemove) {
       return
     }
-    const host = confirmRemove
-    try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
-      setConfirmRemove(null)
-      data.setHostCatalog(await loadHostCatalog())
-    } catch {
-      setConfirmRemove(host)
-      Alert.alert('Could not remove host', 'Please try again.')
-    }
+    void removeHomeHost(confirmRemove, {
+      remove: (hostId) => removeHostAndCloseClient(hostId, forgetHostClient),
+      dropLocally: data.dropHostLocally,
+      reread: data.recheckHostCatalog,
+      setConfirm: setConfirmRemove,
+      alert: (title, message) => Alert.alert(title, message),
+      warn: (message, detail) => console.warn(message, detail)
+    })
   }
 
   const bodyKind = homeBodyKind(
@@ -217,7 +216,7 @@ export function MobileHomeScreen() {
         message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
         confirmLabel="Remove"
         destructive
-        onConfirm={() => void handleRemove()}
+        onConfirm={handleRemove}
         onCancel={() => setConfirmRemove(null)}
       />
     </SafeAreaView>

@@ -78,6 +78,7 @@ vi.mock('../components/AccountUsage', () => ({ hasRenderableUsage: () => false }
 import { noteHostMembershipChange } from '../transport/host-list-load-sharing'
 import { homeBodyKind } from './home-body-kind'
 import { HOME_CATALOG_READ_CAP_MS } from './home-catalog-read'
+import { removeHomeHost } from './home-host-removal'
 import { useMobileHomeData } from './use-mobile-home-data'
 
 function entry(id: string) {
@@ -443,5 +444,74 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     await act(async () => latest!.setHostCatalog([entry('a')] as never))
     await act(async () => stuck([entry('a'), entry('b')]))
     expect(listedIds.at(-1)).toEqual(['a'])
+  })
+
+  describe('removing a desktop from home itself', () => {
+    const alert = vi.fn()
+    const confirm = vi.fn()
+    beforeEach(() => {
+      alert.mockReset()
+      confirm.mockReset()
+    })
+
+    // The store's removeHost moves the membership revision before it resolves.
+    async function removeFromHome(id: string): Promise<void> {
+      await act(async () =>
+        removeHomeHost(
+          { id, name: id },
+          {
+            remove: async () => noteHostMembershipChange(),
+            dropLocally: latest!.dropHostLocally,
+            reread: latest!.recheckHostCatalog,
+            setConfirm: confirm,
+            alert,
+            warn: (message, detail) => console.warn(message, detail)
+          }
+        )
+      )
+    }
+
+    it('drops the removed desktop, and says nothing failed, when only the re-read fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+      await mount()
+      catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+      await removeFromHome('b')
+      expect(alert).not.toHaveBeenCalled()
+      expect(confirm).toHaveBeenLastCalledWith(null)
+      expect(listedIds.at(-1)).toEqual(['a'])
+      expect(kinds.at(-1)).toBe('hosts')
+      expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(
+        /host b was removed, but the catalog re-read after it failed/
+      )
+      // The local drop counts as read: the next return to home keeps its list on screen.
+      catalog.load.mockResolvedValueOnce([entry('a')])
+      kinds.length = 0
+      await act(async () => focus.refocus?.())
+      expect(kinds).not.toContain('loading')
+      expect(listedIds.at(-1)).toEqual(['a'])
+    })
+
+    it('goes to the pairing screen after removing the only desktop, even when the re-read fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockResolvedValueOnce([entry('mac')])
+      await mount()
+      catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+      await removeFromHome('mac')
+      expect(alert).not.toHaveBeenCalled()
+      expect(listedIds.at(-1)).toEqual([])
+      // Removing the last desktop is a known answer, not a failed read.
+      expect(kinds.at(-1)).toBe('pair')
+    })
+
+    it('applies the fresh list the re-read after a removal finds', async () => {
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+      await mount()
+      // c was paired from another screen while home still listed a and b.
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('c')])
+      await removeFromHome('b')
+      expect(alert).not.toHaveBeenCalled()
+      expect(listedIds.at(-1)).toEqual(['a', 'c'])
+    })
   })
 })

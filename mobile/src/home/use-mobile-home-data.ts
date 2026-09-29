@@ -172,6 +172,7 @@ export function useMobileHomeData() {
     ...connections,
     accountsHosts,
     connectedHosts,
+    dropHostLocally: catalog.dropHostLocally,
     hostCatalog,
     hostCatalogFailed: catalog.hostCatalogFailed,
     hostCatalogLoaded: catalog.hostCatalogLoaded,

@@ -76,6 +76,14 @@ describe('a screen that words an empty host list as a claim waits for the read',
     expect(src).not.toMatch(/loadHostCatalog\(\)\s*\.then\(data\.setHostCatalog\)/)
   })
 
+  it('home removes a desktop through removeHomeHost, which tells a failed removal from a failed re-read', () => {
+    const src = code('./home/MobileHomeScreen.tsx')
+    expect(src).toMatch(/removeHomeHost\(/)
+    // An inline read after the removal, inside the removal's own try, is the defect.
+    expect(src).not.toMatch(/loadHostCatalog/)
+    expect(src).not.toMatch(/Could not remove host/)
+  })
+
   it('the failed-read home body takes its colours from the theme, not a literal', () => {
     const src = code('./home/MobileHomeCatalogFailedState.tsx')
     expect(src).toMatch(/useTheme\(\)/)

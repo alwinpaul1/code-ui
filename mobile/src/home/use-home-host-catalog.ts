@@ -23,20 +23,23 @@ export function useHomeHostCatalog(router: ReturnType<typeof useRouter>) {
   // Why apart from `loaded`: a read that rejected or passed its cap ends the wait
   // too, but with no answer. Only a list that lands clears it.
   const [hostCatalogFailed, setHostCatalogFailed] = useState(false)
+  // The list as last applied, for a removal that finishes after later renders.
+  const catalogRef = useRef<HostCatalogEntry[]>([])
   const onboardingCheckedRef = useRef(false)
   const membershipReadRef = useRef<number | null>(null)
   const passRef = useRef<FocusPass | null>(null)
   const [catalogSequence] = useState(createHomeCatalogSequence)
 
   const show = useCallback((catalog: HostCatalogEntry[]) => {
+    catalogRef.current = catalog
     setHostCatalogState(catalog)
     setHostCatalogLoaded(true)
     setHostCatalogFailed(false)
   }, [])
 
-  // A list this screen produced itself (a removal, a re-check): it supersedes any
-  // read still in flight, and it is already current, so a membership change it
-  // caused must not send the next return to home back to loading.
+  // A list this screen produced itself (the list after a removal): it supersedes
+  // any read still in flight, and it is already current, so a membership change
+  // it caused must not send the next return to home back to loading.
   const setHostCatalog = useCallback(
     (catalog: HostCatalogEntry[]) => {
       catalogSequence.localChange(catalog.length)
@@ -44,6 +47,16 @@ export function useHomeHostCatalog(router: ReturnType<typeof useRouter>) {
       show(catalog)
     },
     [catalogSequence, show]
+  )
+
+  // A committed removal, applied without a read: the list on screen minus that
+  // desktop. Removing the only one leaves [], which is a known answer ("none"),
+  // not a failed read.
+  const dropHostLocally = useCallback(
+    (hostId: string) => {
+      setHostCatalog(catalogRef.current.filter((host) => host.id !== hostId))
+    },
+    [setHostCatalog]
   )
 
   // Home's own re-check of the store (a tap on an unavailable card). Unlike a
@@ -133,6 +146,7 @@ export function useHomeHostCatalog(router: ReturnType<typeof useRouter>) {
 
   return {
     beginFocusRead,
+    dropHostLocally,
     hostCatalog,
     hostCatalogFailed,
     hostCatalogLoaded,
