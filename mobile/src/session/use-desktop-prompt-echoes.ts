@@ -64,20 +64,27 @@ function rawIndex(rawMessages: readonly NativeChatMessage[], id: string): number
  * screenshot, 2026-09-15 — "the entire user prompts stack on together").
  *
  * So a beaconed prompt waits. The bound exists because the row may genuinely
- * never come — an older window, a compacted transcript — and a message with no
- * position must still be shown rather than hidden for good.
+ * never come — an older window, a compacted transcript, a row the hook named
+ * wrongly — and a message with no position must still be shown rather than
+ * hidden for good. It settles where it was first seen (`provisionalByNonce`).
+ * Until 2026-09-29 it settled on the tail of its last reading instead: with the
+ * phone asleep through a turn that was the last reply, and a message typed at
+ * 05:36 settled under the 05:46 answer to it.
  */
 const ANCHOR_WAIT_READINGS = 30
 const waitsByNonce = new Map<string, number>()
-/** The tail when a waiting prompt was FIRST seen, held still.
+/** The tail when a waiting prompt was FIRST seen, held still: at its first
+ *  reading that held a row, so never before the transcript has loaded.
  *
  *  Read fresh each render instead, the provisional position followed the tail
  *  down as the turn wrote rows, and the prompt ended up below the reply it had
  *  caused — two of them stacking on the same last row (device screenshot,
  *  2026-09-15). The tail at first sighting is roughly where a mid-turn prompt
  *  belongs, which is what the code did before the waiting was added; the wait
- *  only ever UPGRADES it to the beaconed row. */
-const provisionalByNonce = new Map<string, string | null>()
+ *  only ever UPGRADES it to the beaconed row, and when the wait runs out this
+ *  is where it settles. Taken before a row was held it was null, and a null
+ *  anchor over held rows draws the bubble at the top of the chat. */
+const provisionalByNonce = new Map<string, string>()
 /** Prompts whose anchor came from their TIME, still open to a later row.
  *
  *  A timed anchor is the last held row written before the prompt, and the
@@ -191,7 +198,11 @@ export function useDesktopPromptEchoes(
     }
     // A beacon restored before the transcript loads would pin the echo to
     // the bottom for good; wait for a row to anchor on (2026-09-13).
-    if (rememberedAnchor(prompt.nonce) === undefined && rawMessages.length > 0) {
+    const newest = rawMessages.at(-1)
+    if (rememberedAnchor(prompt.nonce) === undefined && newest !== undefined) {
+      // Where this chat first saw it: the tail of its first reading with a row.
+      const firstSeenAfter = provisionalByNonce.get(prompt.nonce) ?? newest.id
+      provisionalByNonce.set(prompt.nonce, firstSeenAfter)
       // The hook beacons the row that was last at SUBMIT time (`at=`). When
       // the phone holds that row, anchor there — however late the beacon
       // arrived, the message lands where the Claude app shows the record.
@@ -226,13 +237,14 @@ export function useDesktopPromptEchoes(
         }
       } else if (beaconed === undefined) {
         // An older hook names no row; the arrival tail is all there is.
-        rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+        rememberAnchor(prompt.nonce, newest.id)
       } else {
         const waited = (waitsByNonce.get(prompt.nonce) ?? 0) + 1
         waitsByNonce.set(prompt.nonce, waited)
         if (waited > ANCHOR_WAIT_READINGS) {
           waitsByNonce.delete(prompt.nonce)
-          rememberAnchor(prompt.nonce, rawMessages.at(-1)?.id ?? null)
+          // Where it has been drawn all along, not the tail now.
+          rememberAnchor(prompt.nonce, firstSeenAfter)
         }
       }
     }
@@ -243,11 +255,9 @@ export function useDesktopPromptEchoes(
     // message stayed invisible with no way back (reported 2026-09-15, straight
     // after the waiting landed). It shows at the tail meanwhile, provisionally,
     // and moves up the moment its real row arrives. Visible in roughly the right
-    // place beats correct and invisible.
+    // place beats correct and invisible. With no row held yet there is no
+    // first place, and a null anchor over an empty chat draws it at the end.
     const settled = rememberedAnchor(prompt.nonce)
-    if (settled === undefined && !provisionalByNonce.has(prompt.nonce)) {
-      provisionalByNonce.set(prompt.nonce, rawMessages.at(-1)?.id ?? null)
-    }
     const placement =
       settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
     echoes.push({

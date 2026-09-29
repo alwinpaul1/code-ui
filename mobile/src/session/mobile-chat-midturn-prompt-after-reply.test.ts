@@ -592,11 +592,13 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
   // skips a record by its block's `"type":` (agent-hud-prompt-anchor.test.ts),
   // but a tab launched before that keeps the old hook until its agent
   // restarts, and this is what its beacon says. The copy waits for that row, drawn
-  // meanwhile where it was first seen. use-desktop-prompt-echoes.ts alone
-  // settles it on the tail of its 30th reading, which with the phone asleep
-  // through the turn is the last reply; the chat keeps it where it was first
-  // seen because the witness memory stores that place and draws it instead.
-  // This passed before the fixes above and pins that it still does.
+  // meanwhile where it was first seen. Until 2026-09-29
+  // use-desktop-prompt-echoes.ts alone settled it on the tail of its 30th
+  // reading, which with the phone asleep through the turn is the last reply,
+  // and the witness memory, which stores the first place, masked that; it now
+  // settles where it was first seen by itself (use-desktop-prompt-echoes.test.ts,
+  // "a waiting copy whose row never loads"). This passed before the fixes above
+  // and pins that it still does.
   it('keeps a beaconed mid-turn message where it was first seen when the row it names never loads', async () => {
     agent = 'claude'
     vi.setSystemTime(at('05:36:35.000'))

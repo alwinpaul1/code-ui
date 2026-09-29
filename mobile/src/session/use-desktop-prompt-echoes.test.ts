@@ -326,7 +326,10 @@ describe('a desktop prompt whose row has not loaded yet', () => {
       })
     }
     // A row that never comes must not strand the message with no position.
-    expect(latest[0]!.baselineTailMessageId).toBe('z2')
+    // The position is where it was first seen, z1. This asserted z2, the tail
+    // of the reading the wait ran out on, which pinned the defect of
+    // 2026-09-29 (see "a waiting copy whose row never loads").
+    expect(latest[0]!.baselineTailMessageId).toBe('z1')
   })
 
   it('still uses the tail at once when the beacon names no row', () => {
@@ -394,14 +397,16 @@ describe('a queued prompt while it waits for its row', () => {
         renderer!.update(createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2')] }))
       })
     }
-    expect(latest[0]!.baselineTailMessageId).toBe('x2')
+    // Where it was first seen, x1. This asserted x2, the tail when the wait
+    // ran out, which pinned the defect of 2026-09-29.
+    expect(latest[0]!.baselineTailMessageId).toBe('x1')
     // A later turn must not drag it down now that it has settled.
     act(() => {
       renderer!.update(
         createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2'), assistant('x3')] })
       )
     })
-    expect(latest[0]!.baselineTailMessageId).toBe('x2')
+    expect(latest[0]!.baselineTailMessageId).toBe('x1')
   })
 })
 
@@ -470,6 +475,121 @@ describe('where a waiting prompt sits while rows keep arriving', () => {
       )
     })
     expect(latest[0]!.baselineTailMessageId).toBe('y2')
+  })
+})
+
+// 2026-09-29, the session behind mobile-chat-midturn-prompt-after-reply.test.ts
+// (Claude Code 2.1.284): the beacon's copy of a message typed at 05:36:34 named
+// the prompt that opened the turn (a hook that skipped every text row of a
+// working turn), on a page the chat never loaded. The copy waited, drawn where
+// the chat first saw it, after the call written at 05:36:25. When the wait ran
+// out it settled on the tail of that reading instead, which with the phone
+// asleep through the turn was the last reply, eleven minutes and the answer to
+// the message below where it arrived. Only the witness memory, which had
+// stored the first place, kept the chat right. On its own this hook must place
+// the copy where it was first seen: the wait may only upgrade that to the
+// named row, never move it to wherever the tail happens to be.
+describe('a waiting copy whose row never loads', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  // The session's own raw rows around the message (ids only).
+  const BEFORE_SECOND = [
+    'fed3dc95-5dba-4516-8d8d-4cebbbae8078',
+    '0465a647-17fa-40a0-b277-87f5fd3561b2',
+    'fb42a005-40bf-4394-9b6c-f75dbb436f95',
+    'c87c6d3e-1a98-4946-a845-df1e58f12acc',
+    'c23a95c6-02db-4b9d-9c85-eb30b5d479ce'
+  ].map(assistant)
+  const WHOLE_TURN = [
+    ...BEFORE_SECOND,
+    ...[
+      'b2fc1eee-5953-4f0f-8c7f-030e47884fd2',
+      '99b501a9-d5cb-4092-a1f1-2aa6898f24e8',
+      '60a7be7b-a870-40e0-ad3d-b3278fb1c02a',
+      '00899e40-73d4-4924-ad6a-fa4c04c98134',
+      'c221689d-cbea-4fdb-8df2-d1971b70cc45',
+      '2a7ab6a0-cf20-459c-8eca-bbcf60d7838c',
+      'bfe5cd40-04d9-4340-8b3f-2b89bb2e4c62'
+    ].map(assistant)
+  ]
+  const OPENING_ROW = 'd01807a3-bea6-4f29-8a97-bc9a106d86ae'
+
+  it('settles where it was first seen, not on the tail of its last reading', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: '48213', text: 'Whats this', anchorId: OPENING_ROW }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: BEFORE_SECOND }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+    // The phone wakes after the turn with every row in, and the chat is read
+    // again and again, well past the wait.
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: WHOLE_TURN }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+    // And it stays there after a remount, when nothing can rediscover it.
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: WHOLE_TURN }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+  })
+
+  it('holds its first place while the turn writes a row on every reading', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'grow-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    const rows = (count: number) => Array.from({ length: count }, (_, index) => assistant(`g${index + 1}`))
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: rows(2) }))
+    })
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: rows(3 + reading) }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('g2')
+  })
+
+  // The degenerate reading: the copy is seen before the chat holds a single
+  // row (a tab opened while its transcript loads). Nothing was seen to place
+  // it after, so its first place is the first reading that holds a row. It
+  // must never lead the conversation: a null anchor over held rows draws it
+  // at the very top.
+  it('takes its first place from the first reading that holds a row, never the top of the chat', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'empty-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [] }))
+    })
+    // No row to sit after, so it is drawn at the end of an empty chat.
+    expect(latest[0]!.baselineTailMessageId).toBeNull()
+    act(() => {
+      renderer!.update(createElement(Probe, { prompts, raw: [assistant('e1'), assistant('e2')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('e2')
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(
+          createElement(Probe, { prompts, raw: [assistant('e1'), assistant('e2'), assistant('e3'), assistant('e4')] })
+        )
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('e2')
+  })
+
+  it('settles on the only row when there is one', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'one-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('o1')] }))
+    })
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: [assistant('o1')] }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('o1')
   })
 })
 
