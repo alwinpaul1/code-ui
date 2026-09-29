@@ -190,30 +190,58 @@ export function joinedLineBetween(
  * the key: keying every run's joined text cost 1.3 s a call for a 200-line
  * paste between the copies, on the render path (the review of 4409aa51, P1).
  * The key collapses whitespace, so a run's key is its lines' keys joined by a
- * space; a key that reads across lines differently (a wrapper split over
- * them) is confirmed on the joined text, and one that never matches the
- * lines' keys is read as no dequeue, which keeps the copy drawn.
+ * space, matched in place. A run's first line is keyed as the start of a
+ * text and each later one as it reads after other text (keyAfterText), and a
+ * match is confirmed on the run's joined text; a run the lines' keys never
+ * spell is read as no dequeue, which keeps the copy drawn.
  */
 function someRunOfLinesIs(lines: readonly string[], key: string, keyOf: (text: string) => string): boolean {
-  const lineKeys = lines.map(keyOf)
+  const startKeys = lines.map(keyOf)
+  const laterKeys = lines.map((line) => keyAfterText(line, keyOf))
   for (let first = 0; first < lines.length; first += 1) {
-    if (lineKeys[first] === '' || !key.startsWith(lineKeys[first])) {
+    if (startKeys[first] === '') {
       continue
     }
-    let joined = ''
+    let matched = 0
     for (let last = first; last < lines.length; last += 1) {
-      const part = lineKeys[last]
-      joined = part === '' ? joined : joined === '' ? part : `${joined} ${part}`
-      if (!key.startsWith(joined)) {
+      const part = last === first ? startKeys[last] : laterKeys[last]
+      if (part === undefined) {
         break
       }
-      if (joined === key && (first > 0 || last < lines.length - 1) && keyOf(lines.slice(first, last + 1).join('\n')) === key) {
+      if (part !== '') {
+        const at = matched === 0 ? 0 : matched + 1
+        if ((matched > 0 && key[matched] !== ' ') || !key.startsWith(part, at)) {
+          break
+        }
+        matched = at + part.length
+      }
+      if (matched === key.length && (first > 0 || last < lines.length - 1) && keyOf(lines.slice(first, last + 1).join('\n')) === key) {
         return true
       }
     }
   }
   return false
 }
+
+/**
+ * A line's key as it reads after other text, as a later line of a run does in
+ * the run's own key: keyed after a line of a plain word, so a rule that acts
+ * only at the start of a text (a plugin skill token, a pasted photo's path)
+ * leaves it alone, as the run's key does. Keyed alone, "please check this
+ * flake" then "/codex:rescue look…" never spelled the copy's key, and the
+ * copy was drawn beside the row it joined for good (the review of 96160b44,
+ * A1, D6). Undefined when the key does not keep the lead word, and no run
+ * then goes through the line.
+ */
+function keyAfterText(line: string, keyOf: (text: string) => string): string | undefined {
+  const keyed = keyOf(`${LEAD_WORD}\n${line}`)
+  if (keyed === LEAD_WORD) {
+    return ''
+  }
+  return keyed.startsWith(`${LEAD_WORD} `) ? keyed.slice(LEAD_WORD.length + 1) : undefined
+}
+
+const LEAD_WORD = 'x'
 
 /** Beyond this many lines a row is read as no dequeue. */
 const JOINED_LINES_CAP = 200

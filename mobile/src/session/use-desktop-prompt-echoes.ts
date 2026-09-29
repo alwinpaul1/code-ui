@@ -473,7 +473,7 @@ function markersOf(text: string): string {
  *  teammate session by its words, because its row is surfaced as them and
  *  the hook's copy kept the wrapper, so the copy never retired and the
  *  follow-up drew twice (teammateTask; review of 2026-09-27). */
-function landedKey(text: string): string {
+export function landedKey(text: string): string {
   const words = teammateTask(text)?.text ?? text
   return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(words))))
 }

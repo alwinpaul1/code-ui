@@ -262,7 +262,12 @@ describe('two queued messages dequeued as one row, the first typed again, with m
   for (const [label, X, Y, yHasCopy] of [
     ['the first of two lines', 'first queued thing to look at\n\nand the second half of it', 'second queued thing to look at', true],
     ['the second of two lines', 'first queued thing to look at', 'second queued thing to look at\nwith a line of detail', true],
-    ['the second with no hook copy', 'first queued thing to look at', 'second queued thing to look at', false]
+    ['the second with no hook copy', 'first queued thing to look at', 'second queued thing to look at', false],
+    // A key rule that acts only at the start of a text (the review of
+    // 96160b44, D6): the first's later line starts with a plugin skill token,
+    // or with a pasted photo's path.
+    ['the first with a later line that starts with a plugin skill token', 'please check this flake\n/codex:rescue look at the retry loop', 'second queued thing to look at', true],
+    ['the first with a later line that starts with a pasted photo path', 'compare the two screens\n/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T/orca-paste-1790405916218-5211776c-2f4a-4164-bbdf-ed7c7adc9c20.png is the new one', 'second queued thing to look at', true]
   ] as const) {
     it(`draws the first only as the joined row and its new row, ${label}, and after the chat comes back`, async () => {
       const hook = { promptHook: true }

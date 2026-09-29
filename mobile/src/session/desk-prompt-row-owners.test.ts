@@ -7,6 +7,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { joinedLineBetween, ownedByLaterSubmission, rowOwners, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
+import { landedKey } from './use-desktop-prompt-echoes'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
 const words = (text: string) => text.trim().toLowerCase().replace(/\s+/g, ' ')
@@ -138,6 +139,24 @@ describe('a joined row between a copy and a later row of its words', () => {
     expect(joinedLineBetween(between, 2, 3, 'go on', words, none)).toBe(false)
     expect(joinedLineBetween(between, undefined, 3, 'go on', words, none)).toBe(false)
   })
+
+  // Read with the chat's own key, the copy's words as the start of a later
+  // line: the run's key reads them where they follow other text, so a rule
+  // that acts only at the start of a text (a plugin skill token, a pasted
+  // photo's path) must not shorten them there (the review of 96160b44, A1).
+  for (const [label, copy] of [
+    ['a later line that starts with a plugin skill token', 'please check this flake\n/codex:rescue look at the retry loop'],
+    ['a later line that starts with a pasted photo path', 'compare the two screens\n/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T/orca-paste-1790405916218-5211776c-2f4a-4164-bbdf-ed7c7adc9c20.png is the new one'],
+    ['a later line that starts with a photo marker', 'compare the two screens\n[Image #4] is the new one'],
+    ['paste tags on lines of their own', 'look at this\n<pasted_content id="329c">\nFind me the flake\n</pasted_content id="329c">\nthanks'],
+    ['backticks across lines', 'run `npm\ntest` again'],
+    ['a first line that is a plugin skill token', '/codex:rescue look at the retry loop\nand the flake']
+  ] as const) {
+    it(`is found with the chat’s key when the copy has ${label}`, () => {
+      const rows = [row('a1', 'assistant', 'one'), row('u2', 'user', `${copy}\nsecond queued thing to look at`), row('u4', 'user', copy)]
+      expect(joinedLineBetween(rows, 0, 2, landedKey(copy), landedKey, none)).toBe(true)
+    })
+  }
 
   // Degenerate: no rows between.
   it('is not there with no rows between', () => {
