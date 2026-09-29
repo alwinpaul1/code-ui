@@ -613,12 +613,16 @@ The tool and thinking exclusion dates from 2026-09-15, when anchors on those
 rows were not found on the phone (the comment above the command in
 `agent-hud-launch-args.ts` has the report). Orca 1.4.216's transcript decoder
 (`rEn` and `KTn` in its app.asar, read 2026-09-29) does make rows of them,
-keyed by the record's uuid: tool calls, tool results, and thinking as text. So
-on that build the exclusion may place a mid-turn message one call above where
-the Claude app draws it. It was not revisited here, and needs a device to
-settle. The same decoder draws nothing for a record whose only block is
-`redacted_thinking`, `server_tool_use` or `web_search_tool_result`, which is
-why a row must also carry text, an image or a string prompt.
+keyed by the record's uuid: tool calls, tool results, and thinking as text.
+The exclusion is kept anyway. A text row is held whichever reading is right,
+while a tool-row anchor is found only if those rows reach the phone under that
+uuid, which no device has shown since 2026-09-15, and changing it moves every
+mid-turn desk message. The cost: a message typed after a call, with no text
+since, is drawn above that call (usually one), where the Claude app draws it
+below. A device check settles it. The same decoder draws nothing for a
+record whose only block is `redacted_thinking`, `server_tool_use` or
+`web_search_tool_result`, which is why a row must also carry text, an image
+or a string prompt.
 
 The rule matches the block's `"type":` field, never the bare word. Claude Code
 2.1.284 writes the message's `"stop_reason":"tool_use"` into every record of a

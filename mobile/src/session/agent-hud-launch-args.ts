@@ -630,17 +630,22 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // (which reads the record in place) shows it (2026-09-14). Capturing the
   // anchor here, at the source, makes the position independent of arrival.
   // A row type is NOT enough. Claude writes tool calls, tool results and
-  // thinking as `user`/`assistant` rows too, and Orca projects none of them —
-  // tool activity folds into "Ran a command" and thinking is dropped. Anchoring
-  // to one names a uuid the phone will never hold, the lookup fails, and every
-  // queued prompt of a turn falls back to the arrival tail and stacks at the
-  // bottom under its own replies (device screenshots, 2026-09-15). Verified
-  // against a live 2.1.270 transcript whose last six rows were tool_use,
-  // tool_result, tool_use, tool_result, thinking, text. Only the text row
-  // reaches the phone, so only rows like it may anchor. (Orca 1.4.216's
-  // decoder does make rows of tool calls, results and thinking, keyed by the
-  // record uuid, read 2026-09-29; this exclusion was not revisited. See
-  // docs/mobile-agent-hud.md, "Beacon field `at`".)
+  // thinking as `user`/`assistant` rows too. On 2026-09-15 anchors on them were
+  // not found on the phone: the lookup failed, and every queued prompt of a
+  // turn fell back to the arrival tail and stacked at the bottom under its own
+  // replies (device screenshots; a live 2.1.270 transcript whose last six rows
+  // were tool_use, tool_result, tool_use, tool_result, thinking, text). So
+  // only text rows anchor.
+  // That day's reason, that Orca projects none of them, is not what Orca
+  // 1.4.216 does: its transcript decoder (`rEn`/`KTn` in app.asar, read
+  // 2026-09-29) makes a row of each, keyed by the record uuid, with tool calls
+  // and results as tool rows and thinking as text. The exclusion is kept
+  // anyway. A text row is held whichever reading is right, while a tool-row
+  // anchor is found only if those rows reach the phone under that uuid, which
+  // no device has shown since the report above, and changing it moves every
+  // mid-turn desk message. The cost: a message typed after a call, with no
+  // text since, is drawn above that call (usually one), where the Claude app
+  // draws it below. See docs/mobile-agent-hud.md, "Beacon field `at`".
   // A row is skipped by its content block's `"type":`, never by the word
   // alone. Claude Code 2.1.284 writes the message's `"stop_reason":"tool_use"`
   // into every record of a turn that goes on to call a tool, text records

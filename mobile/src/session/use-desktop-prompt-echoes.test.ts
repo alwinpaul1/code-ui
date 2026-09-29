@@ -99,10 +99,12 @@ describe('where a desktop prompt echo anchors', () => {
   })
 
   // 2026-09-19, on the device: the transcript names the row a queued prompt
-  // was written after, but that row is a tool call Orca never projects, so
-  // the id was never held, the wait ran out, and the bubble fell to the
-  // arrival tail — three turns under the reply that answered it. The record's
-  // own time places it after the last row written before it.
+  // was written after, but that row was a tool call the phone did not hold,
+  // so the wait ran out, and the bubble fell to the arrival tail — three
+  // turns under the reply that answered it. The record's own time places it
+  // after the last row written before it. (Orca 1.4.216's decoder does make a
+  // row of a tool call, keyed by its uuid, read 2026-09-29; this path is for
+  // when the row is not held.)
   it('anchors by time when the row it names is one the phone never holds', () => {
     const at = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
     const raw = [at('a1', 1000), at('a2', 2000), at('a3', 3000), at('a4', 4000)]

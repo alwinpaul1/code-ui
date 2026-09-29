@@ -13,11 +13,20 @@ import { decodeAgentHudChannelText } from './agent-hud-channel'
 //   assistant tool_use · user tool_result · assistant tool_use
 //   user tool_result · assistant thinking · assistant text
 //
-// Only the LAST of those reaches the phone as a chat row. Orca folds tool
-// activity into "Ran a command" and drops thinking, so a uuid naming any of the
-// others can never be found — the echo then falls back to the arrival tail, and
-// every desktop prompt of a turn stacks at the bottom under its own replies
-// (device screenshots, 2026-09-15).
+// On the device that day a uuid naming any but the LAST of those was not
+// found: the echo fell back to the arrival tail, and every desktop prompt of a
+// turn stacked at the bottom under its own replies (device screenshots,
+// 2026-09-15). So the hook anchors only on text rows.
+//
+// The reason given then, that Orca folds tool activity away and drops
+// thinking, is not what Orca 1.4.216 does. Its transcript decoder (`rEn`/`KTn`
+// in app.asar, read 2026-09-29) makes a row of each of those records, keyed by
+// the record uuid: tool calls and results as tool rows, thinking as text. The
+// exclusion is kept because a text row is held either way, while a tool-row
+// anchor is found only if those rows reach the phone under that uuid, and no
+// device has shown that since. It costs this: a message typed after a call,
+// with no text since, is drawn above that call (usually one), where the
+// Claude app draws it below.
 function row(uuid: string, type: 'user' | 'assistant', contentType: string): string {
   const content =
     contentType === 'string'

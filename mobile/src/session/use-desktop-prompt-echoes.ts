@@ -214,10 +214,12 @@ export function useDesktopPromptEchoes(
       const beaconed = prompt.anchorId
       const anchorRow =
         beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
-      // The transcript names the row it was written after, and that row is
-      // often a tool call or result Orca never projects — so the id is never
-      // held. The record's own time is enough: the last row written before
-      // it is where it belongs. Without this the wait ran out and the echo
+      // The transcript names the row it was written after, and on the device
+      // that row was a tool call or result the phone did not hold. (Orca
+      // 1.4.216's decoder does make a row of each, keyed by the record uuid,
+      // read 2026-09-29, so on that build it may be held; this path is for
+      // when it is not.) The record's own time is enough: the last row
+      // written before it is where it belongs. Without this the wait ran out and the echo
       // fell to the arrival tail, three turns under the reply that answered
       // it (device, 2026-09-19).
       const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, prompt.at) : undefined
@@ -282,8 +284,8 @@ export function useDesktopPromptEchoes(
     })
   }
   // With every row loaded, a copy still held names a row the transcript does
-  // not have (a tool call Orca never projects): it will not be drawn, and the
-  // log says so once (2026-09-27).
+  // not have (a record Orca draws nothing for, such as an `isMeta` row): it
+  // will not be drawn, and the log says so once (2026-09-27).
   const refusals = JSON.stringify(
     refused.map((prompt) => [
       prompt.nonce,
@@ -311,8 +313,10 @@ const loggedRefusals = new Set<string>()
  * waiting for it drew the copy at the tail, and after the wait it stayed there
  * for good (2026-09-27, the beacon's side of session 76ba8f2f's 13:20 prompt;
  * a relaunch restores 40 such copies). It is drawn once the row loads. A row
- * Orca never projects (a tool call) never loads, and such a copy is never
- * drawn; with every row loaded the chat logs that once.
+ * Orca draws nothing for (an `isMeta` record, say) never loads, and such a
+ * copy is never drawn; with every row loaded the chat logs that once. (This
+ * named a tool call as such a row. Orca 1.4.216's decoder does make a row of
+ * one, keyed by the record uuid, read 2026-09-29.)
  *
  * Only a copy no chat has placed or waited on this run, and that arrived more
  * than TIMED_ANCHOR_OPEN_MS before this reading. One that arrived just before

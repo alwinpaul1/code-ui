@@ -77,13 +77,15 @@ describe('the desktop prompt hook', () => {
   // moment it was typed. The hook now beacons the transcript's last projected
   // row at submit time, so the phone anchors where the record actually sits.
   it('beacons the last user/assistant row uuid at submit time as at=', () => {
-    // Real row shapes. Only the assistant TEXT row reaches the phone: Orca
-    // folds tool activity into "Ran a command", drops thinking, and never
-    // projects the queue records Claude writes for the submit itself. This test
-    // used to expect the tool_use row and called it projected — the same wrong
-    // assumption the hook carried, which anchored every queued prompt to a uuid
-    // the phone does not hold, so they all fell back to the tail and stacked
-    // (device screenshots, 2026-09-15).
+    // Real row shapes. Only the assistant TEXT row may anchor. Orca never
+    // projects the queue records Claude writes for the submit itself (its
+    // decoder reads only user and assistant records). This test used to expect
+    // the tool_use row, and on the device of 2026-09-15 an anchor on it was not
+    // found, so every queued prompt fell back to the tail and stacked (device
+    // screenshots). Orca 1.4.216's decoder does make rows of tool calls,
+    // results and thinking, keyed by the record uuid (read 2026-09-29); the
+    // text-only rule is kept until a device shows those rows are found, and
+    // why is in agent-hud-launch-args.ts.
     const transcript = [
       '{"type":"assistant","uuid":"a1a1a1a1-0000-4000-8000-000000000001","parentUuid":null,"message":{"role":"assistant","content":[{"type":"text","text":"working"}]}}',
       '{"type":"user","uuid":"b2b2b2b2-0000-4000-8000-000000000002","parentUuid":"a1a1a1a1-0000-4000-8000-000000000001","message":{"role":"user","content":[{"type":"tool_result","content":"ok"}]}}',

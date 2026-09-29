@@ -123,9 +123,11 @@ describe('a beacon copy of a desk prompt, found long after it arrived', () => {
     expect(frames.flatMap(deskRows)).toEqual([])
   })
 
-  // Review of c685c0cd: the row a copy was typed after is often a tool call
-  // Orca never projects. With every row loaded it never comes, so the copy is
-  // never drawn, and the log says so, once.
+  // Review of c685c0cd: the row a copy was typed after may be one that never
+  // loads, a record Orca draws nothing for (an `isMeta` row, say). With every
+  // row loaded it never comes, so the copy is never drawn, and the log says
+  // so, once. (This said a tool call; Orca 1.4.216's decoder does make a row
+  // of one, keyed by the record uuid, read 2026-09-29.)
   it('says once in the log why it is not drawn when the row it names never loads', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     vi.setSystemTime(at('21:30:00.000'))
