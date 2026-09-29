@@ -10,7 +10,9 @@ export type HomeCatalogReadDeps = {
   load: () => Promise<HostCatalogEntry[]>
   capMs: number
   isStale: () => boolean
-  /** True once an earlier read landed a list this screen is still holding. */
+  /** True once any earlier list was applied, so this is a re-read, not the first. */
+  readBefore: boolean
+  /** True when that list has hosts, which is what a failed read leaves on screen. */
   keptList: boolean
   onCatalog: (catalog: HostCatalogEntry[]) => void | Promise<void>
   /** End the loading state without a fresh list. */
@@ -35,7 +37,7 @@ export async function readHomeCatalog(deps: HomeCatalogReadDeps): Promise<void> 
     outcome = await Promise.race([read, capped])
   } catch (error) {
     deps.warn(
-      `[home] host catalog ${deps.keptList ? 're-read' : 'first read'} failed; ${failOpenLine(deps.keptList)}`,
+      `[home] host catalog ${deps.readBefore ? 're-read' : 'first read'} failed; ${failOpenLine(deps.keptList)}`,
       error
     )
     if (!deps.isStale()) {

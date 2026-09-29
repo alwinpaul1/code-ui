@@ -7,6 +7,7 @@ function deps(over: Partial<Deps> = {}) {
     load: async () => [],
     capMs: 50,
     isStale: () => false,
+    readBefore: false,
     keptList: false,
     onCatalog: vi.fn(),
     onFailOpen: vi.fn(),

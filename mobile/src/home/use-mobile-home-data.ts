@@ -20,6 +20,7 @@ import {
   getHostMembershipRevision
 } from '../transport/host-list-load-sharing'
 import { loadHostCatalog } from '../transport/host-store'
+import { createHomeCatalogSequence } from './home-catalog-sequence'
 import { HOME_CATALOG_READ_CAP_MS, readHomeCatalog } from './home-catalog-read'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { fetchHomeHostWorktreeInfo } from '../worktree/home-host-worktree-fetch'
@@ -40,7 +41,7 @@ import { useMobileHomeHostConnections } from './use-mobile-home-host-connections
 
 export function useMobileHomeData() {
   const router = useRouter()
-  const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
+  const [hostCatalog, setHostCatalogState] = useState<HostCatalogEntry[]>([])
   // Why: `[]` before the first read finishes is "not known yet", not "no hosts".
   const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
   const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
@@ -52,8 +53,20 @@ export function useMobileHomeData() {
   )
   const onboardingCheckedRef = useRef(false)
   const membershipReadRef = useRef<number | null>(null)
-  const hostCatalogReadRef = useRef(false)
+  const [catalogSequence] = useState(createHomeCatalogSequence)
   const hydratedRef = useRef(false)
+  // A list this screen produced itself (a removal, a re-check): it supersedes any
+  // read still in flight, and it is already current, so a membership change it
+  // caused must not send the next return to home back to loading.
+  const setHostCatalog = useCallback(
+    (catalog: HostCatalogEntry[]) => {
+      catalogSequence.localChange(catalog.length)
+      membershipReadRef.current = getHostMembershipRevision()
+      setHostCatalogState(catalog)
+      setHostCatalogLoaded(true)
+    },
+    [catalogSequence]
+  )
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, {
     setStats: setStatsByHost,
@@ -112,11 +125,13 @@ export function useMobileHomeData() {
         setHostCatalogLoaded(false)
       }
       membershipReadRef.current = membership
+      const readNo = catalogSequence.start()
       void readHomeCatalog({
         load: loadHostCatalog,
         capMs: HOME_CATALOG_READ_CAP_MS,
         isStale: () => stale,
-        keptList: hostCatalogReadRef.current,
+        readBefore: catalogSequence.hasAnswer(),
+        keptList: catalogSequence.drawingHosts(),
         abandonLoad: dropSharedHostListLoad,
         // Fail open: an unreadable or stuck store must not leave home blank
         // forever. Pairing is the one thing that still works, and the next focus
@@ -124,8 +139,10 @@ export function useMobileHomeData() {
         onFailOpen: () => setHostCatalogLoaded(true),
         warn: (message, detail) => console.warn(message, detail),
         onCatalog: async (catalog) => {
-          hostCatalogReadRef.current = true
-          setHostCatalog(catalog)
+          if (!catalogSequence.accept(readNo, catalog.length)) {
+            return
+          }
+          setHostCatalogState(catalog)
           setHostCatalogLoaded(true)
           if (catalog.length === 0 || onboardingCheckedRef.current) {
             return
@@ -158,7 +175,7 @@ export function useMobileHomeData() {
       return () => {
         stale = true
       }
-    }, [router])
+    }, [router, catalogSequence])
   )
 
   const [refreshingAccounts, setRefreshingAccounts] = useState(false)

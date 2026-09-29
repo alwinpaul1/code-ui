@@ -92,9 +92,13 @@ describe('home body on launch, for a phone that already has a desktop', () => {
   let renderer: ReactTestRenderer | null = null
   let kinds: string[] = []
   let loadedFlags: unknown[] = []
+  let latest: ReturnType<typeof useMobileHomeData> | null = null
+  let listedIds: string[][] = []
 
   function Probe() {
     const data = useMobileHomeData()
+    latest = data
+    listedIds.push(data.hostCatalog.map((h) => h.id))
     loadedFlags.push(data.hostCatalogLoaded)
     kinds.push(homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length))
     return null
@@ -103,6 +107,8 @@ describe('home body on launch, for a phone that already has a desktop', () => {
   beforeEach(() => {
     kinds = []
     loadedFlags = []
+    listedIds = []
+    latest = null
     focus.refocus = null
     catalog.load.mockReset()
   })
@@ -234,5 +240,82 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     kinds.length = 0
     await act(async () => focus.refocus?.())
     expect(kinds).not.toContain('loading')
+  })
+
+  it('does not send the next return to loading after home removed a desktop itself', async () => {
+    catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+    await mount()
+    // handleRemove: the store removes b (membership moves), then home sets the fresh list.
+    noteHostMembershipChange()
+    await act(async () => latest!.setHostCatalog([entry('a')] as never))
+    let release: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+    kinds.length = 0
+    await act(async () => focus.refocus?.())
+    // Still in flight: home must go on drawing its list, not fall back to loading.
+    expect(kinds).not.toContain('loading')
+    expect(kinds.at(-1)).toBe('hosts')
+    await act(async () => release([entry('a')]))
+    expect(kinds.at(-1)).toBe('hosts')
+  })
+
+  it('drops a late answer from a timed-out read that predates a local removal', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+      await mount()
+      let late: (value: unknown[]) => void = () => {}
+      catalog.load.mockReturnValueOnce(new Promise((resolve) => (late = resolve)))
+      await act(async () => focus.refocus?.())
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
+      })
+      // The user removes b while the stuck read is still out.
+      await act(async () => latest!.setHostCatalog([entry('a')] as never))
+      await act(async () => late([entry('a'), entry('b')]))
+      expect(listedIds.at(-1)).toEqual(['a'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still applies a late answer when nothing newer has landed', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      let late: (value: unknown[]) => void = () => {}
+      catalog.load.mockReturnValueOnce(new Promise((resolve) => (late = resolve)))
+      await mount()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
+      })
+      await act(async () => late([entry('mac')]))
+      expect(listedIds.at(-1)).toEqual(['mac'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not let an older overlapping read overwrite a newer one', async () => {
+    let first: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (first = resolve)))
+    await mount()
+    catalog.load.mockResolvedValueOnce([entry('new')])
+    await act(async () => focus.refocus?.())
+    await act(async () => first([entry('old')]))
+    expect(listedIds.at(-1)).toEqual(['new'])
+  })
+
+  it('words a failed re-read by what is drawn when the last list was empty', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockResolvedValueOnce([])
+    await mount()
+    catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+    await act(async () => focus.refocus?.())
+    expect(kinds.at(-1)).toBe('pair')
+    const lines = warn.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(lines).toMatch(/re-read failed; showing the pairing screen/)
+    expect(lines).not.toMatch(/keeping the list/)
   })
 })
