@@ -93,7 +93,11 @@ describe('the words of a link', () => {
   ] as const)('draws the code in a link in the %s theme\'s link and code colours', (scheme, palette) => {
     act(() => {
       renderer = create(
-        createElement(ThemeProvider, { initialPreference: scheme }, createElement(MobileMarkdown, { content: 'see [`app.ts`](https://x.dev)' }))
+        createElement(ThemeProvider, {
+          initialPreference: scheme,
+          // oxlint-disable-next-line react/no-children-prop -- a .ts file has no JSX, and ThemeProvider types children as required, so createElement only type-checks with them in props.
+          children: createElement(MobileMarkdown, { content: 'see [`app.ts`](https://x.dev)' })
+        })
       )
     })
     const [link] = links(renderer!)
