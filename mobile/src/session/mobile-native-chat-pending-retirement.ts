@@ -14,8 +14,8 @@ const SPACE = ' '
  *  sees the box without it only at a later screen read (one a second, each
  *  given 2.5 s, over the relay), so the row leads by up to that; it trails
  *  only by however far the phone's clock runs behind the desktop's. */
-export const DEQUEUED_ROW_LEADS_MS = 10_000
-export const DEQUEUED_ROW_TRAILS_MS = 1_000
+const DEQUEUED_ROW_LEADS_MS = 10_000
+const DEQUEUED_ROW_TRAILS_MS = 1_000
 const NO_PENDING_IDS: ReadonlySet<string> = new Set()
 // Slack the cursor slide may spend re-trying later start positions, on top of
 // one free pass over the run. Nothing bounds how many sends accumulate on the
@@ -403,14 +403,9 @@ export function retireLandedMobileNativeChatPending(
     // The same hold as below for a photo send made before the read settled:
     // an older row of its words would take its only copy away (re-review of
     // 4e25d63e). Its dequeued row, if it gets one, names its paths.
-    // A witnessed message the agent took (a desk message the chat watched
-    // arrive, or one the queue box let go) takes only the row Claude
-    // dequeued it as, above: no other copy of its words stands for a later
-    // message of the same words, so any row of them retired it, the next
-    // turn's prompt included (gap D, desk-copy-releases.ts).
     const item = current[index]!
     const held = item.images?.length && item.sentBeforeReadSettled === true && rowWillNamePastedPhotos(item)
-    if (!held && !isWitnessedId(item.id) && claims(index)) {
+    if (!held && claims(index)) {
       claim(index)
     }
   }
@@ -421,8 +416,4 @@ export function retireLandedMobileNativeChatPending(
   return current
     .filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
     .map((item) => (bumps.has(item.id) ? { ...item, expectedOccurrence: ordinalOf(item) } : item))
-}
-
-function isWitnessedId(id: string): boolean {
-  return id.startsWith('desk-') || id.startsWith('absorbed-')
 }

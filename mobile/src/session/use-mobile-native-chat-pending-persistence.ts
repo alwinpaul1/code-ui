@@ -57,7 +57,7 @@ export function useMobileNativeChatPendingPersistence(
 ): {
   rememberEcho: (id: string, text: string, anchorId: string | null, queued?: boolean) => void
   /** Mark own sends the agent took out of its queue box (isTakenSend). */
-  takeSends: (ids: readonly string[], at?: number) => void
+  takeSends: (ids: readonly string[]) => void
 } {
   const sessionKeyRef = useRef(sessionKey)
   sessionKeyRef.current = sessionKey
@@ -91,10 +91,10 @@ export function useMobileNativeChatPendingPersistence(
     [setPendingBySession]
   )
   const takeSends = useCallback(
-    (ids: readonly string[], at?: number) => {
+    (ids: readonly string[]) => {
       const key = sessionKeyRef.current
       if (key) {
-        setPendingBySession((previous) => takeMobileNativeChatPending(previous, key, ids, at))
+        setPendingBySession((previous) => takeMobileNativeChatPending(previous, key, ids))
       }
     },
     [setPendingBySession]

@@ -105,7 +105,7 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
-  removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null, queued?: boolean) => void; takeSends: (ids: readonly string[], at?: number) => void
+  removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null, queued?: boolean) => void; takeSends: (ids: readonly string[]) => void
 } {
   const {
     hostId,

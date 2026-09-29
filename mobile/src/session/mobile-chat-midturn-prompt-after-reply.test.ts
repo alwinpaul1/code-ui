@@ -670,64 +670,105 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
-  // Gap D of the final review of fix/midturn-prompt-at-end: the same words
-  // sent mid-turn in one turn, then typed at the desk as the prompt of the
-  // next. The next turn's row of those words retired the first turn's bubble,
-  // so one bubble stood for two messages. Claude took the first mid-turn: the
-  // queue box never listed it, and the turn went on. A row of its words is its
-  // own only when stamped as the box let it go (the row Claude writes when it
-  // dequeues a prompt at a turn's end), as for the phone's own taken sends.
-  const secondTurnStarts = (stamped: string): NonNullable<AgentStatusPromptSource> => ({
+  // Gap D of the final review of fix/midturn-prompt-at-end (the same words
+  // sent mid-turn, then typed at the desk as the next turn's prompt: the next
+  // turn's row retires the first turn's bubble) is left as it was. The rule
+  // tried for it, a desk copy landing only on a row stamped as the agent took
+  // it, drew a message still queued when a turn ended twice whenever the
+  // phone did not see the box let it go at the moment Claude dequeued it (the
+  // review of fix/midturn-gaps): asleep through the turn's end, a box reader
+  // that never listed it, a phone clock running behind. Those cannot be told
+  // from gap D on the same inputs, and a message drawn twice is the worse
+  // error. These pin the side kept.
+  /** Claude dequeues a message still queued as the turn ends, as the next
+   *  turn's row, and answers it. */
+  const DEQUEUED = user('7d1e0c5a-3b2f-4e61-9a8d-0c4b5e6f7a81', SECOND_SEND, '05:46:54.300')
+  const ANSWER = text('8e2f1d6b-4c3a-4f72-8b9e-1d5c6f7a8b92', '05:47:20.000')
+  const dequeuedRun = (stamped: string): NonNullable<AgentStatusPromptSource> => ({
     ...working(SECOND_SEND, stamped),
-    stateStartedAt: at('05:49:47.000'),
+    stateStartedAt: at('05:46:54.200'),
     stateHistory: [...done(SECOND_SEND).stateHistory!, { state: 'done', prompt: normalizePromptField(SECOND_SEND), startedAt: TURN_ENDED }]
   })
-  const RESENT_ROW = user('2ec552d7-b75d-42d1-bee8-d2ca8cdff524', SECOND_SEND, '05:49:46.995')
+  /** The chat watched the message queue behind the long run, then the phone
+   *  slept from 05:40 to 06:05, through the turn's end and the dequeue. */
+  async function queuedThenAsleep(reader: ReturnType<typeof statusReader>): Promise<DesktopPrompt[]> {
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:40:00.000', WHOLE_TURN.slice(0, -3), prompts, true, [SECOND_SEND])
+    vi.setSystemTime(at('06:05:00.000'))
+    prompts = reader.read(done(SECOND_SEND, '05:47:30.000'))
+    await showAt('06:05:00.100', [...WHOLE_TURN, DEQUEUED, ANSWER], prompts, false, [])
+    await showAt('06:05:10.000', [...WHOLE_TURN, DEQUEUED, ANSWER], prompts, false, [])
+    return prompts
+  }
   for (const kind of ['claude', 'codex'] as const) {
-    it(`draws the same words twice when they were sent mid-turn and again as the next turn's prompt, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+    it(`draws a message the queue box held until the turn ended once when the phone slept through the dequeue, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
       agent = kind
       const reader = statusReader()
-      await watchTheTurn(reader)
-      vi.setSystemTime(at('05:49:47.100'))
-      let prompts = reader.read(secondTurnStarts('05:49:47.000'))
-      await showAt('05:49:47.200', [...WHOLE_TURN, RESENT_ROW], prompts)
-      prompts = reader.read(secondTurnStarts('05:49:50.000'))
-      await showAt('05:49:50.100', [...WHOLE_TURN, RESENT_ROW], prompts)
-      const second = where(SECOND_SEND)
-      expect(second.at).toHaveLength(2)
-      expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
-      expect(second.at[1]!).toBeGreaterThan(second.reply)
-      // And after the chat remounts.
+      await queuedThenAsleep(reader)
+      expect(queueBox()).toEqual([])
+      expect(where(SECOND_SEND).at).toHaveLength(1)
       reader.unmount()
-      unmount()
-      const again = statusReader()
-      vi.setSystemTime(at('05:50:30.000'))
-      prompts = again.read(secondTurnStarts('05:50:20.000'))
-      await showAt('05:50:30.100', [...WHOLE_TURN, RESENT_ROW], prompts)
-      await showAt('05:50:31.000', [...WHOLE_TURN, RESENT_ROW], prompts)
-      expect(where(SECOND_SEND).at).toHaveLength(2)
-      again.unmount()
       unmount()
     })
   }
 
-  // The other half, which the rule above must keep: a message still queued
-  // when the turn ended, which Claude dequeues as the next turn's row. That
-  // row is its own, and the message is drawn once.
-  it('draws a message the queue box held until the turn ended once, as the row Claude dequeued it as', async () => {
+  it('draws that message once when the chat comes back later on the next prompt', async () => {
     agent = 'claude'
     const reader = statusReader()
+    await queuedThenAsleep(reader)
+    reader.unmount()
+    unmount()
+    const nextRow = user('9c8b7a6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', NEXT, '06:10:00.000')
+    const later = text('3f4e5d6c-7b8a-4c9d-8e0f-1a2b3c4d5e6f', '06:10:30.000')
+    const again = statusReader()
+    vi.setSystemTime(at('06:20:00.000'))
+    const prompts = again.read({ ...done(NEXT, '06:10:31.000'), stateStartedAt: at('06:10:31.000') })
+    await showAt('06:20:00.100', [...WHOLE_TURN, DEQUEUED, ANSWER, nextRow, later], prompts, false, [])
+    await showAt('06:20:01.000', [...WHOLE_TURN, DEQUEUED, ANSWER, nextRow, later], prompts, false, [])
+    expect(where(SECOND_SEND).at).toHaveLength(1)
+    again.unmount()
+    unmount()
+  })
+
+  it('draws a queued message the box reader never listed once after Claude dequeues it at the turn end', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
     vi.setSystemTime(at('05:36:35.000'))
-    let prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
-    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
-    await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [SECOND_SEND])
-    // Dequeued as the turn ended: the box empties, and its row comes.
-    const dequeued = user('7d1e0c5a-3b2f-4e61-9a8d-0c4b5e6f7a81', SECOND_SEND, '05:46:54.300')
+    prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [])
+    await showAt('05:36:45.000', BEFORE_SECOND, prompts, true, [])
+    await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [])
     vi.setSystemTime(at('05:46:54.800'))
+    prompts = reader.read(dequeuedRun('05:46:54.400'))
+    await showAt('05:46:56.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [])
+    await showAt('05:47:21.000', [...WHOLE_TURN, DEQUEUED, ANSWER], prompts, true, [])
+    expect(where(SECOND_SEND).at).toHaveLength(1)
+    reader.unmount()
+    unmount()
+  })
+
+  it('draws a message the queue box held until the turn ended once with the phone clock 3 s behind', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:34:57.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:34:57.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:32.000'))
+    prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:32.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:46:47.900', WHOLE_TURN, prompts, true, [SECOND_SEND])
+    vi.setSystemTime(at('05:46:51.800'))
     prompts = reader.read(done(SECOND_SEND, '05:46:54.200'))
-    await showAt('05:46:54.900', WHOLE_TURN, prompts, false, [])
-    await showAt('05:46:56.000', [...WHOLE_TURN, dequeued], prompts, true, [])
-    await showAt('05:47:10.000', [...WHOLE_TURN, dequeued], prompts, true, [])
+    await showAt('05:46:52.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [])
+    await showAt('05:47:10.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [])
     expect(where(SECOND_SEND).at).toHaveLength(1)
     reader.unmount()
     unmount()

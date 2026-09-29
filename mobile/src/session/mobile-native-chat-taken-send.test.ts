@@ -132,11 +132,7 @@ describe('a send the agent took out of its queue box', () => {
     ])
   })
 
-  // A witnessed message is marked taken too since gap D of the final review of
-  // fix/midturn-prompt-at-end (desk-copy-releases.ts): only the row Claude
-  // dequeues it as is its own from then on. No ordinal moves for it: a later
-  // send never counted it as outstanding.
-  it('takes the phone own text sends, and marks a witnessed message taken without moving an ordinal, never a caption-less photo', () => {
+  it('takes only the phone own text sends, never a witnessed message or a caption-less photo', () => {
     const witness: MobileNativeChatPendingMessage = {
       id: 'desk-status:s:1:0',
       text: 'typed at the desk',
@@ -144,15 +140,9 @@ describe('a send the agent took out of its queue box', () => {
       baselineTailMessageId: 'm1',
       baselineResolved: true
     }
-    const later: MobileNativeChatPendingMessage = { ...witness, id: 'pending-3', expectedOccurrence: 2, sentAt: TAKEN_AT - 1_000 }
     const photo: MobileNativeChatPendingMessage = { ...witness, id: 'pending-2', text: '', images: ['file:///a.png'] }
-    const state = { [KEY]: [witness, later, photo] }
-    const taken = takeMobileNativeChatPending(state, KEY, [witness.id, photo.id], TAKEN_AT)
-    expect(taken[KEY]).toEqual([{ ...witness, takenAt: TAKEN_AT }, later, photo])
-    // Taken once: taking it again changes nothing.
-    expect(takeMobileNativeChatPending(taken, KEY, [witness.id], TAKEN_AT + 5_000)).toBe(taken)
-    const photoOnly = { [KEY]: [photo] }
-    expect(takeMobileNativeChatPending(photoOnly, KEY, [photo.id], TAKEN_AT)).toBe(photoOnly)
+    const state = { [KEY]: [witness, photo] }
+    expect(takeMobileNativeChatPending(state, KEY, [witness.id, photo.id], TAKEN_AT)).toBe(state)
   })
 
   // The pending store does not check the fields it reads back.
