@@ -91,8 +91,8 @@ export function MobileHomeScreen() {
     if (host.credentialStatus === 'missing') {
       data.router.push('/pair-scan')
     } else if (host.credentialStatus === 'temporarily-unavailable') {
-      void loadHostCatalog()
-        .then(data.setHostCatalog)
+      void data
+        .recheckHostCatalog()
         .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
     } else {
       data.router.push(`/h/${host.id}`)

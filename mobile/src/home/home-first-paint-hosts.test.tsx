@@ -318,4 +318,52 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     expect(lines).toMatch(/re-read failed; showing the pairing screen/)
     expect(lines).not.toMatch(/keeping the list/)
   })
+
+  it('lets a focus read that started after an unavailable-card re-check win over it', async () => {
+    catalog.load.mockResolvedValueOnce([entry('h1')])
+    await mount()
+    // Tap a temporarily-unavailable card: the re-check starts and is slow.
+    let recheck: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (recheck = resolve)))
+    let recheckDone: Promise<void> = Promise.resolve()
+    await act(async () => {
+      recheckDone = latest!.recheckHostCatalog()
+    })
+    // Leave, pair h2 (the write drops the shared read), and come back.
+    noteHostMembershipChange()
+    let focusRead: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (focusRead = resolve)))
+    await act(async () => focus.refocus?.())
+    // The old re-check lands first, then the newer focus read.
+    await act(async () => {
+      recheck([entry('h1')])
+      await recheckDone
+    })
+    await act(async () => focusRead([entry('h1'), entry('h2')]))
+    expect(listedIds.at(-1)).toEqual(['h1', 'h2'])
+  })
+
+  it('applies a re-check that lands with nothing newer, and a failed one rejects to its caller', async () => {
+    catalog.load.mockResolvedValueOnce([entry('h1')])
+    await mount()
+    catalog.load.mockResolvedValueOnce([entry('h1'), entry('h2')])
+    await act(async () => latest!.recheckHostCatalog())
+    expect(listedIds.at(-1)).toEqual(['h1', 'h2'])
+    catalog.load.mockRejectedValueOnce(new Error('keychain'))
+    await expect(latest!.recheckHostCatalog()).rejects.toThrow('keychain')
+    expect(listedIds.at(-1)).toEqual(['h1', 'h2'])
+  })
+
+  it('still drops an older focus read when home removes a desktop itself', async () => {
+    catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+    await mount()
+    let stuck: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (stuck = resolve)))
+    await act(async () => focus.refocus?.())
+    // handleRemove: the store removed b, then home applies the fresh list.
+    noteHostMembershipChange()
+    await act(async () => latest!.setHostCatalog([entry('a')] as never))
+    await act(async () => stuck([entry('a'), entry('b')]))
+    expect(listedIds.at(-1)).toEqual(['a'])
+  })
 })

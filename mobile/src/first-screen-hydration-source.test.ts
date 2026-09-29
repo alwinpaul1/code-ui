@@ -22,7 +22,10 @@ describe('a screen that words an empty host list as a claim waits for the read',
 
   it('the home screen hands the body its kind unchanged, not a re-derived one', () => {
     const src = code('./home/MobileHomeScreen.tsx')
-    expect(src).toMatch(/const bodyKind = homeBodyKind\(data\.hostCatalogLoaded,/)
+    // The whole derivation line, to its end: a suffix like `=== 'hosts' ? 'hosts' : 'pair'` fails it.
+    expect(src).toMatch(
+      /^\s*const bodyKind = homeBodyKind\(data\.hostCatalogLoaded, data\.hostCatalog\.length\)\s*$/m
+    )
     expect(src).toMatch(/kind=\{bodyKind\}/)
     // A re-mapped kind (loading drawn as the pairing screen) is the launch flash again.
     expect(src).not.toMatch(/kind=\{(?!bodyKind\})/)
@@ -64,6 +67,12 @@ describe('a screen that words an empty host list as a claim waits for the read',
     for (const route of ['terminal-settings', 'connection-log', 'voice-settings']) {
       expect(code(`../app/${route}.tsx`), route).toContain('useLoadedHosts()')
     }
+  })
+
+  it("an unavailable card's re-check takes its place in the read order when it starts", () => {
+    const src = code('./home/MobileHomeScreen.tsx')
+    expect(src).toMatch(/data\s*\.recheckHostCatalog\(\)/)
+    expect(src).not.toMatch(/loadHostCatalog\(\)\s*\.then\(data\.setHostCatalog\)/)
   })
 
   it('the loading home body and the theme background come from the theme, not a literal', () => {

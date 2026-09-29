@@ -67,6 +67,21 @@ export function useMobileHomeData() {
     },
     [catalogSequence]
   )
+  // Home's own re-check of the store (a tap on an unavailable card). Unlike a
+  // removal it has no write of its own behind it, so it takes a place in the read
+  // order when it STARTS: a focus read that starts after it is newer and must win,
+  // and this one lands only if nothing newer already has.
+  const recheckHostCatalog = useCallback(async (): Promise<void> => {
+    const readNo = catalogSequence.start()
+    const membership = getHostMembershipRevision()
+    const catalog = await loadHostCatalog()
+    if (!catalogSequence.accept(readNo, catalog.length)) {
+      return
+    }
+    membershipReadRef.current = membership
+    setHostCatalogState(catalog)
+    setHostCatalogLoaded(true)
+  }, [catalogSequence])
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const connections = useMobileHomeHostConnections(hosts, hostCatalog, {
     setStats: setStatsByHost,
@@ -243,6 +258,7 @@ export function useMobileHomeData() {
     refreshingAccounts,
     resumeCard,
     router,
+    recheckHostCatalog,
     setHostCatalog,
     sortedHostCatalog,
     stats,
