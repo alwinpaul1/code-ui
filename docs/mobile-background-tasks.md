@@ -126,6 +126,9 @@ watched publishing a roster to this phone. The fallback is the safe direction
      remaining approximation.
    - `null` status (no hooks for this pane, an older host) trusts the
      transcript alone.
+   - Orca does not always send the hook row. Where it sends a status built
+     from the terminal title instead, the readers read the pane's last hook
+     row through it; see "Orca's title stand-in" below.
 
 ## Tests
 
@@ -431,3 +434,64 @@ bridged. If Codex fires SubagentStart for a child's own child on the lead's
 pane, that row is counted: nothing the phone reads can place a Codex row. Not
 verified: none of the 12 rollouts on this machine (codex-cli 0.153.4) ever
 spawned a sub-agent.
+
+## Orca's title stand-in (2026-09-29)
+
+Reported from the phone: "there are background processes running but the
+chat UI doesn't show that". No "N running tasks", nothing running in the
+sheet, while the desk's footer listed them.
+
+Orca 1.4.216's mobile projection (`renewMobileAgentStatusFromPtyTitle` in
+Orca's orca-runtime.ts, `SEa` in the 1.4.216 app.asar) sends a status built
+from the terminal title in place of the pane's hook row when the title
+changed after the row and the two disagree, or when the row is over 30
+minutes old. It carries the title's state (`done` for an idle title), the
+row's identity fields, `prompt: ''`, `stateHistory: []`, and nothing else:
+no roster, no working mode.
+
+That can happen at the end of every Claude turn. Claude Code animates its
+title only while a turn loads, and its Stop hooks run inside that turn, so
+the Stop row can reach Orca before the idle title (`✳ …`); any later title
+change does the same. With background work running, the row
+says `working` (`monitoring` for shells) and carries the roster; the phone
+was sent a `done` with no roster in its place, until the next hook. A `done`
+retires every shell and drops every roster row, so the count and the sheet
+went empty for as long as the lead sat idle. Over a long tool call the same
+stand-in, `working`, took the roster away mid-turn and restarted the run
+boundary.
+
+The task readers (the count, the sheet, the task memory, the run clock) now
+read the pane's last hook row through a stand-in
+(`mobile/src/session/agent-status-stand-in.ts`), but only when the phone can
+know that row still stands:
+
+- the phone watched the pane since the row: same pane, link up, the host's
+  own tab list rather than the one the last visit cached;
+- the row carries a prompt or a history, so it is told from a stand-in
+  (Orca's headless builder sends hook rows with neither, and there a real
+  "no roster" row has the stand-in's shape);
+- the stand-in copies at least one of the row's `terminalHandle`,
+  `worktreeId`, `tabId`, `terminalTitle` (the `done` Orca sends once the
+  agent has left the pane copies none, and the agent's shells died with it);
+- the same agent and session.
+
+Every change to background work fires a hook (a launch is a tool call, an
+agent's end is SubagentStop, a shell's end starts a turn), and a hook row
+newer than the title takes the pane back, so the held row is the host's
+latest word for as long as the phone watches. Otherwise the stand-in is read
+as it comes, as before: after a tab switch, a reconnect, or a relaunch, the
+tasks leave the count until the next hook row. The Working row, Stop and the
+prompt reader keep reading the stand-in.
+
+Not watched live. The stand-in's fields are read off Orca's source and the
+1.4.216 asar, and the order of the Stop row and the idle title off how
+Claude Code 2.1.284 runs a turn; no phone has been seen receiving these
+statuses, and the connected tablet has no Code UI installed.
+
+Also found, not fixed: Claude Code 2.1.284's footer pill names only a list
+of one kind in its own words ("N shells", "N shells, M monitors", "1
+monitor"); a mix of kinds reads "N background tasks" (`Lwe` in the 2.1.284
+binary). `parseClaudeRunningShellCount` reads only "N shells", so a mixed
+pill gives the phone no footer count to pad from. No real screen of that
+pill has been captured, so the parser is left alone.
+

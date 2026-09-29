@@ -1,0 +1,146 @@
+import { useEffect, useRef } from 'react'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
+
+// ─── Orca's title stand-in, and what the task readers read through it ────────
+//
+// Orca 1.4.216 does not always send the pane's hook row to the phone. Its
+// mobile projection (`renewMobileAgentStatusFromPtyTitle` in Orca's
+// orca-runtime.ts; the minified `SEa` in the 1.4.216 app.asar, read
+// 2026-09-29) puts a status built from the terminal title in its place when
+// the title and the row disagree and the title came later, or when the row is
+// over 30 minutes old:
+//
+//   { state, prompt: '', updatedAt, stateStartedAt, paneKey, stateHistory: [],
+//     agentType?, terminalHandle?, worktreeId?, tabId?, terminalTitle?,
+//     providerSession? }
+//
+// with the state the title says (`working`, `blocked` for a permission title,
+// `done` for anything else). The optional fields are copied from the row it
+// replaces. Nothing else: no roster, no working mode.
+//
+// That can happen at the end of every Claude turn. Claude Code animates its
+// title only while a turn loads, and its Stop hooks run inside the turn, so
+// the Stop row can reach Orca before the idle title (`✳ …`), and the title's
+// flip clears the row's claim on the pane; any later title change does the
+// same. When background work runs on, the row says `working`
+// (`monitoring` for shells) with the roster, and the phone was sent a `done`
+// with no roster instead, for as long as nothing else fired a hook: every shell
+// was retired as finished (`done` means every shell has reported, for a hook
+// row) and every roster agent left the running count and the sheet. Seen from
+// the phone on 2026-09-29: "there are background processes running but the
+// chat UI doesn't show that". The same stand-in, `working`, stands over a long
+// tool call, and took the roster away mid-turn.
+//
+// A stand-in speaks for the title, which says whether the lead is generating.
+// It says nothing about background work. So the task readers (the running
+// count, the tasks sheet, the task memory and the run clock) read the pane's
+// last hook row through it, when the phone can know that row still stands:
+//
+// - The phone watched the pane since that row, with nothing between: the same
+//   pane, the link up, the tab list the host's own (not the one the last visit
+//   cached). A row that changed the roster while the chat showed another tab,
+//   or while the link was down, was never seen, and the stand-in is read as it
+//   comes then (the review of b860f0d1 on fix/midturn-residuals).
+// - That row is told from a stand-in: it carries a prompt or a history. Orca's
+//   headless builder, and its PTY builder when the renderer published none,
+//   send hook rows with neither, and there a real "no roster" row has the
+//   stand-in's shape (the same review).
+// - The stand-in is the title's, not the one Orca sends when the agent has
+//   left the pane (a shell title): that one copies none of `terminalHandle`,
+//   `worktreeId`, `tabId`, `terminalTitle`, and the agent's shells died with it.
+// - The same agent and session.
+//
+// Every change to background work fires a hook (a launch is a tool call, an
+// agent's end is SubagentStop, a shell's end starts a turn), and a hook row
+// newer than the title takes the pane back, so the held row is the host's
+// latest word on that work for as long as the phone watches. The chat's other
+// readers (the Working row, Stop, the prompt reader) keep the stand-in.
+
+/** Every field the title stand-in carries. A status with any other field is a
+ *  hook row. */
+const STAND_IN_FIELDS: ReadonlySet<string> = new Set([
+  'state',
+  'prompt',
+  'updatedAt',
+  'stateStartedAt',
+  'paneKey',
+  'stateHistory',
+  'agentType',
+  'terminalHandle',
+  'worktreeId',
+  'tabId',
+  'terminalTitle',
+  'providerSession'
+])
+
+/** The fields the title stand-in copies from the row it replaces, and the one
+ *  Orca sends for a pane whose agent left never carries. */
+const COPIED_IDENTITY = ['terminalHandle', 'worktreeId', 'tabId', 'terminalTitle'] as const
+
+type Status = AgentStatusEntry
+
+/** Whether a status has the shape of Orca's title stand-in (see above). A hook
+ *  row with no prompt and no history, on a host that sends them so, has it too. */
+export function isOrcaStandIn(status: Status): boolean {
+  if ((status.prompt ?? '').trim() !== '' || (status.stateHistory?.length ?? 0) > 0) {
+    return false
+  }
+  const fields = status as unknown as Record<string, unknown>
+  return Object.keys(fields).every((key) => fields[key] === undefined || STAND_IN_FIELDS.has(key))
+}
+
+/** Whether a hook row is told from a stand-in: it carries a prompt or a history. */
+function toldFromStandIn(row: Status): boolean {
+  return (row.prompt ?? '').trim() !== '' || (row.stateHistory?.length ?? 0) > 0
+}
+
+/** What the task readers watched of the active pane: its last hook row. */
+export type TaskStatusWatch = { paneKey: string; row: Status | null } | null
+
+/**
+ * The status the task readers read, and the watch to keep after it. Pure.
+ * `watching`: the link is up and the tab list is the host's own; without it
+ * the watch is dropped, since anything could have changed unseen.
+ */
+export function readTaskStatus(
+  watch: TaskStatusWatch,
+  status: Status | null,
+  watching: boolean
+): { read: Status | null; watch: TaskStatusWatch } {
+  if (!watching || status === null || !status.paneKey) {
+    return { read: status, watch: null }
+  }
+  const samePane = watch !== null && watch.paneKey === status.paneKey
+  const row = samePane ? watch.row : null
+  if (!isOrcaStandIn(status)) {
+    return { read: status, watch: samePane && row === status ? watch : { paneKey: status.paneKey, row: status } }
+  }
+  const kept = row !== null && rowStandsThrough(row, status) ? row : null
+  return { read: kept ?? status, watch: samePane ? watch : { paneKey: status.paneKey, row: null } }
+}
+
+function rowStandsThrough(row: Status, standIn: Status): boolean {
+  const copied = standIn as unknown as Record<string, unknown>
+  return (
+    toldFromStandIn(row) &&
+    COPIED_IDENTITY.some((key) => copied[key] !== undefined) &&
+    row.agentType === standIn.agentType &&
+    (row.providerSession?.id ?? null) === (standIn.providerSession?.id ?? null)
+  )
+}
+
+/**
+ * The chat's status as the task readers read it: the pane's last hook row
+ * while Orca stands in its title, when that row still stands (see above).
+ * The watch is a ref written only in the effect after the render that saw a
+ * row, so a render reads what a committed render saw, never a value mutated
+ * outside React; a render React throws away changes nothing.
+ */
+export function useTaskReaderStatus(status: Status | null, watching: boolean): Status | null {
+  const watchRef = useRef<TaskStatusWatch>(null)
+  const { read, watch } = readTaskStatus(watchRef.current, status, watching)
+  useEffect(() => {
+    watchRef.current = watch
+  }, [watch])
+  return read
+}

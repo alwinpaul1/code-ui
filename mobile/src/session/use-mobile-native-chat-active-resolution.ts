@@ -14,6 +14,7 @@ import {
 import { chatDefaultAgent } from './mobile-session-view-default'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
+import { useTaskReaderStatus } from './agent-status-stand-in'
 
 export function useMobileNativeChatActiveResolution(args: {
   hostId: string
@@ -29,6 +30,9 @@ export function useMobileNativeChatActiveResolution(args: {
   /** Kept for callbacks and effects, which run after the ref has settled. */
   activeHandleRef: MutableRefObject<string | null>
   nativeChatTranscriptIsLocalReadable: boolean
+  /** The link is up and the tab list is the host's own, so the phone sees
+   *  every status the tab is sent (agent-status-stand-in.ts). */
+  watching?: boolean
 }): {
   isTabChatView: (tabId: string, agent?: string | null) => boolean
   toggleTabChatView: (tabId: string, agent?: string | null) => void
@@ -57,6 +61,11 @@ export function useMobileNativeChatActiveResolution(args: {
    *  agent's (native-chat-kept-session.ts), so it drives no Working row, no
    *  model, no tasks. Everything in the chat reads this, not the raw status. */
   activeChatAgentStatus: NonNullable<MobileNativeChatTab['agentStatus']> | null
+  /** The same status as the task readers read it (the running count, the
+   *  tasks sheet, the task memory, the run clock): the pane's last hook row
+   *  while Orca stands in its title with a status that says nothing about
+   *  background work, when the phone watched the pane since (agent-status-stand-in.ts). */
+  activeChatTaskStatus: NonNullable<MobileNativeChatTab['agentStatus']> | null
   /** The raw status, for the desk-prompt reader only: its own session check
    *  refuses a nested agent's prompt, and it must still SEE that prompt, or
    *  the same text coming back with the agent's own status reads as new. */
@@ -74,6 +83,7 @@ export function useMobileNativeChatActiveResolution(args: {
     activeSessionTabId,
     hostId,
     nativeChatTranscriptIsLocalReadable,
+    watching = false,
     worktreeId
   } = args
   const {
@@ -113,6 +123,7 @@ export function useMobileNativeChatActiveResolution(args: {
     }
   }, [readingLog])
   const chatStatus = reading.kind === 'nested' ? null : tabStatus
+  const taskStatus = useTaskReaderStatus(chatStatus, watching)
   // The agent that decides the DEFAULT view, which a hand-started one does not:
   // see `chatDefaultAgent`. An explicit toggle is an override and still wins.
   const defaultViewAgent = chatDefaultAgent(chatIdentity?.agent, chatIdentity?.source)
@@ -168,6 +179,7 @@ export function useMobileNativeChatActiveResolution(args: {
     activeTabAgentWorking,
     nativeChatStatus,
     activeChatAgentStatus: chatStatus,
+    activeChatTaskStatus: taskStatus,
     activeChatPromptStatus:
       activeChatResolution && !activeChatStructured && !(reading.kind === 'nested' && reading.read === null)
         ? tabStatus

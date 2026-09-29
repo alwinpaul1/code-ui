@@ -99,7 +99,9 @@ export type MobileNativeChatController = {
    *  as working before the provider opens one, and Stop cannot act until it does. */
   nativeChatCanStop: boolean
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire.
-   *  Null while it is a nested agent's, not the chat agent's (native-chat-kept-session.ts). */
+   *  Null while it is a nested agent's, not the chat agent's (native-chat-kept-session.ts). The
+   *  pane's last hook row while Orca stands in its title with one that says nothing about
+   *  background work, when the phone watched the pane since (agent-status-stand-in.ts). */
   nativeChatAgentStatus: AgentStatusEntry | null
   /** The session the chat reads, and a nested agent's it does not; null for a tab with no chat. */
   nativeChatSessionIdentity: NativeChatSessionIdentity | null
