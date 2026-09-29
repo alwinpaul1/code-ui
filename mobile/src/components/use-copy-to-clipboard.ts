@@ -14,22 +14,28 @@ export type CopyToClipboard = {
 }
 
 /**
- * Copying from the code viewer, with its outcome. A refusal is kept and
- * shown (MobileCodeView's notice line): a copy that fails without a word
- * looks exactly like one that worked, and the paste finds the old text.
+ * Copying from the code viewer or a chat code block, with its outcome. A
+ * refusal is kept and shown (MobileCodeView's notice line, the line under a
+ * code block's header): a copy that fails without a word looks exactly like
+ * one that worked, and the paste finds the old text.
  */
 export function useCopyToClipboard(): CopyToClipboard {
   const clipboard = useClipboardWriter()
   const [state, setState] = useState<{ copied: boolean; error: string | null }>({ copied: false, error: null })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
+  // A copy can land after its button is gone: a chat cell unmounts its
+  // markdown whenever the list recycles it. The timer is armed after the
+  // write, so a cleanup that ran first could not clear it.
+  const mounted = useRef(true)
+  useEffect(() => {
+    mounted.current = true
+    return () => {
+      mounted.current = false
       if (timer.current) {
         clearTimeout(timer.current)
       }
-    },
-    []
-  )
+    }
+  }, [])
   const copy = useCallback(
     async (text: string) => {
       let next: { copied: boolean; error: string | null }
@@ -38,6 +44,9 @@ export function useCopyToClipboard(): CopyToClipboard {
         next = { copied: true, error: null }
       } catch (error) {
         next = { copied: false, error: error instanceof Error ? error.message : String(error) }
+      }
+      if (!mounted.current) {
+        return next.copied
       }
       if (timer.current) {
         clearTimeout(timer.current)

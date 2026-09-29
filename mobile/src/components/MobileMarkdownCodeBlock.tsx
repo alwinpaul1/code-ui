@@ -50,7 +50,12 @@ export function renderMarkdownCodeBlock({
           const gutterWidth = gutterWidthForLines(code.lines.length)
           return (
             <View key={index} style={styles.codeBlock}>
-              <MarkdownCodeHeader language={block.language} code={block.text} styles={styles} />
+              <MarkdownCodeHeader
+                language={block.language}
+                code={block.text}
+                closed={block.closed}
+                styles={styles}
+              />
               {/* A horizontal scroller, not a wrap: at ~40 columns wrapping a
                   command or an indented block shreds it, and a reader who
                   wants to copy a line needs the line. */}

@@ -120,6 +120,35 @@ describe('parseMobileMarkdown', () => {
     )
   })
 
+  // Review of the chat code block's Copy button (2026-09-29): only a fence at
+  // the margin, opened by exactly three backticks and a bare word, skipped the
+  // HTML pass. Every other fence lost its tags, its entities and its blank
+  // lines before the parser saw it, so the block drew damaged code and Copy
+  // put it on the clipboard. A fence under a list item is the commonest one an
+  // agent writes.
+  it.each([
+    ['under a list item', ['1. Render it:', '', '   ```tsx', '   return <View style={s.row}>', '     <Text>{label}</Text>', '   </View>', '   ```']],
+    ['on the list marker line', ['- ```sh', '  echo "a &amp; b" > out.txt', '  ```']],
+    ['with tildes', ['~~~html', '<div class="x">hi</div>', '~~~']],
+    ['with a title in its info string', ['```html title="a.html"', '<details><summary>x</summary>body</details>', '```']],
+    ['with four backticks around a fence', ['````md', '```html', '<b>kept</b>', '```', '````']],
+    ['with blank lines and trailing spaces', ['- step', '', '  ```sh', '  echo one  ', '', '', '', '  echo <two>', '  ```']]
+  ])('leaves a fence %s exactly as written', (_shape, lines) => {
+    const source = lines.join('\n')
+    expect(normalizeMobileMarkdownPreviewHtml(source)).toBe(source)
+  })
+
+  it('still strips HTML from the prose around a protected fence', () => {
+    const source = ['<p>Before</p>', '', '- step', '', '  ```tsx', '  <View />', '  ```', '', '<p>After</p>'].join('\n')
+    expect(normalizeMobileMarkdownPreviewHtml(source)).toBe(
+      ['Before', '', '- step', '', '  ```tsx', '  <View />', '  ```', '', 'After'].join('\n')
+    )
+  })
+
+  it('does not take a triple-backtick span on one line for a fence', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('```a<b>c```\n\n<p>After</p>')).toBe('```a<b>c```\n\nAfter')
+  })
+
   it('preserves non-tag angle bracket prose while stripping known HTML tags', () => {
     expect(normalizeMobileMarkdownPreviewHtml('1 < 2 and 3 > 1')).toBe('1 < 2 and 3 > 1')
     expect(normalizeMobileMarkdownPreviewHtml('Array<string> in prose')).toBe(

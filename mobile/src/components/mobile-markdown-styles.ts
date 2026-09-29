@@ -46,9 +46,23 @@ export function markdownScreenDensity(): number {
   }
 }
 
+/** The Copy icon on a fence's header, in dp: an icon does not follow the
+ *  system font size. */
+export const MARKDOWN_CODE_COPY_ICON_SIZE = 14
+const CODE_COPY_PADDING_VERTICAL = 2
+/** The "Copied" label's line, in sp: text does follow the font size. */
+const CODE_COPIED_LINE_HEIGHT = 14
+
 export function makeMarkdownStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
-  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, systemSpScale().toDp)
+  const spScale = systemSpScale()
+  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, spScale.toDp)
+  // Tall enough for "Copied" at this phone's font size, which grows with it
+  // while the icon does not: a fixed 18 dp let a block grow for the 1.5 s the
+  // label shows and shrink back under the reader (review, 2026-09-29).
+  const codeHeaderHeight =
+    Math.max(MARKDOWN_CODE_COPY_ICON_SIZE, Math.ceil(spScale.toDp(CODE_COPIED_LINE_HEIGHT))) +
+    2 * CODE_COPY_PADDING_VERTICAL
   return StyleSheet.create({
     root: {
       gap: space.sm + 2
@@ -180,12 +194,13 @@ export function makeMarkdownStyles(theme: Theme) {
       padding: space.md
     },
     /** A fence's language and its Copy button (MobileMarkdownCodeHeader). As
-     *  tall as the button with or without a language beside it, so a block
-     *  does not grow when its first character streams in. */
+     *  tall as the button at its tallest, with or without a language beside
+     *  it, so a block does not grow when its first character streams in or
+     *  while "Copied" shows. */
     codeHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: 18,
+      minHeight: codeHeaderHeight,
       marginBottom: space.xs
     },
     codeLanguage: {
@@ -202,7 +217,7 @@ export function makeMarkdownStyles(theme: Theme) {
       gap: space.xs,
       // Right-aligned whether or not a language sits on its left.
       marginLeft: 'auto',
-      paddingVertical: 2,
+      paddingVertical: CODE_COPY_PADDING_VERTICAL,
       paddingLeft: space.sm
     },
     codeCopyPressed: {
@@ -211,14 +226,16 @@ export function makeMarkdownStyles(theme: Theme) {
     codeCopied: {
       fontFamily: fonts.medium,
       fontSize: 11,
-      lineHeight: 14,
+      lineHeight: CODE_COPIED_LINE_HEIGHT,
       color: colors.accentText
     },
+    // The words say it failed; `danger` was 4.48:1 on the light code fill,
+    // under AA for text this size (review, 2026-09-29).
     codeCopyFailed: {
       fontFamily: fonts.regular,
       fontSize: 11,
       lineHeight: 15,
-      color: colors.danger,
+      color: colors.textSecondary,
       marginBottom: space.xs
     },
     codeText: {
