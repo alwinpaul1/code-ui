@@ -68,7 +68,7 @@ export function useHostScreenController({
   const settings = useHostViewSettings({ client, connState, hostId, state })
   const showPinnedInGroups = useHostShowPinnedInGroups(client, connState)
 
-  useHostScreenIdentity({ client, hostId, state })
+  useHostScreenIdentity({ client, hostId, lastConnectedAt, state })
   const fetchRepoMetadata = useHostRepoMetadata({ client, connState, hostId, state })
   const catalog = useHostWorktreeCatalog({
     client,
