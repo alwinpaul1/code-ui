@@ -50,12 +50,19 @@ export type NativeChatTerminalWait =
  * menu (an ask, a picker). The hook's waiting/blocked state speaks for a
  * prompt the screen read has not seen, but not for one the screen saw leave:
  * the hook's row outlives its answer.
+ *
+ * Nor does a screen read from before the phone's own answer speak: the dialog
+ * on it is the one that answer closed. On 2026-09-29 Submit on Claude's
+ * question swapped the card for this notice until the next poll ("the screen
+ * flashes"), once the hook row and the transcript said the answer was taken.
  */
 export function terminalPromptWait(input: {
   /** The card the chat shows for a prompt: permission, question or ask. */
   card: unknown
   /** `terminalDialogKind` over the last screen read. */
   dialogKind: TerminalDialogKind | null
+  /** That read began before the phone's last accepted answer to a prompt. */
+  dialogBeforeAnswer: boolean
   /** Its numbered choices as drawn, when they read as Yes…/No…. */
   dialogOptions: MobileChatPermission['options'] | null
   /** A dialog was seen on screen and has since left it. */
@@ -65,7 +72,7 @@ export function terminalPromptWait(input: {
   if (input.card != null) {
     return null
   }
-  if (input.dialogKind !== null) {
+  if (input.dialogKind !== null && !input.dialogBeforeAnswer) {
     return {
       source: 'screen',
       kind: input.dialogKind,

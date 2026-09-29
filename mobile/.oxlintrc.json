@@ -233,7 +233,11 @@
             // controller and the header's pair ride on existing lines. The scan,
             // its budget and the precedence live in use-claude-transcript-model.ts,
             // claude-transcript-model-scan.ts and claude-transcript-model.ts.
-            "max": 508,
+            // 2026-09-29: +2 so an accepted card answer re-reads the screen
+            // (onCardAnswered, and the question card's own wrapper): the
+            // waiting notice read the answered dialog off the read before it.
+            // The flag and the re-read live in use-mobile-terminal-hud-observation.ts.
+            "max": 510,
             "skipBlankLines": true,
             "skipComments": true
           }
