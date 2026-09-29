@@ -71,11 +71,12 @@ export function useMobileTerminalHudObservation(args: {
    *  mirror all use. */
   dialogKind: TerminalDialogKind | null
   /** True from `rereadAfterAnswer` until a read begun after it lands:
-   *  `dialogKind` is then a screen from before the phone's own answer, and
-   *  the dialog on it is most likely the one that answer closed. */
+   *  `dialogKind` is then a screen from before the agent took the phone's
+   *  answer, and the dialog on it is most likely the one that answer closed. */
   dialogBeforeAnswer: boolean
-  /** The phone's answer to a prompt was just accepted: read the screen again
-   *  now, and flag `dialogKind` as older than the answer until that is done. */
+  /** The card the phone answered has left (use-answered-prompt-notice-hold.ts):
+   *  read the screen again now, and flag `dialogKind` as older than that until
+   *  the read is done. */
   rereadAfterAnswer: () => void
   terminalPermission: MobileChatPermission | null
 } {
@@ -264,7 +265,7 @@ export function useMobileTerminalHudObservation(args: {
   // Why: the phone's answer closes the dialog the last read saw, and the poll
   // comes once a second. The waiting notice read that dialog as still up once
   // the card had gone, and drew "A menu is open in the terminal" between the
-  // answer and the next poll (2026-09-29, "the screen flashes").
+  // card leaving and the next poll (2026-09-29, "the screen flashes").
   const rereadAfterAnswer = useCallback(() => {
     answersRef.current += 1
     setDialogBeforeAnswer(true)

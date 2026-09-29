@@ -424,6 +424,23 @@ describe("the dock after Submit on Claude Code 2.1.282's question", () => {
     expect(frames.at(-1)).toBe('nothing')
   })
 
+  // On a fast link (LAN) the phone's look right after Submit can reach the
+  // host before Claude Code has repainted, and see the question still up
+  // (independent review of ab2c1d55).
+  it('does not flash it when the look right after Submit still shows the question', async () => {
+    await questionUp()
+    const start = frames.length
+    await submitSecondOption()
+    // Claude repaints; from here every read lands after its reports.
+    screen = ANSWERED_ON_SCREEN
+    slowReads = true
+    await hook(TOOK)
+    await transcript([PROMPT_ROW, ASK_CALL, ASK_RESULT])
+    await landReads(ANSWERED_ON_SCREEN)
+    expect(noticesIn(start), frames.slice(start).join(' → ')).toEqual([])
+    expect(frames.at(-1)).toBe('nothing')
+  })
+
   // The failure path: the look after the answer is the one that may speak.
   it("still says a menu is open when the screen read after the answer shows Claude's next question", async () => {
     // Claude Code 2.1.282's multi-select question (tmux, 2026-09-25), drawn
@@ -436,7 +453,9 @@ describe("the dock after Submit on Claude Code 2.1.282's question", () => {
     await transcript([PROMPT_ROW, ASK_CALL, ASK_RESULT])
     const start = frames.length
     await landReads(nextQuestion)
+    // A frame after the answer: the phone looked again, it did not wait a poll.
     expect(frames.slice(start).at(-1)).toBe('terminal notice (screen menu)')
+    expect(controller?.nativeChatTerminalWait).toMatchObject({ source: 'screen', kind: 'menu' })
   })
 
   it('says nothing about the answered dialog while the host will not read the screen again', async () => {

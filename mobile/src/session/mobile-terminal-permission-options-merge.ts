@@ -61,7 +61,8 @@ export function terminalPromptWait(input: {
   card: unknown
   /** `terminalDialogKind` over the last screen read. */
   dialogKind: TerminalDialogKind | null
-  /** That read began before the phone's last accepted answer to a prompt. */
+  /** The phone answered a card and no read has begun since that card left
+   *  (use-answered-prompt-notice-hold.ts). */
   dialogBeforeAnswer: boolean
   /** Its numbered choices as drawn, when they read as Yes…/No…. */
   dialogOptions: MobileChatPermission['options'] | null

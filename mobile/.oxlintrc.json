@@ -233,11 +233,13 @@
             // controller and the header's pair ride on existing lines. The scan,
             // its budget and the precedence live in use-claude-transcript-model.ts,
             // claude-transcript-model-scan.ts and claude-transcript-model.ts.
-            // 2026-09-29: +2 so an accepted card answer re-reads the screen
-            // (onCardAnswered, and the question card's own wrapper): the
-            // waiting notice read the answered dialog off the read before it.
-            // The flag and the re-read live in use-mobile-terminal-hud-observation.ts.
-            "max": 510,
+            // 2026-09-29: +5 so an accepted card answer holds the waiting
+            // notice until its card leaves (onCardAnswered, the question card's
+            // own wrapper, promptCard computed once, the hold and its import):
+            // the notice read the answered dialog off a read taken before the
+            // agent took the answer. The hold is use-answered-prompt-notice-hold.ts;
+            // the flag and the re-read live in use-mobile-terminal-hud-observation.ts.
+            "max": 513,
             "skipBlankLines": true,
             "skipComments": true
           }
