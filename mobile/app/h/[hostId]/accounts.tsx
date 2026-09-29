@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { lookUpPairedHost } from '../../../src/transport/host-lookup'
 import { useHostClient } from '../../../src/transport/client-context'
 import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
@@ -17,6 +16,7 @@ import {
   hasRenderableUsage
 } from '../../../src/components/AccountUsage'
 import { AccountsProviderCard } from '../../../src/accounts/AccountsProviderCard'
+import { useAccountsHostLookup } from '../../../src/accounts/use-accounts-host-lookup'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
@@ -32,11 +32,10 @@ export default function AccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
-  const [hostName, setHostName] = useState<string>('')
+  // The desktop's name and why it cannot be opened, from the catalog, read again per new connection.
+  const { hostName, hostNotice } = useAccountsHostLookup(hostId)
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Why this desktop cannot be opened, from the catalog; null while it reads or once it is readable.
-  const [hostNotice, setHostNotice] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
@@ -74,32 +73,6 @@ export default function AccountsScreen() {
   )
   // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
   const now = useNow(60_000, clockEnabled)
-
-  // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired and
-  // still has its name, so it is worded as unreadable, not "Host not found".
-  useEffect(() => {
-    if (!hostId) {
-      return
-    }
-    let stale = false
-    void lookUpPairedHost(hostId).then((lookup) => {
-      if (stale) {
-        return
-      }
-      if (lookup.kind === 'ready') {
-        setHostName(lookup.host.name)
-        setHostNotice(null)
-        return
-      }
-      if (lookup.kind === 'unavailable' || lookup.kind === 'missing') {
-        setHostName(lookup.name)
-      }
-      setHostNotice(lookup.message)
-    })
-    return () => {
-      stale = true
-    }
-  }, [hostId])
 
   // Why: subscribe to streaming snapshot updates so usage bars refresh in
   // place when the desktop's rate-limit poll completes (every 5 min) or

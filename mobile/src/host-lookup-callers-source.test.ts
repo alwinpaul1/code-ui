@@ -18,14 +18,38 @@ function code(path: string): string {
 // `hosts.find((h) => h.id === hostId)` and its spellings: the lookup the screens used to do.
 const FINDS_HOST_BY_ID = /\.find\(\s*\(?\s*\w+\s*\)?\s*=>\s*\w+\.id\s*===\s*hostId\s*\)/
 
+/** Every non-test source file under app/ and src/, as paths relative to this test. */
+function sourceFiles(): string[] {
+  const root = join(import.meta.dirname, '..')
+  const files: string[] = []
+  const walk = (dir: string) => {
+    for (const name of readdirSync(dir)) {
+      if (name === 'node_modules') {
+        continue
+      }
+      const full = join(dir, name)
+      if (statSync(full).isDirectory()) {
+        walk(full)
+      } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) {
+        files.push(relative(import.meta.dirname, full))
+      }
+    }
+  }
+  walk(join(root, 'app'))
+  walk(join(root, 'src'))
+  return files
+}
+
 describe('a screen opened for one desktop says what the catalog knows about it', () => {
   it.each([
-    '../app/h/[hostId]/edit.tsx',
-    '../app/h/[hostId]/accounts.tsx',
-    './host-screen/use-host-screen-identity.ts'
-  ])('%s looks its desktop up through lookUpPairedHost, not in a loaded list', (path) => {
+    ['../app/h/[hostId]/edit.tsx', /\blookUpPairedHost\(hostId\)/],
+    ['../app/h/[hostId]/accounts.tsx', /\buseAccountsHostLookup\(hostId\)/],
+    ['./accounts/use-accounts-host-lookup.ts', /\busePairedHostLookup\(hostId,/],
+    ['./transport/use-paired-host-lookup.ts', /\blookUpPairedHost\(hostId\)/],
+    ['./host-screen/use-host-screen-identity.ts', /\blookUpPairedHost\(hostId\)/]
+  ])('%s looks its desktop up through lookUpPairedHost, not in a loaded list', (path, lookup) => {
     const src = code(path)
-    expect(src).toMatch(/\blookUpPairedHost\(hostId\)/)
+    expect(src).toMatch(lookup)
     expect(src).not.toMatch(FINDS_HOST_BY_ID)
     expect(src).not.toMatch(/'Host not found'|removed from this phone/)
   })
@@ -45,31 +69,10 @@ describe('a screen opened for one desktop says what the catalog knows about it',
 
   it('no module that reads loadHosts() words a desktop it did not find as removed or not found', () => {
     // Found by shape, not by a list of screens: every non-test source file under app/ and src/.
-    const root = join(import.meta.dirname, '..')
-    const files: string[] = []
-    const walk = (dir: string) => {
-      for (const name of readdirSync(dir)) {
-        if (name === 'node_modules') {
-          continue
-        }
-        const full = join(dir, name)
-        if (statSync(full).isDirectory()) {
-          walk(full)
-        } else if (/\.tsx?$/.test(name) && !/\.test\.tsx?$/.test(name)) {
-          files.push(full)
-        }
-      }
-    }
-    walk(join(root, 'app'))
-    walk(join(root, 'src'))
-    const offenders = files
-      .filter((file) => {
-        const src = code(relative(import.meta.dirname, file))
-        return (
-          /\bloadHosts\(\)/.test(src) && /['"`][^'"`]*(not found|removed)[^'"`]*['"`]/i.test(src)
-        )
-      })
-      .map((file) => relative(root, file))
+    const offenders = sourceFiles().filter((file) => {
+      const src = code(file)
+      return /\bloadHosts\(\)/.test(src) && /['"`][^'"`]*(not found|removed)[^'"`]*['"`]/i.test(src)
+    })
     expect(offenders).toEqual([])
   })
 })

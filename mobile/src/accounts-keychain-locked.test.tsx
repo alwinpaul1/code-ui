@@ -94,6 +94,10 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 vi.mock('./components/AgentIcons', () => ({ ClaudeIcon: 'ClaudeIcon', OpenAIIcon: 'OpenAIIcon' }))
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 // 'disconnected' comes with no client: that is what a desktop whose credential cannot be read
 // really gets, because the client opener cannot open it either. 'connected' with no snapshot yet
 // is the only state in which the old screen drew its lookup error; 'connecting' is a client that
