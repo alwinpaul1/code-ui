@@ -457,6 +457,35 @@ describe('a tab status that carries no prompt', () => {
     )
   })
 
+  // Round-2 review: a hook row with no prompt and a history of its own is a
+  // real reading (a pane whose cached prompt is empty). A message found after
+  // a reconnect or the cached tab list came after it, and the next copy of a
+  // prompt after it is a new submission, as before 257768bc.
+  describe('from a hook row, with a history of its own', () => {
+    const row = (updatedAt: number, prompt = '') => ({
+      state: 'working',
+      prompt,
+      updatedAt,
+      stateStartedAt: 1_000,
+      stateHistory: [{ state: 'done', prompt: '', startedAt: 500 }],
+      providerSession: { id: 'sess-1' }
+    })
+
+    it('bounds the next message found after a reconnect or the cached tab list', () => {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', row(2_000))
+      state = observeAgentStatusPrompt(state, 'sess-1', row(50_000))
+      state = observeAgentStatusPrompt(state, 'sess-1', row(90_000, 'and keep the old table'), { firstRead: true })
+      expect(state.prompts.map((prompt) => prompt.at)).toEqual([50_000])
+    })
+
+    it('makes the same words after it a new message', () => {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', row(2_000, 'ok'))
+      state = observeAgentStatusPrompt(state, 'sess-1', row(3_000))
+      state = observeAgentStatusPrompt(state, 'sess-1', row(4_000, 'ok'))
+      expect(state.prompts.map((prompt) => prompt.text)).toEqual(['ok', 'ok'])
+    })
+  })
+
   // Degenerate: nothing but statuses with no prompt, and the first status of
   // the session carrying none.
   it('makes no message of its own, and leaves the first message found on the next status', () => {

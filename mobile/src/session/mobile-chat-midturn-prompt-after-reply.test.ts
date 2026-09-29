@@ -474,6 +474,45 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     })
   }
 
+  // Round-2 review of this branch: a hook row that carries no prompt, on a
+  // pane whose cached prompt is empty, is a real reading (the message's
+  // UserPromptSubmit would have put it on the next row). A message taken
+  // while the link was down came after the last such row, and 257768bc's
+  // `readAt` left it bounded by nothing but its run's start, 05:08, on a page
+  // the chat has not loaded: never drawn. Only null and Orca's stand-in, with
+  // no history of its own, are no reading.
+  it('draws a message taken while the link was down, on hook rows with no prompt, after the rows watched before the drop', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    const noPrompt = (stamped: string): NonNullable<AgentStatusPromptSource> => ({
+      ...working('', stamped),
+      prompt: '',
+      stateHistory: [{ state: 'done', prompt: '', startedAt: at('05:07:00.700') }]
+    })
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(noPrompt('05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:03.000'))
+    prompts = reader.read(noPrompt('05:36:02.200'))
+    await showAt('05:36:03.100', AFTER_FIRST, prompts)
+    vi.setSystemTime(at('05:36:26.000'))
+    prompts = reader.read(noPrompt('05:36:25.100'))
+    await showAt('05:36:26.100', BEFORE_SECOND, prompts)
+    reader.read(noPrompt('05:36:25.100'), { connected: false })
+    vi.setSystemTime(at('05:37:40.000'))
+    reader.read(noPrompt('05:36:25.100'))
+    prompts = reader.read({ ...noPrompt('05:37:31.306'), prompt: normalizePromptField(SECOND_SEND) })
+    await showAt('05:37:40.100', WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938')), prompts)
+    await showAt('05:46:50.900', WHOLE_TURN, prompts)
+    const rows = drawn(frames.at(-1)!)
+    const second = where(SECOND_SEND)
+    expect(second.at).toHaveLength(1)
+    expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
+    expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
+    reader.unmount()
+    unmount()
+  })
+
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.
   it('draws nothing under the reply of a turn that had no mid-turn message', async () => {
