@@ -3,6 +3,7 @@ import type { PendingAgentCall, WindowTaskEvidence } from './mobile-background-t
 import type { HeldShellCount } from './mobile-background-task-footer'
 import type { RosterRow } from './mobile-background-task-roster'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
+import { isOrcaStandIn } from './agent-status-stand-in'
 
 // ─── What the phone has seen of a session's background work, kept ───────────
 //
@@ -103,7 +104,11 @@ type Seen = {
  *  do not recount. */
 export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen): SessionTaskEvidence {
   const { window, agentStatus, onScreenShellCount, now } = seen
-  const working = agentStatus ? (agentStatus.subagents ?? []).filter((row) => row.state !== 'idle') : null
+  // Orca's title stand-in carries no roster, which is not a roster with no one
+  // on it (agent-status-stand-in.ts): read as one, every row lost the benefit
+  // of the doubt and stayed hidden once a hook row listed it again.
+  const working =
+    agentStatus && !isOrcaStandIn(agentStatus) ? (agentStatus.subagents ?? []).filter((row) => row.state !== 'idle') : null
   const placed = working ? placeRows(previous, seen, working) : null
   return {
     ownAgentIds: rememberFinishedTaskIds(previous.ownAgentIds, [...window.ownAgentIds, ...(placed?.own ?? [])]),

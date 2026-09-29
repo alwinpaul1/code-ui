@@ -475,7 +475,7 @@ know that row still stands:
   shell title once the agent has left copies none), and names the same agent
   and session;
 - through a `done`, only while Orca says background work outlived the lead's
-  turn, and not once a beacon that keeps a heartbeat has gone silent.
+  turn.
 
 The last rule is there because the row the phone last saw is often not the
 Stop row. Orca coalesces the phone's tab snapshots (50 ms, at most 250 ms)
@@ -493,10 +493,17 @@ the live hook row, past its own stand-in, until that row is 30 minutes old.
 The phone's tab comparison now counts it, or a frame where only it changed
 never reached the chat.
 
-The heartbeat rule is for an agent that exits. It takes its shells and
-agents with it, and with no renderer row for the pane Orca's last resort
-(`buildPtyMobileAgentStatus`, "what retires the card once the agent exits")
-is a `done` with the title stand-in's exact shape.
+With no such stamp the `done` is read as it comes, which is also what
+retires the work of an agent that exited after a turn that held none: with
+no renderer row for the pane, Orca's last resort (`buildPtyMobileAgentStatus`,
+"what retires the card once the agent exits") is a `done` with the title
+stand-in's exact shape.
+
+The task memory no longer reads a stand-in's missing roster as a roster with
+no one on it. It did, after a reconnect or on any stand-in read as it came:
+every row the loaded window never showed launched lost the benefit of the
+doubt, and when the next hook row listed it again it read as a reviewer's and
+stayed hidden until it stopped.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
@@ -511,18 +518,26 @@ Known limits:
 - Thirty minutes after the pane's last hook row, Orca drops the row and its
   `turnCompletedAt` from the tab, and a lead idle that long with only a shell
   running (nothing fires a hook) loses the shell from the count again.
-- An agent that exits after a turn that held background work, on a tab with
-  no heartbeat beacon (hand-started, Windows), keeps that work listed until
-  the watch breaks or those 30 minutes pass.
+- An agent that exits after a turn that held background work keeps that
+  work listed until the watch breaks or those 30 minutes pass. A silent
+  beacon is no sign of an exit: Claude unmounts its status line, and the
+  beat, under every picker and dialog, and a terminal keeps the last beacon
+  of a process long gone. A rule built on it (8c71e9fd) dropped the work
+  of an idle lead with `/tasks` open on the desk, and of a hand-started
+  `claude -c` in a terminal a phone-launched Claude had used (its re-review).
 - Orca stamps the turn end for Claude only, so on a Codex tab a `done`
   stand-in is read as it comes and a sub-agent that outlived the lead's turn
   leaves the count while it stands. The `working` stand-in over a long tool
   call is read through on both.
-- The watch is taken per render. A row that dropped an agent and was applied
-  in the same render as the stand-in after it (a burst after a stalled JS
-  thread), or one published during a relay-to-direct cutover that replays
-  the subscription on a link that stayed up, is never seen, and the older
-  row is read until the next hook row.
+- The watch is taken per render. A row applied in the same render as the
+  stand-in after it (a burst after a stalled JS thread), or published during
+  a relay-to-direct cutover that replays the subscription on a link that
+  stayed up, is never seen, and the older row is read until the next hook
+  row. When the row missed is the all-clear `done`, which carries that
+  turn's `turnCompletedAt` too, until the lead's next turn or those 30
+  minutes.
+- The subagent run clock still restarts after a stand-in read as it comes;
+  4853532e on fix/midturn-residuals keeps it.
 
 Not watched live. The stand-in's fields are read off Orca's source and the
 1.4.216 asar, and the order of the Stop row and the idle title off how

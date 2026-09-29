@@ -123,14 +123,7 @@ export function useMobileNativeChatActiveResolution(args: {
     }
   }, [readingLog])
   const chatStatus = reading.kind === 'nested' ? null : tabStatus
-  // A beacon that keeps a heartbeat and is not painting has gone silent, or
-  // was written off: its process has left the pane (agent-status-stand-in.ts).
-  const heartbeatSilent =
-    readAgent !== null && beacon?.agent === readAgent && beacon.heartbeatSeconds != null && Boolean(beacon.sessionId) && painting === null
-  const taskStatus = useTaskReaderStatus(chatStatus, watching, {
-    turnCompletedAt: activeSessionTab?.turnCompletedAt ?? null,
-    heartbeatSilent
-  })
+  const taskStatus = useTaskReaderStatus(chatStatus, watching, activeSessionTab?.turnCompletedAt ?? null)
   // The agent that decides the DEFAULT view, which a hand-started one does not:
   // see `chatDefaultAgent`. An explicit toggle is an override and still wins.
   const defaultViewAgent = chatDefaultAgent(chatIdentity?.agent, chatIdentity?.source)

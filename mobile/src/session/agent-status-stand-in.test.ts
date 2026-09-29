@@ -9,7 +9,6 @@ import {
   isOrcaStandIn,
   readTaskStatus,
   useTaskReaderStatus,
-  type StandInEvidence,
   type TaskStatusWatch
 } from './agent-status-stand-in'
 
@@ -49,19 +48,19 @@ const standIn = (fields: Partial<AgentStatusEntry> = {}): AgentStatusEntry =>
   }) as AgentStatusEntry
 
 /** Orca's turn end on the tab: background work outlived the lead's turn. */
-const GATED: StandInEvidence = { turnCompletedAt: 2_100, heartbeatSilent: false }
+const GATED = 2_100
 
 /** Feeds statuses in order, as renders do, and returns what the task readers
  *  read of the last one. */
 function readAll(
   statuses: readonly (AgentStatusEntry | null)[],
   watching: readonly boolean[] = [],
-  evidence: StandInEvidence = GATED
+  turnCompletedAt: number | null = GATED
 ): AgentStatusEntry | null {
   let watch: TaskStatusWatch = null
   let read: AgentStatusEntry | null = null
   statuses.forEach((status, index) => {
-    const next = readTaskStatus(watch, status, watching[index] ?? true, evidence)
+    const next = readTaskStatus(watch, status, watching[index] ?? true, turnCompletedAt)
     watch = next.watch
     read = next.read
   })
@@ -98,17 +97,12 @@ describe('what the task readers read through a stand-in', () => {
   // Stop row: through a `done` only Orca's turn end says work outlived the turn.
   it('reads a done stand-in as it comes when Orca carries no turn end on the tab', () => {
     const idle = standIn()
-    expect(readAll([row({ workingMode: undefined, toolName: 'Read' }), idle], [], { turnCompletedAt: null, heartbeatSilent: false })).toBe(idle)
-  })
-
-  it('reads a done stand-in as it comes once the heartbeat beacon has gone silent', () => {
-    const idle = standIn()
-    expect(readAll([row(), idle], [], { ...GATED, heartbeatSilent: true })).toBe(idle)
+    expect(readAll([row({ workingMode: undefined, toolName: 'Read' }), idle], [], null)).toBe(idle)
   })
 
   it('reads the row through a working stand-in with no turn end: the lead is still at it', () => {
     const last = row({ workingMode: undefined })
-    expect(readAll([last, standIn({ state: 'working' })], [], { turnCompletedAt: null, heartbeatSilent: true })).toBe(last)
+    expect(readAll([last, standIn({ state: 'working' })], [], null)).toBe(last)
   })
 
   it('reads a hook row after the stand-in as it comes', () => {
@@ -158,15 +152,15 @@ describe('what the task readers read through a stand-in', () => {
 describe('the task readers’ status under React', () => {
   let push: ((status: AgentStatusEntry) => void) | null = null
   let read: AgentStatusEntry | null = null
-  function Reader({ initial, evidence }: { initial: AgentStatusEntry; evidence: StandInEvidence }): null {
+  function Reader({ initial, turnCompletedAt }: { initial: AgentStatusEntry; turnCompletedAt: number | null }): null {
     const [status, setStatus] = useState(initial)
     push = setStatus
-    read = useTaskReaderStatus(status, true, evidence)
+    read = useTaskReaderStatus(status, true, turnCompletedAt)
     return null
   }
-  function mount(initial: AgentStatusEntry, evidence: StandInEvidence = GATED, strict = false): ReactTestRenderer {
+  function mount(initial: AgentStatusEntry, turnCompletedAt: number | null = GATED, strict = false): ReactTestRenderer {
     let renderer: ReactTestRenderer | null = null
-    const reader = createElement(Reader, { initial, evidence })
+    const reader = createElement(Reader, { initial, turnCompletedAt })
     act(() => {
       renderer = create(strict ? createElement(StrictMode, null, reader) : reader)
     })
@@ -195,7 +189,7 @@ describe('the task readers’ status under React', () => {
   // that dropped an agent. Through a `done` with no turn end on the tab the
   // stand-in is read as it comes all the same (the review of 09aa69a0).
   it('reads a done stand-in as it comes over a row React batched away, when Orca carries no turn end', () => {
-    const renderer = mount(row(), { turnCompletedAt: null, heartbeatSilent: false })
+    const renderer = mount(row(), null)
     act(() => {
       push!(row({ subagents: undefined, updatedAt: 2_200 }))
       push!(standIn())

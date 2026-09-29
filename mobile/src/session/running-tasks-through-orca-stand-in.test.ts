@@ -106,6 +106,9 @@ const SESSION: Record<Agent, { id: string; transcriptPath: string }> = {
   }
 }
 
+/** A phone-launched Claude's status-line beacon, declaring a 5 s beat. */
+const BEACON = `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION.claude.id} hb=5\u0007`
+
 /** The pane's hook row as Orca's store holds it after the lead's Stop, with
  *  background work still running: Orca keeps the pane `working` (in
  *  `monitoring` mode when only shells run), so the working state still dates
@@ -365,20 +368,48 @@ describe('background work the chat shows while Orca stands in the pane status', 
     expect(show('claude', standIn('claude', 'tab-1', 'done', '10:05:00.000'))).toEqual([])
   })
 
-  // After a turn that held background work, only the phone's own evidence
-  // says the agent is gone: a beacon that keeps a heartbeat and went silent.
-  it('retires the shell and agent Claude killed on exit when its heartbeat beacon has gone silent', () => {
+  // A silent beacon is no sign the agent left (the re-review of 8c71e9fd,
+  // which dropped that rule). Claude unmounts its status line, and the beat
+  // with it, under every picker and dialog: an idle lead with /tasks open on
+  // the desk beats no more than one that exited (agent-hud-beacon-liveness.ts).
+  it('keeps the background work while the idle lead sits under a desktop dialog that silenced its beacon', () => {
     session.messages = CLAUDE_TURN
     act(() => {
-      consumeAgentHudBeacons('term-tab-1', `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION.claude.id} hb=5\u0007`)
+      consumeAgentHudBeacons('term-tab-1', BEACON)
     })
     expect(show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)).toEqual([SHELL, AGENT])
     expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
-    // Six missed beats later, Claude has exited.
-    vi.setSystemTime(at('10:01:10.000'))
+    vi.setSystemTime(at('10:00:45.000'))
     act(() => {
       vi.advanceTimersByTime(5_000)
     })
-    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:01:09.000'), GATED)).toEqual([])
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
+  })
+
+  // The beacon store is keyed by terminal handle and outlives the process: a
+  // phone-launched Claude left its beacon, then `claude -c` typed into the
+  // same terminal (same session id, no beacon flag) never beats.
+  it('keeps a hand-started successor’s background work in a terminal whose last beacon was a previous process’s', () => {
+    vi.setSystemTime(at('09:50:00.000'))
+    act(() => {
+      consumeAgentHudBeacons('term-tab-1', BEACON)
+    })
+    vi.setSystemTime(at('10:00:06.000'))
+    session.messages = CLAUDE_TURN
+    expect(show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)).toEqual([SHELL, AGENT])
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
+  })
+
+  // After a reconnect the watch is empty and the first stand-in is read as it
+  // comes. The task memory read its missing roster as none: a row from before
+  // the loaded window lost the benefit of the doubt, and the next hook row
+  // listing it showed a reviewer's row, hidden until it stopped.
+  it('shows an agent from before the loaded window again when the next hook row lists it, after a reconnect read a stand-in first', () => {
+    session.messages = CLAUDE_TURN.slice(0, 2)
+    const earlier = rosterRow(OWN_AGENTS.a441.id, at('09:40:00.000'))
+    expect(show('claude', hookRow('claude', 'tab-1', roster(earlier)), GATED)).toEqual([SHELL, earlier.id])
+    show('claude', hookRow('claude', 'tab-1', roster(earlier)), { connState: 'disconnected', ...GATED })
+    show('claude', standIn('claude', 'tab-1', 'done'), GATED)
+    expect(show('claude', hookRow('claude', 'tab-1', { ...roster(earlier), updatedAt: at('10:00:40.000') }), GATED)).toEqual([SHELL, earlier.id])
   })
 })
