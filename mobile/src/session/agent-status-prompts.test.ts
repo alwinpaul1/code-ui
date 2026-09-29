@@ -489,6 +489,22 @@ describe('a tab status that carries no prompt', () => {
       ])
     })
 
+    // The same after `/clear`, where the new session's key already started
+    // the reader over but kept the text last read (a pane flips sessions).
+    it('draws a first prompt after /clear that repeats the last one of the session before', () => {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-A', {
+        state: 'done',
+        prompt: 'ok',
+        updatedAt: 1_000,
+        stateStartedAt: 900,
+        stateHistory: [{ state: 'working', prompt: 'ok', startedAt: 500 }],
+        providerSession: { id: 'sess-A' }
+      })
+      state = observeAgentStatusPrompt(state, 'sess-B', { state: 'done', prompt: '', sessionBoundary: true, updatedAt: 2_000, stateStartedAt: 2_000, stateHistory: [], providerSession: { id: 'sess-B' } })
+      state = observeAgentStatusPrompt(state, 'sess-B', { state: 'working', prompt: 'ok', updatedAt: 3_000, stateStartedAt: 3_000, stateHistory: [], providerSession: { id: 'sess-B' } })
+      expect(state.prompts.map((prompt) => prompt.text)).toEqual(['ok'])
+    })
+
     it('still keeps one message through the stand-in, working or done', () => {
       let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, state: 'working', prompt: 'yes', updatedAt: 1_000, stateStartedAt: 1_000 })
       for (const standInState of ['working', 'blocked', 'done']) {
