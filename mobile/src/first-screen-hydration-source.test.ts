@@ -20,6 +20,14 @@ describe('a screen that words an empty host list as a claim waits for the read',
     expect(src).not.toMatch(/hostCatalog\.length\s*===\s*0/)
   })
 
+  it('the home screen hands the body its kind unchanged, not a re-derived one', () => {
+    const src = code('./home/MobileHomeScreen.tsx')
+    expect(src).toMatch(/const bodyKind = homeBodyKind\(data\.hostCatalogLoaded,/)
+    expect(src).toMatch(/kind=\{bodyKind\}/)
+    // A re-mapped kind (loading drawn as the pairing screen) is the launch flash again.
+    expect(src).not.toMatch(/kind=\{(?!bodyKind\})/)
+  })
+
   it('no route or component seeds a host list with [] and fills it from a bare load', () => {
     // Found by shape, not by a list of screens: every non-test source file under app/ and src/.
     const root = join(import.meta.dirname, '..')
