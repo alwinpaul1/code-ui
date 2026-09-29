@@ -51,10 +51,11 @@ export type NativeChatTerminalWait =
  * prompt the screen read has not seen, but not for one the screen saw leave:
  * the hook's row outlives its answer.
  *
- * Nor does a screen read from before the phone's own answer speak: the dialog
- * on it is the one that answer closed. On 2026-09-29 Submit on Claude's
- * question swapped the card for this notice until the next poll ("the screen
- * flashes"), once the hook row and the transcript said the answer was taken.
+ * Nor does a screen read speak once the phone has answered a card, until a
+ * read begun after that card left: the dialog on it is the one the answer
+ * closed. On 2026-09-29 Submit on Claude's question swapped the card for this
+ * notice until the next poll ("the screen flashes"), once the hook row and the
+ * transcript said the answer was taken.
  */
 export function terminalPromptWait(input: {
   /** The card the chat shows for a prompt: permission, question or ask. */

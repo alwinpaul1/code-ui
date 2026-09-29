@@ -93,8 +93,8 @@ export function useMobileTerminalHudObservation(args: {
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
   const [dialogBeforeAnswer, setDialogBeforeAnswer] = useState(false)
-  // Bumped by each accepted answer; a read clears `dialogBeforeAnswer` only if
-  // none came in while it was on the wire.
+  // Bumped by each `rereadAfterAnswer`; a read clears `dialogBeforeAnswer` only
+  // if none came in while it was on the wire.
   const answersRef = useRef(0)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)

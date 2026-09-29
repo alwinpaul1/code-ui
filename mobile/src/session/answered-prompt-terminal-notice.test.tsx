@@ -208,6 +208,9 @@ let screen: string[] | null = []
 let slowReadsAfterWrite = false
 /** Set by a case: every screen read, whenever it began, waits for `landReads`. */
 let slowReads = false
+/** Set by a case: the host's ack of a key waits for its resolver in `heldWrites`. */
+let slowWrites = false
+let heldWrites: (() => void)[] = []
 let wrote = false
 let heldReads: (() => void)[] = []
 /** The keys the phone wrote into the terminal. */
@@ -218,6 +221,9 @@ const sendRequest = vi.fn(async (method: string, params?: { text?: string }) => 
     // The host takes every key, as it did on the phone.
     wrote = true
     writes.push(params?.text ?? '')
+    if (slowWrites) {
+      await new Promise<void>((resolve) => heldWrites.push(resolve))
+    }
     return { ok: true, result: { send: { handle: 'term-1', accepted: true, bytesWritten: 1 } } }
   }
   if (method !== 'terminal.read') {
@@ -348,6 +354,8 @@ beforeEach(() => {
   screen = []
   slowReadsAfterWrite = false
   slowReads = false
+  slowWrites = false
+  heldWrites = []
   wrote = false
   heldReads = []
   writes = []
@@ -438,6 +446,31 @@ describe("the dock after Submit on Claude Code 2.1.282's question", () => {
     await transcript([PROMPT_ROW, ASK_CALL, ASK_RESULT])
     await landReads(ANSWERED_ON_SCREEN)
     expect(noticesIn(start), frames.slice(start).join(' → ')).toEqual([])
+    expect(frames.at(-1)).toBe('nothing')
+  })
+
+  // Rare: the agent's report beats the host's ack of the key, so the card has
+  // left before the answer counts as accepted. Nothing holds the notice in
+  // that window (known, and short), but the ack must end it at once, not a
+  // poll later (second review of the hold, 4f6110f7).
+  it('ends the notice as soon as the host acks an answer whose card already left', async () => {
+    await questionUp()
+    slowWrites = true
+    let answer!: Promise<boolean>
+    act(() => {
+      answer = askProps!.onAnswer([{ indices: [1] }])
+    })
+    await hook(TOOK)
+    await transcript([PROMPT_ROW, ASK_CALL, ASK_RESULT])
+    screen = ANSWERED_ON_SCREEN
+    await act(async () => {
+      for (const ack of heldWrites.splice(0)) {
+        ack()
+      }
+      expect(await answer).toBe(true)
+    })
+    expect(writes).toEqual(['2'])
+    expect(controller?.nativeChatTerminalWait).toBeNull()
     expect(frames.at(-1)).toBe('nothing')
   })
 
