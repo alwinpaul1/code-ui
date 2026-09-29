@@ -441,4 +441,36 @@ describe('a mid-turn message the queue box lists', () => {
     unmount()
   })
 
+  // Round 3 of the review of fix/midturn-gaps: a message the person typed
+  // ending in an ellipsis (the Claude app's smart punctuation makes "..." a
+  // "…") is not the box's cut of an earlier message it merely begins.
+  for (const [earlier, later] of [
+    ['wait, the build is still running on the old branch', 'wait…'],
+    ['Hmm, the retry path never logs the second failure', 'Hmm…'],
+    ['ok so the migration ran twice on staging last night', 'ok so…']
+  ] as const) {
+    it(`keeps "${earlier}" in the chat while "${later}" waits in the box`, async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(earlier, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+      await showAt('05:37:40.000', WHOLE_TURN.slice(0, -5), prompts)
+      expect(where(earlier).at).toHaveLength(1)
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:39:30.000'))
+      prompts = again.read(working(later, '05:39:29.000'))
+      await showAt('05:39:30.100', WHOLE_TURN.slice(0, -4), prompts, true, [later])
+      await showAt('05:39:31.000', WHOLE_TURN.slice(0, -4), prompts, true, [later])
+      expect(queueBox()).toEqual([later])
+      expect(where(earlier).at).toHaveLength(1)
+      again.unmount()
+      unmount()
+    })
+  }
 })

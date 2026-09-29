@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+import { projectMobileChatQueue, QUEUE_ROW_MATCH_FLOOR, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { isTakenSend } from './mobile-native-chat-pending-echo'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
@@ -319,12 +319,21 @@ function isWitnessId(id: string): boolean {
 
 /**
  * Whether a queue box row lists a remembered message: its words exactly; the
- * box's own `…` stub of them (Codex keeps its preview's ellipsis); or, for a
- * photo of no words, the same `[Image #N]` markers. Never a longer row that
- * only goes on past a message's words: that is another message (c9c1d899),
- * nor another photo of no words (round 2 of the review of fix/midturn-gaps).
- * A long message's echo, cut at the tab status's field, gives way in the
- * store to the box's whole reading of it (mobile-native-chat-remember-echo.ts).
+ * box's own `…` stub of them; or, for a photo of no words, the same
+ * `[Image #N]` markers. Never a longer row that only goes on past a message's
+ * words: that is another message (c9c1d899), nor another photo of no words
+ * (round 2 of the review of fix/midturn-gaps). A long message's echo, cut at
+ * the tab status's field, gives way in the store to the box's whole reading
+ * of it (mobile-native-chat-remember-echo.ts).
+ *
+ * A stub is Codex's preview, whose last line is a `…` alone, or a row long
+ * enough to be sure of (QUEUE_ROW_MATCH_FLOOR, the floor the box's rows of the
+ * phone's own sends are held to). A short row that ends in `…` is a message
+ * the person typed that way (the Claude app's smart punctuation makes "..."
+ * one): "wait…" in the box held "wait, the build is still running on the old
+ * branch" out of the chat while it waited (round 3 of the review of
+ * fix/midturn-gaps). What it costs: a typed message of 24 characters or more
+ * that ends in `…` still holds an earlier one it begins while it waits.
  */
 function rowListsWitness(row: string, text: string): boolean {
   const rowKey = boxKey(row)
@@ -337,7 +346,10 @@ function rowListsWitness(row: string, text: string): boolean {
     return true
   }
   const stub = rowKey.endsWith('…') ? rowKey.slice(0, -1).trimEnd() : null
-  return stub !== null && stub.length > 0 && key.startsWith(stub)
+  if (stub === null || stub.length === 0 || !key.startsWith(stub)) {
+    return false
+  }
+  return row.trimEnd().split('\n').at(-1)!.trim() === '…' || stub.replace(/\s+/g, '').length >= QUEUE_ROW_MATCH_FLOOR
 }
 
 function imageMarkers(text: string): string {
