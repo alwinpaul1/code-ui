@@ -39,6 +39,22 @@ describe('a roster subagent’s run clock', () => {
     expect(advanceSubagentRunClock({ ...standIn, sessionBoundary: true }, NOW - 4_000)?.size).toBe(0)
   })
 
+  // The review of b75a42e6 (K1): the lead resumes a subagent by SendMessage
+  // with the same agent id, and Orca gives its row a new start because the
+  // row had left. On a host whose real statuses carry no prompt and no
+  // history, the status that said none was tracked has the stand-in's shape,
+  // so the clock kept the first run, and the resumed one read "1h 0m".
+  it('times a resumed subagent from its resume, not from its first run', () => {
+    const bare = { paneKey: 'pane-1', prompt: '', stateHistory: [] }
+    const firstRun = { ...agent, startedAt: NOW - 60 * 60_000 }
+    advanceSubagentRunClock({ ...bare, subagents: [firstRun] }, NOW - 60 * 60_000 + 2_000)
+    advanceSubagentRunClock({ ...bare }, NOW - 10 * 60_000)
+    const resumed = { ...firstRun, startedAt: NOW - 20_000 }
+    const clock = advanceSubagentRunClock({ ...bare, subagents: [resumed] }, NOW - 15_000)
+    const tasks = deriveBackgroundTasks([], NOW, { state: 'working', subagents: [resumed] }, { subagentRuns: clock })
+    expect(formatBackgroundTaskElapsed(tasks.running[0]?.elapsedMs ?? null)).toBe('20s')
+  })
+
   // Degenerate: a stand-in before the phone has any clock for the pane, and
   // a status with no pane at all.
   it('has no clock from a stand-in alone, or from a status with no pane', () => {
