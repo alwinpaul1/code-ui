@@ -9,13 +9,13 @@ import {
   connectionLogStore,
   recordConnectionClientSessionStart
 } from './persisted-connection-log-store'
-import { loadHosts } from './host-store'
+import { loadHostCatalog } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import type { RpcClient } from './rpc-client'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { ConnectionState, HostProfile } from './types'
+import type { ConnectionState, HostCatalogEntry, HostProfile } from './types'
 
 export type HostClientStoreEntry = {
   client: RpcClient
@@ -37,7 +37,15 @@ type HostEntryOpenerState = {
   notifyAllHosts: () => void
 }
 
-type HostOpenFailureCategory = 'catalog-unavailable' | 'host-not-found' | 'client-construction'
+// The detail line the diagnostics timeline draws under "Host client open failed". A listed desktop
+// whose credential cannot be read is not "host-not-found": that line sent readers looking for a
+// removed host under a locked Keychain (review, 2026-09-30).
+type HostOpenFailureCategory =
+  | 'catalog-unavailable'
+  | 'host-not-found'
+  | 'credential-unavailable'
+  | 'credential-missing'
+  | 'client-construction'
 
 export async function openHostClientEntry(
   state: HostEntryOpenerState,
@@ -98,15 +106,23 @@ export async function openHostClientEntry(
   try {
     let host = state.primedHosts.get(hostId)
     if (!host) {
+      let entry: HostCatalogEntry | undefined
       try {
-        const hosts = await loadHosts()
-        host = hosts.find((candidate) => candidate.id === hostId)
+        entry = (await loadHostCatalog()).find((candidate) => candidate.id === hostId)
       } catch {
         failCurrentOpen('catalog-unavailable')
         return null
       }
+      // The same profile loadHosts() hands back: it lists exactly the entries that carry one.
+      host = entry?.profile ?? undefined
       if (!host) {
-        failCurrentOpen('host-not-found')
+        failCurrentOpen(
+          entry === undefined
+            ? 'host-not-found'
+            : entry.credentialStatus === 'missing'
+              ? 'credential-missing'
+              : 'credential-unavailable'
+        )
         return null
       }
     }
