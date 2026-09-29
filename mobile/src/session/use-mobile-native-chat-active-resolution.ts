@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, type MutableRefObject } from 'react'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import {
@@ -14,6 +14,7 @@ import {
 import { chatDefaultAgent } from './mobile-session-view-default'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 import { useMobileSessionViewMode } from './use-mobile-session-view-mode'
+import { withRosterHeldThroughStandIn } from './agent-status-stand-in'
 
 export function useMobileNativeChatActiveResolution(args: {
   hostId: string
@@ -112,7 +113,9 @@ export function useMobileNativeChatActiveResolution(args: {
       console.warn(readingLog)
     }
   }, [readingLog])
-  const chatStatus = reading.kind === 'nested' ? null : tabStatus
+  // With the roster the pane's last real status carried while Orca stands in
+  // a working one (agent-status-stand-in.ts).
+  const chatStatus = useMemo(() => withRosterHeldThroughStandIn(reading.kind === 'nested' ? null : tabStatus), [reading.kind, tabStatus])
   // The agent that decides the DEFAULT view, which a hand-started one does not:
   // see `chatDefaultAgent`. An explicit toggle is an override and still wins.
   const defaultViewAgent = chatDefaultAgent(chatIdentity?.agent, chatIdentity?.source)

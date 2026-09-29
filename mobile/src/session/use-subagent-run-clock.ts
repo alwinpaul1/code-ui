@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { observeSubagentRuns, type SubagentRunClock } from './mobile-subagent-runs'
+import { isOrcaStandIn } from './agent-status-stand-in'
 
 /**
  * The run clock for one pane, kept OUTSIDE the component: the tasks sheet
@@ -15,25 +16,6 @@ const CLOCK_CAP = 64
 type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
   Partial<Pick<AgentStatusEntry, 'paneKey' | 'prompt' | 'stateHistory' | 'sessionBoundary'>>
 
-/**
- * Whether a status is Orca's stand-in, which says nothing of the roster: built
- * from the terminal title when the pane's hook row is stale, as over a long
- * tool call, with the pane's key and state, no prompt, no history and no
- * `subagents` (the title-only branch of Orca 1.4.216's status projection,
- * read in its app.asar 2026-09-29; agent-status-prompts.ts has the same
- * shape). Read as a roster it emptied the clock, and the next real status
- * brought every subagent still running back as just started: the sheet read
- * seconds beside the desk's "1h 15m" (the user, 2026-09-29).
- */
-function isStandIn(status: RosterStatus): boolean {
-  return (
-    status.subagents === undefined &&
-    (status.prompt ?? '').trim() === '' &&
-    (status.stateHistory?.length ?? 0) === 0 &&
-    status.sessionBoundary !== true
-  )
-}
-
 /** Advance the pane's clock by this snapshot and return it. Pure per snapshot:
  *  the same roster observed twice changes nothing, so both readers may call it. */
 export function advanceSubagentRunClock(
@@ -45,7 +27,11 @@ export function advanceSubagentRunClock(
     return undefined
   }
   const previous = clocks.get(key) ?? null
-  if (isStandIn(status)) {
+  // Orca's stand-in says nothing of the roster. Read as one it emptied the
+  // clock, and the next real status brought every subagent still running
+  // back as just started: seconds on the sheet beside the desk's "1h 15m"
+  // (the user, 2026-09-29).
+  if (isOrcaStandIn(status)) {
     return previous ?? undefined
   }
   const next = observeSubagentRuns(previous, status.subagents, now)
