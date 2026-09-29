@@ -31,6 +31,7 @@ import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
 import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
 import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
+import { homeBodyKind } from './home-body-kind'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
 import { MobileHomeListFooter } from './MobileHomeListFooter'
@@ -121,10 +122,12 @@ export function MobileHomeScreen() {
     }
   }
 
+  const bodyKind = homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length)
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }} edges={['top']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
-      {data.hostCatalog.length === 0 ? (
+      {bodyKind === 'loading' ? null : bodyKind === 'pair' ? (
         <MobileHomeEmptyState
           bottomInset={insets.bottom}
           contentMaxWidth={contentMaxWidth}

@@ -36,6 +36,8 @@ import { useMobileHomeHostConnections } from './use-mobile-home-host-connections
 export function useMobileHomeData() {
   const router = useRouter()
   const [hostCatalog, setHostCatalog] = useState<HostCatalogEntry[]>([])
+  // Why: `[]` before the first read finishes is "not known yet", not "no hosts".
+  const [hostCatalogLoaded, setHostCatalogLoaded] = useState(false)
   const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
@@ -94,20 +96,32 @@ export function useMobileHomeData() {
   useFocusEffect(
     useCallback(() => {
       let stale = false
-      void loadHostCatalog().then(async (catalog) => {
-        if (stale) {
-          return
+      void loadHostCatalog().then(
+        async (catalog) => {
+          if (stale) {
+            return
+          }
+          setHostCatalog(catalog)
+          setHostCatalogLoaded(true)
+          if (catalog.length === 0 || onboardingCheckedRef.current) {
+            return
+          }
+          onboardingCheckedRef.current = true
+          const steps = await loadMobileOnboardingSteps()
+          if (!stale && steps.length > 0) {
+            router.replace(mobileOnboardingDestination(steps))
+          }
+        },
+        (error: unknown) => {
+          // Fail open: an unreadable store must not leave the home screen blank
+          // forever. The pairing screen is the one thing that still works, and
+          // the next focus reads again.
+          console.warn('[home] host catalog failed to load; showing the pairing screen', error)
+          if (!stale) {
+            setHostCatalogLoaded(true)
+          }
         }
-        setHostCatalog(catalog)
-        if (catalog.length === 0 || onboardingCheckedRef.current) {
-          return
-        }
-        onboardingCheckedRef.current = true
-        const steps = await loadMobileOnboardingSteps()
-        if (!stale && steps.length > 0) {
-          router.replace(mobileOnboardingDestination(steps))
-        }
-      })
+      )
       void AsyncStorage.getItem(LAST_VISITED_WORKTREE_STORAGE_KEY).then((raw) => {
         if (!stale) {
           setLastVisited(readLastVisitedWorktreeRecord(raw))
@@ -189,6 +203,7 @@ export function useMobileHomeData() {
     accountsHosts,
     connectedHosts,
     hostCatalog,
+    hostCatalogLoaded,
     hostConnections,
     primaryHost,
     primaryTaskProviders,
