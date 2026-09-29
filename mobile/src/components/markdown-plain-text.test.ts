@@ -92,6 +92,11 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('![](fig/plot.svg)')).toBe('fig/plot.svg')
   })
 
+  it('copies an image\'s alt text without its marks, as the screen draws it', () => {
+    expect(markdownPlainText('![**fig** `one`](fig/plot.svg)')).toBe('fig one\nfig/plot.svg')
+    expect(markdownPlainText('see ![**b** alt](https://x.dev/a.png) here')).toBe('see b alt (https://x.dev/a.png) here')
+  })
+
   it('copies a data: image as its words, never its data', () => {
     const blob = `data:image/png;base64,${'A'.repeat(2000)}`
     expect(markdownPlainText(`![](${blob})`)).toBe('')
