@@ -182,6 +182,24 @@ describe('parseMobileMarkdown', () => {
     }
   })
 
+  // Fourth review (2026-09-29): an indented code block went through the HTML
+  // pass in every version, so `<div>x</div>` drew and Copy copied `x`.
+  it.each([
+    ['at the margin', ['Run:', '', '    <div class="x">hi</div>', '    a &amp; b']],
+    ['after a wide list marker gap', ['-     ```html', '      <b>x</b>', '      ```']]
+  ])('leaves an indented code block %s exactly as written', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml([...lines, '', '<p>After</p>'].join('\n'))
+    expect(normalized).toBe([...lines, '', 'After'].join('\n'))
+  })
+
+  it('still strips README HTML indented inside a paragraph tag', () => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(
+      ['<p align="center">', '    <img src="logo.png" alt="Logo">', '    <b>Orca</b>', '</p>'].join('\n')
+    )
+    expect(normalized).not.toMatch(/<\/?(?:img|b|p)\b/)
+    expect(normalized).toContain('Orca')
+  })
+
   it('keeps a deeper fence run inside a list fence as code, not as its closer', () => {
     const fenced = ['  ```md', '  text', '      ```', '  <b>still code</b>', '  ```']
     const normalized = normalizeMobileMarkdownPreviewHtml(['- step', '', ...fenced, '', '<p>After</p>'].join('\n'))

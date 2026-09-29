@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { markdownFenceRanges } from './markdown-fence-range'
+import { markdownCodeRanges } from './markdown-code-ranges'
 
-const end = (lines: string[], index = 0): number | null => markdownFenceRanges(lines).get(index) ?? null
+const end = (lines: string[], index = 0): number | null => markdownCodeRanges(lines).get(index) ?? null
 
 // Where the HTML pass must leave code alone (mobile-markdown-preview-html.ts);
 // every case is a shape an agent's reply takes, read the way marked reads it.
@@ -56,6 +56,37 @@ describe('where a fenced code block ends in the source', () => {
   })
 })
 
+// Fourth review (2026-09-29): an indented code block is code too, and it went
+// through the HTML pass in every version, so `<div>x</div>` drew and copied
+// as `x`. Same defect as the fences, so the same pass protects it.
+describe('where an indented code block ends in the source', () => {
+  const code = (lines: string[], index = 0): number | null =>
+    markdownCodeRanges(lines, { indentedCode: true }).get(index) ?? null
+
+  it('finds nothing on a blank line of spaces', () => {
+    expect(code(['    '])).toBeNull()
+  })
+
+  it('runs over its indented and blank lines, and stops before the text after it', () => {
+    expect(code(['    only'])).toBe(1)
+    expect(code(['Run:', '', '    <div>x</div>', '', '    y', '', 'after'], 2)).toBe(5)
+  })
+
+  it('takes an indented line right after a paragraph for that paragraph', () => {
+    expect(code(['Intro', '    not code'], 1)).toBeNull()
+    expect(code(['<p align="center">', '    <img src="logo.png">', '</p>'], 1)).toBeNull()
+  })
+
+  it('finds one inside a list item, four columns past its content', () => {
+    expect(code(['- item', '', '      <b>x</b>', '  more'], 2)).toBe(3)
+    expect(code(['-     ```html', '      <b>x</b>', '      ```', 'after'])).toBe(3)
+  })
+
+  it('is left alone unless asked for, as in a fragment the HTML pass cuts out', () => {
+    expect(end(['Run:', '', '    <div>x</div>'], 2)).toBeNull()
+  })
+})
+
 // Third review (2026-09-29): tabs counted one column, where marked expands
 // them to the next multiple of four; and finding a fence's list item walked
 // back over the document for every fence, which the normalizer does on every
@@ -66,6 +97,15 @@ describe('fence ranges, tabs and cost', () => {
     expect(end(['- ```go', '\tfmt.Println("<b>hi</b>")', '  ```'])).toBe(3)
     expect(end(['Intro', '', '\t```', 'x'], 2)).toBeNull()
     expect(end(['```md', '\t```', 'x', '```', 'after'])).toBe(4)
+  })
+
+  // Fourth review (2026-09-29): `- - -` is a rule, not an item; a line after a
+  // blank that is less indented than the item's content ends the item; and a
+  // line at the margin right after an item's text is a lazy continuation of it.
+  it('reads the list items the way marked does around a fence', () => {
+    expect(end(['Intro', '- - -', '  ```sh', 'echo hi', '  ```', 'after'], 2)).toBe(5)
+    expect(end(['- item', '', ' para', '  ```sh', 'x', '  ```', 'after'], 3)).toBe(6)
+    expect(end(['1. step', 'lazy', '   ```sh', 'x', '   ```'], 2)).toBe(3)
   })
 
   it('reads a fence the next item has outdented as one at the margin', () => {
@@ -84,7 +124,7 @@ describe('fence ranges, tabs and cost', () => {
         return Reflect.get(target, key, receiver)
       }
     })
-    expect(markdownFenceRanges(counted).size).toBe(1000)
+    expect(markdownCodeRanges(counted).size).toBe(1000)
     expect(reads).toBeLessThanOrEqual(4 * source.length)
   })
 })
