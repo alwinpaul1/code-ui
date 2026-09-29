@@ -74,11 +74,22 @@ function claudeScreen(queued: readonly string[]): string[] {
 
 /** Orca's hook copies of submissions, as the tab status reports them. The
  *  status carries one text at a time, so a repeat of the same text is only a
- *  new prompt after the field was reset between them. */
+ *  new prompt after the field was reset between them. The reset is a hook
+ *  row saying the pane has no prompt, with a history of its own: a row with
+ *  no history is how Orca stands in for a hook row it will not use, which
+ *  says nothing (statusReadsPrompt, agent-status-prompts.ts), and the second
+ *  of two copies of the same words came to be taken for the first. On a real
+ *  host two submissions of the same words in one turn reach the reader as
+ *  one copy; the reset is what gives a case two. */
 function hookCopies(...submissions: [clock: string, text: string][]): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
   for (const [clock, text] of submissions) {
-    state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
+    state = observeAgentStatusPrompt(state, SESSION, {
+      state: 'working',
+      prompt: '',
+      updatedAt: at(clock),
+      stateHistory: [{ state: 'done', prompt: '', startedAt: at(clock) - 60_000 }]
+    })
     state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: text, updatedAt: at(clock) })
   }
   return [...state.prompts]
@@ -308,6 +319,9 @@ describe('a message the phone queues while the agent works', () => {
       const origin = await tap('08:24:19.000', 'yes')
       // The phone's own copy races its ack, as in the report.
       const both = hookCopies(['08:24:13.000', 'yes'], ['08:24:19.090', 'yes'])
+      // Two copies of the same words, as the case needs (final review of
+      // fix/midturn-prompt-at-end: the fixture had come to hand one).
+      expect(both.map((prompt) => prompt.text)).toEqual(['yes', 'yes'])
       await show('08:24:19.320', { messages: held, prompts: both })
       await ack('08:24:19.900', origin, 'yes')
       await show('08:24:52.500', { messages: afterTake, prompts: both })

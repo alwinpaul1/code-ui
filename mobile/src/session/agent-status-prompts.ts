@@ -44,6 +44,9 @@ export type AgentStatusPromptSource = {
   stateHistory?: readonly { state: string; prompt?: string; startedAt?: number }[] | null
   /** The session the row's last hook event came from (Claude `session_id`). */
   providerSession?: { id: string } | null
+  /** Set on the row Orca lands for a SessionStart (startup, resume, clear):
+   *  the pane's prompt was reset. */
+  sessionBoundary?: boolean | null
 } | null
 
 export type AgentStatusPromptState = {
@@ -97,16 +100,31 @@ function statusCarriesPrompt(
 
 /**
  * Whether a tab status says anything about the pane's prompt: one that
- * carries a prompt, or a hook row that carries none on a pane whose cached
- * prompt is empty (after startup, resume or clear, in a turn a teammate's
- * message started), which comes with a history of its own. Not a tab
- * snapshot with no status, and not Orca's stand-in for a hook row it will not
- * use (`prompt: ''`, `stateHistory: []`; see observeAgentStatusPrompt). Orca's
- * headless builder sends its live rows with no history too, so there a hook
- * row with no prompt is taken for a stand-in: it bounds nothing.
+ * carries a prompt, or one that says the pane has none. That is the row Orca
+ * lands for a SessionStart (`sessionBoundary`), and a hook row with a history
+ * of its own on a pane whose cached prompt is empty (after startup, resume or
+ * clear, in a turn a teammate's message started). Not a tab snapshot with no
+ * status, and not Orca's stand-in for a hook row it will not use:
+ * `prompt: ''`, `stateHistory: []`, working, blocked or done as the terminal
+ * title says, never a session boundary (`buildTitleOnlyStatus` in
+ * runtime-mobile-agent-status-projection.ts, runtime-mobile-agent-status-builder.ts,
+ * the idle-title branch of runtime-mobile-session-projection.ts, origin/main
+ * 8d6fec597b; see observeAgentStatusPrompt).
+ *
+ * What it cannot tell: Orca's headless builder, and its PTY builder when the
+ * renderer published no status, send live hook rows with no history, so
+ * there a teammate's turn's rows with no prompt read as the stand-in. After a
+ * SessionStart the phone read, that costs nothing (the boundary did the
+ * reset); with that row missed, the same words sent again mid-turn in such a
+ * turn are taken for the prompt read before and not drawn. Taking every such
+ * row as a reset instead would draw a second copy of a message after each
+ * long tool call, when Orca's title stands in mid-turn.
  */
 function statusReadsPrompt(status: AgentStatusPromptSource | undefined): boolean {
-  return statusCarriesPrompt(status) || (status != null && (status.stateHistory?.length ?? 0) > 0)
+  return (
+    statusCarriesPrompt(status) ||
+    (status != null && (status.sessionBoundary === true || (status.stateHistory?.length ?? 0) > 0))
+  )
 }
 
 export function observeAgentStatusPrompt(

@@ -461,6 +461,34 @@ describe('a tab status that carries no prompt', () => {
   // real reading (a pane whose cached prompt is empty). A message found after
   // a reconnect or the cached tab list came after it, and the next copy of a
   // prompt after it is a new submission, as before 257768bc.
+  // Final review of this branch: Orca's headless builder, and its PTY builder
+  // when the renderer published no tab status, send hook rows with no history
+  // (`stateHistory: []`), so a history cannot tell them from the stand-in.
+  // The row Orca lands for a SessionStart says the pane was reset
+  // (`sessionBoundary`), and the stand-in never does.
+  describe('from a session reset with no history', () => {
+    const pane = { stateHistory: [], providerSession: { id: 'sess-1' } }
+    it('makes the same words sent mid-turn in a teammate’s turn after it a new message', () => {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, state: 'working', prompt: 'yes', updatedAt: 1_000, stateStartedAt: 1_000 })
+      state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, state: 'done', prompt: '', sessionBoundary: true, updatedAt: 2_000, stateStartedAt: 2_000 })
+      state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, state: 'working', prompt: '', updatedAt: 3_000, stateStartedAt: 3_000 })
+      state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, state: 'working', prompt: 'yes', updatedAt: 4_000, stateStartedAt: 3_000 })
+      expect(state.prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([
+        ['yes', 1_000],
+        ['yes', 4_000]
+      ])
+    })
+
+    it('still keeps one message through the stand-in, working or done', () => {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, state: 'working', prompt: 'yes', updatedAt: 1_000, stateStartedAt: 1_000 })
+      for (const standInState of ['working', 'blocked', 'done']) {
+        state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, state: standInState, prompt: '', updatedAt: 2_000, stateStartedAt: 1_500 })
+        state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, state: 'working', prompt: 'yes', updatedAt: 3_000, stateStartedAt: 1_000 })
+      }
+      expect(state.prompts).toHaveLength(1)
+    })
+  })
+
   describe('from a hook row, with a history of its own', () => {
     const row = (updatedAt: number, prompt = '') => ({
       state: 'working',
