@@ -47,6 +47,7 @@ import type {
   NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 
@@ -144,9 +145,10 @@ function ToolLine({
   // A plan's input has no path and no primary argument, so the generic label
   // falls through to a bounded JSON preview — `{"todos":[{"content":…` on the
   // one line the phone gives a collapsed row. Say how far along it is instead.
+  // A result with no call previews its first line, never cut through an emoji.
   const preview = taskList
     ? mobileTaskListPreview(taskList.list)
-    : (inputDisplay?.label ?? result?.output.split('\n')[0]?.slice(0, 80) ?? '')
+    : (inputDisplay?.label ?? cutWholeCharacters(result?.output.split('\n')[0] ?? '', 80))
   // Why: collapsed tool rows are the common path; defer bounded diff parsing
   // and detail formatting until the user asks to reveal the detail.
   // An edit renders as one card per file it changed, which speaks for the call
