@@ -17,8 +17,8 @@ import { MobileMarkdown } from './MobileMarkdown'
 import { ThemeProvider } from '../theme/theme-context'
 
 // Review, 2026-09-30 (two reviewers): a fence inside a quote reached the HTML
-// pass, so the quote drew `**x** &` for `<b>x</b> &amp;` and nothing at all
-// for `<Text>a</Text>`. A quote draws a fence as its source (quotedText in
+// pass, so the quote drew `**x** &` for `<b>x</b> &amp;` and a bare `a` for
+// `<Text>a</Text>`. A quote draws a fence as its source (quotedText in
 // mobile-markdown-parser.ts); what is pinned here is that its code arrives as
 // written. The Copy is pinned in markdown-plain-text.test.ts.
 

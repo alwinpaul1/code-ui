@@ -210,7 +210,7 @@ describe('markdownPlainText', () => {
 // is a group inside a group; one written with overlapping alternatives takes
 // exponential time on a bold that never closes. The screen and the Copy run
 // the same pattern over every paragraph of every reply, so it is held to the
-// parser's deadline. About 20 ms each for these on a Mac.
+// parser's deadline. These take 15 ms or less each on a Mac.
 describe('emphasis that never closes', () => {
   it.each([
     ['a bold over many italics', `**${'a *b* '.repeat(15_000)}`],
