@@ -82,7 +82,7 @@ export { BridgeInitRouteSchema, type BridgeInitRoute }
  * The host the shell opened this page for, minus everything secret about it.
  *
  * `expo-secure-store` is `{}` on web, so the page's own `loadHosts()` answers with nothing and the
- * list paints "Host not found" over a host that is right there. What crosses is the profile the
+ * list says the host is gone when it is right there. What crosses is the profile the
  * screens read and not the credential they never touch: the bridge already carries the RPC, so a
  * page that held a device token would be holding one it has no use for.
  */

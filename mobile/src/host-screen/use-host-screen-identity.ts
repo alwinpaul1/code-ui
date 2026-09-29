@@ -1,17 +1,24 @@
-import { useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getCachedWorktrees } from '../cache/worktree-cache'
 import { loadPinnedIds } from '../storage/preferences'
-import { loadHosts, updateLastConnected } from '../transport/host-store'
+import { lookUpPairedHost } from '../transport/host-lookup'
+import { updateLastConnected } from '../transport/host-store'
 import type { RpcClient } from '../transport/rpc-client'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import type { Worktree } from '../worktree/workspace-list-sections'
 import type { HostScreenState } from './use-host-screen-state'
 
 export function useHostScreenIdentity(args: {
   client: RpcClient | null
   hostId: string | undefined
+  /** Moves each time the host connects; a failed lookup is read again on the next one. */
+  lastConnectedAt: number | null
   state: HostScreenState
 }): void {
-  const { client, hostId, state } = args
+  const { client, hostId, lastConnectedAt, state } = args
   const {
     clientRef,
     repoMetadataFetchedAtRef,
@@ -28,6 +35,10 @@ export function useHostScreenIdentity(args: {
     setWorktrees,
     setWorktreesLoaded
   } = state
+  // Which lookup of this desktop is current, and whether the last one could not name it.
+  const [lookupRun, setLookupRun] = useState(0)
+  const [lookupFailed, setLookupFailed] = useState(false)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
 
   // Load persisted pins from local cache; view settings are no longer local (they sync via ui.get).
   useEffect(() => {
@@ -73,24 +84,46 @@ export function useHostScreenIdentity(args: {
       setWorktrees([])
       setLastKnownWorktrees([])
     }
+    setLookupFailed(false)
+  }, [hostId])
+
+  // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired, and
+  // "Host not found" over it took the whole screen for a desktop that only needed a moment.
+  useEffect(() => {
     if (!hostId) {
       return
     }
     let stale = false
-    void loadHosts().then((hosts) => {
+    void lookUpPairedHost(hostId).then((lookup) => {
       if (stale) {
         return
       }
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host) {
-        setError('Host not found')
+      if (lookup.kind !== 'ready') {
+        setLookupFailed(true)
+        // A client for this desktop means the opener has read it, so a read that fails now neither
+        // takes the screen from a connection that works nor keeps an older line up over one.
+        setError(clientRef.current === null ? lookup.message : '')
         return
       }
-      setHostName(host.name)
-      void updateLastConnected(host.id)
+      setLookupFailed(false)
+      setError('')
+      setHostName(lookup.host.name)
+      void updateLastConnected(lookup.host.id)
     })
     return () => {
       stale = true
     }
-  }, [hostId])
+  }, [hostId, lookupRun])
+
+  // Nothing stays stale once the host connects: it can only connect after the opener has read its
+  // credential, so a lookup that failed is read again, once per new connection, never per render.
+  useEffect(() => {
+    const status = lookupFailed ? 'error' : 'ready'
+    if (
+      hostId &&
+      shouldRefetchAfterReconnect(staleLedgerRef.current, hostId, status, lastConnectedAt)
+    ) {
+      setLookupRun((run) => run + 1)
+    }
+  }, [hostId, lookupFailed, lastConnectedAt])
 }

@@ -36,8 +36,16 @@ vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'ChevronLeft'
 }))
 
+// The screen looks its host up in the catalog (host-lookup.ts); every fixture here is a readable
+// desktop, so the catalog is the same list with each entry ready.
 vi.mock('./transport/host-store', () => ({
   loadHosts: dependencies.loadHosts,
+  loadHostCatalog: async () =>
+    ((await dependencies.loadHosts()) as { id: string }[]).map((profile) => ({
+      ...profile,
+      credentialStatus: 'ready',
+      profile
+    })),
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 

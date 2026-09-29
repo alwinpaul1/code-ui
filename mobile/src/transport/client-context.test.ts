@@ -15,7 +15,15 @@ vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => connectMock(...args)
 }))
 vi.mock('./host-store', () => ({
-  loadHosts: () => loadHostsMock()
+  loadHosts: () => loadHostsMock(),
+  // The client opener reads the catalog (host-entry-opener.ts). Every fixture here is a readable
+  // desktop, so the catalog is the same list with each entry ready, read through the same mock.
+  loadHostCatalog: async () =>
+    ((await loadHostsMock()) as { id: string }[]).map((profile) => ({
+      ...profile,
+      credentialStatus: 'ready',
+      profile
+    }))
 }))
 vi.mock('./connection-revival-triggers', () => ({
   subscribeConnectionRevivalTriggers: () => () => {}

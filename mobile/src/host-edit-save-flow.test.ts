@@ -37,8 +37,17 @@ vi.mock('lucide-react-native', () => ({
   ChevronLeft: 'ChevronLeft'
 }))
 
+// The screen looks its host up in the catalog (host-lookup.ts) and re-primes from loadHosts()
+// after a save. Every fixture here is a readable desktop, so the catalog is the same list with
+// each entry ready, and one queue feeds both reads in the order the screen makes them.
 vi.mock('./transport/host-store', () => ({
   loadHosts: dependencies.loadHosts,
+  loadHostCatalog: async () =>
+    ((await dependencies.loadHosts()) as { id: string }[]).map((profile) => ({
+      ...profile,
+      credentialStatus: 'ready',
+      profile
+    })),
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
@@ -293,17 +302,20 @@ describe('edit host load() error states', () => {
     dependencies.loadHosts.mockReset().mockResolvedValue([])
     const renderer = await renderEditHostRoute()
 
-    expect(findText(renderer, 'This host was removed from this phone.')).toBe(true)
+    expect(findText(renderer, 'This desktop was removed from this phone.')).toBe(true)
     expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
 
     act(() => renderer.unmount())
   })
 
-  it('surfaces the error message when loadHosts rejects', async () => {
+  it('says the desktops could not be read when the host list read rejects', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     dependencies.loadHosts.mockReset().mockRejectedValue(new Error('storage unreadable'))
     const renderer = await renderEditHostRoute()
 
-    expect(findText(renderer, 'storage unreadable')).toBe(true)
+    expect(
+      findText(renderer, "Couldn't read your paired desktops. Reopen this screen in a moment.")
+    ).toBe(true)
     expect(renderer.root.findAllByType('TextInput')).toHaveLength(0)
 
     act(() => renderer.unmount())

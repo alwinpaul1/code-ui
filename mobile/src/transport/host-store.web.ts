@@ -1,6 +1,6 @@
 // Web sibling: the page has no keychain and no host list. `expo-secure-store` resolves to `{}` on
 // web, so the real module's `loadHosts()` answers with an empty array and every screen that looks
-// this host up paints "Host not found" over the host the shell just opened it for. What crosses
+// this host up says it is gone, over the host the shell just opened it for. What crosses
 // instead is `init.host`: the profile the screens read, without the credential the bridge carries.
 import { readPageHostProfile } from '../mobile-web-shell/bridge/page-host-profile'
 import type { HostCatalogEntry, HostProfile } from './types'

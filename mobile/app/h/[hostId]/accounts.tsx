@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { loadHosts } from '../../../src/transport/host-store'
+import { lookUpPairedHost } from '../../../src/transport/host-lookup'
 import { useHostClient } from '../../../src/transport/client-context'
 import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
@@ -35,6 +35,8 @@ export default function AccountsScreen() {
   const [hostName, setHostName] = useState<string>('')
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Why this desktop cannot be opened, from the catalog; null while it reads or once it is readable.
+  const [hostNotice, setHostNotice] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null)
   const [clockEnabled, setClockEnabled] = useState(false)
@@ -73,21 +75,26 @@ export default function AccountsScreen() {
   // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
   const now = useNow(60_000, clockEnabled)
 
+  // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired and
+  // still has its name, so it is worded as unreadable, not "Host not found".
   useEffect(() => {
     if (!hostId) {
       return
     }
     let stale = false
-    void loadHosts().then((hosts) => {
+    void lookUpPairedHost(hostId).then((lookup) => {
       if (stale) {
         return
       }
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host) {
-        setError('Host not found')
+      if (lookup.kind === 'ready') {
+        setHostName(lookup.host.name)
+        setHostNotice(null)
         return
       }
-      setHostName(host.name)
+      if (lookup.kind === 'unavailable' || lookup.kind === 'missing') {
+        setHostName(lookup.name)
+      }
+      setHostNotice(lookup.message)
     })
     return () => {
       stale = true
@@ -262,7 +269,11 @@ export default function AccountsScreen() {
           />
         }
       >
-        {connState !== 'connected' && !snapshot ? (
+        {/* Before "Connecting…": a desktop that cannot be read cannot be opened either. Only while
+            it has no client, because a client means the opener has since read it. */}
+        {hostNotice && !client && !snapshot ? (
+          placeholder(hostNotice, false)
+        ) : connState !== 'connected' && !snapshot ? (
           placeholder(`Connecting to ${hostName || 'host'}…`)
         ) : error && !snapshot ? (
           placeholder(error, false)
