@@ -654,6 +654,36 @@ the 2,000 reserved for the host that is 32,766, one short of the 32,767 cap
 (2026-09-29), so any fix there has to pay for itself; and that path has never
 run on Windows.
 
+### The prompt hook's copy as evidence (2026-09-29)
+
+The tab status (`agentStatus.prompt`) carries the pane's last prompt, cut at
+200 characters, and makes no new copy when the prompt's words do not change.
+The prompt hook's copy (`up=`, with `at=`) carries the words as typed, up to
+2,000 bytes, the text row they were typed after, and a nonce of its own for
+each submission. Three cases the status alone cannot settle use it
+(`desktop-prompt-merge.ts`, `desk-prompt-row-owners.ts`,
+`use-desktop-prompt-echoes.ts`; the cases are in
+`mobile-chat-midturn-beacon-evidence.test.ts`):
+
+- A long message is drawn by its twin's whole words, so the queue box's whole
+  reading of it and the echo are the same words (W1 of the review of
+  fix/midturn-gaps).
+- A user row belongs to the latest hook submission of its words typed before
+  it, so the same words sent mid-turn and then typed as the next turn's prompt
+  stay two messages (gap D).
+- A message read first after Orca's stand-in goes after the row its hook copy
+  names; with the hook and no copy of it, it came before the chat listened,
+  and goes by its run's start (gap C).
+
+Verified on Claude Code 2.1.284, in a private tmux server with no `ORCA_*`
+variables and a hook that logged each event: a prompt typed while a turn ran
+fired `UserPromptSubmit` at its enqueue (21 ms after the Enter) and none when
+Claude dequeued it as its own turn after the first ended. So a second hook
+copy of the same words is a second submission, never a dequeue. Without the
+hook's copies (a Codex tab, a Windows host, a Claude tab launched without the
+hook, a submission made while the phone did not listen to the terminal) each
+case behaves as before, and the tests pin those limits.
+
 ## Windows (2026-09-10): what actually reaches the phone, and how
 
 An earlier version of this section claimed the sh script's MSYS branch reached
