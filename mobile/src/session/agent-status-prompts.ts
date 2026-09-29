@@ -54,10 +54,11 @@ export type AgentStatusPromptState = {
    *  while the chat watched. A missing status is not a reading. */
   read: boolean
   /** The last prompt text seen, so a status ping that repeats it (tool
-   *  events keep the field) does not become a second bubble. */
+   *  events keep the field) does not become a second bubble. A status with
+   *  no prompt leaves it as it was. */
   last: string | null
-  /** The `updatedAt` of the last status read. A prompt first seen on the
-   *  first read after a reconnect came after it. */
+  /** The `updatedAt` of the last status read that carried a prompt. A prompt
+   *  first seen on the first read after a reconnect came after it. */
   readAt?: number
   prompts: readonly DesktopPrompt[]
   /** The subagent messages the status carried, in the order it did: never
@@ -87,6 +88,15 @@ const PROMPT_CAP = 64
  *  from the beacon's copy of the same submission (desktop-prompt-own-sends.ts). */
 export const STATUS_PROMPT_NONCE_PREFIX = 'status:'
 
+/** Whether a tab status carries a prompt. One that does not (no status at
+ *  all, or Orca's stand-in with `prompt: ''`) says nothing about the pane's
+ *  prompt; see observeAgentStatusPrompt. */
+export function statusCarriesPrompt(
+  status: AgentStatusPromptSource | undefined
+): status is NonNullable<AgentStatusPromptSource> & { prompt: string } {
+  return typeof status?.prompt === 'string' && status.prompt.trim().length > 0
+}
+
 export function observeAgentStatusPrompt(
   state: AgentStatusPromptState,
   sessionKey: string | null,
@@ -113,7 +123,21 @@ export function observeAgentStatusPrompt(
   // first status it does read was already there all the same.
   const firstOfSession = !state.read && status != null
   const readBefore = state.readAt
-  const readAt = typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : readBefore
+  const text = typeof status?.prompt === 'string' ? status.prompt : ''
+  // A status that carries no prompt says nothing about the pane's prompt: a
+  // tab snapshot with no status on it (a relay re-dial, a tab list coming
+  // back), or Orca's own stand-in when it will not use its hook row (a stale
+  // row, or a terminal title that is not the agent's: `done`, `prompt: ''`,
+  // no history; runtime-mobile-agent-status-builder.ts and the idle-title
+  // branch of runtime-mobile-session-projection.ts, origin/main 8d6fec597b).
+  // Read as a pane reset, it cleared `last`, and the pane's prompt on the next
+  // status became a second copy of a message already drawn: timed by the last
+  // status read before a reconnect, the turn's `done`, it drew under the reply
+  // that answered it (device, 2026-09-29). Its stamp is no bound on a prompt
+  // either (`notBefore` below): the prompt may have been there all along.
+  const carriesPrompt = statusCarriesPrompt(status)
+  const readAt =
+    carriesPrompt && typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : readBefore
   if (firstOfSession || (status != null && readAt !== readBefore)) {
     state = { ...state, read: true, ...(readAt !== undefined ? { readAt } : {}) }
   }
@@ -124,11 +148,8 @@ export function observeAgentStatusPrompt(
   // chat was closed came unseen, and that status's `updatedAt` is its last
   // tool ping, which drew it at the tail (device, 2026-09-27).
   const found = firstOfSession || (options.firstRead === true && status != null)
-  const text = typeof status?.prompt === 'string' ? status.prompt : ''
-  if (text.trim().length === 0) {
-    // Empty is "unknown" or a pane reset: the next prompt is new even if it
-    // repeats the last text.
-    return state.last === null ? state : { ...state, last: null }
+  if (!carriesPrompt) {
+    return state
   }
   if (text === state.last) {
     return state

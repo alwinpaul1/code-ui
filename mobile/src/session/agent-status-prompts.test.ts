@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { MIDTURN_HANDBACK_STATUS_PROMPT } from './fixtures/claude-midturn-queued-commands-2.1.283'
 import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
-import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt } from './agent-status-prompts'
+import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt, type AgentStatusPromptSource } from './agent-status-prompts'
 
 // 2026-09-19: the user wanted the transcript-tail terminal off their desktop
 // and asked whether the transcript could be read live without it. Orca's own
@@ -58,9 +58,11 @@ describe('desktop prompts read off the tab status', () => {
     let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', LIVE)
     state = observeAgentStatusPrompt(state, 'sess-1', null)
     expect(state.prompts).toHaveLength(1)
-    // The same text after a reset is a new submission.
+    // The same text after a blip is the same submission. This asserted a
+    // second one until 2026-09-29, when that second copy was drawn under the
+    // reply to the message (mobile-chat-midturn-prompt-after-reply.test.ts).
     state = observeAgentStatusPrompt(state, 'sess-1', LIVE)
-    expect(state.prompts).toHaveLength(2)
+    expect(state.prompts).toHaveLength(1)
     state = observeAgentStatusPrompt(state, 'sess-2', { ...LIVE, prompt: 'new session' })
     expect(state.prompts.map((p) => p.text)).toEqual(['new session'])
     expect(observeAgentStatusPrompt(state, null, LIVE).prompts).toEqual([])
@@ -384,6 +386,84 @@ describe('a prompt the tab status still carries after its turn', () => {
     // Nothing to say about a prompt it drew.
     const running = { ...DONE, state: 'working', stateStartedAt: T('13:20:44.026'), stateHistory: [before] }
     expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, running).withheld).toBeNull()
+  })
+})
+
+// Device, 2026-09-29 (mobile-chat-midturn-prompt-after-reply.test.ts): a tab
+// status that carries no prompt came between two that carried a mid-turn
+// message, the reader took it for a pane reset, and the message came back as
+// a second copy timed after the reply to it. Two statuses carry none: a tab
+// snapshot with no status at all, and Orca's own stand-in when it will not
+// use its hook row (`done`, `prompt: ''`, no history). Neither says anything
+// about the pane's prompt.
+describe('a tab status that carries no prompt', () => {
+  const T = (clock: string) => Date.parse(`2026-09-29T${clock}Z`)
+  const MESSAGE = 'Password changes now end only password sessions. Whats this'
+  const history = [{ state: 'done', prompt: 'the turn before', startedAt: T('05:07:00.700') }]
+  const taken = {
+    state: 'working',
+    agentType: 'claude',
+    prompt: MESSAGE,
+    updatedAt: T('05:36:34.891'),
+    stateStartedAt: T('05:08:00.600'),
+    stateHistory: history,
+    providerSession: { id: 'sess-1' }
+  }
+  const turnDone = {
+    ...taken,
+    state: 'done',
+    updatedAt: T('05:46:51.005'),
+    stateStartedAt: T('05:46:51.005'),
+    stateHistory: [...history, { state: 'working', prompt: MESSAGE, startedAt: T('05:08:00.600') }]
+  }
+  const standIn = (status: NonNullable<AgentStatusPromptSource>) => ({ ...status, state: 'done', prompt: '', updatedAt: T('05:47:09.000'), stateHistory: [] })
+  const copies = (state: { prompts: readonly { text: string; at?: number }[] }) =>
+    state.prompts.map((prompt) => [prompt.text, prompt.at])
+
+  for (const [agent, providerSession] of [['claude', { id: 'sess-1' }], ['codex', null]] as const) {
+    it(`keeps a ${agent} pane's prompt one message through a status with none, before and after the turn ends`, () => {
+      const pane = { ...taken, agentType: agent, providerSession }
+      const ended = { ...turnDone, agentType: agent, providerSession }
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, prompt: 'an earlier message', updatedAt: T('05:30:40.761') })
+      state = observeAgentStatusPrompt(state, 'sess-1', pane)
+      for (const blip of [null, undefined, standIn(pane)]) {
+        state = observeAgentStatusPrompt(state, 'sess-1', blip)
+        state = observeAgentStatusPrompt(state, 'sess-1', { ...pane, updatedAt: T('05:46:41.308') })
+        state = observeAgentStatusPrompt(state, 'sess-1', blip)
+        // The first status after a reconnect, the turn over.
+        state = observeAgentStatusPrompt(state, 'sess-1', ended, { firstRead: true })
+      }
+      expect(copies(state).slice(1)).toEqual([[MESSAGE, T('05:36:34.891')]])
+    })
+  }
+
+  it('still takes the next message the person sends after it', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', taken)
+    state = observeAgentStatusPrompt(state, 'sess-1', standIn(taken))
+    state = observeAgentStatusPrompt(state, 'sess-1', { ...taken, prompt: 'and this too', updatedAt: T('05:40:00.000') })
+    expect(copies(state).map(([text]) => text)).toEqual([MESSAGE, 'and this too'])
+  })
+
+  it('is no bound on when a message taken while the link was down came', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...taken, prompt: 'an earlier message', updatedAt: T('05:30:40.761') })
+    state = observeAgentStatusPrompt(state, 'sess-1', standIn(taken))
+    state = observeAgentStatusPrompt(state, 'sess-1', turnDone, { firstRead: true })
+    // No earlier than the last status read that carried a prompt, not the
+    // stand-in's stamp, which is after the turn ended.
+    expect(copies(state)[1]).toEqual([MESSAGE, T('05:30:40.761')])
+  })
+
+  // Degenerate: nothing but statuses with no prompt, and the first status of
+  // the session carrying none.
+  it('makes no message of its own, and leaves the first message found on the next status', () => {
+    let state = EMPTY_AGENT_STATUS_PROMPTS
+    for (const blip of [null, standIn(taken), undefined, standIn(taken)]) {
+      state = observeAgentStatusPrompt(state, 'sess-1', blip)
+    }
+    expect(state.prompts).toEqual([])
+    expect(state.last).toBeNull()
+    state = observeAgentStatusPrompt(state, 'sess-1', turnDone)
+    expect(copies(state)).toEqual([[MESSAGE, T('05:08:00.600')]])
   })
 })
 

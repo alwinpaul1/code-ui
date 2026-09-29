@@ -3,6 +3,7 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import {
   EMPTY_AGENT_STATUS_PROMPTS,
   observeAgentStatusPrompt,
+  statusCarriesPrompt,
   type AgentStatusPromptSource
 } from './agent-status-prompts'
 import { mergeDesktopPrompts } from './desktop-prompt-merge'
@@ -63,9 +64,13 @@ export function useAgentStatusPrompts(
     readRef.current = { ...readRef.current, cached: true }
   }
   // A null status is no reading: it neither is the first read nor ends the
-  // wait for one (pre-merge review of 06911823).
+  // wait for one (pre-merge review of 06911823). Nor is one that carries no
+  // prompt, Orca's stand-in when it will not use its hook row: taken as the
+  // first read, it left the status after it, which carried a message taken
+  // while the link was down, read as watched and timed by its ping, under the
+  // words written after the message (agent-status-prompts.ts, 2026-09-29).
   const firstRead =
-    status != null &&
+    statusCarriesPrompt(status) &&
     ((readRef.current.stale !== NOTHING_PENDING && status !== readRef.current.stale) || (live && readRef.current.cached))
   if (firstRead) {
     readRef.current = { connected, stale: NOTHING_PENDING, cached: false }
