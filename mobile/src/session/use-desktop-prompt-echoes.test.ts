@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -99,10 +99,12 @@ describe('where a desktop prompt echo anchors', () => {
   })
 
   // 2026-09-19, on the device: the transcript names the row a queued prompt
-  // was written after, but that row is a tool call Orca never projects, so
-  // the id was never held, the wait ran out, and the bubble fell to the
-  // arrival tail — three turns under the reply that answered it. The record's
-  // own time places it after the last row written before it.
+  // was written after, but that row was a tool call the phone did not hold,
+  // so the wait ran out, and the bubble fell to the arrival tail — three
+  // turns under the reply that answered it. The record's own time places it
+  // after the last row written before it. (Orca 1.4.216's decoder does make a
+  // row of a tool call, keyed by its uuid, read 2026-09-29; this path is for
+  // when the row is not held.)
   it('anchors by time when the row it names is one the phone never holds', () => {
     const at = (id: string, t: number): NativeChatMessage => ({ ...assistant(id), timestamp: t })
     const raw = [at('a1', 1000), at('a2', 2000), at('a3', 3000), at('a4', 4000)]
@@ -326,7 +328,10 @@ describe('a desktop prompt whose row has not loaded yet', () => {
       })
     }
     // A row that never comes must not strand the message with no position.
-    expect(latest[0]!.baselineTailMessageId).toBe('z2')
+    // The position is where it was first seen, z1. This asserted z2, the tail
+    // of the reading the wait ran out on, which pinned the defect of
+    // 2026-09-29 (see "a waiting copy whose row never loads").
+    expect(latest[0]!.baselineTailMessageId).toBe('z1')
   })
 
   it('still uses the tail at once when the beacon names no row', () => {
@@ -394,14 +399,16 @@ describe('a queued prompt while it waits for its row', () => {
         renderer!.update(createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2')] }))
       })
     }
-    expect(latest[0]!.baselineTailMessageId).toBe('x2')
+    // Where it was first seen, x1. This asserted x2, the tail when the wait
+    // ran out, which pinned the defect of 2026-09-29.
+    expect(latest[0]!.baselineTailMessageId).toBe('x1')
     // A later turn must not drag it down now that it has settled.
     act(() => {
       renderer!.update(
         createElement(Probe, { prompts, raw: [assistant('x1'), assistant('x2'), assistant('x3')] })
       )
     })
-    expect(latest[0]!.baselineTailMessageId).toBe('x2')
+    expect(latest[0]!.baselineTailMessageId).toBe('x1')
   })
 })
 
@@ -470,6 +477,168 @@ describe('where a waiting prompt sits while rows keep arriving', () => {
       )
     })
     expect(latest[0]!.baselineTailMessageId).toBe('y2')
+  })
+})
+
+// 2026-09-29, the session behind mobile-chat-midturn-prompt-after-reply.test.ts
+// (Claude Code 2.1.284): the beacon's copy of a message typed at 05:36:34 named
+// the prompt that opened the turn (a hook that skipped every text row of a
+// working turn), on a page the chat never loaded. The copy waited, drawn where
+// the chat first saw it, after the call written at 05:36:25. When the wait ran
+// out it settled on the tail of that reading instead, which with the phone
+// asleep through the turn was the last reply, eleven minutes and the answer to
+// the message below where it arrived. Only the witness memory, which had
+// stored the first place, kept the chat right. On its own this hook must place
+// the copy where it was first seen: the wait may only upgrade that to the
+// named row, never move it to wherever the tail happens to be.
+describe('a waiting copy whose row never loads', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  // The session's own raw rows around the message (ids only).
+  const BEFORE_SECOND = [
+    'fed3dc95-5dba-4516-8d8d-4cebbbae8078',
+    '0465a647-17fa-40a0-b277-87f5fd3561b2',
+    'fb42a005-40bf-4394-9b6c-f75dbb436f95',
+    'c87c6d3e-1a98-4946-a845-df1e58f12acc',
+    'c23a95c6-02db-4b9d-9c85-eb30b5d479ce'
+  ].map(assistant)
+  const WHOLE_TURN = [
+    ...BEFORE_SECOND,
+    ...[
+      'b2fc1eee-5953-4f0f-8c7f-030e47884fd2',
+      '99b501a9-d5cb-4092-a1f1-2aa6898f24e8',
+      '60a7be7b-a870-40e0-ad3d-b3278fb1c02a',
+      '00899e40-73d4-4924-ad6a-fa4c04c98134',
+      'c221689d-cbea-4fdb-8df2-d1971b70cc45',
+      '2a7ab6a0-cf20-459c-8eca-bbcf60d7838c',
+      'bfe5cd40-04d9-4340-8b3f-2b89bb2e4c62'
+    ].map(assistant)
+  ]
+  const OPENING_ROW = 'd01807a3-bea6-4f29-8a97-bc9a106d86ae'
+
+  it('settles where it was first seen, not on the tail of its last reading', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: '48213', text: 'Whats this', anchorId: OPENING_ROW }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: BEFORE_SECOND }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+    // The phone wakes after the turn with every row in, and the chat is read
+    // again and again, well past the wait.
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: WHOLE_TURN }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+    // And it stays there after a remount, when nothing can rediscover it.
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: WHOLE_TURN }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('c23a95c6-02db-4b9d-9c85-eb30b5d479ce')
+  })
+
+  it('holds its first place while the turn writes a row on every reading', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'grow-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    const rows = (count: number) => Array.from({ length: count }, (_, index) => assistant(`g${index + 1}`))
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: rows(2) }))
+    })
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: rows(3 + reading) }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('g2')
+  })
+
+  // The degenerate reading: the copy is seen before the chat holds a single
+  // row (a tab opened while its transcript loads). Nothing was seen to place
+  // it after, so its first place is the first reading that holds a row. It
+  // must never lead the conversation: a null anchor over held rows draws it
+  // at the very top.
+  it('takes its first place from the first reading that holds a row, never the top of the chat', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'empty-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [] }))
+    })
+    // No row to sit after, so it is drawn at the end of an empty chat.
+    expect(latest[0]!.baselineTailMessageId).toBeNull()
+    act(() => {
+      renderer!.update(createElement(Probe, { prompts, raw: [assistant('e1'), assistant('e2')] }))
+    })
+    expect(latest[0]!.baselineTailMessageId).toBe('e2')
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(
+          createElement(Probe, { prompts, raw: [assistant('e1'), assistant('e2'), assistant('e3'), assistant('e4')] })
+        )
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('e2')
+  })
+
+  // Second review of 34c80e97: a copy drawn over a chat still loading left no
+  // mark once an empty reading stopped recording its first place, so when the
+  // first reading with rows came more than ten minutes after the copy
+  // arrived (the tab left and come back, or a long outage), the copy counted
+  // as "found long after it arrived" and was never drawn again. The chat had
+  // drawn it; it was seen arrive.
+  describe('when the rows come more than ten minutes after a copy it drew over an empty chat', () => {
+    const T0 = Date.parse('2026-09-29T05:36:35.000Z')
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(T0)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+    function Loading({ prompts, raw, readSettled }: { prompts: readonly DesktopPrompt[]; raw: readonly NativeChatMessage[]; readSettled: boolean }) {
+      latest = useDesktopPromptEchoes(prompts, raw, raw, false, readSettled)
+      return null
+    }
+
+    it('keeps drawing it after a remount, at the first row it sees', () => {
+      const prompts: DesktopPrompt[] = [{ nonce: 'loading-remount', text: 'typed at the desk', anchorId: 'never-loads', seenAt: T0 }]
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [], readSettled: false }))
+      })
+      expect(latest).toHaveLength(1)
+      act(() => renderer?.unmount())
+      vi.setSystemTime(T0 + 11 * 60_000)
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [assistant('l1'), assistant('l2')], readSettled: true }))
+      })
+      expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['l2'])
+    })
+
+    it('keeps drawing it on the same mount, at the first row it sees', () => {
+      const prompts: DesktopPrompt[] = [{ nonce: 'loading-slow', text: 'typed at the desk', anchorId: 'never-loads', seenAt: T0 }]
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [], readSettled: false }))
+      })
+      vi.setSystemTime(T0 + 11 * 60_000)
+      act(() => {
+        renderer!.update(createElement(Loading, { prompts, raw: [assistant('s1'), assistant('s2')], readSettled: true }))
+      })
+      expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['s2'])
+    })
+  })
+
+  it('settles on the only row when there is one', () => {
+    const prompts: DesktopPrompt[] = [{ nonce: 'one-1', text: 'typed mid-turn', anchorId: 'never-loads' }]
+    act(() => {
+      renderer = create(createElement(Probe, { prompts, raw: [assistant('o1')] }))
+    })
+    for (let reading = 0; reading < 40; reading += 1) {
+      act(() => {
+        renderer!.update(createElement(Probe, { prompts, raw: [assistant('o1')] }))
+      })
+    }
+    expect(latest[0]!.baselineTailMessageId).toBe('o1')
   })
 })
 
