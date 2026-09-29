@@ -160,6 +160,28 @@ describe('parseMobileMarkdown', () => {
     expect(normalized).not.toContain('&amp;')
   })
 
+  // Third review (2026-09-29): a leading tab was counted as one column, where
+  // marked expands it to the next multiple of four.
+  it('keeps a fence after a tab-separated list marker exactly, and strips what follows', () => {
+    const fenced = ['1.\t```html', '\t<b>x</b>', '\t```']
+    expect(normalizeMobileMarkdownPreviewHtml([...fenced, '', '<p>After</p>'].join('\n'))).toBe(
+      [...fenced, '', 'After'].join('\n')
+    )
+  })
+
+  it.each([
+    ['a tab-indented fence run in prose', ['Intro', '', '\t```', '', '<b>bold</b>', '', '<p>After</p>']],
+    ['a tab-indented fence run inside a margin fence', ['```md', '\t```', '<b>x</b>', '```', '', '<p>After</p>']]
+  ])('reads %s the way marked does', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(lines.join('\n'))
+    expect(normalized).not.toContain('<p>')
+    if (lines[0] === '```md') {
+      expect(normalized).toContain('```md\n\t```\n<b>x</b>\n```')
+    } else {
+      expect(normalized).not.toContain('<b>')
+    }
+  })
+
   it('keeps a deeper fence run inside a list fence as code, not as its closer', () => {
     const fenced = ['  ```md', '  text', '      ```', '  <b>still code</b>', '  ```']
     const normalized = normalizeMobileMarkdownPreviewHtml(['- step', '', ...fenced, '', '<p>After</p>'].join('\n'))

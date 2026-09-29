@@ -5,7 +5,7 @@ import {
   replaceMobileMarkdownPairedMarkupTags,
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
-import { markdownFenceEnd } from './markdown-fence-range'
+import { markdownFenceRanges } from './markdown-fence-range'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -238,11 +238,12 @@ function protectMarkdownCode(content: string): {
 
   const lines = content.split('\n')
   const protectedLines: string[] = []
+  const fences = markdownFenceRanges(lines)
   let index = 0
   while (index < lines.length) {
     const line = lines[index] ?? ''
-    const fenceEnd = markdownFenceEnd(lines, index)
-    if (fenceEnd !== null) {
+    const fenceEnd = fences.get(index)
+    if (fenceEnd !== undefined) {
       protectedLines.push(store(lines.slice(index, fenceEnd).join('\n')))
       index = fenceEnd
       continue

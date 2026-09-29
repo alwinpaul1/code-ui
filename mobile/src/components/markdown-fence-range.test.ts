@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { markdownFenceEnd } from './markdown-fence-range'
+import { markdownFenceRanges } from './markdown-fence-range'
 
-const end = (lines: string[], index = 0): number | null => markdownFenceEnd(lines, index)
+const end = (lines: string[], index = 0): number | null => markdownFenceRanges(lines).get(index) ?? null
 
 // Where the HTML pass must leave code alone (mobile-markdown-preview-html.ts);
 // every case is a shape an agent's reply takes, read the way marked reads it.
@@ -53,5 +53,38 @@ describe('where a fenced code block ends in the source', () => {
     expect(end(['    ```'])).toBeNull()
     expect(end(['Intro', '    ```js', 'x'], 1)).toBeNull()
     expect(end(['- item', '', '      ```', 'x'], 2)).toBeNull()
+  })
+})
+
+// Third review (2026-09-29): tabs counted one column, where marked expands
+// them to the next multiple of four; and finding a fence's list item walked
+// back over the document for every fence, which the normalizer does on every
+// streamed tick.
+describe('fence ranges, tabs and cost', () => {
+  it('counts a tab to the next multiple of four columns', () => {
+    expect(end(['1.\t```html', '\t<b>x</b>', '\t```', 'after'])).toBe(3)
+    expect(end(['- ```go', '\tfmt.Println("<b>hi</b>")', '  ```'])).toBe(3)
+    expect(end(['Intro', '', '\t```', 'x'], 2)).toBeNull()
+    expect(end(['```md', '\t```', 'x', '```', 'after'])).toBe(4)
+  })
+
+  it('reads a fence the next item has outdented as one at the margin', () => {
+    expect(end(['9. a', '10. b', '   ```', 'x', '```', 'after'], 2)).toBe(5)
+  })
+
+  it('reads each line a bounded number of times, however many fences one item holds', () => {
+    const fence = ['   ```sh', '   echo <b>hi</b>', '   ```', '']
+    const source = ['1. one item', '', ...Array.from({ length: 1000 }, () => fence).flat()]
+    let reads = 0
+    const counted = new Proxy(source, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) {
+          reads += 1
+        }
+        return Reflect.get(target, key, receiver)
+      }
+    })
+    expect(markdownFenceRanges(counted).size).toBe(1000)
+    expect(reads).toBeLessThanOrEqual(4 * source.length)
   })
 })
