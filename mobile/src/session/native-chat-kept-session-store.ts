@@ -149,11 +149,15 @@ export function useNativeChatTabStatusReading(
   const notedFromStandIn = noted?.fromStandIn ?? false
   const notedStamp = inheritsBackground ? keptStamp : turnCompletedAt
   const notedAt = inheritsBackground ? claimAnchor : statusAt
+  const notedBoundary = noted?.boundary === true
   useEffect(() => {
     if (agent && statusId && notedTurn) {
-      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn, notedStamp, notedAt)
+      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn, notedStamp, notedAt, {
+        boundary: notedBoundary,
+        inherited: inheritsBackground
+      })
     }
-  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt, notedStamp, notedAt])
+  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt, notedStamp, notedAt, notedBoundary, inheritsBackground])
   return reading
 }
 

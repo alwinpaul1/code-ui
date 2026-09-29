@@ -60,8 +60,12 @@ import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-
  *   mid-turn. What it cannot tell apart: a claude restarted at the desk after
  *   the lead left holding background work (Orca's last resort for the pane
  *   has the stand-in's shape) waits for its second turn, the beacon, the
- *   phone's own word below, or those 30 minutes; and a nested run started by
- *   work still running after them is followed.
+ *   phone's own word below, or those 30 minutes; a nested run started by
+ *   work still running after them is followed; and the session a phone
+ *   `/clear` started keeps the claim it took over until its own first Stop,
+ *   even when the work stopped before it (Orca's SessionStart dropped the
+ *   pane's inventory, so nothing says so). A session's own boundary ends a
+ *   claim it made itself: that is its process restarting.
  * - The phone's own word. This phone knows what it wrote to the terminal. A
  *   new session taking a prompt the phone sent is the terminal's own agent
  *   (a nested run never reads the phone's keystrokes), and one that starts
@@ -289,7 +293,11 @@ const IMAGE_MARKER = /\[Image #\d+\]\s*/g
  *   Only while the send is unclaimed or claimed by this session: Orca keeps
  *   the prompt per PANE, so a nested run's rows can carry the prompt the lead
  *   took from the phone, and a send belongs to the first session that shows
- *   it (the second review of this rule).
+ *   it (the second review of this rule). The first the PHONE sees: when it
+ *   never rendered the lead's row taking the send (a snapshot Orca coalesced
+ *   away, a link down), a nested run's subagent row, which Orca gives the
+ *   pane's prompt and no tool, can take it until the next lead-level tool
+ *   row (a limit; native-chat-kept-session-restart.test.ts).
  * - `reset`: a session boundary right after the phone sent `/clear`, `/new`,
  *   `/reset` or `/resume`, one boundary per send, and not while the kept
  *   session is mid-turn (a /clear waits in its queue then, and a nested run

@@ -28,6 +28,9 @@ export type TurnRecord = {
   /** When the noted status was stamped (host clock): for a claim to
    *  background work, the first status that made it. */
   at?: number | null
+  /** The claim came with the phone's /clear from the session before it,
+   *  not from this session's own status. */
+  inherited?: boolean
 }
 const turns = new Map<string, TurnRecord>()
 const TURNS_KEPT = 128
@@ -81,7 +84,8 @@ export function noteTurn(
   finishedOne: boolean,
   fromStandIn = false,
   stamp: number | null = null,
-  at: number | null = null
+  at: number | null = null,
+  { boundary = false, inherited = false }: { boundary?: boolean; inherited?: boolean } = {}
 ): void {
   const key = turnKey(agent, sessionId)
   const previous = turns.get(key)
@@ -92,10 +96,12 @@ export function noteTurn(
     // turn (another stamp, or none) is no such word.
     return
   }
-  if (turn === 'ended' && !finishedOne && previous?.turn === 'background') {
-    // A session boundary or a dialog ends no turn, and says nothing of the
-    // background work: the session a /clear started keeps the claim it took
-    // over, and a lead asking a question keeps its work running.
+  if (turn === 'ended' && !finishedOne && previous?.turn === 'background' && (!boundary || previous.inherited === true)) {
+    // A dialog ends no turn and says nothing of the background work: a lead
+    // asking a question keeps its work running. Nor does the boundary of the
+    // session a /clear started, which keeps the claim it took over. A
+    // session's boundary over a claim it made itself is its process
+    // restarting (`--resume` after an exit), and its work died with it.
     return
   }
   const sameClaim = previous?.turn === turn && (previous.stamp ?? null) === stamp
@@ -104,9 +110,16 @@ export function noteTurn(
     finished: previous?.finished === true || finishedOne,
     secondTurn: previous?.secondTurn === true || (previous?.finished === true && turn === 'working'),
     stamp,
-    at: sameClaim ? (previous.at ?? at) : at
+    at: sameClaim ? (previous.at ?? at) : at,
+    inherited: turn === 'background' && (inherited || (sameClaim && previous.inherited === true))
   }
-  if (sameClaim && previous.finished === next.finished && previous.secondTurn === next.secondTurn && (previous.at ?? null) === next.at) {
+  if (
+    sameClaim &&
+    previous.finished === next.finished &&
+    previous.secondTurn === next.secondTurn &&
+    (previous.at ?? null) === next.at &&
+    (previous.inherited === true) === next.inherited
+  ) {
     return
   }
   turns.delete(key)
@@ -162,7 +175,7 @@ export function statusTurn(
   workingMode: string | null | undefined,
   sessionBoundary: boolean | null | undefined,
   evidence: StatusTurnEvidence = {}
-): { turn: NativeChatTurn; finishedOne: boolean; fromStandIn: boolean } | null {
+): { turn: NativeChatTurn; finishedOne: boolean; fromStandIn: boolean; boundary?: boolean } | null {
   const gated = evidence.turnCompletedAt != null
   const fromStandIn = evidence.titleStandIn === true
   if (state === 'working') {
@@ -179,7 +192,7 @@ export function statusTurn(
   if (sessionBoundary !== true && gated && fromStandIn) {
     return { turn: 'background', finishedOne: true, fromStandIn }
   }
-  return { turn: 'ended', finishedOne: sessionBoundary !== true, fromStandIn }
+  return { turn: 'ended', finishedOne: sessionBoundary !== true, fromStandIn, boundary: sessionBoundary === true }
 }
 
 /** What this phone wrote to a terminal, newest last, by terminal handle: a
