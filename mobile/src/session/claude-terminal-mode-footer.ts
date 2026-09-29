@@ -24,8 +24,15 @@ export type TerminalPermissionMode =
  * Why the shape: the phrases were matched anywhere on any row, so while a
  * dialog or a repaint hid the footer, a line of conversation ("I would not use
  * bypass permissions on prod.") set the pill, and the mode stepper acted on it
- * (review, 2026-09-30). Plan mode has no captured footer on record, so its
- * phrase is held to the bottom rows only, as every phrase is.
+ * (review, 2026-09-30).
+ *
+ * Plan mode is held to the same shape ("  ⏸ plan mode on (shift+tab to
+ * cycle)"), but that row is INFERRED from the captures above, not captured:
+ * no plan-mode footer is on record. Its bare phrase used to be matched
+ * anywhere in the bottom rows, so "⏺ Turned plan mode on for the next step."
+ * right above the composer read as Plan (review, 2026-09-30). When a real plan
+ * footer is captured, it replaces the inferred rows in
+ * claude-terminal-mode-footer.test.ts.
  */
 function footerMode(phrase: string): RegExp {
   return new RegExp(`^\\s*(?:[⏵⏸▶]+\\s*)?${phrase}(?=\\s*$|\\s+·|\\s+\\(shift)`, 'i')
@@ -38,9 +45,10 @@ const FOOTER_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
   [footerMode('auto mode on'), 'auto'],
   [footerMode('bypass permissions on'), 'bypassPermissions']
 ]
+/** Plus plan mode, in the shape inferred for it. */
 const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
   ...FOOTER_MODE_PATTERNS,
-  [/plan mode on/i, 'plan']
+  [footerMode('plan mode on'), 'plan']
 ]
 
 /** How far up from the last painted row the footer can sit. Every capture
@@ -58,8 +66,9 @@ function claudeFooterRows(lines: readonly string[]): readonly string[] {
 }
 
 /** Whether one of the captured footer rows is at the bottom of this screen.
- *  Plan mode's bare phrase does not count: nothing on record says it is the
- *  footer and not conversation. */
+ *  Plan mode's row does not count: its shape is inferred, not captured, and
+ *  this decides whether a context figure is read over a footer known only by
+ *  its row. */
 export function hasClaudeModeFooter(lines: readonly string[]): boolean {
   return claudeFooterRows(lines).some((row) =>
     FOOTER_MODE_PATTERNS.some(([pattern]) => pattern.test(row))
