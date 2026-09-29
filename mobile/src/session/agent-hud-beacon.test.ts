@@ -153,6 +153,23 @@ describe('what the payload is allowed to say', () => {
     expect(beacon).toMatchObject({ usedTokens: null, usedPercent: null, windowTokens: 200000 })
   })
 
+  // 2026-09-29, "All 3 prompts stacked together with no responses in between
+  // them": the prompt hook says when it ran (`ts=`, epoch seconds by the desk's
+  // clock), which places a copy whose named row the phone does not hold.
+  it('reads when the desk says a prompt was typed, and trusts nothing that is not a time', () => {
+    expect(
+      parseAgentHudBeaconPayload('CUIHUD1 agent=claude up=4242:hi at=c3c3c3c3-0000-4000-8000-000000000003 ts=1790660194')
+        ?.desktopPrompt
+    ).toEqual({ nonce: '4242', text: 'hi', cut: false, anchorId: 'c3c3c3c3-0000-4000-8000-000000000003', typedAt: 1790660194000 })
+    for (const bad of ['', '17906x0194', '12', '179066019412345', '-1790660194']) {
+      expect(parseAgentHudBeaconPayload(`CUIHUD1 agent=claude up=1:hi ts=${bad}`)?.desktopPrompt).toEqual({
+        nonce: '1',
+        text: 'hi',
+        cut: false
+      })
+    }
+  })
+
   it('refuses a payload from a version it does not know', () => {
     expect(parseAgentHudBeaconPayload('CUIHUD2 agent=claude model=x')).toBeNull()
     expect(parseAgentHudBeaconPayload('hello there')).toBeNull()

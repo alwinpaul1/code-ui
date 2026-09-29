@@ -24,9 +24,12 @@ import { decodeAgentHudChannelText } from './agent-hud-channel'
 // the record uuid: tool calls and results as tool rows, thinking as text. The
 // exclusion is kept because a text row is held either way, while a tool-row
 // anchor is found only if those rows reach the phone under that uuid, and no
-// device has shown that since. It costs this: a message typed after a call,
-// with no text since, is drawn above that call (usually one), where the
-// Claude app draws it below.
+// device has shown that since. It cost this: a message typed after a call,
+// with no text since, drew above that call (usually one), where the Claude
+// app draws it below. The hook's `ts=` (2026-09-29) now moves it below the rows
+// stamped a second before the start of the second it ran
+// (mobile-chat-stacked-desk-prompts.test.ts); a call within about two seconds
+// of the send, or a tab whose hook sends no time, still pays it.
 function row(uuid: string, type: 'user' | 'assistant', contentType: string): string {
   const content =
     contentType === 'string'

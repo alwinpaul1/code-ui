@@ -98,7 +98,7 @@ variable (bash uses `\001` internally), and a `tr -d "\n"` drops any newline
 a `sed` adds, which would move the cursor. With no `od` or no `cksum` the frame
 comes out empty or fails its checksum, and the phone ignores it. The code is
 `agent-hud-channel.ts` (the phone's decoder and a reference encoder) and
-`AGENT_HUD_TTY_WRITE` in `agent-hud-launch-args.ts` (the writer). A test holds
+`AGENT_HUD_TTY_WRITE` in `agent-hud-tty-write.ts` (the writer). A test holds
 the writer's bytes to the encoder's under `sh`, bash and dash.
 
 Why these four bytes, checked against both parsers' source rather than from
@@ -617,9 +617,13 @@ keyed by the record's uuid: tool calls, tool results, and thinking as text.
 The exclusion is kept anyway. A text row is held whichever reading is right,
 while a tool-row anchor is found only if those rows reach the phone under that
 uuid, which no device has shown since 2026-09-15, and changing it moves every
-mid-turn desk message. The cost: a message typed after a call, with no text
-since, is drawn above that call (usually one), where the Claude app draws it
-below. A device check settles it. The same decoder draws nothing for a
+mid-turn desk message. It cost this: a message typed after a call, with no
+text since, drew above that call (usually one), where the Claude app draws it
+below. Since 2026-09-29 the hook also sends when it ran (`ts=`, below), and the
+phone moves the message below the rows stamped a second or more before the
+start of that second, so it pays it only for a call made within about two
+seconds of the send, and a tab whose hook sends no time still pays it in full. A device check settles the exclusion
+itself. The same decoder draws nothing for a
 record whose only block is `redacted_thinking`, `server_tool_use` or
 `web_search_tool_result`, which is why a row must also carry text, an image
 or a string prompt.
@@ -653,6 +657,66 @@ rows. It is not fixed: the Windows Claude flag is 30,766 characters, and with
 the 2,000 reserved for the host that is 32,766, one short of the 32,767 cap
 (2026-09-29), so any fix there has to pay for itself; and that path has never
 run on Windows.
+
+### Beacon field `ts` (when the prompt was typed, 2026-09-29)
+
+`ts=<epoch seconds>` rides the same beacon: `date +%s` when the hook ran, by
+the desk's clock, the clock the transcript's rows are stamped by. On Claude
+Code 2.1.284 `UserPromptSubmit` fires at the enqueue, 21 ms after the Enter, so
+it is when the prompt was typed. A `date` that prints anything but digits
+(one without `%s`) sends no `ts=`, and the phone takes nine to eleven digits
+only. The phone keeps it as `typedAt` (epoch ms, the start of that second),
+apart from a status copy's `at`: `at` also pairs a copy with the phone's own
+sends, and this changes only where a hook copy is drawn
+(`use-desktop-prompt-echoes.ts`).
+
+Why it exists: "All 3 prompts stacked together with no responses in between
+them" (the phone, 2026-09-29). When the chat does not hold the row `at=` names,
+the copy had nothing else to go by and was drawn where the chat first saw it.
+After a sleep the phone reads every beacon of the turn at once and its first
+page is the turn's tail, so the rows the copies name are on the page above, and
+every copy was first seen on the same last reply: they settled under it, in a
+row. With a time:
+
+- A copy whose named row is not held goes after the last row written at or
+  before the start of its second. One typed before every row of a page, with
+  earlier rows not loaded, is not drawn under that page: it is drawn where it
+  was typed when the page above loads. A place found among the rows of a read
+  that has not settled (the transcript the chat kept from before a sleep) is
+  drawn for now and not kept, and the following below stays open while
+  earlier rows are not loaded, or the copies of a turn stayed after the kept
+  tail, in a row (review of 15fcfbea).
+- A copy whose named row is held follows the rows stamped at least a second
+  before the start of its second (`typedAt` minus 1 s, the slack a status
+  copy's exact time gets) as those rows load, so it sits below the calls made
+  between Claude's last words and the send, as the Claude app draws it, except
+  one made within about the last two seconds.
+- The chat's stored copy of a drawn message (the witness memory) gives way to
+  its own hook copy when that copy has a time, as it gives way to a status
+  copy, so a row that loads late still moves the message, and the stored copy's
+  old place does not break the tool fold. It gives way the same way to its
+  own hook copy while this run's chat is placing that copy (`placedHere`), so
+  a row loading a reading later moves a waiting copy, time or no time; drawn
+  by the stored copy instead, its waiting place was final. The copy is still
+  stored from its first drawing: not storing a waiting one (fe1c055a) lost it
+  after a relaunch and let a phone send of the same words take it (review of
+  fe1c055a). After a relaunch nothing is placed in that run, and the stored
+  copy draws it where it was.
+- A stored `typedAt` the beacon could not have written (not whole seconds in
+  the nine-to-eleven-digit range) is no time: the warm start restores fields
+  unchecked.
+- Three prompts typed during one long call have no row between their times,
+  so they stay three in a row, after that call.
+
+A copy with no time (a tab launched before this) whose named row is not held is
+drawn where the chat first saw it while it waits. If the row does not come
+within the wait it settles there, and the chat logs that once
+(`[desk-prompt] drawn where first seen: …`), so a stack of those can be told
+from a placement bug. Such a tab gets `ts=` when its agent restarts. The
+PowerShell hook sends no `ts=` (see above: no room, and Windows gets no flag).
+Tested against the day's real records (`mobile-chat-stacked-desk-prompts.test.ts`)
+and by running the hook itself under sh, bash and dash
+(`agent-hud-prompt-hook.test.ts`); not yet seen on a device.
 
 ### The prompt hook's copy as evidence (2026-09-29)
 

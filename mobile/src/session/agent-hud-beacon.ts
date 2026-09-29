@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import { resetAgentHudChannels, takeAgentHudChannelFor } from './agent-hud-channel'
+import { readDesktopPrompt } from './agent-hud-beacon-desktop-prompt'
 import { restamp, unchangedBeacon } from './agent-hud-beacon-identity'
 import { resetBeaconWatches } from './agent-hud-beacon-liveness'
 import {
@@ -7,6 +8,9 @@ import {
   rememberWarmStartBeacon
 } from './agent-hud-beacon-warm-start'
 import { agentMessagesIdentity, withAgentMessagePlaced, withAgentMessagesOf, withRestoredAgentMessages, type AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
+
+// Re-exported: two tests import it from this module.
+export { unescapeJsonStringBody } from './agent-hud-beacon-desktop-prompt'
 
 /**
  * The phone half of the invisible HUD channel.
@@ -55,6 +59,11 @@ export type AgentHudBeaconLimit = {
  *  those runs (desk-prompt-harness-turns.ts). */
 /** `seenAt` on a beacon copy: when the phone received it (a restored one from
  *  an older build: its record's last beacon, agent-hud-beacon-warm-start.ts). */
+/** `typedAt` on a beacon copy: epoch ms of the second the prompt hook ran, by
+ *  the desk clock the transcript's rows are stamped by (`ts=`, 2026-09-29).
+ *  Only placement reads it (use-desktop-prompt-echoes.ts); it is not `at`,
+ *  which marks a copy the transcript witnessed and pairs it with the phone's
+ *  own sends. Absent from a tab launched before the hook sent it. */
 /** `atStateStart`: `at` is when the pane's working run began, read at first
  *  sight of the tab status (agent-status-prompts.ts), which can be before the
  *  prompt (one sent mid-run).
@@ -68,7 +77,7 @@ export type AgentHudBeaconLimit = {
  *  `foundAt`: on a status prompt read first after Orca's stand-in, which may
  *  have been found or watched arriving, the start of the run it came in;
  *  `standInAt`, when the phone read that stand-in, by its own clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
 
 export type AgentHudBeacon = {
   agent: string
@@ -221,7 +230,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     promptHook: values.get('hk') === '1',
-    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at')),
+    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at'), values.get('ts')),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
@@ -450,67 +459,6 @@ function liveOrRun(values: Map<string, string>): string[] | null {
     return null
   }
   return (values.get(key) ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id))
-}
-
-/** `up=<hook pid>:<percent-encoded JSON string body>`. The body is the raw
- *  JSON text of the prompt, so `\n` and `\"` are still escaped there. */
-function readDesktopPrompt(
-  raw: string | undefined,
-  cutByHook: boolean,
-  anchorRaw?: string
-): DesktopPrompt | null {
-  if (!raw) {
-    return null
-  }
-  const cut = raw.indexOf(':')
-  if (cut <= 0) {
-    return null
-  }
-  const nonce = raw.slice(0, cut)
-  const body = raw.slice(cut + 1)
-  if (!/^[0-9]+$/.test(nonce) || body.length === 0) {
-    return null
-  }
-  let decoded: string
-  try {
-    decoded = decodeURIComponent(body)
-  } catch {
-    decoded = body
-  }
-  // A uuid the hook read off the transcript; anything else is not an anchor.
-  const anchorId = anchorRaw && /^[0-9a-fA-F-]{8,}$/.test(anchorRaw) ? anchorRaw : undefined
-  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook, ...(anchorId ? { anchorId } : {}) }
-}
-
-/** Undo the escaping a JSON string body carries, without a JSON parse: the
- *  text may hold a lone trailing backslash after the 2000-character cut. */
-export function unescapeJsonStringBody(body: string): string {
-  let out = ''
-  for (let i = 0; i < body.length; i++) {
-    if (body[i] !== '\\' || i === body.length - 1) {
-      out += body[i]
-      continue
-    }
-    const next = body[++i]
-    if (next === 'n') {
-      out += '\n'
-    } else if (next === 't') {
-      out += '\t'
-    } else if (next === 'r') {
-      out += ''
-    } else if (next === 'u') {
-      const hex = body.slice(i + 1, i + 5)
-      if (/^[0-9a-fA-F]{4}$/.test(hex)) {
-        out += String.fromCharCode(Number.parseInt(hex, 16))
-        i += 4
-      } else {
-        out += next
-      }
-    } else {
-      out += next
-    }
-  }
-  return out
 }
 
 const MAX_DESKTOP_PROMPTS = 40

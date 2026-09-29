@@ -277,15 +277,23 @@ export function MobileNativeChatOverlay({
     session.messages,
     ownPrompts
   )
+  // The pending copies drawn: a witness that gave way to a copy placed by the
+  // desk's clock is not, and its old place must not break the tool fold
+  // either, or the call written between that place and the message drew as a
+  // row of its own above it (2026-09-29).
+  const drawnOwn = useMemo(
+    () => (hookPairing.steppedAside.size === 0 ? placedOwn : placedOwn.filter((item) => !hookPairing.steppedAside.has(item.id))),
+    [hookPairing, placedOwn]
+  )
   const foldedWithoutPeers = useMemo(
     () =>
       desktopEchoes.length > 0 || absorbedEchoes.length > 0
         ? foldMobileNativeChatMessages(
             session.messages,
-            pendingFoldBoundaries([...placedOwn, ...absorbedEchoes, ...desktopEchoes])
+            pendingFoldBoundaries([...drawnOwn, ...absorbedEchoes, ...desktopEchoes])
           )
         : baseFolded,
-    [absorbedEchoes, baseFolded, desktopEchoes, placedOwn, session.messages]
+    [absorbedEchoes, baseFolded, desktopEchoes, drawnOwn, session.messages]
   )
   // A subagent's message never reaches the transcript the phone reads; the
   // prompt hook carries it, drawn as the TUI's folded row (2026-09-26).
@@ -325,16 +333,14 @@ export function MobileNativeChatOverlay({
     controller.rememberEcho
   )
   const pendingWithDesktopPrompts = useMemo(() => {
-    const own = hookPairing.steppedAside.size === 0
-      ? placedOwn
-      : placedOwn.filter((item) => !hookPairing.steppedAside.has(item.id))
+    const own = drawnOwn
     if (desktopEchoes.length === 0 && absorbedEchoes.length === 0) {
       return own
     }
     // Two bubbles after one row draw in list order, so in the order they were sent.
     const sentAt = new Map(desktopPrompts.map((prompt) => [deskEchoId(prompt.nonce), prompt.at]))
     return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
-  }, [absorbedEchoes, desktopEchoes, desktopPrompts, hookPairing, placedOwn])
+  }, [absorbedEchoes, desktopEchoes, desktopPrompts, drawnOwn])
   // …and one the hook took after a subagent message at the same row is drawn
   // below that message's row, as it came (2026-09-26).
   const pendingInArrivalOrder = useMemo(

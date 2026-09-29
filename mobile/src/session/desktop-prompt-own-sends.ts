@@ -6,7 +6,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
-import { deskEchoId } from './use-desktop-prompt-echoes'
+import { deskEchoId, placedHere, typedAtOf } from './use-desktop-prompt-echoes'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
@@ -235,7 +235,21 @@ export function pairPendingWithHookPrompts(
     }
     const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, notLater)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
-    const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
+    // Its own hook copy, when the hook said the second it ran (`ts=`): that
+    // copy places itself by the rows written before it, and keeps doing so as
+    // rows load late. The witness stored its first place, and held there, a
+    // message that reached the phone before the call written before it stayed
+    // above that call for good (2026-09-29).
+    // And to its own hook copy while this run's chat is placing that copy
+    // (`placedHere`): the witness is stored at the copy's first drawing, and
+    // drawn instead of it the copy could never move to its row when that
+    // loaded. After a relaunch nothing is placed here, and the witness draws.
+    const ownPlacing = candidates.find(
+      (index) =>
+        deskEchoId(prompts[index]!.nonce) === item.id &&
+        (typedAtOf(prompts[index]!) !== undefined || placedHere(prompts[index]!.nonce))
+    )
+    const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id) ?? ownPlacing
     const pick = own ?? timed[0]
     if (pick !== undefined && witnessOfTheRun(item, prompts[pick]!, messages)) {
       // The witness's own place stands: it was drawn where the message
