@@ -47,7 +47,7 @@ export function rememberEchoInPending(
   // …and a phone send of its own beats a witnessed reading that glues rows
   // onto it, whichever came first: this is the send-first order, and
   // acceptOwnSendInPending below is the witness-first one.
-  const reading = { id, text }
+  const reading = { id, text, witnessedAt: now }
   if (current.some((item) => preferredStoredReading(item, reading) === 'a')) {
     return previous
   }
@@ -200,6 +200,10 @@ function isWitnessed(id: string): boolean {
   return id.startsWith('absorbed-') || id.startsWith('desk-')
 }
 
+/** A copy the store holds or is about to: a witness is stamped with when
+ *  the phone saw it. */
+type StoredReading = { id: string; text: string; witnessedAt?: number }
+
 /** Stands for a phone send compared by its words alone. */
 const SEND_ID = 'pending-send'
 
@@ -218,10 +222,7 @@ const SEND_ID = 'pending-send'
  * is a pair with a screen reading in it, or one whose shorter copy fills the
  * tab status's field, which Orca cuts there.
  */
-function preferredStoredReading(
-  a: { id: string; text: string },
-  b: { id: string; text: string }
-): 'a' | 'b' | null {
+function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
   const verdict = preferredWitnessReading(a.text, b.text) ?? cutStatusCopyOf(a, b)
   if (verdict === null) {
     return null
@@ -235,23 +236,52 @@ function preferredStoredReading(
 
 /**
  * A hook copy that fills the tab status's field, and a longer reading that
- * goes on from it: one message, and the longer reading is the whole of it.
- * Orca cuts the field mid-word, so the word boundary preferredWitnessReading
- * asks of a reading that goes on is not there. A message longer than the
- * field, drawn from its status copy for a beat and then listed whole by the
- * queue box, was stored as both and drawn twice once the agent took it, the
- * first cut short (round 2 of the review of fix/midturn-gaps, 2026-09-29).
- * Only a `desk-` copy: a phone send is its words as sent, however long.
+ * goes on from it, seen together: one message, and the longer reading is the
+ * whole of it. Orca cuts the field mid-word, so the word boundary
+ * preferredWitnessReading asks of a reading that goes on is not there. A
+ * message longer than the field, drawn from its status copy for a beat and
+ * then listed whole by the queue box, was stored as both and drawn twice once
+ * the agent took it, the first cut short (round 2 of the review of
+ * fix/midturn-gaps, 2026-09-29). Only a `desk-` copy: a phone send is its
+ * words as sent, however long.
+ *
+ * Seen together, because the words cannot tell. Two long messages that share
+ * their first 200 characters have the same cut copy, and the tab status's
+ * reader makes one copy of the pair, the first's. Merged into the second's
+ * box reading minutes later, the first message's copy was freed, the second
+ * paired with it, and one of the two was not drawn (round 3 of the same
+ * review). A copy and a reading of one message reach the phone within the
+ * relay's latency of each other, the hook's copy and the box's row both
+ * written when the agent takes the Enter; so only witnesses stored within
+ * CUT_COPY_SEEN_WITH_MS of each other merge. Past it both are kept: a long
+ * message whose two readings came further apart than that is drawn twice,
+ * which beats losing the other message. A witness from a build that kept no
+ * time merges with nothing this way. A phone send is timed against its
+ * witnesses by withoutWitnessesOfSends instead.
  */
-function cutStatusCopyOf(a: { id: string; text: string }, b: { id: string; text: string }): 'a' | 'b' | null {
+function cutStatusCopyOf(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
   const [ka, kb] = [storedKey(a.text), storedKey(b.text)]
-  if (a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)) {
-    return 'b'
+  const verdict =
+    a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)
+      ? 'b'
+      : b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)
+        ? 'a'
+        : null
+  return verdict !== null && seenTogether(a, b) ? verdict : null
+}
+
+/** How far apart a status copy and a reading of one message may be stored. */
+const CUT_COPY_SEEN_WITH_MS = 30_000
+
+function seenTogether(a: StoredReading, b: StoredReading): boolean {
+  if (!isWitnessed(a.id) || !isWitnessed(b.id)) {
+    return true
   }
-  if (b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)) {
-    return 'a'
-  }
-  return null
+  return (
+    typeof a.witnessedAt === 'number' &&
+    typeof b.witnessedAt === 'number' &&
+    Math.abs(a.witnessedAt - b.witnessedAt) <= CUT_COPY_SEEN_WITH_MS
+  )
 }
 
 /** The words preferredWitnessReading compares. */

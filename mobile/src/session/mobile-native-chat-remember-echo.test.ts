@@ -162,7 +162,26 @@ describe('two hook copies whose words differ by a last word', () => {
     })
 
     it('is restored once, whole, from a store that holds both', () => {
-      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', statusCut, 'a1'), stored(boxId, whole, 'a2')]).map((item) => item.text)).toEqual([whole])
+      const both = [
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 },
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 2_000 }
+      ]
+      expect(sweepWitnessedEchoes(both).map((item) => item.text)).toEqual([whole])
+    })
+
+    // Round 3 of the review of fix/midturn-gaps: two long messages that share
+    // their first 200 characters have the same cut copy. Seen minutes apart,
+    // the copy is the first's and the box's reading the second's.
+    it('is two messages when the box reads the longer one minutes after the copy, or either was stored with no time', () => {
+      const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd', 1_000)
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd', 181_000).k!.map((item) => item.id)).toEqual(['desk-status:s:1:0', boxId])
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd', 31_000).k!.map((item) => item.id)).toEqual([boxId])
+      const apart = [
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 },
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 181_000 }
+      ]
+      expect(sweepWitnessedEchoes(apart)).toHaveLength(2)
+      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', statusCut, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
     })
 
     // Degenerate: a copy one short of the field is not cut, and a phone send

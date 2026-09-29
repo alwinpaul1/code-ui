@@ -473,4 +473,41 @@ describe('a mid-turn message the queue box lists', () => {
       unmount()
     })
   }
+
+  // Round 3 of the review of fix/midturn-gaps: two long desk messages that
+  // share their first 200 characters, so the tab status carries the same cut
+  // copy of both and the reader makes one copy, the first's. The first is
+  // taken at once and drawn; the second waits in the box minutes later.
+  it('draws both of two long desk messages that share their first 200 characters, sent minutes apart, and after the chat comes back', async () => {
+    agent = 'claude'
+    const base = `${SECOND_SEND} issue, and also please check whether the session list on the account page still shows the ended sessions after a refresh`
+    const one = `${base}, first on staging`
+    const two = `${base}, then on production with the new flag`
+    expect(normalizePromptField(one)).toBe(normalizePromptField(two))
+    const users = () => drawn(frames.at(-1)!).filter((row) => row.role === 'user').map((row) => row.text)
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(one, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+    await showAt('05:37:40.000', WHOLE_TURN.slice(0, -5), prompts)
+    vi.setSystemTime(at('05:39:30.000'))
+    prompts = reader.read(working(two, '05:39:29.000'))
+    await showAt('05:39:30.100', WHOLE_TURN.slice(0, -4), prompts, true, [two])
+    await showAt('05:39:31.000', WHOLE_TURN.slice(0, -4), prompts, true, [two])
+    await showAt('05:40:00.000', WHOLE_TURN.slice(0, -3), prompts, true, [])
+    expect(users()).toEqual([normalizePromptField(one), oneLine(two)])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:48:00.000'))
+    prompts = again.read(done(two))
+    await showAt('05:48:00.100', WHOLE_TURN, prompts, false)
+    await showAt('05:48:01.000', WHOLE_TURN, prompts, false)
+    expect(users()).toEqual([normalizePromptField(one), oneLine(two)])
+    again.unmount()
+    unmount()
+  })
 })
