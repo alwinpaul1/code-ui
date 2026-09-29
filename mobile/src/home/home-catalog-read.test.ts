@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HOME_CATALOG_READ_CAP_MS, readHomeCatalog } from './home-catalog-read'
 
-function deps(over: Partial<Parameters<typeof readHomeCatalog>[0]> = {}) {
+type Deps = Parameters<typeof readHomeCatalog>[0]
+function deps(over: Partial<Deps> = {}) {
   return {
     load: async () => [],
     capMs: 50,
@@ -12,7 +13,7 @@ function deps(over: Partial<Parameters<typeof readHomeCatalog>[0]> = {}) {
     abandonLoad: vi.fn(),
     warn: vi.fn(),
     ...over
-  }
+  } as Deps & { warn: ReturnType<typeof vi.fn> }
 }
 
 describe('bounded home catalog read', () => {
@@ -62,7 +63,9 @@ describe('bounded home catalog read', () => {
   it('words the timeout by whether a list is being kept', async () => {
     const first = deps({ load: () => new Promise(() => {}) })
     await readHomeCatalog(first)
-    expect(String(first.warn.mock.calls[0]![0])).toMatch(/timed out after 50 ms; showing the pairing/)
+    expect(String(first.warn.mock.calls[0]![0])).toMatch(
+      /timed out after 50 ms; showing the pairing/
+    )
     const again = deps({ load: () => new Promise(() => {}), keptList: true })
     await readHomeCatalog(again)
     expect(String(again.warn.mock.calls[0]![0])).toMatch(/timed out after 50 ms; keeping the list/)

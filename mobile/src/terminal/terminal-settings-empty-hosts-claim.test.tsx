@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -55,11 +54,9 @@ describe('Terminal settings empty-host line', () => {
   async function mount(scheme: 'light' | 'dark') {
     await act(async () => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(TerminalSettingsScreen)
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <TerminalSettingsScreen />
+        </ThemeProvider>
       )
     })
     return texts(renderer!)

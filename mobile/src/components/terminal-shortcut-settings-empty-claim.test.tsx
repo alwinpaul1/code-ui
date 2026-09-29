@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -56,11 +55,9 @@ describe('custom shortcut section before its read lands', () => {
   async function mount(scheme: 'light' | 'dark') {
     await act(async () => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(TerminalShortcutSettings, props)
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <TerminalShortcutSettings {...props} />
+        </ThemeProvider>
       )
     })
     return () => JSON.stringify(renderer!.toJSON())

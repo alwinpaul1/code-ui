@@ -43,15 +43,13 @@ describe('home body rendered for a phone that already has a desktop', () => {
   async function render(scheme: 'light' | 'dark', loaded: boolean, hostCount: number) {
     await act(async () => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(MobileHomeBody, {
-            kind: homeBodyKind(loaded, hostCount),
-            pair,
-            hostList: createElement('HostList')
-          })
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <MobileHomeBody
+            kind={homeBodyKind(loaded, hostCount)}
+            pair={pair}
+            hostList={createElement('HostList')}
+          />
+        </ThemeProvider>
       )
     })
     const text = JSON.stringify(renderer!.toJSON())
