@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
@@ -49,7 +48,7 @@ const ROCKET = '🚀'
 
 function Harness({ blocks }: { blocks: NativeChatBlock[] }): React.JSX.Element {
   const styles = useChatMessageStyles()
-  return createElement(ToolRun, { blocks, defaultExpanded: true, activeCall: null, styles })
+  return <ToolRun blocks={blocks} defaultExpanded activeCall={null} styles={styles} />
 }
 
 let renderer: ReactTestRenderer | null = null
@@ -65,14 +64,15 @@ function previewOfOrphanResult(output: string, scheme: 'light' | 'dark' = 'light
   act(() => renderer?.unmount())
   act(() => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: scheme },
-        createElement(Harness, { blocks: [{ type: 'tool-result', output }] })
-      )
+      <ThemeProvider initialPreference={scheme}>
+        <Harness blocks={[{ type: 'tool-result', output }]} />
+      </ThemeProvider>
     )
   })
-  const nodes = renderer!.root.findAll((node) => node.props?.testID === 'tool-line-preview' && node.type === 'Text')
+  // The host Text (a string type under the mock), not a component that passes testID on.
+  const nodes = renderer!.root.findAll(
+    (node) => node.props?.testID === 'tool-line-preview' && typeof node.type === 'string'
+  )
   return nodes.length === 0 ? null : [nodes[0]!.props.children].flat().join('')
 }
 
