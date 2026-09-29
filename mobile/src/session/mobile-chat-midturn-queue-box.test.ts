@@ -326,4 +326,60 @@ describe('a mid-turn message the queue box lists', () => {
     unmount()
   })
 
+  // Round 2 of the review of fix/midturn-gaps: the queue box's row of a
+  // remembered message is not always its exact words.
+  // Codex keeps its preview's ellipsis: three lines, then a `…` line
+  // (codex-terminal-queued-messages.test.ts).
+  it('draws a long desk message Codex still holds only in the box after the chat comes back', async () => {
+    agent = 'codex'
+    const preview =
+      'Password changes now end only password sessions. Next, setting up your own\nbirth-date sign-in: it will now end your app sessions but keep your Google\nweb session.\n…'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [])
+    await showAt('05:36:36.000', BEFORE_SECOND, prompts, true, [preview])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:37:10.000'))
+    prompts = again.read(working(SECOND_SEND, '05:37:09.000'))
+    await showAt('05:37:10.100', BEFORE_SECOND, prompts, true, [preview])
+    await showAt('05:37:12.000', BEFORE_SECOND, prompts, true, [preview])
+    expect(queueBox()).toHaveLength(1)
+    expect(where(SECOND_SEND).at).toEqual([])
+    again.unmount()
+    unmount()
+  })
+
+  // Photos of no words have no words to match: a row of `[Image #6]` is not
+  // the remembered `[Image #5]`.
+  it('keeps an earlier desk photo of no words in the chat while a later one waits in the box', async () => {
+    agent = 'claude'
+    const photoBubbles = () => drawn(frames.at(-1)!).flatMap((row, index) => (row.role === 'user' && row.text === '' ? [index] : []))
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working('[Image #5]', '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+    await showAt('05:37:40.000', WHOLE_TURN.slice(0, -5), prompts)
+    expect(photoBubbles()).toHaveLength(1)
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:39:30.000'))
+    prompts = again.read(working('[Image #6]', '05:39:29.000'))
+    await showAt('05:39:30.100', WHOLE_TURN.slice(0, -4), prompts, true, ['[Image #6]'])
+    await showAt('05:39:31.000', WHOLE_TURN.slice(0, -4), prompts, true, ['[Image #6]'])
+    expect(queueBox()).toHaveLength(1)
+    expect(photoBubbles()).toHaveLength(1)
+    again.unmount()
+    unmount()
+  })
+
 })

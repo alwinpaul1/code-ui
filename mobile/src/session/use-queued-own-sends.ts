@@ -302,15 +302,10 @@ function projectWaitingFirst<T extends OwnSend>(
     pending.filter((item) => !isWitnessId(item.id)),
     queue
   )
-  const rows = projected.queue.flatMap((entry) => (typeof entry === 'string' ? [boxKey(entry)] : []))
-  const inBox = new Set<T>()
-  for (const witness of witnesses) {
-    const row = rows.indexOf(boxKey(witness.text))
-    if (row !== -1) {
-      rows.splice(row, 1)
-      inBox.add(witness)
-    }
-  }
+  // Every copy the chat remembered of a message a row lists is held by it,
+  // its echo's and the box's own reading alike.
+  const rows = projected.queue.flatMap((entry) => (typeof entry === 'string' ? [entry] : []))
+  const inBox = new Set(witnesses.filter((witness) => rows.some((row) => rowListsWitness(row, witness.text))))
   const outside = new Set(projected.pending)
   return {
     pending: pending.filter((item) => (isWitnessId(item.id) ? !inBox.has(item) : outside.has(item))),
@@ -320,6 +315,33 @@ function projectWaitingFirst<T extends OwnSend>(
 
 function isWitnessId(id: string): boolean {
   return id.startsWith('desk-') || id.startsWith('absorbed-')
+}
+
+/**
+ * Whether a queue box row lists a remembered message: its words exactly; the
+ * box's own `…` stub of them (Codex keeps its preview's ellipsis); or, for a
+ * photo of no words, the same `[Image #N]` markers. Never a longer row that
+ * only goes on past a message's words: that is another message (c9c1d899),
+ * nor another photo of no words (round 2 of the review of fix/midturn-gaps).
+ * A long message's echo, cut at the tab status's field, gives way in the
+ * store to the box's whole reading of it (mobile-native-chat-remember-echo.ts).
+ */
+function rowListsWitness(row: string, text: string): boolean {
+  const rowKey = boxKey(row)
+  const key = boxKey(text)
+  if (key === '') {
+    const markers = imageMarkers(text)
+    return markers !== '' && markers === imageMarkers(row)
+  }
+  if (rowKey === key) {
+    return true
+  }
+  const stub = rowKey.endsWith('…') ? rowKey.slice(0, -1).trimEnd() : null
+  return stub !== null && stub.length > 0 && key.startsWith(stub)
+}
+
+function imageMarkers(text: string): string {
+  return (text.match(/\[Image #\d+\]/g) ?? []).join(' ')
 }
 
 function boxKey(text: string): string {
