@@ -84,6 +84,17 @@ describe('the benefit of the doubt through a stand-in', () => {
     expect(see(after, hookRow([row(DOUBTED, '10:00:30.000')])).preexistingAgentIds).toEqual([DOUBTED])
   })
 
+  // The fifth review pass: snapshots with no status between the stand-in and
+  // the next hook row carry the flag, and that hook row still clears it.
+  it('judges the first hook row after a stand-in even with statuses missing between, then clears', () => {
+    const first = see(EMPTY_SESSION_TASK_EVIDENCE, hookRow([row(DOUBTED, '09:40:00.000')]))
+    const gap = see(see(see(first, standIn()), null), null)
+    expect(gap.rosterUnseen).toBe(true)
+    const resumed = see(gap, hookRow([row(DOUBTED, '10:00:30.000')]))
+    expect(resumed.preexistingAgentIds).toEqual([])
+    expect(resumed.rosterUnseen).toBe(false)
+  })
+
   it('carries nothing when there is no roster yet', () => {
     const empty = see(EMPTY_SESSION_TASK_EVIDENCE, standIn())
     expect(empty.preexistingAgentIds).toBeNull()
