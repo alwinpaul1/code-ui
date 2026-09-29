@@ -263,7 +263,14 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
   const { show, unmount } = landingHarness(frames)
   let agent: 'claude' | 'codex' = 'claude'
   /** The chat drawn at this time of the day of the report. */
-  async function showAt(clock: string, messages: NativeChatMessage[], prompts: DesktopPrompt[], working = true): Promise<void> {
+  async function showAt(
+    clock: string,
+    messages: NativeChatMessage[],
+    prompts: DesktopPrompt[],
+    working = true,
+    /** The rows the agent's queue box lists, as the screen reader took them. */
+    queued: string[] = []
+  ): Promise<void> {
     const delta = at(clock) - Date.now()
     if (delta > 0) {
       await act(async () => {
@@ -271,8 +278,13 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
       })
     }
     // Twice: the witness memory settles on the render after it stores.
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent })
-    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent, queued })
+    await show('00:00:00.000', { messages, working, prompts, hasMore: true, agent, queued })
+  }
+  /** The rows the chat's queue box draws, as their words. */
+  function queueBox(): string[] {
+    const entries = (frames.at(-1)!.queuedMessages ?? []) as (string | { text: string })[]
+    return entries.map((entry) => oneLine(typeof entry === 'string' ? entry : entry.text))
   }
   function where(body: string): { at: number[]; reply: number; after: (index: number) => string | undefined } {
     const rows = drawn(frames.at(-1)!)
@@ -565,6 +577,32 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
       unmount()
     })
   }
+
+  // Found with gap 2: the queue box took a message the chat had drawn out of
+  // the chat when it listed a later one whose words are the first's less the
+  // last word. It read the row as its own shortened reading of that message
+  // (its prefix rule for the phone's sends), and drew the earlier message in
+  // the box in the later one's place.
+  it('keeps an earlier message in the chat when the queue box lists a later one that is its words less the last', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+    vi.setSystemTime(at('05:36:01.700'))
+    prompts = reader.read(working(FIRST_SEND, '05:36:01.523'))
+    await showAt('05:36:03.000', AFTER_FIRST, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:36:40.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+    const first = where(FIRST_SEND)
+    expect(first.at).toHaveLength(1)
+    expect(first.after(first.at[0]!)).toBe(BEFORE_FIRST[0]!.id)
+    reader.unmount()
+    unmount()
+  })
 
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.

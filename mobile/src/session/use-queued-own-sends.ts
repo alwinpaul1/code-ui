@@ -24,7 +24,7 @@ export const QUEUE_SIGHTING_CAP_MS = 15_000
  *  came after the box listed it and let it go is known as listed. */
 const SEEN_ROWS_CAP = 32
 
-type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number; takenAt?: number }
+type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number; takenAt?: number; queuedAt?: number }
 
 /** The agents whose queue box the phone parses off the screen, as
  *  use-mobile-terminal-hud-observation.ts reads them. Keep the two in step. */
@@ -275,7 +275,37 @@ export function useQueuedOwnSends<T extends OwnSend>(
  * own when there is one, or it is drawn as a bubble beside it (review,
  * 2026-09-25).
  */
+/**
+ * The phone's own sends split between the queue box and the chat, and the
+ * witnessed messages (`desk-`/`absorbed-`) left out of that: a message the
+ * phone drew is not a row of its own in the box, and projected by the box's
+ * prefix rule it was (a later message "… Whats this" in the box took the
+ * earlier "… Whats this issue" out of the chat and drew it in the box).
+ */
 function projectWaitingFirst<T extends OwnSend>(
+  pending: readonly T[],
+  queue: readonly string[]
+): { pending: T[]; queue: MobileChatQueueEntry[] } {
+  const witnesses = pending.filter((item) => isWitnessId(item.id))
+  if (witnesses.length === 0) {
+    return projectSendsWaitingFirst(pending, queue)
+  }
+  const projected = projectSendsWaitingFirst(
+    pending.filter((item) => !isWitnessId(item.id)),
+    queue
+  )
+  const outside = new Set(projected.pending)
+  return {
+    pending: pending.filter((item) => isWitnessId(item.id) || outside.has(item)),
+    queue: projected.queue
+  }
+}
+
+function isWitnessId(id: string): boolean {
+  return id.startsWith('desk-') || id.startsWith('absorbed-')
+}
+
+function projectSendsWaitingFirst<T extends OwnSend>(
   pending: readonly T[],
   queue: readonly string[]
 ): { pending: T[]; queue: MobileChatQueueEntry[] } {
