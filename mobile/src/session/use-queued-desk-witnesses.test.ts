@@ -7,8 +7,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
-import { echoMemoryId, rememberEchoInPending } from './mobile-native-chat-remember-echo'
-import { isHeldInQueueBox, takeMobileNativeChatPending } from './mobile-native-chat-pending-echo'
+import { echoMemoryId } from './mobile-native-chat-remember-echo'
 import { useQueuedDeskWitnesses } from './use-queued-desk-witnesses'
 import type { WitnessToRemember } from './mobile-native-chat-witness-memory'
 
@@ -59,23 +58,5 @@ describe('a message the queue box lists', () => {
     const read = reader()
     read(['check the logs'], [row('a1')], 'one')
     expect(read(['check the logs'], [row('b9')], 'two').map((witness) => witness.anchorId)).toEqual(['b9'])
-  })
-})
-
-describe('a witness stored from the queue box', () => {
-  it('is held in the box until the box lets it go, then no longer', () => {
-    const stored = rememberEchoInPending({}, 'k', echoMemoryId('check the logs'), 'check the logs', 'a1', [], 'd', 5_000, true)
-    const witness = stored.k![0]!
-    expect(witness).toMatchObject({ queuedAt: 5_000 })
-    expect(isHeldInQueueBox(witness)).toBe(true)
-    const taken = takeMobileNativeChatPending(stored, 'k', [witness.id], 9_000)
-    expect(taken.k![0]).toMatchObject({ queuedAt: 5_000, takenAt: 9_000 })
-    expect(isHeldInQueueBox(taken.k![0]!)).toBe(false)
-  })
-
-  it('is not held when it was stored from a drawn echo', () => {
-    const drawn = rememberEchoInPending({}, 'k', 'desk-status:s:1', 'check the logs', 'a1', [], 'd', 5_000)
-    expect(isHeldInQueueBox(drawn.k![0]!)).toBe(false)
-    expect(takeMobileNativeChatPending(drawn, 'k', ['desk-status:s:1'], 9_000)).toBe(drawn)
   })
 })

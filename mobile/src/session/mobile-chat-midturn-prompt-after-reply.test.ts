@@ -670,6 +670,79 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
+  // The review of fix/midturn-gaps: the status copy reaches the chat a beat
+  // before the screen read lists the message in the box (the usual order),
+  // so its echo is drawn for that beat and remembered as `desk-<nonce>`. The
+  // chat's reader then starts over while the message is still queued. The
+  // stored message kept its place against the copy found then (242fa47f), and
+  // was drawn as a bubble beside the box's row of it.
+  for (const how of ['terminal', 'remount'] as const) {
+    it(`draws a message still in the queue box only there after the chat ${how === 'terminal' ? 'shows the terminal and comes back' : 'remounts'}`, async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [])
+      await showAt('05:36:36.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      await showAt('05:36:40.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+      expect(where(SECOND_SEND).at).toEqual([])
+      let again = reader
+      if (how === 'terminal') {
+        vi.setSystemTime(at('05:37:00.000'))
+        reader.read(working(SECOND_SEND, '05:36:59.000'), { shown: false })
+      } else {
+        reader.unmount()
+        unmount()
+        again = statusReader()
+      }
+      vi.setSystemTime(at('05:37:10.000'))
+      prompts = again.read(working(SECOND_SEND, '05:37:09.000'))
+      await showAt('05:37:10.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      await showAt('05:37:12.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+      expect(where(SECOND_SEND).at).toEqual([])
+      // Taken: drawn once, where it arrived.
+      const taken = WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938'))
+      await showAt('05:37:40.000', taken, prompts, true, [])
+      expect(queueBox()).toEqual([])
+      expect(where(SECOND_SEND).at).toHaveLength(1)
+      again.unmount()
+      unmount()
+    })
+  }
+
+  // The same review: a relay drop hands the chat an empty box for a moment
+  // while the message is still queued. The stored message was taken for let
+  // go, and drawn as a bubble beside the box's row once the box listed it
+  // again.
+  it('keeps a message still in the queue box only in the box after a relay drop', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:36:35.000'))
+    let prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:37:00.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:37:10.000'))
+    prompts = again.read(working(SECOND_SEND, '05:37:09.000'))
+    await showAt('05:37:10.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+    expect(where(SECOND_SEND).at).toEqual([])
+    await showAt('05:37:20.000', BEFORE_SECOND, prompts, true, [])
+    await showAt('05:37:25.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:37:26.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+    expect(where(SECOND_SEND).at).toEqual([])
+    again.unmount()
+    unmount()
+  })
+
   // Gap D of the final review of fix/midturn-prompt-at-end (the same words
   // sent mid-turn, then typed at the desk as the next turn's prompt: the next
   // turn's row retires the first turn's bubble) is left as it was. The rule

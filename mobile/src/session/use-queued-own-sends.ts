@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
-import { isHeldInQueueBox, isTakenSend } from './mobile-native-chat-pending-echo'
+import { isTakenSend } from './mobile-native-chat-pending-echo'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
@@ -26,7 +26,7 @@ export const QUEUE_SIGHTING_CAP_MS = 15_000
  *  came after the box listed it and let it go is known as listed. */
 const SEEN_ROWS_CAP = 32
 
-type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number; takenAt?: number; queuedAt?: number }
+type OwnSend = { id: string; text: string; images?: string[]; sentAt?: number; takenAt?: number }
 
 /** The agents whose queue box the phone parses off the screen, as
  *  use-mobile-terminal-hud-observation.ts reads them. Keep the two in step. */
@@ -279,12 +279,16 @@ export function useQueuedOwnSends<T extends OwnSend>(
  */
 /**
  * The phone's own sends split between the queue box and the chat, and the
- * witnessed messages (`desk-`/`absorbed-`) left out of that: a message the
- * phone drew is not a row of its own in the box, and projected by the box's
- * prefix rule it was (a later message "… Whats this" in the box took the
- * earlier "… Whats this issue" out of the chat and drew it in the box). Only
- * a witness stored while its message sat in the box and not yet taken
- * (isHeldInQueueBox) is held there, by a row of exactly its words.
+ * witnessed messages (`desk-`/`absorbed-`) apart from them. A message the
+ * phone drew is not one of its sends, and projected by the box's prefix rule
+ * it was taken for one: a later message "… Whats this" in the box took the
+ * earlier "… Whats this issue" out of the chat and drew it in the box. A
+ * witness is held in the box only by a row of exactly its words: one the
+ * chat stored from the box, or drew for a beat before the box listed it,
+ * while that row is listed, however often the box let it go and listed it
+ * again (a relay drop hands the chat an empty box), and drawn where it
+ * arrived once the row is gone (the review of fix/midturn-gaps). A later
+ * message of the same words hides it while that one is queued.
  */
 function projectWaitingFirst<T extends OwnSend>(
   pending: readonly T[],
@@ -301,7 +305,7 @@ function projectWaitingFirst<T extends OwnSend>(
   const rows = projected.queue.flatMap((entry) => (typeof entry === 'string' ? [boxKey(entry)] : []))
   const inBox = new Set<T>()
   for (const witness of witnesses) {
-    const row = isHeldInQueueBox(witness) ? rows.indexOf(boxKey(witness.text)) : -1
+    const row = rows.indexOf(boxKey(witness.text))
     if (row !== -1) {
       rows.splice(row, 1)
       inBox.add(witness)

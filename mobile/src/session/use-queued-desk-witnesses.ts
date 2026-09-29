@@ -15,9 +15,9 @@ const SIGHTING_CAP = 64
  * sends, each with where it arrived: the raw row that was last when the chat
  * first saw it in the box, the place the queue-box witness draws a message
  * the agent takes (use-absorbed-queue-echoes.ts). The chat remembers them
- * while they sit in the box (`queued`, isHeldInQueueBox), so one the agent
- * takes while the chat is closed is still drawn where it arrived when the
- * chat comes back. Before, a message drawn only in the box was remembered
+ * while they sit in the box, held there while a row of exactly their words
+ * is listed (useQueuedOwnSends), so one the agent takes while the chat is
+ * closed is still drawn where it arrived when the chat comes back. Before, a message drawn only in the box was remembered
  * nowhere, and after the chat came back its status copy, found and timed by
  * its run's start, was on a page not loaded: the message was lost (final
  * review of fix/midturn-prompt-at-end, 2026-09-29).
@@ -70,12 +70,12 @@ export function useQueuedDeskWitnesses(
  * Keep what the chat witnessed with the phone's own sends, so it survives a
  * reconnect, a tab switch and a relaunch (2026-09-13): the echoes it drew
  * (witnessesToRemember says which, and under what id), and the messages the
- * agent's queue box lists (useQueuedDeskWitnesses), stored as `queued`.
+ * agent's queue box lists (useQueuedDeskWitnesses).
  */
 export function useRememberedWitnesses(
   echoes: readonly MobileNativeChatPendingMessage[],
   queued: readonly WitnessToRemember[],
-  rememberEcho: ((id: string, text: string, anchorId: string | null, queued?: boolean) => void) | undefined
+  rememberEcho: ((id: string, text: string, anchorId: string | null) => void) | undefined
 ): void {
   const drawn = JSON.stringify(witnessesToRemember(echoes))
   const listed = JSON.stringify(queued)
@@ -84,7 +84,7 @@ export function useRememberedWitnesses(
       rememberEcho?.(witness.id, witness.text, witness.anchorId)
     }
     for (const witness of JSON.parse(listed) as WitnessToRemember[]) {
-      rememberEcho?.(witness.id, witness.text, witness.anchorId, true)
+      rememberEcho?.(witness.id, witness.text, witness.anchorId)
     }
   }, [drawn, listed, rememberEcho])
 }

@@ -35,9 +35,7 @@ export function rememberEchoInPending(
   anchorId: string,
   messages: readonly NativeChatMessage[],
   draftKey: string,
-  now = Date.now(),
-  /** Seen in the agent's queue box, not yet taken (isHeldInQueueBox). */
-  queued = false
+  now = Date.now()
 ): PendingByKey {
   const current = previous[key] ?? []
   if (current.some((item) => item.id === id)) {
@@ -74,7 +72,7 @@ export function rememberEchoInPending(
     text
   )
   const list = next[key]!
-  return { ...next, [key]: [...list.slice(0, -1), { ...list.at(-1)!, witnessedAt: now, ...(queued ? { queuedAt: now } : {}) }] }
+  return { ...next, [key]: [...list.slice(0, -1), { ...list.at(-1)!, witnessedAt: now }] }
 }
 
 /**
@@ -153,8 +151,6 @@ export type HeldWitness = {
   draftKey: string
   /** When the phone saw it, by the phone's clock. */
   at: number
-  /** Seen in the agent's queue box (rememberEchoInPending's `queued`). */
-  queued?: boolean
 }
 
 /**
@@ -193,8 +189,7 @@ export function rememberHeldWitnesses(
         witness.anchorId,
         witness.messages,
         witness.draftKey,
-        witness.at,
-        witness.queued === true
+        witness.at
       )
     }
   }

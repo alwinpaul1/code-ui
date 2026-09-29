@@ -63,24 +63,8 @@ export type MobileNativeChatPendingMessage = {
   provisional?: boolean
   /** The phone's own send only: when, by the phone's clock, the agent took it
    *  out of its queue box. Claude Code writes no row for a prompt it takes
-   *  mid-turn (see `isTakenSend`), so from then on the send waits for none.
-   *  Also stamped on a witness stored with `queuedAt`, when the box let it go. */
+   *  mid-turn (see `isTakenSend`), so from then on the send waits for none. */
   takenAt?: number
-  /** A witness only: stored, by the phone's clock, while its message sat in
-   *  the agent's queue box, before the agent took it (isHeldInQueueBox). */
-  queuedAt?: number
-}
-
-/**
- * Whether a witness is a message the agent's queue box still holds: stored
- * while its row was listed (`queuedAt`), and not let go since (`takenAt`).
- * Drawn in the box while a row of exactly its words is listed, and as a
- * bubble where it arrived once taken. Before, a message still in the box
- * when the chat closed was remembered nowhere, and after the chat came back
- * it was lost or misplaced (final review of fix/midturn-prompt-at-end).
- */
-export function isHeldInQueueBox(item: Pick<MobileNativeChatPendingMessage, 'queuedAt' | 'takenAt'>): boolean {
-  return typeof item.queuedAt === 'number' && Number.isFinite(item.queuedAt) && !isTakenSend(item)
 }
 
 /**
@@ -281,13 +265,6 @@ export function takeMobileNativeChatPending(
   for (let index = 0; index < next.length; index += 1) {
     const item = next[index]!
     const text = normalizeReconcileText(item.text)
-    // A witness stored from the queue box: let go of, it is drawn where it
-    // arrived from now on, and no later row of its words takes it back.
-    if (wanted.has(item.id) && isHeldInQueueBox(item) && !item.id.startsWith('pending-')) {
-      next[index] = { ...item, takenAt: now }
-      changed = true
-      continue
-    }
     if (!wanted.has(item.id) || !item.id.startsWith('pending-') || text === '') {
       continue
     }
