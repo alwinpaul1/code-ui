@@ -440,11 +440,8 @@ export function withoutLandedDesktopPrompts(
   // A row a later hook submission of the same words owns is that
   // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
   const owners = rowOwners(prompts, raw, landedKey)
-  const joined = keysInJoinedRows(
-    prompts.map((prompt) => landedKey(prompt.text)),
-    raw.flatMap((message, index) =>
-      message.role === 'user' ? [{ key: landedKey(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')), index }] : []
-    )
+  const joined = keysInJoinedRows(prompts, raw, landedKey, (message) =>
+    landedKey(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
   )
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {

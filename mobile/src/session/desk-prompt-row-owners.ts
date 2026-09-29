@@ -200,40 +200,78 @@ export function witnessRowsNotItsOwn(
  * words a line apart. That row is each of theirs, and each copy was drawn
  * beside it until another row of its own words came along, which with the
  * prompt hook's copies was then the next submission's and never came
- * (the review of d147a9c4). Only a row made wholly of the copies' words, so a
- * prompt that merely quotes one of them lands none. By key, the index of the
- * last such row, which a copy typed after it cannot be.
+ * (the review of d147a9c4). By key, the index of the last such row, which a
+ * copy typed after it cannot be.
+ *
+ * Only on the prompt hook's evidence, since a prompt typed at the desk can be
+ * made of earlier messages' words too ("ok" and "continue", then "ok
+ * continue"), and split, it retired a message taken mid-turn (the review of
+ * c3844d00, J1): every part must be a hook-reported submission (a hook copy,
+ * or a status copy the merge paired with one), and the row must be no
+ * submission's of its own words (rowOwners: a prompt typed with the agent
+ * idle comes straight after the row its hook copy names). A row made wholly
+ * of the parts' words is needed too, so one that merely quotes a part lands
+ * none. Without the hook's copies no row is split, as before.
  */
-export function keysInJoinedRows(keys: readonly string[], rows: readonly { key: string; index: number }[]): Map<string, number> {
-  const words = [...new Set(keys.filter((key) => key.length > 0))]
+export function keysInJoinedRows(
+  prompts: readonly Pick<DesktopPrompt, 'nonce' | 'text' | 'anchorId' | 'seenAt' | 'hookTwin'>[],
+  raw: readonly NativeChatMessage[],
+  keyOf: (text: string) => string,
+  rowKeyOf: (message: NativeChatMessage) => string
+): Map<string, number> {
+  const words = [
+    ...new Set(
+      prompts
+        .filter((prompt) => (prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) ? prompt.hookTwin !== undefined : true))
+        .map((prompt) => keyOf(prompt.text))
+        .filter((key) => key.length > 0)
+    )
+  ]
   const out = new Map<string, number>()
   if (words.length < 2) {
     return out
   }
-  for (const row of rows) {
-    const parts = splitIntoWords(row.key, words)
-    if (parts !== null && parts.length >= 2) {
-      parts.forEach((part) => out.set(part, Math.max(out.get(part) ?? -1, row.index)))
+  const owners = rowOwners(prompts, raw, keyOf, rowKeyOf)
+  raw.forEach((message, index) => {
+    if (message.role !== 'user' || owners.has(message.id)) {
+      return
     }
-  }
+    const parts = splitIntoWords(rowKeyOf(message), words)
+    if (parts !== null && parts.length >= 2) {
+      parts.forEach((part) => out.set(part, Math.max(out.get(part) ?? -1, index)))
+    }
+  })
   return out
 }
 
-/** `key` as the copies' words joined by single spaces, or null. */
-function splitIntoWords(key: string, words: readonly string[], from = 0): string[] | null {
-  if (from === key.length) {
-    return []
-  }
-  for (const word of words) {
-    const end = from + word.length
-    if (key.startsWith(word, from) && (end === key.length || key[end] === ' ')) {
-      const rest = splitIntoWords(key, words, end === key.length ? end : end + 1)
-      if (rest !== null) {
-        return [word, ...rest]
+/** `key` as the copies' words joined by single spaces, or null. Each place in
+ *  the key is decided once: words that overlap made a row that almost splits
+ *  cost twice as much for every repeat (the review of c3844d00, S1). */
+function splitIntoWords(key: string, words: readonly string[]): string[] | null {
+  const decided = new Map<number, string[] | null>()
+  const from = (at: number): string[] | null => {
+    if (at === key.length) {
+      return []
+    }
+    const known = decided.get(at)
+    if (known !== undefined) {
+      return known
+    }
+    let found: string[] | null = null
+    for (const word of words) {
+      const end = at + word.length
+      if (key.startsWith(word, at) && (end === key.length || key[end] === ' ')) {
+        const rest = from(end === key.length ? end : end + 1)
+        if (rest !== null) {
+          found = [word, ...rest]
+          break
+        }
       }
     }
+    decided.set(at, found)
+    return found
   }
-  return null
+  return from(0)
 }
 
 /**

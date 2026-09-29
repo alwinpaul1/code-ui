@@ -278,10 +278,7 @@ export function retireLandedMobileNativeChatPending(
   const notItsRows = witnessRowsNotItsOwn(messages, current, receipts)
   // Messages Claude dequeued together as one row, their words a line apart:
   // that row is each of theirs (keysInJoinedRows).
-  const joined = keysInJoinedRows(
-    [...current.filter((item) => isWitnessId(item.id)), ...receipts].map((item) => normalizeReconcileText(item.text)),
-    messages.flatMap((message, index) => (message.role === 'user' ? [{ key: normalizedUserText(message) ?? '', index }] : []))
-  )
+  const joined = keysInJoinedRows(receipts, messages, normalizeReconcileText, (message) => normalizedUserText(message) ?? '')
   const joinedAfter = (item: MobileNativeChatPendingMessage, key: string): boolean => {
     const at = joined.get(key)
     return at !== undefined && at > messages.findIndex((message) => message.id === item.baselineTailMessageId)

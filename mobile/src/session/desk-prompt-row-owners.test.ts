@@ -108,28 +108,50 @@ describe('a witnessed message and the next turn’s prompt of its words', () => 
 })
 
 // Two queued messages Claude dequeued as one row, a line apart (the review of
-// d147a9c4): that row is each of theirs.
+// d147a9c4): that row is each of theirs, on the prompt hook's evidence.
 describe('a row made of queued messages joined', () => {
+  const copy = (nonce: string, text: string, anchorId: string): DesktopPrompt => ({ nonce, text, anchorId, seenAt: 1_000 })
+  const joined = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('a3', 'assistant', 'done'), row('u4', 'user', 'look at x look at y')]
+
   it('is each of theirs, by the last such row', () => {
-    const joined = keysInJoinedRows(['look at x', 'look at y'], [
-      { key: 'look at x look at y', index: 4 },
-      { key: 'look at y look at x', index: 9 }
-    ])
-    expect([...joined]).toEqual([['look at x', 9], ['look at y', 9]])
+    const out = keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a2')], joined, words, (message) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')))
+    expect([...out]).toEqual([['look at x', 3], ['look at y', 3]])
+  })
+
+  // The review of c3844d00 (J1): a prompt typed idle, made of earlier
+  // messages' words, is its own row; and a part that is only a copy of the
+  // tab status, with no hook copy, is no evidence.
+  it('is no one’s when a submission of its own words came straight before it, or a part has no hook copy', () => {
+    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
+    const own = copy('3', 'look at x look at y', 'a3')
+    expect(keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a2'), own], joined, words, rowKey).size).toBe(0)
+    const statusOnly: DesktopPrompt = { nonce: 'status:s:1:0', text: 'look at x', at: 1 }
+    expect(keysInJoinedRows([statusOnly, copy('2', 'look at y', 'a2')], joined, words, rowKey).size).toBe(0)
   })
 
   // A prompt that only quotes one of them, or one message alone, is no join.
   it('is no one’s when it only quotes one of them, or holds one alone', () => {
-    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'please look at x first', index: 1 }]).size).toBe(0)
-    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'look at x', index: 1 }]).size).toBe(0)
-    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'look at x look at y and more', index: 1 }]).size).toBe(0)
+    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
+    const quotes = [row('a1', 'assistant', 'one'), row('u2', 'user', 'please look at x first'), row('u3', 'user', 'look at x'), row('u4', 'user', 'look at x look at y and more')]
+    expect(keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a1')], quotes, words, rowKey).size).toBe(0)
+  })
+
+  // The review of c3844d00 (S1): words that overlap made a row that almost
+  // splits cost twice as much for every repeat, on the render path. Measured
+  // before the fix: 20 repeats took 106 ms, doubling with each.
+  it('decides a row of overlapping words quickly however long it is', () => {
+    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
+    const long = [row('a1', 'assistant', 'one'), row('u2', 'user', `${Array.from({ length: 25 }, () => 'yes do it').join(' ')} now`)]
+    const started = performance.now()
+    expect(keysInJoinedRows([copy('1', 'yes', 'a1'), copy('2', 'do it', 'a1'), copy('3', 'yes do it', 'a1')], long, words, rowKey).size).toBe(0)
+    expect(performance.now() - started).toBeLessThan(250)
   })
 
   // Degenerate: one copy's words, no copies, no rows.
   it('is nothing with fewer than two copies’ words or no rows', () => {
-    expect(keysInJoinedRows(['look at x'], [{ key: 'look at x look at x', index: 1 }]).size).toBe(0)
-    expect(keysInJoinedRows([], [{ key: 'a b', index: 1 }]).size).toBe(0)
-    expect(keysInJoinedRows(['a', 'b'], []).size).toBe(0)
+    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
+    expect(keysInJoinedRows([copy('1', 'look at x', 'a1')], joined, words, rowKey).size).toBe(0)
+    expect(keysInJoinedRows([], joined, words, rowKey).size).toBe(0)
+    expect(keysInJoinedRows([copy('1', 'a', 'a1'), copy('2', 'b', 'a1')], [], words, rowKey).size).toBe(0)
   })
 })
-
