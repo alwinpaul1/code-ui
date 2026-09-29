@@ -91,7 +91,7 @@ export const STATUS_PROMPT_NONCE_PREFIX = 'status:'
 /** Whether a tab status carries a prompt. One that does not (no status at
  *  all, or Orca's stand-in with `prompt: ''`) says nothing about the pane's
  *  prompt; see observeAgentStatusPrompt. */
-export function statusCarriesPrompt(
+function statusCarriesPrompt(
   status: AgentStatusPromptSource | undefined
 ): status is NonNullable<AgentStatusPromptSource> & { prompt: string } {
   return typeof status?.prompt === 'string' && status.prompt.trim().length > 0

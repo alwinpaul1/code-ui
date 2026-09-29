@@ -247,37 +247,83 @@ describe('a desk prompt taken while the phone was away, after a null status on t
       ['and keep the old table', 1_000]
     ])
   })
+})
 
-  // 2026-09-29: Orca's own stand-in, working with no prompt, can come first
-  // (mobile-chat-midturn-prompt-after-reply.test.ts). It is no reading of the
-  // prompt either, and must not end the wait for the first one.
-  it('is still timed by the run it came in when a status with no prompt comes first', () => {
-    let listed: readonly { text: string; at?: number }[] = []
-    function Chat({ status, connected }: { status: AgentStatusPromptSource; connected: boolean }) {
-      listed = useAgentStatusPrompts('sess-1', status, undefined, connected).prompts
+// Review of 257768bc, which held the reconnect and cached-tab-list latch
+// through statuses with no prompt: a Claude lead whose cached prompt is empty
+// (Orca's SessionStart empties it after startup, resume or clear, and a turn
+// a teammate's or subagent's message starts keeps it) sends genuine hook rows
+// with `prompt: ''`. Held through them, the latch took a message the chat
+// watched arrive long after the reconnect for one found there, timed it by
+// the run's start, and a subagent message read live got no time to pair by.
+// Any status that is not null ends the latch, as before that commit.
+describe('a status with no prompt on the way back', () => {
+  const noPrompt: NonNullable<AgentStatusPromptSource> = {
+    state: 'working',
+    prompt: '',
+    updatedAt: 2_000,
+    stateStartedAt: 1_000,
+    stateHistory: [{ state: 'done', prompt: '', startedAt: 500 }],
+    providerSession: { id: 'sess-1' }
+  }
+  function mount() {
+    let renderer: ReactTestRenderer | null = null
+    let out: ReturnType<typeof useAgentStatusPrompts> = { prompts: [], agentMessages: [] }
+    function Chat({ status, connected, live }: { status: AgentStatusPromptSource; connected: boolean; live: boolean }) {
+      out = useAgentStatusPrompts('sess-1', status, undefined, connected, live)
       return null
     }
-    let renderer!: ReactTestRenderer
-    const show = (status: AgentStatusPromptSource, connected: boolean) =>
-      act(() => {
-        if (renderer) {
-          renderer.update(createElement(Chat, { status, connected }))
-        } else {
-          renderer = create(createElement(Chat, { status, connected }))
-        }
-      })
-    const history = [{ state: 'done', prompt: 'earlier', startedAt: 500 }]
-    const watched = { state: 'working', prompt: 'run the migration', updatedAt: 1_000, stateStartedAt: 1_000, stateHistory: history }
-    show(watched, true)
-    show(watched, false)
-    show(watched, true)
-    show({ state: 'working', prompt: '', updatedAt: 8_000, stateStartedAt: 8_000, stateHistory: [] }, true)
-    show({ ...watched, prompt: 'and keep the old table', updatedAt: 9_000 }, true)
-    act(() => renderer.unmount())
-    expect(listed.map((prompt) => [prompt.text, prompt.at])).toEqual([
-      ['run the migration', 1_000],
-      ['and keep the old table', 1_000]
-    ])
+    return {
+      show(status: AgentStatusPromptSource, { connected = true, live = true }: { connected?: boolean; live?: boolean } = {}) {
+        act(() => {
+          const element = createElement(Chat, { status, connected, live })
+          if (renderer) {
+            renderer.update(element)
+          } else {
+            renderer = create(element)
+          }
+        })
+        return out
+      },
+      done(): void {
+        act(() => renderer?.unmount())
+      }
+    }
+  }
+
+  it('ends the wait, so a message watched arriving long after a reconnect is timed by its own stamp', () => {
+    const chat = mount()
+    chat.show(noPrompt)
+    chat.show(noPrompt, { connected: false })
+    chat.show({ ...noPrompt })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { prompts } = chat.show({ ...noPrompt, prompt: 'and keep the old table', updatedAt: 120_000 })
+    chat.done()
+    expect(prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([['and keep the old table', 120_000]])
+  })
+
+  it('ends the wait after the cached tab list too', () => {
+    const chat = mount()
+    chat.show(noPrompt, { live: false })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { prompts } = chat.show({ ...noPrompt, prompt: 'and keep the old table', updatedAt: 120_000 })
+    chat.done()
+    expect(prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([['and keep the old table', 120_000]])
+  })
+
+  it('leaves a subagent message read live after it a time to pair by', () => {
+    const chat = mount()
+    chat.show(noPrompt)
+    chat.show(noPrompt, { connected: false })
+    chat.show({ ...noPrompt })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { agentMessages } = chat.show({
+      ...noPrompt,
+      prompt: '<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>',
+      updatedAt: 120_000
+    })
+    chat.done()
+    expect(agentMessages[0]?.seenAt).toEqual(expect.any(Number))
   })
 })
 

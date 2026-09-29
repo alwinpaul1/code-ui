@@ -406,32 +406,73 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
-  // The same on the way back: Orca's stand-in, working while the terminal
-  // says the agent works, comes before the status that carries the message.
-  // It is not the first read of the message; the status after it is.
-  it('draws a message taken while the link was down above the words written after it, when a status with no prompt comes first on the way back', async () => {
+  // Review of 257768bc: the reconnect latch is left to any status that is not
+  // null, as before. Held through statuses with no prompt, it took a message
+  // the chat watched arrive long after the reconnect for one found there: on
+  // a Claude lead whose cached prompt is empty (after startup, resume or
+  // clear, with its run started by a teammate's message, which keeps the
+  // cached prompt), Orca's genuine hook rows carry `prompt: ''`, and the
+  // message was timed by the run's start and never drawn.
+  it('draws a message watched arriving after a reconnect through hook rows with no prompt where it was sent', async () => {
     agent = 'claude'
     const reader = statusReader()
+    const noPrompt = (stamped: string): NonNullable<AgentStatusPromptSource> => ({
+      ...working('', stamped),
+      prompt: '',
+      stateHistory: [{ state: 'done', prompt: '', startedAt: at('05:07:00.700') }]
+    })
     vi.setSystemTime(at('05:35:00.000'))
-    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    let prompts = reader.read(noPrompt('05:34:55.850'))
     await showAt('05:35:00.100', BEFORE_FIRST, prompts)
-    const heldThroughTheDrop = working(EARLIER, '05:34:55.850')
-    reader.read(heldThroughTheDrop, { connected: false })
-    // Back at 05:40, while the long run's call works (line 721, 05:39:23):
-    // the status the phone held, then the host's stand-in, then its status.
-    vi.setSystemTime(at('05:40:00.000'))
-    reader.read(heldThroughTheDrop)
-    reader.read({ ...standIn('05:39:23.200'), state: 'working' })
-    prompts = reader.read(working(SECOND_SEND, '05:39:23.200'))
-    const upToTheCall = WHOLE_TURN.filter((row) => row.timestamp! <= at('05:39:23.200'))
-    await showAt('05:40:00.100', upToTheCall, prompts)
+    reader.read(noPrompt('05:34:55.850'), { connected: false })
+    vi.setSystemTime(at('05:36:03.000'))
+    reader.read(noPrompt('05:34:55.850'))
+    prompts = reader.read(noPrompt('05:36:02.200'))
+    await showAt('05:36:30.000', BEFORE_SECOND, prompts)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read({ ...noPrompt('05:36:34.891'), prompt: normalizePromptField(SECOND_SEND) })
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+    await showAt('05:46:50.900', WHOLE_TURN, prompts)
     const rows = drawn(frames.at(-1)!)
     const second = where(SECOND_SEND)
     expect(second.at).toHaveLength(1)
+    expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
     expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
     reader.unmount()
     unmount()
   })
+
+  // The same with Orca's stand-in first on the way back, rows written while
+  // the link was down, and the message sent after the reconnect. A message
+  // taken WHILE the link was down, with the stand-in first on the way back,
+  // reaches the reader in the same shape and is timed by its ping, below
+  // the words written after it; the reader cannot tell the two apart, and
+  // this one is the case the latch is not for.
+  for (const kind of ['claude', 'codex'] as const) {
+    it(`draws a message sent after a reconnect whose first status was Orca's stand-in below the rows written during the drop, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+      agent = kind
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      reader.read(working(EARLIER, '05:34:55.850'), { connected: false })
+      vi.setSystemTime(at('05:36:28.000'))
+      reader.read(working(EARLIER, '05:34:55.850'))
+      prompts = reader.read({ ...standIn('05:36:26.000'), state: 'working' })
+      await showAt('05:36:28.100', BEFORE_SECOND, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts)
+      const rows = drawn(frames.at(-1)!)
+      const second = where(SECOND_SEND)
+      expect(second.at).toHaveLength(1)
+      expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
+      expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
+      reader.unmount()
+      unmount()
+    })
+  }
 
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.
