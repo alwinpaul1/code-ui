@@ -76,7 +76,7 @@ export type MobileNativeChatController = {
   rememberEcho: (id: string, text: string, anchorId: string | null, queued?: boolean) => void
   /** Own sends the agent took out of its queue box, which no row is owed for
    *  (isTakenSend in mobile-native-chat-pending-echo.ts). */
-  takeOwnSends?: (ids: readonly string[]) => void
+  takeOwnSends?: (ids: readonly string[], at?: number) => void
   nativeChatQueuedMessages?: string[]
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>

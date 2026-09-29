@@ -73,9 +73,11 @@ describe('a witness stored from the queue box', () => {
     expect(isHeldInQueueBox(taken.k![0]!)).toBe(false)
   })
 
-  it('is not held when it was stored from a drawn echo', () => {
+  it('is not held when it was stored from a drawn echo, taken or not', () => {
     const drawn = rememberEchoInPending({}, 'k', 'desk-status:s:1', 'check the logs', 'a1', [], 'd', 5_000)
     expect(isHeldInQueueBox(drawn.k![0]!)).toBe(false)
-    expect(takeMobileNativeChatPending(drawn, 'k', ['desk-status:s:1'], 9_000)).toBe(drawn)
+    const taken = takeMobileNativeChatPending(drawn, 'k', ['desk-status:s:1'], 9_000)
+    expect(taken.k![0]).toMatchObject({ takenAt: 9_000 })
+    expect(isHeldInQueueBox(taken.k![0]!)).toBe(false)
   })
 })

@@ -17,11 +17,8 @@ import {
   pairPendingWithHookPrompts,
   promptsNoCopyStandsFor
 } from './desktop-prompt-own-sends'
-import {
-  deskEchoId,
-  useDesktopPromptEchoes,
-  withoutLandedDesktopPrompts
-} from './use-desktop-prompt-echoes'
+import { deskEchoId, useDesktopPromptEchoes } from './use-desktop-prompt-echoes'
+import { pendingIds, useDeskCopyReleases, withoutLandedDeskCopies } from './desk-copy-releases'
 import { useScreenPeerNotices } from './use-screen-peer-notices'
 import { drawnAfterEarlierAgentMessages, useAgentMessageRows } from './mobile-native-chat-agent-message-rows'
 import { screenRowBodies, type BeaconAgentMessage, type StatusSubagentMessage } from './mobile-native-chat-agent-messages'
@@ -229,15 +226,19 @@ export function MobileNativeChatOverlay({
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
+  // A desk message the agent took at a known time lands only on the row
+  // Claude dequeued it as (desk-copy-releases.ts, gap D).
+  const releases = useDeskCopyReleases(desktopPrompts, queuedMessages ?? [], controller.takeOwnSends, pendingIds(controller.chatPending))
   const unlandedPrompts = useMemo(
     () =>
-      withoutLandedDesktopPrompts(
+      withoutLandedDeskCopies(
         promptsNoCopyStandsFor(desktopPrompts, hookPairing),
+        releases,
         baseFolded,
         queuedMessages ?? [],
         session.messages
       ),
-    [hookPairing, desktopPrompts, baseFolded, queuedMessages, session.messages]
+    [hookPairing, desktopPrompts, releases, baseFolded, queuedMessages, session.messages]
   )
   // Existing sessions have no hook, but the agent draws its own queue and the
   // phone parses it: an entry that leaves that list was absorbed (2026-09-13).

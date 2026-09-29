@@ -281,11 +281,14 @@ export function takeMobileNativeChatPending(
   for (let index = 0; index < next.length; index += 1) {
     const item = next[index]!
     const text = normalizeReconcileText(item.text)
-    // A witness stored from the queue box: let go of, it is drawn where it
-    // arrived from now on, and no later row of its words takes it back.
-    if (wanted.has(item.id) && isHeldInQueueBox(item) && !item.id.startsWith('pending-')) {
-      next[index] = { ...item, takenAt: now }
-      changed = true
+    // A witnessed message (`desk-`/`absorbed-`) the agent took: from now on
+    // only the row Claude dequeues it as is its own (retireLanded…), and one
+    // stored from the queue box is no longer held there (isHeldInQueueBox).
+    if (wanted.has(item.id) && (item.id.startsWith('desk-') || item.id.startsWith('absorbed-'))) {
+      if (!isTakenSend(item)) {
+        next[index] = { ...item, takenAt: now }
+        changed = true
+      }
       continue
     }
     if (!wanted.has(item.id) || !item.id.startsWith('pending-') || text === '') {
