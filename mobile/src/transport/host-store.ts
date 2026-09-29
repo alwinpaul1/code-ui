@@ -161,20 +161,6 @@ async function mutateStoredHosts(
   })
 }
 
-// Why ids only: routine saves of an existing host (the direct-route memory on each
-// network change, the supervisor's preferred endpoint, a relay upgrade, a same-id
-// re-pair) rewrite a row without changing which desktops exist.
-function sameHostIdSet(
-  before: readonly { id: string }[],
-  after: readonly { id: string }[]
-): boolean {
-  if (before.length !== after.length) {
-    return false
-  }
-  const ids = new Set(before.map(({ id }) => id))
-  return after.every(({ id }) => ids.has(id))
-}
-
 export class MobileRelayUpgradeHostRemovedError extends Error {}
 
 export const saveHost = (host: HostProfile): Promise<void> => persistHost(host, false)
@@ -224,7 +210,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         await commitDeviceToken(stored.id, validated.deviceToken)
         tokenCommittedBeforeMetadata = true
       }
-      membershipChanged = !sameHostIdSet(hosts, next)
+      membershipChanged = !hostListLoads.sameHostIdSet(hosts, next)
       return next
     })
   } catch (error) {
@@ -238,9 +224,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     throw error
   }
-  if (membershipChanged) {
-    hostListLoads.noteHostMembershipChange()
-  }
+  hostListLoads.noteHostMembershipIf(membershipChanged)
   if (!tokenCommittedBeforeMetadata) {
     // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
@@ -295,9 +279,7 @@ export async function removeHost(hostId: string): Promise<void> {
     }
     throw error
   }
-  if (removedRow) {
-    hostListLoads.noteHostMembershipChange()
-  }
+  hostListLoads.noteHostMembershipIf(removedRow)
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostOverlay(hostId)

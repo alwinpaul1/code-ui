@@ -24,6 +24,12 @@ export function noteHostMembershipChange(): void {
   membershipRevision += 1
 }
 
+export function noteHostMembershipIf(changed: boolean): void {
+  if (changed) {
+    noteHostMembershipChange()
+  }
+}
+
 export function getHostListLoadRevision(): number {
   return revision
 }
@@ -49,4 +55,18 @@ export function shareHostListLoad(
 export function dropSharedHostListLoad(): void {
   revision += 1
   inflight = null
+}
+
+// Why ids only: routine saves of an existing host (the direct-route memory on each
+// network change, the supervisor's preferred endpoint, a relay upgrade, a same-id
+// re-pair) rewrite a row without changing which desktops exist.
+export function sameHostIdSet(
+  before: readonly { id: string }[],
+  after: readonly { id: string }[]
+): boolean {
+  if (before.length !== after.length) {
+    return false
+  }
+  const ids = new Set(before.map(({ id }) => id))
+  return after.every(({ id }) => ids.has(id))
 }
