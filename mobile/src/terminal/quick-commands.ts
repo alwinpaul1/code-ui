@@ -16,6 +16,7 @@ import {
 } from '../../../src/shared/terminal-quick-commands'
 import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
 import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { clipWithEllipsis } from '../text/whole-character-cut'
 
 // Reuse the canonical desktop quick-command logic (pure, no heavy deps) so
 // mobile behaves identically to desktop. Only genuinely mobile-specific pieces
@@ -98,11 +99,8 @@ export function getQuickCommandPreview(command: TerminalQuickCommand): string {
 }
 
 export function getQuickCommandDisplayPreview(command: TerminalQuickCommand): string {
-  const preview = getQuickCommandPreview(command)
-  if (preview.length <= MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH) {
-    return preview
-  }
   // Why: one-line rows should not send up to 6 KB each through native text
   // layout; full command bodies remain available to search, edit, and launch.
-  return `${preview.slice(0, MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH - 1)}…`
+  // The cut never splits an emoji into a broken glyph before the ellipsis.
+  return clipWithEllipsis(getQuickCommandPreview(command), MAX_QUICK_COMMAND_DISPLAY_PREVIEW_LENGTH)
 }
