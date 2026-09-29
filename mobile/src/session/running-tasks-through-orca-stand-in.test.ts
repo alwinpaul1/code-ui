@@ -87,7 +87,7 @@ vi.mock('./use-mobile-native-chat-file-search', () => ({
 }))
 
 import { backgroundShellLaunch, OWN_AGENTS, ownAgentLaunch, rosterRow } from './fixtures/claude-orchestration-2.1.281'
-import { resetAgentHudBeacons } from './agent-hud-beacon'
+import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { resetNativeChatKeptSessionsForTests } from './native-chat-kept-session-store'
 import { resetTaskEvidenceForTests } from './use-active-tab-task-report'
@@ -175,6 +175,12 @@ const CLAUDE_TURN: NativeChatMessage[] = [
   }
 ]
 const roster = (...rows: AgentSubagentSnapshot[]) => ({ subagents: rows })
+/** Orca's hook listener stamps `turnCompletedAt` on the row that holds the pane
+ *  `working` after the lead's Stop because background work is still
+ *  registered (vendored claude-events.ts), and Orca 1.4.216 carries it on the
+ *  TAB from the live hook row, past its own title stand-in, for as long as
+ *  that row is under 30 minutes old. */
+const GATED = { turnCompletedAt: at('10:00:05.000') }
 const AGENT_ROW = rosterRow(AGENT, at('09:59:51.000'))
 const REVIEWER_ROW = rosterRow('a77d87fe2e3c0195d', at('09:59:55.000'))
 
@@ -183,14 +189,14 @@ describe('background work the chat shows while Orca stands in the pane status', 
   let controller: MobileNativeChatController | null = null
   const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
 
-  function Chat({ agent, tab, status, connState, tabsLive }: { agent: Agent; tab: string; status: AgentStatusEntry; connState: ConnectionState; tabsLive: boolean }): null {
+  function Chat({ agent, tab, status, connState, tabsLive, turnCompletedAt }: { agent: Agent; tab: string; status: AgentStatusEntry; connState: ConnectionState; tabsLive: boolean; turnCompletedAt?: number }): null {
     controller = useMobileNativeChatController({
       client: clientStub as unknown as RpcClient,
       connState,
       tabsLive,
       hostId: 'h',
       worktreeId: 'w',
-      activeSessionTab: { type: 'terminal', id: tab, terminal: `term-${tab}`, launchAgent: agent, agentStatus: status, isActive: true } as never,
+      activeSessionTab: { type: 'terminal', id: tab, terminal: `term-${tab}`, launchAgent: agent, agentStatus: status, isActive: true, ...(turnCompletedAt === undefined ? {} : { turnCompletedAt }) } as never,
       activeSessionTabId: tab,
       activeHandle: `term-${tab}`,
       activeHandleRef: { current: `term-${tab}` },
@@ -208,10 +214,15 @@ describe('background work the chat shows while Orca stands in the pane status', 
   function show(
     agent: Agent,
     status: AgentStatusEntry,
-    { tab = 'tab-1', connState = 'connected', tabsLive = true }: { tab?: string; connState?: ConnectionState; tabsLive?: boolean } = {}
+    {
+      tab = 'tab-1',
+      connState = 'connected',
+      tabsLive = true,
+      turnCompletedAt
+    }: { tab?: string; connState?: ConnectionState; tabsLive?: boolean; turnCompletedAt?: number } = {}
   ): string[] {
     act(() => {
-      const element = createElement(Chat, { agent, tab, status, connState, tabsLive })
+      const element = createElement(Chat, { agent, tab, status, connState, tabsLive, ...(turnCompletedAt === undefined ? {} : { turnCompletedAt }) })
       if (renderer) {
         renderer.update(element)
       } else {
@@ -228,7 +239,7 @@ describe('background work the chat shows while Orca stands in the pane status', 
   }
 
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
     vi.setSystemTime(at('10:00:06.000'))
     resetAgentHudBeacons()
     resetTaskEvidenceForTests()
@@ -246,10 +257,40 @@ describe('background work the chat shows while Orca stands in the pane status', 
   // running; the title turned idle after its Stop.
   it('keeps a Claude turn’s background shell and agent running when Orca stands in a done status after the turn', () => {
     session.messages = CLAUDE_TURN
-    expect(show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)))).toEqual([SHELL, AGENT])
-    expect(show('claude', standIn('claude', 'tab-1', 'done'))).toEqual([SHELL, AGENT])
+    expect(show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)).toEqual([SHELL, AGENT])
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
     // And through the next one, a second after.
-    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:00:06.300'))).toEqual([SHELL, AGENT])
+    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:00:06.300'), GATED)).toEqual([SHELL, AGENT])
+  })
+
+  // Orca coalesces the phone's tab snapshots (50 ms, at most 250 ms) and
+  // builds each from its state at the flush, and every spinner frame restamps
+  // the title, so the phone often never sees the Stop row: the last row it
+  // saw is the turn's last TOOL row, the lead working (the review of
+  // 09aa69a0). Only Orca's turn end on the tab says background work outlived
+  // the turn.
+  it('keeps the background work when the phone saw only the turn’s last tool row, while the tab carries Orca’s turn end', () => {
+    session.messages = CLAUDE_TURN
+    const toolRow = { workingMode: undefined, toolName: 'Bash', lastAssistantMessage: undefined, ...roster(AGENT_ROW), updatedAt: at('10:00:03.000') }
+    show('claude', hookRow('claude', 'tab-1', toolRow))
+    show('claude', standIn('claude', 'tab-1', 'working', '10:00:04.900'), GATED)
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
+    // Only the task readers read that row: the Working row and Stop read the
+    // stand-in, whose idle title says the lead is done. Read off the held row
+    // (the lead working, no reply reported) they would draw Working again.
+    expect(controller?.nativeChatAgentWorking).toBe(false)
+    expect(controller?.nativeChatCanStop).toBe(false)
+  })
+
+  // A shell that finished mid-turn: its notification is a queued_command
+  // attachment Orca's reader drops, and a hand-started tab has no beacon. The
+  // Stop that followed held nothing (no turn end on the tab), so the pane is
+  // done and the shell with it (the review of 09aa69a0).
+  it('retires a shell that finished mid-turn once the turn ends with nothing left running, when the phone saw only the last tool row', () => {
+    session.messages = [...CLAUDE_TURN.slice(0, 2), CLAUDE_TURN[4]!]
+    show('claude', hookRow('claude', 'tab-1', { workingMode: undefined, toolName: 'Read', updatedAt: at('10:00:03.000') }))
+    show('claude', standIn('claude', 'tab-1', 'working', '10:00:04.900'))
+    expect(show('claude', standIn('claude', 'tab-1', 'done'))).toEqual([])
   })
 
   // The case already known: a long tool call, the row gone stale.
@@ -261,14 +302,13 @@ describe('background work the chat shows while Orca stands in the pane status', 
     expect(show(agent, standIn(agent, 'tab-1', 'working'))).toEqual(expected)
   })
 
-  it('keeps a Codex tab’s roster running when Orca stands in a done status after the turn', () => {
+  // A limit, pinned: Orca's hook listener stamps the turn end for Claude only
+  // (claude-events.ts), so nothing says a Codex sub-agent outlived the lead's
+  // turn, and a done stand-in on a Codex tab is read as it comes.
+  it('reads a Codex tab’s done stand-in as it comes: Orca stamps no turn end for Codex (a limit)', () => {
     const rows = roster(AGENT_ROW)
     expect(show('codex', hookRow('codex', 'tab-1', rows))).toEqual([AGENT])
-    expect(show('codex', standIn('codex', 'tab-1', 'done'))).toEqual([AGENT])
-    // Only the task readers read the row through it: the Working row and
-    // Stop still read the stand-in, whose idle title says the lead is done.
-    expect(controller?.nativeChatAgentWorking).toBe(false)
-    expect(controller?.nativeChatCanStop).toBe(false)
+    expect(show('codex', standIn('codex', 'tab-1', 'done'))).toEqual([])
   })
 
   // A hook row after the stand-in is the host's word again.
@@ -293,9 +333,9 @@ describe('background work the chat shows while Orca stands in the pane status', 
     ['the tab list is the one the last visit cached', { tabsLive: false }]
   ])('reads the stand-in as it comes after %s', (_label, gap) => {
     session.messages = CLAUDE_TURN
-    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)))
-    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), gap)
-    expect(show('claude', standIn('claude', 'tab-1', 'done'))).toEqual([])
+    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)
+    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), { ...gap, ...GATED })
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([])
   })
 
   // Orca's headless builder, and its PTY builder when the renderer published
@@ -311,7 +351,34 @@ describe('background work the chat shows while Orca stands in the pane status', 
   // that copies none of the title stand-in's identity fields.
   it('retires the shells when the agent has left the pane', () => {
     session.messages = CLAUDE_TURN
-    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)))
-    expect(show('claude', leftPane('claude', 'tab-1'))).toEqual([])
+    show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)
+    expect(show('claude', leftPane('claude', 'tab-1'), GATED)).toEqual([])
+  })
+
+  // With no renderer row for the pane, Orca's last resort for it is a `done`
+  // with every identity field (`buildPtyMobileAgentStatus`, SQa in the
+  // 1.4.216 asar: "what retires the card once the agent exits"), the title
+  // stand-in's exact shape (the review of 09aa69a0).
+  it('retires the shell and agent Claude killed on exit, when the turn before held nothing', () => {
+    session.messages = CLAUDE_TURN
+    show('claude', hookRow('claude', 'tab-1', { workingMode: undefined, ...roster(AGENT_ROW) }))
+    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:05:00.000'))).toEqual([])
+  })
+
+  // After a turn that held background work, only the phone's own evidence
+  // says the agent is gone: a beacon that keeps a heartbeat and went silent.
+  it('retires the shell and agent Claude killed on exit when its heartbeat beacon has gone silent', () => {
+    session.messages = CLAUDE_TURN
+    act(() => {
+      consumeAgentHudBeacons('term-tab-1', `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION.claude.id} hb=5\u0007`)
+    })
+    expect(show('claude', hookRow('claude', 'tab-1', roster(AGENT_ROW)), GATED)).toEqual([SHELL, AGENT])
+    expect(show('claude', standIn('claude', 'tab-1', 'done'), GATED)).toEqual([SHELL, AGENT])
+    // Six missed beats later, Claude has exited.
+    vi.setSystemTime(at('10:01:10.000'))
+    act(() => {
+      vi.advanceTimersByTime(5_000)
+    })
+    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:01:09.000'), GATED)).toEqual([])
   })
 })

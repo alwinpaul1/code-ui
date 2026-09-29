@@ -1,9 +1,17 @@
 // What the task readers read while Orca stands in a pane's status, rule by
 // rule (agent-status-stand-in.ts). The chat-level story, through the real
 // controller, is running-tasks-through-orca-stand-in.test.ts.
+import { createElement, StrictMode, useState } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { isOrcaStandIn, readTaskStatus, type TaskStatusWatch } from './agent-status-stand-in'
+import {
+  isOrcaStandIn,
+  readTaskStatus,
+  useTaskReaderStatus,
+  type StandInEvidence,
+  type TaskStatusWatch
+} from './agent-status-stand-in'
 
 const SESSION = { key: 'session_id', id: '5f2d8c61-3b0e-4f7a-9c44-2e61d0a9b7c3' }
 const row = (fields: Partial<AgentStatusEntry> = {}): AgentStatusEntry =>
@@ -40,13 +48,20 @@ const standIn = (fields: Partial<AgentStatusEntry> = {}): AgentStatusEntry =>
     ...fields
   }) as AgentStatusEntry
 
+/** Orca's turn end on the tab: background work outlived the lead's turn. */
+const GATED: StandInEvidence = { turnCompletedAt: 2_100, heartbeatSilent: false }
+
 /** Feeds statuses in order, as renders do, and returns what the task readers
  *  read of the last one. */
-function readAll(statuses: readonly (AgentStatusEntry | null)[], watching: readonly boolean[] = []): AgentStatusEntry | null {
+function readAll(
+  statuses: readonly (AgentStatusEntry | null)[],
+  watching: readonly boolean[] = [],
+  evidence: StandInEvidence = GATED
+): AgentStatusEntry | null {
   let watch: TaskStatusWatch = null
   let read: AgentStatusEntry | null = null
   statuses.forEach((status, index) => {
-    const next = readTaskStatus(watch, status, watching[index] ?? true)
+    const next = readTaskStatus(watch, status, watching[index] ?? true, evidence)
     watch = next.watch
     read = next.read
   })
@@ -77,6 +92,23 @@ describe('what the task readers read through a stand-in', () => {
     const last = row()
     expect(readAll([row({ updatedAt: 1_900 }), last, standIn()])).toBe(last)
     expect(readAll([last, standIn(), standIn({ state: 'working', updatedAt: 2_900 })])).toBe(last)
+  })
+
+  // The row the phone last saw is often the turn's last tool row, not the
+  // Stop row: through a `done` only Orca's turn end says work outlived the turn.
+  it('reads a done stand-in as it comes when Orca carries no turn end on the tab', () => {
+    const idle = standIn()
+    expect(readAll([row({ workingMode: undefined, toolName: 'Read' }), idle], [], { turnCompletedAt: null, heartbeatSilent: false })).toBe(idle)
+  })
+
+  it('reads a done stand-in as it comes once the heartbeat beacon has gone silent', () => {
+    const idle = standIn()
+    expect(readAll([row(), idle], [], { ...GATED, heartbeatSilent: true })).toBe(idle)
+  })
+
+  it('reads the row through a working stand-in with no turn end: the lead is still at it', () => {
+    const last = row({ workingMode: undefined })
+    expect(readAll([last, standIn({ state: 'working' })], [], { turnCompletedAt: null, heartbeatSilent: true })).toBe(last)
   })
 
   it('reads a hook row after the stand-in as it comes', () => {
@@ -120,5 +152,55 @@ describe('what the task readers read through a stand-in', () => {
   it('reads nothing as nothing', () => {
     expect(readAll([row(), null])).toBeNull()
     expect(readAll([])).toBeNull()
+  })
+})
+
+describe('the task readers’ status under React', () => {
+  let push: ((status: AgentStatusEntry) => void) | null = null
+  let read: AgentStatusEntry | null = null
+  function Reader({ initial, evidence }: { initial: AgentStatusEntry; evidence: StandInEvidence }): null {
+    const [status, setStatus] = useState(initial)
+    push = setStatus
+    read = useTaskReaderStatus(status, true, evidence)
+    return null
+  }
+  function mount(initial: AgentStatusEntry, evidence: StandInEvidence = GATED, strict = false): ReactTestRenderer {
+    let renderer: ReactTestRenderer | null = null
+    const reader = createElement(Reader, { initial, evidence })
+    act(() => {
+      renderer = create(strict ? createElement(StrictMode, null, reader) : reader)
+    })
+    return renderer!
+  }
+
+  it('reads the committed row through a stand-in under StrictMode’s double render', () => {
+    const first = row()
+    const renderer = mount(first, GATED, true)
+    act(() => push!(standIn()))
+    expect(read).toBe(first)
+    act(() => renderer.unmount())
+  })
+
+  it('reads the stand-in as it comes after a remount: the watch starts empty', () => {
+    const before = mount(row())
+    act(() => before.unmount())
+    const idle = standIn()
+    const renderer = mount(idle)
+    expect(read).toBe(idle)
+    act(() => renderer.unmount())
+  })
+
+  // A limit, pinned: a row React never renders is never watched. Two
+  // snapshots in one render (a burst after a stalled JS thread) hide the row
+  // that dropped an agent. Through a `done` with no turn end on the tab the
+  // stand-in is read as it comes all the same (the review of 09aa69a0).
+  it('reads a done stand-in as it comes over a row React batched away, when Orca carries no turn end', () => {
+    const renderer = mount(row(), { turnCompletedAt: null, heartbeatSilent: false })
+    act(() => {
+      push!(row({ subagents: undefined, updatedAt: 2_200 }))
+      push!(standIn())
+    })
+    expect(read?.subagents ?? []).toEqual([])
+    act(() => renderer.unmount())
   })
 })

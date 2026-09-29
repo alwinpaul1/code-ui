@@ -38,6 +38,9 @@ export type MobileNativeChatTab = {
   /** Host-provided launch context still parked as an unsent TUI-input draft. */
   launchDraft?: string
   launchDraftCreatedAt?: number
+  /** Orca's lead-turn end, while background work keeps the pane working
+   *  (the host's tab field; see agent-status-stand-in.ts). */
+  turnCompletedAt?: number
   sessionId?: string | null
   agent?: string | null
 }

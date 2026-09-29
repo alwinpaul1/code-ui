@@ -28,6 +28,9 @@ export type MobileSessionTab =
       /** Host-provided launch context still parked as an unsent TUI-input draft. */
       launchDraft?: string
       launchDraftCreatedAt?: number
+      /** Orca's lead-turn end while background work keeps the pane working,
+       *  from the live hook row, past its title stand-in (agent-status-stand-in.ts). */
+      turnCompletedAt?: number
       terminalTheme?: MobileTerminalTheme
       isActive: boolean
     }

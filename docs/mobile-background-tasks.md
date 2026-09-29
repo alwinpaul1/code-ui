@@ -471,9 +471,32 @@ know that row still stands:
   (Orca's headless builder sends hook rows with neither, and there a real
   "no roster" row has the stand-in's shape);
 - the stand-in copies at least one of the row's `terminalHandle`,
-  `worktreeId`, `tabId`, `terminalTitle` (the `done` Orca sends once the
-  agent has left the pane copies none, and the agent's shells died with it);
-- the same agent and session.
+  `worktreeId`, `tabId`, `terminalTitle` (the `done` Orca sends under a
+  shell title once the agent has left copies none), and names the same agent
+  and session;
+- through a `done`, only while Orca says background work outlived the lead's
+  turn, and not once a beacon that keeps a heartbeat has gone silent.
+
+The last rule is there because the row the phone last saw is often not the
+Stop row. Orca coalesces the phone's tab snapshots (50 ms, at most 250 ms)
+and builds each from its state at the flush, and every spinner frame
+restamps the title, so a plain Stop row becomes a `working` stand-in on the
+next frame and a `done` one when the title goes idle. The row held is then
+the turn's last tool row, which says the lead was working, not what outlived
+the turn: held through the `done`, a shell that finished mid-turn (its
+notification an attachment Orca's reader drops, no beacon) stayed "running"
+while the lead sat idle (the review of 09aa69a0). What does say it is the
+tab's `turnCompletedAt`: Orca's hook listener stamps it on the row that holds
+the pane `working` after the lead's Stop because background work is still
+registered (vendored `claude-events.ts`), and Orca carries it on the TAB from
+the live hook row, past its own stand-in, until that row is 30 minutes old.
+The phone's tab comparison now counts it, or a frame where only it changed
+never reached the chat.
+
+The heartbeat rule is for an agent that exits. It takes its shells and
+agents with it, and with no renderer row for the pane Orca's last resort
+(`buildPtyMobileAgentStatus`, "what retires the card once the agent exits")
+is a `done` with the title stand-in's exact shape.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row
@@ -482,6 +505,24 @@ latest word for as long as the phone watches. Otherwise the stand-in is read
 as it comes, as before: after a tab switch, a reconnect, or a relaunch, the
 tasks leave the count until the next hook row. The Working row, Stop and the
 prompt reader keep reading the stand-in.
+
+Known limits:
+
+- Thirty minutes after the pane's last hook row, Orca drops the row and its
+  `turnCompletedAt` from the tab, and a lead idle that long with only a shell
+  running (nothing fires a hook) loses the shell from the count again.
+- An agent that exits after a turn that held background work, on a tab with
+  no heartbeat beacon (hand-started, Windows), keeps that work listed until
+  the watch breaks or those 30 minutes pass.
+- Orca stamps the turn end for Claude only, so on a Codex tab a `done`
+  stand-in is read as it comes and a sub-agent that outlived the lead's turn
+  leaves the count while it stands. The `working` stand-in over a long tool
+  call is read through on both.
+- The watch is taken per render. A row that dropped an agent and was applied
+  in the same render as the stand-in after it (a burst after a stalled JS
+  thread), or one published during a relay-to-direct cutover that replays
+  the subscription on a link that stayed up, is never seen, and the older
+  row is read until the next hook row.
 
 Not watched live. The stand-in's fields are read off Orca's source and the
 1.4.216 asar, and the order of the Stop row and the idle title off how

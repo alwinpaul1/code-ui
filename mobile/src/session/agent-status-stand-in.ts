@@ -45,16 +45,38 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 //   headless builder, and its PTY builder when the renderer published none,
 //   send hook rows with neither, and there a real "no roster" row has the
 //   stand-in's shape (the same review).
-// - The stand-in is the title's, not the one Orca sends when the agent has
-//   left the pane (a shell title): that one copies none of `terminalHandle`,
-//   `worktreeId`, `tabId`, `terminalTitle`, and the agent's shells died with it.
-// - The same agent and session.
+// - The stand-in copies the row's identity (one of `terminalHandle`,
+//   `worktreeId`, `tabId`, `terminalTitle`; the `done` Orca sends under a
+//   shell title once the agent has left copies none) and names the same agent
+//   and session.
+// - A `done` stand-in says the lead is idle, and the row the phone last saw is
+//   often not the Stop row at all: Orca coalesces the phone's tab snapshots
+//   (50 ms, at most 250 ms) and builds each from its state at the flush, and
+//   every spinner frame restamps the title, so a Stop row becomes a stand-in
+//   on the next frame. The row held is then the turn's last TOOL row, which
+//   says the lead was working, not what outlived the turn (the review of
+//   09aa69a0). So through a `done` the row is read only while Orca says
+//   background work outlived the lead's turn: its hook listener stamps
+//   `turnCompletedAt` on the row that holds the pane `working` after the
+//   lead's Stop (vendored claude-events.ts), and Orca 1.4.216 carries it on
+//   the TAB from the live hook row, past its own stand-in, until that row is
+//   30 minutes old. And not once a beacon that keeps a heartbeat has gone
+//   silent: the agent has left, its shells with it, and Orca's last resort for
+//   a pane with no renderer row (`buildPtyMobileAgentStatus`) is a `done` with
+//   the stand-in's exact shape.
 //
 // Every change to background work fires a hook (a launch is a tool call, an
 // agent's end is SubagentStop, a shell's end starts a turn), and a hook row
 // newer than the title takes the pane back, so the held row is the host's
 // latest word on that work for as long as the phone watches. The chat's other
 // readers (the Working row, Stop, the prompt reader) keep the stand-in.
+//
+// What this cannot see: a row the phone never rendered. The watch is taken per
+// render, so a row that dropped a roster agent and was applied in the same
+// render as the stand-in after it (a burst after a stalled JS thread), or one
+// published while a relay-to-direct cutover replayed the subscription on a
+// link that stayed up, is missed, and the older row is read until the next
+// hook row.
 
 /** Every field the title stand-in carries. A status with any other field is a
  *  hook row. */
@@ -97,6 +119,18 @@ function toldFromStandIn(row: Status): boolean {
 /** What the task readers watched of the active pane: its last hook row. */
 export type TaskStatusWatch = { paneKey: string; row: Status | null } | null
 
+/** What else the phone knows about the pane, for a `done` stand-in. */
+export type StandInEvidence = {
+  /** The tab's `turnCompletedAt`: Orca says the lead's turn ended while
+   *  background work kept the pane `working`. Null when the tab has none. */
+  turnCompletedAt: number | null
+  /** The tab's beacon keeps a heartbeat and has gone silent, or was written
+   *  off: the process that painted the pane has left. */
+  heartbeatSilent: boolean
+}
+
+const NO_EVIDENCE: StandInEvidence = { turnCompletedAt: null, heartbeatSilent: false }
+
 /**
  * The status the task readers read, and the watch to keep after it. Pure.
  * `watching`: the link is up and the tab list is the host's own; without it
@@ -105,7 +139,8 @@ export type TaskStatusWatch = { paneKey: string; row: Status | null } | null
 export function readTaskStatus(
   watch: TaskStatusWatch,
   status: Status | null,
-  watching: boolean
+  watching: boolean,
+  evidence: StandInEvidence = NO_EVIDENCE
 ): { read: Status | null; watch: TaskStatusWatch } {
   if (!watching || status === null || !status.paneKey) {
     return { read: status, watch: null }
@@ -115,17 +150,18 @@ export function readTaskStatus(
   if (!isOrcaStandIn(status)) {
     return { read: status, watch: samePane && row === status ? watch : { paneKey: status.paneKey, row: status } }
   }
-  const kept = row !== null && rowStandsThrough(row, status) ? row : null
+  const kept = row !== null && rowStandsThrough(row, status, evidence) ? row : null
   return { read: kept ?? status, watch: samePane ? watch : { paneKey: status.paneKey, row: null } }
 }
 
-function rowStandsThrough(row: Status, standIn: Status): boolean {
+function rowStandsThrough(row: Status, standIn: Status, evidence: StandInEvidence): boolean {
   const copied = standIn as unknown as Record<string, unknown>
   return (
     toldFromStandIn(row) &&
     COPIED_IDENTITY.some((key) => copied[key] !== undefined) &&
     row.agentType === standIn.agentType &&
-    (row.providerSession?.id ?? null) === (standIn.providerSession?.id ?? null)
+    (row.providerSession?.id ?? null) === (standIn.providerSession?.id ?? null) &&
+    (standIn.state !== 'done' || (evidence.turnCompletedAt !== null && !evidence.heartbeatSilent))
   )
 }
 
@@ -136,9 +172,13 @@ function rowStandsThrough(row: Status, standIn: Status): boolean {
  * row, so a render reads what a committed render saw, never a value mutated
  * outside React; a render React throws away changes nothing.
  */
-export function useTaskReaderStatus(status: Status | null, watching: boolean): Status | null {
+export function useTaskReaderStatus(
+  status: Status | null,
+  watching: boolean,
+  evidence: StandInEvidence = NO_EVIDENCE
+): Status | null {
   const watchRef = useRef<TaskStatusWatch>(null)
-  const { read, watch } = readTaskStatus(watchRef.current, status, watching)
+  const { read, watch } = readTaskStatus(watchRef.current, status, watching, evidence)
   useEffect(() => {
     watchRef.current = watch
   }, [watch])
