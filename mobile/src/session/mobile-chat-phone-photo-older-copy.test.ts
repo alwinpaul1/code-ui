@@ -79,7 +79,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
   it('a second phone photo of no words after a tab switch, sent idle: never flashes "Image on Desktop"', async () => {
     await show('07:00:00.000', { messages: before })
     await send('07:00:20.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
-    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600') })
+    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
     await show('07:00:21.000', { messages: before, working: true, prompts: [...state.prompts] })
     const first = [...before, promptRow('a17a17a1', 17, 1, '', '07:00:20.500'), companionRow('a17a17a2', [A], '07:00:20.500')]
@@ -125,7 +125,7 @@ describe('a phone photo of no words sent while the tab status still shows an old
     // is sent idle before the turn in the other case; here the first photo
     // started this turn and has its row.
     await send('07:00:20.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
-    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600') })
+    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
     const first = [...running, agentRow('0a0a0a0b', 'Done with the fold.', '07:00:19.000'), promptRow('a17a17a1', 17, 1, '', '07:00:20.500'), companionRow('a17a17a2', [A], '07:00:20.500')]
     await show('07:00:22.000', { messages: first, working: true, prompts: [...state.prompts] })

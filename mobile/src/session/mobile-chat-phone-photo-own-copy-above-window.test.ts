@@ -50,7 +50,7 @@ describe('the phone photo whose row is above the loaded window', () => {
     const hi = agentRow('0a0a0a0a', 'Hi.', '06:59:00.000')
     await show('07:00:00.000', { messages: [hi] })
     await send('07:00:20.000', '', ['file:///phone/c1.jpg'], [`${TEMP}/${A}.png`])
-    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600') })
+    let state: AgentStatusPromptState = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:20.600'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '[Image #17]', updatedAt: at('07:00:20.600') })
     // The hook's copy reaches the phone before the photo's row does.
     await show('07:00:21.000', { messages: [hi], working: true, prompts: [...state.prompts] })

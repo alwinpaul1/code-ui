@@ -164,8 +164,13 @@ export function observeAgentStatusPrompt(
     return state
   }
   // The chat can mount before the tab's status reaches it; the prompt on the
-  // first status it does read was already there all the same.
-  const firstOfSession = !state.read && status != null
+  // first status it does read was already there all the same. A status that
+  // says nothing about the prompt (statusReadsPrompt) is not that first read:
+  // Orca's stand-in there used it up, and the message on the host's next
+  // status, taken before the chat opened, was timed as if the chat had watched
+  // it arrive, by that status's ping, under the words written after it (gap C
+  // of the final review of fix/midturn-prompt-at-end, 2026-09-29).
+  const firstOfSession = !state.read && statusReadsPrompt(status)
   const readBefore = state.readAt
   const text = typeof status?.prompt === 'string' ? status.prompt : ''
   // Some statuses say nothing about the pane's prompt: a tab snapshot with no

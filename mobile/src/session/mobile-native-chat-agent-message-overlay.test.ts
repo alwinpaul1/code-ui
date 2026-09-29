@@ -279,7 +279,7 @@ describe('a desk prompt typed after a subagent message, both mid-turn after the 
   it('is drawn below the "Message from" row when the tab status copy is the one drawn', async () => {
     const messages = [PROMPT, OPENING, ...LAUNCH]
     await show('12:40:30.000', { messages, working: true, promptHook: true, ...fromBeacon([MESSAGE]) })
-    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:34.000') })
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:34.000'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { prompt: DESK, updatedAt: at('12:40:35.000') })
     const beacon = [MESSAGE, { nonce: '4102', text: DESK, anchorId: 'a1' }]
     await show('12:40:40.000', {
@@ -421,7 +421,7 @@ describe("a subagent's message on a tab with no prompt hook, with the tab status
   /** The status's copy, read by the phone a second before the row is. */
   const statusOf = (prompt: string) => {
     vi.setSystemTime(at('12:40:29.000'))
-    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:20.000') })
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:20.000'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { prompt, updatedAt: at('12:40:21.000') })
     return state.agentMessages ?? []
   }
@@ -677,7 +677,7 @@ describe('a peer message that waited in the queue box, once Claude takes it', ()
     const messages = [PROMPT, OPENING, ...LAUNCH]
     await show('12:40:30.000', { messages, working: true, promptHook: false, queued: queuedMessagesFromScreen(waiting), peerRows: peerNoticesFromScreen(waiting) })
     vi.setSystemTime(at('12:41:30.000'))
-    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:00.000') })
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:40:00.000'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { prompt: `<agent-message from="${AGENT_ID}"> ready for the probe </agent-message>`, updatedAt: at('12:41:30.000') })
     await show('12:41:30.000', {
       messages: [...messages, LATER],

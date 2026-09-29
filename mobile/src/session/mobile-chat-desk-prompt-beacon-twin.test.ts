@@ -61,7 +61,7 @@ describe('a desk prompt that the tab status and the beacon both carried', () => 
   for (const [name, text] of [['over several lines', MULTILINE], ['over 200 characters', LONG]] as const) {
     it(`is drawn once when it runs ${name}`, async () => {
       vi.setSystemTime(at('07:00:50.000'))
-      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:45.000') })
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:00:45.000'), stateHistory: [{ state: 'done', prompt: '' }] })
       state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: normalizePromptField(text), updatedAt: at('07:00:50.000') })
       const beacon: DesktopPrompt[] = [{ nonce: '9001', text, anchorId: 'a1', seenAt: at('07:00:50.000') }]
       const prompts = mergeDesktopPrompts(state.prompts, beacon)

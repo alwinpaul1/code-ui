@@ -97,7 +97,7 @@ describe("a subagent message's copy on the tab status, across a reconnect", () =
           renderer = create(createElement(Chat, { status, connected }))
         }
       })
-    show(statusOf(''), true)
+    show({ ...statusOf(''), stateHistory: [{ state: 'done', prompt: '' }] }, true)
     const live = statusOf(wrap('a1111111111111111', 'read live'))
     show(live, true)
     show(live, false)
@@ -131,7 +131,7 @@ describe("a subagent message's copy on the tab status, across a reconnect", () =
           renderer = create(createElement(Chat, { status, connected }))
         }
       })
-    show(statusOf(''), true)
+    show({ ...statusOf(''), stateHistory: [{ state: 'done', prompt: '' }] }, true)
     show(statusOf(wrap('a1111111111111111', 'read live')), true)
     show(null, false)
     show(null, true)

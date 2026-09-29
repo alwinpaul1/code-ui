@@ -447,6 +447,17 @@ describe('a tab status that carries no prompt', () => {
     })
   }
 
+  // Gap C of the final review of fix/midturn-prompt-at-end: the stand-in as
+  // the chat's first status took the chat's first read.
+  it('leaves the chat’s first read to the next status that says what the prompt is', () => {
+    for (const standInState of ['working', 'done']) {
+      let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...standIn(taken), state: standInState })
+      state = observeAgentStatusPrompt(state, 'sess-1', { ...taken, updatedAt: T('05:39:23.200') })
+      expect(copies(state)).toEqual([[MESSAGE, T('05:08:00.600')]])
+      expect(state.placed).toContain("found on the chat's first status")
+    }
+  })
+
   it('still takes the next message the person sends after it', () => {
     let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', taken)
     state = observeAgentStatusPrompt(state, 'sess-1', standIn(taken))
@@ -565,7 +576,7 @@ describe('a tab status that carries no prompt', () => {
 describe("a subagent message's copy on the tab status", () => {
   /** Read live: the phone had read this session's status before. */
   const observe = (prompt: string) =>
-    observeAgentStatusPrompt(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '' }), 'sess-1', { ...LIVE, prompt })
+    observeAgentStatusPrompt(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '', stateHistory: [{ state: 'done', prompt: '' }] }), 'sess-1', { ...LIVE, prompt })
 
   it("keeps the first words of a short message, marked as cut, and no desktop prompt", () => {
     // SUBAGENT_REQUEST_PROMPT as normalizePromptField leaves it.

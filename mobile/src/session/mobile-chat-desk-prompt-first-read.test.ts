@@ -234,7 +234,7 @@ describe('a phone send whose own copy the chat watched, read again after the tur
     await show('07:03:20.000', { messages: working, working: true })
     await send('07:03:54.000', YES, [])
     vi.setSystemTime(at('07:03:54.700'))
-    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:03:50.000') })
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { state: 'working', prompt: '', updatedAt: at('07:03:50.000'), stateHistory: [{ state: 'done', prompt: '' }] })
     state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: YES, updatedAt: at('07:03:54.573') })
     await show('07:03:55.000', { messages: working, working: true, prompts: [...state.prompts], queued: queuedMessagesFromScreen(claudeScreen([YES])) })
     const ended = [...working, agentRow('33806c18', 'Spawning a fixer.', '07:04:32.916'), agentRow('55906d18', 'Fixed.', '07:06:00.000')]

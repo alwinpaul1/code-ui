@@ -513,6 +513,35 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
+  // Gap C (final review of fix/midturn-prompt-at-end): Orca's stand-in as the
+  // chat's first status used up the chat's first read, so the message the
+  // host's next status carried, taken before the chat opened, was read as one
+  // the chat watched arrive and timed by that status's ping: drawn under the
+  // words written after it. A chat opened straight on that status finds it and
+  // places it by the run it came in; so must this one, on both agents' tabs.
+  for (const kind of ['claude', 'codex'] as const) {
+    it(`draws a message taken before the chat opened where it would without Orca's stand-in first, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+      agent = kind
+      const opened = [user(OPENING_ROW, OPENING, '05:08:00.467'), ...WHOLE_TURN.filter((row) => row.timestamp! <= at('05:39:23.200'))]
+      const onTheMessage = statusReader()
+      vi.setSystemTime(at('05:40:00.000'))
+      const straight = onTheMessage.read(working(SECOND_SEND, '05:39:23.200'))
+      onTheMessage.unmount()
+      const reader = statusReader()
+      reader.read({ ...standIn('05:39:30.000'), state: 'working' })
+      const prompts = reader.read(working(SECOND_SEND, '05:39:23.200'))
+      expect(prompts.map((prompt) => prompt.at)).toEqual(straight.map((prompt) => prompt.at))
+      await showAt('05:40:00.100', opened, prompts)
+      const rows = drawn(frames.at(-1)!)
+      const second = where(SECOND_SEND)
+      expect(second.at).toHaveLength(1)
+      expect(second.after(second.at[0]!)).toBe(OPENING_ROW)
+      expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
+      reader.unmount()
+      unmount()
+    })
+  }
+
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.
   it('draws nothing under the reply of a turn that had no mid-turn message', async () => {
