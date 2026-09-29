@@ -23,9 +23,9 @@ export function useCopyToClipboard(): CopyToClipboard {
   const clipboard = useClipboardWriter()
   const [state, setState] = useState<{ copied: boolean; error: string | null }>({ copied: false, error: null })
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  // A copy can land after its button is gone: a chat cell unmounts its
-  // markdown whenever the list recycles it. The timer is armed after the
-  // write, so a cleanup that ran first could not clear it.
+  // A copy can land after its button is gone: the chat list unmounts a
+  // message once it scrolls out of the draw window. The timer is armed after
+  // the write, so a cleanup that ran first could not clear it.
   const mounted = useRef(true)
   useEffect(() => {
     mounted.current = true

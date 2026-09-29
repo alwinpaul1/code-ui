@@ -265,8 +265,8 @@ describe('the Copy button on a chat code block', () => {
     expect(textsIn(tree.root)).toContain("Couldn't copy: the clipboard did not accept this text.")
   })
 
-  // A chat cell unmounts its markdown whenever the list recycles it; a copy
-  // still in flight must not arm the 1.5 s timer after the block is gone.
+  // The chat list unmounts a message once it scrolls out of the draw window;
+  // a copy still in flight must not arm the 1.5 s timer after it is gone.
   it('leaves no timer behind when the block goes away before the copy lands', async () => {
     vi.useFakeTimers()
     pasteboard.held = true

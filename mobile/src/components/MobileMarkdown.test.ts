@@ -145,6 +145,27 @@ describe('parseMobileMarkdown', () => {
     )
   })
 
+  // Second review (2026-09-29): a line marked does not open as a fence, or a
+  // fence marked has already ended, started or kept a protected region, and
+  // every tag after it reached the screen and "Copy message" raw.
+  it.each([
+    ['an indented code block holding only a fence run', ['    ```', '', '<p align="center"><b>Logo</b></p>', '', 'The end &amp; more.']],
+    ['a paragraph line indented four spaces', ['Intro', '    ```js', '<b>bold</b>', '', '<p>After</p>']],
+    ['an unclosed list fence the next item ends', ['- ```sh', '  echo hi', '- next <b>item</b>', '', '<p>After</p>']],
+    ['a list item whose text starts with a fence run', ['- ``` is the fence marker', '- <b>bold</b> item', '', '<p>After</p>']],
+    ['a fence nested under a list item, unclosed, then prose at the margin', ['1. step', '', '   ```sh', '   echo hi', 'After <b>the list</b>.', '', '<p>After</p>']]
+  ])('strips the HTML after %s', (_shape, lines) => {
+    const normalized = normalizeMobileMarkdownPreviewHtml(lines.join('\n'))
+    expect(normalized).not.toMatch(/<\/?(?:b|p)\b/)
+    expect(normalized).not.toContain('&amp;')
+  })
+
+  it('keeps a deeper fence run inside a list fence as code, not as its closer', () => {
+    const fenced = ['  ```md', '  text', '      ```', '  <b>still code</b>', '  ```']
+    const normalized = normalizeMobileMarkdownPreviewHtml(['- step', '', ...fenced, '', '<p>After</p>'].join('\n'))
+    expect(normalized).toBe(['- step', '', ...fenced, '', 'After'].join('\n'))
+  })
+
   it('does not take a triple-backtick span on one line for a fence', () => {
     expect(normalizeMobileMarkdownPreviewHtml('```a<b>c```\n\n<p>After</p>')).toBe('```a<b>c```\n\nAfter')
   })

@@ -5,6 +5,7 @@ import {
   replaceMobileMarkdownPairedMarkupTags,
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
+import { markdownFenceEnd } from './markdown-fence-range'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -222,39 +223,6 @@ function codePlaceholderPrefix(content: string): string {
   return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
 }
 
-/** A fence's opening run: its character and how long it is. */
-type MarkdownFence = { char: '`' | '~'; length: number }
-
-/** An optional list marker, then a run of three or more backticks or tildes. */
-const FENCE_OPENER = /^[ \t]*(?:(?:[-*+]|\d{1,9}[.)])[ \t]+)?(`{3,}|~{3,})(.*)$/
-
-/**
- * A line that opens a fence, however an agent indents it. Only a fence at the
- * margin opened by exactly three backticks and a bare word was protected
- * before, so a fence under a list item (the commonest fence an agent writes),
- * one with tildes or a longer run, and one with a title in its info string
- * went through the HTML pass: `<Text>` and `&amp;` were stripped out of the
- * code, blank lines were squeezed, and the chat's Copy button put what was
- * left on the clipboard (review, 2026-09-29).
- *
- * A backtick fence's info string cannot hold a backtick, as in CommonMark,
- * so a one-line ```code``` span is not taken for one.
- */
-function markdownFenceOpener(line: string): MarkdownFence | null {
-  const match = FENCE_OPENER.exec(line)
-  const run = match?.[1]
-  if (!run || (run[0] === '`' && match[2]?.includes('`'))) {
-    return null
-  }
-  return { char: run[0] === '`' ? '`' : '~', length: run.length }
-}
-
-/** A run of the opener's character at least as long as it, alone on its line. */
-function closesMarkdownFence(line: string, fence: MarkdownFence): boolean {
-  const trimmed = line.trim()
-  return trimmed.length >= fence.length && [...trimmed].every((char) => char === fence.char)
-}
-
 function protectMarkdownCode(content: string): {
   protectedText: string
   codeSpans: string[]
@@ -273,17 +241,10 @@ function protectMarkdownCode(content: string): {
   let index = 0
   while (index < lines.length) {
     const line = lines[index] ?? ''
-    const fence = markdownFenceOpener(line)
-    if (fence) {
-      const start = index
-      index += 1
-      while (index < lines.length && !closesMarkdownFence(lines[index] ?? '', fence)) {
-        index += 1
-      }
-      if (index < lines.length) {
-        index += 1
-      }
-      protectedLines.push(store(lines.slice(start, index).join('\n')))
+    const fenceEnd = markdownFenceEnd(lines, index)
+    if (fenceEnd !== null) {
+      protectedLines.push(store(lines.slice(index, fenceEnd).join('\n')))
+      index = fenceEnd
       continue
     }
 
