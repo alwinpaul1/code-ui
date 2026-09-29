@@ -32,8 +32,15 @@ export function observeSubagentRuns(
     if (snapshot.state === 'idle') {
       continue
     }
-    if (previous?.has(snapshot.id)) {
-      next.set(snapshot.id, previous.get(snapshot.id) ?? null)
+    // A row the host started again after the one the clock kept (the lead
+    // resumed the subagent by SendMessage, same id, and Orca stamped the
+    // row anew): a new run, from the new start (the review of b75a42e6, K1:
+    // "1h 0m" beside a run of 20 s, when the status between said nothing
+    // the clock would take as the end of the first run).
+    const kept = previous?.get(snapshot.id)
+    const restarted = typeof kept === 'number' && typeof snapshot.startedAt === 'number' && snapshot.startedAt > kept
+    if (previous?.has(snapshot.id) && !restarted) {
+      next.set(snapshot.id, kept ?? null)
       continue
     }
     const freshlyStarted =

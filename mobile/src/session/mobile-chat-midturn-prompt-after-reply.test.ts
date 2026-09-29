@@ -229,9 +229,11 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
   // The same with Orca's stand-in first on the way back, rows written while
   // the link was down, and the message sent after the reconnect. A message
   // taken WHILE the link was down, with the stand-in first on the way back,
-  // reaches the reader in the same shape and is timed by its ping, below
-  // the words written after it; the reader cannot tell the two apart, and
-  // this one is the case the latch is not for.
+  // reaches the reader in the same shape and, with no hook, is timed by its
+  // ping, below the words written after it; the reader cannot tell the two
+  // apart, and this one is the case the latch is not for. With the hook the
+  // one taken during the drop is placed after the last status read before it
+  // (mobile-chat-midturn-beacon-evidence.test.ts).
   for (const kind of ['claude', 'codex'] as const) {
     it(`draws a message sent after a reconnect whose first status was Orca's stand-in below the rows written during the drop, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
       agent = kind
@@ -299,14 +301,15 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
 
   // Gap C of the final review of fix/midturn-prompt-at-end (Orca's stand-in
   // as the chat's first status uses up its first read, so a message taken
-  // before the chat opened is timed by the next status's ping) is left as it
-  // was. Taking the stand-in for no read, as tried, timed the next status's
-  // message by the start of its run instead, and a message typed after the
-  // chat opened, which Claude took before a screen read listed it, is then
-  // on a page the chat has not loaded and not drawn at all (the review of
-  // fix/midturn-gaps); so is the message gap C is about when its run began
-  // off the page. The two cannot be told apart, and a message lost is the
-  // worse error: drawn late, it is at least drawn.
+  // before the chat opened is timed by the next status's ping) is settled
+  // only by the prompt hook's copy of the message
+  // (mobile-chat-midturn-beacon-evidence.test.ts). Taking the stand-in for no
+  // read, as tried, timed the next status's message by the start of its run
+  // instead, and a message typed after the chat opened, which Claude took
+  // before a screen read listed it, is then on a page the chat has not loaded
+  // and not drawn at all (the review of fix/midturn-gaps). Without the hook
+  // the two cannot be told apart, and a message lost is the worse error:
+  // drawn late, it is at least drawn. This pins that, with no hook.
   for (const kind of ['claude', 'codex'] as const) {
     it(`draws a message typed after the chat opened on Orca's stand-in where it was sent, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
       agent = kind

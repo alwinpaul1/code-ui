@@ -11,6 +11,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { phoneClockAllowanceMs } from './mid-turn-written-before'
+import { hookSubmissionOf, ownedByLaterSubmission } from './desk-prompt-row-owners'
 
 /**
  * Which copy of a message is drawn when the phone holds one and the hook has
@@ -53,6 +54,8 @@ type PendingCopy = {
   markersBefore?: number
   /** Where the bubble is drawn: for a witness, the row it was drawn after. */
   baselineTailMessageId?: string | null
+  /** A witness only: when the phone stored it. */
+  witnessedAt?: number
 }
 
 export type HookPairing = {
@@ -220,7 +223,17 @@ export function pairPendingWithHookPrompts(
     const itsPrompt = prompts.findIndex(
       (prompt, index) => !taken.has(index) && deskEchoId(prompt.nonce) === item.id && prompt.text === item.text
     )
-    const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, () => true)
+    // Never a later submission of its words (desk-prompt-row-owners.ts): the
+    // same words typed as the next turn's prompt are another message, and a
+    // witness that gave way to that copy after a remount was drawn nowhere
+    // (gap D).
+    const anchor = item.baselineTailMessageId ? messages.findIndex((message) => message.id === item.baselineTailMessageId) : -1
+    const place = { nonce: item.id.startsWith('desk-') ? item.id.slice('desk-'.length) : null, position: anchor === -1 ? undefined : anchor, arrival: item.witnessedAt }
+    const notLater = (prompt: DesktopPrompt) => {
+      const submission = hookSubmissionOf(prompt, messages)
+      return submission === null || !ownedByLaterSubmission(submission, place)
+    }
+    const candidates = itsPrompt !== -1 && key(item.text) === '' ? [itsPrompt] : open(item, notLater)
     const timed = candidates.filter((index) => isTranscriptWitnessed(prompts[index]!))
     const own = timed.find((index) => deskEchoId(prompts[index]!.nonce) === item.id)
     const pick = own ?? timed[0]

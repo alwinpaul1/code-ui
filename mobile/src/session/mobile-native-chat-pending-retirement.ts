@@ -6,6 +6,8 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { rowWillNamePastedPhotos } from './mobile-native-chat-photo-rows'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
+import { witnessRowsNotItsOwn } from './desk-prompt-row-owners'
 
 const SPACE = ' '
 /** How long before, and after, the phone saw a taken send leave the queue box
@@ -268,8 +270,12 @@ function dequeuedRowLanded(
 export function retireLandedMobileNativeChatPending(
   messages: readonly NativeChatMessage[],
   current: MobileNativeChatPendingMessage[],
-  landedImagePendingIds: ReadonlySet<string>
+  landedImagePendingIds: ReadonlySet<string>,
+  /** The desk prompts the chat holds, the prompt hook's copies among them,
+   *  which say whose some rows are (desk-prompt-row-owners.ts). */
+  receipts: readonly BeaconPromptReceipt[] = []
 ): MobileNativeChatPendingMessage[] {
+  const notItsRows = witnessRowsNotItsOwn(messages, current, receipts)
   const landedCounts = new Map<string, number>()
   for (const message of messages) {
     const text = normalizedUserText(message)
@@ -346,7 +352,12 @@ export function retireLandedMobileNativeChatPending(
       const other = current[earlier]!
       return normalizeReconcileText(other.text) === key && dequeuedRowLanded(messages, key, other)
     })
-    const byCount = captioned && (landedCounts.get(key) ?? 0) >= item.expectedOccurrence && !deferred
+    // A witnessed message's count leaves out the rows a later submission of
+    // its words owns: the same words typed as the next turn's prompt retired
+    // the message sent mid-turn before it (gap D).
+    const others = notItsRows.get(item.id)
+    const counted = (landedCounts.get(key) ?? 0) - (others ? messages.filter((message) => others.includes(message.id)).length : 0)
+    const byCount = captioned && counted >= item.expectedOccurrence && !deferred
     const landed = !captioned
       ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >= item.expectedOccurrence
       : byCount || stubLanded(item.id, item.text, landedCounts) || gluedLanded(item.text, landedCounts)
@@ -410,10 +421,13 @@ export function retireLandedMobileNativeChatPending(
     }
   }
   const glued = selectGluedPendingIds(messages, current, exactLandedIds, landedImagePendingIds)
-  if (landedPendingIds.size === 0 && glued.size === 0 && bumps.size === 0) {
+  const learned = [...notItsRows].filter(([id, rows]) => rows.length > (current.find((item) => item.id === id)?.notItsRows?.length ?? 0))
+  if (landedPendingIds.size === 0 && glued.size === 0 && bumps.size === 0 && learned.length === 0) {
     return current
   }
+  const kept = new Map(learned)
   return current
     .filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
     .map((item) => (bumps.has(item.id) ? { ...item, expectedOccurrence: ordinalOf(item) } : item))
+    .map((item) => (kept.has(item.id) ? { ...item, notItsRows: kept.get(item.id)! } : item))
 }

@@ -1,5 +1,6 @@
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { UnconfirmedSend } from './mobile-native-chat-draft-reconcile'
+import type { DesktopPrompt } from './agent-hud-beacon'
 
 /** One `up=` reading from the agent's own `UserPromptSubmit` hook: the text the
  *  agent says it accepted, and whether the hook truncated it. */
@@ -10,6 +11,12 @@ export type BeaconPromptReceipt = {
   nonce: string
   text: string
   cut?: boolean
+  /** The rest of a DesktopPrompt a submission is placed by
+   *  (desk-prompt-row-owners.ts): the row a hook copy names, when it reached
+   *  the phone, and on a status copy its hook copy's. */
+  anchorId?: string
+  seenAt?: number
+  hookTwin?: DesktopPrompt['hookTwin']
 }
 
 /**

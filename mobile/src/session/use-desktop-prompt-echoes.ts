@@ -9,6 +9,8 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
+import { joinedLineBetween, ownedByLaterSubmission, placeOfCopy, rowOwners, withoutLateHookTwins } from './desk-prompt-row-owners'
+import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT } from './desk-prompt-stand-in-place'
 
 
 /**
@@ -147,10 +149,14 @@ export function useDesktopPromptEchoes(
   /** Whether the chat's read of this session has settled. Before it does,
    *  `hasEarlier` is false and no row is held, which says nothing about a
    *  row being missing (sixth review of this rule, 2026-09-27). */
-  readSettled = true
+  readSettled = true,
+  /** Whether the tab was launched with the prompt hook (`hk=1`): every prompt
+   *  it takes while the chat is open reaches the phone as a hook copy too. */
+  promptHook = false
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   const refused: DesktopPrompt[] = []
+  const rowBefore = (at: number | undefined) => lastRowBefore(rawMessages, at)
   for (const prompt of prompts) {
     // A status copy held back for want of a time pairs with the phone's sends
     // and is never drawn (agent-status-prompts.ts, 2026-09-26).
@@ -202,6 +208,11 @@ export function useDesktopPromptEchoes(
     // A beacon restored before the transcript loads would pin the echo to
     // the bottom for good; wait for a row to anchor on (2026-09-13).
     const newest = rawMessages.at(-1)
+    let waitingForItsCopy = false
+    const late = prompt.foundAt === undefined ? undefined : replaceFoundByLateTwin(prompt, rawMessages, rowBefore)
+    if (late !== undefined) {
+      rememberAnchor(prompt.nonce, late)
+    }
     if (rememberedAnchor(prompt.nonce) === undefined && newest !== undefined) {
       // Where this chat first saw it: the tail of its first reading with a row.
       const firstSeenAfter = provisionalByNonce.get(prompt.nonce) ?? newest.id
@@ -212,8 +223,17 @@ export function useDesktopPromptEchoes(
       // Only without it (an older hook, or the row paged out of the window)
       // does the arrival-time tail stand in (2026-09-14).
       const beaconed = prompt.anchorId
+      // A copy found on a first reading is timed by the start of its run, a
+      // bound below it; its hook copy's row is where it was typed (the review
+      // of 5d17a9d0, B4: after a comeback, a message typed mid-run drew at
+      // its run's start, above rows written before it).
+      const twinRow = prompt.atStateStart === true ? prompt.hookTwin?.anchorId : undefined
       const anchorRow =
-        beaconed !== undefined ? rawMessages.find((message) => message.id === beaconed) : undefined
+        beaconed !== undefined
+          ? rawMessages.find((message) => message.id === beaconed)
+          : twinRow !== undefined
+            ? rawMessages.find((message) => message.id === twinRow)
+            : undefined
       // The transcript names the row it was written after, and on the device
       // that row was a tool call or result the phone did not hold. (Orca
       // 1.4.216's decoder does make a row of each, keyed by the record uuid,
@@ -223,7 +243,15 @@ export function useDesktopPromptEchoes(
       // fell to the arrival tail, three turns under the reply that answered
       // it (device, 2026-09-19).
       const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, prompt.at) : undefined
-      if (anchorRow) {
+      const afterStandIn = prompt.foundAt === undefined ? undefined : placeAfterStandIn(prompt, rawMessages, promptHook, rowBefore)
+      if (afterStandIn === STAND_IN_WAIT) {
+        // Drawn where it was first seen meanwhile, not settled, and not
+        // remembered there either (`provisional` below).
+        waitingForItsCopy = true
+      } else if (afterStandIn !== undefined) {
+        waitsByNonce.delete(prompt.nonce)
+        rememberAnchor(prompt.nonce, afterStandIn)
+      } else if (anchorRow) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, anchorRow.id)
         // The named row is the transcript's last RECORD at submit, and a reply
@@ -280,7 +308,8 @@ export function useDesktopPromptEchoes(
       text: prompt.text,
       expectedOccurrence: 0,
       baselineTailMessageId: placement,
-      baselineResolved: true
+      baselineResolved: true,
+      ...(waitingForItsCopy ? { provisional: true } : {})
     })
   }
   // With every row loaded, a copy still held names a row the transcript does
@@ -386,6 +415,7 @@ export function withoutLandedDesktopPrompts(
    *  (Claude Code numbers photos through a session). */
   raw: readonly NativeChatMessage[] = []
 ): DesktopPrompt[] {
+  prompts = withoutLateHookTwins(prompts, raw)
   // The rows as read, and what the agent's queue box lists (fourth review: a
   // desk photo of no words drew in the box and as a bubble above it).
   const landedMarkers = new Set(
@@ -399,24 +429,36 @@ export function withoutLandedDesktopPrompts(
   const seen = [
     ...folded
       .filter((message) => message.role === 'user')
-      .map((message) =>
-        message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-      ),
-    ...alsoShown
+      .map((message) => ({
+        text: message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''),
+        rowId: message.id as string | undefined
+      })),
+    ...alsoShown.map((text) => ({ text, rowId: undefined }))
   ]
-    .map(landedKey)
-    .filter((text) => text.length > 0)
+    .map((entry) => ({ key: landedKey(entry.text), rowId: entry.rowId }))
+    .filter((entry) => entry.key.length > 0)
+  // A row a later hook submission of the same words owns is that
+  // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
+  const owners = rowOwners(prompts, raw, landedKey)
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {
       return !landedMarkers.has(markersOf(prompt.text))
     }
     const key = landedKey(prompt.text)
+    const place = owners.size > 0 ? placeOfCopy(prompt, raw) : null
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
     // from the length was wrong whenever escapes or multibyte text moved the
     // boundary (2026-09-13).
     return !seen.some(
-      (other) => other === key || (prompt.cut === true && key.length > 0 && other.startsWith(key))
+      (other) =>
+        (other.key === key || (prompt.cut === true && key.length > 0 && other.key.startsWith(key))) &&
+        !(
+          place !== null &&
+          other.rowId !== undefined &&
+          ownedByLaterSubmission(owners.get(other.rowId), place) &&
+          !joinedLineBetween(raw, place.position, raw.findIndex((message) => message.id === other.rowId), key, landedKey, owners)
+        )
     )
   })
 }
@@ -431,7 +473,7 @@ function markersOf(text: string): string {
  *  teammate session by its words, because its row is surfaced as them and
  *  the hook's copy kept the wrapper, so the copy never retired and the
  *  follow-up drew twice (teammateTask; review of 2026-09-27). */
-function landedKey(text: string): string {
+export function landedKey(text: string): string {
   const words = teammateTask(text)?.text ?? text
   return normalizeNativeChatUserText(asPaintedPrompt(withShortSkillToken(withoutPasteWrappers(words))))
 }

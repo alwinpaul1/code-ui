@@ -229,21 +229,17 @@ export function MobileNativeChatOverlay({
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
-  // Any user row of a desk copy's words lands it. So the same words sent
-  // mid-turn and then typed at the desk as the next turn's prompt read as one
-  // message (gap D of the final review of fix/midturn-prompt-at-end): the
-  // phone cannot tell that row from the one Claude writes for a message still
-  // queued at a turn's end, and a rule that tried drew those twice whenever
-  // the phone missed the moment of the dequeue (asleep, a box it could not
-  // read, a clock behind the desktop's). Drawn twice is the worse error.
+  // A user row of a desk copy's words lands it, unless a later submission of
+  // the words owns that row, which only the prompt hook's copies can say
+  // (desk-prompt-row-owners.ts: the same words sent mid-turn and then typed
+  // at the desk as the next turn's prompt, gap D). Without them the phone
+  // cannot tell that row from the one Claude writes for a message still
+  // queued at a turn's end, and a rule that tried by the queue box drew those
+  // twice whenever the phone missed the moment of the dequeue (asleep, a box
+  // it could not read, a clock behind the desktop's).
   const unlandedPrompts = useMemo(
     () =>
-      withoutLandedDesktopPrompts(
-        promptsNoCopyStandsFor(desktopPrompts, hookPairing),
-        baseFolded,
-        queuedMessages ?? [],
-        session.messages
-      ),
+      withoutLandedDesktopPrompts(promptsNoCopyStandsFor(desktopPrompts, hookPairing), baseFolded, queuedMessages ?? [], session.messages),
     [hookPairing, desktopPrompts, baseFolded, queuedMessages, session.messages]
   )
   // Existing sessions have no hook, but the agent draws its own queue and the
@@ -267,7 +263,8 @@ export function MobileNativeChatOverlay({
     baseFolded,
     session.messages,
     session.hasMore,
-    session.status === 'ready' && session.baseRetained !== true
+    session.status === 'ready' && session.baseRetained !== true,
+    controller.nativeChatPromptHook === true
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],

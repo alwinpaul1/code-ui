@@ -225,14 +225,16 @@ describe('a mid-turn message the queue box lists', () => {
 
   // Gap D of the final review of fix/midturn-prompt-at-end (the same words
   // sent mid-turn, then typed at the desk as the next turn's prompt: the next
-  // turn's row retires the first turn's bubble) is left as it was. The rule
-  // tried for it, a desk copy landing only on a row stamped as the agent took
-  // it, drew a message still queued when a turn ended twice whenever the
-  // phone did not see the box let it go at the moment Claude dequeued it (the
-  // review of fix/midturn-gaps): asleep through the turn's end, a box reader
-  // that never listed it, a phone clock running behind. Those cannot be told
-  // from gap D on the same inputs, and a message drawn twice is the worse
-  // error. These pin the side kept.
+  // turn's row retires the first turn's bubble) is settled only by the prompt
+  // hook's copies of each submission (desk-prompt-row-owners.ts,
+  // mobile-chat-midturn-beacon-evidence.test.ts). The rule first tried for it,
+  // a desk copy landing only on a row stamped as the agent took it, drew a
+  // message still queued when a turn ended twice whenever the phone did not
+  // see the box let it go at the moment Claude dequeued it (the review of
+  // fix/midturn-gaps): asleep through the turn's end, a box reader that never
+  // listed it, a phone clock running behind. With no hook copies those
+  // cannot be told from gap D, and a message drawn twice is the worse error.
+  // These pin that side; the hook-copy file pins the same with them.
   /** Claude dequeues a message still queued as the turn ends, as the next
    *  turn's row, and answers it. */
   const DEQUEUED = user('7d1e0c5a-3b2f-4e61-9a8d-0c4b5e6f7a81', SECOND_SEND, '05:46:54.300')

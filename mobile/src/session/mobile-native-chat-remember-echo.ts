@@ -283,7 +283,10 @@ const CUT_COPY_SEEN_WITH_MS = 30_000
  * kept apart: the cut copy is drawn beside the box row while it waits, and
  * cut and whole once the agent takes it (round 5 of the review; main draws
  * it once). The store cannot tell that from the two messages above, and of
- * the two outcomes a message drawn twice beats one lost.
+ * the two outcomes a message drawn twice beats one lost. Only without the
+ * prompt hook's copy of the message: with it, the echo carries the words as
+ * typed (mergeDesktopPrompts), and the box's reading is the same words
+ * (mobile-chat-midturn-beacon-evidence.test.ts pins both).
  *
  * The copy stored after the reading: always. The status reader makes a copy
  * when the field's words change, so a copy that comes after a longer reading
