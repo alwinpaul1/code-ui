@@ -10,6 +10,7 @@ import {
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { unescapeJsonStringBody } from './agent-hud-beacon'
+import { AGENT_STATUS_MAX_FIELD_LENGTH, normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 
 function user(id: string, text: string): NativeChatMessage {
   return { id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 0, source: 'transcript' }
@@ -137,6 +138,30 @@ describe('two hook copies whose words differ by a last word', () => {
     expect(cut).toHaveLength(200)
     const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1', cut, 'a1', [], 'd')
     expect(rememberEchoInPending(withCut, 'k', 'desk-4242', long, 'a1', [], 'd')).toBe(withCut)
+  })
+
+  // Regression review of f4b53616: Orca drops a high surrogate the cut
+  // leaves alone at character 200 (truncatePreservingSurrogates), so a cut
+  // copy can be 199 characters long.
+  describe('cut one character short, before an emoji', () => {
+    const start = `${'word '.repeat(39)}abc`
+    const full = `${start} \u{1F600} and more words after the emoji`
+    const statusCut = normalizePromptField(full)
+
+    it('is the copy Orca makes', () => {
+      expect(statusCut).toBe(`${start} `)
+      expect(statusCut).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH - 1)
+    })
+
+    it('is still the start of the beacon copy of the same message', () => {
+      const withBeacon = rememberEchoInPending({}, 'k', 'desk-48213', full, 'a1', [], 'd')
+      expect(rememberEchoInPending(withBeacon, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd').k).toHaveLength(1)
+    })
+
+    it("is still the hook's copy of the phone's own send", () => {
+      const copy = { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 2_000 }
+      expect(withoutWitnessesOfSends([copy], [{ text: full, sentAt: 1_000 }])).toEqual([])
+    })
   })
 
   // Degenerate: one copy alone, and the empty store.

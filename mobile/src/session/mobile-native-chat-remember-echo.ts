@@ -228,7 +228,10 @@ function preferredStoredReading(
   }
   const [kept, dropped] = verdict === 'a' ? [a, b] : [b, a]
   const goesOn = storedKey(dropped.text).length > storedKey(kept.text).length && !storedKey(kept.text).endsWith('…')
-  const whole = kept.text.length < AGENT_STATUS_MAX_FIELD_LENGTH
+  // Orca cuts the status field at AGENT_STATUS_MAX_FIELD_LENGTH characters,
+  // one fewer when the cut would leave half an emoji
+  // (truncatePreservingSurrogates): a copy that long may be a cut.
+  const whole = kept.text.length < AGENT_STATUS_MAX_FIELD_LENGTH - 1
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
   return goesOn && whole && asSent ? null : verdict
 }
