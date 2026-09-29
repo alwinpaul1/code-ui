@@ -85,18 +85,20 @@ export function useMobileStructuredPromptResponses(args: {
           'agentSession.respondTo:question',
           { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: grouped.optionId }
         )
-        if (result.status !== 'rejected') {
-          // The group left the phone; a retry must start from the first question, not a stale tail.
+        if (result.status === 'unknown') {
+          // The group may have left the phone; a retry must start from the first question, not a stale tail.
           setCollected((current) =>
             current?.sessionKey === sessionKey && current.draft.promptKey === promptKey
               ? null
               : current
           )
-        }
-        if (result.status === 'unknown') {
           onSendError('Answer unconfirmed — check chat before retrying')
           return false
         }
+        // Accepted, the steps stay until the journal resolves the prompt, so the
+        // card stays on the step that sent the group, saying so. Dropped here, it
+        // went back to the first question, live, until the journal caught up
+        // (2026-09-29). A newer revision keys its own draft, so these go stale.
         return result.status === 'accepted'
       }
       const target = structuredQuestionResponseTarget(answer, prompt)
