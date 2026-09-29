@@ -2,6 +2,7 @@ import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
 } from '../../../src/shared/agent-session-journal-types'
+import { clipWithEllipsis } from '../text/whole-character-cut'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
@@ -139,9 +140,9 @@ function isAlwaysLabel(text: string): boolean {
   return /\balways\b|don't ask again|do not ask again|for the rest|this session/i.test(text)
 }
 
+// Cut at `max` code units, never through an emoji (a half drew a broken glyph).
 function shortLabel(text: string, max = 40): string {
-  const trimmed = text.replace(/\s+/g, ' ').trim()
-  return trimmed.length > max ? `${trimmed.slice(0, max - 1)}…` : trimmed
+  return clipWithEllipsis(text.replace(/\s+/g, ' ').trim(), max)
 }
 
 function buildNumberedPermission(
