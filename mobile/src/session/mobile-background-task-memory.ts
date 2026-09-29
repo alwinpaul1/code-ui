@@ -1,7 +1,7 @@
 import type { AgentStatusEntry, AgentStatusState } from '../../../src/shared/agent-status-types'
 import type { PendingAgentCall, WindowTaskEvidence } from './mobile-background-task-evidence'
 import type { HeldShellCount } from './mobile-background-task-footer'
-import type { RosterRow } from './mobile-background-task-roster'
+import { isTeammateLifecycleId, type RosterRow } from './mobile-background-task-roster'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 import { isOrcaStandIn } from './agent-status-stand-in'
 
@@ -52,6 +52,11 @@ export type SessionTaskEvidence = {
   /** Rows given the benefit of the doubt, until they stop. Null until the
    *  phone first reads this session's roster. */
   preexistingAgentIds: readonly string[] | null
+  /** Each doubted row's start when it got the doubt. Orca drops a stopped
+   *  subagent's row and starts it afresh, so a row back with another start
+   *  stopped and was resumed while the phone did not see it, and the doubt
+   *  does not follow it. A teammate's row keeps its start across a stop. */
+  doubtStartedAt: Readonly<Record<string, number>>
   /** Every roster id already placed; one is never placed twice. */
   placedAgentIds: readonly string[]
   /** Unanswered Agent calls already matched to a row. */
@@ -74,6 +79,7 @@ export type SessionTaskEvidence = {
 export const EMPTY_SESSION_TASK_EVIDENCE: SessionTaskEvidence = {
   ownAgentIds: [],
   preexistingAgentIds: null,
+  doubtStartedAt: {},
   placedAgentIds: [],
   vouchedCallKeys: [],
   retiredTaskIds: [],
@@ -114,6 +120,7 @@ export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen):
     ownAgentIds: rememberFinishedTaskIds(previous.ownAgentIds, [...window.ownAgentIds, ...(placed?.own ?? [])]),
     retiredTaskIds: rememberFinishedTaskIds(previous.retiredTaskIds, window.retiredTaskIds),
     preexistingAgentIds: placed ? placed.preexisting : previous.preexistingAgentIds,
+    doubtStartedAt: placed ? placed.doubtStartedAt : previous.doubtStartedAt,
     placedAgentIds: placed ? rememberFinishedTaskIds(previous.placedAgentIds, placed.placed) : previous.placedAgentIds,
     vouchedCallKeys: placed ? rememberFinishedTaskIds(previous.vouchedCallKeys, placed.vouched) : previous.vouchedCallKeys,
     lastStatus: agentStatus ? { status: agentStatus, at: now } : previous.lastStatus,
@@ -126,7 +133,13 @@ export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen):
   }
 }
 
-type Placement = { own: string[]; preexisting: readonly string[]; placed: string[]; vouched: string[] }
+type Placement = {
+  own: string[]
+  preexisting: readonly string[]
+  doubtStartedAt: Readonly<Record<string, number>>
+  placed: string[]
+  vouched: string[]
+}
 
 function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly RosterRow[]): Placement {
   const { window } = seen
@@ -150,15 +163,22 @@ function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly 
     // already up is used by it, so it cannot vouch for a later row.
     byStart.forEach(vouch)
     const ids = working.map((row) => row.id)
-    return { own, preexisting: ids, placed: ids, vouched }
+    return { own, preexisting: ids, doubtStartedAt: startsOf(working), placed: ids, vouched }
   }
-  const still = new Set(working.map((row) => row.id))
-  const preexisting: string[] = previous.preexistingAgentIds.filter((id) => still.has(id))
+  const startOf = new Map(working.map((row) => [row.id, row.startedAt]))
+  // Still running, and the same run: a row that stopped unseen and came back
+  // with a new start was resumed by whoever started it, and a subagent's
+  // resume is not in the lead's transcript.
+  const sameRun = (id: string): boolean => {
+    const doubtedAt = previous.doubtStartedAt[id]
+    return startOf.has(id) && (isTeammateLifecycleId(id) || doubtedAt === undefined || doubtedAt === startOf.get(id))
+  }
+  const preexisting: string[] = previous.preexistingAgentIds.filter(sameRun)
   const oldestAt = window.oldestAt
   if (oldestAt === null || !seen.settled) {
     // No settled window (a re-subscribe starts from an empty list, then paints
     // the cached tail): nothing new is placed until the fresh read lands.
-    return { own, preexisting: sameOrNew(previous.preexistingAgentIds, preexisting), placed, vouched }
+    return withDoubtStarts(previous, { own, preexisting: sameOrNew(previous.preexistingAgentIds, preexisting), placed, vouched }, startOf)
   }
   const known = new Set([...previous.placedAgentIds, ...previous.ownAgentIds, ...window.ownAgentIds])
   const before = (previous.lastStatus?.status.subagents ?? []).filter((row) => row.state !== 'idle').map((row) => row.id)
@@ -172,7 +192,32 @@ function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly 
       preexisting.push(row.id)
     }
   }
-  return { own, preexisting: sameOrNew(previous.preexistingAgentIds, preexisting), placed, vouched }
+  return withDoubtStarts(previous, { own, preexisting: sameOrNew(previous.preexistingAgentIds, preexisting), placed, vouched }, startOf)
+}
+
+function startsOf(rows: readonly RosterRow[]): Record<string, number> {
+  return Object.fromEntries(rows.map((row) => [row.id, row.startedAt]))
+}
+
+/** The placement with each doubted row's start: the one it was doubted with,
+ *  or this roster's for a row doubted now. The same object when the doubted
+ *  rows did not change. */
+function withDoubtStarts(
+  previous: SessionTaskEvidence,
+  placement: Omit<Placement, 'doubtStartedAt'>,
+  startOf: ReadonlyMap<string, number>
+): Placement {
+  if (placement.preexisting === previous.preexistingAgentIds) {
+    return { ...placement, doubtStartedAt: previous.doubtStartedAt }
+  }
+  const doubtStartedAt: Record<string, number> = {}
+  for (const id of placement.preexisting) {
+    const at = previous.doubtStartedAt[id] ?? startOf.get(id)
+    if (at !== undefined) {
+      doubtStartedAt[id] = at
+    }
+  }
+  return { ...placement, doubtStartedAt }
 }
 
 /** A foreground Agent call started this row: the row came up within 30 s of

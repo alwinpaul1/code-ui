@@ -412,4 +412,20 @@ describe('background work the chat shows while Orca stands in the pane status', 
     show('claude', standIn('claude', 'tab-1', 'done'), GATED)
     expect(show('claude', hookRow('claude', 'tab-1', { ...roster(earlier), updatedAt: at('10:00:40.000') }), GATED)).toEqual([SHELL, earlier.id])
   })
+
+  // The other side of the case above (the third review pass). A row that
+  // stopped while the phone was away and came back had a new run: Orca drops
+  // a stopped subagent's row and starts it afresh, so its start moved. Without
+  // the lead's SendMessage in the transcript, its parent subagent resumed it:
+  // a reviewer's, not the session's own.
+  it('does not count a reviewer its parent resumed after it stopped unseen, once the phone came back to a stand-in', () => {
+    session.messages = CLAUDE_TURN.slice(0, 2)
+    const reviewer = 'a77d87fe2e3c0195d'
+    expect(show('claude', hookRow('claude', 'tab-1', roster(rosterRow(reviewer, at('09:40:00.000')))))).toEqual([SHELL, reviewer])
+    show('claude', hookRow('claude', 'tab-1', roster(rosterRow(reviewer, at('09:40:00.000')))), { connState: 'disconnected' })
+    expect(show('claude', standIn('claude', 'tab-1', 'done', '10:00:20.000'))).toEqual([])
+    vi.setSystemTime(at('10:00:41.000'))
+    const resumed = hookRow('claude', 'tab-1', { ...roster(rosterRow(reviewer, at('10:00:30.000'))), updatedAt: at('10:00:40.000') })
+    expect(show('claude', resumed)).toEqual([SHELL])
+  })
 })
