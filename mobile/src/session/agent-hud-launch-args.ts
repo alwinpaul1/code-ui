@@ -665,7 +665,16 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
   // session in the same terminal does not echo it (see the status line).
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
-  'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct${at:+ at=$at}"',
+  // `ts=`: the second this ran, by the desk clock, which stamps the
+  // transcript's rows too. UserPromptSubmit fires at the enqueue (2.1.284: 21
+  // ms after the Enter), so it is when the prompt was typed. It places a copy
+  // whose `at=` row the phone does not hold: the rows on a page not loaded,
+  // or a record Orca draws nothing for. Without it every such copy of a turn
+  // read after a sleep settled under the same last reply, three in a row
+  // (reported 2026-09-29). A `date` that cannot say `%s` sends no time.
+  'ts=$(date +%s 2>/dev/null)',
+  'case "$ts" in ""|*[!0-9]*) ts="";; esac',
+  'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct${at:+ at=$at}${ts:+ ts=$ts}"',
   '[ -z "$pr" ] && exit 0',
   ...AGENT_HUD_TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,

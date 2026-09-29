@@ -55,6 +55,11 @@ export type AgentHudBeaconLimit = {
  *  those runs (desk-prompt-harness-turns.ts). */
 /** `seenAt` on a beacon copy: when the phone received it (a restored one from
  *  an older build: its record's last beacon, agent-hud-beacon-warm-start.ts). */
+/** `typedAt` on a beacon copy: epoch ms of the second the prompt hook ran, by
+ *  the desk clock the transcript's rows are stamped by (`ts=`, 2026-09-29).
+ *  Only placement reads it (use-desktop-prompt-echoes.ts); it is not `at`,
+ *  which marks a copy the transcript witnessed and pairs it with the phone's
+ *  own sends. Absent from a tab launched before the hook sent it. */
 /** `atStateStart`: `at` is when the pane's working run began, read at first
  *  sight of the tab status (agent-status-prompts.ts), which can be before the
  *  prompt (one sent mid-run).
@@ -68,7 +73,7 @@ export type AgentHudBeaconLimit = {
  *  `foundAt`: on a status prompt read first after Orca's stand-in, which may
  *  have been found or watched arriving, the start of the run it came in;
  *  `standInAt`, when the phone read that stand-in, by its own clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
 
 export type AgentHudBeacon = {
   agent: string
@@ -221,7 +226,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     promptHook: values.get('hk') === '1',
-    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at')),
+    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at'), values.get('ts')),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')
@@ -457,7 +462,8 @@ function liveOrRun(values: Map<string, string>): string[] | null {
 function readDesktopPrompt(
   raw: string | undefined,
   cutByHook: boolean,
-  anchorRaw?: string
+  anchorRaw?: string,
+  typedRaw?: string
 ): DesktopPrompt | null {
   if (!raw) {
     return null
@@ -479,7 +485,10 @@ function readDesktopPrompt(
   }
   // A uuid the hook read off the transcript; anything else is not an anchor.
   const anchorId = anchorRaw && /^[0-9a-fA-F-]{8,}$/.test(anchorRaw) ? anchorRaw : undefined
-  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook, ...(anchorId ? { anchorId } : {}) }
+  // Epoch seconds by the desk clock: nine to eleven digits, 1973 to 5138.
+  // Anything else is not a time, and a wrong one would place the copy wrong.
+  const typedAt = typedRaw && /^[0-9]{9,11}$/.test(typedRaw) ? Number(typedRaw) * 1000 : undefined
+  return { nonce, text: unescapeJsonStringBody(decoded), cut: cutByHook, ...(anchorId ? { anchorId } : {}), ...(typedAt !== undefined ? { typedAt } : {}) }
 }
 
 /** Undo the escaping a JSON string body carries, without a JSON parse: the

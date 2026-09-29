@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
-import { unescapeJsonStringBody } from './agent-hud-beacon'
+import { parseAgentHudBeaconPayload, unescapeJsonStringBody } from './agent-hud-beacon'
 import { decodeAgentHudChannelText } from './agent-hud-channel'
 
 function runHook(payload: Record<string, unknown>, transcript?: string): string {
@@ -33,7 +33,10 @@ const BEL = String.fromCharCode(7)
 
 function promptOf(beacon: string): string {
   const after = beacon.slice(beacon.indexOf('up=') + 3)
-  const value = after.includes(BEL) ? after.slice(0, after.indexOf(BEL)) : after
+  const ended = after.includes(BEL) ? after.slice(0, after.indexOf(BEL)) : after
+  // The payload is space-separated `key=value`, and the body's own spaces are
+  // `%20`: the value ends at the next space (`ts=` follows it since 2026-09-29).
+  const value = ended.includes(' ') ? ended.slice(0, ended.indexOf(' ')) : ended
   const cut = value.indexOf(':')
   return unescapeJsonStringBody(decodeURIComponent(value.slice(cut + 1)))
 }
@@ -118,5 +121,53 @@ describe('the desktop prompt hook', () => {
       env: { ...process.env, CUIHUD_TTY: '/nonexistent/tty' }
     })
     expect(out).toBe('')
+  })
+})
+
+// 2026-09-29, from the phone: "All 3 prompts stacked together with no
+// responses in between them". A mid-turn prompt's copy names the text row it
+// was typed after (`at=`), and when that row is not held (a page the chat has
+// not loaded, a record Orca draws nothing for) the phone had no other clue to
+// where the prompt belongs: the beacon carried no time, and the phone's own
+// arrival time is its clock, not the desk's, and says nothing after a sleep,
+// when every copy is read at once. The hook now says when it ran, by the desk's
+// clock, the one the transcript's rows are stamped by. On Claude Code 2.1.284
+// UserPromptSubmit fires at the enqueue, 21 ms after the Enter
+// (mobile-chat-midturn-beacon-evidence.test.ts), so that is when it was typed.
+describe('when the desktop prompt hook says the prompt was typed', () => {
+  const SHELLS = ['sh', 'bash', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])]
+
+  function beaconFrom(shell: string, path: string): { beacon: string; stdout: string } {
+    const dir = mkdtempSync(join(tmpdir(), 'cuihud-typed-'))
+    const tty = join(dir, 'tty')
+    writeFileSync(tty, '')
+    const stdout = execFileSync(shell, ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
+      input: JSON.stringify({ prompt: 'typed mid-turn' }),
+      encoding: 'utf8',
+      env: { PATH: path, CUIHUD_TTY: tty }
+    })
+    return { beacon: decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n'), stdout }
+  }
+
+  it.each(SHELLS)('beacons the second it ran, by the desk clock (%s)', (shell) => {
+    const before = Math.floor(Date.now() / 1000)
+    const { beacon } = beaconFrom(shell, process.env.PATH ?? '')
+    const after = Math.ceil(Date.now() / 1000)
+    const ts = Number(/\bts=([0-9]+)\b/.exec(beacon)?.[1])
+    expect(ts).toBeGreaterThanOrEqual(before)
+    expect(ts).toBeLessThanOrEqual(after)
+    expect(parseAgentHudBeaconPayload(beacon)?.desktopPrompt?.typedAt).toBe(ts * 1000)
+  })
+
+  // A `date` that does not know `%s` prints something else; the hook sends no
+  // time rather than a wrong one, and still beacons the prompt.
+  it('sends no time when the host date cannot say it, and still beacons the prompt quietly', () => {
+    const shim = mkdtempSync(join(tmpdir(), 'cuihud-date-'))
+    writeFileSync(join(shim, 'date'), '#!/bin/sh\necho %s\n', { mode: 0o755 })
+    const { beacon, stdout } = beaconFrom('sh', `${shim}:${process.env.PATH ?? ''}`)
+    expect(stdout).toBe('')
+    expect(beacon).toContain('up=')
+    expect(beacon).not.toContain(' ts=')
+    expect(parseAgentHudBeaconPayload(beacon)?.desktopPrompt?.typedAt).toBeUndefined()
   })
 })

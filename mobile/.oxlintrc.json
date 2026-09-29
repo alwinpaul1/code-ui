@@ -388,7 +388,10 @@
             // (agent-hud-channel.ts), beside the OSC `w` the Windows branch keeps.
             // +3 the same day for `hostTakesAgentHudFlag`: no flag reaches a
             // Windows host, whose PowerShell 5.1 broke the `--settings` JSON.
-            "max": 319,
+            // 2026-09-29: 321. The prompt hook says when it ran (`ts=`, a
+            // `date +%s` and its digits check), which places a desk copy whose
+            // named row the phone does not hold.
+            "max": 321,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -415,7 +418,9 @@
             // list itself lives in agent-hud-beacon-agent-messages.ts.
             // 2026-09-27: 342 for rememberAgentMessagePlacement, which has to
             // reach the store's own map, listeners and warm-start write.
-            "max": 342,
+            // 2026-09-29: 344. The prompt beacon's `ts=` read into `typedAt`
+            // (the parameter and its digits check).
+            "max": 344,
             "skipBlankLines": true,
             "skipComments": true
           }
