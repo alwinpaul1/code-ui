@@ -105,4 +105,40 @@ describe('a `/` row with the argument hint the provider reported (Orca #19928)',
     ).toBeNull()
     expect(suggestionArgumentHint(CLEAR)).toBeNull()
   })
+
+  // The 80 cap counts UTF-16 code units, and an emoji is two: a cut between
+  // them left half of one, a broken glyph, at the end of the hint.
+  describe('with an emoji at the 80-character cap', () => {
+    const LONE_HALF = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+    const hintOf = (argumentHint: string) =>
+      suggestionArgumentHint({ kind: 'command', command: { name: 'ship', argumentHint } })
+
+    it('keeps a rocket emoji whole when it straddles the cut', () => {
+      const hint = hintOf(`<${'x'.repeat(78)}🚀 release name>`)
+      expect(hint).not.toMatch(LONE_HALF)
+      expect(hint).toBe(`<${'x'.repeat(78)}`)
+    })
+
+    it('keeps an emoji that ends just before the cut', () => {
+      expect(hintOf(`<${'x'.repeat(77)}🚀 release name>`)).toBe(`<${'x'.repeat(77)}🚀`)
+    })
+
+    it('keeps a hint of exactly 80 code units whole, and cuts one a unit over', () => {
+      const exact = `<${'x'.repeat(77)}🚀`
+      expect(hintOf(exact)).toBe(exact)
+      const over = hintOf(`<${'x'.repeat(78)}🚀`)
+      expect(over).not.toMatch(LONE_HALF)
+      expect(over).toBe(`<${'x'.repeat(78)}`)
+    })
+
+    it('has no hint for an empty one', () => {
+      expect(hintOf('')).toBeNull()
+    })
+
+    it('cuts a hint made only of emoji between two of them', () => {
+      const hint = hintOf(`✅${'🚀'.repeat(50)}`)
+      expect(hint).not.toMatch(LONE_HALF)
+      expect(hint).toBe(`✅${'🚀'.repeat(39)}`)
+    })
+  })
 })
