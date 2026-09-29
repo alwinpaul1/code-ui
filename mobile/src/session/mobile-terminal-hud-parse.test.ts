@@ -269,3 +269,54 @@ describe('parseClaudeRunningShellCount', () => {
     expect(observation?.runningShellCount).toBe(4)
   })
 })
+
+// With no status line, the observation comes from Claude Code's own footer
+// once it warns that context is low. That branch dropped the footer's shell
+// count, and it ran only when "shift+tab to cycle" was on screen, which the
+// footers captured with a shell running do not paint (review, 2026-09-30).
+// The warning row is worded from the 2.1.266 binary's string table
+// (docs/mobile-agent-hud.md, 2026-09-09 night; no near-full session has been
+// captured), laid out as the test above reads it. Each footer is a capture.
+describe("Claude Code's own low-context warning over the footers it paints", () => {
+  const LOW = 'Context low (8% remaining) · Run /compact to compact & continue'
+
+  it('keeps the shell count the footer states while context is low', () => {
+    // 2.1.277, orca terminal read 2026-09-19 (mobile-terminal-queued-messages.test.ts).
+    expect(parseTerminalHudObservation([LOW, '  ⏵⏵ auto mode on · 1 shell · ← for agents'])).toMatchObject({
+      modelId: null,
+      context: { usedPercent: 92, usedLabel: null, windowLabel: null },
+      permissionMode: 'auto',
+      permissionModeSeen: 'auto',
+      runningShellCount: 1
+    })
+  })
+
+  it.each([
+    ['2.1.270 and 2.1.276 in manual mode (tmux)', '  ⏸ manual mode on · ← for agents', 'manual'],
+    ['2.1.278 at 46 columns, the hint cut short (tmux)', '  ⏵⏵ bypass permissions on (shift+tab to  ·', 'bypassPermissions']
+  ])('reads the warning over the footer %s paints without the whole hint', (_build, footer, mode) => {
+    const observation = parseTerminalHudObservation([LOW, footer])
+    expect(observation?.context?.usedPercent).toBe(92)
+    expect(observation?.permissionModeSeen).toBe(mode)
+    expect(observation).not.toHaveProperty('runningShellCount')
+  })
+
+  it('takes no context figure from the conversation above a footer that has no hint', () => {
+    // 2.1.270's composer and footer, tmux 2026-09-13 (mobile-terminal-sent-prompts.test.ts).
+    const rule = '─'.repeat(100)
+    const screen = ['⏺ The ring said context 54% a minute ago.', '', rule, '❯\u00a0', rule, '  ⏸ manual mode on · ← for agents']
+    expect(parseTerminalHudObservation(screen)).toBeNull()
+    expect(parseTerminalHudObservation([LOW, ...screen.slice(1)])?.context?.usedPercent).toBe(92)
+  })
+
+  it('stays silent when the warning has no footer under it, or only conversation', () => {
+    expect(parseTerminalHudObservation([LOW])).toBeNull()
+    expect(parseTerminalHudObservation([LOW, 'I would not use bypass permissions on prod.'])).toBeNull()
+  })
+
+  it('stays silent on a footer with a shell count but no figure, and on an empty screen', () => {
+    expect(parseTerminalHudObservation(['  ⏵⏵ auto mode on · 1 shell · ← for agents'])).toBeNull()
+    expect(parseTerminalHudObservation([])).toBeNull()
+    expect(parseTerminalHudObservation([''])).toBeNull()
+  })
+})

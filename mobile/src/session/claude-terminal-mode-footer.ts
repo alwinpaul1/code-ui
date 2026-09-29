@@ -31,12 +31,16 @@ function footerMode(phrase: string): RegExp {
   return new RegExp(`^\\s*(?:[⏵⏸▶]+\\s*)?${phrase}(?=\\s*$|\\s+·|\\s+\\(shift)`, 'i')
 }
 
-const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
+/** The modes whose footer row has been captured, in that row's shape. */
+const FOOTER_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
   [footerMode('manual mode on'), 'manual'],
   [footerMode('accept edits on'), 'acceptEdits'],
-  [/plan mode on/i, 'plan'],
   [footerMode('auto mode on'), 'auto'],
   [footerMode('bypass permissions on'), 'bypassPermissions']
+]
+const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
+  ...FOOTER_MODE_PATTERNS,
+  [/plan mode on/i, 'plan']
 ]
 
 /** How far up from the last painted row the footer can sit. Every capture
@@ -51,6 +55,15 @@ function claudeFooterRows(lines: readonly string[]): readonly string[] {
     end -= 1
   }
   return lines.slice(Math.max(0, end - FOOTER_ROWS), end)
+}
+
+/** Whether one of the captured footer rows is at the bottom of this screen.
+ *  Plan mode's bare phrase does not count: nothing on record says it is the
+ *  footer and not conversation. */
+export function hasClaudeModeFooter(lines: readonly string[]): boolean {
+  return claudeFooterRows(lines).some((row) =>
+    FOOTER_MODE_PATTERNS.some(([pattern]) => pattern.test(row))
+  )
 }
 
 /** The mode the footer states, or null when no footer row is on this screen.

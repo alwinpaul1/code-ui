@@ -1,4 +1,8 @@
-import { readTerminalPermissionMode, type TerminalPermissionMode } from './claude-terminal-mode-footer'
+import {
+  hasClaudeModeFooter,
+  readTerminalPermissionMode,
+  type TerminalPermissionMode
+} from './claude-terminal-mode-footer'
 
 // The footer's mode reader lives beside this parser; its callers import both from here.
 export { readTerminalPermissionMode, type TerminalPermissionMode }
@@ -213,7 +217,7 @@ const BARE_PERCENT = /(\d{1,3})%/
 
 export function parseTerminalHudContextWindow(
   line: string,
-  options: { allowBarePercent?: boolean } = {}
+  options: { allowBarePercent?: boolean; ownWarningOnly?: boolean } = {}
 ): TerminalHudContextWindow | null {
   for (const pattern of REMAINING_PATTERNS) {
     const match = pattern.exec(line)
@@ -224,6 +228,9 @@ export function parseTerminalHudContextWindow(
     if (Number.isFinite(left) && left >= 0 && left <= 100) {
       return { usedPercent: 100 - left, usedLabel: null, windowLabel: null }
     }
+  }
+  if (options.ownWarningOnly) {
+    return null
   }
   for (const pattern of options.allowBarePercent
     ? [...CONTEXT_PATTERNS, BARE_PERCENT]
@@ -378,9 +385,15 @@ export function parseTerminalHudObservation(
   // No status-line badge, but Claude Code's own footer is on screen: read the
   // context figure Claude Code paints itself once the window runs low. The
   // model then comes from Orca's hook (agentStatus.model), not from here.
-  if (lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line))) {
+  // The footer is known by its hint or by its mode row: the footers captured
+  // with a shell running, in manual mode, or at 46 columns paint no whole
+  // "shift+tab to cycle" (review, 2026-09-30). Over a footer known only by
+  // its row, only Claude Code's own warning is read: a "context 54%" above
+  // one may be conversation, and those footers were never read for a figure.
+  const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line))
+  if (hinted || hasClaudeModeFooter(lines)) {
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
-      const context = parseTerminalHudContextWindow(lines[index] ?? '')
+      const context = parseTerminalHudContextWindow(lines[index] ?? '', { ownWarningOnly: !hinted })
       if (context) {
         return {
           modelLabel: '',
@@ -389,7 +402,8 @@ export function parseTerminalHudObservation(
           context,
           ...activityField(lines),
           permissionMode: parseTerminalPermissionMode(lines),
-      permissionModeSeen: readTerminalPermissionMode(lines)
+          permissionModeSeen: readTerminalPermissionMode(lines),
+          ...runningShellCountField(lines)
         }
       }
     }
