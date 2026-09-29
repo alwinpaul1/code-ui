@@ -1,6 +1,7 @@
-// A session's own restart, an inherited claim, and a phone prompt the phone
-// never saw the lead take: the third review of the background rule
-// (native-chat-kept-session.ts, 4b09c9a8). Same harness as
+// The claim the phone's /clear passes on, a same-session boundary from a live
+// process, and how long a nested run keeps a phone follow-up it took: the
+// fourth review of the background rule (native-chat-kept-session.ts,
+// 95aa5588). Same harness as
 // native-chat-kept-session-gaps.test.ts; the listener cases feed Orca's real
 // vendored hook listener, and `feed` posts a hook the phone never renders (a
 // snapshot Orca coalesced away, or one sent while the phone was not watching).
@@ -88,7 +89,6 @@ const claudeSession = (id: string) => ({ key: 'session_id', id, transcriptPath: 
 const LEAD = '5f2d8c61-3b0e-4f7a-9c44-2e61d0a9b7c3'
 const NESTED = '3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6b'
 const CLEARED = '0c1d2e3f-4a5b-4c6d-8e7f-8091a2b3c4d5'
-const NEXT = '7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d'
 const TURN_END = 1790705085923
 const MINUTE = 60_000
 
@@ -106,19 +106,6 @@ const LEAD_WORKING: Status = {
   providerSession: claudeSession(LEAD)
 }
 const LEAD_BACKGROUND: Status = { ...LEAD_WORKING, workingMode: 'monitoring', toolName: undefined, lastAssistantMessage: 'Running.', updatedAt: TURN_END }
-const standIn = (at: number, extra: Status = {}): Status => ({
-  state: 'done',
-  prompt: '',
-  updatedAt: at,
-  stateStartedAt: at,
-  paneKey: PANE,
-  stateHistory: [],
-  agentType: 'claude',
-  tabId: 'tab-1',
-  terminalTitle: '✳ Dev server',
-  providerSession: claudeSession(LEAD),
-  ...extra
-})
 const sessionStart = (id: string, at: number): Status => ({
   state: 'done',
   prompt: '',
@@ -193,7 +180,9 @@ function harness() {
   }
 }
 
-describe('a claim to background work through a restart, a dialog and a /clear', () => {
+const SECOND_NESTED = '9d8c7b6a-5f4e-4d3c-8b2a-1f0e9d8c7b6a'
+
+describe('the claim a phone /clear passes on', () => {
   let h = harness()
   beforeEach(() => {
     subscribed.length = 0
@@ -208,71 +197,44 @@ describe('a claim to background work through a restart, a dialog and a /clear', 
     vi.restoreAllMocks()
   })
 
-  // 4b09c9a8 kept `background` through a session's own boundary. The lead
-  // left holding a shell (the exit reads as the stand-in, Orca's PTY last
-  // resort) and came back as the SAME session (`claude --resume <id>`): its
-  // SessionStart did not end the dead claim, so a /clear typed at the desk
-  // before any prompt waited. A session's own boundary is its process
-  // restarting: its claim ends.
-  it('follows a desk /clear after the lead came back as the same session following an exit that held background work', () => {
-    h.show(LEAD_WORKING)
-    h.show(LEAD_BACKGROUND, TURN_END)
-    h.show(standIn(TURN_END + 5_000, { terminalHandle: 'term-1', worktreeId: 'code-ui::main' }), TURN_END)
-    expect(h.show(sessionStart(LEAD, TURN_END + 20_000))).toBe(LEAD)
-    expect(h.show(sessionStart(CLEARED, TURN_END + 40_000))).toBe(CLEARED)
-  })
-
-  // The guard itself, as a unit: a dialog note never ends a claim, a
-  // boundary ends a claim the session made itself and keeps one it inherited
-  // from the phone's /clear.
-  it('ends a claim on the session’s own boundary, and keeps it through a dialog or an inherited claim’s boundary', () => {
-    act(() => noteTurn('claude', LEAD, 'background', true, false, TURN_END, TURN_END))
-    act(() => noteTurn('claude', LEAD, 'ended', false, false, null, TURN_END + 10_000))
-    expect(readTurn('claude', LEAD)?.turn).toBe('background')
-    act(() => noteTurn('claude', LEAD, 'ended', false, false, null, TURN_END + 20_000, { boundary: true }))
-    expect(readTurn('claude', LEAD)?.turn).toBe('ended')
-    act(() => noteTurn('claude', CLEARED, 'background', false, false, TURN_END, TURN_END, { inherited: true }))
-    act(() => noteTurn('claude', CLEARED, 'ended', false, false, null, TURN_END + 30_000, { boundary: true }))
-    expect(readTurn('claude', CLEARED)?.turn).toBe('background')
-  })
-
-  // A background agent's permission prompt (Orca's child-induced `waiting`, on
-  // the lead's session) keeps the claim.
-  it('keeps the lead held while one of its background agents waits on a permission prompt', () => {
-    h.show(LEAD_WORKING)
-    h.show({ ...LEAD_BACKGROUND, workingMode: undefined }, TURN_END)
-    h.show({ ...LEAD_WORKING, state: 'waiting', toolName: 'Bash', updatedAt: TURN_END + 60_000 })
-    expect(h.show(sessionStart(NESTED, TURN_END + 70_000))).toBe(LEAD)
-  })
-
-  // A limit, pinned: the session the phone's /clear started inherits the
-  // lead's claim. When that work is gone before the new session runs a turn
-  // (and Orca, whose SessionStart dropped the pane's inventory, never says
-  // so), a second /clear at the desk waits for the new session's second turn,
-  // the beacon, a phone rule or the 30 minutes; the cleared session's own
-  // first working row ends the claim sooner.
-  it('waits on a desk /clear made after the phone’s /clear before any turn, once the lead’s background work is gone (a limit)', () => {
+  // 1a (green): the phone-reset path marks only the new session; the M2
+  // re-render (the cleared session's own boundary, now kept) keeps the mark;
+  // the new session's own first turn clears it.
+  it('inherits into the cleared session only, keeps it through its own boundary re-render, clears it at its first turn', () => {
     h.show(LEAD_WORKING)
     h.show(LEAD_BACKGROUND, TURN_END)
     act(() => notePhoneTerminalSend('term-1', '/clear', TURN_END + 10_000))
     expect(h.show(sessionStart(CLEARED, TURN_END + 10_500))).toBe(CLEARED)
-    // (the dev server is stopped; nothing reaches Orca about it)
-    expect(h.show(sessionStart(NEXT, TURN_END + 5 * MINUTE))).toBe(CLEARED)
-    expect(h.show(turnOf(NEXT, 'working', TURN_END + 31 * MINUTE))).toBe(NEXT)
+    expect(readTurn('claude', CLEARED)).toMatchObject({ turn: 'background', inherited: true })
+    expect(readTurn('claude', LEAD)?.inherited ?? false).toBe(false)
+    expect(h.show(sessionStart(NESTED, TURN_END + 60_000))).toBe(CLEARED)
+    h.show(turnOf(CLEARED, 'working', TURN_END + 90_000))
+    expect(readTurn('claude', CLEARED)).toMatchObject({ turn: 'working', inherited: false })
   })
 
-  // A stamp-less claim is timed from the first status that made it, and
-  // repeating the same claim with later rows does not move that anchor.
-  it('times a stamp-less claim from its first status, whatever later rows repeat it', () => {
+  // 1b (red, narrow): the mark survives a `sameClaim` repeat that is the
+  // session's OWN claim when both stamps are null (a host that carries no
+  // turn end on the tab, and a phone that saw none of the session's working
+  // rows between): the session's own restart then keeps a claim it made.
+  it('drops the inherited mark when the session makes its own claim, even with no stamp to tell the two apart', () => {
+    act(() => noteTurn('claude', CLEARED, 'background', false, false, null, TURN_END, { inherited: true }))
+    act(() => noteTurn('claude', CLEARED, 'background', true, false, null, TURN_END + 10 * MINUTE))
+    expect(readTurn('claude', CLEARED)?.inherited ?? false).toBe(false)
+  })
+
+  // 2b (green): a desk /clear while the lead holds work still waits for the
+  // new session to hold the work itself.
+  it('a desk /clear while the lead holds work still waits for the new session’s own held Stop', () => {
     h.show(LEAD_WORKING)
-    h.show(LEAD_BACKGROUND)
-    h.show({ ...LEAD_BACKGROUND, updatedAt: TURN_END + 20 * MINUTE })
-    h.show({ ...LEAD_BACKGROUND, updatedAt: TURN_END + 29 * MINUTE })
-    expect(h.show(turnOf(CLEARED, 'working', TURN_END + 31 * MINUTE))).toBe(CLEARED)
+    h.show(LEAD_BACKGROUND, TURN_END)
+    expect(h.show(sessionStart(CLEARED, TURN_END + 20_000))).toBe(LEAD)
+    expect(h.show(turnOf(CLEARED, 'working', TURN_END + 21_000))).toBe(LEAD)
+    const held = turnOf(CLEARED, 'working', TURN_END + 40_000, { workingMode: 'monitoring', lastAssistantMessage: 'Done.' })
+    expect(h.show(held, TURN_END + 40_000)).toBe(CLEARED)
   })
 })
 
-describe('the phone’s follow-up through Orca’s per-pane prompt, when the phone missed the lead taking it', () => {
+describe('same-session boundaries and a taken follow-up, through Orca’s real hook listener', () => {
   let renderer: ReactTestRenderer | null = null
   let clock = TURN_END
   const clientStub = { sendRequest: vi.fn(), getState: () => 'connected' as const, notifyForeground: vi.fn() }
@@ -353,7 +315,7 @@ describe('the phone’s follow-up through Orca’s per-pane prompt, when the pho
     vi.restoreAllMocks()
   })
 
-  function leadHoldsAShellAndANestedRunWithASubagentStarts(state: State) {
+  function leadEndsHoldingAShell(state: State) {
     post(state, LEAD, 'SessionStart', { source: 'startup' })
     post(state, LEAD, 'UserPromptSubmit', { prompt: 'run the review script in the background' })
     post(state, LEAD, 'PreToolUse', { tool_name: 'Bash', tool_input: { command: './review.sh', run_in_background: true }, tool_use_id: 't1' })
@@ -363,45 +325,94 @@ describe('the phone’s follow-up through Orca’s per-pane prompt, when the pho
       background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: './review.sh' }],
       session_crons: []
     })
-    // The script's `claude -p` hands its work to a subagent.
+  }
+
+  // 2c (red, narrow and conditional): `/resume` of the SAME session inside the
+  // live process. Orca's SessionStart handler drops the pane's inventory and
+  // lands a boundary for the session; the phone reads it as the session's own
+  // restart and ends the claim. If Claude kept the work (as it does through
+  // /clear), the script's next `claude -p` takes the chat. 4b09c9a8 kept the
+  // claim through that boundary.
+  // A limit, pinned: a same-session boundary from a live process (an
+  // in-process /resume of the lead itself) reads like the lead restarting
+  // after an exit (`claude --resume <id>`), the likelier of the two, and ends
+  // its claim; if Claude keeps the work through it, a nested run started by
+  // that work is then followed. Unverified whether Claude Code 2.1.284 keeps
+  // backgrounded tasks through an in-process /resume, or lets one resume the
+  // current session at all.
+  it('follows a nested run after an in-process /resume of the lead itself, if its background work ran on through it (a limit)', () => {
+    const state = createHookListenerState()
+    leadEndsHoldingAShell(state)
+    const resumed = post(state, LEAD, 'SessionStart', { source: 'resume' })
+    expect(resumed.payload?.sessionBoundary).toBe(true)
+    expect(post(state, NESTED, 'SessionStart', { source: 'startup' }).session).toBe(NESTED)
+  })
+
+  // 2d (green, disproves a suspicion): a manual /compact of the lead is no
+  // other same-session boundary here. With Orca's inventory intact it sends
+  // no row for the compact; after a nested run it drops the completion
+  // outright, since the pane's last row names another session
+  // (canAcceptClaudeCompactCompletion).
+  it('a manual /compact of the lead after a nested run lands no boundary, so the lead stays held', () => {
+    const state = createHookListenerState()
+    leadEndsHoldingAShell(state)
+    expect(post(state, LEAD, 'PostCompact', { trigger: 'manual', prompt_id: '11111111-1111-4111-8111-111111111111' }).payload).toBeNull()
+    expect(post(state, NESTED, 'SessionStart', { source: 'startup' }).session).toBe(LEAD)
+    expect(post(state, NESTED, 'UserPromptSubmit', { prompt: 'list the risky hunks' }).session).toBe(LEAD)
+    expect(post(state, NESTED, 'Stop', { last_assistant_message: 'Two.', background_tasks: [], session_crons: [] }).session).toBe(LEAD)
+    expect(post(state, LEAD, 'PostCompact', { trigger: 'manual', prompt_id: '22222222-2222-4222-8222-222222222222' }).payload).toBeNull()
+    expect(post(state, SECOND_NESTED, 'SessionStart', { source: 'startup' }).session).toBe(LEAD)
+  })
+
+  // 3b (red): the pinned limit's reach. When the lead answers the follow-up
+  // with no tool (a text-only reply), its next row is its Stop, which Orca
+  // holds `working` (the nested run's subagent is on the pane's roster) and
+  // stamps: the phone notes `background`, not a second turn, so nothing
+  // brings the chat back while the nested run lasts. The lead's reply to the
+  // phone's own follow-up is off the screen: the original symptom.
+  // A limit, pinned: when the lead answers the follow-up a nested subagent
+  // row took WITHOUT a tool, its next row is its Stop, which Orca holds
+  // `working` for the nested run's subagent on the pane's roster and stamps:
+  // a claim, not a second turn. The chat stays on the nested run until that
+  // run ends and the lead posts again.
+  it('stays on the nested run when the lead answers the phone’s follow-up without a tool, after a nested subagent row took it (a limit)', () => {
+    const state = createHookListenerState()
+    leadEndsHoldingAShell(state)
     expect(post(state, NESTED, 'SessionStart', { source: 'startup' }).session).toBe(LEAD)
     expect(post(state, NESTED, 'UserPromptSubmit', { prompt: 'list the risky hunks in this diff' }).session).toBe(LEAD)
     expect(post(state, NESTED, 'PreToolUse', { tool_name: 'Task', tool_input: { description: 'hunks' }, tool_use_id: 'n1' }).session).toBe(LEAD)
     expect(post(state, NESTED, 'SubagentStart', { agent_id: 'sub-1', agent_type: 'general-purpose' }).session).toBe(LEAD)
-  }
-
-  // The lead's own turn-start row claims the phone's follow-up,
-  // and the nested run's subagent row that carries it after (Orca keeps the
-  // prompt and the tool snapshot per pane, and the lead's prompt reset the
-  // snapshot) cannot take it.
-  it('the lead’s own turn-start row claims the follow-up, so the nested subagent row carrying it does not move the chat', () => {
-    const state = createHookListenerState()
-    leadHoldsAShellAndANestedRunWithASubagentStarts(state)
-    const followUp = 'also check the migration tests'
+    const followUp = 'what did the review find so far?'
     act(() => notePhoneTerminalSend('term-1', followUp, clock + 200))
-    expect(post(state, LEAD, 'UserPromptSubmit', { prompt: followUp }).session).toBe(LEAD)
-    const row = post(state, NESTED, 'PreToolUse', { agent_id: 'sub-1', agent_type: 'general-purpose', tool_name: 'Grep', tool_input: { pattern: 'x' }, tool_use_id: 's1' })
-    expect(row.payload?.prompt).toBe(followUp)
-    expect(row.payload?.toolName).toBeUndefined()
-    expect(row.session).toBe(LEAD)
+    feed(state, LEAD, 'UserPromptSubmit', { prompt: followUp })
+    expect(post(state, NESTED, 'PreToolUse', { agent_id: 'sub-1', agent_type: 'general-purpose', tool_name: 'Grep', tool_input: { pattern: 'x' }, tool_use_id: 's1' }).session).toBe(NESTED)
+    const leadStop = post(state, LEAD, 'Stop', {
+      last_assistant_message: 'So far: two risky hunks.',
+      background_tasks: [{ id: 'bsh1', type: 'shell', status: 'running', description: './review.sh' }],
+      session_crons: []
+    })
+    expect(leadStop.payload?.state).toBe('working')
+    expect(leadStop.session).toBe(NESTED)
   })
 
-  // A limit, pinned: the same when the phone never rendered the lead's
-  // turn-start row (Orca coalesced it with the nested row inside its 50–250 ms
-  // window, or the link was down while the lead took it). The send is
-  // unclaimed, the nested subagent row has the turn-start shape (working, no
-  // tool: the lead's UserPromptSubmit reset the pane's tool snapshot, and a
-  // subagent's own tool event never writes it) and the phone's prompt, and it
-  // claims the send. Until the next lead-level tool row on the pane.
-  it('follows a nested run when the only row the phone saw carrying its follow-up is that run’s subagent row (a limit)', () => {
+  // 3 (green, disproves a suspicion): when the lead answers with a tool, its
+  // first tool row is a second turn of the lead's (it finished the turn that
+  // started the work), and the chat comes back there.
+  it('comes back to the lead at its next tool row after a nested subagent row took the phone’s follow-up', () => {
     const state = createHookListenerState()
-    leadHoldsAShellAndANestedRunWithASubagentStarts(state)
+    leadEndsHoldingAShell(state)
+    expect(post(state, NESTED, 'SessionStart', { source: 'startup' }).session).toBe(LEAD)
+    expect(post(state, NESTED, 'UserPromptSubmit', { prompt: 'list the risky hunks in this diff' }).session).toBe(LEAD)
+    expect(post(state, NESTED, 'PreToolUse', { tool_name: 'Task', tool_input: { description: 'hunks' }, tool_use_id: 'n1' }).session).toBe(LEAD)
+    expect(post(state, NESTED, 'SubagentStart', { agent_id: 'sub-1', agent_type: 'general-purpose' }).session).toBe(LEAD)
     const followUp = 'also check the migration tests'
     act(() => notePhoneTerminalSend('term-1', followUp, clock + 200))
     feed(state, LEAD, 'UserPromptSubmit', { prompt: followUp })
-    const row = post(state, NESTED, 'PreToolUse', { agent_id: 'sub-1', agent_type: 'general-purpose', tool_name: 'Grep', tool_input: { pattern: 'x' }, tool_use_id: 's1' })
-    expect(row.payload?.state).toBe('working')
-    expect(row.payload?.toolName).toBeUndefined()
-    expect(row.session).toBe(NESTED)
+    expect(post(state, NESTED, 'PreToolUse', { agent_id: 'sub-1', agent_type: 'general-purpose', tool_name: 'Grep', tool_input: { pattern: 'x' }, tool_use_id: 's1' }).session).toBe(NESTED)
+    // The lead answers the follow-up: its first tool row, the "next lead-level tool row".
+    const leadTool = post(state, LEAD, 'PreToolUse', { tool_name: 'Read', tool_input: { file_path: '/tmp/migrations.test.ts' }, tool_use_id: 'l2' })
+    expect(leadTool.payload?.toolName).toBe('Read')
+    expect(leadTool.session).toBe(LEAD)
   })
 })
+

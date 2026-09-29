@@ -111,7 +111,9 @@ export function noteTurn(
     secondTurn: previous?.secondTurn === true || (previous?.finished === true && turn === 'working'),
     stamp,
     at: sameClaim ? (previous.at ?? at) : at,
-    inherited: turn === 'background' && (inherited || (sameClaim && previous.inherited === true))
+    // A Stop is the session's own word: a claim it makes itself is no longer
+    // the inherited one, stamp or none (the inherited note is no finished turn).
+    inherited: turn === 'background' && (inherited || (sameClaim && previous.inherited === true && !finishedOne))
   }
   if (
     sameClaim &&
