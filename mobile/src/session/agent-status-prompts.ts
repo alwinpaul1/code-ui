@@ -128,6 +128,19 @@ function statusReadsPrompt(status: AgentStatusPromptSource | undefined): boolean
   )
 }
 
+/**
+ * Whether a prompt on the tab status may be Orca's cut of a longer one. Orca
+ * cuts the field at AGENT_STATUS_MAX_FIELD_LENGTH characters, one fewer when
+ * the cut would leave half an emoji (`truncatePreservingSurrogates`,
+ * src/shared/agent-status-field-normalization.ts). A copy cut at 199 read as
+ * whole matched neither the phone's send of the message nor its row, and the
+ * message was drawn twice. A whole prompt of exactly 199 characters is read
+ * as cut too, which only lets it match a row or send that goes on past it.
+ */
+export function statusCopyMayBeCut(text: string): boolean {
+  return text.length >= AGENT_STATUS_MAX_FIELD_LENGTH - 1
+}
+
 export function observeAgentStatusPrompt(
   state: AgentStatusPromptState,
   sessionKey: string | null,
@@ -200,7 +213,7 @@ export function observeAgentStatusPrompt(
   // an XML tag. The transcript row is drawn as a peer notice; an echo here
   // would be the wrapper, drawn twice (2026-09-20). Seen, not echoed.
   if (isKnownHarnessInjectedUserTurnText(text)) {
-    const message = parseStatusSubagentPreview(text, text.length >= AGENT_STATUS_MAX_FIELD_LENGTH)
+    const message = parseStatusSubagentPreview(text, statusCopyMayBeCut(text))
     // When the phone first read it, which is what pairs it with the screen's
     // row of the same message (screen-peer-notices.ts). Not on a first read
     // (a launch, a return to the tab, a reconnect): that copy can be minutes
@@ -234,7 +247,7 @@ export function observeAgentStatusPrompt(
     const held: DesktopPrompt = {
       nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
       text,
-      ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
+      ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
       heldBack: true,
       ...(typeof run === 'object' && run !== null ? { ifHarnessStarted: run } : {}),
       seenAt: Date.now()
@@ -266,7 +279,7 @@ export function observeAgentStatusPrompt(
   const prompt: DesktopPrompt = {
     nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,
-    ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
+    ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).

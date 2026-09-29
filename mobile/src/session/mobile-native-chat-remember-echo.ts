@@ -5,7 +5,7 @@ import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { isPeerRowHead } from './mobile-terminal-peer-notices'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
-import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
+import { statusCopyMayBeCut } from './agent-status-prompts'
 import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import {
   appendMobileNativeChatPending,
@@ -228,10 +228,7 @@ function preferredStoredReading(
   }
   const [kept, dropped] = verdict === 'a' ? [a, b] : [b, a]
   const goesOn = storedKey(dropped.text).length > storedKey(kept.text).length && !storedKey(kept.text).endsWith('…')
-  // Orca cuts the status field at AGENT_STATUS_MAX_FIELD_LENGTH characters,
-  // one fewer when the cut would leave half an emoji
-  // (truncatePreservingSurrogates): a copy that long may be a cut.
-  const whole = kept.text.length < AGENT_STATUS_MAX_FIELD_LENGTH - 1
+  const whole = !statusCopyMayBeCut(kept.text)
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
   return goesOn && whole && asSent ? null : verdict
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { MIDTURN_HANDBACK_STATUS_PROMPT } from './fixtures/claude-midturn-queued-commands-2.1.283'
 import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
-import { AGENT_STATUS_MAX_FIELD_LENGTH } from '../../../src/shared/agent-status-field-normalization'
+import { AGENT_STATUS_MAX_FIELD_LENGTH, normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import { EMPTY_AGENT_STATUS_PROMPTS, observeAgentStatusPrompt, type AgentStatusPromptSource } from './agent-status-prompts'
 
 // 2026-09-19: the user wanted the transcript-tail terminal off their desktop
@@ -75,6 +75,16 @@ describe('desktop prompts read off the tab status', () => {
     expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '' }).prompts).toEqual([])
     expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: '   ' }).prompts).toEqual([])
     expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', undefined).prompts).toEqual([])
+  })
+
+  // Final review of fix/midturn-prompt-at-end: Orca cuts one character short
+  // when the cut would leave half an emoji (mobile-chat-status-copy-cut-before-emoji.test.ts).
+  it('marks a prompt the hook cut one short of its field cap, before an emoji', () => {
+    const cutBeforeEmoji = normalizePromptField(`${'word '.repeat(39)}abc \u{1F600} and the rest`)
+    expect(cutBeforeEmoji).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH - 1)
+    const state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: cutBeforeEmoji })
+    expect(state.prompts[0]).toMatchObject({ text: cutBeforeEmoji, cut: true })
+    expect(observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: 'x'.repeat(198) }).prompts[0]!.cut).toBeUndefined()
   })
 
   it('keeps a bounded tail of prompts', () => {
