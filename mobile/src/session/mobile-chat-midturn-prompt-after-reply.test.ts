@@ -98,6 +98,8 @@ const SECOND_SEND =
  *  earlier mid-turn messages, 05:30:40.761). */
 const EARLIER = 'an earlier message sent during the turn'
 const OPENING = 'the prompt that opened the turn'
+/** Its row, line 6, 05:08:00.467: on a page the chat has not loaded. */
+const OPENING_ROW = 'd01807a3-bea6-4f29-8a97-bc9a106d86ae'
 const NEXT = 'Yes do it and open a pr'
 
 const text = (id: string, clock: string): NativeChatMessage => ({
@@ -207,14 +209,19 @@ function standIn(stamped: string): NonNullable<AgentStatusPromptSource> {
 function statusReader() {
   let renderer: ReactTestRenderer | null = null
   let prompts: DesktopPrompt[] = []
-  function Reader({ status, connected, live }: { status: AgentStatusPromptSource; connected: boolean; live: boolean }) {
-    prompts = useAgentStatusPrompts(SESSION, status, undefined, connected, live).prompts
+  function Reader({ status, connected, live, shown }: { status: AgentStatusPromptSource; connected: boolean; live: boolean; shown: boolean }) {
+    // The controller hands the reader no session while the tab shows its
+    // terminal (use-mobile-native-chat-controller.ts).
+    prompts = useAgentStatusPrompts(shown ? SESSION : null, status, undefined, connected, live).prompts
     return null
   }
   return {
-    read(status: AgentStatusPromptSource, { connected = true, live = true }: { connected?: boolean; live?: boolean } = {}): DesktopPrompt[] {
+    read(
+      status: AgentStatusPromptSource,
+      { connected = true, live = true, shown = true }: { connected?: boolean; live?: boolean; shown?: boolean } = {}
+    ): DesktopPrompt[] {
       act(() => {
-        const element = createElement(Reader, { status, connected, live })
+        const element = createElement(Reader, { status, connected, live, shown })
         if (renderer) {
           renderer.update(element)
         } else {
@@ -469,6 +476,57 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     expect(second.at).toHaveLength(1)
     expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
     reader.unmount()
+    unmount()
+  })
+
+  // The two messages differ only by the first's last word, and each is a
+  // message of its own. The chat keeps what it drew of them in its witness
+  // memory, which is all it draws from once its reader starts over and the
+  // status carries only the second (the tab's terminal looked at, then the
+  // chat again). That memory took the first for the second with the screen's
+  // rows glued on, and kept only the second.
+  it('keeps both of two messages that differ by a last word, each where it was sent, after the terminal is looked at', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await watchTheTurn(reader)
+    expectSentWhereItArrived()
+    vi.setSystemTime(at('05:47:30.000'))
+    reader.read(done(SECOND_SEND), { shown: false })
+    const prompts = reader.read(done(SECOND_SEND))
+    await showAt('05:47:31.000', WHOLE_TURN, prompts, false)
+    expectSentWhereItArrived()
+    reader.unmount()
+    unmount()
+  })
+
+  // The same message by the other copy the phone can hold, the prompt hook's
+  // beacon (agent-hud-launch-args.ts; Claude Code only, a Codex tab's beacon
+  // carries no prompt). The beacon names the row the message was typed after
+  // (`at=`), and the hook skips every record with `"tool_use"` in it. Claude
+  // Code 2.1.284 writes each text record of a turn that goes on to a tool
+  // with `"stop_reason":"tool_use"`, so a message sent mid-turn names the
+  // last row of a finished turn: here the prompt that opened this one (line
+  // 6), on a page the chat has not loaded. The copy waits for that row, drawn
+  // meanwhile where it was first seen. use-desktop-prompt-echoes.ts alone
+  // settles it on the tail of its 30th reading, which with the phone asleep
+  // through the turn is the last reply; the chat keeps it where it was first
+  // seen because the witness memory stores that place and draws it instead.
+  // This passed before the fixes above and pins that it still does.
+  it('keeps a beaconed mid-turn message where it was first seen when the row it names never loads', async () => {
+    agent = 'claude'
+    vi.setSystemTime(at('05:36:35.000'))
+    const beaconed: DesktopPrompt = { nonce: '48213', text: SECOND_SEND, anchorId: OPENING_ROW, seenAt: at('05:36:35.000') }
+    await showAt('05:36:35.100', BEFORE_SECOND, [beaconed])
+    // The phone wakes after the turn with every row in, and the chat is read
+    // again on every beat.
+    for (let beat = 0; beat < 20; beat += 1) {
+      await showAt(`05:47:${String(10 + beat).padStart(2, '0')}.000`, WHOLE_TURN, [beaconed], false)
+    }
+    const rows = drawn(frames.at(-1)!)
+    const second = where(SECOND_SEND)
+    expect(second.at).toHaveLength(1)
+    expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
+    expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
     unmount()
   })
 

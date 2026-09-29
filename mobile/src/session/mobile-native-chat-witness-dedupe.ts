@@ -94,13 +94,18 @@ function stubStem(key: string): string | null {
   return key.endsWith('…') ? key.slice(0, -1).trimEnd() : null
 }
 
-/** Drop every reading another reading in the list beats. Keeps order. */
-export function dedupeWitnessReadings<T>(items: readonly T[], text: (item: T) => string): T[] {
+/** Drop every reading another reading in the list beats. Keeps order.
+ *  `prefer` decides a pair; by default, by their words alone. */
+export function dedupeWitnessReadings<T>(
+  items: readonly T[],
+  text: (item: T) => string,
+  prefer: (a: T, b: T) => 'a' | 'b' | null = (a, b) => preferredWitnessReading(text(a), text(b))
+): T[] {
   const out: T[] = []
   for (const item of items) {
     let beaten = false
     for (let index = 0; index < out.length; index += 1) {
-      const verdict = preferredWitnessReading(text(out[index] as T), text(item))
+      const verdict = prefer(out[index] as T, item)
       if (verdict === 'a') {
         beaten = true
         break

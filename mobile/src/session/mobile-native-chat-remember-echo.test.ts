@@ -4,7 +4,8 @@ import {
   acceptOwnSendInPending,
   echoMemoryId,
   rememberEchoInPending,
-  sweepWitnessedEchoes
+  sweepWitnessedEchoes,
+  withoutWitnessesOfSends
 } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import { SUBAGENT_HANDBACK_PROMPT, SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
@@ -59,6 +60,89 @@ describe('remembered readings of one message', () => {
       { id: echoMemoryId(clean), text: clean, expectedOccurrence: 1, baselineTailMessageId: 'a1', baselineResolved: true }
     ]
     expect(sweepWitnessedEchoes(stored).map((i) => i.text)).toEqual(['a phone send', clean])
+  })
+})
+
+// Device, 2026-09-29 (Claude Code 2.1.284): two messages sent at the desk 33 s
+// apart, the second the first less its last word. Only a queue-box reading
+// can have the screen's rows glued on; the hook's copies are the words as
+// sent, so the longer one is a message of its own, not the shorter one glued
+// (mobile-chat-midturn-prompt-after-reply.test.ts).
+describe('two hook copies whose words differ by a last word', () => {
+  const first =
+    'Password changes now end only password sessions. Next, setting up your own birth-date sign-in: it will now end your app sessions but keep your Google web session. Whats this issue'
+  const second =
+    'Password changes now end only password sessions. Next, setting up your own birth-date sign-in: it will now end your app sessions but keep your Google web session. Whats this'
+  const stored = (id: string, text: string, anchor: string) => ({
+    id,
+    text,
+    expectedOccurrence: 1,
+    baselineTailMessageId: anchor,
+    baselineResolved: true
+  })
+
+  it('are stored as two messages, in either order', () => {
+    const both = rememberEchoInPending(
+      rememberEchoInPending({}, 'k', 'desk-status:s:1', first, 'a1', [], 'd'),
+      'k',
+      'desk-status:s:2',
+      second,
+      'a2',
+      [],
+      'd'
+    )
+    expect(both.k!.map((item) => [item.id, item.baselineTailMessageId])).toEqual([
+      ['desk-status:s:1', 'a1'],
+      ['desk-status:s:2', 'a2']
+    ])
+    const reversed = rememberEchoInPending(
+      rememberEchoInPending({}, 'k', 'desk-status:s:2', second, 'a2', [], 'd'),
+      'k',
+      'desk-status:s:1',
+      first,
+      'a1',
+      [],
+      'd'
+    )
+    expect(reversed.k!.map((item) => item.id)).toEqual(['desk-status:s:2', 'desk-status:s:1'])
+  })
+
+  it('are both restored, and a phone send of the shorter words keeps the longer message', () => {
+    expect(sweepWitnessedEchoes([stored('desk-status:s:1', first, 'a1'), stored('desk-status:s:2', second, 'a2')]).map((item) => item.id)).toEqual([
+      'desk-status:s:1',
+      'desk-status:s:2'
+    ])
+    const send = { ...stored('pending-1', second, 'a2'), sentAt: 1_000 }
+    expect(withoutWitnessesOfSends([{ ...stored('desk-status:s:1', first, 'a1'), witnessedAt: 2_000 }], [send]).map((item) => item.id)).toEqual([
+      'desk-status:s:1'
+    ])
+  })
+
+  it('still takes a queue-box reading with rows glued on, or a stub, for the message it reads', () => {
+    const glued = `${second} Running 1 shell command…`
+    const withHook = rememberEchoInPending({}, 'k', 'desk-status:s:2', second, 'a2', [], 'd')
+    expect(rememberEchoInPending(withHook, 'k', echoMemoryId(glued), glued, 'a2', [], 'd')).toBe(withHook)
+    expect(rememberEchoInPending(withHook, 'k', echoMemoryId('Password changes now end only…'), 'Password changes now end only…', 'a2', [], 'd')).toBe(withHook)
+    // The box's first row of a send that wrapped, read with no `…`: that send.
+    const send = { ...stored('pending-1', first, 'a1'), sentAt: 1_000 }
+    const firstRow = 'Password changes now end only password sessions. Next, setting up your own birth-date sign-in:'
+    expect(withoutWitnessesOfSends([{ ...stored(echoMemoryId(firstRow), firstRow, 'a1'), witnessedAt: 2_000 }], [send])).toEqual([])
+  })
+
+  // The tab status cuts a prompt at 200 characters, so a hook copy that
+  // fills the field may be the cut of a longer one: still one message.
+  it('still takes a copy that fills the tab status field for the start of the longer copy', () => {
+    const long = `${'word '.repeat(40)}and the rest of it`
+    const cut = long.slice(0, 200)
+    expect(cut).toHaveLength(200)
+    const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1', cut, 'a1', [], 'd')
+    expect(rememberEchoInPending(withCut, 'k', 'desk-4242', long, 'a1', [], 'd')).toBe(withCut)
+  })
+
+  // Degenerate: one copy alone, and the empty store.
+  it('stores one copy alone, and restores an empty store as empty', () => {
+    expect(rememberEchoInPending({}, 'k', 'desk-status:s:1', first, 'a1', [], 'd').k!.map((item) => item.id)).toEqual(['desk-status:s:1'])
+    expect(sweepWitnessedEchoes([])).toEqual([])
   })
 })
 
