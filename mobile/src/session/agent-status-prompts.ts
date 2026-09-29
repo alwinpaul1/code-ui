@@ -44,6 +44,9 @@ export type AgentStatusPromptSource = {
   stateHistory?: readonly { state: string; prompt?: string; startedAt?: number }[] | null
   /** The session the row's last hook event came from (Claude `session_id`). */
   providerSession?: { id: string } | null
+  /** Set on the row Orca lands for a SessionStart (startup, resume, clear):
+   *  the pane's prompt was reset. */
+  sessionBoundary?: boolean | null
 } | null
 
 export type AgentStatusPromptState = {
@@ -54,10 +57,12 @@ export type AgentStatusPromptState = {
    *  while the chat watched. A missing status is not a reading. */
   read: boolean
   /** The last prompt text seen, so a status ping that repeats it (tool
-   *  events keep the field) does not become a second bubble. */
+   *  events keep the field) does not become a second bubble. A status with
+   *  no prompt leaves it as it was. */
   last: string | null
-  /** The `updatedAt` of the last status read. A prompt first seen on the
-   *  first read after a reconnect came after it. */
+  /** The `updatedAt` of the last status read that said what prompt the pane
+   *  had: one carrying a prompt, or one saying it had none (statusReadsPrompt).
+   *  A prompt first seen on the first read after a reconnect came after it. */
   readAt?: number
   prompts: readonly DesktopPrompt[]
   /** The subagent messages the status carried, in the order it did: never
@@ -87,6 +92,55 @@ const PROMPT_CAP = 64
  *  from the beacon's copy of the same submission (desktop-prompt-own-sends.ts). */
 export const STATUS_PROMPT_NONCE_PREFIX = 'status:'
 
+/** Whether a tab status carries a prompt. */
+function statusCarriesPrompt(
+  status: AgentStatusPromptSource | undefined
+): status is NonNullable<AgentStatusPromptSource> & { prompt: string } {
+  return typeof status?.prompt === 'string' && status.prompt.trim().length > 0
+}
+
+/**
+ * Whether a tab status says anything about the pane's prompt: one that
+ * carries a prompt, or one that says the pane has none. That is the row Orca
+ * lands for a SessionStart (`sessionBoundary`), and a hook row with a history
+ * of its own on a pane whose cached prompt is empty (after startup, resume or
+ * clear, in a turn a teammate's message started). Not a tab snapshot with no
+ * status, and not Orca's stand-in for a hook row it will not use:
+ * `prompt: ''`, `stateHistory: []`, working, blocked or done as the terminal
+ * title says, never a session boundary (`buildTitleOnlyStatus` in
+ * runtime-mobile-agent-status-projection.ts, runtime-mobile-agent-status-builder.ts,
+ * the idle-title branch of runtime-mobile-session-projection.ts, origin/main
+ * 8d6fec597b; see observeAgentStatusPrompt).
+ *
+ * What it cannot tell: Orca's headless builder, and its PTY builder when the
+ * renderer published no status, send live hook rows with no history, so
+ * there a teammate's turn's rows with no prompt read as the stand-in. After a
+ * SessionStart the phone read, that costs nothing (the boundary did the
+ * reset); with that row missed, the same words sent again mid-turn in such a
+ * turn are taken for the prompt read before and not drawn. Taking every such
+ * row as a reset instead would draw a second copy of a message after each
+ * long tool call, when Orca's title stands in mid-turn.
+ */
+function statusReadsPrompt(status: AgentStatusPromptSource | undefined): boolean {
+  return (
+    statusCarriesPrompt(status) ||
+    (status != null && (status.sessionBoundary === true || (status.stateHistory?.length ?? 0) > 0))
+  )
+}
+
+/**
+ * Whether a prompt on the tab status may be Orca's cut of a longer one. Orca
+ * cuts the field at AGENT_STATUS_MAX_FIELD_LENGTH characters, one fewer when
+ * the cut would leave half an emoji (`truncatePreservingSurrogates`,
+ * src/shared/agent-status-field-normalization.ts). A copy cut at 199 read as
+ * whole matched neither the phone's send of the message nor its row, and the
+ * message was drawn twice. A whole prompt of exactly 199 characters is read
+ * as cut too, which only lets it match a row or send that goes on past it.
+ */
+export function statusCopyMayBeCut(text: string): boolean {
+  return text.length >= AGENT_STATUS_MAX_FIELD_LENGTH - 1
+}
+
 export function observeAgentStatusPrompt(
   state: AgentStatusPromptState,
   sessionKey: string | null,
@@ -113,7 +167,23 @@ export function observeAgentStatusPrompt(
   // first status it does read was already there all the same.
   const firstOfSession = !state.read && status != null
   const readBefore = state.readAt
-  const readAt = typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : readBefore
+  const text = typeof status?.prompt === 'string' ? status.prompt : ''
+  // Some statuses say nothing about the pane's prompt: a tab snapshot with no
+  // status on it (a relay re-dial, a tab list coming back), and Orca's own
+  // stand-in when it will not use its hook row (a stale row, or a terminal
+  // title that is not the agent's: `prompt: ''`, no history;
+  // runtime-mobile-agent-status-builder.ts and the idle-title branch of
+  // runtime-mobile-session-projection.ts, origin/main 8d6fec597b). Read as a
+  // pane reset, one cleared `last`, and the pane's prompt on the next status
+  // became a second copy of a message already drawn: timed by the last status
+  // read before a reconnect, the turn's `done`, it drew under the reply that
+  // answered it (device, 2026-09-29). Its stamp is no bound on a prompt either
+  // (`notBefore` below): the prompt may have been there all along. A hook row
+  // that carries no prompt does say the pane had none (statusReadsPrompt).
+  const carriesPrompt = statusCarriesPrompt(status)
+  const readsPrompt = statusReadsPrompt(status)
+  const readAt =
+    readsPrompt && typeof status?.updatedAt === 'number' && Number.isFinite(status.updatedAt) ? status.updatedAt : readBefore
   if (firstOfSession || (status != null && readAt !== readBefore)) {
     state = { ...state, read: true, ...(readAt !== undefined ? { readAt } : {}) }
   }
@@ -124,11 +194,10 @@ export function observeAgentStatusPrompt(
   // chat was closed came unseen, and that status's `updatedAt` is its last
   // tool ping, which drew it at the tail (device, 2026-09-27).
   const found = firstOfSession || (options.firstRead === true && status != null)
-  const text = typeof status?.prompt === 'string' ? status.prompt : ''
-  if (text.trim().length === 0) {
-    // Empty is "unknown" or a pane reset: the next prompt is new even if it
-    // repeats the last text.
-    return state.last === null ? state : { ...state, last: null }
+  if (!carriesPrompt) {
+    // A pane with no prompt: the next prompt is new even if it repeats the
+    // last text.
+    return readsPrompt && state.last !== null ? { ...state, last: null } : state
   }
   if (text === state.last) {
     return state
@@ -144,7 +213,7 @@ export function observeAgentStatusPrompt(
   // an XML tag. The transcript row is drawn as a peer notice; an echo here
   // would be the wrapper, drawn twice (2026-09-20). Seen, not echoed.
   if (isKnownHarnessInjectedUserTurnText(text)) {
-    const message = parseStatusSubagentPreview(text, text.length >= AGENT_STATUS_MAX_FIELD_LENGTH)
+    const message = parseStatusSubagentPreview(text, statusCopyMayBeCut(text))
     // When the phone first read it, which is what pairs it with the screen's
     // row of the same message (screen-peer-notices.ts). Not on a first read
     // (a launch, a return to the tab, a reconnect): that copy can be minutes
@@ -178,7 +247,7 @@ export function observeAgentStatusPrompt(
     const held: DesktopPrompt = {
       nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:x:${state.prompts.length}`,
       text,
-      ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
+      ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
       heldBack: true,
       ...(typeof run === 'object' && run !== null ? { ifHarnessStarted: run } : {}),
       seenAt: Date.now()
@@ -197,10 +266,10 @@ export function observeAgentStatusPrompt(
   // (device, 2026-09-20). The run it came in began at or before it, so that
   // run's start is its time; a status with no state (a fixture) has only its
   // current state's start.
-  // After a reconnect, no earlier than the last status read before the drop:
-  // the prompt came after it, and the run can have begun an hour before
-  // (review of a615bde2). The same after the tab list the last visit cached:
-  // the last status read before is that visit's.
+  // After a reconnect, no earlier than the last status read before the drop
+  // that said what prompt the pane had: the prompt came after it, and the run
+  // can have begun an hour before (review of a615bde2). The same after the tab
+  // list the last visit cached: the last status read before is that visit's.
   const notBefore = !firstOfSession && options.firstRead === true ? readBefore : undefined
   const runStart = typeof run === 'number' ? Math.max(run, notBefore ?? run) : null
   const byStateStart =
@@ -210,7 +279,7 @@ export function observeAgentStatusPrompt(
   const prompt: DesktopPrompt = {
     nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,
-    ...(text.length >= AGENT_STATUS_MAX_FIELD_LENGTH ? { cut: true } : {}),
+    ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).
@@ -223,15 +292,18 @@ export function observeAgentStatusPrompt(
   const clockName =
     typeof run === 'number'
       ? notBefore !== undefined && notBefore > run
-        ? 'the last status read before it'
+        ? 'the last status read before it that said what prompt the pane had'
         : 'the start of the run it came in'
       : byStateStart
         ? "the start of the pane's state"
         : 'its status stamp'
+  // Which prompt the reader held when this one came, so the line for a copy
+  // of a message it had already drawn shows what it had lost (2026-09-29).
+  const before = state.last === null ? 'no prompt read before it' : `after "${preview(state.last)}"`
   const how = found
     ? firstOfSession
       ? "found on the chat's first status"
-      : 'found on the first status since a reconnect or the cached tab list'
+      : `found on the first status since a reconnect or the cached tab list, ${before}`
     : 'watched arriving'
   const placed = `[desk-prompt] drawn: "${preview(text)}" (${how}) placed from ${at === null ? 'no time, at the tail' : `${new Date(at).toISOString()}, ${clockName}`}`
   // The subagent messages stay (`...state`): dropping them here took the

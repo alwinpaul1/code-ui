@@ -4,6 +4,8 @@ import { isCutAtHookLength, isCutHandback, parseSubagentMessage } from './mobile
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
 import { isPeerRowHead } from './mobile-terminal-peer-notices'
 import { dedupeWitnessReadings, preferredWitnessReading } from './mobile-native-chat-witness-dedupe'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
+import { statusCopyMayBeCut } from './agent-status-prompts'
 import { countUserTextOccurrences, normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 import {
   appendMobileNativeChatPending,
@@ -45,11 +47,12 @@ export function rememberEchoInPending(
   // …and a phone send of its own beats a witnessed reading that glues rows
   // onto it, whichever came first: this is the send-first order, and
   // acceptOwnSendInPending below is the witness-first one.
-  if (current.some((item) => preferredWitnessReading(item.text, text) === 'a')) {
+  const reading = { id, text }
+  if (current.some((item) => preferredStoredReading(item, reading) === 'a')) {
     return previous
   }
   const kept = current.filter(
-    (item) => !(isWitnessed(item.id) && preferredWitnessReading(item.text, text) === 'b')
+    (item) => !(isWitnessed(item.id) && preferredStoredReading(item, reading) === 'b')
   )
   const base = kept.length === current.length ? previous : { ...previous, [key]: kept }
   const normalizedText = normalizeReconcileText(text)
@@ -130,7 +133,7 @@ export function withoutWitnessesOfSends(
         typeof item.witnessedAt === 'number' &&
         timed.some(
           (send) =>
-            item.witnessedAt! >= send.sentAt! && preferredWitnessReading(send.text, item.text) !== null
+            item.witnessedAt! >= send.sentAt! && preferredStoredReading({ id: SEND_ID, text: send.text }, item) !== null
         )
       )
   )
@@ -175,7 +178,7 @@ export function rememberHeldWitnesses(
         typeof send.sentAt === 'number' &&
         Number.isFinite(send.sentAt) &&
         witness.at >= send.sentAt &&
-        preferredWitnessReading(send.text, witness.text) !== null
+        preferredStoredReading(send, witness) !== null
     )
     if (!copyOfSend) {
       next = rememberEchoInPending(
@@ -195,6 +198,44 @@ export function rememberHeldWitnesses(
 
 function isWitnessed(id: string): boolean {
   return id.startsWith('absorbed-') || id.startsWith('desk-')
+}
+
+/** Stands for a phone send compared by its words alone. */
+const SEND_ID = 'pending-send'
+
+/**
+ * preferredWitnessReading for two copies the store holds, told apart by what
+ * each is as well as by its words.
+ *
+ * Only a screen reading (`absorbed-`, read off the agent's queue box) can be
+ * cut short or have the screen's rows glued on under the words. A hook copy
+ * (`desk-`) and a phone send are the words as they were sent, so between two
+ * of those, one that goes on past the other's whole words is a message of its
+ * own: "… keep your Google web session. Whats this issue" and "… Whats this",
+ * sent 33 s apart at the desk, were stored as one message, and the first was
+ * gone whenever the chat drew from the store (device, 2026-09-29, Claude Code
+ * 2.1.284). The same words are still one message, whoever holds them, and so
+ * is a pair with a screen reading in it, or one whose shorter copy fills the
+ * tab status's field, which Orca cuts there.
+ */
+function preferredStoredReading(
+  a: { id: string; text: string },
+  b: { id: string; text: string }
+): 'a' | 'b' | null {
+  const verdict = preferredWitnessReading(a.text, b.text)
+  if (verdict === null) {
+    return null
+  }
+  const [kept, dropped] = verdict === 'a' ? [a, b] : [b, a]
+  const goesOn = storedKey(dropped.text).length > storedKey(kept.text).length && !storedKey(kept.text).endsWith('…')
+  const whole = !statusCopyMayBeCut(kept.text)
+  const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
+  return goesOn && whole && asSent ? null : verdict
+}
+
+/** The words preferredWitnessReading compares. */
+function storedKey(text: string): string {
+  return normalizeNativeChatUserText(asPaintedPrompt(text))
 }
 
 /** What is on disk from before this rule existed: readings of one message
@@ -231,7 +272,7 @@ export function sweepWitnessedEchoes(
       (item.id.startsWith('absorbed-') && isPeerRowHead(`› ${item.text}`) && PEER_ROW_TAIL.test(item.text)))
   // Phone sends first so they win against witnessed readings of themselves.
   const ordered = [...list.filter((item) => !isWitnessed(item.id)), ...list.filter((item) => isWitnessed(item.id) && !injected(item))]
-  const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text).map((item) => item.id))
+  const kept = new Set(dedupeWitnessReadings(ordered, (item) => item.text, preferredStoredReading).map((item) => item.id))
   const swept = list.filter((item) => !isWitnessed(item.id) || kept.has(item.id))
   return swept.length === list.length ? [...list] : swept
 }

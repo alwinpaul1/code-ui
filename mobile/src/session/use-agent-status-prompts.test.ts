@@ -249,6 +249,84 @@ describe('a desk prompt taken while the phone was away, after a null status on t
   })
 })
 
+// Review of 257768bc, which held the reconnect and cached-tab-list latch
+// through statuses with no prompt: a Claude lead whose cached prompt is empty
+// (Orca's SessionStart empties it after startup, resume or clear, and a turn
+// a teammate's or subagent's message starts keeps it) sends genuine hook rows
+// with `prompt: ''`. Held through them, the latch took a message the chat
+// watched arrive long after the reconnect for one found there, timed it by
+// the run's start, and a subagent message read live got no time to pair by.
+// Any status that is not null ends the latch, as before that commit.
+describe('a status with no prompt on the way back', () => {
+  const noPrompt: NonNullable<AgentStatusPromptSource> = {
+    state: 'working',
+    prompt: '',
+    updatedAt: 2_000,
+    stateStartedAt: 1_000,
+    stateHistory: [{ state: 'done', prompt: '', startedAt: 500 }],
+    providerSession: { id: 'sess-1' }
+  }
+  function mount() {
+    let renderer: ReactTestRenderer | null = null
+    let out: ReturnType<typeof useAgentStatusPrompts> = { prompts: [], agentMessages: [] }
+    function Chat({ status, connected, live }: { status: AgentStatusPromptSource; connected: boolean; live: boolean }) {
+      out = useAgentStatusPrompts('sess-1', status, undefined, connected, live)
+      return null
+    }
+    return {
+      show(status: AgentStatusPromptSource, { connected = true, live = true }: { connected?: boolean; live?: boolean } = {}) {
+        act(() => {
+          const element = createElement(Chat, { status, connected, live })
+          if (renderer) {
+            renderer.update(element)
+          } else {
+            renderer = create(element)
+          }
+        })
+        return out
+      },
+      done(): void {
+        act(() => renderer?.unmount())
+      }
+    }
+  }
+
+  it('ends the wait, so a message watched arriving long after a reconnect is timed by its own stamp', () => {
+    const chat = mount()
+    chat.show(noPrompt)
+    chat.show(noPrompt, { connected: false })
+    chat.show({ ...noPrompt })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { prompts } = chat.show({ ...noPrompt, prompt: 'and keep the old table', updatedAt: 120_000 })
+    chat.done()
+    expect(prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([['and keep the old table', 120_000]])
+  })
+
+  it('ends the wait after the cached tab list too', () => {
+    const chat = mount()
+    chat.show(noPrompt, { live: false })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { prompts } = chat.show({ ...noPrompt, prompt: 'and keep the old table', updatedAt: 120_000 })
+    chat.done()
+    expect(prompts.map((prompt) => [prompt.text, prompt.at])).toEqual([['and keep the old table', 120_000]])
+  })
+
+  it('leaves a subagent message read live after it a time to pair by', () => {
+    const chat = mount()
+    chat.show(noPrompt)
+    chat.show(noPrompt, { connected: false })
+    chat.show({ ...noPrompt })
+    chat.show({ ...noPrompt, updatedAt: 60_000 })
+    const { agentMessages } = chat.show({
+      ...noPrompt,
+      prompt: '<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>',
+      updatedAt: 120_000
+    })
+    chat.done()
+    expect(agentMessages[0]?.seenAt).toEqual(expect.any(Number))
+  })
+})
+
 // Device, 2026-09-27 (session 790eafa8): the session screen paints the tab
 // list the last visit cached before the host answers, so the chat's first
 // status of a session was that visit's. A message taken while the chat was
@@ -324,7 +402,7 @@ describe('a desk prompt taken while the chat was closed, opened on the cached ta
     chat.done()
     expect(info.mock.calls.map((call) => String(call[0]))).toEqual([
       '[desk-prompt] drawn: "run the migration" (found on the chat\'s first status) placed from 1970-01-01T00:00:01.000Z, the start of the run it came in',
-      '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list) placed from 1970-01-01T01:00:00.000Z, the last status read before it'
+      '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list, after "run the migration") placed from 1970-01-01T01:00:00.000Z, the last status read before it that said what prompt the pane had'
     ])
     info.mockRestore()
   })
