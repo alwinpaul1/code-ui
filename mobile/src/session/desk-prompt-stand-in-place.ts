@@ -20,7 +20,11 @@ import type { DesktopPrompt } from './agent-hud-beacon'
  *   listened to the terminal (while the chat is open it does, and a message
  *   typed then is beaconed): found, it goes by its run's start, as a copy
  *   found on the chat's first status does, or, with that start off the page,
- *   by the ping, since a message drawn late beats one drawn nowhere.
+ *   by the ping, since a message drawn late beats one drawn nowhere. What that
+ *   costs: a message typed after the chat opened whose hook copy was lost on
+ *   the way (a frame spliced on the pty or cut in the relay) reaches the
+ *   phone in the same shape, and goes by its run's start too, above rows
+ *   written before it; drawn once either way (the review of 5d17a9d0, B3).
  * - The hook's copy can reach the phone a moment after the status's, so for
  *   STAND_IN_TWIN_WAIT_MS the copy is drawn where it was first seen, not
  *   remembered there, and waits; and one that comes later still moves a copy
