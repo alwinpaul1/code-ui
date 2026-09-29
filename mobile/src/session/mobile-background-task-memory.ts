@@ -52,11 +52,15 @@ export type SessionTaskEvidence = {
   /** Rows given the benefit of the doubt, until they stop. Null until the
    *  phone first reads this session's roster. */
   preexistingAgentIds: readonly string[] | null
-  /** Each doubted row's start when it got the doubt. Orca drops a stopped
-   *  subagent's row and starts it afresh, so a row back with another start
-   *  stopped and was resumed while the phone did not see it, and the doubt
-   *  does not follow it. A teammate's row keeps its start across a stop. */
+  /** Each doubted row's start on the last hook row that listed it. */
   doubtStartedAt: Readonly<Record<string, number>>
+  /** True from a title stand-in (no roster) until the next hook row: the
+   *  rows went unseen, so a doubted row back with another start stopped and
+   *  was resumed meanwhile (Orca drops a stopped subagent's row and starts it
+   *  afresh), and the doubt does not follow it. With no stand-in between, a
+   *  new start is no stop: a nested `claude` in the pane makes Orca re-create
+   *  the lead's running rows. A teammate's row keeps its start across a stop. */
+  rosterUnseen: boolean
   /** Every roster id already placed; one is never placed twice. */
   placedAgentIds: readonly string[]
   /** Unanswered Agent calls already matched to a row. */
@@ -80,6 +84,7 @@ export const EMPTY_SESSION_TASK_EVIDENCE: SessionTaskEvidence = {
   ownAgentIds: [],
   preexistingAgentIds: null,
   doubtStartedAt: {},
+  rosterUnseen: false,
   placedAgentIds: [],
   vouchedCallKeys: [],
   retiredTaskIds: [],
@@ -113,14 +118,15 @@ export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen):
   // Orca's title stand-in carries no roster, which is not a roster with no one
   // on it (agent-status-stand-in.ts): read as one, every row lost the benefit
   // of the doubt and stayed hidden once a hook row listed it again.
-  const working =
-    agentStatus && !isOrcaStandIn(agentStatus) ? (agentStatus.subagents ?? []).filter((row) => row.state !== 'idle') : null
+  const standIn = agentStatus !== null && isOrcaStandIn(agentStatus)
+  const working = agentStatus && !standIn ? (agentStatus.subagents ?? []).filter((row) => row.state !== 'idle') : null
   const placed = working ? placeRows(previous, seen, working) : null
   return {
     ownAgentIds: rememberFinishedTaskIds(previous.ownAgentIds, [...window.ownAgentIds, ...(placed?.own ?? [])]),
     retiredTaskIds: rememberFinishedTaskIds(previous.retiredTaskIds, window.retiredTaskIds),
     preexistingAgentIds: placed ? placed.preexisting : previous.preexistingAgentIds,
     doubtStartedAt: placed ? placed.doubtStartedAt : previous.doubtStartedAt,
+    rosterUnseen: standIn || (placed === null && previous.rosterUnseen),
     placedAgentIds: placed ? rememberFinishedTaskIds(previous.placedAgentIds, placed.placed) : previous.placedAgentIds,
     vouchedCallKeys: placed ? rememberFinishedTaskIds(previous.vouchedCallKeys, placed.vouched) : previous.vouchedCallKeys,
     lastStatus: agentStatus ? { status: agentStatus, at: now } : previous.lastStatus,
@@ -166,12 +172,16 @@ function placeRows(previous: SessionTaskEvidence, seen: Seen, working: readonly 
     return { own, preexisting: ids, doubtStartedAt: startsOf(working), placed: ids, vouched }
   }
   const startOf = new Map(working.map((row) => [row.id, row.startedAt]))
-  // Still running, and the same run: a row that stopped unseen and came back
-  // with a new start was resumed by whoever started it, and a subagent's
-  // resume is not in the lead's transcript.
+  // Still running, and, when a stand-in hid the roster since the last hook
+  // row, the same run: a row that stopped unseen and came back with a new
+  // start was resumed by whoever started it, and a subagent's resume is not
+  // in the lead's transcript (`rosterUnseen`).
   const sameRun = (id: string): boolean => {
-    const doubtedAt = previous.doubtStartedAt[id]
-    return startOf.has(id) && (isTeammateLifecycleId(id) || doubtedAt === undefined || doubtedAt === startOf.get(id))
+    const lastStart = previous.doubtStartedAt[id]
+    return (
+      startOf.has(id) &&
+      (!previous.rosterUnseen || isTeammateLifecycleId(id) || lastStart === undefined || lastStart === startOf.get(id))
+    )
   }
   const preexisting: string[] = previous.preexistingAgentIds.filter(sameRun)
   const oldestAt = window.oldestAt
@@ -199,25 +209,25 @@ function startsOf(rows: readonly RosterRow[]): Record<string, number> {
   return Object.fromEntries(rows.map((row) => [row.id, row.startedAt]))
 }
 
-/** The placement with each doubted row's start: the one it was doubted with,
- *  or this roster's for a row doubted now. The same object when the doubted
- *  rows did not change. */
+/** The placement with each doubted row's start on this roster. The same
+ *  object when no doubted row or start changed. */
 function withDoubtStarts(
   previous: SessionTaskEvidence,
   placement: Omit<Placement, 'doubtStartedAt'>,
   startOf: ReadonlyMap<string, number>
 ): Placement {
-  if (placement.preexisting === previous.preexistingAgentIds) {
-    return { ...placement, doubtStartedAt: previous.doubtStartedAt }
-  }
   const doubtStartedAt: Record<string, number> = {}
   for (const id of placement.preexisting) {
-    const at = previous.doubtStartedAt[id] ?? startOf.get(id)
+    const at = startOf.get(id) ?? previous.doubtStartedAt[id]
     if (at !== undefined) {
       doubtStartedAt[id] = at
     }
   }
-  return { ...placement, doubtStartedAt }
+  const ids = Object.keys(doubtStartedAt)
+  const unchanged =
+    ids.length === Object.keys(previous.doubtStartedAt).length &&
+    ids.every((id) => previous.doubtStartedAt[id] === doubtStartedAt[id])
+  return { ...placement, doubtStartedAt: unchanged ? previous.doubtStartedAt : doubtStartedAt }
 }
 
 /** A foreground Agent call started this row: the row came up within 30 s of

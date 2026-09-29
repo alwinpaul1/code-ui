@@ -504,12 +504,18 @@ no one on it. It did, after a reconnect or on any stand-in read as it came:
 every row the loaded window never showed launched lost the benefit of the
 doubt, and when the next hook row listed it again it read as a reviewer's and
 stayed hidden until it stopped. What the stand-in hid can still be read off
-the next hook row: Orca drops a stopped subagent's row and starts it afresh,
-so a doubted row back with another start stopped and was resumed while the
-phone looked away, and it keeps no doubt (a teammate's row keeps its start,
-so its doubt stands). The cost: a doubted row Orca lists again with a new
-start after losing its own roster (a restart with no saved snapshot) loses
-the doubt too, as a row it first shows then already does.
+the first hook row after it: Orca drops a stopped subagent's row and starts
+it afresh, so a doubted row back with another start stopped and was resumed
+while the roster went unseen, and it keeps no doubt (a teammate's row keeps
+its start, so its doubt stands). Only across a stand-in: with every hook row
+seen, a new start is no stop. A `claude -p` the lead runs from its Bash tool
+posts as the pane, and its SessionStart and its events naming another
+session make Orca delete the pane's rows and re-create the lead's running
+agents with new starts, while the phone keeps the nested run's statuses
+from the task readers. The cost: when a stand-in does fall between that
+re-creation and the next hook row the phone reads, or Orca re-lists rows
+with new starts after losing its own roster (a restart with no saved
+snapshot), a doubted row of the lead's loses the doubt.
 
 Every change to background work fires a hook (a launch is a tool call, an
 agent's end is SubagentStop, a shell's end starts a turn), and a hook row

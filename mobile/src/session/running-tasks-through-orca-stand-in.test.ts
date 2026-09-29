@@ -428,4 +428,20 @@ describe('background work the chat shows while Orca stands in the pane status', 
     const resumed = hookRow('claude', 'tab-1', { ...roster(rosterRow(reviewer, at('10:00:30.000'))), updatedAt: at('10:00:40.000') })
     expect(show('claude', resumed)).toEqual([SHELL])
   })
+
+  // But a new start alone is no stop. A `claude -p` the lead runs from its
+  // Bash tool posts as the pane: its SessionStart, and its events naming
+  // another session, make Orca delete the pane's roster rows and re-create
+  // the lead's running agents with new starts (vendored claude-events.ts),
+  // while the phone withholds the nested run's statuses from the task
+  // readers (the fourth review pass). Only a start that moved across a
+  // stand-in, where the roster went unseen, ends the doubt.
+  it('keeps counting the lead’s own agent from before the loaded window after a nested claude in the pane made Orca re-create its row', () => {
+    session.messages = CLAUDE_TURN.slice(0, 2)
+    const earlier = OWN_AGENTS.a441.id
+    expect(show('claude', hookRow('claude', 'tab-1', roster(rosterRow(earlier, at('09:40:00.000')))))).toEqual([SHELL, earlier])
+    vi.setSystemTime(at('10:00:41.000'))
+    const recreated = hookRow('claude', 'tab-1', { ...roster(rosterRow(earlier, at('10:00:30.000'))), updatedAt: at('10:00:40.000') })
+    expect(show('claude', recreated)).toEqual([SHELL, earlier])
+  })
 })
