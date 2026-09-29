@@ -161,6 +161,20 @@ async function mutateStoredHosts(
   })
 }
 
+// Why ids only: routine saves of an existing host (the direct-route memory on each
+// network change, the supervisor's preferred endpoint, a relay upgrade, a same-id
+// re-pair) rewrite a row without changing which desktops exist.
+function sameHostIdSet(
+  before: readonly { id: string }[],
+  after: readonly { id: string }[]
+): boolean {
+  if (before.length !== after.length) {
+    return false
+  }
+  const ids = new Set(before.map(({ id }) => id))
+  return after.every(({ id }) => ids.has(id))
+}
+
 export class MobileRelayUpgradeHostRemovedError extends Error {}
 
 export const saveHost = (host: HostProfile): Promise<void> => persistHost(host, false)
@@ -175,6 +189,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
   let updatedExistingHost = false
   let cleanupIntentRecordedBeforeMetadata = false
   let tokenCommittedBeforeMetadata = false
+  let membershipChanged = false
   try {
     await mutateStoredHosts(async (hosts) => {
       const index = hosts.findIndex((h) => h.id === stored.id)
@@ -209,6 +224,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
         await commitDeviceToken(stored.id, validated.deviceToken)
         tokenCommittedBeforeMetadata = true
       }
+      membershipChanged = !sameHostIdSet(hosts, next)
       return next
     })
   } catch (error) {
@@ -222,7 +238,9 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     throw error
   }
-  hostListLoads.noteHostMembershipChange()
+  if (membershipChanged) {
+    hostListLoads.noteHostMembershipChange()
+  }
   if (!tokenCommittedBeforeMetadata) {
     // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
@@ -259,8 +277,10 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
 
 export async function removeHost(hostId: string): Promise<void> {
   let cleanupIntentRecorded = false
+  let removedRow = false
   try {
     await mutateStoredHosts(async (hosts) => {
+      removedRow = hosts.some((h) => h.id === hostId)
       try {
         await recordHostCredentialCleanupIntent(hostId)
         cleanupIntentRecorded = true
@@ -275,7 +295,9 @@ export async function removeHost(hostId: string): Promise<void> {
     }
     throw error
   }
-  hostListLoads.noteHostMembershipChange()
+  if (removedRow) {
+    hostListLoads.noteHostMembershipChange()
+  }
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostOverlay(hostId)

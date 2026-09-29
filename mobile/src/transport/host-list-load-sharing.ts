@@ -11,8 +11,9 @@ let inflight: Promise<HostListSnapshot> | null = null
 let revision = 0
 // Why apart from `revision`: that one moves on every durable write, including the
 // last-connected stamp written on each connect. This one moves only when a host
-// is added or removed, which is the only change that can turn "no hosts" into
-// "some" or back, and so the only one worth hiding a screen's list for.
+// is added or removed (the SET of host ids changes), which is the only change
+// that can turn "no hosts" into "some" or back. Rewrites of an existing host's
+// row do not move it, so a network change never blanks the home list.
 let membershipRevision = 0
 
 export function getHostMembershipRevision(): number {
