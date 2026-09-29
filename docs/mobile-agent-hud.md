@@ -694,9 +694,14 @@ row. With a time:
 - The chat's stored copy of a drawn message (the witness memory) gives way to
   its own hook copy when that copy has a time, as it gives way to a status
   copy, so a row that loads late still moves the message, and the stored copy's
-  old place does not break the tool fold. A copy still waiting for its row is
-  not stored until it settles, so the row loading a reading later moves it,
-  time or no time; stored at once, its waiting place was final.
+  old place does not break the tool fold. It gives way the same way to its
+  own hook copy while this run's chat is placing that copy (`placedHere`), so
+  a row loading a reading later moves a waiting copy, time or no time; drawn
+  by the stored copy instead, its waiting place was final. The copy is still
+  stored from its first drawing: not storing a waiting one (fe1c055a) lost it
+  after a relaunch and let a phone send of the same words take it (review of
+  fe1c055a). After a relaunch nothing is placed in that run, and the stored
+  copy draws it where it was.
 - A stored `typedAt` the beacon could not have written (not whole seconds in
   the nine-to-eleven-digit range) is no time: the warm start restores fields
   unchecked.

@@ -121,6 +121,20 @@ function rememberedAnchor(nonce: string): string | null | undefined {
   return anchor
 }
 
+/** Follow a timed copy's later rows, keeping at most the cap: the follow
+ *  stays open while earlier rows are unloaded, which in a long session is
+ *  always (review of fe1c055a). */
+function followTimed(nonce: string, at: number): void {
+  timedByNonce.delete(nonce)
+  if (timedByNonce.size >= DESKTOP_PROMPT_ANCHOR_CAP) {
+    const oldest = timedByNonce.keys().next()
+    if (!oldest.done) {
+      timedByNonce.delete(oldest.value)
+    }
+  }
+  timedByNonce.set(nonce, at)
+}
+
 function rememberAnchor(nonce: string, anchor: string | null): void {
   provisionalByNonce.delete(nonce)
   timedByNonce.delete(nonce)
@@ -211,7 +225,7 @@ export function useDesktopPromptEchoes(
       ) {
         rememberAnchor(prompt.nonce, later)
         if (!closed) {
-          timedByNonce.set(prompt.nonce, at)
+          followTimed(prompt.nonce, at)
         }
       } else if (closed) {
         timedByNonce.delete(prompt.nonce)
@@ -277,7 +291,7 @@ export function useDesktopPromptEchoes(
         // Claude app draws it: those stamped a second before the start of its
         // second, for a hook's whole-second `typedAt`.
         if (when !== undefined) {
-          timedByNonce.set(prompt.nonce, when)
+          followTimed(prompt.nonce, when)
         }
       } else if (timedRow !== undefined && !readSettled) {
         // The rows of a read that has not settled can be the transcript kept
@@ -289,7 +303,7 @@ export function useDesktopPromptEchoes(
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, timedRow)
         if (when !== undefined) {
-          timedByNonce.set(prompt.nonce, when)
+          followTimed(prompt.nonce, when)
         }
       } else if (beaconed === undefined) {
         // An older hook names no row; the arrival tail is all there is.
@@ -335,10 +349,11 @@ export function useDesktopPromptEchoes(
       expectedOccurrence: 0,
       baselineTailMessageId: placement,
       baselineResolved: true,
-      // Not kept by the witness memory until it settles: stored at once, the
-      // place a copy waits at became its place for good, and the row it names
-      // loading a reading later could no longer move it (2026-09-29).
-      ...(waitingForItsCopy || settled === undefined ? { provisional: true } : {})
+      // Kept by the witness memory from its first drawing, waiting or not, so
+      // a relaunch still draws it and a phone send of the same words cannot
+      // take it (review of fe1c055a). While this run's chat is placing it, the
+      // stored copy gives way to it (`placedHere`), so it can still move.
+      ...(waitingForItsCopy ? { provisional: true } : {})
     })
   }
   // With every row loaded, a copy still held names a row the transcript does
@@ -418,6 +433,16 @@ function deskTimeOf(prompt: DesktopPrompt): number | undefined {
 export function typedAtOf(prompt: DesktopPrompt): number | undefined {
   const typed = prompt.typedAt
   return typeof typed === 'number' && Number.isInteger(typed) && typed % 1000 === 0 && typed >= 1e11 && typed < 1e14 ? typed : undefined
+}
+
+/** Whether this run's chat is placing a desk copy itself: it drew it and
+ *  waits on its row, or placed it. Its stored witness gives way to it then,
+ *  so a row that loads later still moves it; stored at once and drawn by the
+ *  witness, its waiting place was final (2026-09-29). After a relaunch these
+ *  maps are empty, pairing hides the copy behind its witness before this hook
+ *  sees it, and the witness draws it where it was. */
+export function placedHere(nonce: string): boolean {
+  return anchorByNonce.has(nonce) || provisionalByNonce.has(nonce) || waitsByNonce.has(nonce)
 }
 
 /** The bubble id of a hook prompt's echo. */
