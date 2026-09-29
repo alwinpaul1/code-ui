@@ -263,36 +263,80 @@ const PHONE_RESET_TAKEN_WITHIN_MS = 2 * 60_000
 /** Commands that end the pane's session and start the next one. */
 const SESSION_COMMAND = /^\/(clear|new|reset|resume)(\s|$)/
 
+/** A send this phone wrote to the terminal, and the session that first
+ *  showed it, once one has. */
+export type PhoneSendRecord = { text: string; at: number; claimedBy?: string }
+
+type PhoneOwnershipStatus = {
+  state?: string | null
+  prompt?: string | null
+  toolName?: string | null
+  sessionBoundary?: boolean | null
+  updatedAt?: number | null
+  providerSession?: { id?: string | null } | null
+} | null
+
+/** Claude's `[Image #N]` markers, which lead the hook's copy of a photo send
+ *  and never the phone's own text of it. */
+const IMAGE_MARKER = /\[Image #\d+\]\s*/g
+
 /**
- * Whether what this phone wrote to the terminal says a status's session is
- * the pane's own: a `working` status whose prompt is one the phone sent (the
- * prompt hook's copy, folded and cut as Orca stores it), or a session
- * boundary that came right after the phone sent a session command.
+ * The send of this phone's that says a status's session is the pane's own,
+ * and how, or null.
+ *
+ * - `prompt`: a turn-start row (`working`, no tool) whose prompt is one the
+ *   phone sent, as Orca folds and cuts it and less Claude's image markers.
+ *   Only while the send is unclaimed or claimed by this session: Orca keeps
+ *   the prompt per PANE, so a nested run's rows can carry the prompt the lead
+ *   took from the phone, and a send belongs to the first session that shows
+ *   it (the second review of this rule).
+ * - `reset`: a session boundary right after the phone sent `/clear`, `/new`,
+ *   `/reset` or `/resume`, one boundary per send, and not while the kept
+ *   session is mid-turn (a /clear waits in its queue then, and a nested run
+ *   started meanwhile is not the session it makes).
  */
-export function phoneOwnership(
-  status: { state?: string | null; prompt?: string | null; sessionBoundary?: boolean | null; updatedAt?: number | null } | null,
-  sends: readonly { text: string; at: number }[]
-): 'prompt' | 'reset' | null {
+export function matchPhoneSend(
+  status: PhoneOwnershipStatus,
+  sends: readonly PhoneSendRecord[],
+  keptTurn: NativeChatTurn | null = null
+): { owned: 'prompt' | 'reset'; send: PhoneSendRecord } | null {
   const at = status?.updatedAt
   if (!status || typeof at !== 'number') {
     return null
   }
+  const sessionId = status.providerSession?.id?.trim() || null
+  const open = (send: PhoneSendRecord) => send.claimedBy === undefined || send.claimedBy === sessionId
   const within = (sentAt: number, window: number) => at >= sentAt - PHONE_HOST_SKEW_MS && at - sentAt <= window + PHONE_HOST_SKEW_MS
-  const prompt = (status.prompt ?? '').trim()
-  if (status.state === 'working' && prompt.length > 0) {
-    const cut = prompt.length >= AGENT_STATUS_MAX_FIELD_LENGTH - 1
-    const took = sends.some((send) => {
-      const sent = normalizePromptField(send.text)
-      return within(send.at, PHONE_PROMPT_TAKEN_WITHIN_MS) && (sent === prompt || (cut && sent.startsWith(prompt)))
+  const prompt = (status.prompt ?? '').replace(IMAGE_MARKER, '').trim()
+  if (status.state === 'working' && !status.toolName && prompt.length > 0) {
+    const cut = (status.prompt ?? '').length >= AGENT_STATUS_MAX_FIELD_LENGTH - 1
+    const send = sends.find((candidate) => {
+      const sent = normalizePromptField(candidate.text)
+      return open(candidate) && within(candidate.at, PHONE_PROMPT_TAKEN_WITHIN_MS) && (sent === prompt || (cut && sent.startsWith(prompt)))
     })
-    if (took) {
-      return 'prompt'
+    if (send) {
+      return { owned: 'prompt', send }
     }
   }
-  if (status.sessionBoundary === true && sends.some((send) => SESSION_COMMAND.test(send.text.trim()) && within(send.at, PHONE_RESET_TAKEN_WITHIN_MS))) {
-    return 'reset'
+  if (status.sessionBoundary === true && keptTurn !== 'working') {
+    const send = sends.find(
+      (candidate) => open(candidate) && SESSION_COMMAND.test(candidate.text.trim()) && within(candidate.at, PHONE_RESET_TAKEN_WITHIN_MS)
+    )
+    if (send) {
+      return { owned: 'reset', send }
+    }
   }
   return null
+}
+
+/** How what this phone wrote to the terminal says a status's session is the
+ *  pane's own (`matchPhoneSend`), or null. */
+export function phoneOwnership(
+  status: PhoneOwnershipStatus,
+  sends: readonly PhoneSendRecord[],
+  keptTurn: NativeChatTurn | null = null
+): 'prompt' | 'reset' | null {
+  return matchPhoneSend(status, sends, keptTurn)?.owned ?? null
 }
 
 /** The first eight characters: enough to tell two sessions apart in a log and

@@ -1,5 +1,5 @@
 import { createPersistedMap } from './session-cache-persistence'
-import type { NativeChatKeptSession, NativeChatTurn } from './native-chat-kept-session'
+import type { NativeChatKeptSession, NativeChatTurn, PhoneSendRecord } from './native-chat-kept-session'
 
 /**
  * The kept-session store's state, apart from its React hooks
@@ -25,6 +25,9 @@ export type TurnRecord = {
   secondTurn: boolean
   /** The tab's turn-end stamp the last note came with, if any. */
   stamp?: number | null
+  /** When the noted status was stamped (host clock): for a claim to
+   *  background work, the first status that made it. */
+  at?: number | null
 }
 const turns = new Map<string, TurnRecord>()
 const TURNS_KEPT = 128
@@ -77,7 +80,8 @@ export function noteTurn(
   turn: NativeChatTurn,
   finishedOne: boolean,
   fromStandIn = false,
-  stamp: number | null = null
+  stamp: number | null = null,
+  at: number | null = null
 ): void {
   const key = turnKey(agent, sessionId)
   const previous = turns.get(key)
@@ -88,18 +92,21 @@ export function noteTurn(
     // turn (another stamp, or none) is no such word.
     return
   }
+  if (turn === 'ended' && !finishedOne && previous?.turn === 'background') {
+    // A session boundary or a dialog ends no turn, and says nothing of the
+    // background work: the session a /clear started keeps the claim it took
+    // over, and a lead asking a question keeps its work running.
+    return
+  }
+  const sameClaim = previous?.turn === turn && (previous.stamp ?? null) === stamp
   const next: TurnRecord = {
     turn,
     finished: previous?.finished === true || finishedOne,
     secondTurn: previous?.secondTurn === true || (previous?.finished === true && turn === 'working'),
-    stamp
+    stamp,
+    at: sameClaim ? (previous.at ?? at) : at
   }
-  if (
-    previous?.turn === next.turn &&
-    previous.finished === next.finished &&
-    previous.secondTurn === next.secondTurn &&
-    (previous.stamp ?? null) === stamp
-  ) {
+  if (sameClaim && previous.finished === next.finished && previous.secondTurn === next.secondTurn && (previous.at ?? null) === next.at) {
     return
   }
   turns.delete(key)
@@ -178,7 +185,7 @@ export function statusTurn(
 /** What this phone wrote to a terminal, newest last, by terminal handle: a
  *  prompt only this terminal's own agent can take, and a session command
  *  that starts the pane's next session (native-chat-kept-session.ts). */
-export type PhoneTerminalSend = { text: string; at: number }
+export type PhoneTerminalSend = PhoneSendRecord
 const phoneSends = new Map<string, readonly PhoneTerminalSend[]>()
 const PHONE_SENDS_KEPT = 8
 const PHONE_SEND_HANDLES_KEPT = 32
@@ -193,6 +200,18 @@ export function notePhoneTerminalSend(handle: string | null, text: string, at: n
   while (phoneSends.size > PHONE_SEND_HANDLES_KEPT) {
     phoneSends.delete(phoneSends.keys().next().value!)
   }
+  notify()
+}
+
+/** The first session that showed a send claims it (native-chat-kept-session.ts
+ *  `matchPhoneSend`). */
+export function claimPhoneTerminalSend(handle: string | null, send: PhoneTerminalSend, sessionId: string): void {
+  const sends = handle ? phoneSends.get(handle) : undefined
+  const index = sends?.indexOf(send) ?? -1
+  if (!handle || !sends || index < 0 || send.claimedBy !== undefined) {
+    return
+  }
+  phoneSends.set(handle, sends.map((entry, at) => (at === index ? { ...entry, claimedBy: sessionId } : entry)))
   notify()
 }
 

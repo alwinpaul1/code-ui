@@ -226,6 +226,26 @@ describe('whose word a tab status is, for a Claude chat', () => {
     it('reads nothing from no status', () => {
       expect(phoneOwnership(null, [{ text: 'x', at: AT }])).toBeNull()
     })
+
+    it('reads a photo send’s caption through the image markers the hook’s copy leads with', () => {
+      expect(phoneOwnership(working('[Image #1] [Image #2] what is wrong here'), [{ text: 'what is wrong here', at: AT - 500 }])).toBe('prompt')
+    })
+
+    it('takes only a turn-start row: Orca carries the pane’s last prompt on every tool row, a nested run’s too', () => {
+      expect(phoneOwnership({ ...working('where were we'), toolName: 'Grep' }, [{ text: 'where were we', at: AT - 500 }])).toBeNull()
+    })
+
+    it('gives a send to the first session that showed it, and to no other', () => {
+      const status = { ...working('where were we'), providerSession: { id: NEXT_SESSION } }
+      expect(phoneOwnership(status, [{ text: 'where were we', at: AT - 500, claimedBy: CLAUDE_SESSION }])).toBeNull()
+      expect(phoneOwnership(status, [{ text: 'where were we', at: AT - 500, claimedBy: NEXT_SESSION }])).toBe('prompt')
+      expect(phoneOwnership({ ...boundary(), providerSession: { id: NEXT_SESSION } }, [{ text: '/clear', at: AT - 1_000, claimedBy: GROK_SESSION }])).toBeNull()
+    })
+
+    it('reads no /clear into a boundary while the kept session is mid-turn: it waits in the queue then', () => {
+      expect(phoneOwnership(boundary(), [{ text: '/clear', at: AT - 1_000 }], 'working')).toBeNull()
+      expect(phoneOwnership(boundary(), [{ text: '/clear', at: AT - 1_000 }], 'background')).toBe('reset')
+    })
   })
 
   it('keeps the beacon’s session when a new one names its transcript but the painting process is still the old one', () => {
