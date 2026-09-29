@@ -23,6 +23,7 @@ import {
   SUBAGENT_REQUEST_PROMPT
 } from './fixtures/claude-agent-message-read-image-2.1.283'
 import { asyncAgentLaunchResult } from './fixtures/claude-parallel-agents-2.1.281'
+import { promptHookBody } from './agent-hud-prompt-hook.test-support'
 
 // Shapes of Claude Code 2.1.283 (fixtures/claude-agent-message-read-image-2.1.283.ts).
 
@@ -270,7 +271,7 @@ describe('a subagent message the beacon carried, later on', () => {
   const A1 = 'a1a1a1a1-0000-4000-8000-000000000001'
   /** The hook's frame for one submission, as the host writes it. */
   const hookFrame = (nonce: string, text: string, anchorId?: string) =>
-    `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION_ID} up=${nonce}:${encodeURIComponent(JSON.stringify(text).slice(1, -1))}${
+    `\u001b]7777;CUIHUD1 agent=claude sid=${SESSION_ID} up=${nonce}:${promptHookBody(text)}${
       anchorId ? ` at=${anchorId}` : ''
     }\u0007`
   const drawn = (rows: readonly NativeChatMessage[]) =>

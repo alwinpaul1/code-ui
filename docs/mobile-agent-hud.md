@@ -78,10 +78,12 @@ CUIHUD1 agent=claude hk=1 hb=5 sid=<session id> model=<id> name=<display name>
         h5=<int>:<epoch> d7=<int>:<epoch>
 ```
 
-Space-separated `key=value`; values percent-encode `%`, space and `;`. A key
-whose figure the agent did not state is simply absent — nothing is guessed at,
-and a beacon with tokens but no window leaves the phone's context ring alone
-rather than inventing a denominator.
+Space-separated `key=value`; values percent-encode `%`, space and `;`, and the
+phone undoes exactly those three, once: a `%41` typed in a prompt arrives as
+`%41` (before 2026-09-30 the phone decoded a prompt a second time, and it
+arrived as `A`). A key whose figure the agent did not state is simply
+absent — nothing is guessed at, and a beacon with tokens but no window leaves
+the phone's context ring alone rather than inventing a denominator.
 
 ### The frame: the C0 channel
 
