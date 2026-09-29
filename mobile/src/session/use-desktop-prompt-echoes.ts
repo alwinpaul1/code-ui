@@ -74,7 +74,9 @@ function rawIndex(rawMessages: readonly NativeChatMessage[], id: string): number
 const ANCHOR_WAIT_READINGS = 30
 const waitsByNonce = new Map<string, number>()
 /** The tail when a waiting prompt was FIRST seen, held still: at its first
- *  reading that held a row, so never before the transcript has loaded.
+ *  reading that held a row. Null while it has been seen only over a chat with
+ *  no row yet: that still marks it as seen here (`foundWithoutItsRow`), and
+ *  the first reading with a row replaces it.
  *
  *  Read fresh each render instead, the provisional position followed the tail
  *  down as the turn wrote rows, and the prompt ended up below the reply it had
@@ -82,9 +84,10 @@ const waitsByNonce = new Map<string, number>()
  *  2026-09-15). The tail at first sighting is roughly where a mid-turn prompt
  *  belongs, which is what the code did before the waiting was added; the wait
  *  only ever UPGRADES it to the beaconed row, and when the wait runs out this
- *  is where it settles. Taken before a row was held it was null, and a null
- *  anchor over held rows draws the bubble at the top of the chat. */
-const provisionalByNonce = new Map<string, string>()
+ *  is where it settles. Until 2026-09-29 a null taken before a row was held
+ *  stayed, and a null anchor over held rows draws the bubble at the top of
+ *  the chat. */
+const provisionalByNonce = new Map<string, string | null>()
 /** Prompts whose anchor came from their TIME, still open to a later row.
  *
  *  A timed anchor is the last held row written before the prompt, and the
@@ -256,8 +259,12 @@ export function useDesktopPromptEchoes(
     // after the waiting landed). It shows at the tail meanwhile, provisionally,
     // and moves up the moment its real row arrives. Visible in roughly the right
     // place beats correct and invisible. With no row held yet there is no
-    // first place, and a null anchor over an empty chat draws it at the end.
+    // first place, and a null anchor over an empty chat draws it at the end;
+    // the null still records that this chat drew it.
     const settled = rememberedAnchor(prompt.nonce)
+    if (settled === undefined && !provisionalByNonce.has(prompt.nonce)) {
+      provisionalByNonce.set(prompt.nonce, null)
+    }
     const placement =
       settled === undefined ? (provisionalByNonce.get(prompt.nonce) ?? null) : settled
     echoes.push({

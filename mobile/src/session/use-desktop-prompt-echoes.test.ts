@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -577,6 +577,53 @@ describe('a waiting copy whose row never loads', () => {
       })
     }
     expect(latest[0]!.baselineTailMessageId).toBe('e2')
+  })
+
+  // Second review of 34c80e97: a copy drawn over a chat still loading left no
+  // mark once an empty reading stopped recording its first place, so when the
+  // first reading with rows came more than ten minutes after the copy
+  // arrived (the tab left and come back, or a long outage), the copy counted
+  // as "found long after it arrived" and was never drawn again. The chat had
+  // drawn it; it was seen arrive.
+  describe('when the rows come more than ten minutes after a copy it drew over an empty chat', () => {
+    const T0 = Date.parse('2026-09-29T05:36:35.000Z')
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(T0)
+    })
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+    function Loading({ prompts, raw, readSettled }: { prompts: readonly DesktopPrompt[]; raw: readonly NativeChatMessage[]; readSettled: boolean }) {
+      latest = useDesktopPromptEchoes(prompts, raw, raw, false, readSettled)
+      return null
+    }
+
+    it('keeps drawing it after a remount, at the first row it sees', () => {
+      const prompts: DesktopPrompt[] = [{ nonce: 'loading-remount', text: 'typed at the desk', anchorId: 'never-loads', seenAt: T0 }]
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [], readSettled: false }))
+      })
+      expect(latest).toHaveLength(1)
+      act(() => renderer?.unmount())
+      vi.setSystemTime(T0 + 11 * 60_000)
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [assistant('l1'), assistant('l2')], readSettled: true }))
+      })
+      expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['l2'])
+    })
+
+    it('keeps drawing it on the same mount, at the first row it sees', () => {
+      const prompts: DesktopPrompt[] = [{ nonce: 'loading-slow', text: 'typed at the desk', anchorId: 'never-loads', seenAt: T0 }]
+      act(() => {
+        renderer = create(createElement(Loading, { prompts, raw: [], readSettled: false }))
+      })
+      vi.setSystemTime(T0 + 11 * 60_000)
+      act(() => {
+        renderer!.update(createElement(Loading, { prompts, raw: [assistant('s1'), assistant('s2')], readSettled: true }))
+      })
+      expect(latest.map((echo) => echo.baselineTailMessageId)).toEqual(['s2'])
+    })
   })
 
   it('settles on the only row when there is one', () => {
