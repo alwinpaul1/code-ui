@@ -8,7 +8,7 @@ import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check } from 'lucide-react-native'
 import { spacing, typography } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../src/theme/theme-context'
-import { useLoadedHosts } from '../src/transport/use-loaded-hosts'
+import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
 import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
 import {
@@ -57,7 +57,8 @@ export default function ConnectionLogScreen() {
   const params = useLocalSearchParams<{ hostId?: string }>()
   const insets = useSafeAreaInsets()
   const routeKey = useMemo((): DiagnosticsRouteKey => ({}), [params.hostId])
-  const { hosts, loaded: hostsLoaded } = useLoadedHosts()
+  const loadedHosts = useLoadedHosts()
+  const { hosts, loaded: hostsLoaded } = loadedHosts
   const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
 
@@ -197,7 +198,9 @@ export default function ConnectionLogScreen() {
           />
         </>
       ) : hostsLoaded ? (
-        <Text style={styles.emptyText}>No paired hosts.</Text>
+        <Text style={styles.emptyText}>
+          {emptyHostsNoticeCopy(loadedHosts, 'No paired hosts.')}
+        </Text>
       ) : null}
     </View>
   )
