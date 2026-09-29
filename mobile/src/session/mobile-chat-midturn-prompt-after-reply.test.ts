@@ -525,30 +525,30 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
-  // Gap C (final review of fix/midturn-prompt-at-end): Orca's stand-in as the
-  // chat's first status used up the chat's first read, so the message the
-  // host's next status carried, taken before the chat opened, was read as one
-  // the chat watched arrive and timed by that status's ping: drawn under the
-  // words written after it. A chat opened straight on that status finds it and
-  // places it by the run it came in; so must this one, on both agents' tabs.
+  // Gap C of the final review of fix/midturn-prompt-at-end (Orca's stand-in
+  // as the chat's first status uses up its first read, so a message taken
+  // before the chat opened is timed by the next status's ping) is left as it
+  // was. Taking the stand-in for no read, as tried, timed the next status's
+  // message by the start of its run instead, and a message typed after the
+  // chat opened, which Claude took before a screen read listed it, is then
+  // on a page the chat has not loaded and not drawn at all (the review of
+  // fix/midturn-gaps); so is the message gap C is about when its run began
+  // off the page. The two cannot be told apart, and a message lost is the
+  // worse error: drawn late, it is at least drawn.
   for (const kind of ['claude', 'codex'] as const) {
-    it(`draws a message taken before the chat opened where it would without Orca's stand-in first, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+    it(`draws a message typed after the chat opened on Orca's stand-in where it was sent, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
       agent = kind
-      const opened = [user(OPENING_ROW, OPENING, '05:08:00.467'), ...WHOLE_TURN.filter((row) => row.timestamp! <= at('05:39:23.200'))]
-      const onTheMessage = statusReader()
-      vi.setSystemTime(at('05:40:00.000'))
-      const straight = onTheMessage.read(working(SECOND_SEND, '05:39:23.200'))
-      onTheMessage.unmount()
       const reader = statusReader()
-      reader.read({ ...standIn('05:39:30.000'), state: 'working' })
-      const prompts = reader.read(working(SECOND_SEND, '05:39:23.200'))
-      expect(prompts.map((prompt) => prompt.at)).toEqual(straight.map((prompt) => prompt.at))
-      await showAt('05:40:00.100', opened, prompts)
-      const rows = drawn(frames.at(-1)!)
+      vi.setSystemTime(at('05:36:26.000'))
+      let prompts = reader.read({ ...standIn('05:36:25.500'), state: 'working' })
+      await showAt('05:36:26.100', BEFORE_SECOND, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts)
+      await showAt('05:37:40.000', WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938')), prompts)
       const second = where(SECOND_SEND)
       expect(second.at).toHaveLength(1)
-      expect(second.after(second.at[0]!)).toBe(OPENING_ROW)
-      expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
+      expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
       reader.unmount()
       unmount()
     })

@@ -134,7 +134,7 @@ const codexBox = (queued: readonly string[]) =>
 /** Orca's hook copy of a submission, read off the tab status. */
 function hookCopy(clock: string, body = TEXT): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
-  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock), stateHistory: [{ state: 'done', prompt: '' }] })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
   state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: body, updatedAt: at(clock) })
   return [...state.prompts]
 }
@@ -659,7 +659,7 @@ describe('a message the phone sent while the agent worked, taken mid-turn', () =
       const origin = await tap('17:09:00.000')
       const deskTurn = [...turnEnded, user('x0000001', 'run the migration', '17:09:01.500'), call('x0000002', '17:09:02.000')]
       let state = EMPTY_AGENT_STATUS_PROMPTS
-      state = observeAgentStatusPrompt(state, SESSION, { state: 'done', prompt: '', updatedAt: at('17:08:30.000'), stateHistory: [{ state: 'done', prompt: '' }] })
+      state = observeAgentStatusPrompt(state, SESSION, { state: 'done', prompt: '', updatedAt: at('17:08:30.000') })
       state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: 'run the migration', updatedAt: at('17:09:01.500') })
       await show('17:09:02.000', { messages: deskTurn, prompts: [...state.prompts] })
       state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: TEXT, updatedAt: at('17:09:03.000') })

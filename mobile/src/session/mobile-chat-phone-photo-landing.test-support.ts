@@ -84,7 +84,7 @@ export const C2 = companionRow('394fac0f', PATHS2, '07:02:54.345')
  *  pane in `working` (the phone watched it arrive, so its time is the ping's). */
 export function hookCopy(clock: string, body: string): DesktopPrompt[] {
   let state = EMPTY_AGENT_STATUS_PROMPTS
-  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock), stateHistory: [{ state: 'done', prompt: '' }] })
+  state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: '', updatedAt: at(clock) })
   state = observeAgentStatusPrompt(state, SESSION, { state: 'working', prompt: body, updatedAt: at(clock) })
   return [...state.prompts]
 }
