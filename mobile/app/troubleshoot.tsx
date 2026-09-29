@@ -15,7 +15,7 @@ import {
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme } from '../src/theme/theme-context'
 import { useRpcClientContext } from '../src/transport/client-context'
-import { loadHosts } from '../src/transport/host-store'
+import { loadHostCatalog } from '../src/transport/host-store'
 import { readMobileLocalAddress, readMobileNetworkType } from '../src/transport/mobile-network-type'
 import {
   startDiagnosticFetchTimeout,
@@ -31,6 +31,11 @@ import {
   type TroubleshootCheck
 } from '../src/diagnostics/troubleshoot-host-check'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
+import {
+  PAIRED_HOSTS_UNREADABLE_CHECK,
+  troubleshootHostTarget,
+  troubleshootPairedHostsCheck
+} from '../src/diagnostics/troubleshoot-paired-hosts'
 import { useTroubleshootScreenStyles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
 import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
@@ -108,14 +113,9 @@ export default function TroubleshootScreen() {
     const isCurrentRun = () => !abortRef.current && diagnosticRunRef.current === runId
 
     try {
-      const hosts = await loadHosts()
-      results.push(
-        hosts.length > 0
-          ? { label: 'Paired hosts', status: 'pass', detail: `${hosts.length} paired` }
-          : { label: 'Paired hosts', status: 'fail', detail: 'None — scan a QR to pair' }
-      )
+      results.push(troubleshootPairedHostsCheck(await loadHostCatalog()))
     } catch {
-      results.push({ label: 'Paired hosts', status: 'warn', detail: 'Could not read host data' })
+      results.push(PAIRED_HOSTS_UNREADABLE_CHECK)
     }
 
     if (!isCurrentRun()) {
@@ -155,15 +155,22 @@ export default function TroubleshootScreen() {
     setChecks([...results])
 
     try {
-      const [hosts, localAddress, networkType] = await Promise.all([
-        loadHosts(),
+      const [catalog, localAddress, networkType] = await Promise.all([
+        loadHostCatalog(),
         readMobileLocalAddress(),
         readMobileNetworkType()
       ])
-      for (const host of hosts) {
+      for (const entry of catalog) {
         if (!isCurrentRun()) {
           return
         }
+        const target = troubleshootHostTarget(entry)
+        if (target.kind === 'check') {
+          results.push(target.check)
+          setChecks([...results])
+          continue
+        }
+        const host = target.host
         // The probe dials the saved direct endpoint only; the VPN check needs that address too.
         const [reachable, phoneVpn] = await Promise.all([
           testHostReachability(host.endpoint),
