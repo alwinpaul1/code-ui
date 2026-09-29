@@ -209,7 +209,9 @@ export function witnessRowsNotItsOwn(
  * c3844d00, J1): every part must be a hook-reported submission (a hook copy,
  * or a status copy the merge paired with one), and the row must be no
  * submission's of its own words (rowOwners: a prompt typed with the agent
- * idle comes straight after the row its hook copy names). A row made wholly
+ * idle comes straight after the row its hook copy names), nor has a hook
+ * copy of its whole words typed before it (a message of those words queued
+ * and dequeued). A row made wholly
  * of the parts' words is needed too, so one that merely quotes a part lands
  * none. Without the hook's copies no row is split, as before.
  */
@@ -232,8 +234,20 @@ export function keysInJoinedRows(
     return out
   }
   const owners = rowOwners(prompts, raw, keyOf, rowKeyOf)
+  // A hook copy of the row's whole words typed before it: the row is that
+  // submission's own, dequeued or not (the review of b75a42e6, J2: "ok
+  // continue" queued mid-turn and dequeued at the turn's end was split for
+  // "ok" and "continue", and the mid-turn "continue" went away).
+  const typedBefore = (key: string, index: number) =>
+    prompts.some((prompt) => {
+      if (keyOf(prompt.text) !== key) {
+        return false
+      }
+      const submission = hookSubmissionOf(prompt, raw)
+      return submission !== null ? submission.position < index : prompt.hookTwin !== undefined || !prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX)
+    })
   raw.forEach((message, index) => {
-    if (message.role !== 'user' || owners.has(message.id)) {
+    if (message.role !== 'user' || owners.has(message.id) || typedBefore(rowKeyOf(message), index)) {
       return
     }
     const parts = splitIntoWords(rowKeyOf(message), words)

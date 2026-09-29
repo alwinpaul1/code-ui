@@ -15,6 +15,7 @@ import {
   WHOLE_TURN,
   LAST_REPLY,
   TURN_ENDED,
+  WRITTEN_AFTER_SECOND,
   text,
   user,
   working,
@@ -104,4 +105,53 @@ describe('a prompt typed at the desk made of earlier messages’ words', () => {
       unmount()
     })
   }
+
+  // The review of b75a42e6 (J2): "ok continue" typed at the desk later in the
+  // same turn, still queued when it ended, and dequeued as the next turn's
+  // row. A dequeue row has rows before it, so no submission owns it, and it
+  // was split for "ok" and "continue": the mid-turn message went away while
+  // the chat was open. A hook copy of the row's whole words, typed before it,
+  // says the row is that submission's own.
+  it('keeps the mid-turn message when a queued message of those words is dequeued at the turn end, on a Claude Code tab with the hook', async () => {
+    agent = 'claude'
+    const hook = { promptHook: true }
+    const copyOk = beaconCopy('94000', OK, BEFORE_FIRST[0]!.id, '05:34:00.050')
+    const copyContinue = beaconCopy('94001', CONTINUE, WRITTEN_BEFORE_SECOND, '05:36:35.050')
+    const copyNext = beaconCopy('94002', OK_CONTINUE, WRITTEN_AFTER_SECOND, '05:38:10.050')
+    const dequeued = user('7d1e0c5a-3b2f-4e61-9a8d-0c4b5e6f7a81', OK_CONTINUE, '05:46:54.300')
+    const answer = text('8e2f1d6b-4c3a-4f72-8b9e-1d5c6f7a8b92', '05:47:20.000')
+    const all = { beacon: [copyOk, copyContinue, copyNext] }
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(OK, '05:34:55.850'), { beacon: [copyOk] })
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(CONTINUE, '05:36:34.891'), { beacon: [copyOk, copyContinue] })
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hook)
+    vi.setSystemTime(at('05:38:10.000'))
+    prompts = reader.read(working(OK_CONTINUE, '05:38:09.900'), all)
+    await showAt('05:38:10.100', WHOLE_TURN.slice(0, -5), prompts, true, [OK_CONTINUE], hook)
+    await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [OK_CONTINUE], hook)
+    const run: NonNullable<AgentStatusPromptSource> = {
+      ...working(OK_CONTINUE, '05:46:54.400'),
+      stateStartedAt: at('05:46:54.200'),
+      stateHistory: [...done(OK_CONTINUE).stateHistory!, { state: 'done', prompt: normalizePromptField(OK_CONTINUE), startedAt: TURN_ENDED }]
+    }
+    vi.setSystemTime(at('05:46:54.800'))
+    prompts = reader.read(run, all)
+    await showAt('05:46:56.000', [...WHOLE_TURN, dequeued], prompts, true, [], hook)
+    await showAt('05:47:21.000', [...WHOLE_TURN, dequeued, answer], prompts, false, [], hook)
+    expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:52:00.000'))
+    prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:47:20.500') }, all)
+    await showAt('05:52:00.100', [...WHOLE_TURN, dequeued, answer], prompts, false, [], hook)
+    await showAt('05:52:01.000', [...WHOLE_TURN, dequeued, answer], prompts, false, [], hook)
+    expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND])
+    again.unmount()
+    unmount()
+  })
 })
+
