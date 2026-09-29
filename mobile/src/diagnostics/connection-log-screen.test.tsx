@@ -59,7 +59,10 @@ vi.mock('expo', () => ({
   })
 }))
 vi.mock('../transport/host-store', () => ({
-  loadHosts: async () => [{ id: 'host-1', name: 'Host 1', endpoint: 'ws://192.168.137.1:6768' }]
+  loadHostCatalog: async () => {
+    const profile = { id: 'host-1', name: 'Host 1', endpoint: 'ws://192.168.137.1:6768' }
+    return [{ ...profile, credentialStatus: 'ready', profile }]
+  }
 }))
 vi.mock('../transport/persisted-connection-log-store', () => ({
   connectionLogStore: {

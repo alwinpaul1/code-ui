@@ -29,7 +29,7 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('expo-router', () => ({
   useRouter: () => ({ back: vi.fn(), push: vi.fn() })
 }))
-vi.mock('./transport/host-store', () => ({ loadHosts: async () => [] }))
+vi.mock('./transport/host-store', () => ({ loadHostCatalog: async () => [] }))
 vi.mock('./transport/settings-host-client-connections', () => ({
   useFocusedSettingsHostClients: () => ({ clients: [], focused: true })
 }))
