@@ -55,7 +55,7 @@ export function useMobileNativeChatPendingPersistence(
   /** What a witnessed message is remembered against; see `rememberEchoInPending`. */
   memory?: { messagesRef: { current: readonly NativeChatMessage[] }; draftKey: string | null }
 ): {
-  rememberEcho: (id: string, text: string, anchorId: string | null) => void
+  rememberEcho: (id: string, text: string, anchorId: string | null, queued?: boolean) => void
   /** Mark own sends the agent took out of its queue box (isTakenSend). */
   takeSends: (ids: readonly string[]) => void
 } {
@@ -70,7 +70,7 @@ export function useMobileNativeChatPendingPersistence(
   const hydratedRef = useRef<string | null>(null)
   const heldRef = useRef(new Map<string, HeldWitness[]>())
   const rememberEcho = useCallback(
-    (id: string, text: string, anchorId: string | null) => {
+    (id: string, text: string, anchorId: string | null, queued = false) => {
       const key = sessionKeyRef.current
       const draftKey = memoryRef.current?.draftKey
       const messages = memoryRef.current?.messagesRef.current
@@ -80,12 +80,12 @@ export function useMobileNativeChatPendingPersistence(
       if (hydratedRef.current !== key) {
         const held = heldRef.current.get(key) ?? []
         if (!held.some((witness) => witness.id === id)) {
-          heldRef.current.set(key, [...held, { id, text, anchorId, messages, draftKey, at: Date.now() }])
+          heldRef.current.set(key, [...held, { id, text, anchorId, messages, draftKey, at: Date.now(), ...(queued ? { queued } : {}) }])
         }
         return
       }
       setPendingBySession((previous) =>
-        rememberEchoInPending(previous, key, id, text, anchorId, messages, draftKey)
+        rememberEchoInPending(previous, key, id, text, anchorId, messages, draftKey, Date.now(), queued)
       )
     },
     [setPendingBySession]

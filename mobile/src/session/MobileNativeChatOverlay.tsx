@@ -11,7 +11,6 @@ import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
-import { witnessesToRemember } from './mobile-native-chat-witness-memory'
 import { boundPhotoCopy, isOwnPhotoStatusCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
 import {
   inSendOrder,
@@ -31,6 +30,7 @@ import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
+import { useQueuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
 import { openImageMarkup } from './image-markup-store'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
@@ -314,15 +314,12 @@ export function MobileNativeChatOverlay({
   )
   // Witnessed messages are remembered with the phone's own sends, so they
   // survive a reconnect, a tab switch and a relaunch (2026-09-13).
-  const rememberEcho = controller.rememberEcho
-  useEffect(() => {
-    // The rule lives in `witnessesToRemember` so it can be tested: inline here
-    // it guarded two things nothing asserted — that a provisional reading is
-    // never made permanent, and which id each kind is stored under.
-    for (const witness of witnessesToRemember([...absorbedEchoes, ...desktopEchoes])) {
-      rememberEcho?.(witness.id, witness.text, witness.anchorId)
-    }
-  }, [absorbedEchoes, desktopEchoes, rememberEcho])
+  // A message still in the agent's queue box too (use-queued-desk-witnesses.ts).
+  useRememberedWitnesses(
+    [...absorbedEchoes, ...desktopEchoes],
+    useQueuedDeskWitnesses(projectedQueue.queue, session.messages, controller.nativeChatStreamScopeKey),
+    controller.rememberEcho
+  )
   const pendingWithDesktopPrompts = useMemo(() => {
     const own = hookPairing.steppedAside.size === 0
       ? placedOwn

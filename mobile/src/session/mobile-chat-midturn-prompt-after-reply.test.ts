@@ -604,6 +604,72 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
+  // Gap 2 of the final review of fix/midturn-prompt-at-end: a message still
+  // in the agent's queue box when the chat closed was drawn only in the box,
+  // so the phone never remembered it. Claude took it while the chat was
+  // closed, and on the chat's return the status copy, found and timed by its
+  // run's start, was on a page not loaded: the message was lost.
+  for (const kind of ['claude', 'codex'] as const) {
+    it(`draws a message the queue box still held when the chat closed where it arrived once it is taken, on a ${kind === 'claude' ? 'Claude Code' : 'Codex'} tab`, async () => {
+      agent = kind
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      vi.setSystemTime(at('05:36:01.700'))
+      prompts = reader.read(working(FIRST_SEND, '05:36:01.523'))
+      await showAt('05:36:03.000', AFTER_FIRST, prompts)
+      // Sent at 05:36:34.891 and queued behind a long call.
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      await showAt('05:36:40.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+      expect(where(SECOND_SEND).at).toEqual([])
+      await showAt('05:37:00.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+      reader.unmount()
+      unmount()
+      // Taken at 05:37:31 while the chat was closed; back after the turn.
+      const again = statusReader()
+      vi.setSystemTime(at('05:48:00.000'))
+      prompts = again.read(done(SECOND_SEND))
+      await showAt('05:48:00.100', WHOLE_TURN, prompts, false)
+      await showAt('05:48:01.000', WHOLE_TURN, prompts, false)
+      const rows = drawn(frames.at(-1)!)
+      const second = where(SECOND_SEND)
+      expect(second.at).toHaveLength(1)
+      expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
+      expect(second.at[0]!).toBeLessThan(rows.findIndex((row) => row.id === WRITTEN_AFTER_SECOND))
+      again.unmount()
+      unmount()
+    })
+  }
+
+  it('keeps a message the queue box still holds when the chat comes back in the box, then draws it once where it arrived', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:36:35.000'))
+    let prompts = reader.read(working(SECOND_SEND, '05:36:34.891'))
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    await showAt('05:37:00.000', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    reader.unmount()
+    unmount()
+    const again = statusReader()
+    vi.setSystemTime(at('05:37:10.000'))
+    prompts = again.read(working(SECOND_SEND, '05:37:09.000'))
+    await showAt('05:37:10.100', BEFORE_SECOND, prompts, true, [SECOND_SEND])
+    expect(queueBox()).toEqual([oneLine(SECOND_SEND)])
+    expect(where(SECOND_SEND).at).toEqual([])
+    const taken = WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938'))
+    await showAt('05:37:40.000', taken, prompts, true, [])
+    const second = where(SECOND_SEND)
+    expect(queueBox()).toEqual([])
+    expect(second.at).toHaveLength(1)
+    expect(second.after(second.at[0]!)).toBe(WRITTEN_BEFORE_SECOND)
+    again.unmount()
+    unmount()
+  })
+
   // Degenerate: a turn with no mid-turn message. The status carries the
   // prompt that opened it, whose row is on a page the chat has not loaded.
   it('draws nothing under the reply of a turn that had no mid-turn message', async () => {

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
-import { isTakenSend } from './mobile-native-chat-pending-echo'
+import { isHeldInQueueBox, isTakenSend } from './mobile-native-chat-pending-echo'
+import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
 /**
  * How long a send made mid-turn stays in the queue box, unlisted by the
@@ -280,7 +282,9 @@ export function useQueuedOwnSends<T extends OwnSend>(
  * witnessed messages (`desk-`/`absorbed-`) left out of that: a message the
  * phone drew is not a row of its own in the box, and projected by the box's
  * prefix rule it was (a later message "… Whats this" in the box took the
- * earlier "… Whats this issue" out of the chat and drew it in the box).
+ * earlier "… Whats this issue" out of the chat and drew it in the box). Only
+ * a witness stored while its message sat in the box and not yet taken
+ * (isHeldInQueueBox) is held there, by a row of exactly its words.
  */
 function projectWaitingFirst<T extends OwnSend>(
   pending: readonly T[],
@@ -294,15 +298,28 @@ function projectWaitingFirst<T extends OwnSend>(
     pending.filter((item) => !isWitnessId(item.id)),
     queue
   )
+  const rows = projected.queue.flatMap((entry) => (typeof entry === 'string' ? [boxKey(entry)] : []))
+  const inBox = new Set<T>()
+  for (const witness of witnesses) {
+    const row = isHeldInQueueBox(witness) ? rows.indexOf(boxKey(witness.text)) : -1
+    if (row !== -1) {
+      rows.splice(row, 1)
+      inBox.add(witness)
+    }
+  }
   const outside = new Set(projected.pending)
   return {
-    pending: pending.filter((item) => isWitnessId(item.id) || outside.has(item)),
+    pending: pending.filter((item) => (isWitnessId(item.id) ? !inBox.has(item) : outside.has(item))),
     queue: projected.queue
   }
 }
 
 function isWitnessId(id: string): boolean {
   return id.startsWith('desk-') || id.startsWith('absorbed-')
+}
+
+function boxKey(text: string): string {
+  return normalizeNativeChatUserText(asPaintedPrompt(text))
 }
 
 function projectSendsWaitingFirst<T extends OwnSend>(
