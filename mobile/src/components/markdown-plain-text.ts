@@ -48,7 +48,8 @@ function linkText(label: string, href: string): string {
  *  to load a file beside the reply: a web image as its words and address, a
  *  `data:` one as its words alone (its address is the picture itself), and a
  *  file one as its words with the path under them, the fallback it draws. */
-function imagePlainText(alt: string, url: string): string {
+function imagePlainText(markedAlt: string, url: string): string {
+  const alt = markdownInlinePlainText(markedAlt)
   const address = destination(url)
   if (DATA_URL.test(address)) {
     return alt
@@ -61,11 +62,11 @@ function imagePlainText(alt: string, url: string): string {
 }
 
 /** One run of inline Markdown as the words it draws: the marks around bold,
- *  italic, strike and code dropped, links read as `linkText`. Finds the same
- *  tokens as MobileMarkdown's `renderInline`, with one difference: the
- *  renderer draws a link's label as written, so "[`app.ts`](…)" shows its
- *  backticks, and the copy takes them off too. */
-function inlinePlainText(text: string): string {
+ *  italic, strike and code dropped, links read as `linkText`, an image as its
+ *  alt text. Finds the same tokens as MobileMarkdown's `renderInline`, and a
+ *  link's label and an image's alt are read the same way the screen reads them
+ *  (mobile-markdown-link-label.tsx). */
+export function markdownInlinePlainText(text: string): string {
   const pattern = createMarkdownInlineMatcher(text, markdownInlineTokenPattern(), true, true)
   let out = ''
   let pendingStart = 0
@@ -81,18 +82,19 @@ function inlinePlainText(text: string): string {
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
-      out += DATA_URL.test(destination(image[2]!)) ? image[1] || 'image' : linkText(image[1] || 'image', image[2]!)
+      const words = markdownInlinePlainText(image[1] ?? '') || 'image'
+      out += DATA_URL.test(destination(image[2]!)) ? words : linkText(words, image[2]!)
     } else if (link) {
-      out += linkText(inlinePlainText(link[1]!), link[2]!)
+      out += linkText(markdownInlinePlainText(link[1]!), link[2]!)
     } else if (/^https?:\/\//i.test(token)) {
       const { url, trailing } = trimAutolinkTrailingPunctuation(token)
       out += url + trailing
     } else if (token.startsWith('`')) {
       out += codeSpanContent(token)
     } else if (token.startsWith('~~') || token.startsWith('**') || token.startsWith('__')) {
-      out += inlinePlainText(token.slice(2, -2))
+      out += markdownInlinePlainText(token.slice(2, -2))
     } else {
-      out += inlinePlainText(token.slice(1, -1))
+      out += markdownInlinePlainText(token.slice(1, -1))
     }
   }
   return out + text.slice(pendingStart)
@@ -106,7 +108,7 @@ function blockPlainText(block: MobileMarkdownBlock): string {
     case 'paragraph':
     case 'heading':
     case 'quote':
-      return inlinePlainText(block.text)
+      return markdownInlinePlainText(block.text)
     case 'code':
       return block.text
     case 'list':
@@ -115,13 +117,13 @@ function blockPlainText(block: MobileMarkdownBlock): string {
           const marker = listMarker(item)
           const indent = LIST_INDENT.repeat(item.depth)
           // The rest of an item a fence cut in two sits under its words.
-          return `${indent}${marker ? `${marker} ` : LIST_INDENT}${inlinePlainText(item.text)}`
+          return `${indent}${marker ? `${marker} ` : LIST_INDENT}${markdownInlinePlainText(item.text)}`
         })
         .join('\n')
     case 'image':
       return block.url ? imagePlainText(block.alt, block.url) : block.alt
     case 'table':
-      return [block.headers, ...block.rows].map((row) => row.map(inlinePlainText).join('\t')).join('\n')
+      return [block.headers, ...block.rows].map((row) => row.map(markdownInlinePlainText).join('\t')).join('\n')
     case 'rule':
       return ''
     default: {

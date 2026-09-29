@@ -25,6 +25,8 @@ import {
   trimAutolinkTrailingPunctuation
 } from './markdown-inline-token-rules'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { markdownInlinePlainText } from './markdown-plain-text'
+import { renderLinkLabel } from './mobile-markdown-link-label'
 import { listMarker } from './mobile-markdown-list-marker'
 import { useChatTextSelectable } from './chat-text-selectable-context'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
@@ -173,13 +175,13 @@ function renderInline(
     if (image) {
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {image[1] || 'image'}
+          {markdownInlinePlainText(image[1] ?? '') || 'image'}
         </Text>
       )
     } else if (link) {
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {link[1]}
+          {renderLinkLabel(styles, link[1]!)}
         </Text>
       )
     } else if (/^https?:\/\//i.test(token)) {
@@ -355,7 +357,7 @@ function MobileMarkdownInner({
                   })
                 ) : member.type === 'image' ? (
                   <MobileMarkdownImage
-                    alt={member.alt}
+                    alt={markdownInlinePlainText(member.alt)}
                     url={member.url}
                     width={contentWidth}
                     resolve={resolveImage}
@@ -395,7 +397,7 @@ function MobileMarkdownInner({
           return (
             <View key={index} style={styles.figure}>
               <MobileMarkdownImage
-                alt={block.alt}
+                alt={markdownInlinePlainText(block.alt)}
                 url={block.url}
                 width={contentWidth}
                 resolve={resolveImage}
