@@ -179,13 +179,47 @@ export function makeMarkdownStyles(theme: Theme) {
       borderRadius: radius.md,
       padding: space.md
     },
+    /** A fence's language and its Copy button (MobileMarkdownCodeHeader). As
+     *  tall as the button with or without a language beside it, so a block
+     *  does not grow when its first character streams in. */
+    codeHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 18,
+      marginBottom: space.xs
+    },
     codeLanguage: {
+      flexShrink: 1,
       fontFamily: fonts.medium,
       fontSize: 10,
       color: colors.textMuted,
-      marginBottom: space.xs,
       textTransform: 'uppercase',
       letterSpacing: 0.6
+    },
+    codeCopy: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.xs,
+      // Right-aligned whether or not a language sits on its left.
+      marginLeft: 'auto',
+      paddingVertical: 2,
+      paddingLeft: space.sm
+    },
+    codeCopyPressed: {
+      opacity: 0.5
+    },
+    codeCopied: {
+      fontFamily: fonts.medium,
+      fontSize: 11,
+      lineHeight: 14,
+      color: colors.accentText
+    },
+    codeCopyFailed: {
+      fontFamily: fonts.regular,
+      fontSize: 11,
+      lineHeight: 15,
+      color: colors.danger,
+      marginBottom: space.xs
     },
     codeText: {
       fontFamily: fonts.mono,
