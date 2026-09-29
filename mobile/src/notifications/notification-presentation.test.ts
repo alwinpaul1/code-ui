@@ -73,6 +73,54 @@ describe('desktop notifications read like a modern app', () => {
     expect(presented.body.endsWith('.…')).toBe(true)
   })
 
+  // A body with no space in its first 320 code units is cut at 320 exactly.
+  // An emoji, and every bold or `code` letter the plain-text pass writes, is
+  // two code units, and a cut between them drew half a character, a broken
+  // glyph, in the shade before the ellipsis.
+  describe('a long body with no space to cut at', () => {
+    const LONE_HALF = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+    const bodyOf = (body: string) =>
+      presentDesktopNotification({ source: 'agent-task-complete', title: 'Code UI - Claude finished', body }).body
+
+    it('keeps a code identifier\'s letters whole when the cut lands inside one', () => {
+      // "Done:" is 5 code units, then every `code` letter is 2, so letter 157
+      // sits on 319 and 320.
+      const identifier = 'useMobileNativeChatSession'.repeat(8)
+      const body = bodyOf(`Done:\`${identifier}\``)
+      expect(body).not.toMatch(LONE_HALF)
+      expect(body).toBe(`Done:${Array.from(styleText(identifier, 'mono')).slice(0, 157).join('')}…`)
+    })
+
+    it('keeps a rocket emoji whole when it straddles the cut', () => {
+      const body = bodyOf(`${'x'.repeat(319)}🚀tail`)
+      expect(body).not.toMatch(LONE_HALF)
+      expect(body).toBe(`${'x'.repeat(319)}…`)
+    })
+
+    it('keeps an emoji that ends just before the cut', () => {
+      expect(bodyOf(`${'x'.repeat(318)}🚀tail`)).toBe(`${'x'.repeat(318)}🚀…`)
+    })
+
+    it('shows a body of exactly 320 code units whole, and cuts one a unit over', () => {
+      const exact = `${'x'.repeat(318)}🚀`
+      expect(bodyOf(exact)).toBe(exact)
+      const over = bodyOf(`${'x'.repeat(319)}🚀`)
+      expect(over).not.toMatch(LONE_HALF)
+      expect(over).toBe(`${'x'.repeat(319)}…`)
+    })
+
+    it('shows nothing for an empty body', () => {
+      expect(bodyOf('')).toBe('')
+    })
+
+    it('cuts a body made only of emoji between two of them', () => {
+      // ✅ is one code unit and 🎉 two, so every 🎉 starts on an odd unit.
+      const body = bodyOf(`✅${'🎉'.repeat(200)}`)
+      expect(body).not.toMatch(LONE_HALF)
+      expect(body).toBe(`✅${'🎉'.repeat(159)}…`)
+    })
+  })
+
   it('passes an unfamiliar title through as plain text', () => {
     const presented = presentDesktopNotification({
       source: 'terminal-bell',
