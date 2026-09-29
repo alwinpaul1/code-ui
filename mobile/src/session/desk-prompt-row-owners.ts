@@ -1,5 +1,6 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
+import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat-draft-reconcile'
@@ -233,4 +234,51 @@ function splitIntoWords(key: string, words: readonly string[], from = 0): string
     }
   }
   return null
+}
+
+/**
+ * The prompts without a hook copy that reached the phone so long after its
+ * status twin that the merge took it for a later submission
+ * (HOOK_TWIN_LAG_MS), when the rows say it is the same one: it names a row at
+ * or before the status copy's time, with no text written between. The
+ * terminal's bytes can stall while the tab status flows, and such a copy was
+ * drawn beside its own status copy (the review of d147a9c4, A3). A later
+ * submission names a text row written after the status copy's time.
+ */
+export function withoutLateHookTwins(prompts: readonly DesktopPrompt[], raw: readonly NativeChatMessage[]): DesktopPrompt[] {
+  const statusCopies = prompts.filter((prompt) => prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) && prompt.hookTwin === undefined && prompt.at !== undefined)
+  if (statusCopies.length === 0) {
+    return [...prompts]
+  }
+  const late = new Set<DesktopPrompt>()
+  for (const copy of statusCopies) {
+    const position = timedPosition(raw, copy.at)
+    if (position === undefined) {
+      continue
+    }
+    const twin = prompts.find((prompt) => {
+      if (prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) || late.has(prompt) || prompt.anchorId === undefined) {
+        return false
+      }
+      const anchor = raw.findIndex((message) => message.id === prompt.anchorId)
+      return (
+        (prompt.text === copy.text || normalizePromptField(prompt.text) === copy.text) &&
+        typeof prompt.seenAt === 'number' &&
+        typeof copy.seenAt === 'number' &&
+        prompt.seenAt - copy.seenAt > HOOK_TWIN_LAG_MS &&
+        anchor !== -1 &&
+        anchor <= position &&
+        !raw.slice(anchor + 1, position + 1).some(isTextRow)
+      )
+    })
+    if (twin !== undefined) {
+      late.add(twin)
+    }
+  }
+  return prompts.filter((prompt) => !late.has(prompt))
+}
+
+/** A row the prompt hook could name: words or a picture, from either side. */
+function isTextRow(message: NativeChatMessage): boolean {
+  return message.role !== 'tool' && message.blocks.some((block) => block.type === 'text' || block.type === 'image-ref')
 }

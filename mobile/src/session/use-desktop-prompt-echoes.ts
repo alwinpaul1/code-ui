@@ -9,7 +9,7 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
-import { keysInJoinedRows, ownedByLaterSubmission, placeOfCopy, rowOwners } from './desk-prompt-row-owners'
+import { keysInJoinedRows, ownedByLaterSubmission, placeOfCopy, rowOwners, withoutLateHookTwins } from './desk-prompt-row-owners'
 import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT } from './desk-prompt-stand-in-place'
 
 
@@ -415,6 +415,7 @@ export function withoutLandedDesktopPrompts(
    *  (Claude Code numbers photos through a session). */
   raw: readonly NativeChatMessage[] = []
 ): DesktopPrompt[] {
+  prompts = withoutLateHookTwins(prompts, raw)
   // The rows as read, and what the agent's queue box lists (fourth review: a
   // desk photo of no words drew in the box and as a bubble above it).
   const landedMarkers = new Set(
