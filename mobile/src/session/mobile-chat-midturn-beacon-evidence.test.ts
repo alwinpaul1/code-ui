@@ -455,6 +455,35 @@ for (const [label, WORDS] of [
       unmount()
     })
 
+    // The same words sent twice in one turn, both still queued when it ended:
+    // Claude dequeues each as a turn's row, the first first. Each row is its
+    // own submission's, not both the later one's.
+    it('draws two messages of the same words both dequeued at the turn end as their two rows only', async () => {
+      agent = 'claude'
+      const later = beaconCopy('71105', WORDS, WRITTEN_AFTER_SECOND, '05:38:10.050')
+      const laterRow = user('1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e', WORDS, '05:47:21.000')
+      const laterAnswer = text('2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f', '05:47:40.000')
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [first] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [WORDS], hooked)
+      vi.setSystemTime(at('05:38:10.000'))
+      prompts = reader.read(working(WORDS, '05:38:09.900'), { beacon: [first, later] })
+      await showAt('05:38:10.100', WHOLE_TURN.slice(0, -5), prompts, true, [WORDS, WORDS], hooked)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [WORDS, WORDS], hooked)
+      vi.setSystemTime(at('05:46:54.800'))
+      prompts = reader.read(dequeuedRun('05:46:54.400'), { beacon: [first, later] })
+      await showAt('05:46:56.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [WORDS], hooked)
+      await showAt('05:47:22.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, laterRow], prompts, true, [], hooked)
+      await showAt('05:47:41.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, laterRow, laterAnswer], prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY, DEQUEUED_ANSWER.id])
+      reader.unmount()
+      unmount()
+    })
+
     // The same words sent twice in one turn and taken mid-turn both times: the
     // status carries them once (its prompt did not change), the hook twice.
     it('draws two messages of the same words taken mid-turn in one turn as two, with the hook copies', async () => {

@@ -40,6 +40,14 @@ describe('whose row a user row of desk words is', () => {
     expect(rowOwners([nextTurn], early, words).has('u0')).toBe(false)
   })
 
+  // Two submissions of the same words still queued at a turn's end: Claude
+  // dequeues each as a row, the first first, and each row is its own.
+  it('gives each of two rows of the words its own submission, the latest row the latest', () => {
+    const queued = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('u3', 'user', 'go on'), row('a4', 'assistant', 'ok'), row('u5', 'user', 'go on')]
+    const owners = rowOwners([midTurn, { ...nextTurn, anchorId: 'a2' }], queued, words)
+    expect([owners.get('u3')?.nonce, owners.get('u5')?.nonce]).toEqual(['status:s:1:0', '502'])
+  })
+
   // Degenerate: nothing to go by.
   it('is no one’s with no prompts, and with no rows', () => {
     expect(rowOwners([], rows, words).size).toBe(0)

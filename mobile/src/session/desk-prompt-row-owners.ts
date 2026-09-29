@@ -23,7 +23,8 @@ import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat
  * placed by the text row it names (`at=`), and a status copy stands for one
  * when the merge paired it with its hook copy (`hookTwin`).
  *
- * A row belongs to the latest hook submission of its words typed before it.
+ * A row belongs to the latest hook submission of its words typed before it
+ * that no later row of the words took.
  * That row lands no copy of the words from an earlier submission: one that
  * reached the phone more than HOOK_TWIN_LAG_MS before the owner did, typed
  * before the row the owner names. Every other copy lands on it as before, so
@@ -90,7 +91,8 @@ function timedPosition(raw: readonly NativeChatMessage[], at: number | undefined
 }
 
 /** The hook submission each user row is, by row id: the latest of its words
- *  typed before it. A row no submission of its words came before is no one's. */
+ *  typed before it that no later row of them took. A row no such submission
+ *  came before is no one's. */
 export function rowOwners(
   prompts: readonly Pick<DesktopPrompt, 'nonce' | 'text' | 'anchorId' | 'seenAt' | 'hookTwin'>[],
   raw: readonly NativeChatMessage[],
@@ -111,21 +113,29 @@ export function rowOwners(
   if (byKey.size === 0) {
     return owners
   }
+  const rowsByKey = new Map<string, number[]>()
   raw.forEach((message, index) => {
-    if (message.role !== 'user') {
-      return
-    }
-    const submissions = byKey.get(rowKeyOf(message))
-    let owner: HookSubmission | undefined
-    for (const submission of submissions ?? []) {
-      if (submission.position < index && (owner === undefined || submission.position > owner.position || (submission.position === owner.position && (submission.arrival ?? -Infinity) >= (owner.arrival ?? -Infinity)))) {
-        owner = submission
-      }
-    }
-    if (owner !== undefined) {
-      owners.set(message.id, owner)
+    const key = message.role === 'user' ? rowKeyOf(message) : ''
+    if (byKey.has(key)) {
+      rowsByKey.set(key, [...(rowsByKey.get(key) ?? []), index])
     }
   })
+  // Latest row first, each taking the latest submission typed before it that
+  // no later row took: the rows go to the latest submissions, and the earlier
+  // ones are the messages Claude took mid-turn, which get none. Two messages
+  // of the same words still queued at a turn's end are dequeued as a row each,
+  // the first first; the latest-before rule alone gave both rows to the
+  // second, and the first was drawn beside its own row.
+  for (const [key, indexes] of rowsByKey) {
+    const open = [...byKey.get(key)!].sort((a, b) => a.position - b.position || (a.arrival ?? -Infinity) - (b.arrival ?? -Infinity))
+    for (const index of indexes.toReversed()) {
+      const pick = open.findLastIndex((submission) => submission.position < index)
+      if (pick !== -1) {
+        owners.set(raw[index]!.id, open[pick]!)
+        open.splice(pick, 1)
+      }
+    }
+  }
   return owners
 }
 
