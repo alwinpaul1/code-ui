@@ -8,7 +8,7 @@ import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import {
   MARKDOWN_BASE_SIZE,
   useMarkdownStyles,
@@ -281,7 +281,8 @@ function MobileMarkdownInner({
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
   const [contentWidth, setContentWidth] = useState(0)
-  const text = content?.trim() ?? ''
+  // Not trimmed whole: the first line's indent can make it code.
+  const text = markdownDocumentSource(content)
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for

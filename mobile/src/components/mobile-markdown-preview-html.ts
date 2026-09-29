@@ -273,6 +273,33 @@ function restoreMarkdownCode(
   return value.replace(placeholderPattern, (_token, index) => codeSpans[Number(index)] ?? _token)
 }
 
+/**
+ * A document as MobileMarkdown draws it and the reply's Copy reads it
+ * (markdown-plain-text.ts): the blank lines before its first line and the
+ * whitespace after its last go, and the first line keeps its indent. One
+ * helper for both, so the screen and the clipboard cannot read two documents.
+ *
+ * Both trimmed it whole, which took the first line's indent too: a reply that
+ * opened with an indented code block (`    <div>x</div>`) reached the HTML pass
+ * as prose, and `<div>x</div>` drew and copied as `x` (review, 2026-09-30).
+ * Anything else before the first line's own spaces and tabs still goes, as
+ * the trim took it: a byte-order mark before `# Title` would keep the heading
+ * from being one.
+ */
+export function markdownDocumentSource(content: string | undefined): string {
+  const text = content ?? ''
+  const first = text.search(/\S/)
+  if (first === -1) {
+    return ''
+  }
+  const lineStart = text.lastIndexOf('\n', first - 1) + 1
+  let start = first
+  while (start > lineStart && (text[start - 1] === ' ' || text[start - 1] === '\t')) {
+    start -= 1
+  }
+  return text.slice(start).trimEnd()
+}
+
 export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   const { protectedText, codeSpans, placeholderPrefix } = protectMarkdownCode(
     content.replace(/\r\n?/g, '\n'),

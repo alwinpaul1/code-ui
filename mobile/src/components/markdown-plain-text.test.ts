@@ -80,6 +80,28 @@ describe('markdownPlainText', () => {
     )
   })
 
+  // Review, 2026-09-30: the document was trimmed before the HTML pass saw it,
+  // which took the first line's indent too, so a reply that opens with an
+  // indented code block read as HTML prose: `<div>x</div>` drew and copied as
+  // `x`, and `&amp;` as `&`. The same block after a paragraph was code.
+  it("copies an indented code block on the reply's first line verbatim", () => {
+    expect(markdownPlainText('    <div>x</div>\n    &amp; y')).toBe('<div>x</div>\n&amp; y')
+    expect(markdownPlainText('\t<b>x</b> &amp; y')).toBe('<b>x</b> &amp; y')
+    expect(markdownPlainText('\n\n    <b>x</b>\n\nafter')).toBe('<b>x</b>\n\nafter')
+    expect(markdownPlainText('\r\n    <b>x</b>\r\n')).toBe('<b>x</b>')
+  })
+
+  it('copies a one-line indented block, and nothing for lines of only spaces', () => {
+    expect(markdownPlainText('    <b>x</b>')).toBe('<b>x</b>')
+    expect(markdownPlainText('    ')).toBe('')
+    expect(markdownPlainText('\n    \n\t\n')).toBe('')
+  })
+
+  it('still reads a first line indented less than four columns, or after a byte-order mark, as prose', () => {
+    expect(markdownPlainText('   <b>x</b> y')).toBe('x y')
+    expect(markdownPlainText('﻿# Title\n\ntext')).toBe('Title\n\ntext')
+  })
+
   it('copies a fence still streaming in without its opener', () => {
     expect(markdownPlainText('```ts\nconst a = 1')).toBe('const a = 1')
   })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 describe('isMobileMermaidLanguage', () => {
@@ -422,5 +422,36 @@ describe('parseMobileMarkdown', () => {
   it('accepts the `|:-:|` and single-dash separators agents emit, and escaped pipes in cells', () => {
     const blocks = parseMobileMarkdown('| Job | Result |\n|:-:|-|\n| 2621 | a \\| b |')
     expect(blocks).toEqual([{ type: 'table', headers: ['Job', 'Result'], rows: [['2621', 'a | b']] }])
+  })
+})
+
+// What MobileMarkdown draws and the reply's Copy reads, from one helper: a
+// whole trim took the first line's indent, and with it an indented code
+// block's claim to be code (review, 2026-09-30).
+describe('the document the screen and the Copy both read', () => {
+  it('is empty for nothing, and for lines of only spaces and tabs', () => {
+    expect(markdownDocumentSource(undefined)).toBe('')
+    expect(markdownDocumentSource('')).toBe('')
+    expect(markdownDocumentSource('    ')).toBe('')
+    expect(markdownDocumentSource('\n \t\r\n  \n')).toBe('')
+  })
+
+  it("keeps the first line's own indent and drops the blank lines above it", () => {
+    expect(markdownDocumentSource('a')).toBe('a')
+    expect(markdownDocumentSource('    code')).toBe('    code')
+    expect(markdownDocumentSource('\n\n\tcode\n  more  \n\n')).toBe('\tcode\n  more')
+    expect(markdownDocumentSource(' \r\n    code\r\n')).toBe('    code')
+  })
+
+  it('drops what the whole trim dropped before that indent', () => {
+    expect(markdownDocumentSource('﻿# Title')).toBe('# Title')
+    expect(markdownDocumentSource('﻿    code')).toBe('    code')
+  })
+
+  it('reads an indented first line as the code block it is', () => {
+    const source = markdownDocumentSource('\n    <div>x</div>\n    &amp; y\n')
+    expect(parseMobileMarkdown(normalizeMobileMarkdownPreviewHtml(source))).toEqual([
+      { type: 'code', text: '<div>x</div>\n&amp; y', language: undefined, closed: true }
+    ])
   })
 })
