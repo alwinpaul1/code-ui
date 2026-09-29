@@ -8,11 +8,13 @@ export type LoadedHosts = {
   loaded: boolean
   /** The read itself rejected: nothing is known about what is paired. */
   failed: boolean
-  /** Paired desktops the catalog lists but whose credential cannot be read right now. */
-  unreadable: number
+  /** Listed desktops whose credential could not be read this time (locked or failing Keychain). */
+  unavailable: number
+  /** Listed desktops that have no credential at all: they must be paired again. */
+  missing: number
 }
 
-const PENDING: LoadedHosts = { hosts: [], loaded: false, failed: false, unreadable: 0 }
+const PENDING: LoadedHosts = { hosts: [], loaded: false, failed: false, unavailable: 0, missing: 0 }
 
 // Why `loaded`: the list starts empty because the read has not finished, not
 // because nothing is paired. A screen that words its empty state as a claim
@@ -38,14 +40,16 @@ export function useLoadedHosts(): LoadedHosts {
             hosts,
             loaded: true,
             failed: false,
-            unreadable: catalog.length - hosts.length
+            unavailable: catalog.filter((e) => e.credentialStatus === 'temporarily-unavailable')
+              .length,
+            missing: catalog.filter((e) => e.credentialStatus === 'missing').length
           })
         }
       },
       (error: unknown) => {
         console.warn('[hosts] paired-host list failed to load', error)
         if (!stale) {
-          setState({ hosts: [], loaded: true, failed: true, unreadable: 0 })
+          setState({ hosts: [], loaded: true, failed: true, unavailable: 0, missing: 0 })
         }
       }
     )
@@ -56,29 +60,30 @@ export function useLoadedHosts(): LoadedHosts {
   return state
 }
 
-export type EmptyHostsNotice = 'none' | 'unreadable' | 'failed'
-
-/** What an empty host list may truthfully say once it has loaded. */
-export function emptyHostsNotice(
-  state: Pick<LoadedHosts, 'failed' | 'unreadable'>
-): EmptyHostsNotice {
-  if (state.failed) {
-    return 'failed'
-  }
-  return state.unreadable > 0 ? 'unreadable' : 'none'
+export const EMPTY_HOSTS_COPY = {
+  failed: "Couldn't read your paired desktops. Reopen this screen in a moment.",
+  unavailable: "Your paired desktops can't be read right now. Reopen this screen in a moment.",
+  // Unlocking cannot fix this one: the credential is gone, so pairing is the way back.
+  missing: 'A paired desktop needs to be paired again. Scan its code from the home screen.'
 }
 
-export const EMPTY_HOSTS_UNKNOWN_COPY: Record<Exclude<EmptyHostsNotice, 'none'>, string> = {
-  unreadable:
-    "Your paired desktops can't be read right now. Unlock your phone and reopen this screen.",
-  failed: "Couldn't read your paired desktops. Reopen this screen in a moment."
-}
-
-/** The empty-list line for a screen: its own "none" copy only when none is the known answer. */
+/**
+ * The empty-list line for a screen: its own "none" copy only when none is the known answer,
+ * and otherwise the state that is actually true for each desktop the catalog still lists.
+ */
 export function emptyHostsNoticeCopy(
-  state: Pick<LoadedHosts, 'failed' | 'unreadable'>,
+  state: Pick<LoadedHosts, 'failed' | 'unavailable' | 'missing'>,
   noneCopy: string
 ): string {
-  const notice = emptyHostsNotice(state)
-  return notice === 'none' ? noneCopy : EMPTY_HOSTS_UNKNOWN_COPY[notice]
+  if (state.failed) {
+    return EMPTY_HOSTS_COPY.failed
+  }
+  const parts: string[] = []
+  if (state.unavailable > 0) {
+    parts.push(EMPTY_HOSTS_COPY.unavailable)
+  }
+  if (state.missing > 0) {
+    parts.push(EMPTY_HOSTS_COPY.missing)
+  }
+  return parts.length > 0 ? parts.join(' ') : noneCopy
 }

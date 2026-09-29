@@ -71,6 +71,7 @@ describe('Terminal settings empty-host line', () => {
       const lines = await mount(scheme)
       expect(lines.join('\n')).not.toContain('No paired desktops yet')
       expect(lines.join('\n')).toContain("can't be read right now")
+      expect(lines.join('\n')).not.toMatch(/unlock/i)
       const line = renderer!.root.find(
         (n) => String(n.type) === 'Text' && n.props.children?.toString().includes("can't be read")
       )
@@ -87,6 +88,16 @@ describe('Terminal settings empty-host line', () => {
       const lines = (await mount(scheme)).join('\n')
       expect(lines).not.toContain('No paired desktops yet')
       expect(lines).toContain("Couldn't read your paired desktops")
+    }
+  )
+
+  it.each(['light', 'dark'] as const)(
+    'says a desktop with no credential needs pairing again, not that Unlock will help (%s)',
+    async (scheme) => {
+      store.catalog.mockResolvedValue([{ id: 'a', credentialStatus: 'missing', profile: null }])
+      const lines = (await mount(scheme)).join('\n')
+      expect(lines).toContain('paired again')
+      expect(lines).not.toMatch(/can't be read|Unlock|No paired desktops yet/)
     }
   )
 
