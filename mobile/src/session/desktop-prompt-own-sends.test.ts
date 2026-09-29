@@ -197,7 +197,7 @@ describe('a send still in the agent queue box', () => {
   it('is what the overlay excludes, queue rows included', () => {
     const source = readFileSync(new URL('./MobileNativeChatOverlay.tsx', import.meta.url), 'utf8')
     expect(source).toMatch(
-      /withoutLandedDesktopPrompts\(\s*promptsNoCopyStandsFor\(desktopPrompts, hookPairing\),\s*baseFolded,\s*queuedMessages \?\? \[\],\s*session\.messages\s*\)/
+      /withoutLandedDesktopPrompts\(\s*promptsNoCopyStandsFor\(desktopPrompts, hookPairing\),\s*baseFolded,\s*queuedMessages \?\? \[\],\s*session\.messages,\s*desktopPrompts\s*\)/
     )
   })
 

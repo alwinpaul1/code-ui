@@ -7,6 +7,7 @@
 // guard that.
 import { describe, expect, it, vi } from 'vitest'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { AgentStatusPromptSource } from './agent-status-prompts'
 import {
   at,
@@ -187,5 +188,63 @@ describe('a prompt typed at the desk made of earlier messages’ words', () => {
     again.unmount()
     unmount()
   })
+})
+
+// The review of b6e83243 (G1): a later row lands an earlier copy of its words
+// again when a row between them carries the words as a line of its own, which
+// a joined dequeue does (joinedLineBetween). A prompt typed with the words on
+// one of its lines, or a subagent's notice, is no such row: gap D's loss came
+// back through it.
+describe('the same words typed mid-turn, then as a later turn’s prompt, with a row between that has them as a line', () => {
+  const { unmount, showAt, where } = midturnChat(frames, () => 'claude')
+  const placesOf = (words: string) => {
+    const found = where(words)
+    return found.at.map((index) => found.after(index))
+  }
+  const history = (...prompts: string[]) => [...done(CONTINUE).stateHistory!, ...prompts.map((prompt, index) => ({ state: 'done', prompt: normalizePromptField(prompt), startedAt: TURN_ENDED + index * 60_000 }))]
+  for (const [label, between] of [
+    ['a prompt typed with them on one of its lines', 'Two things before you go on:\ncontinue\nthen open a pr for review'],
+    ['a subagent’s completion notice', '<task-notification>\n<task-id>a1b2c3d4</task-id>\n<status>completed</status>\n<summary>Agent "Sweep" completed</summary>\n<result>\nAsked what to do next; the reply was:\ncontinue\n</result>\n</task-notification>']
+  ] as const) {
+    it(`keeps the mid-turn message, with ${label} between`, async () => {
+      const hook = { promptHook: true }
+      const copyW = beaconCopy('99101', CONTINUE, WRITTEN_BEFORE_SECOND, '05:36:35.050')
+      const betweenRow = user('b1b1b1b1-0000-4000-8000-000000000001', between, '05:48:00.000')
+      const betweenReply = text('b1b1b1b1-0000-4000-8000-000000000002', '05:48:30.000')
+      const againRow = user('b1b1b1b1-0000-4000-8000-000000000003', CONTINUE, '05:49:46.995')
+      const againReply = text('b1b1b1b1-0000-4000-8000-000000000004', '05:50:05.000')
+      const typed = label.startsWith('a prompt')
+      const copyBetween = beaconCopy('99102', between, WHOLE_TURN.at(-1)!.id, '05:48:00.050')
+      const copyAgain = beaconCopy('99103', CONTINUE, betweenReply.id, '05:49:47.050')
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working('an earlier message', '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(CONTINUE, '05:36:34.891'), { beacon: [copyW] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hook)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [], hook)
+      vi.setSystemTime(at('05:46:51.100'))
+      prompts = reader.read(done(CONTINUE), { beacon: [copyW] })
+      await showAt('05:46:51.200', WHOLE_TURN, prompts, false, [], hook)
+      const rows: NativeChatMessage[] = [...WHOLE_TURN, betweenRow, betweenReply]
+      const heard = typed ? [copyW, copyBetween] : [copyW]
+      if (typed) {
+        vi.setSystemTime(at('05:48:00.100'))
+        prompts = reader.read({ ...working(between, '05:48:00.000'), stateStartedAt: at('05:48:00.000'), stateHistory: history(CONTINUE) } as AgentStatusPromptSource, { beacon: heard })
+      }
+      await showAt('05:48:31.000', rows, prompts, false, [], hook)
+      vi.setSystemTime(at('05:49:47.100'))
+      prompts = reader.read(
+        { ...working(CONTINUE, '05:49:47.000'), stateStartedAt: at('05:49:47.000'), stateHistory: history(CONTINUE, between) } as AgentStatusPromptSource,
+        { beacon: [...heard, copyAgain] }
+      )
+      await showAt('05:49:48.000', [...rows, againRow], prompts, true, [], hook)
+      await showAt('05:50:06.000', [...rows, againRow, againReply], prompts, false, [], hook)
+      expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND, betweenReply.id])
+      reader.unmount()
+      unmount()
+    })
+  }
 })
 

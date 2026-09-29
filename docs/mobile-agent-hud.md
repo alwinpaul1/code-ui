@@ -668,9 +668,13 @@ each submission. Three cases the status alone cannot settle use it
 - A long message is drawn by its twin's whole words, so the queue box's whole
   reading of it and the echo are the same words (W1 of the review of
   fix/midturn-gaps).
-- A user row belongs to the latest hook submission of its words typed before
-  it, so the same words sent mid-turn and then typed as the next turn's prompt
-  stay two messages (gap D).
+- A user row belongs to a hook submission of its words when it comes straight
+  after the row the submission names, as a prompt typed with the agent idle
+  does, so the same words sent mid-turn and then typed as the next turn's
+  prompt stay two messages (gap D). Not when a row between them is a joined
+  dequeue that may be the earlier message's own: two or more lines, each a desk
+  message's words (`joinedLineBetween`). No row is split into its messages: a
+  prompt can be made of earlier messages' words, and that lost messages.
 - A message read first after Orca's stand-in goes after the row its hook copy
   names; with the hook and no copy of it, it came before the chat listened,
   and goes by its run's start (gap C).

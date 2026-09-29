@@ -114,22 +114,27 @@ describe('a joined row between a copy and a later row of its words', () => {
   const between = [row('a1', 'assistant', 'one'), row('u2', 'user', 'go on\nand the rest'), row('a3', 'assistant', 'ok'), row('u4', 'user', 'go on')]
 
   it('is found when a line of it is the copy’s words', () => {
-    expect(joinedLineBetween(between, 0, 3, 'go on', words)).toBe(true)
+    expect(joinedLineBetween(between, 0, 3, 'go on', words, new Set(['go on', 'and the rest']))).toBe(true)
   })
 
-  // A prompt that merely has the words inside a line, or a row after the
-  // later one, is not; nor is anything for a copy with no place.
-  it('is not a line that only contains the words, a row outside the span, or anything with no place', () => {
+  // A prompt that merely has the words inside a line, one whose other lines
+  // are no desk message's words (the review of b6e83243, G1), a harness
+  // row, a row after the later one, or a copy with no place: none is.
+  it('is not a line that only contains the words, a row with lines of other words, a harness row, a row outside the span, or anything with no place', () => {
+    const keys = new Set(['go on', 'and the rest'])
     const inline = [row('a1', 'assistant', 'one'), row('u2', 'user', 'ok go on\nand the rest'), row('u4', 'user', 'go on')]
-    expect(joinedLineBetween(inline, 0, 2, 'go on', words)).toBe(false)
-    expect(joinedLineBetween(between, 2, 3, 'go on', words)).toBe(false)
-    expect(joinedLineBetween(between, undefined, 3, 'go on', words)).toBe(false)
+    expect(joinedLineBetween(inline, 0, 2, 'go on', words, keys)).toBe(false)
+    expect(joinedLineBetween(between, 0, 3, 'go on', words, new Set(['go on']))).toBe(false)
+    const notice = [row('a1', 'assistant', 'one'), row('u2', 'user', '<task-notification>\ngo on\nand the rest\n</task-notification>'), row('u4', 'user', 'go on')]
+    expect(joinedLineBetween(notice, 0, 2, 'go on', words, new Set(['go on', 'and the rest', '<task-notification>', '</task-notification>']))).toBe(false)
+    expect(joinedLineBetween(between, 2, 3, 'go on', words, keys)).toBe(false)
+    expect(joinedLineBetween(between, undefined, 3, 'go on', words, keys)).toBe(false)
   })
 
   // Degenerate: no rows between.
   it('is not there with no rows between', () => {
-    expect(joinedLineBetween(between, 0, 1, 'go on', words)).toBe(false)
-    expect(joinedLineBetween([], 0, 0, 'go on', words)).toBe(false)
+    expect(joinedLineBetween(between, 0, 1, 'go on', words, new Set(['go on', 'and the rest']))).toBe(false)
+    expect(joinedLineBetween([], 0, 0, 'go on', words, new Set())).toBe(false)
   })
 })
 

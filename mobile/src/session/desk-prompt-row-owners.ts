@@ -1,6 +1,7 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
+import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { normalizeReconcileText, normalizedUserText } from './mobile-native-chat-draft-reconcile'
@@ -156,16 +157,30 @@ export function joinedLineBetween(
   from: number | undefined,
   to: number,
   key: string,
-  keyOf: (text: string) => string
+  keyOf: (text: string) => string,
+  /** The words of every desk copy the chat holds. */
+  copyKeys: ReadonlySet<string>
 ): boolean {
   if (from === undefined) {
     return false
   }
-  return raw.slice(from + 1, to).some(
-    (message) =>
-      message.role === 'user' &&
-      message.blocks.some((block) => block.type === 'text' && block.text.includes('\n') && block.text.split('\n').some((line) => keyOf(line) === key))
-  )
+  return raw.slice(from + 1, to).some((message) => {
+    if (message.role !== 'user') {
+      return false
+    }
+    const text = message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+    // The shape of a dequeue: two or more lines, each one a desk message's
+    // words, this copy's among them. A prompt with the words on one of its
+    // lines, or a subagent's notice, is not one, and let gap D's loss back in
+    // (the review of b6e83243, G1).
+    const lines = text.split('\n').map(keyOf).filter((line) => line.length > 0)
+    return (
+      !isKnownHarnessInjectedUserTurnText(text) &&
+      lines.length >= 2 &&
+      lines.includes(key) &&
+      lines.every((line) => copyKeys.has(line))
+    )
+  })
 }
 
 /** Whether a row a submission owns is a later submission's and not this
@@ -198,6 +213,7 @@ export function witnessRowsNotItsOwn(
 ): Map<string, string[]> {
   const out = new Map<string, string[]>()
   const owners = receipts.length > 0 ? rowOwners(receipts, messages, normalizeReconcileText, (message) => normalizedUserText(message) ?? '') : null
+  const copyKeys = new Set([...receipts, ...current].map((item) => normalizeReconcileText(item.text)))
   for (const item of current) {
     if (!item.id.startsWith('desk-') && !item.id.startsWith('absorbed-')) {
       continue
@@ -215,7 +231,7 @@ export function witnessRowsNotItsOwn(
         if (
           normalizedUserText(message) === key &&
           ownedByLaterSubmission(owners.get(message.id), place) &&
-          !joinedLineBetween(messages, place.position, messages.indexOf(message), key, normalizeReconcileText)
+          !joinedLineBetween(messages, place.position, messages.indexOf(message), key, normalizeReconcileText, copyKeys)
         ) {
           rows.add(message.id)
         }
