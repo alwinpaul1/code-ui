@@ -140,6 +140,40 @@ describe('two hook copies whose words differ by a last word', () => {
     expect(rememberEchoInPending(withCut, 'k', 'desk-4242', long, 'a1', [], 'd')).toBe(withCut)
   })
 
+  // Round 2 of the review of fix/midturn-gaps: Orca cuts the field
+  // mid-word, and the queue box lists the whole message. Stored as both, the
+  // message was drawn twice once the agent took it, the first cut short.
+  describe('cut mid-word, and listed whole by the queue box', () => {
+    const whole = `${first}, and also please check whether the session list on the account page still shows the ended sessions after a refresh`
+    const statusCut = normalizePromptField(whole)
+    const boxId = echoMemoryId(whole)
+
+    it('is the copy Orca makes', () => {
+      expect(statusCut).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+      expect(whole[statusCut.length - 1]).not.toBe(' ')
+      expect(whole[statusCut.length]).not.toBe(' ')
+    })
+
+    it('is one message, stored whole, in either order', () => {
+      const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd')
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd').k!.map((item) => [item.id, item.text])).toEqual([[boxId, whole]])
+      const withWhole = rememberEchoInPending({}, 'k', boxId, whole, 'a2', [], 'd')
+      expect(rememberEchoInPending(withWhole, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd')).toBe(withWhole)
+    })
+
+    it('is restored once, whole, from a store that holds both', () => {
+      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', statusCut, 'a1'), stored(boxId, whole, 'a2')]).map((item) => item.text)).toEqual([whole])
+    })
+
+    // Degenerate: a copy one short of the field is not cut, and a phone send
+    // of that length is its words as sent.
+    it('is two messages when the shorter copy is not a cut one, or is a phone send', () => {
+      const short = statusCut.slice(0, -2)
+      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', short, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
+      expect(sweepWitnessedEchoes([stored('pending-1', statusCut, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
+    })
+  })
+
   // Regression review of f4b53616: Orca drops a high surrogate the cut
   // leaves alone at character 200 (truncatePreservingSurrogates), so a cut
   // copy can be 199 characters long.

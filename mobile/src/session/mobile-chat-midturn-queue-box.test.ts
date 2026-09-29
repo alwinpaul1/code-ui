@@ -355,6 +355,49 @@ describe('a mid-turn message the queue box lists', () => {
     unmount()
   })
 
+  // A message longer than the tab status's 200-character field: the status
+  // copy, and the message the chat remembered from its echo, are cut there,
+  // while the box lists the whole message.
+  for (const how of ['terminal', 'remount'] as const) {
+    it(`draws a long desk message Claude Code still holds only in the box after the chat ${how === 'terminal' ? 'shows the terminal and comes back' : 'remounts'}`, async () => {
+      agent = 'claude'
+      const long = `${SECOND_SEND} issue, and also please check whether the session list on the account page still shows the ended sessions after a refresh, because it looked stale to me yesterday`
+      expect(normalizePromptField(long).length).toBeLessThan(long.length)
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(long, '05:36:34.891'))
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [])
+      await showAt('05:36:36.000', BEFORE_SECOND, prompts, true, [long])
+      await showAt('05:36:40.000', BEFORE_SECOND, prompts, true, [long])
+      let again = reader
+      if (how === 'terminal') {
+        vi.setSystemTime(at('05:37:00.000'))
+        reader.read(working(long, '05:36:59.000'), { shown: false })
+      } else {
+        reader.unmount()
+        unmount()
+        again = statusReader()
+      }
+      vi.setSystemTime(at('05:37:10.000'))
+      prompts = again.read(working(long, '05:37:09.000'))
+      await showAt('05:37:10.100', BEFORE_SECOND, prompts, true, [long])
+      await showAt('05:37:12.000', BEFORE_SECOND, prompts, true, [long])
+      expect(queueBox()).toHaveLength(1)
+      expect(drawn(frames.at(-1)!).filter((row) => row.role === 'user')).toEqual([])
+      // Taken: drawn once.
+      const taken = WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938'))
+      await showAt('05:37:40.000', taken, prompts, true, [])
+      await showAt('05:37:41.000', taken, prompts, true, [])
+      expect(queueBox()).toEqual([])
+      expect(drawn(frames.at(-1)!).filter((row) => row.role === 'user').map((row) => row.text)).toEqual([oneLine(long)])
+      again.unmount()
+      unmount()
+    })
+  }
+
   // Photos of no words have no words to match: a row of `[Image #6]` is not
   // the remembered `[Image #5]`.
   it('keeps an earlier desk photo of no words in the chat while a later one waits in the box', async () => {

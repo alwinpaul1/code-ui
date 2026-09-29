@@ -222,7 +222,7 @@ function preferredStoredReading(
   a: { id: string; text: string },
   b: { id: string; text: string }
 ): 'a' | 'b' | null {
-  const verdict = preferredWitnessReading(a.text, b.text)
+  const verdict = preferredWitnessReading(a.text, b.text) ?? cutStatusCopyOf(a, b)
   if (verdict === null) {
     return null
   }
@@ -231,6 +231,27 @@ function preferredStoredReading(
   const whole = !statusCopyMayBeCut(kept.text)
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
   return goesOn && whole && asSent ? null : verdict
+}
+
+/**
+ * A hook copy that fills the tab status's field, and a longer reading that
+ * goes on from it: one message, and the longer reading is the whole of it.
+ * Orca cuts the field mid-word, so the word boundary preferredWitnessReading
+ * asks of a reading that goes on is not there. A message longer than the
+ * field, drawn from its status copy for a beat and then listed whole by the
+ * queue box, was stored as both and drawn twice once the agent took it, the
+ * first cut short (round 2 of the review of fix/midturn-gaps, 2026-09-29).
+ * Only a `desk-` copy: a phone send is its words as sent, however long.
+ */
+function cutStatusCopyOf(a: { id: string; text: string }, b: { id: string; text: string }): 'a' | 'b' | null {
+  const [ka, kb] = [storedKey(a.text), storedKey(b.text)]
+  if (a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)) {
+    return 'b'
+  }
+  if (b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)) {
+    return 'a'
+  }
+  return null
 }
 
 /** The words preferredWitnessReading compares. */
