@@ -144,7 +144,7 @@ describe('when the desktop prompt hook says the prompt was typed', () => {
     const stdout = execFileSync(shell, ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
       input: JSON.stringify({ prompt: 'typed mid-turn' }),
       encoding: 'utf8',
-      env: { PATH: path, CUIHUD_TTY: tty }
+      env: { ...process.env, PATH: path, CUIHUD_TTY: tty }
     })
     return { beacon: decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n'), stdout }
   }
