@@ -65,7 +65,8 @@ import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-
  *   `/clear` started keeps the claim it took over until its own first
  *   working row, even when the work stopped before it (Orca's SessionStart
  *   dropped the pane's inventory, so nothing says so), or until 30 minutes
- *   after the lead's stamp, the anchor it takes over with the claim. A
+ *   after the lead's stamp (or, with none, the status that made its claim),
+ *   the anchor it takes over with the claim. A
  *   session's own boundary ends a claim it made itself: that is its process
  *   restarting (`claude --resume <id>` after an exit). A same-session
  *   boundary from a live process (an in-process /resume of itself) reads the
