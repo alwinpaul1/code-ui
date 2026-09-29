@@ -61,8 +61,11 @@ export type AgentHudBeaconLimit = {
  *  `heldBack`: a status prompt whose time the status does not hold, found on a
  *  pane whose state began after it was taken. It has no `at`, pairs like any
  *  other copy (a phone send still claims its own), and is never drawn.
- *  `seenAt`: when the phone first read a status prompt, by the phone's clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number }
+ *  `seenAt`: when the phone first read a status prompt, by the phone's clock.
+ *  `hookTwin`: on a status prompt, the prompt hook's copy of the same
+ *  submission it stands for (mergeDesktopPrompts): the hook's nonce, the text
+ *  row it names, and when it reached the phone. */
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number } }
 
 export type AgentHudBeacon = {
   agent: string

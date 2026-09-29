@@ -338,8 +338,8 @@ export function useMobileNativeChatDrafts(args: {
   // last knew of them, so a chat that comes back draws its photos at once.
   const storedPreviews = pendingKey ? (imagePreviewsBySession[pendingKey] ?? knownNativeChatImagePreviews(pendingKey)) : undefined
   const landed = useMemo(
-    () => (pendingKey ? settleLandedOwnSends(messages, pending, transcriptSettled, storedPreviews) : null),
-    [messages, pending, pendingKey, storedPreviews, transcriptSettled]
+    () => (pendingKey ? settleLandedOwnSends(messages, pending, transcriptSettled, storedPreviews, args.beaconPromptReceipts) : null),
+    [messages, pending, pendingKey, storedPreviews, transcriptSettled, args.beaconPromptReceipts]
   )
   useEffect(() => {
     if (!pendingKey) {

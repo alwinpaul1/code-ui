@@ -15,6 +15,8 @@
 // mobile-chat-midturn-prompt-after-reply.test.ts.
 
 import { describe, expect, it, vi } from 'vitest'
+import type { DesktopPrompt } from './agent-hud-beacon'
+import type { AgentStatusPromptSource } from './agent-status-prompts'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import {
   at,
@@ -25,6 +27,11 @@ import {
   BEFORE_FIRST,
   BEFORE_SECOND,
   WHOLE_TURN,
+  LAST_REPLY,
+  TURN_ENDED,
+  BEFORE_TURN,
+  text,
+  user,
   working,
   done,
   statusReader,
@@ -230,3 +237,242 @@ describe('a long desk message, with the prompt hook’s copy of it', () => {
     unmount()
   })
 })
+
+// Once for words the tab status folds (several lines), whose hook copies pair
+// by that folding, and once for words it carries as typed.
+for (const [label, WORDS] of [
+  ['a message of several lines', SECOND_SEND],
+  ['a message of one line', 'yes, go ahead with the migration']
+] as const) {
+  /** The next turn, started by the same words typed at the desk once the first
+   *  turn was over: its row, and the pane as Orca holds it then. */
+  const AGAIN_ROW = user('5e6f7a8b-9c0d-4e1f-8a2b-3c4d5e6f7a8b', WORDS, '05:49:46.995')
+  const AGAIN_REPLY = text('6f7a8b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c', '05:50:05.000')
+  function againRun(stamped: string): NonNullable<AgentStatusPromptSource> {
+    return {
+      ...working(WORDS, stamped),
+      stateStartedAt: at('05:49:47.000'),
+      stateHistory: [...BEFORE_TURN, { state: 'working', prompt: normalizePromptField(WORDS), startedAt: at('05:08:00.600') }, { state: 'done', prompt: normalizePromptField(WORDS), startedAt: TURN_ENDED }]
+    }
+  }
+  /** Claude dequeues a message still queued as the turn ends, as the next
+   *  turn's row, and fires no UserPromptSubmit for it (checked on 2.1.284). */
+  const DEQUEUED = user('7d1e0c5a-3b2f-4e61-9a8d-0c4b5e6f7a81', WORDS, '05:46:54.300')
+  const DEQUEUED_ANSWER = text('8e2f1d6b-4c3a-4f72-8b9e-1d5c6f7a8b92', '05:47:20.000')
+
+  describe(`the same words mid-turn, then as the prompt that starts the next turn: ${label}`, () => {
+    let agent: 'claude' | 'codex' = 'claude'
+    const { unmount, showAt, where } = midturnChat(frames, () => agent)
+    /** Every user bubble or row of the words, each with the row it follows. */
+    const placesOf = (words: string) => {
+      const found = where(words)
+      return found.at.map((index) => found.after(index))
+    }
+    /** The mid-turn message watched arriving and taken mid-turn, the turn's
+     *  end, and the same words typed at the desk as the next prompt. */
+    async function sentTwice(reader: ReturnType<typeof statusReader>, beacon: (upTo: 'first' | 'both') => DesktopPrompt[] | undefined, hook: { promptHook?: boolean }): Promise<DesktopPrompt[]> {
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: beacon('first') })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hook)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [], hook)
+      vi.setSystemTime(at('05:46:51.100'))
+      prompts = reader.read(done(WORDS), { beacon: beacon('first') })
+      await showAt('05:46:51.200', WHOLE_TURN, prompts, false, [], hook)
+      vi.setSystemTime(at('05:49:47.100'))
+      prompts = reader.read(againRun('05:49:47.000'), { beacon: beacon('both') })
+      await showAt('05:49:47.200', WHOLE_TURN, prompts, true, [], hook)
+      await showAt('05:49:48.000', [...WHOLE_TURN, AGAIN_ROW], prompts, true, [], hook)
+      await showAt('05:50:06.000', [...WHOLE_TURN, AGAIN_ROW, AGAIN_REPLY], prompts, true, [], hook)
+      return prompts
+    }
+    const first = beaconCopy('71101', WORDS, WRITTEN_BEFORE_SECOND, '05:36:35.050')
+    const second = beaconCopy('71102', WORDS, LAST_REPLY, '05:49:47.050')
+
+    // Gap D of the final review of fix/midturn-prompt-at-end: the second turn's
+    // row landed the first turn's bubble too, and one of the two was lost. The
+    // hook's copy of the second submission is the evidence: Claude fires no
+    // UserPromptSubmit when it dequeues a message, so a second copy of the words
+    // is a second submission, and that row is its own.
+    it('keeps both, each where it was sent, on a tab with the prompt hook, and after the chat comes back', async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      await sentTwice(reader, (upTo) => (upTo === 'first' ? [first] : [first, second]), hooked)
+      expect(placesOf(WORDS)).toEqual([WRITTEN_BEFORE_SECOND, LAST_REPLY])
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:52:00.000'))
+      const prompts = again.read({ ...againRun('05:50:05.500'), state: 'done', stateStartedAt: at('05:50:05.500') }, { beacon: [first, second] })
+      await showAt('05:52:00.100', [...WHOLE_TURN, AGAIN_ROW, AGAIN_REPLY], prompts, false, [], hooked)
+      await showAt('05:52:01.000', [...WHOLE_TURN, AGAIN_ROW, AGAIN_REPLY], prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([WRITTEN_BEFORE_SECOND, LAST_REPLY])
+      again.unmount()
+      unmount()
+    })
+
+    // The phone never got the first's hook copy (a lost chunk), only its status
+    // copy, which it drew and remembered. After the chat comes back the tab
+    // status carries only the second turn's prompt, and the remembered bubble
+    // is all that holds the first: the second's row is not its row either.
+    it('keeps both when the phone got only the second submission’s hook copy, and after the chat comes back', async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      await sentTwice(reader, (upTo) => (upTo === 'first' ? undefined : [second]), hooked)
+      expect(placesOf(WORDS)).toEqual([WRITTEN_BEFORE_SECOND, LAST_REPLY])
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:52:00.000'))
+      const prompts = again.read({ ...againRun('05:50:05.500'), state: 'done', stateStartedAt: at('05:50:05.500') }, { beacon: [second] })
+      await showAt('05:52:00.100', [...WHOLE_TURN, AGAIN_ROW, AGAIN_REPLY], prompts, false, [], hooked)
+      await showAt('05:52:01.000', [...WHOLE_TURN, AGAIN_ROW, AGAIN_REPLY], prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([WRITTEN_BEFORE_SECOND, LAST_REPLY])
+      again.unmount()
+      unmount()
+    })
+
+    // The limit, pinned: with no hook copy of the second submission (a Codex
+    // tab, a Windows host, a Claude tab launched without the hook, or a second
+    // submission made while the phone did not listen to the terminal), the
+    // second turn's row is the same input as the row Claude writes when it
+    // dequeues the first message at the turn's end, and the first is retired
+    // as it was: one of the two is lost, and none is drawn twice.
+    for (const kind of ['claude', 'codex'] as const) {
+      it(`still draws one of the two with no hook copy of the second submission, on a ${kind === 'claude' ? 'Claude Code tab launched without the hook' : 'Codex tab'} (a limit)`, async () => {
+        agent = kind
+        const reader = statusReader()
+        await sentTwice(reader, () => undefined, {})
+        expect(placesOf(WORDS)).toEqual([LAST_REPLY])
+        reader.unmount()
+        unmount()
+      })
+    }
+
+    // The guards: the first message's own copies only, and the row Claude
+    // writes when it dequeues it at the turn's end. Each of these drew the
+    // message twice under the rule gap D's first fix tried (a4c67c53, withdrawn
+    // in d57459ae), which went by when the phone saw the box let it go.
+    const dequeuedRun = (stamped: string): NonNullable<AgentStatusPromptSource> => ({
+      ...working(WORDS, stamped),
+      stateStartedAt: at('05:46:54.200'),
+      stateHistory: [...done(WORDS).stateHistory!, { state: 'done', prompt: normalizePromptField(WORDS), startedAt: TURN_ENDED }]
+    })
+    it('draws a message Claude dequeued at the turn end once when the phone slept through the dequeue, with the hook copy', async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [first] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [WORDS], hooked)
+      await showAt('05:40:00.000', WHOLE_TURN.slice(0, -3), prompts, true, [WORDS], hooked)
+      vi.setSystemTime(at('06:05:00.000'))
+      prompts = reader.read(done(WORDS, '05:47:30.000'), { beacon: [first] })
+      await showAt('06:05:00.100', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, false, [], hooked)
+      await showAt('06:05:10.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY])
+      reader.unmount()
+      unmount()
+      // A persisted witness coming back.
+      const again = statusReader()
+      vi.setSystemTime(at('06:20:00.000'))
+      prompts = again.read(done(WORDS, '05:47:30.000'), { beacon: [first] })
+      await showAt('06:20:00.100', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, false, [], hooked)
+      await showAt('06:20:01.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, false, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY])
+      again.unmount()
+      unmount()
+    })
+
+    it('draws a queued message the box reader never listed once after Claude dequeues it at the turn end, with the hook copy', async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [first] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:46:54.800'))
+      prompts = reader.read(dequeuedRun('05:46:54.400'), { beacon: [first] })
+      await showAt('05:46:56.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [], hooked)
+      await showAt('05:47:21.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, true, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY])
+      reader.unmount()
+      unmount()
+    })
+
+    it('draws a message the queue box held until the turn ended once with the phone clock 3 s behind, with the hook copy', async () => {
+      agent = 'claude'
+      const lateFirst = { ...first, seenAt: at('05:36:32.050') }
+      const reader = statusReader()
+      vi.setSystemTime(at('05:34:57.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:34:57.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:32.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [lateFirst] })
+      await showAt('05:36:32.100', BEFORE_SECOND, prompts, true, [WORDS], hooked)
+      await showAt('05:46:47.900', WHOLE_TURN, prompts, true, [WORDS], hooked)
+      vi.setSystemTime(at('05:46:51.800'))
+      prompts = reader.read(done(WORDS, '05:46:54.200'), { beacon: [lateFirst] })
+      await showAt('05:46:52.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [], hooked)
+      await showAt('05:47:10.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY])
+      reader.unmount()
+      unmount()
+    })
+
+    // Both at once: the first dequeued at the turn end, then the same words
+    // typed again for the turn after. Each row is its own submission's.
+    it('draws a message Claude dequeued and the same words typed later as their two rows only', async () => {
+      agent = 'claude'
+      const typedAgain = user('0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', WORDS, '05:49:46.995')
+      const third = beaconCopy('71103', WORDS, DEQUEUED_ANSWER.id, '05:49:47.050')
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [first] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [WORDS], hooked)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [WORDS], hooked)
+      vi.setSystemTime(at('05:46:54.800'))
+      prompts = reader.read(dequeuedRun('05:46:54.400'), { beacon: [first] })
+      await showAt('05:46:56.000', [...WHOLE_TURN, DEQUEUED], prompts, true, [], hooked)
+      await showAt('05:47:21.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER], prompts, false, [], hooked)
+      vi.setSystemTime(at('05:49:47.100'))
+      prompts = reader.read({ ...dequeuedRun('05:49:47.000'), stateStartedAt: at('05:49:47.000') }, { beacon: [first, third] })
+      await showAt('05:49:48.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, typedAgain], prompts, true, [], hooked)
+      await showAt('05:49:49.000', [...WHOLE_TURN, DEQUEUED, DEQUEUED_ANSWER, typedAgain], prompts, true, [], hooked)
+      expect(placesOf(WORDS)).toEqual([LAST_REPLY, DEQUEUED_ANSWER.id])
+      reader.unmount()
+      unmount()
+    })
+
+    // The same words sent twice in one turn and taken mid-turn both times: the
+    // status carries them once (its prompt did not change), the hook twice.
+    it('draws two messages of the same words taken mid-turn in one turn as two, with the hook copies', async () => {
+      agent = 'claude'
+      const again = beaconCopy('71104', WORDS, WRITTEN_AFTER_SECOND, '05:38:10.050')
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      prompts = reader.read(working(WORDS, '05:36:34.891'), { beacon: [first] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:38:10.000'))
+      prompts = reader.read(working(WORDS, '05:38:09.900'), { beacon: [first, again] })
+      await showAt('05:38:10.100', WHOLE_TURN.slice(0, -5), prompts, true, [], hooked)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [], hooked)
+      expect(placesOf(WORDS)).toEqual([WRITTEN_BEFORE_SECOND, WRITTEN_AFTER_SECOND])
+      reader.unmount()
+      unmount()
+    })
+  })
+}

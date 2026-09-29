@@ -9,6 +9,7 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
+import { ownedByLaterSubmission, placeOfCopy, rowOwners } from './desk-prompt-row-owners'
 
 
 /**
@@ -399,24 +400,31 @@ export function withoutLandedDesktopPrompts(
   const seen = [
     ...folded
       .filter((message) => message.role === 'user')
-      .map((message) =>
-        message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-      ),
-    ...alsoShown
+      .map((message) => ({
+        text: message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''),
+        rowId: message.id as string | undefined
+      })),
+    ...alsoShown.map((text) => ({ text, rowId: undefined }))
   ]
-    .map(landedKey)
-    .filter((text) => text.length > 0)
+    .map((entry) => ({ key: landedKey(entry.text), rowId: entry.rowId }))
+    .filter((entry) => entry.key.length > 0)
+  // A row a later hook submission of the same words owns is that
+  // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
+  const owners = rowOwners(prompts, raw, landedKey)
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {
       return !landedMarkers.has(markersOf(prompt.text))
     }
     const key = landedKey(prompt.text)
+    const place = owners.size > 0 ? placeOfCopy(prompt, raw) : null
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
     // from the length was wrong whenever escapes or multibyte text moved the
     // boundary (2026-09-13).
     return !seen.some(
-      (other) => other === key || (prompt.cut === true && key.length > 0 && other.startsWith(key))
+      (other) =>
+        (other.key === key || (prompt.cut === true && key.length > 0 && other.key.startsWith(key))) &&
+        !(place !== null && other.rowId !== undefined && ownedByLaterSubmission(owners.get(other.rowId), place))
     )
   })
 }

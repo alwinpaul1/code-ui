@@ -195,7 +195,9 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       sessionId: SESSION,
       messages: tick.messages,
       transcriptLoading: tick.loading ?? false,
-      transcriptSettled: !tick.loading
+      transcriptSettled: !tick.loading,
+      // As the controller does: the desk prompts the chat holds.
+      beaconPromptReceipts: tick.prompts
     })
     seen.drafts = drafts
     const controller = {

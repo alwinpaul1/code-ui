@@ -9,6 +9,7 @@ import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pen
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import { pastedPhotos } from './mobile-native-chat-photo-rows'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 
 const NO_PREVIEWS: LandedImagePreviewEcho[] = []
 const NO_IDS: ReadonlySet<string> = new Set()
@@ -25,6 +26,8 @@ export type LandedOwnSends = {
   /** The phone's photos each landed row takes from the send it replaces. */
   landedImagePreviews: LandedImagePreviewEcho[]
   landedImagePendingIds: ReadonlySet<string>
+  /** The desk prompts the read was settled against. */
+  receipts: readonly BeaconPromptReceipt[]
 }
 
 /**
@@ -50,10 +53,12 @@ export function settleLandedOwnSends(
   pending: MobileNativeChatPendingMessage[],
   transcriptSettled: boolean,
   /** The previews the chat already draws, by row: those rows are taken. */
-  stored?: Record<string, string[]>
+  stored?: Record<string, string[]>,
+  /** The desk prompts the chat holds (retireLandedMobileNativeChatPending). */
+  receipts: readonly BeaconPromptReceipt[] = []
 ): LandedOwnSends {
   if (pending.length === 0) {
-    return { pending, rebased: pending, landedImagePreviews: NO_PREVIEWS, landedImagePendingIds: NO_IDS }
+    return { pending, rebased: pending, landedImagePreviews: NO_PREVIEWS, landedImagePendingIds: NO_IDS, receipts }
   }
   // Only a send judged against a read known to be this session's binds. That
   // does NOT give an image echo a boundary (the rebase leaves those on
@@ -70,10 +75,11 @@ export function settleLandedOwnSends(
     ? new Set(landedImagePreviews.map((preview) => preview.pendingId))
     : NO_IDS
   return {
-    pending: retireLandedMobileNativeChatPending(messages, rebased, landedImagePendingIds),
+    pending: retireLandedMobileNativeChatPending(messages, rebased, landedImagePendingIds, receipts),
     rebased,
     landedImagePreviews,
-    landedImagePendingIds
+    landedImagePendingIds,
+    receipts
   }
 }
 
@@ -94,7 +100,8 @@ export function storedAfterLanding(
   return retireLandedMobileNativeChatPending(
     messages,
     rebaseMobileNativeChatPendingBaselines(messages, stored),
-    settled.landedImagePendingIds
+    settled.landedImagePendingIds,
+    settled.receipts
   )
 }
 

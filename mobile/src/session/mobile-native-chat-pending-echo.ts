@@ -47,6 +47,10 @@ export type MobileNativeChatPendingMessage = {
    *  own witness from an older message (acceptOwnSendInPending). Absent on
    *  witnesses stored by an older build. */
   witnessedAt?: number
+  /** A witnessed message only: user rows of its words that a later submission
+   *  of the same words owns (desk-prompt-row-owners.ts), kept so they never
+   *  retire it, even once the prompt hook's copies that told are gone. */
+  notItsRows?: string[]
   /** Whether the transcript this baseline was captured from was already this
    *  session's own history. A send issued mid-hydration is captured unresolved
    *  and rebased onto the first authoritative read instead of reconciling

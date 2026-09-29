@@ -15,7 +15,7 @@ describe('one list of desktop prompts from the tab status and the beacon', () =>
       ]
     )
     expect(merged).toEqual([
-      { nonce: 'status:s:1:0', text: 'fix the queue', at: 1000 },
+      { nonce: 'status:s:1:0', text: 'fix the queue', at: 1000, hookTwin: { nonce: 'beacon-1' } },
       { nonce: 'beacon-2', text: 'and the pill' }
     ])
   })
@@ -98,7 +98,7 @@ describe('a status copy the field cut, and the hook copy of the same message', (
 
   it('carries the words as typed, with its own nonce and time', () => {
     const merged = mergeDesktopPrompts([cutCopy], [{ nonce: '9001', text: words, cut: false, anchorId: 'a1', seenAt: 1100 }])
-    expect(merged).toEqual([{ ...cutCopy, text: words, cut: false }])
+    expect(merged).toEqual([{ ...cutCopy, text: words, cut: false, hookTwin: { nonce: '9001', anchorId: 'a1', seenAt: 1100 } }])
   })
 
   it('stays cut when the hook cut the words too, at 2,000 bytes', () => {
@@ -124,10 +124,11 @@ describe('a status copy the field cut, and the hook copy of the same message', (
     expect(mergeDesktopPrompts([cutCopy], [{ nonce: '9003', text: later }]).map((prompt) => prompt.text)).toEqual([later])
   })
 
-  // Degenerate: a whole status copy, and one with no twin, are left as they are.
-  it('leaves a whole status copy and a cut one with no twin as they were', () => {
+  // Degenerate: a whole status copy keeps its words, and one with no twin is
+  // left as it is.
+  it('leaves the words of a whole status copy, and a cut one with no twin, as they were', () => {
     const whole: DesktopPrompt = { nonce: 'status:s:1000:1', text: 'fix the\n\nqueue'.replace(/\s+/g, ' '), at: 1000, seenAt: 1000 }
-    expect(mergeDesktopPrompts([whole], [{ nonce: '9002', text: 'fix the\n\nqueue', seenAt: 1000 }])).toEqual([whole])
+    expect(mergeDesktopPrompts([whole], [{ nonce: '9002', text: 'fix the\n\nqueue', seenAt: 1000 }])).toEqual([{ ...whole, hookTwin: { nonce: '9002', seenAt: 1000 } }])
     expect(mergeDesktopPrompts([cutCopy], [])).toEqual([cutCopy])
   })
 })

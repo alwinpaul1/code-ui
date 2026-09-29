@@ -2,6 +2,7 @@ import { normalizePromptField } from '../../../src/shared/agent-status-field-nor
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { isSubagentMessagePrompt } from './mobile-native-chat-agent-messages'
 import { isCrossSessionMessagePrompt } from './claude-peer-message-frames'
+import { HOOK_TWIN_LAG_MS } from './desk-prompt-row-owners'
 
 /**
  * The tab status's prompts and the beacon's, as one list for the chat.
@@ -40,11 +41,18 @@ export function mergeDesktopPrompts(
   // on before the box listed it came back as two, cut and whole (W1 of the
   // review of fix/midturn-gaps, 2026-09-29). The status copy keeps its nonce
   // and its time; only the words come from the twin.
+  // And it keeps the twin's nonce, row and arrival (`hookTwin`): proof of a
+  // submission of its own, which a copy of the tab status is not
+  // (desk-prompt-row-owners.ts).
   const merged: DesktopPrompt[] = status.map((copy) => {
     const twin = twinOf.get(copy)
-    return twin !== undefined && copy.cut === true && twin.text.length > copy.text.length
-      ? { ...copy, text: twin.text, cut: twin.cut === true }
-      : copy
+    if (twin === undefined) {
+      return copy
+    }
+    const hookTwin = { nonce: twin.nonce, ...(twin.anchorId ? { anchorId: twin.anchorId } : {}), ...(twin.seenAt !== undefined ? { seenAt: twin.seenAt } : {}) }
+    return copy.cut === true && twin.text.length > copy.text.length
+      ? { ...copy, text: twin.text, cut: twin.cut === true, hookTwin }
+      : { ...copy, hookTwin }
   })
   // The two copies of one message are told by the status's own folding: it
   // keeps a prompt on one line and cuts it at 200 characters
@@ -54,15 +62,19 @@ export function mergeDesktopPrompts(
   // for ONE beacon copy, the one the phone read nearest it: two long messages
   // that agree for 200 characters fold to one status text, and dropping every
   // copy that folded to it hid the second, which as a mid-turn message has no
-  // row (review of 004ce958). A status copy held back (`heldBack`,
+  // row (review of 004ce958). The same holds for the same words exactly: the
+  // status makes no copy when its prompt does not change, so the same words
+  // sent mid-turn and then typed as the next turn's prompt, or sent twice in
+  // one turn, were one status copy, and every hook copy of them was dropped
+  // with it: one of the two messages was drawn nowhere (gap D of the final
+  // review of fix/midturn-prompt-at-end). A status copy held back (`heldBack`,
   // agent-status-prompts.ts) drops its twin the same way, a desk resend's own
   // copy included, whose anchor could place it (combined review of 30c94116):
   // the held copy can be placed later, once the rows show a harness message
   // carried it (desk-prompt-harness-turns.ts, after this merge), and a twin
   // let through would then draw the message twice.
-  const seen = new Set(status.map((prompt) => prompt.text))
   for (const prompt of beacon) {
-    const twin = seen.has(prompt.text) || twins.has(prompt)
+    const twin = twins.has(prompt)
     if (!twin && !isSubagentMessagePrompt(prompt) && !isCrossSessionMessagePrompt(prompt.text)) {
       merged.push(prompt)
     }
@@ -71,9 +83,9 @@ export function mergeDesktopPrompts(
 }
 
 /**
- * The beacon copies a status copy stands for by the status's folding, one
- * each, nearest pair first by when the phone read them, each with the status
- * copy it pairs with. Taken from the beacon
+ * The beacon copies a status copy stands for, by its words or by the
+ * status's folding of them, one each, nearest pair first by when the phone
+ * read them, each with the status copy it pairs with. Taken from the beacon
  * side in list order, an older message of the same first 200 characters took
  * the status copy after a remount, and the message the status carried was
  * kept beside it, drawn twice (review of 08813139).
@@ -83,7 +95,7 @@ function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopP
   beacon.forEach((prompt, index) => {
     const folded = normalizePromptField(prompt.text)
     for (const copy of status) {
-      if (copy.text === folded && folded !== prompt.text && !arrivedAfter(prompt, copy)) {
+      if ((copy.text === folded || copy.text === prompt.text) && !arrivedAfter(prompt, copy)) {
         const distance =
           typeof copy.seenAt === 'number' && typeof prompt.seenAt === 'number' ? Math.abs(copy.seenAt - prompt.seenAt) : Number.MAX_VALUE
         pairs.push({ copy, prompt, distance, order: index })
@@ -102,11 +114,6 @@ function foldedTwins(status: readonly DesktopPrompt[], beacon: readonly DesktopP
   return twins
 }
 
-/** How long after the phone read a status copy the hook's copy of the same
- *  submission can still reach it: the two travel separate streams (the tab
- *  status and the terminal's bytes), a moment apart as a rule. */
-const TWIN_LAG_MS = 30_000
-
 /**
  * Whether a hook copy reached the phone well after it read the status copy,
  * which makes it a later submission and never that copy's twin. The status
@@ -118,5 +125,5 @@ const TWIN_LAG_MS = 30_000
  * 2026-09-29). A copy with no arrival time pairs as before.
  */
 function arrivedAfter(prompt: DesktopPrompt, copy: DesktopPrompt): boolean {
-  return typeof prompt.seenAt === 'number' && typeof copy.seenAt === 'number' && prompt.seenAt - copy.seenAt > TWIN_LAG_MS
+  return typeof prompt.seenAt === 'number' && typeof copy.seenAt === 'number' && prompt.seenAt - copy.seenAt > HOOK_TWIN_LAG_MS
 }
