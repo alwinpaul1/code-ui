@@ -521,7 +521,8 @@ for (const [label, WORDS] of [
 }
 
 // Gap C of the final review of fix/midturn-prompt-at-end: Orca's stand-in (a
-// status with no prompt and no history, when its hook row is stale) as the
+// status with no prompt and no history, built from the terminal title in
+// place of the pane's hook row; agent-status-stand-in.ts) as the
 // chat's first status used up the chat's first reading, so a message taken
 // before the chat opened, on the next status, read as one the chat watched
 // arrive: timed by that status's ping, it was drawn at the tail, below the

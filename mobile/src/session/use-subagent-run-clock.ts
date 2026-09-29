@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { observeSubagentRuns, type SubagentRunClock } from './mobile-subagent-runs'
+import { observeSubagentRuns, type LastRosterRead, type SubagentRunClock } from './mobile-subagent-runs'
 
 /**
  * The run clock for one pane, kept OUTSIDE the component: the tasks sheet
@@ -9,7 +9,7 @@ import { observeSubagentRuns, type SubagentRunClock } from './mobile-subagent-ru
  * count observes the same status while the chat is open, so the clock keeps
  * counting between openings. Bounded by the panes seen this launch.
  */
-const clocks = new Map<string, SubagentRunClock>()
+const clocks = new Map<string, { runs: SubagentRunClock; lastRead: LastRosterRead }>()
 const CLOCK_CAP = 64
 
 type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
@@ -17,13 +17,16 @@ type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
 
 /**
  * Whether a status is Orca's stand-in, which says nothing of the roster: built
- * from the terminal title when the pane's hook row is stale, as over a long
- * tool call, with the pane's key and state, no prompt, no history and no
- * `subagents` (the title-only branch of Orca 1.4.216's status projection,
- * read in its app.asar 2026-09-29; agent-status-prompts.ts has the same
- * shape). Read as a roster it emptied the clock, and the next real status
- * brought every subagent still running back as just started: the sheet read
- * seconds beside the desk's "1h 15m" (the user, 2026-09-29).
+ * from the terminal title in place of the pane's hook row, with the pane's key
+ * and state, no prompt, no history and no `subagents` (the title-only branch
+ * of Orca 1.4.216's status projection; agent-status-stand-in.ts). The clock
+ * reads the task readers' status, which is the held hook row through a
+ * stand-in while the phone watched the pane, so one reaches it only when read
+ * as it comes, as it reaches the task memory. Read as a roster it emptied the
+ * clock, and the next real status brought every subagent still running back
+ * as just started: the sheet read seconds beside the desk's "1h 15m" (the
+ * user, 2026-09-29). Skipped, it marks the pane's roster unseen
+ * (mobile-subagent-runs.ts).
  */
 function isStandIn(status: RosterStatus): boolean {
   return (
@@ -44,18 +47,27 @@ export function advanceSubagentRunClock(
   if (!status || !key) {
     return undefined
   }
-  const previous = clocks.get(key) ?? null
+  const pane = clocks.get(key)
   if (isStandIn(status)) {
-    return previous ?? undefined
+    if (pane && !pane.lastRead.unseen) {
+      clocks.set(key, { ...pane, lastRead: { ...pane.lastRead, unseen: true } })
+    }
+    return pane?.runs
   }
-  const next = observeSubagentRuns(previous, status.subagents, now)
-  if (!clocks.has(key) && clocks.size >= CLOCK_CAP) {
+  const next = observeSubagentRuns(pane?.runs ?? null, status.subagents, now, pane?.lastRead)
+  const hostStarts = new Map<string, number>()
+  for (const row of status.subagents ?? []) {
+    if (row.state !== 'idle' && typeof row.startedAt === 'number') {
+      hostStarts.set(row.id, row.startedAt)
+    }
+  }
+  if (!pane && clocks.size >= CLOCK_CAP) {
     const oldest = clocks.keys().next()
     if (!oldest.done) {
       clocks.delete(oldest.value)
     }
   }
-  clocks.set(key, next)
+  clocks.set(key, { runs: next, lastRead: { hostStarts, unseen: false } })
   return next
 }
 
@@ -64,7 +76,7 @@ export function useSubagentRunClock(status: RosterStatus | null | undefined): Su
   // with the phone's clock, which render must not read. The sheet's first
   // paint reads the pane's clock as it stands and catches up a frame later.
   const [clock, setClock] = useState<SubagentRunClock | undefined>(() =>
-    status?.paneKey ? clocks.get(status.paneKey) : undefined
+    status?.paneKey ? clocks.get(status.paneKey)?.runs : undefined
   )
   useEffect(() => {
     setClock(advanceSubagentRunClock(status, Date.now()))
