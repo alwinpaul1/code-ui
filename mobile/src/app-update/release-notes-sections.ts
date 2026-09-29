@@ -84,3 +84,44 @@ export function releaseBody(
   }
   return `${sections}\n\n**Full Changelog**: https://github.com/${release.repo}/compare/${release.previousTag}...${release.tag}\n`
 }
+
+/** The change lines of `notes` that `previous` already had, as written. The card shows only the
+ *  newest release's notes, so each release lists what changed since the one before it; a line
+ *  carried over reads to someone updating as a change they are getting now (2026-09-29: 0.9.100
+ *  to 0.9.104 each listed everything since 0.9.54). */
+export function repeatedReleaseNotes(notes: string, previous: string): string[] {
+  const changes = (text: string) =>
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trimEnd())
+      .filter((line) => CHANGE.test(line))
+  const before = new Set(changes(previous))
+  return changes(notes).filter((line) => before.has(line))
+}
+
+function versionParts(version: string): number[] {
+  return version.split('.').map((part) => Number.parseInt(part, 10) || 0)
+}
+
+function compareVersions(a: string, b: string): number {
+  const left = versionParts(a)
+  const right = versionParts(b)
+  for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
+    const difference = (left[index] ?? 0) - (right[index] ?? 0)
+    if (difference !== 0) {
+      return difference
+    }
+  }
+  return 0
+}
+
+/** The newest of `versions` older than `version`, or null when there is none. */
+export function previousNotesVersion(version: string, versions: readonly string[]): string | null {
+  let previous: string | null = null
+  for (const candidate of versions) {
+    if (compareVersions(candidate, version) < 0 && (previous === null || compareVersions(candidate, previous) > 0)) {
+      previous = candidate
+    }
+  }
+  return previous
+}

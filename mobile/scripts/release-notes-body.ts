@@ -6,9 +6,14 @@
 //   tsx scripts/release-notes-body.ts --check
 //   tsx scripts/release-notes-body.ts --tag <tag> --previous <tag|""> --repo <owner/repo> --out <file>
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { releaseBody, releaseNotesProblems } from '../src/app-update/release-notes-sections'
+import {
+  previousNotesVersion,
+  releaseBody,
+  releaseNotesProblems,
+  repeatedReleaseNotes
+} from '../src/app-update/release-notes-sections'
 
 const MOBILE = join(import.meta.dirname, '..')
 
@@ -28,6 +33,19 @@ if (!existsSync(file)) {
 }
 const notes = readFileSync(file, 'utf8')
 const problems = releaseNotesProblems(notes)
+// The card shows only the newest release's notes, so they say what changed since the one before.
+const priorVersion = previousNotesVersion(
+  version,
+  readdirSync(join(MOBILE, 'release-notes'))
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => name.replace(/\.md$/, ''))
+)
+if (priorVersion !== null) {
+  const prior = readFileSync(join(MOBILE, 'release-notes', `${priorVersion}.md`), 'utf8')
+  for (const line of repeatedReleaseNotes(notes, prior)) {
+    problems.push(`"${line}" is already in ${priorVersion}'s notes; list only what changed since ${priorVersion}`)
+  }
+}
 if (problems.length > 0) {
   for (const problem of problems) {
     console.error(`::error file=mobile/release-notes/${version}.md::${problem}`)

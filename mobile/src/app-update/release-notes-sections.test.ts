@@ -9,9 +9,11 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { releaseNotesMarkdown } from './release-notes-markdown'
 import {
+  previousNotesVersion,
   RELEASE_NOTE_SECTIONS,
   releaseBody,
-  releaseNotesProblems
+  releaseNotesProblems,
+  repeatedReleaseNotes
 } from './release-notes-sections'
 
 const NOTES_DIR = join(import.meta.dirname, '../../release-notes')
@@ -83,14 +85,51 @@ describe('a release notes file', () => {
   })
 })
 
+// 2026-09-29, the user: "I see the same old features and improvements in
+// 0.9.104 it wasnt updating or cleared and rewritten to tell the changelog of
+// new version". The card shows the newest release's notes alone, and 0.9.100
+// to 0.9.104 each listed everything since 0.9.54, so every update read like
+// the one before it.
+describe('a release\'s notes against the release before', () => {
+  it('names the lines this release repeats from the one before', () => {
+    const before = ['### Improvements', '- Light mode on every screen', '- A smaller pill'].join('\n')
+    const now = ['### Improvements', '- Light mode on every screen', '', '### Security & Bug Fixes', '- Copy drops the stars'].join('\n')
+    expect(repeatedReleaseNotes(now, before)).toEqual(['- Light mode on every screen'])
+    expect(repeatedReleaseNotes(GOOD, before)).toEqual(['- Light mode on every screen'])
+    expect(repeatedReleaseNotes('### Features\n- New', before)).toEqual([])
+  })
+
+  it('finds the release before by version, not by file name order', () => {
+    const versions = ['0.9.9', '0.9.100', '0.9.103', '0.9.104', '0.10.0']
+    expect(previousNotesVersion('0.9.104', versions)).toBe('0.9.103')
+    expect(previousNotesVersion('0.9.100', versions)).toBe('0.9.9')
+    expect(previousNotesVersion('0.10.0', versions)).toBe('0.9.104')
+    expect(previousNotesVersion('0.9.9', versions)).toBeNull()
+    expect(previousNotesVersion('0.9.9', ['0.9.9'])).toBeNull()
+    expect(previousNotesVersion('0.9.9', [])).toBeNull()
+  })
+})
+
 describe('the committed release notes', () => {
   const files = readdirSync(NOTES_DIR).filter((name) => name.endsWith('.md'))
+  const app = JSON.parse(readFileSync(join(import.meta.dirname, '../../app.json'), 'utf8')) as {
+    expo: { version: string }
+  }
 
   it('include the version app.json ships', () => {
-    const app = JSON.parse(readFileSync(join(import.meta.dirname, '../../app.json'), 'utf8')) as {
-      expo: { version: string }
-    }
     expect(files).toContain(`${app.expo.version}.md`)
+  })
+
+  it('tell what changed in the version app.json ships, not what the release before already said', () => {
+    const previous = previousNotesVersion(
+      app.expo.version,
+      files.map((name) => name.replace(/\.md$/, ''))
+    )
+    if (previous === null) {
+      return
+    }
+    const read = (version: string) => readFileSync(join(NOTES_DIR, `${version}.md`), 'utf8')
+    expect(repeatedReleaseNotes(read(app.expo.version), read(previous))).toEqual([])
   })
 
   it.each(files)('%s follows the three-section format', (name) => {
