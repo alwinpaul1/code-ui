@@ -17,6 +17,7 @@ import { ChevronLeft } from 'lucide-react-native'
 import { radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../../../src/theme/theme-context'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
+import { lookUpPairedHost } from '../../../src/transport/host-lookup'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
@@ -46,22 +47,19 @@ export default function EditHostScreen() {
       setLoadError('Missing host.')
       return
     }
-    try {
-      const hosts = await loadHosts()
-      const found = hosts.find((h) => h.id === hostId) ?? null
-      if (!found) {
-        setLoadError('This host was removed from this phone.')
-        setHost(null)
-        return
-      }
-      setHost(found)
-      setName(found.name)
-      setAddress(displayHostEndpoint(found.endpoint))
-      setLoadError(null)
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
+    // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired, and
+    // saying it was removed sent people to re-pair a desktop that only needed a moment.
+    const lookup = await lookUpPairedHost(hostId)
+    if (lookup.kind !== 'ready') {
+      setLoadError(lookup.message)
       setHost(null)
+      return
     }
+    const found = lookup.host
+    setHost(found)
+    setName(found.name)
+    setAddress(displayHostEndpoint(found.endpoint))
+    setLoadError(null)
   }, [hostId])
 
   useEffect(() => {
