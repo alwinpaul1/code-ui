@@ -1,3 +1,8 @@
+import { readTerminalPermissionMode, type TerminalPermissionMode } from './claude-terminal-mode-footer'
+
+// The footer's mode reader lives beside this parser; its callers import both from here.
+export { readTerminalPermissionMode, type TerminalPermissionMode }
+
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 /** Read as the badge's FIRST word, never as a substring of it. */
 const MODEL_FAMILIES = ['fable', 'opus', 'sonnet', 'haiku'] as const
@@ -113,23 +118,6 @@ export function parseCodexStatusContext(lines: readonly string[]): TerminalHudCo
   return null
 }
 
-export type TerminalPermissionMode =
-  | 'default'
-  | 'manual'
-  | 'acceptEdits'
-  | 'plan'
-  | 'auto'
-  | 'bypassPermissions'
-
-const PERMISSION_MODE_PATTERNS: Array<[RegExp, TerminalPermissionMode]> = [
-  [/manual mode on/i, 'manual'],
-  [/accept edits on/i, 'acceptEdits'],
-  [/plan mode on/i, 'plan'],
-  [/auto mode on/i, 'auto'],
-  [/bypass permissions on/i, 'bypassPermissions']
-]
-
-/** The mode footer sits under the input box; the last match on screen wins. */
 // Claude Code's spinner glyphs rotate through these; the verb follows, then an
 // ellipsis. Read from the bottom, where the live line sits.
 const ACTIVITY_LINE = /^\s*[✳✻✽✶✢·*⏺]\s+([A-Z][a-zA-Z]+)…/
@@ -151,28 +139,7 @@ function activityField(lines: readonly string[]): { activity?: string } {
   return activity ? { activity } : {}
 }
 
-/** The mode the footer states, or null when no footer row is on this screen.
- *
- *  Null is a real answer and callers must keep it. `parseTerminalPermissionMode`
- *  collapses it to 'default' for the HUD, which reads as Manual — fine for a
- *  pill that shows the last known mode, wrong for anything that ACTS on it. The
- *  mode stepper treated a blank mid-repaint frame as "already Manual" and
- *  reported success having pressed nothing, so the pill claimed Manual while the
- *  agent kept auto-accepting edits (2026-09-14). */
-export function readTerminalPermissionMode(
-  lines: readonly string[]
-): TerminalPermissionMode | null {
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? ''
-    for (const [pattern, mode] of PERMISSION_MODE_PATTERNS) {
-      if (pattern.test(line)) {
-        return mode
-      }
-    }
-  }
-  return null
-}
-
+/** The footer's mode for the pill: 'default' when no footer states one. */
 export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
   return readTerminalPermissionMode(lines) ?? 'default'
 }
