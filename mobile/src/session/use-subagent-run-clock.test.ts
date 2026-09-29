@@ -103,7 +103,9 @@ describe('a roster subagent’s run clock', () => {
 // SubagentStop. The phone withholds the nested run's statuses from the task
 // readers, so the next status the clock sees is the lead's, the start moved.
 // Timed from the re-creation, the sheet read "30s" beside the desk's
-// "1h 15m". The host rows here are built by the vendored hook listener.
+// "1h 15m". That holds while the nested claude runs; the lead's row after it
+// is the limit at the end. The host rows are built by the vendored hook
+// listener.
 describe('a roster subagent’s run clock across a nested claude in the pane', () => {
   const LEAD = 'session-lead'
   const X = 'abe66e505fe909946'
@@ -156,7 +158,7 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     expect(rows.later.find((row) => row.id === X)?.startedAt).toBe(at('09:59:30.000'))
   })
 
-  it('keeps timing the subagent from the start the phone watched, not from its re-creation', () => {
+  it('keeps timing the subagent from the start the phone watched, not from its re-creation, while the nested claude runs', () => {
     const rows = hostRows()
     advanceSubagentRunClock(lead(rows.first), at('08:45:02.000'))
     const clock = advanceSubagentRunClock(lead(rows.afterNested), at('09:59:40.000'))
@@ -187,5 +189,37 @@ describe('a roster subagent’s run clock across a nested claude in the pane', (
     advanceSubagentRunClock({ paneKey, prompt: '', stateHistory: [] }, at('09:59:20.000'))
     const clock = advanceSubagentRunClock(lead(rows.afterNested), at('09:59:40.000'))
     expect(shown(clock, rows.afterNested, at('10:00:00.000'))).toBe('30s')
+  })
+  // A limit, pinned (the review of 078a79b9, its finding 1): the above holds
+  // while the nested claude runs. The lead's first event after it, the
+  // PostToolUse of the Bash that ran it, takes the pane's session back, and
+  // the listener deletes every row the replaced session held
+  // (voidClaimsOfReplacedClaudeSession), the lead's running agent with them:
+  // a lead row that lists none, which the phone cannot tell from the agent's
+  // stop. Its next call re-creates it, and the run is timed from there. The
+  // task memory drops the agent from the count on that row too (on main).
+  it('times it from its next re-creation once the nested claude exits and the lead’s row lists none (a limit)', () => {
+    const state = createHookListenerState()
+    const event = (clock: string, payload: Record<string, unknown>) => {
+      vi.setSystemTime(at(clock))
+      return (normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')?.payload.subagents ?? []) as AgentSubagentSnapshot[]
+    }
+    event('08:44:50.000', { hook_event_name: 'UserPromptSubmit', session_id: LEAD, prompt: 'go' })
+    const first = event('08:45:00.000', { hook_event_name: 'SubagentStart', session_id: LEAD, agent_id: X, agent_type: 'general-purpose' })
+    const bash = event('09:58:55.000', { hook_event_name: 'PreToolUse', session_id: LEAD, tool_name: 'Bash', tool_input: { command: 'claude -p "second opinion"' } })
+    event('09:59:00.000', { hook_event_name: 'SessionStart', session_id: 'session-nested', source: 'startup' })
+    event('09:59:10.000', { hook_event_name: 'UserPromptSubmit', session_id: 'session-nested', prompt: 'second opinion' })
+    const recreated = event('09:59:30.000', { hook_event_name: 'PreToolUse', session_id: LEAD, agent_id: X, tool_name: 'Read' })
+    event('09:59:40.000', { hook_event_name: 'Stop', session_id: 'session-nested' })
+    const back = event('09:59:41.000', { hook_event_name: 'PostToolUse', session_id: LEAD, tool_name: 'Bash' })
+    const again = event('10:02:00.000', { hook_event_name: 'PreToolUse', session_id: LEAD, agent_id: X, tool_name: 'Grep' })
+    expect(back).toEqual([])
+    expect(again.find((row) => row.id === X)?.startedAt).toBe(at('10:02:00.000'))
+    advanceSubagentRunClock(lead(first), at('08:45:02.000'))
+    advanceSubagentRunClock(lead(bash), at('09:58:55.100'))
+    expect(advanceSubagentRunClock(lead(recreated), at('09:59:30.100'))?.get(X)).toBe(at('08:45:00.000'))
+    advanceSubagentRunClock(lead(back), at('09:59:41.100'))
+    const clock = advanceSubagentRunClock(lead(again), at('10:02:00.100'))
+    expect(shown(clock, again, at('10:02:30.000'))).toBe('30s')
   })
 })

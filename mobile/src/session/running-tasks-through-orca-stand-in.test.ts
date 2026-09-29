@@ -467,7 +467,9 @@ describe('background work the chat shows while Orca stands in the pane status', 
   // the run clock restarted on any later start (2f526916), and the nested
   // claude above moves the start with no stop. The count kept the agent and
   // the sheet timed it from the re-creation: "30s" beside the desk's "1h 15m".
-  it('keeps timing the lead’s agent from the start the phone watched after a nested claude in the pane made Orca re-create its row', () => {
+  // While the nested claude runs: the lead's row after it lists none
+  // (use-subagent-run-clock.test.ts, the limit).
+  it('keeps timing the lead’s agent from the start the phone watched while a nested claude in the pane has re-created its row', () => {
     vi.setSystemTime(at('08:45:02.000'))
     show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), updatedAt: at('08:45:01.000') }))
     vi.setSystemTime(at('10:00:00.000'))
@@ -570,6 +572,29 @@ describe('background work the chat shows while Orca stands in the pane status', 
     expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
   })
 
+  // The review of 078a79b9 (its finding 2): the Bash that runs `claude -p`
+  // asks permission. The PermissionRequest row (`waiting`, the agent at its
+  // first start) is the lead's last roster read; on approval the spinner title
+  // lands after it and disagrees, so Orca stands a `working` title in for it,
+  // read through. No stop can hide there (the lead is mid-turn, no turn end on
+  // the tab), and the re-creation in the nested run is no resume.
+  it('keeps timing the lead’s agent from its first start across a nested claude behind a permission prompt', () => {
+    vi.setSystemTime(at('08:45:02.000'))
+    show('claude', firstRun())
+    vi.setSystemTime(at('09:58:55.100'))
+    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), toolName: 'Bash', updatedAt: at('09:58:55.000') }))
+    vi.setSystemTime(at('09:58:55.300'))
+    show('claude', hookRow('claude', 'tab-1', { ...roster(rosterRow(AGENT, at('08:45:00.000'))), state: 'waiting', toolName: 'Bash', updatedAt: at('09:58:55.200') }))
+    vi.setSystemTime(at('09:58:58.300'))
+    show('claude', standIn('claude', 'tab-1', 'working', '09:58:58.200'))
+    expect(controller?.nativeChatAgentStatus?.subagents?.map((row) => row.id)).toEqual([AGENT])
+    vi.setSystemTime(at('09:59:00.100'))
+    show('claude', hookRow('claude', 'tab-1', { state: 'done', sessionBoundary: true, prompt: '', providerSession: NESTED, updatedAt: at('09:59:00.000') }))
+    vi.setSystemTime(at('09:59:30.100'))
+    show('claude', recreated('09:59:30.000'))
+    expect(runTime(AGENT, '10:00:00.000')).toBe('1h 15m')
+  })
+
   // The review of 7e632bbb (its finding 1): after the re-creation the host's
   // start stays 09:59:30. A stand-in read as it comes after a reconnect, or
   // after a switch back from another tab, took that unmoved start for a
@@ -577,7 +602,7 @@ describe('background work the chat shows while Orca stands in the pane status', 
   it.each([
     ['a reconnect', { connState: 'disconnected' as const }, 'working' as const, {}],
     ['a switch back from another tab', { tab: 'tab-2' }, 'done' as const, { turnCompletedAt: at('09:59:50.000') }]
-  ])('keeps timing the lead’s agent from its first start after the nested claude, through %s to a stand-in', (_label, gap, state, turnEnd) => {
+  ])('keeps timing the lead’s agent from its first start while the nested claude runs, through %s to a stand-in', (_label, gap, state, turnEnd) => {
     vi.setSystemTime(at('08:45:02.000'))
     show('claude', firstRun())
     vi.setSystemTime(at('10:00:00.000'))
