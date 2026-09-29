@@ -79,6 +79,8 @@ export function TerminalShortcutSettings({
   const { colors } = useTheme()
   const styles = useThemedStyles(terminalShortcutSettingsStyles)
   const [customKeys, setCustomKeys] = useState<CustomKey[]>([])
+  // Why: `[]` before the first read lands is "not known yet", not "none defined".
+  const [customKeysLoaded, setCustomKeysLoaded] = useState(false)
   const [showCustomKeyModal, setShowCustomKeyModal] = useState(false)
   const [shortcutLayout, setShortcutLayout] = useState<TerminalAccessoryLayout>(
     getDefaultTerminalAccessoryLayout
@@ -133,6 +135,8 @@ export function TerminalShortcutSettings({
   const refreshCustomKeys = useCallback(() => {
     const refreshSeq = customKeysWriteSeqRef.current
     void loadCustomKeys().then((keys) => {
+      // Landed either way: with a save pending the optimistic list is the answer.
+      setCustomKeysLoaded(true)
       if (pendingCustomKeysWritesRef.current > 0 || refreshSeq !== customKeysWriteSeqRef.current) {
         return
       }
@@ -262,7 +266,7 @@ export function TerminalShortcutSettings({
 
       <Text style={[styles.groupHeading, styles.groupTopGap]}>CUSTOM SHORTCUTS</Text>
       <View style={[styles.section, styles.sectionTopGap]}>
-        {customKeys.length === 0 ? (
+        {!customKeysLoaded && customKeys.length === 0 ? null : customKeys.length === 0 ? (
           <>
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No custom shortcuts defined yet.</Text>
