@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   nativeChatStatusReadingLogLine,
+  phoneOwnership,
   readNativeChatTabStatus,
   type NativeChatStatusEvidence,
   type NativeChatStatusReading
@@ -161,6 +162,90 @@ describe('whose word a tab status is, for a Claude chat', () => {
     expect(
       read({ keptTurn: 'working', painting: NEXT_SESSION, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
     ).toMatchObject({ kind: 'own', switched: { why: 'the claude beacon on this terminal names it' } })
+  })
+
+  // 2026-09-29: a lead whose turn ended with background work running can
+  // still have a nested agent start under it, from that background work.
+  it('keeps the session whose turn ended with background work running, over a new one naming its transcript', () => {
+    const reading = read({ keptTurn: 'background', providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(reading).toMatchObject({ kind: 'nested', read: KEPT, reason: { kind: 'background' } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toBe(
+      "[native-chat] kept session 76ba8f2f over 0c1d2e3f: it appeared while 76ba8f2f's background work ran (a nested agent on this pane)"
+    )
+  })
+
+  it('follows a new session whose own turn ended holding the pane’s background work, as a /clear’s does', () => {
+    const reading = read({ keptTurn: 'background', holdsBackground: true, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(reading).toMatchObject({ kind: 'own', sessionId: NEXT_SESSION, switched: { from: CLAUDE_SESSION, rule: 'holds-background' } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toBe(
+      "[native-chat] switched session 76ba8f2f to 0c1d2e3f (rule holds-background): 0c1d2e3f's own turn ended with the pane's background work still running"
+    )
+  })
+
+  it.each([
+    ['beacon', { keptTurn: 'background' as const, painting: NEXT_SESSION }],
+    ['turn-ended', { keptTurn: 'ended' as const }],
+    ['turn-unknown', { keptTurn: null }],
+    ['second-turn', { keptTurn: 'background' as const, secondTurn: true }]
+  ])('names the rule that let it switch in the log line: %s', (rule, evidence) => {
+    const reading = read({ ...evidence, providerSession: { id: NEXT_SESSION, transcriptPath: NEXT_TRANSCRIPT } })
+    expect(nativeChatStatusReadingLogLine('claude', reading)).toMatch(new RegExp(`^\\[native-chat\\] switched session 76ba8f2f to 0c1d2e3f \\(rule ${rule}\\): `))
+  })
+
+  describe('what this phone wrote to the terminal', () => {
+    const AT = 1_790_705_106_923
+    const working = (prompt: string, updatedAt = AT) => ({ state: 'working', prompt, updatedAt })
+    const boundary = (updatedAt = AT) => ({ state: 'done', prompt: '', sessionBoundary: true, updatedAt })
+
+    it('owns a session that took a prompt the phone sent, as Orca folds and cuts it', () => {
+      expect(phoneOwnership(working('where were we'), [{ text: 'where were we', at: AT - 500 }])).toBe('prompt')
+      expect(phoneOwnership(working('two lines'), [{ text: 'two\nlines', at: AT - 500 }])).toBe('prompt')
+      const long = 'x'.repeat(260)
+      expect(phoneOwnership(working(long.slice(0, 200)), [{ text: long, at: AT - 500 }])).toBe('prompt')
+    })
+
+    it('owns a session boundary that came right after the phone sent a session command', () => {
+      for (const command of ['/clear', '/new', '/reset', '/resume 0c1d2e3f']) {
+        expect(phoneOwnership(boundary(), [{ text: command, at: AT - 1_000 }])).toBe('reset')
+      }
+    })
+
+    it.each([
+      ['no sends', working('where were we'), []],
+      ['another text', working('where were we'), [{ text: 'where are we', at: AT - 500 }]],
+      ['a send long before', working('where were we'), [{ text: 'where were we', at: AT - 30 * 60_000 }]],
+      ['a send after the status', working('where were we'), [{ text: 'where were we', at: AT + 5 * 60_000 }]],
+      ['a /clear long before the boundary', boundary(), [{ text: '/clear', at: AT - 10 * 60_000 }]],
+      ['a /clear under a working status', working('/clear'), [{ text: '/compact', at: AT - 500 }]],
+      ['a command that starts no session', boundary(), [{ text: '/cleanup', at: AT - 1_000 }]],
+      ['a status with no time', { state: 'working', prompt: 'where were we' }, [{ text: 'where were we', at: AT }]]
+    ])('owns nothing from %s', (_label, status, sends) => {
+      expect(phoneOwnership(status, sends)).toBeNull()
+    })
+
+    it('reads nothing from no status', () => {
+      expect(phoneOwnership(null, [{ text: 'x', at: AT }])).toBeNull()
+    })
+
+    it('reads a photo send’s caption through the image markers the hook’s copy leads with', () => {
+      expect(phoneOwnership(working('[Image #1] [Image #2] what is wrong here'), [{ text: 'what is wrong here', at: AT - 500 }])).toBe('prompt')
+    })
+
+    it('takes only a turn-start row: Orca carries the pane’s last prompt on every tool row, a nested run’s too', () => {
+      expect(phoneOwnership({ ...working('where were we'), toolName: 'Grep' }, [{ text: 'where were we', at: AT - 500 }])).toBeNull()
+    })
+
+    it('gives a send to the first session that showed it, and to no other', () => {
+      const status = { ...working('where were we'), providerSession: { id: NEXT_SESSION } }
+      expect(phoneOwnership(status, [{ text: 'where were we', at: AT - 500, claimedBy: CLAUDE_SESSION }])).toBeNull()
+      expect(phoneOwnership(status, [{ text: 'where were we', at: AT - 500, claimedBy: NEXT_SESSION }])).toBe('prompt')
+      expect(phoneOwnership({ ...boundary(), providerSession: { id: NEXT_SESSION } }, [{ text: '/clear', at: AT - 1_000, claimedBy: GROK_SESSION }])).toBeNull()
+    })
+
+    it('reads no /clear into a boundary while the kept session is mid-turn: it waits in the queue then', () => {
+      expect(phoneOwnership(boundary(), [{ text: '/clear', at: AT - 1_000 }], 'working')).toBeNull()
+      expect(phoneOwnership(boundary(), [{ text: '/clear', at: AT - 1_000 }], 'background')).toBe('reset')
+    })
   })
 
   it('keeps the beacon’s session when a new one names its transcript but the painting process is still the old one', () => {

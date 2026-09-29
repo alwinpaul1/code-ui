@@ -119,6 +119,14 @@ export function isOrcaStandIn(status: Status): boolean {
   return Object.keys(fields).every((key) => fields[key] === undefined || STAND_IN_FIELDS.has(key))
 }
 
+/** Whether a status is the TITLE's stand-in: the stand-in's shape, with the
+ *  row's identity copied. Orca's `done` for a pane its agent left under a
+ *  shell title copies none. Loose on type: every field is read at run time. */
+export function isTitleStandIn(status: object): boolean {
+  const fields = status as Record<string, unknown>
+  return isOrcaStandIn(status as Status) && COPIED_IDENTITY.some((key) => fields[key] !== undefined)
+}
+
 /** Whether a hook row is told from a stand-in: it carries a prompt or a history. */
 function toldFromStandIn(row: Status): boolean {
   return (row.prompt ?? '').trim() !== '' || (row.stateHistory?.length ?? 0) > 0

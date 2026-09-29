@@ -6,15 +6,20 @@ import {
   isBeaconWrittenOff
 } from './agent-hud-beacon-liveness'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
+import { isTitleStandIn } from './agent-status-stand-in'
 import {
+  BACKGROUND_CLAIM_MS,
+  matchPhoneSend,
   namesItsTranscript,
   readNativeChatTabStatus,
   type NativeChatStatusReading
 } from './native-chat-kept-session'
 import {
+  claimPhoneTerminalSend,
   keepNativeChatSession,
   keptSession,
   noteTurn,
+  phoneTerminalSends,
   readTurn,
   statusTurn,
   subscribe
@@ -24,6 +29,7 @@ export {
   hydrateNativeChatKeptSessions,
   nativeChatKeptSessionKey,
   noteNativeChatTranscriptTurn,
+  notePhoneTerminalSend,
   resetNativeChatKeptSessionsForTests
 } from './native-chat-kept-session-state'
 
@@ -33,6 +39,9 @@ export type NativeChatTabStatus = {
   sessionBoundary?: boolean | null
   updatedAt?: number | null
   providerSession?: { id?: string | null; transcriptPath?: string | null } | null
+  prompt?: string | null
+  toolName?: string | null
+  stateHistory?: readonly unknown[] | null
 } | null
 
 /**
@@ -46,7 +55,15 @@ export function useNativeChatTabStatusReading(
   agent: string | null,
   status: NativeChatTabStatus,
   /** The session a fresh beacon of the chat agent names on this terminal. */
-  painting: string | null = null
+  painting: string | null = null,
+  /** The tab's `turnCompletedAt` (agent-status-stand-in.ts). */
+  turnCompletedAt: number | null = null,
+  /** `handle`: the tab's terminal, which the phone's own sends are kept by.
+   *  `watching`: the link is up and the tab list is the host's own. Nothing
+   *  is noted from a status seen otherwise: a cached list can be hours old,
+   *  and a note from it stood over the live list's word for the same turn
+   *  (the second review of the background rule). */
+  { handle = null, watching = true }: { handle?: string | null; watching?: boolean } = {}
 ): NativeChatStatusReading {
   const getKept = useCallback(() => keptSession(key), [key])
   const keptNow = useSyncExternalStore(subscribe, getKept, getKept)
@@ -55,13 +72,37 @@ export function useNativeChatTabStatusReading(
     () => (agent && keptId ? (readTurn(agent, keptId)?.turn ?? null) : null),
     [agent, keptId]
   )
-  const keptTurn = useSyncExternalStore(subscribe, getKeptTurn, getKeptTurn)
+  const recordedKeptTurn = useSyncExternalStore(subscribe, getKeptTurn, getKeptTurn)
+  const getKeptStamp = useCallback(
+    () => (agent && keptId ? (readTurn(agent, keptId)?.stamp ?? null) : null),
+    [agent, keptId]
+  )
+  const keptStamp = useSyncExternalStore(subscribe, getKeptStamp, getKeptStamp)
+  const getKeptAt = useCallback(() => (agent && keptId ? (readTurn(agent, keptId)?.at ?? null) : null), [agent, keptId])
+  const keptAt = useSyncExternalStore(subscribe, getKeptAt, getKeptAt)
+  const statusAt = status?.updatedAt ?? null
+  // A claim to background work older than Orca keeps the row that made it
+  // is no longer the host's word (BACKGROUND_CLAIM_MS): from the turn end
+  // Orca stamped, or the status that made the claim when none was stamped.
+  const claimAnchor = keptStamp ?? keptAt
+  const keptTurn =
+    recordedKeptTurn === 'background' && claimAnchor !== null && statusAt !== null && statusAt - claimAnchor > BACKGROUND_CLAIM_MS
+      ? 'ended'
+      : recordedKeptTurn
   const statusId = status?.providerSession?.id?.trim() || null
   const getSecondTurn = useCallback(
     () => (agent && statusId ? readTurn(agent, statusId)?.secondTurn === true : false),
     [agent, statusId]
   )
   const secondTurn = useSyncExternalStore(subscribe, getSecondTurn, getSecondTurn)
+  const getHoldsBackground = useCallback(
+    () => (agent && statusId ? readTurn(agent, statusId)?.turn === 'background' : false),
+    [agent, statusId]
+  )
+  const holdsBackground = useSyncExternalStore(subscribe, getHoldsBackground, getHoldsBackground)
+  const getPhoneSends = useCallback(() => phoneTerminalSends(handle), [handle])
+  const phoneSends = useSyncExternalStore(subscribe, getPhoneSends, getPhoneSends)
+  const phoneSend = matchPhoneSend(status, phoneSends, keptTurn)
   const reading = readNativeChatTabStatus({
     agent,
     providerSession: status?.providerSession,
@@ -70,8 +111,18 @@ export function useNativeChatTabStatusReading(
     kept: keptNow,
     keptTurn,
     secondTurn,
+    holdsBackground,
+    phoneOwned: phoneSend?.owned ?? null,
     painting
   })
+  // The first session that shows a send owns it; a /clear's send goes to the
+  // first boundary naming a session other than the kept one.
+  const claimSend = phoneSend !== null && statusId !== null && watching && (phoneSend.owned === 'prompt' || statusId !== keptId) ? phoneSend.send : null
+  useEffect(() => {
+    if (claimSend && statusId) {
+      claimPhoneTerminalSend(handle, claimSend, statusId)
+    }
+  }, [claimSend, handle, statusId])
   const keepId = reading.kind === 'own' ? (reading.keep?.sessionId ?? null) : null
   const keepPath = reading.kind === 'own' ? (reading.keep?.transcriptPath ?? null) : null
   useEffect(() => {
@@ -80,17 +131,33 @@ export function useNativeChatTabStatusReading(
     }
   }, [key, keepId, keepPath])
   // Every status is its own session's word on that session's turn, whoever
-  // the chat reads: noted per event (`updatedAt`), so a later status always
-  // stands over an earlier word.
-  const noted = namesItsTranscript(agent) && statusId ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary) : null
-  const notedTurn = noted?.turn ?? null
+  // the chat reads: noted per event (`updatedAt`), so a later status stands
+  // over an earlier word, save a title stand-in over the all-clear of its own
+  // turn (native-chat-kept-session-state.ts `noteTurn`).
+  const noted =
+    namesItsTranscript(agent) && statusId
+      ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary, {
+          turnCompletedAt,
+          titleStandIn: status ? isTitleStandIn(status) : false
+        })
+      : null
+  // A /clear keeps the background tasks (Claude Code 2.1.284), so the session
+  // the phone's /clear started holds the claim the lead had.
+  const inheritsBackground = reading.kind === 'own' && reading.switched?.rule === 'phone-reset' && keptTurn === 'background'
+  const notedTurn = !watching ? null : inheritsBackground ? 'background' : (noted?.turn ?? null)
   const notedFinished = noted?.finishedOne ?? false
-  const statusAt = status?.updatedAt ?? null
+  const notedFromStandIn = noted?.fromStandIn ?? false
+  const notedStamp = inheritsBackground ? keptStamp : turnCompletedAt
+  const notedAt = inheritsBackground ? claimAnchor : statusAt
+  const notedBoundary = noted?.boundary === true
   useEffect(() => {
     if (agent && statusId && notedTurn) {
-      noteTurn(agent, statusId, notedTurn, notedFinished)
+      noteTurn(agent, statusId, notedTurn, notedFinished, notedFromStandIn, notedStamp, notedAt, {
+        boundary: notedBoundary,
+        inherited: inheritsBackground
+      })
     }
-  }, [agent, statusId, notedTurn, notedFinished, statusAt])
+  }, [agent, statusId, notedTurn, notedFinished, notedFromStandIn, statusAt, notedStamp, notedAt, notedBoundary, inheritsBackground])
   return reading
 }
 

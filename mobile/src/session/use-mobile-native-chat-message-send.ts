@@ -25,6 +25,7 @@ import {
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
 import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
+import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 
 
 export type MobileNativeChatMessageSend = {
@@ -237,6 +238,11 @@ export function useMobileNativeChatMessageSend(args: {
             deadline,
             ...(mobileClient ? { mobileClient } : {})
           })
+      if (outcome !== 'rejected') {
+        // What this phone wrote to the terminal, for the chat's session rule
+        // (native-chat-kept-session.ts `phoneOwnership`).
+        notePhoneTerminalSend(handle, text, Date.now())
+      }
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
       // TUI, not the conversation — the transcript never echoes it as a user
       // turn, so an optimistic bubble would never reconcile and the

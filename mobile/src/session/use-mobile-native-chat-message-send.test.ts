@@ -30,6 +30,7 @@ import {
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
 import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
+import { phoneTerminalSends } from './native-chat-kept-session-state'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
@@ -265,6 +266,24 @@ describe('useMobileNativeChatMessageSend', () => {
       await api!.answerQuestion('1')
     })
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  // The chat's session rule reads what this phone wrote to the terminal: a
+  // new session that takes it, or starts right after a /clear it sent, is
+  // the pane's own (native-chat-kept-session.ts `phoneOwnership`).
+  it('remembers the prompts and commands it wrote to the terminal, and not a send the host refused', async () => {
+    mount(() => null)
+    await act(async () => {
+      await api!.send('where were we')
+    })
+    await act(async () => {
+      await api!.send('/clear')
+    })
+    sendWithOutcome.mockResolvedValueOnce('rejected')
+    await act(async () => {
+      await api!.send('never delivered')
+    })
+    expect(phoneTerminalSends('term').map((send) => send.text)).toEqual(['where were we', '/clear'])
   })
 
   it('creates an optimistic echo for an ordinary chat send', async () => {
