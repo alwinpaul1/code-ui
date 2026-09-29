@@ -7,6 +7,9 @@ Claude Code 2.1.283 (2026-09-26, the two binaries compared, not run): the
 status-line payload, the `--settings` and `statusLine.refreshInterval`
 handling, the hook list and the Stop and UserPromptSubmit payloads are built
 with 2.1.282's code, so every field and key order the scripts read is unchanged.
+The prompt hook's `at=` rule was checked against Claude Code 2.1.284's record
+shapes (2026-09-29, built by hand from a real session's uuids and times, not
+run live; see "Beacon field `at`" below).
 
 **The rule this is built to:** a Code UI user sets up nothing on their desktop.
 No status line, no plugin, no config, no Orca change — and no code written to
@@ -593,6 +596,42 @@ cwd discriminator, and its refusal to guess when a session id is unknown.
 `done=id1,id2,…` — background-task ids whose completion Claude has written to
 its transcript, read by the status-line script from `transcript_path`. Only
 Claude emits it. Consumed by `mobile-background-tasks.ts`, not by the HUD.
+
+### Beacon field `at` (the prompt hook's anchor)
+
+`at=<uuid>` rides the prompt hook's beacon (`up=`, Claude Code only; Codex's
+notify carries no prompt). It names the transcript row the prompt was typed
+after, read by the hook from the last 1 MiB of `transcript_path` at submit
+time: the last `"type":"user"` or `"type":"assistant"` record whose content
+block is not `"type":"tool_use"`, `"type":"tool_result"` or
+`"type":"thinking"`, because Orca projects none of those, so the phone never
+holds their uuids. Plain `sh`, `tail`, `grep -E`/`-v`/`-o`, `head` and `sed`;
+`agent-hud-prompt-anchor.test.ts` runs the hook itself against a temp
+transcript, the main case under sh, bash and dash.
+
+The rule matches the block's `"type":` field, never the bare word. Claude Code
+2.1.284 writes the message's `"stop_reason":"tool_use"` into every record of a
+turn that goes on to call a tool, text records included. Until 2026-09-29 the
+hook skipped any record with `"tool_use"` anywhere in it, so it skipped every
+text row of a working turn: a message typed at 05:36, right after a text row,
+was beaconed as typed after the prompt that opened the turn at 05:08. The test
+fixture is built by hand in the shape 2.1.284 writes, with that session's uuids
+and times; the hook was not run live against 2.1.284.
+
+A changed hook reaches a tab only when its agent starts. The phone's own
+launches carry the new flag at once. For desktop launches, the connect sync
+rewrites the flag in Orca's `agentDefaultArgs` on the next connect, because it
+matches the flag by shape and writes only when the text differs. An agent
+already running keeps the hook it was launched with until it restarts: its
+beacons still decode, and a mid-turn prompt's `at=` can still name the prompt
+that opened the turn.
+
+The PowerShell prompt hook (Windows, switched off) still takes the last
+user/assistant record with no content filter at all, so it would name tool
+rows. It is not fixed: the Windows Claude flag is 30,766 characters, and with
+the 2,000 reserved for the host that is 32,766, one short of the 32,767 cap
+(2026-09-29), so any fix there has to pay for itself; and that path has never
+run on Windows.
 
 ## Windows (2026-09-10): what actually reaches the phone, and how
 

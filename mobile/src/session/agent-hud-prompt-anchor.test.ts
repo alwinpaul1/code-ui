@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -26,13 +26,13 @@ function row(uuid: string, type: 'user' | 'assistant', contentType: string): str
   return JSON.stringify({ type, uuid, message: { role: type, content: JSON.parse(content) } })
 }
 
-function anchorFor(lines: string[]): string | null {
+function anchorFor(lines: string[], shell = 'sh'): string | null {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-anchor-'))
   const transcript = join(dir, 'session.jsonl')
   writeFileSync(transcript, lines.join('\n') + '\n')
   const tty = join(dir, 'pty')
   writeFileSync(tty, '')
-  execFileSync('sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
+  execFileSync(shell, ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
     input: JSON.stringify({ prompt: 'hello', transcript_path: transcript }),
     encoding: 'utf8',
     env: { PATH: process.env.PATH ?? '', HOME: dir, CUIHUD_TTY: tty }
@@ -82,5 +82,104 @@ describe('the row a queued prompt is anchored to', () => {
     expect(
       anchorFor([row('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'assistant', 'tool_use')])
     ).toBe(null)
+  })
+})
+
+// 2026-09-29, Claude Code 2.1.284 (the session behind
+// mobile-chat-midturn-prompt-after-reply.test.ts): a message typed at 05:36:34,
+// right after the text Claude wrote at 05:36:16, was beaconed as typed after
+// the prompt that OPENED the turn, at 05:08. 2.1.284 writes the message's
+// `"stop_reason":"tool_use"` into every record of a turn that goes on to call a
+// tool, the text records included, and the hook skipped any record with the
+// word `"tool_use"` anywhere in it. So every text row of a working turn was
+// skipped, and the anchor fell back past all of them to the last typed prompt.
+//
+// The lines are built by hand in the shape 2.1.284 writes (key order, the
+// envelope fields, one content block per record, `stop_reason` and `usage` on
+// every assistant record). The uuids and times are that session's own; the
+// words, ids and paths are placeholders.
+const CC_2_1_284 = {
+  opening:
+    '{"parentUuid":"5b0e9c1a-7f3d-4e21-9a54-0c6f2d8e1b37","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","type":"user","message":{"role":"user","content":"the prompt that opened the turn"},"uuid":"d01807a3-bea6-4f29-8a97-bc9a106d86ae","timestamp":"2026-09-29T05:08:00.467Z","promptSource":"typed","permissionMode":"default"}',
+  textBeforeFirst:
+    '{"parentUuid":"9e3a4c21-6b7d-4f80-8c15-2a9d0e6f7b43","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","message":{"model":"claude-opus-5","id":"msg_01Vb3kQm8xN2pRz7aT5yLw4E","type":"message","role":"assistant","content":[{"type":"text","text":"Now the sign-in path."}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":388,"cache_read_input_tokens":150204,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":388},"output_tokens":214,"service_tier":"standard"}},"requestId":"req_011CWq7nB2xY4pK9mR3tZ8vA","type":"assistant","uuid":"fed3dc95-5dba-4516-8d8d-4cebbbae8078","timestamp":"2026-09-29T05:34:51.297Z"}',
+  callBeforeFirst:
+    '{"parentUuid":"fed3dc95-5dba-4516-8d8d-4cebbbae8078","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","message":{"model":"claude-opus-5","id":"msg_01Vb3kQm8xN2pRz7aT5yLw4E","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01Hc5nW2qZ8rT4mK7yB3vX6P","name":"Bash","input":{"command":"npx vitest run auth","description":"Run the auth tests"}}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":388,"cache_read_input_tokens":150204,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":388},"output_tokens":214,"service_tier":"standard"}},"requestId":"req_011CWq7nB2xY4pK9mR3tZ8vA","type":"assistant","uuid":"0465a647-17fa-40a0-b277-87f5fd3561b2","timestamp":"2026-09-29T05:34:55.802Z"}',
+  firstEnqueued:
+    '{"type":"queue-operation","operation":"enqueue","timestamp":"2026-09-29T05:36:01.523Z","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","content":"the first mid-turn message"}',
+  resultBeforeFirst:
+    '{"parentUuid":"0465a647-17fa-40a0-b277-87f5fd3561b2","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","type":"user","message":{"role":"user","content":[{"tool_use_id":"toolu_01Hc5nW2qZ8rT4mK7yB3vX6P","type":"tool_result","content":"Test Files  4 passed (4)","is_error":false}]},"uuid":"fb42a005-40bf-4394-9b6c-f75dbb436f95","timestamp":"2026-09-29T05:36:02.163Z","toolUseResult":{"stdout":"Test Files  4 passed (4)","stderr":"","interrupted":false,"isImage":false},"sourceToolAssistantUUID":"0465a647-17fa-40a0-b277-87f5fd3561b2"}',
+  firstRemoved:
+    '{"type":"queue-operation","operation":"remove","timestamp":"2026-09-29T05:36:02.185Z","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","reason":"absorbed_mid_turn"}',
+  firstQueued:
+    '{"parentUuid":"fb42a005-40bf-4394-9b6c-f75dbb436f95","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","type":"attachment","attachment":{"type":"queued_command","prompt":"the first mid-turn message","commandMode":"prompt","origin":"human"},"uuid":"3c1d7e9f-0a42-4b6e-8d15-7f2a9c4e1b08","timestamp":"2026-09-29T05:36:01.523Z"}',
+  /** The row the second message was typed after. */
+  textBeforeSecond:
+    '{"parentUuid":"3c1d7e9f-0a42-4b6e-8d15-7f2a9c4e1b08","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","message":{"model":"claude-opus-5","id":"msg_01Kp8rD4wQ2mX7nB5tY9zL3F","type":"message","role":"assistant","content":[{"type":"text","text":"Those pass. Checking the session sweep next."}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":512,"cache_read_input_tokens":150592,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":512},"output_tokens":187,"service_tier":"standard"}},"requestId":"req_011CWq8aF5tH2nJ7kP4xR9wC","type":"assistant","uuid":"c87c6d3e-1a98-4946-a845-df1e58f12acc","timestamp":"2026-09-29T05:36:16.011Z"}',
+  callBeforeSecond:
+    '{"parentUuid":"c87c6d3e-1a98-4946-a845-df1e58f12acc","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","message":{"model":"claude-opus-5","id":"msg_01Kp8rD4wQ2mX7nB5tY9zL3F","type":"message","role":"assistant","content":[{"type":"tool_use","id":"toolu_01Rm4xK8pW2nZ6tB9yH3vQ7D","name":"Grep","input":{"pattern":"endSessions","path":"src"}}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":512,"cache_read_input_tokens":150592,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":512},"output_tokens":187,"service_tier":"standard"}},"requestId":"req_011CWq8aF5tH2nJ7kP4xR9wC","type":"assistant","uuid":"c23a95c6-02db-4b9d-9c85-eb30b5d479ce","timestamp":"2026-09-29T05:36:25.066Z"}',
+  secondEnqueued:
+    '{"type":"queue-operation","operation":"enqueue","timestamp":"2026-09-29T05:36:34.891Z","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","content":"the second mid-turn message"}',
+  /** A thinking block of the same turn, in the same envelope. */
+  thinking:
+    '{"parentUuid":"c87c6d3e-1a98-4946-a845-df1e58f12acc","isSidechain":false,"userType":"external","cwd":"/Users/dev/app","sessionId":"4f6c0f7e-2b1d-4c58-9a3e-2d1f0c7b9a11","version":"2.1.284","gitBranch":"main","message":{"model":"claude-opus-5","id":"msg_01Kp8rD4wQ2mX7nB5tY9zL3F","type":"message","role":"assistant","content":[{"type":"thinking","thinking":"The sweep is in the session store.","signature":"EqQBCkYIBhgCKkA2"}],"stop_reason":"tool_use","stop_sequence":null,"usage":{"input_tokens":2,"cache_creation_input_tokens":512,"cache_read_input_tokens":150592,"cache_creation":{"ephemeral_5m_input_tokens":0,"ephemeral_1h_input_tokens":512},"output_tokens":187,"service_tier":"standard"}},"requestId":"req_011CWq8aF5tH2nJ7kP4xR9wC","type":"assistant","uuid":"7a2e5c90-3f1b-4d68-b0a4-9e6c2d8f5a17","timestamp":"2026-09-29T05:36:20.402Z"}'
+}
+
+/** The transcript as the second message's hook read it, 05:36:34.891. */
+const AT_SECOND_SUBMIT = [
+  CC_2_1_284.opening,
+  CC_2_1_284.textBeforeFirst,
+  CC_2_1_284.callBeforeFirst,
+  CC_2_1_284.firstEnqueued,
+  CC_2_1_284.resultBeforeFirst,
+  CC_2_1_284.firstRemoved,
+  CC_2_1_284.firstQueued,
+  CC_2_1_284.textBeforeSecond,
+  CC_2_1_284.callBeforeSecond,
+  CC_2_1_284.secondEnqueued
+]
+
+// Codex has no prompt hook: its notify runs at a turn's end and carries no
+// prompt, so this anchor is Claude Code's alone.
+describe('the row a mid-turn message is anchored to, on Claude Code 2.1.284', () => {
+  // The host's own shell: macOS's sh is bash in POSIX mode, Debian's is dash.
+  it.each(['sh', 'bash', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])])(
+    'names the text the message was typed after, not the prompt that opened the turn (%s)',
+    (shell) => {
+      expect(anchorFor(AT_SECOND_SUBMIT, shell)).toBe('c87c6d3e-1a98-4946-a845-df1e58f12acc')
+    }
+  )
+
+  it('skips a thinking block that carries the same stop reason', () => {
+    expect(
+      anchorFor([CC_2_1_284.opening, CC_2_1_284.textBeforeSecond, CC_2_1_284.thinking, CC_2_1_284.callBeforeSecond])
+    ).toBe('c87c6d3e-1a98-4946-a845-df1e58f12acc')
+  })
+
+  it('names the only text of a turn when that is all there is', () => {
+    expect(anchorFor([CC_2_1_284.textBeforeSecond])).toBe('c87c6d3e-1a98-4946-a845-df1e58f12acc')
+  })
+
+  it('still skips the call and the result, and a turn of nothing else names no row', () => {
+    expect(anchorFor([CC_2_1_284.callBeforeFirst, CC_2_1_284.resultBeforeFirst, CC_2_1_284.firstQueued])).toBe(
+      null
+    )
+  })
+
+  it('names no row for an empty transcript', () => {
+    expect(anchorFor([])).toBe(null)
+  })
+
+  // What a record SAYS is escaped in the JSON, so words that quote a tool
+  // block's type are not the block's type.
+  it('keeps a text row whose words quote a tool block', () => {
+    const quoting = CC_2_1_284.textBeforeSecond.replace(
+      'Those pass. Checking the session sweep next.',
+      'The hook skipped every record with \\"type\\":\\"tool_use\\" or \\"tool_result\\" in it.'
+    )
+    expect(quoting).toContain('\\"type\\":\\"tool_use\\"')
+    expect(anchorFor([CC_2_1_284.opening, quoting, CC_2_1_284.callBeforeSecond])).toBe(
+      'c87c6d3e-1a98-4946-a845-df1e58f12acc'
+    )
   })
 })

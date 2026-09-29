@@ -584,11 +584,14 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
   // The same message by the other copy the phone can hold, the prompt hook's
   // beacon (agent-hud-launch-args.ts; Claude Code only, a Codex tab's beacon
   // carries no prompt). The beacon names the row the message was typed after
-  // (`at=`), and the hook skips every record with `"tool_use"` in it. Claude
-  // Code 2.1.284 writes each text record of a turn that goes on to a tool
-  // with `"stop_reason":"tool_use"`, so a message sent mid-turn names the
-  // last row of a finished turn: here the prompt that opened this one (line
-  // 6), on a page the chat has not loaded. The copy waits for that row, drawn
+  // (`at=`). Until 2026-09-29 the hook skipped every record with `"tool_use"`
+  // anywhere in it, and Claude Code 2.1.284 writes each text record of a turn
+  // that goes on to a tool with `"stop_reason":"tool_use"`, so a message sent
+  // mid-turn named the last row of a finished turn: here the prompt that
+  // opened this one (line 6), on a page the chat has not loaded. The hook now
+  // skips a record by its block's `"type":` (agent-hud-prompt-anchor.test.ts),
+  // but a tab launched before that keeps the old hook until its agent
+  // restarts, and this is what its beacon says. The copy waits for that row, drawn
   // meanwhile where it was first seen. use-desktop-prompt-echoes.ts alone
   // settles it on the tail of its 30th reading, which with the phone asleep
   // through the turn is the last reply; the chat keeps it where it was first
