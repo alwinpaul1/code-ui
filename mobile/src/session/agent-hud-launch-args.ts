@@ -637,7 +637,10 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // bottom under its own replies (device screenshots, 2026-09-15). Verified
   // against a live 2.1.270 transcript whose last six rows were tool_use,
   // tool_result, tool_use, tool_result, thinking, text. Only the text row
-  // reaches the phone, so only rows like it may anchor.
+  // reaches the phone, so only rows like it may anchor. (Orca 1.4.216's
+  // decoder does make rows of tool calls, results and thinking, keyed by the
+  // record uuid, read 2026-09-29; this exclusion was not revisited. See
+  // docs/mobile-agent-hud.md, "Beacon field `at`".)
   // A row is skipped by its content block's `"type":`, never by the word
   // alone. Claude Code 2.1.284 writes the message's `"stop_reason":"tool_use"`
   // into every record of a turn that goes on to call a tool, text records
@@ -645,11 +648,15 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // working turn and named the prompt that opened it: 05:08 for a message
   // typed at 05:36, right after a text row (2026-09-29). Words that quote a
   // type are escaped in the JSON (`\"type\":\"tool_use\"`), so they do not match.
+  // And a row must carry something Orca draws: a string prompt, or a text or
+  // image block. Orca 1.4.216's decoder draws nothing for a record of only
+  // redacted_thinking, server_tool_use or web_search_tool_result, which the
+  // bare-word rule skipped only by the accident of their stop reason.
   'tp=$(g "\\"transcript_path\\":\\"([^\\"]*)\\"")',
   // Same as the status line: a Windows path arrives JSON-escaped with
   // backslashes, which Git Bash cannot open; slashes work on every platform.
   '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
-  '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | grep -v -E "\\"type\\":\\"(tool_use|tool_result|thinking)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
+  '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | grep -E "\\"role\\":\\"user\\",\\"content\\":\\"|\\"type\\":\\"(text|image)\\"" 2>/dev/null | grep -v -E "\\"type\\":\\"(tool_use|tool_result|thinking)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
   // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
   // session in the same terminal does not echo it (see the status line).
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',

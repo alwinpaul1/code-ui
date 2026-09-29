@@ -170,6 +170,52 @@ describe('the row a mid-turn message is anchored to, on Claude Code 2.1.284', ()
     expect(anchorFor([])).toBe(null)
   })
 
+  // Second review of 029bdd04. Orca 1.4.216's transcript decoder (`rEn` and
+  // `KTn` in its app.asar, read 2026-09-29) makes a row only from text,
+  // thinking, tool_use, tool_result and image blocks, and drops a record with
+  // none of them. The bare-word rule skipped these records only because 2.1.284
+  // stamps them `"stop_reason":"tool_use"`; skipping by the tool types alone
+  // named them, a row the phone never holds. Shapes built by hand in the
+  // 2.1.284 envelope, not captured live: these blocks are rare in a session.
+  it('skips a redacted thinking block, which Orca draws as no row', () => {
+    const redacted = CC_2_1_284.thinking
+      .replace('{"type":"thinking","thinking":"The sweep is in the session store.","signature":"EqQBCkYIBhgCKkA2"}', '{"type":"redacted_thinking","data":"EmwKAhgBEgy3va3pzix/LafPsn4aDFIT2Xlxh0L5L8rL"}')
+      .replace('7a2e5c90-3f1b-4d68-b0a4-9e6c2d8f5a17', 'e1111111-1111-4111-8111-111111111111')
+    expect(redacted).toContain('"type":"redacted_thinking"')
+    expect(anchorFor([CC_2_1_284.opening, CC_2_1_284.textBeforeSecond, redacted, CC_2_1_284.callBeforeSecond])).toBe(
+      'c87c6d3e-1a98-4946-a845-df1e58f12acc'
+    )
+  })
+
+  it('skips a web search call and its result, which Orca draws as no row', () => {
+    const block = (content: string, uuid: string) =>
+      CC_2_1_284.callBeforeSecond
+        .replace('{"type":"tool_use","id":"toolu_01Rm4xK8pW2nZ6tB9yH3vQ7D","name":"Grep","input":{"pattern":"endSessions","path":"src"}}', content)
+        .replace('c23a95c6-02db-4b9d-9c85-eb30b5d479ce', uuid)
+    const search = block('{"type":"server_tool_use","id":"srvtoolu_01AbCdEf","name":"web_search","input":{"query":"session sweep"}}', 'e2222222-2222-4222-8222-222222222222')
+    const found = block(
+      '{"type":"web_search_tool_result","tool_use_id":"srvtoolu_01AbCdEf","content":[{"type":"web_search_result","title":"t","url":"https://example.com","encrypted_content":"abc","page_age":null}]}',
+      'e3333333-3333-4333-8333-333333333333'
+    )
+    expect(search).toContain('"type":"server_tool_use"')
+    expect(found).toContain('"type":"web_search_tool_result"')
+    expect(anchorFor([CC_2_1_284.opening, CC_2_1_284.textBeforeSecond, search, found])).toBe(
+      'c87c6d3e-1a98-4946-a845-df1e58f12acc'
+    )
+  })
+
+  it('still names a typed prompt that carries a pasted image', () => {
+    const withImage = CC_2_1_284.opening
+      .replace(
+        '"content":"the prompt that opened the turn"',
+        '"content":[{"type":"text","text":"[Image #1] what is this"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgo="}}]'
+      )
+    expect(withImage).toContain('"type":"image"')
+    expect(anchorFor([CC_2_1_284.textBeforeSecond, withImage, CC_2_1_284.callBeforeSecond])).toBe(
+      'd01807a3-bea6-4f29-8a97-bc9a106d86ae'
+    )
+  })
+
   // What a record SAYS is escaped in the JSON, so words that quote a tool
   // block's type are not the block's type.
   it('keeps a text row whose words quote a tool block', () => {

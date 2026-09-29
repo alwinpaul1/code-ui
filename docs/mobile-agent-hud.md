@@ -602,12 +602,23 @@ Claude emits it. Consumed by `mobile-background-tasks.ts`, not by the HUD.
 `at=<uuid>` rides the prompt hook's beacon (`up=`, Claude Code only; Codex's
 notify carries no prompt). It names the transcript row the prompt was typed
 after, read by the hook from the last 1 MiB of `transcript_path` at submit
-time: the last `"type":"user"` or `"type":"assistant"` record whose content
-block is not `"type":"tool_use"`, `"type":"tool_result"` or
-`"type":"thinking"`, because Orca projects none of those, so the phone never
-holds their uuids. Plain `sh`, `tail`, `grep -E`/`-v`/`-o`, `head` and `sed`;
+time. That is the last `"type":"user"` or `"type":"assistant"` record that
+carries a string prompt or a `"type":"text"` or `"type":"image"` block, and no
+`"type":"tool_use"`, `"type":"tool_result"` or `"type":"thinking"` block. Plain
+`sh`, `tail`, `grep -E`/`-v`/`-o`, `head` and `sed`;
 `agent-hud-prompt-anchor.test.ts` runs the hook itself against a temp
 transcript, the main case under sh, bash and dash.
+
+The tool and thinking exclusion dates from 2026-09-15, when anchors on those
+rows were not found on the phone (the comment above the command in
+`agent-hud-launch-args.ts` has the report). Orca 1.4.216's transcript decoder
+(`rEn` and `KTn` in its app.asar, read 2026-09-29) does make rows of them,
+keyed by the record's uuid: tool calls, tool results, and thinking as text. So
+on that build the exclusion may place a mid-turn message one call above where
+the Claude app draws it. It was not revisited here, and needs a device to
+settle. The same decoder draws nothing for a record whose only block is
+`redacted_thinking`, `server_tool_use` or `web_search_tool_result`, which is
+why a row must also carry text, an image or a string prompt.
 
 The rule matches the block's `"type":` field, never the bare word. Claude Code
 2.1.284 writes the message's `"stop_reason":"tool_use"` into every record of a
@@ -616,7 +627,13 @@ hook skipped any record with `"tool_use"` anywhere in it, so it skipped every
 text row of a working turn: a message typed at 05:36, right after a text row,
 was beaconed as typed after the prompt that opened the turn at 05:08. The test
 fixture is built by hand in the shape 2.1.284 writes, with that session's uuids
-and times; the hook was not run live against 2.1.284.
+and times; the hook was not run live against 2.1.284. Matching on the type
+alone then named the records above that 2.1.284 had also stamped
+`"stop_reason":"tool_use"`, which the bare word had skipped by accident; a
+regression review of the fix found that, and the text-or-image requirement is
+its answer. One gap is left as it was: that decoder draws an image block only
+when it has a url or a path, so a record of nothing but a base64 image still
+qualifies here and makes no row.
 
 A changed hook reaches a tab only when its agent starts. The phone's own
 launches carry the new flag at once. For desktop launches, the connect sync
