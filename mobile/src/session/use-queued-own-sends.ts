@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { projectMobileChatQueue, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+import { projectMobileChatQueue, QUEUE_ROW_MATCH_FLOOR, type MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { isTakenSend } from './mobile-native-chat-pending-echo'
+import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
+import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 
 /**
  * How long a send made mid-turn stays in the queue box, unlisted by the
@@ -275,7 +277,90 @@ export function useQueuedOwnSends<T extends OwnSend>(
  * own when there is one, or it is drawn as a bubble beside it (review,
  * 2026-09-25).
  */
+/**
+ * The phone's own sends split between the queue box and the chat, and the
+ * witnessed messages (`desk-`/`absorbed-`) apart from them. A message the
+ * phone drew is not one of its sends, and projected by the box's prefix rule
+ * it was taken for one: a later message "… Whats this" in the box took the
+ * earlier "… Whats this issue" out of the chat and drew it in the box. A
+ * witness is held in the box only by a row of exactly its words: one the
+ * chat stored from the box, or drew for a beat before the box listed it,
+ * while that row is listed, however often the box let it go and listed it
+ * again (a relay drop hands the chat an empty box), and drawn where it
+ * arrived once the row is gone (the review of fix/midturn-gaps). A later
+ * message of the same words hides it while that one is queued.
+ */
 function projectWaitingFirst<T extends OwnSend>(
+  pending: readonly T[],
+  queue: readonly string[]
+): { pending: T[]; queue: MobileChatQueueEntry[] } {
+  const witnesses = pending.filter((item) => isWitnessId(item.id))
+  if (witnesses.length === 0) {
+    return projectSendsWaitingFirst(pending, queue)
+  }
+  const projected = projectSendsWaitingFirst(
+    pending.filter((item) => !isWitnessId(item.id)),
+    queue
+  )
+  // Every copy the chat remembered of a message a row lists is held by it,
+  // its echo's and the box's own reading alike.
+  const rows = projected.queue.flatMap((entry) => (typeof entry === 'string' ? [entry] : []))
+  const inBox = new Set(witnesses.filter((witness) => rows.some((row) => rowListsWitness(row, witness.text))))
+  const outside = new Set(projected.pending)
+  return {
+    pending: pending.filter((item) => (isWitnessId(item.id) ? !inBox.has(item) : outside.has(item))),
+    queue: projected.queue
+  }
+}
+
+function isWitnessId(id: string): boolean {
+  return id.startsWith('desk-') || id.startsWith('absorbed-')
+}
+
+/**
+ * Whether a queue box row lists a remembered message: its words exactly; the
+ * box's own `…` stub of them; or, for a photo of no words, the same
+ * `[Image #N]` markers. Never a longer row that only goes on past a message's
+ * words: that is another message (c9c1d899), nor another photo of no words
+ * (round 2 of the review of fix/midturn-gaps). A long message's echo, cut at
+ * the tab status's field, gives way in the store to the box's whole reading
+ * of it (mobile-native-chat-remember-echo.ts).
+ *
+ * A stub is Codex's preview, whose last line is a `…` alone, or a row long
+ * enough to be sure of (QUEUE_ROW_MATCH_FLOOR, the floor the box's rows of the
+ * phone's own sends are held to). A short row that ends in `…` is a message
+ * the person typed that way (the Claude app's smart punctuation makes "..."
+ * one): "wait…" in the box held "wait, the build is still running on the old
+ * branch" out of the chat while it waited (round 3 of the review of
+ * fix/midturn-gaps). What it costs: a typed message of 24 characters or more
+ * that ends in `…` still holds an earlier one it begins while it waits.
+ */
+function rowListsWitness(row: string, text: string): boolean {
+  const rowKey = boxKey(row)
+  const key = boxKey(text)
+  if (key === '') {
+    const markers = imageMarkers(text)
+    return markers !== '' && markers === imageMarkers(row)
+  }
+  if (rowKey === key) {
+    return true
+  }
+  const stub = rowKey.endsWith('…') ? rowKey.slice(0, -1).trimEnd() : null
+  if (stub === null || stub.length === 0 || !key.startsWith(stub)) {
+    return false
+  }
+  return row.trimEnd().split('\n').at(-1)!.trim() === '…' || stub.replace(/\s+/g, '').length >= QUEUE_ROW_MATCH_FLOOR
+}
+
+function imageMarkers(text: string): string {
+  return (text.match(/\[Image #\d+\]/g) ?? []).join(' ')
+}
+
+function boxKey(text: string): string {
+  return normalizeNativeChatUserText(asPaintedPrompt(text))
+}
+
+function projectSendsWaitingFirst<T extends OwnSend>(
   pending: readonly T[],
   queue: readonly string[]
 ): { pending: T[]; queue: MobileChatQueueEntry[] } {

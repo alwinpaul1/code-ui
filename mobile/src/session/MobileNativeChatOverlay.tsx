@@ -11,7 +11,6 @@ import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
-import { witnessesToRemember } from './mobile-native-chat-witness-memory'
 import { boundPhotoCopy, isOwnPhotoStatusCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
 import {
   inSendOrder,
@@ -31,6 +30,7 @@ import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
+import { useQueuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
 import { openImageMarkup } from './image-markup-store'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
@@ -229,6 +229,13 @@ export function MobileNativeChatOverlay({
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
+  // Any user row of a desk copy's words lands it. So the same words sent
+  // mid-turn and then typed at the desk as the next turn's prompt read as one
+  // message (gap D of the final review of fix/midturn-prompt-at-end): the
+  // phone cannot tell that row from the one Claude writes for a message still
+  // queued at a turn's end, and a rule that tried drew those twice whenever
+  // the phone missed the moment of the dequeue (asleep, a box it could not
+  // read, a clock behind the desktop's). Drawn twice is the worse error.
   const unlandedPrompts = useMemo(
     () =>
       withoutLandedDesktopPrompts(
@@ -314,15 +321,12 @@ export function MobileNativeChatOverlay({
   )
   // Witnessed messages are remembered with the phone's own sends, so they
   // survive a reconnect, a tab switch and a relaunch (2026-09-13).
-  const rememberEcho = controller.rememberEcho
-  useEffect(() => {
-    // The rule lives in `witnessesToRemember` so it can be tested: inline here
-    // it guarded two things nothing asserted — that a provisional reading is
-    // never made permanent, and which id each kind is stored under.
-    for (const witness of witnessesToRemember([...absorbedEchoes, ...desktopEchoes])) {
-      rememberEcho?.(witness.id, witness.text, witness.anchorId)
-    }
-  }, [absorbedEchoes, desktopEchoes, rememberEcho])
+  // A message still in the agent's queue box too (use-queued-desk-witnesses.ts).
+  useRememberedWitnesses(
+    [...absorbedEchoes, ...desktopEchoes],
+    useQueuedDeskWitnesses(projectedQueue.queue, session.messages, controller.nativeChatStreamScopeKey),
+    controller.rememberEcho
+  )
   const pendingWithDesktopPrompts = useMemo(() => {
     const own = hookPairing.steppedAside.size === 0
       ? placedOwn

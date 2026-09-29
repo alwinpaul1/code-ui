@@ -140,6 +140,82 @@ describe('two hook copies whose words differ by a last word', () => {
     expect(rememberEchoInPending(withCut, 'k', 'desk-4242', long, 'a1', [], 'd')).toBe(withCut)
   })
 
+  // Round 2 of the review of fix/midturn-gaps: Orca cuts the field
+  // mid-word, and the queue box lists the whole message. Stored as both, the
+  // message was drawn twice once the agent took it, the first cut short.
+  describe('cut mid-word, and listed whole by the queue box', () => {
+    const whole = `${first}, and also please check whether the session list on the account page still shows the ended sessions after a refresh`
+    const statusCut = normalizePromptField(whole)
+    const boxId = echoMemoryId(whole)
+
+    it('is the copy Orca makes', () => {
+      expect(statusCut).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+      expect(whole[statusCut.length - 1]).not.toBe(' ')
+      expect(whole[statusCut.length]).not.toBe(' ')
+    })
+
+    it('is one message, stored whole, in either order', () => {
+      const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd')
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd').k!.map((item) => [item.id, item.text])).toEqual([[boxId, whole]])
+      const withWhole = rememberEchoInPending({}, 'k', boxId, whole, 'a2', [], 'd')
+      expect(rememberEchoInPending(withWhole, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd')).toBe(withWhole)
+    })
+
+    it('is restored once, whole, from a store that holds both', () => {
+      const both = [
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 },
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 2_000 }
+      ]
+      expect(sweepWitnessedEchoes(both).map((item) => item.text)).toEqual([whole])
+    })
+
+    // Round 3 of the review of fix/midturn-gaps: two long messages that share
+    // their first 200 characters have the same cut copy. Seen minutes apart,
+    // the copy is the first's and the box's reading the second's.
+    it('is two messages when the box reads the longer one minutes after the copy, or either was stored with no time', () => {
+      const withCut = rememberEchoInPending({}, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd', 1_000)
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd', 181_000).k!.map((item) => item.id)).toEqual(['desk-status:s:1:0', boxId])
+      expect(rememberEchoInPending(withCut, 'k', boxId, whole, 'a2', [], 'd', 31_000).k!.map((item) => item.id)).toEqual([boxId])
+      const apart = [
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 },
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 181_000 }
+      ]
+      expect(sweepWitnessedEchoes(apart)).toHaveLength(2)
+      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', statusCut, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
+    })
+
+    // Round 4 of the review: the copy's echo is held while the box lists the
+    // message, so it is first stored, or stored again after it was merged
+    // away, when the agent takes it, minutes after the box's reading.
+    it('is one message when the copy is stored after the whole reading, however late', () => {
+      const withWhole = rememberEchoInPending({}, 'k', boxId, whole, 'a2', [], 'd', 1_000)
+      expect(rememberEchoInPending(withWhole, 'k', 'desk-status:s:1:0', statusCut, 'a1', [], 'd', 181_000)).toBe(withWhole)
+      const later = [
+        { ...stored(boxId, whole, 'a2'), witnessedAt: 1_000 },
+        { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 181_000 }
+      ]
+      expect(sweepWitnessedEchoes(later).map((item) => item.id)).toEqual([boxId])
+    })
+
+    // Round 4 of the review: a phone send that begins with the copy's words is
+    // that message only when the copy was seen at or after it left the phone.
+    it('is read back beside a later phone send that begins with its words, and as the send when seen after it', () => {
+      const send = { ...stored('pending-1', whole, 'a2'), sentAt: 5_000 }
+      const copyBefore = { ...stored('desk-status:s:1:0', statusCut, 'a1'), witnessedAt: 1_000 }
+      const copyAfter = { ...copyBefore, witnessedAt: 6_000 }
+      expect(sweepWitnessedEchoes([send, copyBefore]).map((item) => item.id)).toEqual(['pending-1', 'desk-status:s:1:0'])
+      expect(sweepWitnessedEchoes([send, copyAfter]).map((item) => item.id)).toEqual(['pending-1'])
+    })
+
+    // Degenerate: a copy one short of the field is not cut, and a phone send
+    // of that length is its words as sent.
+    it('is two messages when the shorter copy is not a cut one, or is a phone send', () => {
+      const short = statusCut.slice(0, -2)
+      expect(sweepWitnessedEchoes([stored('desk-status:s:1:0', short, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
+      expect(sweepWitnessedEchoes([stored('pending-1', statusCut, 'a1'), stored(boxId, whole, 'a2')])).toHaveLength(2)
+    })
+  })
+
   // Regression review of f4b53616: Orca drops a high surrogate the cut
   // leaves alone at character 200 (truncatePreservingSurrogates), so a cut
   // copy can be 199 characters long.

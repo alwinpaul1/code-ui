@@ -324,3 +324,38 @@ describe('a remembered desk message beside a held status copy of its words', () 
     expect([...pairing.standIns]).toEqual(['9001'])
   })
 })
+
+// Gap B of the final review of fix/midturn-prompt-at-end, 2026-09-29: after a
+// remount the first status finds a mid-turn message and times it by its run's
+// start (`atStateStart`), which can be on a page the chat has not loaded. The
+// message's witness, drawn where it arrived, gave way to that copy, which was
+// then not drawn.
+describe('a witness and a copy of its words timed by the start of its run', () => {
+  const at = (clock: string) => Date.parse(`2026-09-29T${clock}Z`)
+  const row = (id: string, clock: string) => ({ id, role: 'assistant' as const, blocks: [], timestamp: at(clock), source: 'transcript' as const })
+  const rows = [row('before-run', '05:07:00.000'), row('opening', '05:08:00.467'), row('mid-turn', '05:36:25.066')]
+  const found: DesktopPrompt = { nonce: 'status:s:1790658480600:0', text: 'whats this', at: at('05:08:00.600'), atStateStart: true }
+  const witness = (id: string, anchor: string) => ({ id, text: 'whats this', baselineTailMessageId: anchor })
+
+  it('keeps the witness where it was drawn in that run, and hides the copy', () => {
+    for (const anchor of ['mid-turn', 'opening']) {
+      const pairing = pairPendingWithHookPrompts([witness('desk-status:s:1790660194891:1', anchor)], [found], rows)
+      expect([[...pairing.steppedAside], [...pairing.standIns]]).toEqual([[], [found.nonce]])
+    }
+    const queueWitness = pairPendingWithHookPrompts([witness('absorbed-abc-10', 'mid-turn')], [found], rows)
+    expect([...queueWitness.steppedAside]).toEqual([])
+  })
+
+  it('still gives way to a copy with a time of its own, to a copy from a later run, and when its row is not held', () => {
+    const watched: DesktopPrompt = { nonce: 'status:s:1790660194891:1', text: 'whats this', at: at('05:36:34.891') }
+    expect([...pairPendingWithHookPrompts([witness('desk-a', 'mid-turn')], [watched], rows).steppedAside]).toEqual(['desk-a'])
+    expect([...pairPendingWithHookPrompts([witness('desk-a', 'before-run')], [found], rows).steppedAside]).toEqual(['desk-a'])
+    expect([...pairPendingWithHookPrompts([witness('desk-a', 'paged-out')], [found], rows).steppedAside]).toEqual(['desk-a'])
+    expect([...pairPendingWithHookPrompts([witness('desk-a', 'mid-turn')], [found], []).steppedAside]).toEqual(['desk-a'])
+  })
+
+  it('leaves a send restored with no send time to give way, as before', () => {
+    const restored = { id: 'pending-1', text: 'whats this', baselineTailMessageId: 'mid-turn' }
+    expect([...pairPendingWithHookPrompts([restored], [found], rows).steppedAside]).toEqual(['pending-1'])
+  })
+})

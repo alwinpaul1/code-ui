@@ -240,7 +240,7 @@ export function queuedMessagesFromScreen(screen: readonly string[], draft?: unkn
 
 /** Enough of a row to be sure it is the same message and not a shorter one
  *  that merely starts the same way. "ok" is a prefix of half the language. */
-const QUEUE_ROW_MATCH_FLOOR = 24
+export const QUEUE_ROW_MATCH_FLOOR = 24
 
 /** Whether the row Claude drew in its queue box is this pending send.
  *

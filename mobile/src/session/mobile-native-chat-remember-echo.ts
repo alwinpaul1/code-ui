@@ -47,7 +47,7 @@ export function rememberEchoInPending(
   // …and a phone send of its own beats a witnessed reading that glues rows
   // onto it, whichever came first: this is the send-first order, and
   // acceptOwnSendInPending below is the witness-first one.
-  const reading = { id, text }
+  const reading = { id, text, witnessedAt: now }
   if (current.some((item) => preferredStoredReading(item, reading) === 'a')) {
     return previous
   }
@@ -178,7 +178,7 @@ export function rememberHeldWitnesses(
         typeof send.sentAt === 'number' &&
         Number.isFinite(send.sentAt) &&
         witness.at >= send.sentAt &&
-        preferredStoredReading(send, witness) !== null
+        preferredStoredReading(send, { ...witness, witnessedAt: witness.at }) !== null
     )
     if (!copyOfSend) {
       next = rememberEchoInPending(
@@ -200,6 +200,10 @@ function isWitnessed(id: string): boolean {
   return id.startsWith('absorbed-') || id.startsWith('desk-')
 }
 
+/** A copy the store holds or is about to: a witness is stamped with when
+ *  the phone saw it. */
+type StoredReading = { id: string; text: string; witnessedAt?: number; sentAt?: number }
+
 /** Stands for a phone send compared by its words alone. */
 const SEND_ID = 'pending-send'
 
@@ -218,11 +222,8 @@ const SEND_ID = 'pending-send'
  * is a pair with a screen reading in it, or one whose shorter copy fills the
  * tab status's field, which Orca cuts there.
  */
-function preferredStoredReading(
-  a: { id: string; text: string },
-  b: { id: string; text: string }
-): 'a' | 'b' | null {
-  const verdict = preferredWitnessReading(a.text, b.text)
+function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
+  const verdict = preferredWitnessReading(a.text, b.text) ?? cutStatusCopyOf(a, b)
   if (verdict === null) {
     return null
   }
@@ -231,6 +232,86 @@ function preferredStoredReading(
   const whole = !statusCopyMayBeCut(kept.text)
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
   return goesOn && whole && asSent ? null : verdict
+}
+
+/**
+ * A hook copy that fills the tab status's field, and a longer reading that
+ * goes on from it, seen together: one message, and the longer reading is the
+ * whole of it. Orca cuts the field mid-word, so the word boundary
+ * preferredWitnessReading asks of a reading that goes on is not there. A
+ * message longer than the field, drawn from its status copy for a beat and
+ * then listed whole by the queue box, was stored as both and drawn twice once
+ * the agent took it, the first cut short (round 2 of the review of
+ * fix/midturn-gaps, 2026-09-29). Only a `desk-` copy: a phone send is its
+ * words as sent, however long.
+ *
+ * Seen together (seenTogether), because the words cannot tell. Two long
+ * messages that share their first 200 characters have the same cut copy, and
+ * the tab status's reader makes one copy of the pair, the first's. Merged
+ * into the second's box reading minutes later, the first message's copy was
+ * freed, the second paired with it, and one of the two was not drawn (round 3
+ * of the same review).
+ */
+function cutStatusCopyOf(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
+  const [ka, kb] = [storedKey(a.text), storedKey(b.text)]
+  if (a.id.startsWith('desk-') && statusCopyMayBeCut(a.text) && kb.length > ka.length && kb.startsWith(ka)) {
+    return seenTogether(a, b) ? 'b' : null
+  }
+  if (b.id.startsWith('desk-') && statusCopyMayBeCut(b.text) && ka.length > kb.length && ka.startsWith(kb)) {
+    return seenTogether(b, a) ? 'a' : null
+  }
+  return null
+}
+
+/** How long after a status copy a longer reading of the same message may
+ *  first be stored. */
+const CUT_COPY_SEEN_WITH_MS = 30_000
+
+/**
+ * Whether a cut status copy (`desk-`) and a longer reading are copies of one
+ * message, by when the phone stored each.
+ *
+ * The copy stored first, and the reading within CUT_COPY_SEEN_WITH_MS of it:
+ * the hook's copy and the box's row are both written when the agent takes the
+ * Enter, and reach the phone within the relay's latency of each other. Later
+ * than that, the reading is a later message that shares the copy's first 200
+ * characters, which the tab status's reader makes no copy of.
+ *
+ * What that costs, and why it stands: when the chat closes in the second
+ * between a long message's echo and the first box read that lists it, and
+ * comes back more than 30 s later with the message still queued, the two are
+ * kept apart: the cut copy is drawn beside the box row while it waits, and
+ * cut and whole once the agent takes it (round 5 of the review; main draws
+ * it once). The store cannot tell that from the two messages above, and of
+ * the two outcomes a message drawn twice beats one lost.
+ *
+ * The copy stored after the reading: always. The status reader makes a copy
+ * when the field's words change, so a copy that comes after a longer reading
+ * of its words is that reading's own, however late: its echo is held while the
+ * box lists the message and first drawn when the agent takes it, minutes
+ * later, and one that came back after being merged away is drawn again then
+ * too. Timed by the window both ways, a long message that waited in the box
+ * more than 30 s was stored and drawn twice for good (round 4 of the review).
+ *
+ * A phone send is merged only with a copy seen at or after it left the phone,
+ * the rule withoutWitnessesOfSends times its witnesses by: read back beside a
+ * later send that began with its first 200 characters, an earlier desk
+ * message's copy was dropped as the send's own (round 4). A witness stored by
+ * a build that kept no time merges with nothing this way.
+ */
+function seenTogether(copy: StoredReading, reading: StoredReading): boolean {
+  if (!isWitnessed(reading.id)) {
+    // withoutWitnessesOfSends compares a send by its words alone (SEND_ID):
+    // it has timed the pair already.
+    return (
+      reading.id === SEND_ID ||
+      (typeof reading.sentAt === 'number' && typeof copy.witnessedAt === 'number' && copy.witnessedAt >= reading.sentAt)
+    )
+  }
+  if (typeof copy.witnessedAt !== 'number' || typeof reading.witnessedAt !== 'number') {
+    return false
+  }
+  return copy.witnessedAt >= reading.witnessedAt || reading.witnessedAt - copy.witnessedAt <= CUT_COPY_SEEN_WITH_MS
 }
 
 /** The words preferredWitnessReading compares. */
