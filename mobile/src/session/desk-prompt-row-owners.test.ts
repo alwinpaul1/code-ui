@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
-import { ownedByLaterSubmission, rowOwners, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
+import { keysInJoinedRows, ownedByLaterSubmission, rowOwners, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
@@ -106,3 +106,30 @@ describe('a witnessed message and the next turn’s prompt of its words', () => 
     expect(witnessRowsNotItsOwn(rows, [{ ...witness, witnessedAt: undefined }], [midTurn, nextTurn]).size).toBe(0)
   })
 })
+
+// Two queued messages Claude dequeued as one row, a line apart (the review of
+// d147a9c4): that row is each of theirs.
+describe('a row made of queued messages joined', () => {
+  it('is each of theirs, by the last such row', () => {
+    const joined = keysInJoinedRows(['look at x', 'look at y'], [
+      { key: 'look at x look at y', index: 4 },
+      { key: 'look at y look at x', index: 9 }
+    ])
+    expect([...joined]).toEqual([['look at x', 9], ['look at y', 9]])
+  })
+
+  // A prompt that only quotes one of them, or one message alone, is no join.
+  it('is no one’s when it only quotes one of them, or holds one alone', () => {
+    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'please look at x first', index: 1 }]).size).toBe(0)
+    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'look at x', index: 1 }]).size).toBe(0)
+    expect(keysInJoinedRows(['look at x', 'look at y'], [{ key: 'look at x look at y and more', index: 1 }]).size).toBe(0)
+  })
+
+  // Degenerate: one copy's words, no copies, no rows.
+  it('is nothing with fewer than two copies’ words or no rows', () => {
+    expect(keysInJoinedRows(['look at x'], [{ key: 'look at x look at x', index: 1 }]).size).toBe(0)
+    expect(keysInJoinedRows([], [{ key: 'a b', index: 1 }]).size).toBe(0)
+    expect(keysInJoinedRows(['a', 'b'], []).size).toBe(0)
+  })
+})
+

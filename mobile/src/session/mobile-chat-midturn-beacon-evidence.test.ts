@@ -671,3 +671,66 @@ describe('a message on the first status after Orca’s stand-in', () => {
   }
 })
 
+// Two messages queued mid-turn and still queued when the turn ended: Claude
+// dequeued them as one row, their words joined by a line break. That row is
+// both messages', so neither is drawn beside it; and the first's words typed
+// again as the next turn's prompt are that prompt's own row, the review of
+// d147a9c4 found (D1): with the hook copies, that row was the new
+// submission's and never landed the first, which stayed beside the joined
+// row for good.
+describe('two queued messages Claude dequeued as one row', () => {
+  const { unmount, showAt, where } = midturnChat(frames, () => 'claude')
+  const X = 'first queued thing to look at'
+  const Y = 'second queued thing to look at'
+  const JOINED = user('9c8b7a6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', `${X}\n${Y}`, '05:46:54.300')
+  const ANSWER = text('8e2f1d6b-4c3a-4f72-8b9e-1d5c6f7a8b92', '05:47:20.000')
+  const AGAIN = user('0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', X, '05:49:46.995')
+  const AGAIN_ANSWER = text('6f7a8b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c', '05:50:05.000')
+  const users = () => drawn(frames.at(-1)!).filter((row) => row.role === 'user').map((row) => row.text)
+  void where
+
+  for (const withHook of [true, false]) {
+    it(`draws the joined row alone, then the first's words typed again as their own row${withHook ? ', with the hook copies' : ''}, and after the chat comes back`, async () => {
+      const hx = beaconCopy('92001', X, WRITTEN_BEFORE_SECOND, '05:36:30.050')
+      const hy = beaconCopy('92002', Y, WRITTEN_BEFORE_SECOND, '05:36:40.050')
+      const hx2 = beaconCopy('92003', X, ANSWER.id, '05:49:47.050')
+      const beacon = (list: DesktopPrompt[]) => (withHook ? { beacon: list } : {})
+      const hook = withHook ? hooked : {}
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+      vi.setSystemTime(at('05:36:30.000'))
+      prompts = reader.read(working(X, '05:36:29.000'), beacon([hx]))
+      await showAt('05:36:30.100', BEFORE_SECOND, prompts, true, [X], hook)
+      vi.setSystemTime(at('05:36:40.000'))
+      prompts = reader.read(working(Y, '05:36:39.000'), beacon([hx, hy]))
+      await showAt('05:36:40.100', BEFORE_SECOND, prompts, true, [X, Y], hook)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [X, Y], hook)
+      await showAt('05:46:55.300', [...WHOLE_TURN, JOINED], prompts, true, [], hook)
+      await showAt('05:47:21.000', [...WHOLE_TURN, JOINED, ANSWER], prompts, false, [], hook)
+      expect(users()).toEqual([oneLine(`${X} ${Y}`)])
+      const run: NonNullable<AgentStatusPromptSource> = {
+        ...working(X, '05:49:47.000'),
+        stateStartedAt: at('05:49:47.000'),
+        stateHistory: [...done(Y).stateHistory!, { state: 'done', prompt: normalizePromptField(Y), startedAt: TURN_ENDED }]
+      }
+      vi.setSystemTime(at('05:49:47.100'))
+      prompts = reader.read(run, beacon([hx, hy, hx2]))
+      await showAt('05:49:48.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN], prompts, true, [], hook)
+      await showAt('05:50:06.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      expect(users()).toEqual([oneLine(`${X} ${Y}`), X])
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:52:00.000'))
+      prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:50:05.500') }, beacon([hx, hy, hx2]))
+      await showAt('05:52:00.100', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      await showAt('05:52:01.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      expect(users()).toEqual([oneLine(`${X} ${Y}`), X])
+      again.unmount()
+      unmount()
+    })
+  }
+})
+

@@ -7,7 +7,7 @@ import {
 import { isTakenSend, type MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { rowWillNamePastedPhotos } from './mobile-native-chat-photo-rows'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
-import { witnessRowsNotItsOwn } from './desk-prompt-row-owners'
+import { keysInJoinedRows, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
 
 const SPACE = ' '
 /** How long before, and after, the phone saw a taken send leave the queue box
@@ -276,6 +276,16 @@ export function retireLandedMobileNativeChatPending(
   receipts: readonly BeaconPromptReceipt[] = []
 ): MobileNativeChatPendingMessage[] {
   const notItsRows = witnessRowsNotItsOwn(messages, current, receipts)
+  // Messages Claude dequeued together as one row, their words a line apart:
+  // that row is each of theirs (keysInJoinedRows).
+  const joined = keysInJoinedRows(
+    [...current.filter((item) => isWitnessId(item.id)), ...receipts].map((item) => normalizeReconcileText(item.text)),
+    messages.flatMap((message, index) => (message.role === 'user' ? [{ key: normalizedUserText(message) ?? '', index }] : []))
+  )
+  const joinedAfter = (item: MobileNativeChatPendingMessage, key: string): boolean => {
+    const at = joined.get(key)
+    return at !== undefined && at > messages.findIndex((message) => message.id === item.baselineTailMessageId)
+  }
   const landedCounts = new Map<string, number>()
   for (const message of messages) {
     const text = normalizedUserText(message)
@@ -360,7 +370,7 @@ export function retireLandedMobileNativeChatPending(
     const byCount = captioned && counted >= item.expectedOccurrence && !deferred
     const landed = !captioned
       ? countImageSourceTurnsAfter(messages, item.baselineTailMessageId) >= item.expectedOccurrence
-      : byCount || stubLanded(item.id, item.text, landedCounts) || gluedLanded(item.text, landedCounts)
+      : byCount || stubLanded(item.id, item.text, landedCounts) || gluedLanded(item.text, landedCounts) || (isWitnessId(item.id) && joinedAfter(item, key))
     if (landed) {
       landedPendingIds.add(item.id)
       exactLandedIds.add(item.id)
@@ -430,4 +440,8 @@ export function retireLandedMobileNativeChatPending(
     .filter((item) => !landedPendingIds.has(item.id) && !glued.has(item.id))
     .map((item) => (bumps.has(item.id) ? { ...item, expectedOccurrence: ordinalOf(item) } : item))
     .map((item) => (kept.has(item.id) ? { ...item, notItsRows: kept.get(item.id)! } : item))
+}
+
+function isWitnessId(id: string): boolean {
+  return id.startsWith('desk-') || id.startsWith('absorbed-')
 }

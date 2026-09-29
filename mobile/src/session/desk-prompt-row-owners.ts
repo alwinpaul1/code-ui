@@ -192,3 +192,45 @@ export function witnessRowsNotItsOwn(
   }
   return out
 }
+
+/**
+ * The copies' words that a user row is made of, two or more of them joined:
+ * Claude dequeues the messages still queued at a turn's end as one row, their
+ * words a line apart. That row is each of theirs, and each copy was drawn
+ * beside it until another row of its own words came along, which with the
+ * prompt hook's copies was then the next submission's and never came
+ * (the review of d147a9c4). Only a row made wholly of the copies' words, so a
+ * prompt that merely quotes one of them lands none. By key, the index of the
+ * last such row, which a copy typed after it cannot be.
+ */
+export function keysInJoinedRows(keys: readonly string[], rows: readonly { key: string; index: number }[]): Map<string, number> {
+  const words = [...new Set(keys.filter((key) => key.length > 0))]
+  const out = new Map<string, number>()
+  if (words.length < 2) {
+    return out
+  }
+  for (const row of rows) {
+    const parts = splitIntoWords(row.key, words)
+    if (parts !== null && parts.length >= 2) {
+      parts.forEach((part) => out.set(part, Math.max(out.get(part) ?? -1, row.index)))
+    }
+  }
+  return out
+}
+
+/** `key` as the copies' words joined by single spaces, or null. */
+function splitIntoWords(key: string, words: readonly string[], from = 0): string[] | null {
+  if (from === key.length) {
+    return []
+  }
+  for (const word of words) {
+    const end = from + word.length
+    if (key.startsWith(word, from) && (end === key.length || key[end] === ' ')) {
+      const rest = splitIntoWords(key, words, end === key.length ? end : end + 1)
+      if (rest !== null) {
+        return [word, ...rest]
+      }
+    }
+  }
+  return null
+}

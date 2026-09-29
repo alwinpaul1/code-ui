@@ -9,7 +9,7 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
-import { ownedByLaterSubmission, placeOfCopy, rowOwners } from './desk-prompt-row-owners'
+import { keysInJoinedRows, ownedByLaterSubmission, placeOfCopy, rowOwners } from './desk-prompt-row-owners'
 
 
 /**
@@ -466,11 +466,21 @@ export function withoutLandedDesktopPrompts(
   // A row a later hook submission of the same words owns is that
   // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
   const owners = rowOwners(prompts, raw, landedKey)
+  const joined = keysInJoinedRows(
+    prompts.map((prompt) => landedKey(prompt.text)),
+    raw.flatMap((message, index) =>
+      message.role === 'user' ? [{ key: landedKey(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')), index }] : []
+    )
+  )
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {
       return !landedMarkers.has(markersOf(prompt.text))
     }
     const key = landedKey(prompt.text)
+    const joinedAt = joined.get(key)
+    if (joinedAt !== undefined && joinedAt > (placeOfCopy(prompt, raw).position ?? -1)) {
+      return false
+    }
     const place = owners.size > 0 ? placeOfCopy(prompt, raw) : null
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
