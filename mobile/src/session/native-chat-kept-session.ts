@@ -64,12 +64,14 @@ import { nativeChatAgentFromTranscriptPath } from './mobile-native-chat-session-
  *   work still running after them is followed; and the session a phone
  *   `/clear` started keeps the claim it took over until its own first
  *   working row, even when the work stopped before it (Orca's SessionStart
- *   dropped the pane's inventory, so nothing says so). A session's own
- *   boundary ends a claim it made itself: that is its process restarting
- *   (`claude --resume <id>` after an exit). A same-session boundary from a
- *   live process (an in-process /resume of itself) reads the same and ends
- *   the claim too; if Claude keeps the work through it, a nested run that
- *   work starts is followed (native-chat-kept-session-inherited.test.ts).
+ *   dropped the pane's inventory, so nothing says so), or until 30 minutes
+ *   after the lead's stamp, the anchor it takes over with the claim. A
+ *   session's own boundary ends a claim it made itself: that is its process
+ *   restarting (`claude --resume <id>` after an exit). A same-session
+ *   boundary from a live process (an in-process /resume of itself) reads the
+ *   same and ends the claim too; if Claude keeps the work through it, a
+ *   nested run that work starts is followed
+ *   (native-chat-kept-session-inherited.test.ts).
  * - The phone's own word. This phone knows what it wrote to the terminal. A
  *   new session taking a prompt the phone sent is the terminal's own agent
  *   (a nested run never reads the phone's keystrokes), and one that starts
@@ -302,10 +304,12 @@ const IMAGE_MARKER = /\[Image #\d+\]\s*/g
  *   away, a link down), a nested run's subagent row, which Orca gives the
  *   pane's prompt and no tool, can take it (a limit;
  *   native-chat-kept-session-restart.test.ts). The chat stays on the nested
- *   run until the lead's next tool row, a second turn of its own; when the
- *   lead answers without a tool, its Stop is held `working` for the nested
- *   run's subagent, a claim and not a turn, and the chat stays there until
- *   that run ends and the lead posts again
+ *   run until the lead next notes `working`: any such row is a second turn
+ *   of the lead's own, a cached row from its own subagent included, though
+ *   none takes the send back from the nested run that owns it. A Stop is
+ *   never a second turn, held `working` for the nested run's subagent or
+ *   not, so when the lead answers without a tool the chat stays on the
+ *   nested run until that run ends and the lead posts again
  *   (native-chat-kept-session-inherited.test.ts).
  * - `reset`: a session boundary right after the phone sent `/clear`, `/new`,
  *   `/reset` or `/resume`, one boundary per send, and not while the kept
