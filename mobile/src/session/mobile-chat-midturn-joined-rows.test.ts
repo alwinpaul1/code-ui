@@ -1,9 +1,10 @@
-// A user row made of several desk messages' words. Claude dequeues the
-// messages still queued at a turn's end as one row, a line apart, and that
-// row lands each of them (mobile-chat-midturn-beacon-evidence.test.ts, "two
-// queued messages Claude dequeued as one row"). A prompt typed at the desk
-// can be made of earlier messages' words too, and that one is no message's
-// row but its own (the review of c3844d00, J1).
+// A user row made of several desk messages' words. A prompt typed at the
+// desk can be made of earlier messages' words, and that one is no message's
+// row but its own. Splitting such a row into its messages, for the row Claude
+// writes when it dequeues several queued messages as one (c3844d00), lost a
+// message taken mid-turn whichever evidence it asked for (the reviews of
+// c3844d00 to 7b3a4685, J1 to J4), and was withdrawn: no row is split. These
+// guard that.
 import { describe, expect, it, vi } from 'vitest'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
 import type { AgentStatusPromptSource } from './agent-status-prompts'
@@ -108,10 +109,8 @@ describe('a prompt typed at the desk made of earlier messages’ words', () => {
 
   // The review of b75a42e6 (J2): "ok continue" typed at the desk later in the
   // same turn, still queued when it ended, and dequeued as the next turn's
-  // row. A dequeue row has rows before it, so no submission owns it, and it
-  // was split for "ok" and "continue": the mid-turn message went away while
-  // the chat was open. A hook copy of the row's whole words, typed before it,
-  // says the row is that submission's own.
+  // row: split for "ok" and "continue", the mid-turn message went away while
+  // the chat was open.
   it('keeps the mid-turn message when a queued message of those words is dequeued at the turn end, on a Claude Code tab with the hook', async () => {
     agent = 'claude'
     const hook = { promptHook: true }
@@ -149,6 +148,41 @@ describe('a prompt typed at the desk made of earlier messages’ words', () => {
     prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:47:20.500') }, all)
     await showAt('05:52:00.100', [...WHOLE_TURN, dequeued, answer], prompts, false, [], hook)
     await showAt('05:52:01.000', [...WHOLE_TURN, dequeued, answer], prompts, false, [], hook)
+    expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND])
+    again.unmount()
+    unmount()
+  })
+
+  // The review of 7b3a4685 (J4): "ok continue" typed at the desk while the
+  // chat was away, no hook copy of it heard; the chat comes back to its row
+  // and the status's copy of it. Split, the mid-turn "continue" was lost.
+  it('keeps the mid-turn message after the chat comes back to a prompt of those words typed while it was away, on a Claude Code tab with the hook', async () => {
+    agent = 'claude'
+    const hook = { promptHook: true }
+    const copyOk = beaconCopy('98000', OK, BEFORE_FIRST[0]!.id, '05:34:00.050')
+    const copyContinue = beaconCopy('98001', CONTINUE, WRITTEN_BEFORE_SECOND, '05:36:35.050')
+    const heard = { beacon: [copyOk, copyContinue] }
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(OK, '05:34:55.850'), { beacon: [copyOk] })
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+    vi.setSystemTime(at('05:36:35.000'))
+    prompts = reader.read(working(CONTINUE, '05:36:34.891'), heard)
+    await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hook)
+    await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [], hook)
+    expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND])
+    reader.unmount()
+    unmount()
+    const run: NonNullable<AgentStatusPromptSource> = {
+      ...working(OK_CONTINUE, '05:49:47.000'),
+      stateStartedAt: at('05:49:47.000'),
+      stateHistory: [...done(CONTINUE).stateHistory!, { state: 'done', prompt: normalizePromptField(CONTINUE), startedAt: TURN_ENDED }]
+    }
+    const again = statusReader()
+    vi.setSystemTime(at('05:52:00.000'))
+    prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:50:05.500') }, heard)
+    await showAt('05:52:00.100', [...WHOLE_TURN, NEXT_ROW, NEXT_REPLY], prompts, false, [], hook)
+    await showAt('05:52:01.000', [...WHOLE_TURN, NEXT_ROW, NEXT_REPLY], prompts, false, [], hook)
     expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND])
     again.unmount()
     unmount()

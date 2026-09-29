@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
-import { keysInJoinedRows, ownedByLaterSubmission, rowOwners, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
+import { joinedLineBetween, ownedByLaterSubmission, rowOwners, witnessRowsNotItsOwn } from './desk-prompt-row-owners'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
@@ -107,51 +107,29 @@ describe('a witnessed message and the next turn’s prompt of its words', () => 
   })
 })
 
-// Two queued messages Claude dequeued as one row, a line apart (the review of
-// d147a9c4): that row is each of theirs, on the prompt hook's evidence.
-describe('a row made of queued messages joined', () => {
-  const copy = (nonce: string, text: string, anchorId: string): DesktopPrompt => ({ nonce, text, anchorId, seenAt: 1_000 })
-  const joined = [row('a1', 'assistant', 'one'), row('a2', 'assistant', 'two'), row('a3', 'assistant', 'done'), row('u4', 'user', 'look at x look at y')]
+// The review of d147a9c4 (D1): a row between a copy and a later row of its
+// words, carrying the copy's words as a line of its own, may be the copy's
+// own (Claude dequeued it with another as one row, a line apart).
+describe('a joined row between a copy and a later row of its words', () => {
+  const between = [row('a1', 'assistant', 'one'), row('u2', 'user', 'go on\nand the rest'), row('a3', 'assistant', 'ok'), row('u4', 'user', 'go on')]
 
-  it('is each of theirs, by the last such row', () => {
-    const out = keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a2')], joined, words, (message) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')))
-    expect([...out]).toEqual([['look at x', 3], ['look at y', 3]])
+  it('is found when a line of it is the copy’s words', () => {
+    expect(joinedLineBetween(between, 0, 3, 'go on', words)).toBe(true)
   })
 
-  // The review of c3844d00 (J1): a prompt typed idle, made of earlier
-  // messages' words, is its own row; and a part that is only a copy of the
-  // tab status, with no hook copy, is no evidence.
-  it('is no one’s when a submission of its own words came straight before it, or a part has no hook copy', () => {
-    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
-    const own = copy('3', 'look at x look at y', 'a3')
-    expect(keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a2'), own], joined, words, rowKey).size).toBe(0)
-    const statusOnly: DesktopPrompt = { nonce: 'status:s:1:0', text: 'look at x', at: 1 }
-    expect(keysInJoinedRows([statusOnly, copy('2', 'look at y', 'a2')], joined, words, rowKey).size).toBe(0)
+  // A prompt that merely has the words inside a line, or a row after the
+  // later one, is not; nor is anything for a copy with no place.
+  it('is not a line that only contains the words, a row outside the span, or anything with no place', () => {
+    const inline = [row('a1', 'assistant', 'one'), row('u2', 'user', 'ok go on\nand the rest'), row('u4', 'user', 'go on')]
+    expect(joinedLineBetween(inline, 0, 2, 'go on', words)).toBe(false)
+    expect(joinedLineBetween(between, 2, 3, 'go on', words)).toBe(false)
+    expect(joinedLineBetween(between, undefined, 3, 'go on', words)).toBe(false)
   })
 
-  // A prompt that only quotes one of them, or one message alone, is no join.
-  it('is no one’s when it only quotes one of them, or holds one alone', () => {
-    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
-    const quotes = [row('a1', 'assistant', 'one'), row('u2', 'user', 'please look at x first'), row('u3', 'user', 'look at x'), row('u4', 'user', 'look at x look at y and more')]
-    expect(keysInJoinedRows([copy('1', 'look at x', 'a1'), copy('2', 'look at y', 'a1')], quotes, words, rowKey).size).toBe(0)
-  })
-
-  // The review of c3844d00 (S1): words that overlap made a row that almost
-  // splits cost twice as much for every repeat, on the render path. Measured
-  // before the fix: 20 repeats took 106 ms, doubling with each.
-  it('decides a row of overlapping words quickly however long it is', () => {
-    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
-    const long = [row('a1', 'assistant', 'one'), row('u2', 'user', `${Array.from({ length: 25 }, () => 'yes do it').join(' ')} now`)]
-    const started = performance.now()
-    expect(keysInJoinedRows([copy('1', 'yes', 'a1'), copy('2', 'do it', 'a1'), copy('3', 'yes do it', 'a1')], long, words, rowKey).size).toBe(0)
-    expect(performance.now() - started).toBeLessThan(250)
-  })
-
-  // Degenerate: one copy's words, no copies, no rows.
-  it('is nothing with fewer than two copies’ words or no rows', () => {
-    const rowKey = (message: NativeChatMessage) => words(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
-    expect(keysInJoinedRows([copy('1', 'look at x', 'a1')], joined, words, rowKey).size).toBe(0)
-    expect(keysInJoinedRows([], joined, words, rowKey).size).toBe(0)
-    expect(keysInJoinedRows([copy('1', 'a', 'a1'), copy('2', 'b', 'a1')], [], words, rowKey).size).toBe(0)
+  // Degenerate: no rows between.
+  it('is not there with no rows between', () => {
+    expect(joinedLineBetween(between, 0, 1, 'go on', words)).toBe(false)
+    expect(joinedLineBetween([], 0, 0, 'go on', words)).toBe(false)
   })
 })
+

@@ -9,7 +9,7 @@ import { withShortSkillToken } from './mobile-native-chat-command-turns'
 import { withoutPasteWrappers } from './mobile-native-chat-paste-wrapper'
 import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
-import { keysInJoinedRows, ownedByLaterSubmission, placeOfCopy, rowOwners, withoutLateHookTwins } from './desk-prompt-row-owners'
+import { joinedLineBetween, ownedByLaterSubmission, placeOfCopy, rowOwners, withoutLateHookTwins } from './desk-prompt-row-owners'
 import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT } from './desk-prompt-stand-in-place'
 
 
@@ -440,18 +440,11 @@ export function withoutLandedDesktopPrompts(
   // A row a later hook submission of the same words owns is that
   // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
   const owners = rowOwners(prompts, raw, landedKey)
-  const joined = keysInJoinedRows(prompts, raw, landedKey, (message) =>
-    landedKey(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(''))
-  )
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {
       return !landedMarkers.has(markersOf(prompt.text))
     }
     const key = landedKey(prompt.text)
-    const joinedAt = joined.get(key)
-    if (joinedAt !== undefined && joinedAt > (placeOfCopy(prompt, raw).position ?? -1)) {
-      return false
-    }
     const place = owners.size > 0 ? placeOfCopy(prompt, raw) : null
     // A prompt the hook had to shorten can only ever be matched as a prefix
     // of the row that landed. The hook says when it shortened one; guessing
@@ -460,7 +453,12 @@ export function withoutLandedDesktopPrompts(
     return !seen.some(
       (other) =>
         (other.key === key || (prompt.cut === true && key.length > 0 && other.key.startsWith(key))) &&
-        !(place !== null && other.rowId !== undefined && ownedByLaterSubmission(owners.get(other.rowId), place))
+        !(
+          place !== null &&
+          other.rowId !== undefined &&
+          ownedByLaterSubmission(owners.get(other.rowId), place) &&
+          !joinedLineBetween(raw, place.position, raw.findIndex((message) => message.id === other.rowId), key, landedKey)
+        )
     )
   })
 }

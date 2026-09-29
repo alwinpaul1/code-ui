@@ -138,6 +138,36 @@ export function rowOwners(
   return owners
 }
 
+/**
+ * Whether a user row between a copy and a row of its words carries the
+ * copy's words as a line of its own: Claude dequeues the messages still
+ * queued at a turn's end as one row, a line apart, and such a row may be the
+ * copy's own. Then the later row is not held against the copy, and lands it
+ * as it did before the hook's copies were read: a queued message dequeued
+ * with another, whose words were typed again as the next prompt, stayed
+ * beside the joined row for good (the review of d147a9c4, D1). The copy's
+ * bubble beside the joined row until then is as before too; splitting such a
+ * row into its messages was tried (c3844d00) and withdrawn, since a prompt
+ * typed at the desk can be made of earlier messages' words and it lost a
+ * message taken mid-turn (the reviews of c3844d00 to 7b3a4685, J1 to J4).
+ */
+export function joinedLineBetween(
+  raw: readonly NativeChatMessage[],
+  from: number | undefined,
+  to: number,
+  key: string,
+  keyOf: (text: string) => string
+): boolean {
+  if (from === undefined) {
+    return false
+  }
+  return raw.slice(from + 1, to).some(
+    (message) =>
+      message.role === 'user' &&
+      message.blocks.some((block) => block.type === 'text' && block.text.includes('\n') && block.text.split('\n').some((line) => keyOf(line) === key))
+  )
+}
+
 /** Whether a row a submission owns is a later submission's and not this
  *  copy's: its hook copy reached the phone more than HOOK_TWIN_LAG_MS after
  *  the copy did, and the copy was typed before the row it names. Unknown
@@ -182,7 +212,11 @@ export function witnessRowsNotItsOwn(
         arrival: item.witnessedAt
       }
       for (const message of messages) {
-        if (normalizedUserText(message) === key && ownedByLaterSubmission(owners.get(message.id), place)) {
+        if (
+          normalizedUserText(message) === key &&
+          ownedByLaterSubmission(owners.get(message.id), place) &&
+          !joinedLineBetween(messages, place.position, messages.indexOf(message), key, normalizeReconcileText)
+        ) {
           rows.add(message.id)
         }
       }
@@ -192,100 +226,6 @@ export function witnessRowsNotItsOwn(
     }
   }
   return out
-}
-
-/**
- * The copies' words that a user row is made of, two or more of them joined:
- * Claude dequeues the messages still queued at a turn's end as one row, their
- * words a line apart. That row is each of theirs, and each copy was drawn
- * beside it until another row of its own words came along, which with the
- * prompt hook's copies was then the next submission's and never came
- * (the review of d147a9c4). By key, the index of the last such row, which a
- * copy typed after it cannot be.
- *
- * Only on the prompt hook's evidence, since a prompt typed at the desk can be
- * made of earlier messages' words too ("ok" and "continue", then "ok
- * continue"), and split, it retired a message taken mid-turn (the review of
- * c3844d00, J1): every part must be a hook-reported submission (a hook copy,
- * or a status copy the merge paired with one), and the row must be no
- * submission's of its own words (rowOwners: a prompt typed with the agent
- * idle comes straight after the row its hook copy names), nor has a hook
- * copy of its whole words typed before it (a message of those words queued
- * and dequeued). A row made wholly
- * of the parts' words is needed too, so one that merely quotes a part lands
- * none. Without the hook's copies no row is split, as before.
- */
-export function keysInJoinedRows(
-  prompts: readonly Pick<DesktopPrompt, 'nonce' | 'text' | 'anchorId' | 'seenAt' | 'hookTwin'>[],
-  raw: readonly NativeChatMessage[],
-  keyOf: (text: string) => string,
-  rowKeyOf: (message: NativeChatMessage) => string
-): Map<string, number> {
-  const words = [
-    ...new Set(
-      prompts
-        .filter((prompt) => (prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) ? prompt.hookTwin !== undefined : true))
-        .map((prompt) => keyOf(prompt.text))
-        .filter((key) => key.length > 0)
-    )
-  ]
-  const out = new Map<string, number>()
-  if (words.length < 2) {
-    return out
-  }
-  const owners = rowOwners(prompts, raw, keyOf, rowKeyOf)
-  // A hook copy of the row's whole words typed before it: the row is that
-  // submission's own, dequeued or not (the review of b75a42e6, J2: "ok
-  // continue" queued mid-turn and dequeued at the turn's end was split for
-  // "ok" and "continue", and the mid-turn "continue" went away).
-  const typedBefore = (key: string, index: number) =>
-    prompts.some((prompt) => {
-      if (keyOf(prompt.text) !== key) {
-        return false
-      }
-      const submission = hookSubmissionOf(prompt, raw)
-      return submission !== null ? submission.position < index : prompt.hookTwin !== undefined || !prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX)
-    })
-  raw.forEach((message, index) => {
-    if (message.role !== 'user' || owners.has(message.id) || typedBefore(rowKeyOf(message), index)) {
-      return
-    }
-    const parts = splitIntoWords(rowKeyOf(message), words)
-    if (parts !== null && parts.length >= 2) {
-      parts.forEach((part) => out.set(part, Math.max(out.get(part) ?? -1, index)))
-    }
-  })
-  return out
-}
-
-/** `key` as the copies' words joined by single spaces, or null. Each place in
- *  the key is decided once: words that overlap made a row that almost splits
- *  cost twice as much for every repeat (the review of c3844d00, S1). */
-function splitIntoWords(key: string, words: readonly string[]): string[] | null {
-  const decided = new Map<number, string[] | null>()
-  const from = (at: number): string[] | null => {
-    if (at === key.length) {
-      return []
-    }
-    const known = decided.get(at)
-    if (known !== undefined) {
-      return known
-    }
-    let found: string[] | null = null
-    for (const word of words) {
-      const end = at + word.length
-      if (key.startsWith(word, at) && (end === key.length || key[end] === ' ')) {
-        const rest = from(end === key.length ? end : end + 1)
-        if (rest !== null) {
-          found = [word, ...rest]
-          break
-        }
-      }
-    }
-    decided.set(at, found)
-    return found
-  }
-  return from(0)
 }
 
 /**

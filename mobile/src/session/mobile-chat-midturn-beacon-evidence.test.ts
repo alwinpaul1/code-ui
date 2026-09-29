@@ -752,16 +752,16 @@ describe('a message on the first status after Orca’s stand-in', () => {
 })
 
 // Two messages queued mid-turn and still queued when the turn ended: Claude
-// dequeued them as one row, their words joined by a line break. That row is
-// both messages', so neither is drawn beside it; and the first's words typed
-// again as the next turn's prompt are that prompt's own row, the review of
-// d147a9c4 found (D1): with the hook copies, that row was the new
-// submission's and never landed the first, which stayed beside the joined
-// row for good. Without the hook's copies a row made of messages' words
-// cannot be told from a prompt typed that way ("ok" and "continue", then "ok
-// continue", mobile-chat-midturn-joined-rows.test.ts), and is split for no
-// one: each message is drawn beside the joined row until a row of its own
-// words comes, as on main. That limit is pinned too.
+// dequeued them as one row, their words a line apart. Each is drawn beside
+// that row, as on main: splitting it into its messages was tried (c3844d00)
+// and withdrawn, since a prompt typed at the desk can be made of earlier
+// messages' words, and it lost a message taken mid-turn
+// (mobile-chat-midturn-joined-rows.test.ts). The first's words typed again
+// as the next turn's prompt then land the first's copy, as on main: with the
+// hook copies that row is the next submission's own, and the first stayed
+// beside the joined row for good until the joined row between them was taken
+// for a row that may be its own (joinedLineBetween; the review of d147a9c4,
+// D1). The same on both kinds of tab: that limit is pinned.
 describe('two queued messages Claude dequeued as one row', () => {
   const { unmount, showAt, where } = midturnChat(frames, () => 'claude')
   const X = 'first queued thing to look at'
@@ -775,9 +775,7 @@ describe('two queued messages Claude dequeued as one row', () => {
   void where
 
   for (const withHook of [true, false]) {
-    it(withHook
-      ? "draws the joined row alone, then the first's words typed again as their own row, with the hook copies, and after the chat comes back"
-      : 'still draws each message beside the joined row until a row of its own words comes, with no hook copies (a limit)', async () => {
+    it(`still draws each message beside the joined row until a row of its own words comes${withHook ? ', with the hook copies' : ''} (a limit), and after the chat comes back`, async () => {
       const hx = beaconCopy('92001', X, WRITTEN_BEFORE_SECOND, '05:36:30.050')
       const hy = beaconCopy('92002', Y, WRITTEN_BEFORE_SECOND, '05:36:40.050')
       const hx2 = beaconCopy('92003', X, ANSWER.id, '05:49:47.050')
@@ -796,7 +794,7 @@ describe('two queued messages Claude dequeued as one row', () => {
       await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [X, Y], hook)
       await showAt('05:46:55.300', [...WHOLE_TURN, JOINED], prompts, true, [], hook)
       await showAt('05:47:21.000', [...WHOLE_TURN, JOINED, ANSWER], prompts, false, [], hook)
-      expect(users()).toEqual(withHook ? [joinedWords] : [X, Y, joinedWords])
+      expect(users()).toEqual([X, Y, joinedWords])
       const run: NonNullable<AgentStatusPromptSource> = {
         ...working(X, '05:49:47.000'),
         stateStartedAt: at('05:49:47.000'),
@@ -806,7 +804,7 @@ describe('two queued messages Claude dequeued as one row', () => {
       prompts = reader.read(run, beacon([hx, hy, hx2]))
       await showAt('05:49:48.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN], prompts, true, [], hook)
       await showAt('05:50:06.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
-      expect(users()).toEqual(withHook ? [joinedWords, X] : [Y, joinedWords, X])
+      expect(users()).toEqual([Y, joinedWords, X])
       reader.unmount()
       unmount()
       const again = statusReader()
@@ -814,7 +812,7 @@ describe('two queued messages Claude dequeued as one row', () => {
       prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:50:05.500') }, beacon([hx, hy, hx2]))
       await showAt('05:52:00.100', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
       await showAt('05:52:01.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
-      expect(users()).toEqual(withHook ? [joinedWords, X] : [Y, joinedWords, X])
+      expect(users()).toEqual([Y, joinedWords, X])
       again.unmount()
       unmount()
     })
