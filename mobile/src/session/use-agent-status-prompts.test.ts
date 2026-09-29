@@ -356,7 +356,7 @@ describe('a desk prompt taken while the chat was closed, opened on the cached ta
     chat.done()
     expect(info.mock.calls.map((call) => String(call[0]))).toEqual([
       '[desk-prompt] drawn: "run the migration" (found on the chat\'s first status) placed from 1970-01-01T00:00:01.000Z, the start of the run it came in',
-      '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list) placed from 1970-01-01T01:00:00.000Z, the last status read before it'
+      '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list, after "run the migration") placed from 1970-01-01T01:00:00.000Z, the last status read before it that carried a prompt'
     ])
     info.mockRestore()
   })

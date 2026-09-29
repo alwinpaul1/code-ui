@@ -218,10 +218,10 @@ export function observeAgentStatusPrompt(
   // (device, 2026-09-20). The run it came in began at or before it, so that
   // run's start is its time; a status with no state (a fixture) has only its
   // current state's start.
-  // After a reconnect, no earlier than the last status read before the drop:
-  // the prompt came after it, and the run can have begun an hour before
-  // (review of a615bde2). The same after the tab list the last visit cached:
-  // the last status read before is that visit's.
+  // After a reconnect, no earlier than the last status read before the drop
+  // that carried a prompt: the prompt came after it, and the run can have
+  // begun an hour before (review of a615bde2). The same after the tab list the
+  // last visit cached: the last status read before is that visit's.
   const notBefore = !firstOfSession && options.firstRead === true ? readBefore : undefined
   const runStart = typeof run === 'number' ? Math.max(run, notBefore ?? run) : null
   const byStateStart =
@@ -244,15 +244,18 @@ export function observeAgentStatusPrompt(
   const clockName =
     typeof run === 'number'
       ? notBefore !== undefined && notBefore > run
-        ? 'the last status read before it'
+        ? 'the last status read before it that carried a prompt'
         : 'the start of the run it came in'
       : byStateStart
         ? "the start of the pane's state"
         : 'its status stamp'
+  // Which prompt the reader held when this one came, so the line for a copy
+  // of a message it had already drawn shows what it had lost (2026-09-29).
+  const before = state.last === null ? 'no prompt read before it' : `after "${preview(state.last)}"`
   const how = found
     ? firstOfSession
       ? "found on the chat's first status"
-      : 'found on the first status since a reconnect or the cached tab list'
+      : `found on the first status since a reconnect or the cached tab list, ${before}`
     : 'watched arriving'
   const placed = `[desk-prompt] drawn: "${preview(text)}" (${how}) placed from ${at === null ? 'no time, at the tail' : `${new Date(at).toISOString()}, ${clockName}`}`
   // The subagent messages stay (`...state`): dropping them here took the

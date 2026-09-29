@@ -451,6 +451,10 @@ describe('a tab status that carries no prompt', () => {
     // No earlier than the last status read that carried a prompt, not the
     // stand-in's stamp, which is after the turn ended.
     expect(copies(state)[1]).toEqual([MESSAGE, T('05:30:40.761')])
+    // And the log line names the prompt the reader held when it came.
+    expect(state.placed).toBe(
+      '[desk-prompt] drawn: "Password changes now end only pa…" (found on the first status since a reconnect or the cached tab list, after "an earlier message") placed from 2026-09-29T05:30:40.761Z, the last status read before it that carried a prompt'
+    )
   })
 
   // Degenerate: nothing but statuses with no prompt, and the first status of

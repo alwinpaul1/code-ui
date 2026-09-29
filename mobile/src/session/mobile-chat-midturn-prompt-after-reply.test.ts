@@ -36,10 +36,12 @@
 // its hook row is stale or the terminal title is not the agent's
 // (`buildRuntimeMobileAgentStatus` and the idle-title branch of
 // runtime-mobile-session-projection.ts, origin/main 8d6fec597b): `done`,
-// `prompt: ''`, `stateHistory: []`. Which one the phone met is only in its
-// log (`[desk-prompt] drawn: … (found on the first status since a reconnect or
-// the cached tab list) placed from 2026-09-29T05:46:51.005Z, the last status
-// read before it`); both are pinned here.
+// `prompt: ''`, `stateHistory: []`. On the build the phone ran, its log
+// names the clock (`[desk-prompt] drawn: "Password changes now end…" (found
+// on the first status since a reconnect or the cached tab list) placed from
+// 2026-09-29T05:46:51.005Z, the last status read before it`), not which of
+// the two came before it; both are pinned here. The line now also names the
+// prompt the reader held when the copy came (agent-status-prompts.ts).
 //
 // The rows are the transcript's own records (uuid, role, time), a tail page of
 // them as the chat holds one (its first read is 40 rows, so the prompt that
