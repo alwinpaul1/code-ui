@@ -60,8 +60,9 @@ export type AgentStatusPromptState = {
    *  events keep the field) does not become a second bubble. A status with
    *  no prompt leaves it as it was. */
   last: string | null
-  /** The `updatedAt` of the last status read that carried a prompt. A prompt
-   *  first seen on the first read after a reconnect came after it. */
+  /** The `updatedAt` of the last status read that said what prompt the pane
+   *  had: one carrying a prompt, or one saying it had none (statusReadsPrompt).
+   *  A prompt first seen on the first read after a reconnect came after it. */
   readAt?: number
   prompts: readonly DesktopPrompt[]
   /** The subagent messages the status carried, in the order it did: never
@@ -253,9 +254,9 @@ export function observeAgentStatusPrompt(
   // run's start is its time; a status with no state (a fixture) has only its
   // current state's start.
   // After a reconnect, no earlier than the last status read before the drop
-  // that carried a prompt: the prompt came after it, and the run can have
-  // begun an hour before (review of a615bde2). The same after the tab list the
-  // last visit cached: the last status read before is that visit's.
+  // that said what prompt the pane had: the prompt came after it, and the run
+  // can have begun an hour before (review of a615bde2). The same after the tab
+  // list the last visit cached: the last status read before is that visit's.
   const notBefore = !firstOfSession && options.firstRead === true ? readBefore : undefined
   const runStart = typeof run === 'number' ? Math.max(run, notBefore ?? run) : null
   const byStateStart =
@@ -278,7 +279,7 @@ export function observeAgentStatusPrompt(
   const clockName =
     typeof run === 'number'
       ? notBefore !== undefined && notBefore > run
-        ? 'the last status read before it that carried a prompt'
+        ? 'the last status read before it that said what prompt the pane had'
         : 'the start of the run it came in'
       : byStateStart
         ? "the start of the pane's state"

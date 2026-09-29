@@ -453,7 +453,7 @@ describe('a tab status that carries no prompt', () => {
     expect(copies(state)[1]).toEqual([MESSAGE, T('05:30:40.761')])
     // And the log line names the prompt the reader held when it came.
     expect(state.placed).toBe(
-      '[desk-prompt] drawn: "Password changes now end only pa…" (found on the first status since a reconnect or the cached tab list, after "an earlier message") placed from 2026-09-29T05:30:40.761Z, the last status read before it that carried a prompt'
+      '[desk-prompt] drawn: "Password changes now end only pa…" (found on the first status since a reconnect or the cached tab list, after "an earlier message") placed from 2026-09-29T05:30:40.761Z, the last status read before it that said what prompt the pane had'
     )
   })
 
@@ -504,6 +504,10 @@ describe('a tab status that carries no prompt', () => {
       state = observeAgentStatusPrompt(state, 'sess-1', row(50_000))
       state = observeAgentStatusPrompt(state, 'sess-1', row(90_000, 'and keep the old table'), { firstRead: true })
       expect(state.prompts.map((prompt) => prompt.at)).toEqual([50_000])
+      // The log names that bound for what it was: no prompt carried it.
+      expect(state.placed).toBe(
+        '[desk-prompt] drawn: "and keep the old table" (found on the first status since a reconnect or the cached tab list, no prompt read before it) placed from 1970-01-01T00:00:50.000Z, the last status read before it that said what prompt the pane had'
+      )
     })
 
     it('makes the same words after it a new message', () => {
