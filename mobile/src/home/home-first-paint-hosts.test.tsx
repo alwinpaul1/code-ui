@@ -10,15 +10,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  * rejected read, and the body the screen would draw is derived through `homeBodyKind`.
  */
 
-const focus = vi.hoisted(() => ({ run: null as null | (() => void | (() => void)) }))
+const focus = vi.hoisted(() => ({
+  refocus: null as null | (() => void),
+  router: { replace: vi.fn(), push: vi.fn() }
+}))
 const catalog = vi.hoisted(() => ({ load: vi.fn() }))
 
 vi.mock('expo-router', async () => {
   const react = await import('react')
   return {
-    useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
+    useRouter: () => focus.router,
     useFocusEffect: (effect: () => void | (() => void)) => {
-      react.useEffect(effect, [effect])
+      const latest = react.useRef(effect)
+      latest.current = effect
+      react.useEffect(() => {
+        let cleanup = latest.current()
+        // A screen coming back into focus: the old pass is stale, a new one starts.
+        focus.refocus = () => {
+          if (typeof cleanup === 'function') {
+            cleanup()
+          }
+          cleanup = latest.current()
+        }
+        return () => {
+          if (typeof cleanup === 'function') {
+            cleanup()
+          }
+        }
+      }, [])
     }
   }
 })
@@ -56,7 +75,9 @@ vi.mock('./mobile-home-host-requests', () => ({
 vi.mock('./refresh-account-usage', () => ({ refreshAccountUsage: vi.fn() }))
 vi.mock('../components/AccountUsage', () => ({ hasRenderableUsage: () => false }))
 
+import { noteHostMembershipChange } from '../transport/host-list-load-sharing'
 import { homeBodyKind } from './home-body-kind'
+import { HOME_CATALOG_READ_CAP_MS } from './home-catalog-read'
 import { useMobileHomeData } from './use-mobile-home-data'
 
 function entry(id: string) {
@@ -82,7 +103,7 @@ describe('home body on launch, for a phone that already has a desktop', () => {
   beforeEach(() => {
     kinds = []
     loadedFlags = []
-    focus.run = null
+    focus.refocus = null
     catalog.load.mockReset()
   })
   afterEach(() => {
@@ -130,8 +151,88 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     await mount()
     expect(kinds.at(-1)).toBe('pair')
     expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[home] host catalog failed to load'),
+      expect.stringContaining('[home] host catalog first read failed'),
       expect.any(Error)
     )
+  })
+
+  it('says the first read failed, and that it shows the pairing screen', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockRejectedValue(new Error('keychain unavailable'))
+    await mount()
+    expect(warn.mock.calls.map((c) => c[0]).join('\n')).toMatch(/first read failed.*pairing screen/)
+  })
+
+  it('keeps the list, and says so, when a refocus re-read rejects after a good read', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    await mount()
+    catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+    await act(async () => focus.refocus?.())
+    expect(kinds.at(-1)).toBe('hosts')
+    const lines = warn.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(lines).toMatch(/re-read failed.*keeping the list/)
+    expect(lines).not.toMatch(/re-read failed.*pairing screen/)
+  })
+
+  it('stops waiting on a read that never settles, and lets a later focus try again', async () => {
+    vi.useFakeTimers()
+    try {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockReturnValueOnce(new Promise(() => {}))
+      await mount()
+      expect(kinds.at(-1)).toBe('loading')
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
+      })
+      expect(kinds.at(-1)).toBe('pair')
+      expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/timed out after/)
+      catalog.load.mockResolvedValueOnce([entry('mac')])
+      await act(async () => focus.refocus?.())
+      expect(kinds.at(-1)).toBe('hosts')
+      // The abandoned pass was dropped, so the retry made its own call.
+      expect(catalog.load).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not redraw "Connect your desktop" after the first desktop is paired elsewhere', async () => {
+    catalog.load.mockResolvedValueOnce([])
+    await mount()
+    expect(kinds.at(-1)).toBe('pair')
+    // pair-confirm saves the host, then home is focused again.
+    noteHostMembershipChange()
+    let release: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+    kinds.length = 0
+    await act(async () => focus.refocus?.())
+    expect(kinds).not.toContain('pair')
+    await act(async () => release([entry('mac')]))
+    expect(kinds.at(-1)).toBe('hosts')
+    expect(kinds).not.toContain('pair')
+  })
+
+  it('does not list a desktop that was removed elsewhere while the re-read is in flight', async () => {
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    await mount()
+    expect(kinds.at(-1)).toBe('hosts')
+    noteHostMembershipChange()
+    let release: (value: unknown[]) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((resolve) => (release = resolve)))
+    kinds.length = 0
+    await act(async () => focus.refocus?.())
+    expect(kinds).not.toContain('hosts')
+    await act(async () => release([]))
+    expect(kinds.at(-1)).toBe('pair')
+  })
+
+  it('keeps the list on screen when only the last-connected stamp changed', async () => {
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    await mount()
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    kinds.length = 0
+    await act(async () => focus.refocus?.())
+    expect(kinds).not.toContain('loading')
   })
 })

@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 /**
@@ -23,7 +22,7 @@ describe('a screen that words an empty host list as a claim waits for the read',
 
   it('no route or component seeds a host list with [] and fills it from a bare load', () => {
     // Found by shape, not by a list of screens: every non-test source file under app/ and src/.
-    const root = fileURLToPath(new URL('..', import.meta.url))
+    const root = join(import.meta.dirname, '..')
     const files: string[] = []
     const walk = (dir: string) => {
       for (const name of readdirSync(dir)) {
@@ -45,7 +44,7 @@ describe('a screen that words an empty host list as a claim waits for the read',
     const offenders = files
       .filter((file) => !owners.some((owner) => file.endsWith(owner)))
       .filter((file) => {
-        const src = code(relative(fileURLToPath(new URL('.', import.meta.url)), file))
+        const src = code(relative(import.meta.dirname, file))
         return (
           /useState<(HostProfile|HostCatalogEntry)\[\]>\(\[\]\)/.test(src) ||
           /loadHosts\(\)\s*\.then\(\s*set/.test(src)

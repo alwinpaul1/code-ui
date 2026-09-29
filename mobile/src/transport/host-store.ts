@@ -222,6 +222,7 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
     }
     throw error
   }
+  hostListLoads.noteHostMembershipChange()
   if (!tokenCommittedBeforeMetadata) {
     // Why: the catalog can now surface a failed token write for recovery instead of losing the host.
     await commitDeviceToken(stored.id, validated.deviceToken)
@@ -274,6 +275,7 @@ export async function removeHost(hostId: string): Promise<void> {
     }
     throw error
   }
+  hostListLoads.noteHostMembershipChange()
   tokenCache.delete(hostId)
   try {
     await removeMobileRelayHostOverlay(hostId)
