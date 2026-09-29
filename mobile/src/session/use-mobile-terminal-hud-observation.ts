@@ -214,20 +214,15 @@ export function useMobileTerminalHudObservation(args: {
         if (answersRef.current === answersBefore) {
           setDialogBeforeAnswer(false)
         }
-        const parsed =
+        const next =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
-        const next = parsed
         if (next) {
+          // The whole observation, like the reads above. A hand-picked list of
+          // six fields kept the old object when only the Codex mode or Claude's
+          // shell count changed, so the mode pill and the task row went stale
+          // (review, 2026-09-30).
           setObservation((current) =>
-            current &&
-            current.modelId === next.modelId &&
-            current.effort === next.effort &&
-            current.modelLabel === next.modelLabel &&
-            current.permissionMode === next.permissionMode &&
-            current.context?.usedPercent === next.context?.usedPercent &&
-            current.context?.usedLabel === next.context?.usedLabel
-              ? current
-              : next
+            JSON.stringify(current) === JSON.stringify(next) ? current : next
           )
         }
         return next
