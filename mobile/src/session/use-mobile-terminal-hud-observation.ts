@@ -70,6 +70,14 @@ export function useMobileTerminalHudObservation(args: {
    *  one test the sends, the queue edit, the waiting notice and the draft
    *  mirror all use. */
   dialogKind: TerminalDialogKind | null
+  /** True from `rereadAfterAnswer` until a read begun after it lands:
+   *  `dialogKind` is then a screen from before the agent took the phone's
+   *  answer, and the dialog on it is most likely the one that answer closed. */
+  dialogBeforeAnswer: boolean
+  /** The card the phone answered has left (use-answered-prompt-notice-hold.ts):
+   *  read the screen again now, and flag `dialogKind` as older than that until
+   *  the read is done. */
+  rereadAfterAnswer: () => void
   terminalPermission: MobileChatPermission | null
 } {
   const { client, enabled, handleRef, handleKey, agent } = args
@@ -84,6 +92,10 @@ export function useMobileTerminalHudObservation(args: {
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
+  const [dialogBeforeAnswer, setDialogBeforeAnswer] = useState(false)
+  // Bumped by each `rereadAfterAnswer`; a read clears `dialogBeforeAnswer` only
+  // if none came in while it was on the wire.
+  const answersRef = useRef(0)
   const [terminalPermission, setTerminalPermission] = useState<MobileChatPermission | null>(null)
   const readRef = useRef<() => Promise<TerminalHudObservation | null>>(async () => null)
 
@@ -94,6 +106,7 @@ export function useMobileTerminalHudObservation(args: {
     setSpinner(null)
     setDialogOptions(null)
     setDialogKind(null)
+    setDialogBeforeAnswer(false)
     setTerminalPermission(null)
     if (!client || !enabled || !handleKey) {
       return
@@ -118,6 +131,7 @@ export function useMobileTerminalHudObservation(args: {
         return null
       }
       inFlight = true
+      const answersBefore = answersRef.current
       try {
         const response = await client.sendRequest(
           'terminal.read',
@@ -197,6 +211,9 @@ export function useMobileTerminalHudObservation(args: {
           JSON.stringify(current) === JSON.stringify(dialog) ? current : dialog
         )
         setDialogKind(terminalDialogKind(lines, agent))
+        if (answersRef.current === answersBefore) {
+          setDialogBeforeAnswer(false)
+        }
         const parsed =
           agent === 'codex' ? parseCodexHudObservation(lines) : parseTerminalHudObservation(lines)
         const next = parsed
@@ -245,12 +262,23 @@ export function useMobileTerminalHudObservation(args: {
   // Why: a Shift+Tab from the phone changes the footer at once; waiting up to
   // 5s for the next poll would make the mode pill look stuck.
   const refresh = useCallback(() => readRef.current(), [])
+  // Why: the phone's answer closes the dialog the last read saw, and the poll
+  // comes once a second. The waiting notice read that dialog as still up once
+  // the card had gone, and drew "A menu is open in the terminal" between the
+  // card leaving and the next poll (2026-09-29, "the screen flashes").
+  const rereadAfterAnswer = useCallback(() => {
+    answersRef.current += 1
+    setDialogBeforeAnswer(true)
+    void readRef.current()
+  }, [])
 
   return {
     observation,
     refresh,
     dialogOptions,
     dialogKind,
+    dialogBeforeAnswer,
+    rereadAfterAnswer,
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],

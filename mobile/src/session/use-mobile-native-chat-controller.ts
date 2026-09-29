@@ -1,9 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
 import { useMobileNativeChatAskDismiss } from './use-mobile-native-chat-ask-dismiss'
+import { useAnsweredPromptNoticeHold } from './use-answered-prompt-notice-hold'
 import { useMobileNativeChatCancelAsk } from './use-mobile-native-chat-cancel-ask'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileNativeChatComposerCatalogs } from './use-mobile-native-chat-composer-catalogs'
@@ -180,7 +181,7 @@ export function useMobileNativeChatController(
     // its process still paints: the live pair, or nothing.
     live: liveHud,
     refresh: refreshTerminalHud,
-    dialogOptions: terminalDialogOptions, dialogKind: terminalDialogKind,
+    dialogOptions: terminalDialogOptions, dialogKind: terminalDialogKind, dialogBeforeAnswer, rereadAfterAnswer,
     terminalPermission,
     permissionDismissed,
     queuedMessages: visibleQueuedMessages,
@@ -482,13 +483,19 @@ export function useMobileNativeChatController(
   useLayoutEffect(() => {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])
-  // Card actions retire the route's held failure banner too, not just sends.
-  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
-  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
+  // Card actions retire the route's held failure banner too, not just sends,
+  // and hold the waiting notice until the answered card leaves: the dialog the
+  // screen showed is the one answered (use-answered-prompt-notice-hold.ts).
+  const promptCard = legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt
+  const { answered: noteAnswered, dialogBeforeAnswer: noticeHeld } = useAnsweredPromptNoticeHold({ card: promptCard, dialogBeforeAnswer, rereadAfterAnswer })
+  const onCardAnswered = useCallback(() => { onSendResolved(); noteAnswered() }, [onSendResolved, noteAnswered])
+  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onCardAnswered)
+  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onCardAnswered)
+  const answerQuestion = useNativeChatAcceptedAction(legacyHandleNativeChatQuestionAnswer, noteAnswered)
   const handleNativeChatRespondPermission = activeChatStructured
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission
-  const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onSendResolved)
+  const respond = useNativeChatAcceptedAction(handleNativeChatRespondPermission, onCardAnswered)
   const respondWithComment = useMobileNativeChatPlanFeedbackRespond({
     client,
     enabled: inputSendable,
@@ -497,7 +504,7 @@ export function useMobileNativeChatController(
     deviceTokenRef,
     onSendError,
     onResponseAccepted: refreshTerminalHud,
-    onAccepted: onSendResolved
+    onAccepted: onCardAnswered
   })
   const queueEditor = useMobileNativeChatQueueEditor({
     agent: activeChatAgent,
@@ -558,7 +565,7 @@ export function useMobileNativeChatController(
       ? structuredNativeChat.permission
       : legacyRenderedPermission,
     nativeChatQuestion: activeChatStructured ? structuredNativeChat.question : legacyQuestion,
-    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: legacyRenderedPermission ?? legacyQuestion ?? nativeChatAskPrompt, dialogKind: terminalDialogKind, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
+    nativeChatTerminalWait: activeChatStructured || connState !== 'connected' ? null : terminalPromptWait({ card: promptCard, dialogKind: terminalDialogKind, dialogBeforeAnswer: noticeHeld, dialogOptions: terminalDialogOptions, dialogLeft: permissionDismissed, hookState: nativeChatStatus?.state }),
     openNativeChatTerminal: () => { if (activeSessionTabId) { peekTerminalTab(activeSessionTabId) } },
     nativeChatAsk: !activeChatStructured && showNativeChatAsk ? nativeChatAskPrompt : null,
     nativeChatAskKey, nativeChatAskSentAt,
@@ -582,7 +589,7 @@ export function useMobileNativeChatController(
     // the curated catalog plus the disk scan.
     nativeChatCommandSurface: activeChatStructured ? structuredNativeChat : undefined,
     loadNativeChatSkills,
-    handleNativeChatQuestionAnswer: activeChatStructured ? structuredNativeChat.respondQuestion : legacyHandleNativeChatQuestionAnswer,
+    handleNativeChatQuestionAnswer: activeChatStructured ? structuredNativeChat.respondQuestion : answerQuestion,
     handleNativeChatSend: activeChatStructured ? structuredNativeChatSend.send : handleNativeChatSend,
     handleNativeChatSendWithOutcome: activeChatStructured ? structuredNativeChatSend.sendWithOutcome : handleNativeChatSendWithOutcome,
     readSeededLaunchDraft, nativeChatSessionOptions,
