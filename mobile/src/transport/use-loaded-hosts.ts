@@ -60,11 +60,19 @@ export function useLoadedHosts(): LoadedHosts {
   return state
 }
 
-export const EMPTY_HOSTS_COPY = {
-  failed: "Couldn't read your paired desktops. Reopen this screen in a moment.",
-  unavailable: "Your paired desktops can't be read right now. Reopen this screen in a moment.",
-  // Unlocking cannot fix this one: the credential is gone, so pairing is the way back.
-  missing: 'A paired desktop needs to be paired again. Scan its code from the home screen.'
+export const EMPTY_HOSTS_FAILED_COPY =
+  "Couldn't read your paired desktops. Reopen this screen in a moment."
+
+function unavailableCopy(count: number): string {
+  const subject = count === 1 ? 'A paired desktop' : 'Your paired desktops'
+  return `${subject} can't be read right now. Reopen this screen in a moment.`
+}
+
+// Unlocking cannot fix a missing credential: it is gone, so pairing is the way back.
+function missingCopy(count: number): string {
+  return count === 1
+    ? 'A paired desktop needs to be paired again. Scan its code from the home screen.'
+    : `${count} paired desktops need to be paired again. Scan their codes from the home screen.`
 }
 
 /**
@@ -76,14 +84,14 @@ export function emptyHostsNoticeCopy(
   noneCopy: string
 ): string {
   if (state.failed) {
-    return EMPTY_HOSTS_COPY.failed
+    return EMPTY_HOSTS_FAILED_COPY
   }
   const parts: string[] = []
   if (state.unavailable > 0) {
-    parts.push(EMPTY_HOSTS_COPY.unavailable)
+    parts.push(unavailableCopy(state.unavailable))
   }
   if (state.missing > 0) {
-    parts.push(EMPTY_HOSTS_COPY.missing)
+    parts.push(missingCopy(state.missing))
   }
   return parts.length > 0 ? parts.join(' ') : noneCopy
 }

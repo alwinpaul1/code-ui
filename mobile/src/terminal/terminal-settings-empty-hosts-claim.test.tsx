@@ -101,6 +101,35 @@ describe('Terminal settings empty-host line', () => {
     }
   )
 
+  it.each(['light', 'dark'] as const)(
+    'words one and several desktops to match the count (%s)',
+    async (scheme) => {
+      const missing = (id: string) => ({ id, credentialStatus: 'missing', profile: null })
+      store.catalog.mockResolvedValue([missing('a')])
+      expect((await mount(scheme)).join('\n')).toContain(
+        'A paired desktop needs to be paired again'
+      )
+      act(() => renderer?.unmount())
+      store.catalog.mockResolvedValue([missing('a'), missing('b')])
+      const several = (await mount(scheme)).join('\n')
+      expect(several).toContain('2 paired desktops need to be paired again')
+      expect(several).not.toContain('needs')
+      act(() => renderer?.unmount())
+      const locked = (id: string) => ({
+        id,
+        credentialStatus: 'temporarily-unavailable',
+        profile: null
+      })
+      store.catalog.mockResolvedValue([locked('a')])
+      expect((await mount(scheme)).join('\n')).toContain("A paired desktop can't be read right now")
+      act(() => renderer?.unmount())
+      store.catalog.mockResolvedValue([locked('a'), locked('b')])
+      expect((await mount(scheme)).join('\n')).toContain(
+        "Your paired desktops can't be read right now"
+      )
+    }
+  )
+
   it('still says none are paired when the read worked and found nothing', async () => {
     store.catalog.mockResolvedValue([])
     expect((await mount('light')).join('\n')).toContain('No paired desktops yet')

@@ -152,6 +152,16 @@ describe('what an empty host list may say', () => {
     expect(copy).not.toMatch(/can't be read|unlock|No paired hosts/i)
   })
 
+  it('matches the wording to the count, one and several', () => {
+    const copy = (unavailable: number, missing: number) =>
+      emptyHostsNoticeCopy({ failed: false, unavailable, missing }, 'x')
+    expect(copy(1, 0)).toMatch(/^A paired desktop can't be read/)
+    expect(copy(3, 0)).toMatch(/^Your paired desktops can't be read/)
+    expect(copy(0, 1)).toMatch(/^A paired desktop needs to be paired again/)
+    expect(copy(0, 3)).toMatch(/^3 paired desktops need to be paired again\. Scan their codes/)
+    expect(copy(0, 3)).not.toMatch(/needs/)
+  })
+
   it('says both when some desktops are unreadable and some need pairing', () => {
     const copy = emptyHostsNoticeCopy({ ...none, unavailable: 1, missing: 1 }, 'x')
     expect(copy).toMatch(/can't be read right now/)
