@@ -268,7 +268,8 @@ export function MobileNativeChatOverlay({
     baseFolded,
     session.messages,
     session.hasMore,
-    session.status === 'ready' && session.baseRetained !== true
+    session.status === 'ready' && session.baseRetained !== true,
+    controller.nativeChatPromptHook === true
   )
   const absorbedEchoes = useAbsorbedQueueEchoes(
     queuedMessages ?? [],

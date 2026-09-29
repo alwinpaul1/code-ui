@@ -148,7 +148,10 @@ export function useDesktopPromptEchoes(
   /** Whether the chat's read of this session has settled. Before it does,
    *  `hasEarlier` is false and no row is held, which says nothing about a
    *  row being missing (sixth review of this rule, 2026-09-27). */
-  readSettled = true
+  readSettled = true,
+  /** Whether the tab was launched with the prompt hook (`hk=1`): every prompt
+   *  it takes while the chat is open reaches the phone as a hook copy too. */
+  promptHook = false
 ): MobileNativeChatPendingMessage[] {
   const echoes: MobileNativeChatPendingMessage[] = []
   const refused: DesktopPrompt[] = []
@@ -224,7 +227,13 @@ export function useDesktopPromptEchoes(
       // fell to the arrival tail, three turns under the reply that answered
       // it (device, 2026-09-19).
       const timedRow = anchorRow === undefined ? lastRowBefore(rawMessages, prompt.at) : undefined
-      if (anchorRow) {
+      const afterStandIn = prompt.foundAt === undefined ? undefined : placeAfterStandIn(prompt, rawMessages, promptHook)
+      if (afterStandIn === STAND_IN_WAIT) {
+        // Drawn where it was first seen meanwhile, and not settled.
+      } else if (afterStandIn !== undefined) {
+        waitsByNonce.delete(prompt.nonce)
+        rememberAnchor(prompt.nonce, afterStandIn)
+      } else if (anchorRow) {
         waitsByNonce.delete(prompt.nonce)
         rememberAnchor(prompt.nonce, anchorRow.id)
         // The named row is the transcript's last RECORD at submit, and a reply
@@ -302,6 +311,52 @@ export function useDesktopPromptEchoes(
     }
   }, [refusals])
   return useStableEchoes(echoes)
+}
+
+/** How long a copy read after Orca's stand-in, on a tab with the prompt
+ *  hook, waits for the hook's copy of it before it is taken for one found. */
+const STAND_IN_TWIN_WAIT_MS = 5_000
+const STAND_IN_WAIT = Symbol('wait for the hook copy')
+
+/**
+ * Where a copy read first after Orca's stand-in goes (`foundAt`,
+ * agent-status-prompts.ts): gap C of the final review of
+ * fix/midturn-prompt-at-end. The status cannot say whether the message was
+ * there before the chat looked or came since, and each clock is wrong for
+ * the other: the status's ping drew a message found there at the tail, under
+ * the rows written after it, and its run's start (67763919, withdrawn in
+ * f4a46e18) drew a message typed after the chat opened above rows written
+ * before it, or nowhere with that start off the page.
+ *
+ * The prompt hook's copy settles it. With it, the copy goes after the row the
+ * hook names, where the message was typed either way. With the hook and no
+ * copy of it, the message came before the chat listened to the terminal
+ * (while the chat is open it does, and a message typed then is beaconed):
+ * found, it goes by its run's start, as a copy found on the chat's first
+ * status does, or, with that start off the page, where the status's ping
+ * puts it, since a message drawn late beats one drawn nowhere. The hook's copy
+ * can reach the phone a moment after the status's, so for
+ * STAND_IN_TWIN_WAIT_MS the copy is drawn where it was first seen and waits.
+ * Without the hook the two cannot be told, and the ping places it as before
+ * (undefined).
+ */
+function placeAfterStandIn(
+  prompt: DesktopPrompt,
+  rawMessages: readonly NativeChatMessage[],
+  promptHook: boolean
+): string | typeof STAND_IN_WAIT | undefined {
+  const hookRow = prompt.hookTwin?.anchorId
+  if (hookRow !== undefined && rawMessages.some((message) => message.id === hookRow)) {
+    return hookRow
+  }
+  if (!promptHook) {
+    return undefined
+  }
+  if (typeof prompt.seenAt === 'number' && Date.now() - prompt.seenAt < STAND_IN_TWIN_WAIT_MS) {
+    return STAND_IN_WAIT
+  }
+  const row = lastRowBefore(rawMessages, prompt.foundAt)
+  return typeof row === 'string' ? row : undefined
 }
 
 /** The refusals already logged, so each says so once. */

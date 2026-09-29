@@ -30,6 +30,7 @@ import {
   LAST_REPLY,
   TURN_ENDED,
   BEFORE_TURN,
+  standIn,
   text,
   user,
   working,
@@ -476,3 +477,155 @@ for (const [label, WORDS] of [
     })
   })
 }
+
+// Gap C of the final review of fix/midturn-prompt-at-end: Orca's stand-in (a
+// status with no prompt and no history, when its hook row is stale) as the
+// chat's first status used up the chat's first reading, so a message taken
+// before the chat opened, on the next status, read as one the chat watched
+// arrive: timed by that status's ping, it was drawn at the tail, below the
+// rows written after it. Taken for a found one instead (67763919, withdrawn in
+// f4a46e18), a message typed after the chat opened was timed by its run's
+// start and, with that start off the page, drawn nowhere. The status cannot
+// tell the two; the prompt hook's copy can: it names the row the message was
+// typed after, and on a tab with the hook the chat listens to the terminal
+// while it is open, so a message typed then always has one.
+describe('a message on the first status after Orca’s stand-in', () => {
+  let agent: 'claude' | 'codex' = 'claude'
+  const { unmount, showAt, where } = midturnChat(frames, () => agent)
+  const placesOf = (words: string) => {
+    const found = where(words)
+    return found.at.map((index) => found.after(index))
+  }
+  /** The run the message came in began on the page the chat holds, after the
+   *  result written at 05:36:02; the chat opens at 05:40, mid-run. */
+  const RUN_START = at('05:36:10.000')
+  const run = (stamped: string): NonNullable<AgentStatusPromptSource> => ({ ...working(SECOND_SEND, stamped), stateStartedAt: RUN_START })
+  const UP_TO_05_40 = WHOLE_TURN.slice(0, -4)
+  const hookCopy = (received: string) => beaconCopy('72001', SECOND_SEND, WRITTEN_BEFORE_SECOND, received)
+
+  async function openOnStandIn(reader: ReturnType<typeof statusReader>, hook: { promptHook?: boolean }): Promise<void> {
+    vi.setSystemTime(at('05:40:00.000'))
+    const prompts = reader.read({ ...standIn('05:39:59.000'), state: 'working' })
+    await showAt('05:40:00.100', UP_TO_05_40, prompts, true, [], hook)
+  }
+
+  // Taken before the chat opened, while the tab showed its terminal: the
+  // phone got the hook's copy then.
+  it('draws a message taken before the chat opened where it was sent, by the hook copy the phone got then', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await openOnStandIn(reader, hooked)
+    vi.setSystemTime(at('05:40:05.100'))
+    const prompts = reader.read(run('05:40:05.000'), { beacon: [hookCopy('05:36:35.050')] })
+    await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
+    await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
+    expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
+    reader.unmount()
+    unmount()
+  })
+
+  // No hook copy of it: the tab has the hook, and the chat has listened to
+  // the terminal since it opened, so the message came before: it is placed by
+  // the start of the run it came in, above the rows written after it, not by
+  // the status's ping at the tail.
+  it('draws a message taken before the chat opened in its run, not at the tail, when the phone never got its hook copy', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await openOnStandIn(reader, hooked)
+    vi.setSystemTime(at('05:40:05.100'))
+    const prompts = reader.read(run('05:40:05.000'))
+    await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
+    await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
+    // After the result written at 05:36:02, which folds into the words
+    // written at 05:34:51 with the call before it.
+    expect(placesOf(SECOND_SEND)).toEqual([BEFORE_FIRST[0]!.id])
+    reader.unmount()
+    unmount()
+  })
+
+  // Found, with its run begun on a page the chat has not loaded: there is no
+  // row to place it by, and it is drawn by the status's ping rather than
+  // nowhere, as before.
+  it('still draws a message taken before the chat opened, at the status’s ping, when its run began off the page', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    await openOnStandIn(reader, hooked)
+    vi.setSystemTime(at('05:40:05.100'))
+    const prompts = reader.read(working(SECOND_SEND, '05:40:05.000'))
+    await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
+    await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
+    expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_AFTER_SECOND])
+    reader.unmount()
+    unmount()
+  })
+
+  // The same after a reconnect: the stand-in first on the way back, and a
+  // message taken while the link was down, when the phone heard nothing of
+  // the terminal. Found, it came after the last status read before the drop.
+  it('draws a message taken while the link was down after the last status read before it, not at the tail, with the hook', async () => {
+    agent = 'claude'
+    const reader = statusReader()
+    vi.setSystemTime(at('05:35:00.000'))
+    let prompts = reader.read(working(EARLIER, '05:34:55.850'))
+    await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hooked)
+    reader.read(working(EARLIER, '05:34:55.850'), { connected: false })
+    vi.setSystemTime(at('05:40:00.000'))
+    reader.read(working(EARLIER, '05:34:55.850'))
+    prompts = reader.read({ ...standIn('05:39:59.000'), state: 'working' })
+    await showAt('05:40:00.100', UP_TO_05_40, prompts, true, [], hooked)
+    vi.setSystemTime(at('05:40:05.100'))
+    prompts = reader.read(working(SECOND_SEND, '05:40:05.000'))
+    await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
+    await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
+    expect(placesOf(SECOND_SEND)).toEqual([BEFORE_FIRST[0]!.id])
+    reader.unmount()
+    unmount()
+  })
+
+  // The guard f4a46e18 kept: a message typed after the chat opened, whose
+  // hook copy the chat got as it arrived, the status's first or a moment
+  // after it. Its run began off the page this time.
+  for (const order of ['with its status', 'a second after its status'] as const) {
+    it(`draws a message typed after the chat opened where it was sent, its hook copy ${order}`, async () => {
+      agent = 'claude'
+      const reader = statusReader()
+      vi.setSystemTime(at('05:36:26.000'))
+      let prompts = reader.read({ ...standIn('05:36:25.500'), state: 'working' })
+      await showAt('05:36:26.100', BEFORE_SECOND, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:35.000'))
+      const copy = hookCopy('05:36:35.050')
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'), { beacon: order === 'with its status' ? [copy] : [] })
+      await showAt('05:36:35.100', BEFORE_SECOND, prompts, true, [], hooked)
+      vi.setSystemTime(at('05:36:36.000'))
+      prompts = reader.read(working(SECOND_SEND, '05:36:34.891'), { beacon: [copy] })
+      await showAt('05:36:36.100', BEFORE_SECOND, prompts, true, [], hooked)
+      await showAt('05:37:40.000', WHOLE_TURN.filter((row) => row.timestamp! <= at('05:37:38.938')), prompts, true, [], hooked)
+      expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
+      reader.unmount()
+      unmount()
+    })
+  }
+
+  // The limit, pinned. With no hook (a Codex tab, a Windows host, a Claude
+  // tab launched without it) a message taken before the chat opened and one
+  // typed after reach the reader in the same shape, and it is drawn by the
+  // status's ping as before: late, below the rows written after it, but
+  // drawn. What would settle it is the row it was typed after, which only
+  // the hook's copy names.
+  for (const kind of ['claude', 'codex'] as const) {
+    it(`still draws a message taken before the chat opened at the status's ping with no hook, on a ${kind === 'claude' ? 'Claude Code tab launched without the hook' : 'Codex tab'} (a limit)`, async () => {
+      agent = kind
+      const reader = statusReader()
+      await openOnStandIn(reader, {})
+      vi.setSystemTime(at('05:40:05.100'))
+      const prompts = reader.read(run('05:40:05.000'))
+      await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [])
+      await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [])
+      // Below the words written after it (the calls since fold into them).
+      expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_AFTER_SECOND])
+      reader.unmount()
+      unmount()
+    })
+  }
+})
+

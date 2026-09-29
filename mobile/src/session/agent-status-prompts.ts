@@ -76,6 +76,11 @@ export type AgentStatusPromptState = {
   /** The line the chat logs for the last prompt it drew: which clock placed
    *  it, and whether the chat watched it arrive. */
   placed?: string | null
+  /** Set while the first reading (of the session, or since a reconnect or
+   *  the cached tab list) was Orca's stand-in, which says nothing about the
+   *  prompt, until a status that does: with the bound a prompt found then
+   *  cannot be older than, after a reconnect. */
+  standIn?: { notBefore?: number }
 }
 
 export const EMPTY_AGENT_STATUS_PROMPTS: AgentStatusPromptState = {
@@ -167,11 +172,14 @@ export function observeAgentStatusPrompt(
   // The chat can mount before the tab's status reaches it; the prompt on the
   // first status it does read was already there all the same. Orca's stand-in
   // counts as that first read, though it says nothing about the prompt, so a
-  // message it hid, taken before the chat opened, is timed by the next
-  // status's ping (gap C of the final review of fix/midturn-prompt-at-end).
-  // Not counting it timed a message typed after the chat opened by its run's
+  // message it hid, taken before the chat opened, reads as watched on the
+  // next status (gap C of the final review of fix/midturn-prompt-at-end). Not
+  // counting it timed a message typed after the chat opened by its run's
   // start instead, and one whose run began on a page not loaded was drawn
-  // nowhere (the review of fix/midturn-gaps). Drawn late beats not drawn.
+  // nowhere (the review of fix/midturn-gaps). So the copy keeps both clocks
+  // (`standIn`, `foundAt` below), and the prompt hook's copy of it decides
+  // where the tab has the hook; without it, the ping places it: drawn late
+  // beats not drawn.
   const firstOfSession = !state.read && status != null
   const readBefore = state.readAt
   const text = typeof status?.prompt === 'string' ? status.prompt : ''
@@ -201,6 +209,18 @@ export function observeAgentStatusPrompt(
   // chat was closed came unseen, and that status's `updatedAt` is its last
   // tool ping, which drew it at the tail (device, 2026-09-27).
   const found = firstOfSession || (options.firstRead === true && status != null)
+  // Orca's stand-in as that first reading used it up, and the prompt on the
+  // next status that says what it is may have been there before the chat
+  // looked or have come since (gap C of the final review of
+  // fix/midturn-prompt-at-end). The copy keeps both clocks (`foundAt`), and the
+  // prompt hook's copy of it, where the tab has the hook, decides
+  // (use-desktop-prompt-echoes.ts).
+  const standIn = state.standIn
+  if (found && status != null && !readsPrompt) {
+    state = { ...state, standIn: firstOfSession || readBefore === undefined ? {} : { notBefore: readBefore } }
+  } else if (readsPrompt && standIn !== undefined) {
+    state = { ...state, standIn: undefined }
+  }
   if (!carriesPrompt) {
     // A pane with no prompt: the next prompt is new even if it repeats the
     // last text.
@@ -283,11 +303,14 @@ export function observeAgentStatusPrompt(
     runStart !== null || (found && typeof status?.stateStartedAt === 'number' && Number.isFinite(status.stateStartedAt))
   const clock = runStart ?? (byStateStart ? status?.stateStartedAt : status?.updatedAt)
   const at = typeof clock === 'number' && Number.isFinite(clock) ? clock : null
+  const foundRun = !found && standIn !== undefined && status?.state === 'working' ? runItCameIn(status) : null
+  const foundAt = typeof foundRun === 'number' ? Math.max(foundRun, standIn?.notBefore ?? foundRun) : undefined
   const prompt: DesktopPrompt = {
     nonce: `${STATUS_PROMPT_NONCE_PREFIX}${sessionKey}:${at ?? 'x'}:${state.prompts.length}`,
     text,
     ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
+    ...(foundAt !== undefined ? { foundAt } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).
     ...(byStateStart ? { atStateStart: true as const } : {}),
@@ -311,7 +334,9 @@ export function observeAgentStatusPrompt(
     ? firstOfSession
       ? "found on the chat's first status"
       : `found on the first status since a reconnect or the cached tab list, ${before}`
-    : 'watched arriving'
+    : foundAt !== undefined
+      ? `on the first status after Orca's stand-in, found or watched arriving, its run begun ${new Date(foundAt).toISOString()}`
+      : 'watched arriving'
   const placed = `[desk-prompt] drawn: "${preview(text)}" (${how}) placed from ${at === null ? 'no time, at the tail' : `${new Date(at).toISOString()}, ${clockName}`}`
   // The subagent messages stay (`...state`): dropping them here took the
   // words off a "Message from" row the moment the person replied (review of

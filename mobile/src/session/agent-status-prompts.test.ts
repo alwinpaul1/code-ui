@@ -636,3 +636,42 @@ describe("a subagent message's copy read on a first read of the tab status", () 
     expect(afterReconnect.agentMessages?.[0]).not.toHaveProperty('seenAt')
   })
 })
+
+// Gap C of the final review of fix/midturn-prompt-at-end: Orca's stand-in as
+// the first reading says nothing about the prompt, so the prompt on the next
+// status may have been found or watched arriving. The copy keeps its ping
+// (`at`) and the start of its run (`foundAt`); the prompt hook's copy of it
+// decides where it goes (use-desktop-prompt-echoes.ts).
+describe('a prompt on the first status after Orca’s stand-in', () => {
+  const standIn = { state: 'working', prompt: '', updatedAt: 1_000, stateStartedAt: 1_000, stateHistory: [] }
+  const pane = { state: 'working', prompt: 'go on', updatedAt: 5_000, stateStartedAt: 800, stateHistory: [{ state: 'done', prompt: 'before', startedAt: 100 }] }
+
+  it('keeps its ping and the start of its run', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', standIn)
+    state = observeAgentStatusPrompt(state, 'sess-1', pane)
+    expect(state.prompts.map((prompt) => [prompt.at, prompt.foundAt])).toEqual([[5_000, 800]])
+  })
+
+  it('is bounded after a reconnect by the last status read before the drop', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, prompt: 'before that', updatedAt: 900 })
+    state = observeAgentStatusPrompt(state, 'sess-1', standIn, { firstRead: true })
+    state = observeAgentStatusPrompt(state, 'sess-1', pane)
+    expect(state.prompts.map((prompt) => prompt.foundAt)).toEqual([undefined, 900])
+  })
+
+  // Degenerate and guards: no stand-in, a status that says what the prompt
+  // is in between, and a pane that is not working.
+  it('is an ordinary watched copy with no stand-in first, or once a status said what the prompt was', () => {
+    let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...pane, prompt: 'first' })
+    state = observeAgentStatusPrompt(state, 'sess-1', pane)
+    expect(state.prompts.map((prompt) => prompt.foundAt)).toEqual([undefined, undefined])
+    state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-2', standIn)
+    state = observeAgentStatusPrompt(state, 'sess-2', { ...pane, prompt: 'first' })
+    state = observeAgentStatusPrompt(state, 'sess-2', pane)
+    expect(state.prompts.map((prompt) => prompt.foundAt)).toEqual([800, undefined])
+    state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-3', standIn)
+    state = observeAgentStatusPrompt(state, 'sess-3', { ...pane, state: 'done' })
+    expect(state.prompts.map((prompt) => prompt.foundAt)).toEqual([undefined])
+  })
+})
+

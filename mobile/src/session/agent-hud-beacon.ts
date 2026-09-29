@@ -64,8 +64,10 @@ export type AgentHudBeaconLimit = {
  *  `seenAt`: when the phone first read a status prompt, by the phone's clock.
  *  `hookTwin`: on a status prompt, the prompt hook's copy of the same
  *  submission it stands for (mergeDesktopPrompts): the hook's nonce, the text
- *  row it names, and when it reached the phone. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number } }
+ *  row it names, and when it reached the phone.
+ *  `foundAt`: on a status prompt read first after Orca's stand-in, which may
+ *  have been found or watched arriving, the start of the run it came in. */
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number }
 
 export type AgentHudBeacon = {
   agent: string
