@@ -62,6 +62,14 @@ describe('the words of a link', () => {
     expect(flat(link!)).toBe('Bold docs old')
   })
 
+  it('keeps a struck label underlined as a link', () => {
+    const [link] = links(render('[~~old~~ docs](https://x.dev)'))
+    const struck = link!.find((node) => node !== link && node.type === ('Text' as never))
+    const style = Object.assign({}, ...styleOf(struck)) as { textDecorationLine?: string }
+    expect(flat(struck)).toBe('old')
+    expect(style.textDecorationLine).toBe('underline line-through')
+  })
+
   it('keeps a plain label as it is, and a stray backtick in one as written', () => {
     const tree = render('[docs](https://x.dev) and [a`b](https://y.dev)')
     expect(links(tree).map(flat)).toEqual(['docs', 'a`b'])
