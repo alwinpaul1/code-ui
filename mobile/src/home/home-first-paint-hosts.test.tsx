@@ -78,6 +78,7 @@ vi.mock('../components/AccountUsage', () => ({ hasRenderableUsage: () => false }
 import { noteHostMembershipChange } from '../transport/host-list-load-sharing'
 import { homeBodyKind } from './home-body-kind'
 import { HOME_CATALOG_READ_CAP_MS } from './home-catalog-read'
+import { removeHomeHost } from './home-host-removal'
 import { useMobileHomeData } from './use-mobile-home-data'
 
 function entry(id: string) {
@@ -100,7 +101,7 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     latest = data
     listedIds.push(data.hostCatalog.map((h) => h.id))
     loadedFlags.push(data.hostCatalogLoaded)
-    kinds.push(homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length))
+    kinds.push(homeBodyKind(data.hostCatalogLoaded, data.hostCatalog.length, data.hostCatalogFailed))
     return null
   }
 
@@ -151,22 +152,75 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     expect(kinds.at(-1)).toBe('pair')
   })
 
-  it('falls back to the pairing screen, and logs why, when the stored read rejects', async () => {
+  it('does not tell a paired phone to pair when the first read fails, and logs why', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     catalog.load.mockRejectedValue(new Error('keychain unavailable'))
     await mount()
-    expect(kinds.at(-1)).toBe('pair')
+    expect(kinds).not.toContain('pair')
+    expect(kinds.at(-1)).toBe('failed')
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('[home] host catalog first read failed'),
       expect.any(Error)
     )
   })
 
-  it('says the first read failed, and that it shows the pairing screen', async () => {
+  it('says the first read failed and the desktops could not be read, not that it shows pairing', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     catalog.load.mockRejectedValue(new Error('keychain unavailable'))
     await mount()
-    expect(warn.mock.calls.map((c) => c[0]).join('\n')).toMatch(/first read failed.*pairing screen/)
+    const lines = warn.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(lines).toMatch(/first read failed; showing that the paired desktops could not be read/)
+    expect(lines).not.toMatch(/pairing screen/)
+  })
+
+  it('offers a retry after a failed first read that reads the store again and draws the list', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockRejectedValueOnce(new Error('keychain unavailable'))
+    await mount()
+    expect(kinds.at(-1)).toBe('failed')
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    await act(async () => latest!.retryHostCatalog())
+    expect(catalog.load).toHaveBeenCalledTimes(2)
+    expect(listedIds.at(-1)).toEqual(['mac'])
+    expect(kinds.at(-1)).toBe('hosts')
+  })
+
+  it('keeps the failed body, and logs a retry, when the retry fails too', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockRejectedValueOnce(new Error('keychain unavailable'))
+    await mount()
+    catalog.load.mockRejectedValueOnce(new Error('keychain still unavailable'))
+    const before = kinds.length
+    await act(async () => latest!.retryHostCatalog())
+    expect(catalog.load).toHaveBeenCalledTimes(2)
+    expect(kinds.slice(before)).not.toContain('pair')
+    expect(kinds.at(-1)).toBe('failed')
+    expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/host catalog retry failed/)
+  })
+
+  it('draws the pairing screen only once a retry has read the store and found no desktop', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockRejectedValueOnce(new Error('keychain unavailable'))
+    await mount()
+    expect(kinds).not.toContain('pair')
+    catalog.load.mockResolvedValueOnce([])
+    await act(async () => latest!.retryHostCatalog())
+    expect(kinds.at(-1)).toBe('pair')
+  })
+
+  it('does not swap a newer answer for the failed body when a read older than it fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    catalog.load.mockResolvedValueOnce([entry('mac')])
+    await mount()
+    let fail: (error: Error) => void = () => {}
+    catalog.load.mockReturnValueOnce(new Promise((_, reject) => (fail = reject)))
+    await act(async () => focus.refocus?.())
+    // While that read is out, the user removes the only desktop from home.
+    noteHostMembershipChange()
+    await act(async () => latest!.setHostCatalog([]))
+    expect(kinds.at(-1)).toBe('pair')
+    await act(async () => fail(new Error('keychain locked')))
+    expect(kinds.at(-1)).toBe('pair')
   })
 
   it('keeps the list, and says so, when a refocus re-read rejects after a good read', async () => {
@@ -191,7 +245,9 @@ describe('home body on launch, for a phone that already has a desktop', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
       })
-      expect(kinds.at(-1)).toBe('pair')
+      // Stuck is not "none": the pairing screen would be a claim the read never made.
+      expect(kinds).not.toContain('pair')
+      expect(kinds.at(-1)).toBe('failed')
       expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(/timed out after/)
       catalog.load.mockResolvedValueOnce([entry('mac')])
       await act(async () => focus.refocus?.())
@@ -290,8 +346,11 @@ describe('home body on launch, for a phone that already has a desktop', () => {
       await act(async () => {
         await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
       })
+      expect(kinds.at(-1)).toBe('failed')
       await act(async () => late([entry('mac')]))
       expect(listedIds.at(-1)).toEqual(['mac'])
+      // The late answer replaces the failed body; it is not stuck behind it.
+      expect(kinds.at(-1)).toBe('hosts')
     } finally {
       vi.useRealTimers()
     }
@@ -313,10 +372,30 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     await mount()
     catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
     await act(async () => focus.refocus?.())
-    expect(kinds.at(-1)).toBe('pair')
+    // Only a read that succeeded may say "none"; this one failed.
+    expect(kinds.at(-1)).toBe('failed')
     const lines = warn.mock.calls.map((c) => String(c[0])).join('\n')
-    expect(lines).toMatch(/re-read failed; showing the pairing screen/)
+    expect(lines).toMatch(/re-read failed; showing that the paired desktops could not be read/)
     expect(lines).not.toMatch(/keeping the list/)
+  })
+
+  it('retries a read that timed out, and the retry makes its own call', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockReturnValueOnce(new Promise(() => {}))
+      await mount()
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(HOME_CATALOG_READ_CAP_MS + 1)
+      })
+      expect(kinds.at(-1)).toBe('failed')
+      catalog.load.mockResolvedValueOnce([entry('mac')])
+      await act(async () => latest!.retryHostCatalog())
+      expect(catalog.load).toHaveBeenCalledTimes(2)
+      expect(kinds.at(-1)).toBe('hosts')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('lets a focus read that started after an unavailable-card re-check win over it', async () => {
@@ -365,5 +444,74 @@ describe('home body on launch, for a phone that already has a desktop', () => {
     await act(async () => latest!.setHostCatalog([entry('a')] as never))
     await act(async () => stuck([entry('a'), entry('b')]))
     expect(listedIds.at(-1)).toEqual(['a'])
+  })
+
+  describe('removing a desktop from home itself', () => {
+    const alert = vi.fn()
+    const confirm = vi.fn()
+    beforeEach(() => {
+      alert.mockReset()
+      confirm.mockReset()
+    })
+
+    // The store's removeHost moves the membership revision before it resolves.
+    async function removeFromHome(id: string): Promise<void> {
+      await act(async () =>
+        removeHomeHost(
+          { id, name: id },
+          {
+            remove: async () => noteHostMembershipChange(),
+            dropLocally: latest!.dropHostLocally,
+            reread: latest!.recheckHostCatalog,
+            setConfirm: confirm,
+            alert,
+            warn: (message, detail) => console.warn(message, detail)
+          }
+        )
+      )
+    }
+
+    it('drops the removed desktop, and says nothing failed, when only the re-read fails', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+      await mount()
+      catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+      await removeFromHome('b')
+      expect(alert).not.toHaveBeenCalled()
+      expect(confirm).toHaveBeenLastCalledWith(null)
+      expect(listedIds.at(-1)).toEqual(['a'])
+      expect(kinds.at(-1)).toBe('hosts')
+      expect(warn.mock.calls.map((c) => String(c[0])).join('\n')).toMatch(
+        /host b was removed, but the catalog re-read after it failed/
+      )
+      // The local drop counts as read: the next return to home keeps its list on screen.
+      catalog.load.mockResolvedValueOnce([entry('a')])
+      kinds.length = 0
+      await act(async () => focus.refocus?.())
+      expect(kinds).not.toContain('loading')
+      expect(listedIds.at(-1)).toEqual(['a'])
+    })
+
+    it('goes to the pairing screen after removing the only desktop, even when the re-read fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      catalog.load.mockResolvedValueOnce([entry('mac')])
+      await mount()
+      catalog.load.mockRejectedValueOnce(new Error('keychain locked'))
+      await removeFromHome('mac')
+      expect(alert).not.toHaveBeenCalled()
+      expect(listedIds.at(-1)).toEqual([])
+      // Removing the last desktop is a known answer, not a failed read.
+      expect(kinds.at(-1)).toBe('pair')
+    })
+
+    it('applies the fresh list the re-read after a removal finds', async () => {
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('b')])
+      await mount()
+      // c was paired from another screen while home still listed a and b.
+      catalog.load.mockResolvedValueOnce([entry('a'), entry('c')])
+      await removeFromHome('b')
+      expect(alert).not.toHaveBeenCalled()
+      expect(listedIds.at(-1)).toEqual(['a', 'c'])
+    })
   })
 })

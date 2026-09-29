@@ -12,18 +12,32 @@ export type HomeCatalogReadDeps = {
   isStale: () => boolean
   /** True once any earlier list was applied, so this is a re-read, not the first. */
   readBefore: boolean
+  /** True when the user asked for this read again from the failed-read body. */
+  retry: boolean
   /** True when that list has hosts, which is what a failed read leaves on screen. */
   keptList: boolean
   onCatalog: (catalog: HostCatalogEntry[]) => void | Promise<void>
-  /** End the loading state without a fresh list. */
-  onFailOpen: () => void
+  /**
+   * The read rejected or passed the cap: end the loading state with no fresh list. It is a
+   * failure, not an answer, so it must never be drawn as "no desktops".
+   */
+  onReadFailed: () => void
   /** Retire the shared in-flight read so a later focus starts its own. */
   abandonLoad: () => void
   warn: (message: string, detail?: unknown) => void
 }
 
-function failOpenLine(keptList: boolean): string {
-  return keptList ? 'keeping the list from the last read' : 'showing the pairing screen'
+function readName(deps: HomeCatalogReadDeps): string {
+  if (deps.retry) {
+    return 'retry'
+  }
+  return deps.readBefore ? 're-read' : 'first read'
+}
+
+function failedLine(keptList: boolean): string {
+  return keptList
+    ? 'keeping the list from the last read'
+    : 'showing that the paired desktops could not be read'
 }
 
 export async function readHomeCatalog(deps: HomeCatalogReadDeps): Promise<void> {
@@ -37,11 +51,11 @@ export async function readHomeCatalog(deps: HomeCatalogReadDeps): Promise<void> 
     outcome = await Promise.race([read, capped])
   } catch (error) {
     deps.warn(
-      `[home] host catalog ${deps.readBefore ? 're-read' : 'first read'} failed; ${failOpenLine(deps.keptList)}`,
+      `[home] host catalog ${readName(deps)} failed; ${failedLine(deps.keptList)}`,
       error
     )
     if (!deps.isStale()) {
-      deps.onFailOpen()
+      deps.onReadFailed()
     }
     return
   } finally {
@@ -49,13 +63,13 @@ export async function readHomeCatalog(deps: HomeCatalogReadDeps): Promise<void> 
   }
   if (outcome === 'timeout') {
     deps.warn(
-      `[home] host catalog read timed out after ${deps.capMs} ms; ${failOpenLine(deps.keptList)}`
+      `[home] host catalog ${readName(deps)} timed out after ${deps.capMs} ms; ${failedLine(deps.keptList)}`
     )
     deps.abandonLoad()
     if (!deps.isStale()) {
-      deps.onFailOpen()
+      deps.onReadFailed()
     }
-    // The stuck read may still land; a late answer beats a permanent guess.
+    // The stuck read may still land; a late answer replaces the failed body.
     void read.then(
       (late) => (deps.isStale() ? undefined : deps.onCatalog(late)),
       () => undefined
