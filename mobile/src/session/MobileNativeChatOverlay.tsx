@@ -239,7 +239,7 @@ export function MobileNativeChatOverlay({
   // it could not read, a clock behind the desktop's).
   const unlandedPrompts = useMemo(
     () =>
-      withoutLandedDesktopPrompts(promptsNoCopyStandsFor(desktopPrompts, hookPairing), baseFolded, queuedMessages ?? [], session.messages, desktopPrompts),
+      withoutLandedDesktopPrompts(promptsNoCopyStandsFor(desktopPrompts, hookPairing), baseFolded, queuedMessages ?? [], session.messages),
     [hookPairing, desktopPrompts, baseFolded, queuedMessages, session.messages]
   )
   // Existing sessions have no hook, but the agent draws its own queue and the

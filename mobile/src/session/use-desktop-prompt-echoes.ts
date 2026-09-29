@@ -413,10 +413,7 @@ export function withoutLandedDesktopPrompts(
   /** The transcript as read, `[Image #N]` markers and all: a photo sent with
    *  no words has no key, and lands as the row of exactly its markers
    *  (Claude Code numbers photos through a session). */
-  raw: readonly NativeChatMessage[] = [],
-  /** Every desk copy the chat holds, those a pending copy stands for too: the
-   *  words a joined dequeue row can be made of (joinedLineBetween). */
-  allPrompts: readonly DesktopPrompt[] = prompts
+  raw: readonly NativeChatMessage[] = []
 ): DesktopPrompt[] {
   prompts = withoutLateHookTwins(prompts, raw)
   // The rows as read, and what the agent's queue box lists (fourth review: a
@@ -443,7 +440,6 @@ export function withoutLandedDesktopPrompts(
   // A row a later hook submission of the same words owns is that
   // submission's, not an earlier copy's (desk-prompt-row-owners.ts).
   const owners = rowOwners(prompts, raw, landedKey)
-  const copyKeys = new Set(allPrompts.map((prompt) => landedKey(prompt.text)))
   return prompts.filter((prompt) => {
     if (photosOnlyPrompt(prompt.text) > 0) {
       return !landedMarkers.has(markersOf(prompt.text))
@@ -461,7 +457,7 @@ export function withoutLandedDesktopPrompts(
           place !== null &&
           other.rowId !== undefined &&
           ownedByLaterSubmission(owners.get(other.rowId), place) &&
-          !joinedLineBetween(raw, place.position, raw.findIndex((message) => message.id === other.rowId), key, landedKey, copyKeys)
+          !joinedLineBetween(raw, place.position, raw.findIndex((message) => message.id === other.rowId), key, landedKey, owners)
         )
     )
   })

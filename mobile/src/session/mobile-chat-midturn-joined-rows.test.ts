@@ -23,6 +23,7 @@ import {
   working,
   done,
   statusReader,
+  drawn,
   beaconCopy,
   midturnChat
 } from './mobile-chat-midturn-prompt.test-support'
@@ -243,6 +244,67 @@ describe('the same words typed mid-turn, then as a later turn’s prompt, with a
       await showAt('05:50:06.000', [...rows, againRow, againReply], prompts, false, [], hook)
       expect(placesOf(CONTINUE)).toEqual([WRITTEN_BEFORE_SECOND, betweenReply.id])
       reader.unmount()
+      unmount()
+    })
+  }
+})
+
+// The review of 4bf3ad54 (D4, D5): two queued messages dequeued as one row,
+// and the first's words typed again as the next turn's prompt, which lands
+// the first's copy as on main (joinedLineBetween). A message of several
+// lines, or a part the chat no longer holds a copy of, kept the first drawn
+// beside the joined row for good.
+describe('two queued messages dequeued as one row, the first typed again, with messages of several lines', () => {
+  const { unmount, showAt } = midturnChat(frames, () => 'claude')
+  const oneLineOf = (body: string) => body.replace(/\s+/g, ' ').trim()
+  const ANSWER = text('8e2f1d6b-4c3a-4f72-8b9e-1d5c6f7a8b92', '05:47:20.000')
+  const AGAIN_ANSWER = text('6f7a8b9c-0d1e-4f2a-9b3c-4d5e6f7a8b9c', '05:50:05.000')
+  for (const [label, X, Y, yHasCopy] of [
+    ['the first of two lines', 'first queued thing to look at\n\nand the second half of it', 'second queued thing to look at', true],
+    ['the second of two lines', 'first queued thing to look at', 'second queued thing to look at\nwith a line of detail', true],
+    ['the second with no hook copy', 'first queued thing to look at', 'second queued thing to look at', false]
+  ] as const) {
+    it(`draws the first only as the joined row and its new row, ${label}, and after the chat comes back`, async () => {
+      const hook = { promptHook: true }
+      const JOINED = user('9c8b7a6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', `${X}\n${Y}`, '05:46:54.300')
+      const AGAIN = user('0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d', X, '05:49:46.995')
+      const hx = beaconCopy('93101', X, WRITTEN_BEFORE_SECOND, '05:36:30.050')
+      const hy = beaconCopy('93102', Y, WRITTEN_BEFORE_SECOND, '05:36:40.050')
+      const hx2 = beaconCopy('93103', X, ANSWER.id, '05:49:47.050')
+      const heard = yHasCopy ? [hx, hy] : [hx]
+      const carriesX = () => drawn(frames.at(-1)!).filter((row) => row.role === 'user' && row.text.includes(oneLineOf(X))).length
+      const reader = statusReader()
+      vi.setSystemTime(at('05:35:00.000'))
+      let prompts = reader.read(working('an earlier message', '05:34:55.850'))
+      await showAt('05:35:00.100', BEFORE_FIRST, prompts, true, [], hook)
+      vi.setSystemTime(at('05:36:30.000'))
+      prompts = reader.read(working(X, '05:36:29.000'), { beacon: [hx] })
+      await showAt('05:36:30.100', BEFORE_SECOND, prompts, true, [X], hook)
+      vi.setSystemTime(at('05:36:40.000'))
+      prompts = reader.read(working(Y, '05:36:39.000'), { beacon: heard })
+      await showAt('05:36:40.100', BEFORE_SECOND, prompts, true, [X, Y], hook)
+      await showAt('05:46:50.900', WHOLE_TURN, prompts, true, [X, Y], hook)
+      await showAt('05:46:55.300', [...WHOLE_TURN, JOINED], prompts, true, [], hook)
+      await showAt('05:47:21.000', [...WHOLE_TURN, JOINED, ANSWER], prompts, false, [], hook)
+      const run: NonNullable<AgentStatusPromptSource> = {
+        ...working(X, '05:49:47.000'),
+        stateStartedAt: at('05:49:47.000'),
+        stateHistory: [...done(Y).stateHistory!, { state: 'done', prompt: normalizePromptField(Y), startedAt: TURN_ENDED }]
+      }
+      vi.setSystemTime(at('05:49:47.100'))
+      prompts = reader.read(run, { beacon: [...heard, hx2] })
+      await showAt('05:49:48.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN], prompts, true, [], hook)
+      await showAt('05:50:06.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      expect(carriesX()).toBe(2)
+      reader.unmount()
+      unmount()
+      const again = statusReader()
+      vi.setSystemTime(at('05:52:00.000'))
+      prompts = again.read({ ...run, state: 'done', stateStartedAt: at('05:50:05.500') }, { beacon: [...heard, hx2] })
+      await showAt('05:52:00.100', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      await showAt('05:52:01.000', [...WHOLE_TURN, JOINED, ANSWER, AGAIN, AGAIN_ANSWER], prompts, false, [], hook)
+      expect(carriesX()).toBe(2)
+      again.unmount()
       unmount()
     })
   }

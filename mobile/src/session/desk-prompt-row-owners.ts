@@ -158,30 +158,41 @@ export function joinedLineBetween(
   to: number,
   key: string,
   keyOf: (text: string) => string,
-  /** The words of every desk copy the chat holds. */
-  copyKeys: ReadonlySet<string>
+  /** Rows a hook submission of their own whole words owns (rowOwners). */
+  owners: ReadonlyMap<string, HookSubmission>
 ): boolean {
   if (from === undefined) {
     return false
   }
   return raw.slice(from + 1, to).some((message) => {
-    if (message.role !== 'user') {
+    if (message.role !== 'user' || owners.has(message.id)) {
       return false
     }
     const text = message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    // The shape of a dequeue: two or more lines, each one a desk message's
-    // words, this copy's among them. A prompt with the words on one of its
-    // lines, or a subagent's notice, is not one, and let gap D's loss back in
-    // (the review of b6e83243, G1).
-    const lines = text.split('\n').map(keyOf).filter((line) => line.length > 0)
-    return (
-      !isKnownHarnessInjectedUserTurnText(text) &&
-      lines.length >= 2 &&
-      lines.includes(key) &&
-      lines.every((line) => copyKeys.has(line))
-    )
+    const lines = text.split('\n')
+    // The shape of a dequeue: the copy's words as a run of whole lines of a
+    // longer row, which may be several lines itself (the review of
+    // 4bf3ad54, D4). Not a prompt typed with its own hook copy (G1), nor a
+    // harness message (a subagent's notice, G1): each let gap D's loss back
+    // in (the review of b6e83243). A prompt typed with the words as some of
+    // its lines while the phone heard no copy of it is taken for one, and
+    // lands the copy as on main.
+    if (lines.length < 2 || lines.length > JOINED_LINES_CAP || isKnownHarnessInjectedUserTurnText(text)) {
+      return false
+    }
+    for (let first = 0; first < lines.length; first += 1) {
+      for (let last = first; last < lines.length; last += 1) {
+        if ((first > 0 || last < lines.length - 1) && keyOf(lines.slice(first, last + 1).join('\n')) === key) {
+          return true
+        }
+      }
+    }
+    return false
   })
 }
+
+/** Beyond this many lines a row is read as no dequeue. */
+const JOINED_LINES_CAP = 200
 
 /** Whether a row a submission owns is a later submission's and not this
  *  copy's: its hook copy reached the phone more than HOOK_TWIN_LAG_MS after
@@ -213,7 +224,6 @@ export function witnessRowsNotItsOwn(
 ): Map<string, string[]> {
   const out = new Map<string, string[]>()
   const owners = receipts.length > 0 ? rowOwners(receipts, messages, normalizeReconcileText, (message) => normalizedUserText(message) ?? '') : null
-  const copyKeys = new Set([...receipts, ...current].map((item) => normalizeReconcileText(item.text)))
   for (const item of current) {
     if (!item.id.startsWith('desk-') && !item.id.startsWith('absorbed-')) {
       continue
@@ -231,7 +241,7 @@ export function witnessRowsNotItsOwn(
         if (
           normalizedUserText(message) === key &&
           ownedByLaterSubmission(owners.get(message.id), place) &&
-          !joinedLineBetween(messages, place.position, messages.indexOf(message), key, normalizeReconcileText, copyKeys)
+          !joinedLineBetween(messages, place.position, messages.indexOf(message), key, normalizeReconcileText, owners)
         ) {
           rows.add(message.id)
         }

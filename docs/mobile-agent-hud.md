@@ -672,9 +672,11 @@ each submission. Three cases the status alone cannot settle use it
   after the row the submission names, as a prompt typed with the agent idle
   does, so the same words sent mid-turn and then typed as the next turn's
   prompt stay two messages (gap D). Not when a row between them is a joined
-  dequeue that may be the earlier message's own: two or more lines, each a desk
-  message's words (`joinedLineBetween`). No row is split into its messages: a
-  prompt can be made of earlier messages' words, and that lost messages.
+  dequeue that may be the earlier message's own: the earlier message's words as
+  a run of whole lines of a longer row that no hook submission of its own words
+  owns and no harness sent (`joinedLineBetween`). No row is split into its
+  messages: a prompt can be made of earlier messages' words, and that lost
+  messages.
 - A message read first after Orca's stand-in goes after the row its hook copy
   names; with the hook and no copy of it, it came before the chat listened,
   and goes by its run's start (gap C).
