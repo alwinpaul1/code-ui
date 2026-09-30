@@ -436,6 +436,89 @@ describe('an approval menu worded outside Yes and No', () => {
   })
 })
 
+// 2026-10-01 review: a plan that ends in a "(y/n)" ask drew no Allow or Deny,
+// and the question card offered its steps as the answers, so a tap sent a
+// step's digit to an ask whose answer is y or n. A line asked only when it
+// ended in "?", and "Shall I proceed? (y/n)" ends in ")". These asks are agent
+// prose, not a captured screen: no agent build is recorded for them, and the
+// repo holds no Codex "(y/n)" capture.
+describe('a plan that ends in a (y/n) ask', () => {
+  const STEPS = "I'll run these:\n1. npm install\n2. npm test\n\n"
+
+  it('asks Allow or Deny after "Shall I proceed? (y/n)", never offering the steps', () => {
+    const text = `${STEPS}Shall I proceed? (y/n)`
+    expect(askWhileWaiting(text)?.title).toBe('Permission requested')
+    expect(askWhileWaiting(text)?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion(text)).toBeNull()
+  })
+
+  it('asks Allow or Deny after "Allow running them? (y/n)"', () => {
+    const text = `${STEPS}Allow running them? (y/n)`
+    expect(askWhileWaiting(text)?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion(text)).toBeNull()
+  })
+
+  it('reads every spelling of the answer hint the same way', () => {
+    for (const ask of [
+      'Shall I proceed? [y/N]',
+      'Shall I proceed? [Y/n]',
+      'Shall I proceed? (Y/N)',
+      'Shall I proceed? (yes/no)',
+      'Shall I proceed? y/n',
+      'Proceed (y/n):',
+      '**Shall I proceed? (y/n)**',
+      'Shall I proceed? `(y/n)`'
+    ]) {
+      expect(askWhileWaiting(STEPS + ask)?.options, ask).toEqual(ALLOW_DENY)
+      expect(parseAgentQuestion(STEPS + ask), ask).toBeNull()
+    }
+  })
+
+  it('reads a (y/n) ask run straight on from the last step as an ask, not more of it', () => {
+    const text = 'Plan:\n1. npm install\n2. npm test\nShall I proceed? (y/n)'
+    expect(askWhileWaiting(text)?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion(text)).toBeNull()
+  })
+
+  // A "(y/n)" says the answer is y or n, so a digit is never the answer: the
+  // steps under the ask are what it asks about, not its choices.
+  it('asks Allow or Deny when the (y/n) ask introduces the steps', () => {
+    const text = 'Run these? (y/n)\n1. npm install\n2. npm test'
+    expect(askWhileWaiting(text)?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion(text)).toBeNull()
+  })
+
+  it('asks Allow or Deny for one step under a (y/n) ask, and for a bare hint after the steps', () => {
+    expect(askWhileWaiting('Run this? (y/n)\n1. npm install')?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion('Run this? (y/n)\n1. npm install')).toBeNull()
+    expect(askWhileWaiting(`${STEPS}(y/n)`)?.options).toEqual(ALLOW_DENY)
+    expect(parseAgentQuestion(`${STEPS}(y/n)`)).toBeNull()
+  })
+
+  it('leaves a choice of database to the question card under a (y/n) in a code fence', () => {
+    const text =
+      'Which database do you want to use?\n1. Postgres\n2. SQLite\n\n' +
+      'The installer then asks:\n```\nContinue? (y/n)\n```'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.options).toEqual(['Postgres', 'SQLite'])
+  })
+
+  it('does not take a "yes/no" that closes prose as the answer hint', () => {
+    const text = 'Which value should the flag take?\n1. strict\n2. loose\n\nThe old config took yes/no'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.options).toEqual(['strict', 'loose'])
+  })
+
+  // A known limit, not a goal: a numbered Yes and No under a "(y/n)" ask is
+  // still a menu, answered by the agent's own digit, as each agent's numbered
+  // dialog is. No agent is recorded painting this pair.
+  it('still answers a numbered Yes and No under a (y/n) ask by its own digits', () => {
+    expect(
+      askWhileWaiting('Do you want to proceed? (y/n)\n1. Yes\n2. No')?.options.map((o) => o.send)
+    ).toEqual(['1', '2'])
+  })
+})
+
 describe('a numbered list in a permission ask, at its degenerate sizes and places', () => {
   it('asks Allow or Deny for a single numbered Yes', () => {
     expect(askWhileWaiting('Do you want to proceed?\n1. Yes')?.options).toEqual(ALLOW_DENY)

@@ -219,7 +219,8 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   }
   // "Which database do you want to use? 1. Postgres 2. SQLite" asks for a
   // choice, not a yes: leave it to the question card. A list of Yes and No
-  // bullets, or one lone "1. Yes", still asks for a yes.
+  // bullets, or one lone "1. Yes", still asks for a yes, and so do steps
+  // around a "(y/n)" ask, which draw no question card at all.
   const question = parseAgentQuestion(text)
   if (question && !readsAsApproval(question.options)) {
     return null
