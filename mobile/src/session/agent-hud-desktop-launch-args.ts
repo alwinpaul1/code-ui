@@ -3,6 +3,7 @@ import { resolveTuiAgentLaunchArgs } from '../../../src/shared/tui-agent-launch-
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentHudLaunchFlag, hostTakesAgentHudFlag } from './agent-hud-launch-args'
+import { readHudLaunchFlags, withoutSpans } from './agent-hud-launch-flag-owner'
 
 /**
  * Agents started on the DESKTOP get the HUD beacon the same way the phone's
@@ -20,31 +21,22 @@ import { agentHudLaunchFlag, hostTakesAgentHudFlag } from './agent-hud-launch-ar
  * a visible row in every terminal — were not.
  *
  * The user's own arguments are preserved in front, and ours are recognised by
- * shape, so the write is idempotent, an upgrade replaces rather than stacks,
- * and 0.2.77's flags are removed wherever they are still found.
+ * our signature or by 0.2.77's exact text (`agent-hud-launch-flag-owner.ts`),
+ * never by shape, so the write is idempotent, an upgrade replaces rather than
+ * stacks, 0.2.77's flags are removed wherever they are still found, and a flag
+ * of the user's that looks like ours is theirs to keep. A user who already
+ * passes their own `--settings` (Claude) or `-c notify=` (Codex) gets no
+ * beacon flag for that agent: ours would replace theirs.
  */
 const HUD_AGENTS = ['claude', 'codex'] as const
 type HudAgent = (typeof HUD_AGENTS)[number]
 
-/**
- * Every flag this app has ever written, so one pass cleans up after all of
- * them. Claude's `--settings` marker also matches 0.2.77's, which carried a
- * different script inside the same JSON envelope; `tui.status_line` is 0.2.77
- * only and is now removed, never written.
- */
-const MARKERS: Record<HudAgent, RegExp[]> = {
-  claude: [/\s*--settings '\{"statusLine":\{"type":"command","command":"[^']*'/g],
-  codex: [
-    /\s*-c 'notify=\[[^']*\]'/g,
-    // 0.2.77's visible Codex footer. Removed on sight, never written again.
-    /\s*-c 'tui\.status_line=\[[^']*\]'/g
-  ]
-}
-
-function stripped(agent: HudAgent, current: string | undefined): string {
-  return MARKERS[agent]
-    .reduce((value, marker) => value.replace(marker, ''), current ?? '')
-    .trim()
+/** `current` less every flag of ours; exactly `current` when it holds none,
+ *  or when it cannot be split the way Orca splits it. */
+function stripped(agent: HudAgent, current: string | undefined, hostPlatform: NodeJS.Platform | null): string {
+  const value = current ?? ''
+  const flags = readHudLaunchFlags(agent, value, hostPlatform)
+  return flags.readable && flags.ours.length > 0 ? withoutSpans(value, flags.ours) : value
 }
 
 export function withAgentHudDesktopFlag(
@@ -52,13 +44,41 @@ export function withAgentHudDesktopFlag(
   current: string | undefined,
   hostPlatform: NodeJS.Platform | null
 ): string {
-  const base = stripped(agent, current)
+  const value = current ?? ''
+  const flags = readHudLaunchFlags(agent, value, hostPlatform)
+  // Unsplittable, ours would land inside the user's open quote.
+  if (!flags.readable) {
+    return value
+  }
+  const base = flags.ours.length > 0 ? withoutSpans(value, flags.ours) : value.trim()
+  if (flags.usersOwn !== null) {
+    return base
+  }
   const flag = agentHudLaunchFlag(agent, hostPlatform)
   return base ? `${base} ${flag}` : flag
 }
 
-export function withoutAgentHudDesktopFlag(agent: HudAgent, current: string | undefined): string {
-  return stripped(agent, current)
+export function withoutAgentHudDesktopFlag(
+  agent: HudAgent,
+  current: string | undefined,
+  hostPlatform: NodeJS.Platform | null = null
+): string {
+  return stripped(agent, current, hostPlatform)
+}
+
+/** Why the switch cannot put the beacon flag on for this agent, or null. */
+export function agentHudDesktopFlagRefusal(
+  agent: HudAgent,
+  current: string,
+  hostPlatform: NodeJS.Platform | null
+): string | null {
+  const flags = readHudLaunchFlags(agent, current, hostPlatform)
+  if (!flags.readable) {
+    return `the saved arguments do not split the way Orca splits them (${flags.reason}), so they are left as they are`
+  }
+  return flags.usersOwn === null
+    ? null
+    : `the saved arguments carry the user's own ${flags.usersOwn}, which the beacon flag would replace, so none is added`
 }
 
 /**
@@ -75,7 +95,7 @@ export function withoutStaleWindowsHudFlag(
   if (hostPlatform !== 'win32' || (agent !== 'claude' && agent !== 'codex')) {
     return args
   }
-  const cleaned = stripped(agent, args)
+  const cleaned = stripped(agent, args, hostPlatform)
   return cleaned === args.trim() ? args : cleaned
 }
 
@@ -128,9 +148,14 @@ export async function syncAgentHudDesktopLaunchArgs(
     // ask-permissions mode is saved. So a key is never deleted, and an agent
     // with no saved args keeps its defaults in front of the flag.
     const launched = resolveTuiAgentLaunchArgs(agent, current)
+    const refusal = writeFlag ? agentHudDesktopFlagRefusal(agent, launched, hostPlatform) : null
+    if (refusal !== null) {
+      // Otherwise a desktop tab with no HUD says nothing about why.
+      console.warn(`[hud-desktop-args] ${agent}: no beacon flag on the desktop: ${refusal}`)
+    }
     const value = writeFlag
       ? withAgentHudDesktopFlag(agent, launched, hostPlatform)
-      : withoutAgentHudDesktopFlag(agent, launched)
+      : withoutAgentHudDesktopFlag(agent, launched, hostPlatform)
     if (value !== launched) {
       changed = true
       next[agent] = value
