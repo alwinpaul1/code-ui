@@ -86,6 +86,42 @@ describe('where an indented code block ends in the source', () => {
   it('is left alone unless asked for, as in a fragment the HTML pass cuts out', () => {
     expect(end(['Run:', '', '    <div>x</div>'], 2)).toBeNull()
   })
+
+  // Review, 2026-09-30: a heading right after a list item's words was read as
+  // a lazy line of them, which kept the list open, so an indented block after
+  // the heading was taken for the item's paragraph. marked ends the list at
+  // the heading, and the HTML pass drew and copied `<b>x</b>` there as `**x**`.
+  it('ends a list at a heading that is not indented into it', () => {
+    expect(code(['- item', '# Next', '', '    <b>x</b>'], 3)).toBe(4)
+    expect(code(['- item', '# Next', '    <b>x</b>'], 2)).toBe(3)
+    expect(code(['text', '# Next', '', '    <b>x</b>'], 3)).toBe(4)
+    // One indented into the item keeps it open, and the line is its paragraph.
+    expect(code(['- item', '  # Sub', '', '    <b>x</b>'], 3)).toBeNull()
+  })
+
+  // marked (18.0.12) ends a list item at any line less indented than its words
+  // that opens with `#`, heading or not, which CommonMark would not.
+  it('ends a list at a line opening with `#`, as marked does', () => {
+    expect(code(['- item', '#hashtag', '', '    <b>x</b>'], 3)).toBe(4)
+    expect(code(['- item', '#hashtag', '    <b>x</b>'], 2)).toBeNull()
+  })
+
+  // marked ends one at a line opening with a tag as well, but by the time it
+  // reads the document the HTML pass has made `<div>` a blank line and
+  // `<b>bold</b>` a lazy `**bold**`, so the item goes on, and the indented
+  // line is its paragraph.
+  it('keeps a list open past a line the HTML pass removes or rewrites', () => {
+    expect(code(['- item', '<div>', '', '    <b>x</b>'], 3)).toBeNull()
+    expect(code(['- item', '<b>bold</b>', '', '    <b>x</b>'], 3)).toBeNull()
+    expect(code(['- item', '<!-- c -->', '', '    <b>x</b>'], 3)).toBeNull()
+    expect(code(['- item', 'a <b>bold</b>', '', '    <b>x</b>'], 3)).toBeNull()
+  })
+
+  it('takes a list item whose words are a heading for no paragraph', () => {
+    expect(code(['- # H', '        <b>x</b>'], 1)).toBe(2)
+    expect(code(['1. # H', '         <b>x</b>'], 1)).toBe(2)
+    expect(code(['- item', '        <b>x</b>'], 1)).toBeNull()
+  })
 })
 
 // Third review (2026-09-29): tabs counted one column, where marked expands
@@ -199,6 +235,37 @@ describe('where a fenced code block inside a quote ends', () => {
     const deep = `${'> '.repeat(12_000)}\`\`\``
     const ranges = runInNewContext('find(lines)', { find: markdownCodeRanges, lines: [deep, deep] }, { timeout: 250 })
     expect(ranges.size).toBe(0)
+  })
+
+  // Review, 2026-09-30: a quote whose last line is not paragraph text leaves
+  // nothing for the next line to continue lazily, so an indented line after
+  // it is code, as marked reads it. It was taken for the quote's paragraph,
+  // and the HTML pass drew and copied its `<b>x</b>` as `**x**`.
+  it('reads an indented line after a quote that ends in a fence, a heading or a blank line as code', () => {
+    const code = (lines: string[], index: number) => markdownCodeRanges(lines, { indentedCode: true }).get(index) ?? null
+    expect(code(['> ```', '> x', '> ```', '    <b>x</b>'], 3)).toBe(4)
+    expect(code(['> # H', '    <b>x</b>'], 1)).toBe(2)
+    expect(code(['>', '    <b>x</b>'], 1)).toBe(2)
+    expect(code(['> ```', '    <b>x</b>'], 1)).toBe(2)
+    expect(code(['>     code', '    <b>x</b>'], 1)).toBe(2)
+    expect(code(['> > # H', '    <b>x</b>'], 1)).toBe(2)
+  })
+
+  it('still reads an indented line after a quote\'s paragraph as that paragraph, lazily', () => {
+    const code = (lines: string[], index: number) => markdownCodeRanges(lines, { indentedCode: true }).get(index) ?? null
+    expect(code(['> quoted text', '    <b>x</b>'], 1)).toBeNull()
+    expect(code(['> - item', '    <b>x</b>'], 1)).toBeNull()
+    expect(code(['> > deep', '    <b>x</b>'], 1)).toBeNull()
+  })
+
+  it('carries a quote\'s paragraph over lazy lines into the quote lines after them', () => {
+    const code = (lines: string[], index: number) => markdownCodeRanges(lines, { indentedCode: true }).get(index) ?? null
+    expect(code(['> quote', '    <b>1</b>', '>     <b>2</b>'], 2)).toBeNull()
+    expect(code(['> quote', 'lazy', '>     <b>2</b>'], 2)).toBeNull()
+    // A blank line ends the paragraph, so the next quote starts afresh; so
+    // does a line opening with a tag, which the HTML pass may leave blank.
+    expect(code(['> quote', 'lazy', '', '>     <b>2</b>'], 3)).toBe(4)
+    expect(code(['> quote', '</div>', '>     <b>2</b>'], 2)).toBe(3)
   })
 
   it('reads each line a bounded number of times, however many fences one quote holds', () => {

@@ -55,3 +55,22 @@ export function trimAutolinkTrailingPunctuation(url: string): { url: string; tra
   }
   return { url: url.slice(0, end), trailing: url.slice(end) }
 }
+
+/** An email address as CommonMark reads one between angle brackets, as a
+ *  RegExp source: `<noreply@anthropic.com>` is a link that writes to it. */
+export const EMAIL_AUTOLINK_SOURCE =
+  "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
+
+/** An autolink as the address it opens, the words drawn for it, and the
+ *  text drawn after it. An address in angle brackets opens whole, closing
+ *  punctuation and all: CommonMark takes the brackets as its bounds. An email
+ *  address in them is drawn as itself and opens a `mailto:`. A bare address
+ *  leaves sentence punctuation behind. */
+export function autolinkParts(token: string): { url: string; words: string; trailing: string } {
+  if (!token.startsWith('<')) {
+    const { url, trailing } = trimAutolinkTrailingPunctuation(token)
+    return { url, words: url, trailing }
+  }
+  const words = token.slice(1, -1)
+  return { url: words.includes(':') ? words : `mailto:${words}`, words, trailing: '' }
+}

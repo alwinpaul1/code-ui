@@ -1,4 +1,6 @@
 import {
+  ADDRESS_TOKEN_GROUP,
+  BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern,
@@ -20,10 +22,8 @@ import {
   normalizeFilePath
 } from './markdown-file-path-detection'
 import { routeMarkdownHref } from './markdown-href-routing'
-import {
-  isIntrawordUnderscoreToken,
-  trimAutolinkTrailingPunctuation
-} from './markdown-inline-token-rules'
+import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
@@ -165,30 +165,23 @@ function renderInline(
     }
     if (match.index > pendingStart) {
       parts.push(
-        renderTextRun(styles, text.slice(pendingStart, match.index), `t${pendingStart}`, onOpenFile)
+        renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart, match.index)), `t${pendingStart}`, onOpenFile)
       )
     }
     pendingStart = pattern.lastIndex
     const key = `${match.index}:${token}`
-    const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-    if (image) {
+    const link = match.link
+    if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {markdownInlinePlainText(image[1] ?? '') || 'image'}
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link.href, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
+          {link.image ? markdownInlinePlainText(link.label) || 'image' : renderLinkLabel(styles, link.label)}
         </Text>
       )
-    } else if (link) {
-      parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {renderLinkLabel(styles, link[1]!)}
-        </Text>
-      )
-    } else if (/^https?:\/\//i.test(token)) {
-      const { url, trailing } = trimAutolinkTrailingPunctuation(token)
+    } else if (match.group === ADDRESS_TOKEN_GROUP) {
+      const { url, words, trailing } = autolinkParts(token)
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {url}
+          {words}
         </Text>
       )
       if (trailing) {
@@ -247,7 +240,7 @@ function renderInline(
           {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
         </Text>
       )
-    } else if (token.startsWith('**') || token.startsWith('__')) {
+    } else if (match.group === BOLD_TOKEN_GROUP) {
       parts.push(
         <Text key={key} style={styles.bold}>
           {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
@@ -263,7 +256,8 @@ function renderInline(
   }
 
   if (pendingStart < text.length) {
-    parts.push(renderTextRun(styles, text.slice(pendingStart), `t${pendingStart}`, onOpenFile))
+    // An escape's backslash is not drawn (markdown-inline-escapes.ts).
+    parts.push(renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart)), `t${pendingStart}`, onOpenFile))
   }
   return parts
 }

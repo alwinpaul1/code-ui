@@ -43,7 +43,24 @@ const LIST_MARKER = /^[ \t]*(?:[-*+]|\d{1,9}[.)])([ \t]+)/
 const FENCE_RUN = /(`{3,}|~{3,})(.*)$/y
 /** `---`, `* * *`, `___`: a rule, which `- - -` must not be read as an item. */
 const THEMATIC_BREAK = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
-const ATX_HEADING = /^ {0,3}#{1,6}(?:[ \t]|$)/
+/** An ATX heading, read where a line's (or an item's) text starts. */
+const ATX_HEADING = /#{1,6}(?:[ \t]|$)/y
+/**
+ * What marked (18.0.12) never takes for a lazy line of a list item, besides
+ * the fences, quotes, items and rules read below: a line opening with `#`,
+ * heading or not (`#hashtag` too), read where its text starts. Any item that
+ * line is not indented into ends at it. A heading right after an item's words
+ * was taken for a lazy line of them before, which kept the list open, and an
+ * indented block after it was taken for the item's paragraph: `<b>x</b>` in
+ * it drew and copied as `**x**` (review, 2026-09-30).
+ *
+ * marked ends an item at a line opening with a tag too, but it never sees
+ * one: the HTML pass these ranges are for has already removed `<div>` and
+ * `<!-- -->` lines (blank now, so the item goes on past them) and turned
+ * `<b>x</b>` into `**x**` (a lazy line). Ending the item there protected the
+ * paragraph after it, and its tags were drawn raw.
+ */
+const ENDS_LIST_ITEM = /#/y
 /**
  * How many quotes deep their fences are looked for. Each level reads its
  * quote's lines once more, so a document of nothing but `> > > …` would cost
@@ -195,16 +212,35 @@ export function markdownCodeRanges(
   lines: readonly string[],
   options: MarkdownCodeRangeOptions = {}
 ): Map<number, number> {
-  return codeRanges(lines, options, 0)
+  const ranges = new Map<number, number>()
+  codeRanges(lines, options, 0, ranges, 0, false)
+  return ranges
 }
 
+/** What a run of lines ends in, for the line after it: nothing a lazy line
+ *  can continue, a paragraph, or a paragraph inside a list item. */
+type Ending = 'none' | 'paragraph' | 'item'
+
+/**
+ * Adds the code blocks in `lines` to `ranges`, each index moved by `offset`
+ * (where these lines sit in the document), and says what the last line
+ * leaves open for the line after it. A quote whose last line is a fence, a
+ * heading, a blank `>` or indented code leaves nothing to continue, so an
+ * indented line after it is code, as marked reads it. It was taken for the
+ * quote's paragraph, and the HTML pass drew and copied `<b>x</b>` there as
+ * `**x**` (review, 2026-09-30).
+ */
 function codeRanges(
   lines: readonly string[],
   options: MarkdownCodeRangeOptions,
   /** How many quotes these lines sit inside. */
-  quoteDepth: number
-): Map<number, number> {
-  const ranges = new Map<number, number>()
+  quoteDepth: number,
+  ranges: Map<number, number>,
+  offset: number,
+  /** The first line may continue a paragraph: the quote these lines are
+   *  the rest of had one open, carried over lazy lines. */
+  continuesParagraph: boolean
+): Ending {
   // The content columns of the list items still open, innermost last.
   const items: number[] = []
   const closeItemsPast = (column: number): void => {
@@ -225,11 +261,16 @@ function codeRanges(
   }
   // The line before was paragraph text, so an indented or outdented line
   // continues that paragraph (a lazy line) instead of starting a block.
-  let inParagraph = false
+  let inParagraph = continuesParagraph
+  // A quote's paragraph is still open over the lazy lines after it, so a
+  // quote line after them is the same quote, its paragraph still going.
+  let quoteParagraphOpen = false
   let index = 0
   while (index < lines.length) {
     const line = lines[index] ?? ''
     const start = lineStart(line)
+    const lazyAfterQuote: boolean = quoteParagraphOpen
+    quoteParagraphOpen = false
     if (start.index === line.length) {
       inParagraph = false
       index += 1
@@ -244,7 +285,7 @@ function codeRanges(
         // them opens a fence or an item.
         const end = indentedCodeEnd(lines, index, container)
         if (options.indentedCode) {
-          ranges.set(index, end)
+          ranges.set(offset + index, offset + end)
         }
         index = end
         continue
@@ -253,6 +294,7 @@ function codeRanges(
     if (inParagraph && start.column - innermostItemAt(start.column) >= 4) {
       // Four columns past its item right after paragraph text: that
       // paragraph's next line, whatever it looks like.
+      quoteParagraphOpen = lazyAfterQuote
       index += 1
       continue
     }
@@ -272,12 +314,12 @@ function codeRanges(
         cursor += 1
       }
       // The quote's code sits on the same lines, and ends inside the quote.
-      for (const [first, end] of codeRanges(quoted, options, quoteDepth + 1)) {
-        ranges.set(index + first, index + end)
-      }
-      // What follows may continue the quote's last paragraph lazily, as a
-      // `>` line was always read.
-      inParagraph = true
+      // What follows may continue its last paragraph lazily, if it ended in
+      // one. marked carries that paragraph on into the quote lines after the
+      // lazy ones only when it is the quote's own, not a list item's in it.
+      const ending = codeRanges(quoted, options, quoteDepth + 1, ranges, offset + index, lazyAfterQuote && inParagraph)
+      inParagraph = ending !== 'none'
+      quoteParagraphOpen = ending === 'paragraph'
       index = cursor
       continue
     }
@@ -297,11 +339,16 @@ function codeRanges(
         // Five columns of gap: the item starts with an indented code block.
         const end = indentedCodeEnd(lines, index, item.contentColumn)
         if (options.indentedCode) {
-          ranges.set(index, end)
+          ranges.set(offset + index, offset + end)
         }
         inParagraph = false
         index = end
         continue
+      }
+    } else if (inParagraph) {
+      ENDS_LIST_ITEM.lastIndex = start.index
+      if (ENDS_LIST_ITEM.test(line)) {
+        closeItemsPast(start.column)
       }
     }
     const textIndex = item ? item.textIndex : start.index
@@ -320,16 +367,23 @@ function codeRanges(
       if (column - container < 4) {
         closeItemsPast(column)
         const end = fenceEnd(lines, index, run, container)
-        ranges.set(index, end)
+        ranges.set(offset + index, offset + end)
         inParagraph = false
         index = end
         continue
       }
     }
     // Text: a heading ends where it starts, anything else is a paragraph
-    // (or an HTML block, which also runs to the next blank line).
+    // (or an HTML block, which also runs to the next blank line). An item's
+    // heading is read from its words: `- # H` holds no paragraph either.
+    ATX_HEADING.lastIndex = textIndex
     inParagraph = !ATX_HEADING.test(line) && textIndex < line.length
+    // A lazy line of a quote's paragraph keeps it open; an item interrupts
+    // it. So does a line opening with a tag, which may be blank by the time
+    // marked reads it (`</div>`): the quote after it starts afresh, and an
+    // indented line in it stays protected rather than risk its code.
+    quoteParagraphOpen = lazyAfterQuote && !item && inParagraph && line[start.index] !== '<'
     index += 1
   }
-  return ranges
+  return !inParagraph ? 'none' : items.length > 0 ? 'item' : 'paragraph'
 }
