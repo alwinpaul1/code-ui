@@ -64,7 +64,7 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // (markdown-block-breaks.ts). It was a line break everywhere, which cut a
   // row, an item, a quote or a heading in two.
   const text = expandParagraphBreaks(body.text, body)
-  const blocks = parseSegment(readHtmlBlocks(text), body)
+  const blocks = parseSegment(readHtmlBlocks(text, (line) => body.fenceOn(line) !== null), body)
   return text.includes(MARKDOWN_INLINE_BREAK) ? blocks.map(withLineBreaks) : blocks
 }
 
