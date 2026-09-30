@@ -135,7 +135,17 @@ const hash = (parts: string[] | string): string =>
 // before and after and diffing: hooks 366 -> 367 and statements 434 -> 435 (the one `useRef`),
 // both also moving for the detail effect's body; `semantics` 3,291 -> 3,293 (two `'linear'`
 // comparisons). Declarations, the render tree and the StyleSheets do not move.
-const PROVIDER_RPC_SCREEN_HOOKS = '96f815944dba3b985e08389f901a2b13d2012147732a3cb40c0314d3498d1b20'
+// 2026-10-01 (fix round 2, finding 4): that ref read the posted comments back from the payload on
+// screen when a read started, and every read clears the payload first, so a refresh that failed
+// outright or was still in flight left nothing to read and the next refused read dropped them.
+// The ref now holds the comments themselves with their issue (`postedOverRefusedListRef`, in place
+// of `linearPayloadIssueRef`), fed from the payload when a read starts, kept through no payload,
+// cleared by a list that is read or another issue opening. Checked by dumping every reader's
+// output before and after and diffing: hooks stay at 367 and statements at 435, each moving in
+// the same two entries only (the `useRef`'s type argument and the detail effect's body);
+// `semantics` holds at 3,293 (the two `'linear'` comparisons swap one for one). Declarations, the
+// render tree and the StyleSheets do not move.
+const PROVIDER_RPC_SCREEN_HOOKS = '63553a41732fb840d17df1ebd3a68cf94eaef6ea4e87ee629a8361666bdee466'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -178,7 +188,8 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // 2026-09-30 (fix round 3, finding 1): 420 -> 431 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 2): 431 still, then 434 (notes above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 434 -> 435 (note above the hooks pin).
-const PROVIDER_RPC_STATEMENTS = '34b01d05ae541e898abf803a7d220f98c6614886f5f2a8a915feab18de7c2fa0'
+// 2026-10-01 (fix round 2, finding 4): two statements changed, 435 still (note above the hooks pin).
+const PROVIDER_RPC_STATEMENTS = '78e53ac13432dd99fa33e00ba5831f9e0fc5f510a0cd147610dd1c476037fabf'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes

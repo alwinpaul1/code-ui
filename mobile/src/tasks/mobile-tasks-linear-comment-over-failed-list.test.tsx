@@ -68,6 +68,8 @@ vi.mock('../components/TaskProviderLogo', () => ({ TaskProviderLogo: () => null 
 
 import { useMobileTasksItemDetailLoading } from './use-mobile-tasks-item-detail-loading'
 import { useMobileTasksLinearItemActions } from './use-mobile-tasks-linear-item-actions'
+import { renderMobileTasksItemDiscussion } from './mobile-tasks-item-discussion'
+import { detailCommentGroupRoot, groupDetailComments } from './mobile-tasks-item-comments'
 
 function linearIssue(id: string, identifier: string) {
   return {
@@ -108,7 +110,9 @@ const EARLIER = { id: 'c-1', author: 'ada', body: 'an earlier comment', createdA
 /** The posted comment as the desktop lists it once its read works again. */
 const POSTED_ON_HOST = { id: 'comment-9', author: 'me', body: 'looks good', createdAt: '2026-09-30T12:00:00Z' }
 
-type Reply = { throw: string } | { ok: boolean; result?: unknown; error?: unknown }
+type Answer = { throw: string } | { ok: boolean; result?: unknown; error?: unknown }
+/** A reply as it lands, or one still in flight until the test lets it land (`inFlight`). */
+type Reply = Answer | { landing: Promise<Answer> }
 
 const host = { replies: new Map<string, Reply[]>(), requests: [] as string[] }
 
@@ -116,13 +120,31 @@ function script(method: string, ...replies: Reply[]): void {
   host.replies.set(method, [...(host.replies.get(method) ?? []), ...replies])
 }
 
+/** A reply the request waits on until `land` is called: a read still in flight until then. */
+function inFlight(): { reply: Reply; land: (answer: Answer) => Promise<void> } {
+  let resolve: (answer: Answer) => void = () => undefined
+  const landing = new Promise<Answer>((settle) => {
+    resolve = settle
+  })
+  return {
+    reply: { landing },
+    land: async (answer) => {
+      await act(async () => {
+        resolve(answer)
+      })
+      await settle()
+    }
+  }
+}
+
 const client = {
   sendRequest: vi.fn(async (method: string) => {
     host.requests.push(method)
-    const next = host.replies.get(method)?.shift()
-    if (!next) {
+    const queued = host.replies.get(method)?.shift()
+    if (!queued) {
       throw new Error(`no reply scripted for ${method}`)
     }
+    const next = 'landing' in queued ? await queued.landing : queued
     if ('throw' in next) {
       throw new Error(next.throw)
     }
@@ -191,6 +213,37 @@ async function settle(): Promise<void> {
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
   })
+}
+
+/**
+ * Every line the Discussion section (mobile-tasks-item-discussion.tsx) draws over the payload the
+ * sheet holds now, in order: its title, the failure line and Retry, then each comment's body. How
+ * those lines look, in both themes, is mobile-tasks-item-discussion.test.tsx's; this reads only
+ * what they say.
+ */
+function discussionLines(state: Record<string, unknown>): string[] {
+  const payload = state.detailPayload as { comments: Parameters<typeof groupDetailComments>[0] }
+  const section = renderMobileTasksItemDiscussion({
+    actionItem: state.actionItem,
+    detailPayload: payload,
+    detailCommentGroups: groupDetailComments(payload.comments),
+    linearCommentDraft: '',
+    mutatingStatus: false,
+    renderCommentComposer: () => null,
+    renderDetailCommentGroup: (group: Parameters<typeof detailCommentGroupRoot>[0]) =>
+      createElement('Text', { key: detailCommentGroupRoot(group).id }, detailCommentGroupRoot(group).body),
+    setDetailRefreshSeq: () => undefined,
+    styles: new Proxy({}, { get: () => ({}) })
+  } as never)
+  let drawn: ReactTestRenderer | null = null
+  act(() => {
+    drawn = create(section!)
+  })
+  const lines = drawn!.root
+    .findAll((node) => String(node.type) === 'Text')
+    .map((node) => [node.props.children].flat().join(''))
+  act(() => drawn!.unmount())
+  return lines
 }
 
 let mounted: ReactTestRenderer | null = null
@@ -380,5 +433,147 @@ describe('a comment posted over a refused list, when the list is refused again',
     const payload = sheet.held.state.detailPayload as Record<string, unknown>
     expect(payload.comments).toEqual([POSTED_ON_HOST])
     expect(payload).not.toHaveProperty('commentsFailed')
+  })
+})
+
+// The block above keeps the posted comment through a read refused again, taking it from the
+// payload on screen when the read starts. But every read clears that payload first, and a read
+// that fails outright (the issue read rejected) leaves it cleared, as does a read still in flight.
+// The next read, refused again, found no payload, dropped the comment, and the sheet was back to
+// "Couldn't load comments" over a comment the desktop holds (review, fix round 2, 2026-10-01).
+describe('a comment posted over a refused list, when a read of the issue fails outright or is still in flight', () => {
+  const POSTED = { id: 'comment-9', body: 'looks good', user: { displayName: 'You' } }
+
+  it.each([
+    ['the request never lands', { throw: 'relay down' }, 'relay down'],
+    [
+      'the desktop refuses the issue read',
+      { ok: false, error: { code: 'internal', message: 'Linear is unreachable' } },
+      'Linear is unreachable'
+    ]
+  ] as [string, Answer, string][])(
+    'keeps it through a refresh that fails outright (%s), then one refused again',
+    async (_case, failure, message) => {
+      script('linear.getIssue', { ok: true, result: ISSUE }, failure, { ok: true, result: ISSUE })
+      script('linear.issueComments', REFUSED, REFUSED, REFUSED)
+      script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+      const sheet = await openSheet()
+      await sheet.post('looks good')
+
+      // The refresh icon bumps the detail's refresh sequence, as Retry does.
+      await sheet.edit('detailRefreshSeq', 1)
+      // The genuine failure: no detail at all, and the read's own message.
+      expect(sheet.held.state.detailPayload).toBeNull()
+      expect(sheet.held.state.detailError).toBe(message)
+
+      await sheet.edit('detailRefreshSeq', 2)
+      expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(3)
+      expect(sheet.held.state.detailPayload).toMatchObject({
+        provider: 'linear',
+        comments: [POSTED],
+        commentsFailed: true
+      })
+      expect(discussionLines(sheet.held.state)).toEqual([
+        'Discussion',
+        "Couldn't load the earlier comments",
+        'Retry',
+        'looks good'
+      ])
+    }
+  )
+
+  it('keeps it through the read a new connection makes after the relay dropped a refresh', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { throw: 'relay down' }, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await sheet.connectedAt(2)
+    // One read for the new connection, and no more while the list stays refused.
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(3)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [POSTED], commentsFailed: true })
+  })
+
+  it('keeps it when a second refresh starts while the first is still in flight', async () => {
+    const first = inFlight()
+    script('linear.getIssue', { ok: true, result: ISSUE }, first.reply, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+    expect(sheet.held.state.detailLoading).toBe(true)
+
+    await sheet.edit('detailRefreshSeq', 2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [POSTED], commentsFailed: true })
+
+    // The first read answers late and is dropped: it writes nothing over the second.
+    await first.land({ ok: true, result: ISSUE })
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(3)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [POSTED], commentsFailed: true })
+    expect(discussionLines(sheet.held.state)).toContain('looks good')
+  })
+
+  it('does not carry it onto another issue opened after a refresh of its own failed outright', async () => {
+    script(
+      'linear.getIssue',
+      { ok: true, result: ISSUE },
+      { throw: 'relay down' },
+      { ok: true, result: OTHER_ISSUE }
+    )
+    script('linear.issueComments', REFUSED, REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await sheet.edit('actionItem', OTHER_ITEM)
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(3)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
+  })
+
+  it('with nothing posted, still says "Couldn\'t load comments" after a refresh that fails outright', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { throw: 'relay down' }, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED, REFUSED)
+    const sheet = await openSheet()
+
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+    await sheet.edit('detailRefreshSeq', 2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
+    expect(discussionLines(sheet.held.state)).toEqual(['Discussion', "Couldn't load comments", 'Retry'])
+  })
+
+  it("gives way to the desktop's list once one is read after a refresh that failed outright, and stays gone when the list is refused again", async () => {
+    script(
+      'linear.getIssue',
+      { ok: true, result: ISSUE },
+      { throw: 'relay down' },
+      { ok: true, result: ISSUE },
+      { ok: true, result: ISSUE }
+    )
+    script('linear.issueComments', REFUSED, REFUSED, { ok: true, result: [EARLIER, POSTED_ON_HOST] }, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await sheet.edit('detailRefreshSeq', 2)
+    const payload = sheet.held.state.detailPayload as Record<string, unknown>
+    // The host's list, which holds the posted comment once: nothing the phone held is added to it.
+    expect(payload.comments).toEqual([EARLIER, POSTED_ON_HOST])
+    expect(payload).not.toHaveProperty('commentsFailed')
+
+    // Once a list was read, the phone holds nothing of its own: a refusal after it claims nothing.
+    await sheet.edit('detailRefreshSeq', 3)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
+    expect(discussionLines(sheet.held.state)).toEqual(['Discussion', "Couldn't load comments", 'Retry'])
   })
 })
