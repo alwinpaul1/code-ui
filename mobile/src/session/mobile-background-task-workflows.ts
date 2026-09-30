@@ -36,6 +36,23 @@ export type WorkflowDetail = {
 
 const LAUNCHED = /^\s*Workflow launched in background\.\s*Task ID:\s*([A-Za-z0-9_-]+)/
 const SUMMARY_LINE = /^Summary:[ \t]*(.+)$/m
+const SCRIPT_FILE_LINE = /^Script file:[ \t]*(.+)$/m
+const RUN_ID_LINE = /^Run ID:[ \t]*([A-Za-z0-9_-]+)/m
+
+/** The workflow's name when the meta gave none (an unreadable or cut script, or
+ *  a `scriptPath` re-run that carries no script): the launch result's
+ *  `Script file: …/<name>-<runId>.js` line names the file after both. */
+function nameFromScriptFile(output: string): string | null {
+  const path = SCRIPT_FILE_LINE.exec(output)?.[1]?.trim()
+  const file = path?.split(/[\\/]/).pop()
+  if (!file?.endsWith('.js')) {
+    return null
+  }
+  const runId = RUN_ID_LINE.exec(output)?.[1]
+  const stem = file.slice(0, -3)
+  const name = runId && stem.endsWith(`-${runId}`) ? stem.slice(0, -(runId.length + 1)) : stem.replace(/-wf_[A-Za-z0-9_-]+$/, '')
+  return name.length > 0 ? name : null
+}
 
 /** The task and detail a Workflow call+result launched, or null when the
  *  result does not say a workflow started. */
@@ -47,7 +64,7 @@ export function readWorkflowLaunch(input: unknown, output: string): { id: string
   const meta = parseWorkflowMeta(scriptOf(input))
   return {
     id,
-    title: meta?.name ?? 'Workflow',
+    title: meta?.name ?? nameFromScriptFile(output) ?? 'Workflow',
     detail: {
       // The launch result repeats the description, so an unreadable script
       // still leaves the sentence.

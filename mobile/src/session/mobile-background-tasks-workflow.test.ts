@@ -17,6 +17,8 @@ import {
 // `workflow-subagent`, the label as `description` once Claude's inventory has
 // named it, no phase and no workflow id on the row.
 const NOW = WORKFLOW_LAUNCHED_AT + 61 * 60_000 + 44_000
+/** The script's real head followed by enough body to pass the wire's cap. */
+const WORKFLOW_SCRIPT_FULL_LENGTH_PAD = WORKFLOW_SCRIPT + 'await agent("review")\n'.repeat(400)
 
 function lane(id: string, description: string | undefined, state: AgentSubagentSnapshot['state'] = 'working'): AgentSubagentSnapshot {
   return {
@@ -51,13 +53,47 @@ describe('a Workflow launch in the lead transcript', () => {
     expect(task?.workflow?.usage).toBeNull()
   })
 
-  it('with a script that will not parse: no phases, a generic title, and the description from the launch result', () => {
+  it('with a script that will not parse: no phases, the name from the launch result\'s Script file line, the description from Summary', () => {
     const { running } = derive(workflowLaunchMessages('export const meta = buildMeta()\nawait agent("x")'))
-    expect(running[0]).toMatchObject({ kind: 'workflow', title: 'Workflow' })
+    expect(running[0]).toMatchObject({ kind: 'workflow', title: 'pre-release-review-sweep' })
     expect(running[0]?.workflow?.phases).toBeNull()
     expect(running[0]?.workflow?.description).toBe(
       'Parallel Sonnet reviewers find proven bugs across Code UI; Opus triages, fixes in worktrees, integrates; Sonnet re-reviews'
     )
+  })
+
+  it('a resume by scriptPath carries no script: the name still comes from the Script file line', () => {
+    const [call, answer] = workflowLaunchMessages()
+    const rerun: NativeChatMessage = {
+      ...call!,
+      blocks: [{ type: 'tool-call', name: 'Workflow', input: { scriptPath: '/x/workflows/scripts/pre-release-review-sweep-wf_8c808671-dd5.js', resumeFromRunId: 'wf_8c808671-dd5' } }]
+    }
+    const { running } = derive([rerun, answer!])
+    expect(running[0]?.title).toBe('pre-release-review-sweep')
+    expect(running[0]?.workflow?.phases).toBeNull()
+  })
+
+  it('with neither a readable meta nor a Script file line the title is just "Workflow"', () => {
+    const [call, answer] = workflowLaunchMessages('nothing to read')
+    const bare: NativeChatMessage = {
+      ...answer!,
+      blocks: [{ type: 'tool-result', output: 'Workflow launched in background. Task ID: wxyz12345\nRun ID: wf_1' }]
+    }
+    const { running } = derive([call!, bare])
+    expect(running[0]).toMatchObject({ id: 'wxyz12345', title: 'Workflow' })
+    expect(running[0]?.workflow?.description).toBeNull()
+  })
+
+  // Orca's wire cuts a tool input string at ~4000 characters and ends it with
+  // `… (truncated)`, adding a `…` key (the shape mobile-native-chat-created-file
+  // -running-work.test.ts pins). The real script's meta sits in its first 1 KB.
+  it('reads the meta of a real script whose tail the wire cut', () => {
+    const [call, answer] = workflowLaunchMessages()
+    const input = { script: `${WORKFLOW_SCRIPT_FULL_LENGTH_PAD.slice(0, 3960)}… (truncated)`, args: '{}', '…': 'truncated' }
+    const cut: NativeChatMessage = { ...call!, blocks: [{ type: 'tool-call', name: 'Workflow', input }] }
+    const { running } = derive([cut, answer!])
+    expect(running[0]?.title).toBe('pre-release-review-sweep')
+    expect(running[0]?.workflow?.phases?.map((phase) => phase.title)).toEqual(['Review', 'Triage', 'Fix', 'Integrate', 'Re-review'])
   })
 
   it('a launch whose result never says a task id launched nothing', () => {

@@ -60,4 +60,41 @@ describe('parseWorkflowMeta', () => {
     expect(meta?.name).toBe('it\'s "q"')
     expect(meta?.phases?.[0]?.title).toBe('A\nB')
   })
+
+  // Orca's mobile wire cuts a tool input string at ~4000 characters and ends it
+  // with `… (truncated)` (MOBILE_BLOCK_CHAR_CAP; the shape the created-file
+  // tests pin). A long meta loses its tail, not its head.
+  it('keeps the name, description and whole phases of a meta the wire cut mid-literal', () => {
+    const phases = Array.from({ length: 60 }, (_, index) => `{ title: 'Phase ${index}', detail: '${'d'.repeat(60)}' }`).join(',\n    ')
+    const script = `export const meta = {\n  name: 'long-one',\n  description: 'many phases',\n  phases: [\n    ${phases},\n  ],\n}\nconst REPO = args.repo\n`
+    expect(script.length).toBeGreaterThan(4000)
+    const cut = `${script.slice(0, 3960)}… (truncated)`
+    const meta = parseWorkflowMeta(cut)
+    expect(meta?.name).toBe('long-one')
+    expect(meta?.description).toBe('many phases')
+    const titles = meta?.phases?.map((phase) => phase.title) ?? []
+    expect(titles.length).toBeGreaterThan(20)
+    expect(titles.length).toBeLessThan(60)
+    expect(titles[0]).toBe('Phase 0')
+    // A phase whose title itself was cut is not drawn cut.
+    expect(titles.every((title) => /^Phase \d+$/.test(title))).toBe(true)
+  })
+
+  it('a cut through the name leaves no name rather than half of one', () => {
+    expect(parseWorkflowMeta("export const meta = { name: 'half-a-na… (truncated)")?.name ?? null).toBeNull()
+  })
+
+  it('takes the meta that is code, not one named in a comment or a string before it', () => {
+    const script = [
+      '// export const meta = { name: "in a comment" }',
+      '/* export const meta = { name: "in a block" } */',
+      "const note = 'export const meta = { name: \"in a string\" }'",
+      "export const meta = { name: 'the real one' }"
+    ].join('\n')
+    expect(parseWorkflowMeta(script)?.name).toBe('the real one')
+  })
+
+  it('finds no meta when the only one is in a comment', () => {
+    expect(parseWorkflowMeta('// export const meta = { name: "x" }\nawait agent("y")')).toBeNull()
+  })
 })
