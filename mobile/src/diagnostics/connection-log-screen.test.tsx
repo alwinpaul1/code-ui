@@ -19,7 +19,11 @@ const doubles = vi.hoisted(() => ({
   state: 'connected' as ConnectionState,
   activePath: 'relay' as MobileConnectionPath,
   lastConnectedAt: null as number | null,
-  clipboard: [] as string[]
+  clipboard: [] as string[],
+  /** What expo-clipboard's setStringAsync answers: whether the pasteboard took the text. */
+  clipboardAccepts: true,
+  /** Set to make the report's snapshot read throw, as a torn-down client context would. */
+  snapshotError: null as Error | null
 }))
 
 vi.mock('react-native', () => ({
@@ -50,6 +54,7 @@ vi.mock('expo-router', () => ({
 vi.mock('expo-clipboard', () => ({
   setStringAsync: async (text: string) => {
     doubles.clipboard.push(text)
+    return doubles.clipboardAccepts
   }
 }))
 vi.mock('expo-constants', () => ({ default: { expoConfig: { version: '0.9.54' } } }))
@@ -75,7 +80,12 @@ vi.mock('../transport/client-context', () => ({
   useHostClient: () => ({ client: null, state: doubles.state }),
   useRpcClientContext: () => ({
     getState: () => doubles.state,
-    getReconnectAttempt: () => 0,
+    getReconnectAttempt: () => {
+      if (doubles.snapshotError) {
+        throw doubles.snapshotError
+      }
+      return 0
+    },
     getLastConnectedAt: () => doubles.lastConnectedAt,
     getActivePath: () => doubles.activePath,
     getPendingPath: () => null
@@ -175,6 +185,8 @@ beforeEach(() => {
   doubles.activePath = 'relay'
   doubles.lastConnectedAt = REPORTED_LAST_CONNECTED_AT
   doubles.clipboard = []
+  doubles.clipboardAccepts = true
+  doubles.snapshotError = null
 })
 
 afterEach(() => {
@@ -256,6 +268,111 @@ describe('the Network diagnostics screen, as reported', () => {
     expect(doubles.clipboard[0]).toContain(
       'Phone was paused by Android for 27m of the last hour (1 pause)'
     )
+  })
+})
+
+// "Copy report" said "Copied" when the clipboard refused the text, and a
+// failure building the report was an unhandled rejection with nothing shown:
+// the screen awaited setStringAsync and ignored its answer, then set "Copied"
+// regardless, and the button fired `void copyDiagnostics()`. The user then
+// pasted the old clipboard into a bug report (review, 2026-09-30). The copy
+// now goes through useClipboardWriter, the seam every other copy uses.
+describe('copying the report when the copy fails', () => {
+  async function pressCopy(tree: ReactTestRenderer): Promise<void> {
+    await act(async () => {
+      await pressableWithText(tree, 'Copy report').props.onPress()
+    })
+  }
+
+  /** The failure line, if one is drawn. */
+  function failureLine(tree: ReactTestRenderer): ReactTestInstance | undefined {
+    return tree.root.findAll(
+      (node) => String(node.type) === 'Text' && textOf(node).startsWith("Couldn't copy the report")
+    )[0]
+  }
+
+  let unhandled: unknown[] = []
+  const onUnhandled = (reason: unknown): void => {
+    unhandled.push(reason)
+  }
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    unhandled = []
+    process.on('unhandledRejection', onUnhandled)
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    process.off('unhandledRejection', onUnhandled)
+    warn.mockRestore()
+  })
+
+  it.each(['light', 'dark'] as const)(
+    'says it could not copy, never "Copied", when the clipboard refuses the report (%s)',
+    async (scheme) => {
+      doubles.clipboardAccepts = false
+      const tree = await renderScreen(scheme)
+      await pressCopy(tree)
+
+      expect(doubles.clipboard).toHaveLength(1)
+      expect(texts(tree)).not.toContain('Copied')
+      expect(texts(tree)).toContain('Copy report')
+      const line = failureLine(tree)
+      expect(line && textOf(line)).toBe("Couldn't copy the report: the clipboard did not accept this text.")
+      expect(stylesOf(line?.props.style).map((style) => style.color)).toContain(
+        colorsForScheme(scheme).danger
+      )
+      // One line left behind that names the cause.
+      expect(warn).toHaveBeenCalledTimes(1)
+      expect(String(warn.mock.calls[0]?.join(' '))).toContain('the clipboard did not accept this text')
+    }
+  )
+
+  it.each(['light', 'dark'] as const)(
+    'says it could not copy when the report cannot be built, with no unhandled rejection (%s)',
+    async (scheme) => {
+      doubles.snapshotError = new Error('client context torn down')
+      const tree = await renderScreen(scheme)
+      await pressCopy(tree)
+      // Let a stray rejection reach the process before looking.
+      await act(async () => {
+        await Promise.resolve()
+      })
+
+      expect(unhandled).toEqual([])
+      expect(doubles.clipboard).toEqual([])
+      expect(texts(tree)).not.toContain('Copied')
+      const line = failureLine(tree)
+      expect(line && textOf(line)).toBe("Couldn't copy the report: client context torn down.")
+      expect(stylesOf(line?.props.style).map((style) => style.color)).toContain(
+        colorsForScheme(scheme).danger
+      )
+      expect(String(warn.mock.calls[0]?.join(' '))).toContain('client context torn down')
+    }
+  )
+
+  it('still says "Copied" for two seconds when the copy lands, and clears a failure', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    vi.setSystemTime(localTime(14, 21, 1))
+    doubles.clipboardAccepts = false
+    const tree = await renderScreen('light')
+    await pressCopy(tree)
+    expect(failureLine(tree)).toBeDefined()
+
+    doubles.clipboardAccepts = true
+    await pressCopy(tree)
+    expect(texts(tree)).toContain('Copied')
+    expect(failureLine(tree)).toBeUndefined()
+    expect(warn).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(1_999)
+    })
+    expect(texts(tree)).toContain('Copied')
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+    })
+    expect(texts(tree)).toContain('Copy report')
+    expect(texts(tree)).not.toContain('Copied')
   })
 })
 
