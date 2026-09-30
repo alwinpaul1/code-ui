@@ -18,6 +18,10 @@ export function notificationPlainText(markdown: string): string {
   const lines = raw
     .map((line) =>
       line
+        // A rule first: the bullet rewrite below turned `* * *` and `- - -`
+        // into "• * *" and "• - -". One character repeated, as CommonMark
+        // has it, so `- * -` is still a bullet.
+        .replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/, '')
         .replace(/^\s*(```+|~~~+)[^\n]*$/, '')
         .replace(/^\s{0,3}#{1,6}\s+(.*)$/, (_, text: string) =>
           styleText(markdownHeadingText(text), 'bold')
@@ -37,7 +41,6 @@ export function notificationPlainText(markdown: string): string {
           lead + styleText(text, 'italic')
         )
         .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
-        .replace(/^\s*([-*_]\s*){3,}$/, '')
         // Not `/\s+$/`: that tries again from every space of a long run,
         // 951 ms for a line holding 40,000 of them. The same characters go.
         .trimEnd()

@@ -258,3 +258,75 @@ describe('a table the desktop flattened onto one line', () => {
     expect(notificationPlainText('| tsc | - |')).toBe('tsc \u00b7 -')
   })
 })
+
+/** Review, 2026-09-30: `* * *` and `- - -` are rules, as `---` is, but the
+ *  list-marker rewrite ran before the rule check and made them "\u2022 * *" and
+ *  "\u2022 - -", a bullet with two stray marks in a turn's preview. The fixtures
+ *  are built in the shapes each agent writes a turn summary (bold lead-in and
+ *  `-` bullets for Claude Code, a heading and `*` bullets for Codex); they
+ *  were not captured from a live session. */
+describe('a spaced rule between the parts of a turn summary', () => {
+  it('drops a Claude-style "* * *" and keeps the bullets around it', () => {
+    const summary = [
+      '**Fixed** the flaky queue test.',
+      '',
+      '- `parseQueue` now waits for the prompt row',
+      '- Added a regression test',
+      '',
+      '* * *',
+      '',
+      'All tests pass.'
+    ].join('\n')
+    expect(notificationPlainText(summary)).toBe(
+      [
+        `${styleText('Fixed', 'bold')} the flaky queue test.`,
+        '',
+        `\u2022 ${styleText('parseQueue', 'mono')} now waits for the prompt row`,
+        '\u2022 Added a regression test',
+        '',
+        'All tests pass.'
+      ].join('\n')
+    )
+  })
+
+  it('drops a Codex-style "- - -" and keeps the bullets around it', () => {
+    const summary = [
+      '## Summary',
+      '',
+      '* Updated `relay.ts`',
+      '* Ran `pnpm test`',
+      '',
+      '- - -',
+      '',
+      'Next: ship it.'
+    ].join('\n')
+    expect(notificationPlainText(summary)).toBe(
+      [
+        styleText('Summary', 'bold'),
+        '',
+        `\u2022 Updated ${styleText('relay.ts', 'mono')}`,
+        `\u2022 Ran ${styleText('pnpm test', 'mono')}`,
+        '',
+        'Next: ship it.'
+      ].join('\n')
+    )
+  })
+
+  it('drops every spelling of a rule, spaced or not', () => {
+    for (const rule of ['* * *', '- - -', '_ _ _', '***', '---', '___', '*  *  *  *', '  - - -']) {
+      expect(notificationPlainText(`a\n\n${rule}\n\nb`), rule).toBe('a\n\nb')
+    }
+  })
+
+  it('leaves a one-item bullet and a bullet holding marks as bullets', () => {
+    expect(notificationPlainText('- item')).toBe('\u2022 item')
+    expect(notificationPlainText('* a')).toBe('\u2022 a')
+    expect(notificationPlainText('- - item')).toBe('\u2022 - item')
+    // Mixed marks are no rule (CommonMark 4.1): a bullet holding "* -".
+    expect(notificationPlainText('- * -')).toBe('\u2022 * -')
+  })
+
+  it('reads a rule that is the whole body as nothing', () => {
+    expect(notificationPlainText('* * *')).toBe('')
+  })
+})
