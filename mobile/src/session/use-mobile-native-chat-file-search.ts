@@ -40,7 +40,8 @@ const isFresh = (at: number | null): boolean => at !== null && Date.now() - at <
  *  falls back to the legacy full list when paired to an older host. A cached
  *  answer is served at once and asked for again past FILE_SEARCH_CACHE_TTL_MS
  *  or after a reconnect; an empty one is never served from the cache; a failed
- *  refresh keeps what was shown. */
+ *  refresh keeps what was shown. A search that ended with no answer at all
+ *  raises `nativeChatFileSearchFailed` and logs its cause once. */
 export function useMobileNativeChatFileSearch(args: {
   client: RpcClient | null
   worktreeId: string
@@ -52,12 +53,17 @@ export function useMobileNativeChatFileSearch(args: {
   /** A debounced or in-flight search has not answered yet; an empty list then
    *  means "still looking", not "nothing matched". */
   nativeChatFileSearchPending: boolean
+  /** The latest search ended with no answer (a rejected request, a refusal other
+   *  than method_not_found, a refused legacy list), so an empty list is NOT
+   *  "nothing matched". False again as soon as the next search starts. */
+  nativeChatFileSearchFailed: boolean
   loadNativeChatFiles: (query: string) => void
 } {
   const { client, worktreeId } = args
   const limit = args.limit ?? FILE_SEARCH_RESULT_LIMIT
   const [nativeChatFilePaths, setNativeChatFilePaths] = useState<string[]>([])
   const [nativeChatFileSearchPending, setNativeChatFileSearchPending] = useState(false)
+  const [nativeChatFileSearchFailed, setNativeChatFileSearchFailed] = useState(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
   const queryCacheRef = useRef(new Map<string, CachedQuery>())
@@ -78,6 +84,7 @@ export function useMobileNativeChatFileSearch(args: {
     searchSupportedRef.current = null
     setNativeChatFilePaths([])
     setNativeChatFileSearchPending(false)
+    setNativeChatFileSearchFailed(false)
     return () => {
       // The owner retires itself the moment a call arrives under a scope it has not seen; this is
       // the teardown path, where no such call is coming.
@@ -110,6 +117,12 @@ export function useMobileNativeChatFileSearch(args: {
         timerRef.current = null
       }
       const sequence = ++sequenceRef.current
+      setNativeChatFileSearchFailed(false)
+      // Whether this search has shown an answer (the cache's counts); only one that
+      // ends without any is a failure.
+      let answered = cached !== undefined
+      // Why no answer came, for the one log line a failure leaves.
+      let unanswered = 'no answer'
       if (cached) {
         setNativeChatFilePaths(cached.paths)
         setNativeChatFileSearchPending(false)
@@ -140,6 +153,7 @@ export function useMobileNativeChatFileSearch(args: {
             }
             queryCacheRef.current.delete(oldest)
           }
+          answered = true
           setNativeChatFilePaths(paths)
           setNativeChatFileSearchPending(false)
         }
@@ -166,7 +180,12 @@ export function useMobileNativeChatFileSearch(args: {
             const accepted = nativeChatFileInventoryRead.interpret(response)
             return accepted.accepted ? accepted.value : null
           })
-          if (!loaded || inventory.commit(loaded.lease, loaded.value) !== 'committed') {
+          if (!loaded) {
+            unanswered = 'the host refused its file list'
+            return
+          }
+          if (inventory.commit(loaded.lease, loaded.value) !== 'committed') {
+            unanswered = 'the connection changed under the file list read'
             return
           }
           inventoryReadAtRef.current = Date.now()
@@ -193,13 +212,22 @@ export function useMobileNativeChatFileSearch(args: {
           if (!response.ok && response.error.code === 'method_not_found') {
             searchSupportedRef.current = false
             await loadLegacyPaths()
+            return
           }
+          unanswered = response.ok ? 'the reply carried no result' : `refused: ${response.error.message}`
         })()
-          .catch(() => {})
+          .catch((error: unknown) => {
+            unanswered = error instanceof Error ? error.message || 'no reason given' : String(error)
+          })
           .finally(() => {
             // Why: a rejected or unsupported search must not read as "still searching".
             if (sequenceRef.current === sequence) {
               setNativeChatFileSearchPending(false)
+              // Nor as "nothing matched": say it failed, and why, once.
+              if (!answered) {
+                console.warn(`[file-search] a path search was not answered: ${unanswered}`)
+                setNativeChatFileSearchFailed(true)
+              }
             }
           })
       }, FILE_SEARCH_DEBOUNCE_MS)
@@ -207,5 +235,10 @@ export function useMobileNativeChatFileSearch(args: {
     [client, inventory, limit, worktreeId]
   )
 
-  return { nativeChatFilePaths, nativeChatFileSearchPending, loadNativeChatFiles }
+  return {
+    nativeChatFilePaths,
+    nativeChatFileSearchPending,
+    nativeChatFileSearchFailed,
+    loadNativeChatFiles
+  }
 }

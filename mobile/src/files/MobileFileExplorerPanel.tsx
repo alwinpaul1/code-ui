@@ -36,16 +36,8 @@ import {
   MobileFileExplorerSearchBar,
   MobileFileExplorerSearchResults
 } from './MobileFileExplorerSearch'
-import { useMobileNativeChatFileSearch } from '../session/use-mobile-native-chat-file-search'
-import {
-  collectCachedFilePaths,
-  filterFilePathsLocally,
-  mergeFileSearchResults
-} from './file-search-local'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
-
-// Why: the host's `files.searchPaths` schema rejects anything above 32.
-const SEARCH_RESULT_LIMIT = 32
+import { useMobileFileExplorerSearch } from './use-mobile-file-explorer-search'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -73,29 +65,22 @@ export function MobileFileExplorerPanel(props: {
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   // Search rides the same host path search the composer's `@` menu uses.
-  const [searchQuery, setSearchQuery] = useState('')
-  const trimmedSearch = searchQuery.trim()
   const {
-    nativeChatFilePaths: searchResults,
-    nativeChatFileSearchPending: searchPending,
-    loadNativeChatFiles: runSearch
-  } = useMobileNativeChatFileSearch({ client, worktreeId, limit: SEARCH_RESULT_LIMIT })
-  useEffect(() => {
-    if (trimmedSearch) {
-      runSearch(trimmedSearch)
-    }
-  }, [runSearch, trimmedSearch])
-  // Why: names already listed on the phone match instantly with no round trip;
-  // the host search only adds files in folders that were never expanded.
-  const cachedFilePaths = useMemo(() => collectCachedFilePaths(directoryCache), [directoryCache])
-  const localMatches = useMemo(
-    () => (trimmedSearch ? filterFilePathsLocally(cachedFilePaths, trimmedSearch) : []),
-    [cachedFilePaths, trimmedSearch]
-  )
-  const mergedSearchResults = useMemo(
-    () => mergeFileSearchResults(localMatches, searchResults),
-    [localMatches, searchResults]
-  )
+    searchQuery,
+    setSearchQuery,
+    trimmedSearch,
+    mergedSearchResults,
+    searchPending,
+    searchFailed,
+    searchRetry
+  } = useMobileFileExplorerSearch({
+    hostId,
+    worktreeId,
+    client,
+    connState,
+    forceReconnect,
+    directoryCache
+  })
 
   const loadDirectory = useCallback(
     async (relativePath: string) => {
@@ -375,6 +360,8 @@ export function MobileFileExplorerPanel(props: {
     <MobileFileExplorerSearchResults
       paths={mergedSearchResults}
       searching={searchPending && mergedSearchResults.length === 0}
+      failed={searchFailed}
+      onRetry={searchRetry}
       onOpen={previewFile}
     />
   ) : loading ? (
