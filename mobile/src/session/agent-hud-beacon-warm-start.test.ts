@@ -16,6 +16,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 
 import type { AgentHudBeacon } from './agent-hud-beacon'
 
+const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage')
+
 const { readWarmStartBeacons, rememberWarmStartBeacon, WARM_START_BEACON_CAP } = await import(
   './agent-hud-beacon-warm-start'
 )
@@ -112,6 +114,43 @@ describe('what the HUD shows before the agent has repainted', () => {
     store.set('codeui:agent-hud-beacons.v2', '{not json')
 
     await expect(readWarmStartBeacons()).resolves.toEqual({})
+  })
+})
+
+// Review of 2026-09-30: each write read the store, changed it and wrote it
+// back, unserialised. Two tabs' beacons in the same tick both read the store
+// before either wrote, and the second write dropped the first tab's record:
+// after a restart that tab showed no model pill or context ring until its
+// next beacon, and it healed only after the 30 s rewrite throttle.
+describe('two tabs writing their warm start at once', () => {
+  beforeEach(() => store.clear())
+
+  it('keeps both records when two tabs write in the same tick', async () => {
+    await Promise.all([rememberWarmStartBeacon('term_a', beacon('opus')), rememberWarmStartBeacon('term_b', beacon('sonnet'))])
+    const restored = await readWarmStartBeacons()
+    expect(Object.keys(restored)).toEqual(['term_a', 'term_b'])
+    expect(restored['term_a']?.modelId).toBe('opus')
+  })
+
+  it('keeps the cap and the newest records when more tabs than it write at once', async () => {
+    const count = WARM_START_BEACON_CAP + 3
+    await Promise.all(Array.from({ length: count }, (_, i) => rememberWarmStartBeacon(`terminal-${i}`, beacon(`m${i}`))))
+    const handles = Object.keys(await readWarmStartBeacons())
+    expect(handles).toHaveLength(WARM_START_BEACON_CAP)
+    expect(handles[0]).toBe('terminal-3')
+    expect(handles.at(-1)).toBe(`terminal-${count - 1}`)
+  })
+
+  it('still lands a later write after one the store refused', async () => {
+    vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error('database or disk is full'))
+    await Promise.all([rememberWarmStartBeacon('term_a', beacon('opus')), rememberWarmStartBeacon('term_b', beacon('sonnet'))])
+    await rememberWarmStartBeacon('term_c', beacon('fable'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_b', 'term_c'])
+  })
+
+  it('writes one tab alone as before', async () => {
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a'])
   })
 })
 

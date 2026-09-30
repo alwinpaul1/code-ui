@@ -102,15 +102,27 @@ export async function readWarmStartBeacons(): Promise<StoredBeacons> {
   }
 }
 
+/**
+ * The last write queued. Each write reads the whole store, changes one record
+ * and writes it back, so each waits for the one before it: unserialised, two
+ * tabs' beacons in the same tick both read the store before either wrote, and
+ * the second write dropped the first tab's record, which then had no model
+ * pill or context ring after a restart (review of 2026-09-30). A write never
+ * rejects (see `writeWarmStartBeacon`), so a refused one cannot wedge the rest.
+ */
+let lastWrite: Promise<void> = Promise.resolve()
+
 /** Best effort: a failed write only costs the next launch its warm start. */
-export async function rememberWarmStartBeacon(
-  handle: string,
-  beacon: AgentHudBeacon
-): Promise<void> {
+export function rememberWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Promise<void> {
   if (!signed(beacon)) {
     // Nothing could believe it on the next launch; see `signed`.
-    return
+    return Promise.resolve()
   }
+  lastWrite = lastWrite.then(() => writeWarmStartBeacon(handle, beacon))
+  return lastWrite
+}
+
+async function writeWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Promise<void> {
   try {
     const stored = await readWarmStartBeacons()
     // Delete first so re-inserting makes this handle the newest key, and the
@@ -123,6 +135,7 @@ export async function rememberWarmStartBeacon(
     }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
   } catch {
-    // Ignored on purpose; see the doc comment.
+    // Ignored on purpose (rememberWarmStartBeacon), and never passed on: a
+    // rejection here would stop every write queued behind this one.
   }
 }
