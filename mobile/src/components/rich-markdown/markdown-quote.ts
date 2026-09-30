@@ -1,6 +1,8 @@
 import { renderInline } from './markdown-inline-render'
 import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
-import { indentedCodeHtml, readIndentedCode } from './markdown-leaf-blocks'
+import { indentedCodeHtml, readIndentedCode, setextLevel } from './markdown-leaf-blocks'
+import { continuesParagraphLazily, isThematicBreak } from './markdown-lazy-line'
+import { opensTable } from './markdown-table-rows'
 
 /**
  * A quote's inside, on the reading half of the round trip: its paragraphs, and the code blocks and
@@ -29,6 +31,209 @@ const NESTED_QUOTE_LIMIT = 8
 /** A quote line with its marker and one space after it off, or null when the line is not one. */
 export function quoteLineContent(line: string): string | null {
   return line.startsWith('>') ? line.replace(/^>\s?/, '') : null
+}
+
+/** Four columns of indent, where a line with no words above it opens indented code. */
+const INDENTED_CODE = /^(?: {4}| {0,3}\t)/
+
+/** An ATX heading's line. */
+const ATX_HEADING = /^ {0,3}#{1,6}(?:\s|$)/
+
+/**
+ * Whether a line ends a table's rows, as marked reads them, besides a blank line, a fence and a
+ * quote: indented code, a heading, a rule, or a list that may break into a paragraph (a bullet, or
+ * an item numbered 1). Any other line is one more row to marked, with pipes or without.
+ */
+function endsTableRows(line: string): boolean {
+  return (
+    INDENTED_CODE.test(line) ||
+    ATX_HEADING.test(line) ||
+    isThematicBreak(line) ||
+    /^ {0,3}(?:[-*+]|1[.)])[ \t]/.test(line)
+  )
+}
+
+/**
+ * Where a lazy line goes: behind `markers` (none for the quote's own paragraph, one `> ` more per
+ * quote nested in it), and after a blank quote line where it opens a paragraph rather than
+ * continuing one.
+ */
+type LazyPlace = { markers: string; opensParagraph: boolean }
+
+/** A quote's lines as they are read, as far as a lazy line after them cares. */
+type QuoteTail = {
+  take: (line: string) => void
+  /** Where a lazy line goes after the lines so far, or null when the quote ends above it. */
+  lazyPlace: () => LazyPlace | null
+}
+
+/** A list item's marker, as marked opens one inside a quote. */
+const LIST_ITEM = /^ {0,3}(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)/
+
+/**
+ * A quote's lines, markers off, fed one at a time, read the way `quoteBlocks` reads them: a fence
+ * runs to its closing fence, a run of marked lines is a quote nested in it, a blank line ends a
+ * paragraph, and a line four columns in with no words above it is code. One pass, so a long quote
+ * with a lazy line every other line costs no more than its length.
+ *
+ * A lazy line joins words, and a heading or a rule too, which marked reads the same way whether the
+ * line joins or opens a paragraph after them. But under a heading or a rule a line four columns in
+ * is code, not more words: until 2026-10-01 a lazy line joined that code, and marked read it inside
+ * the quote where it read the source's outside.
+ *
+ * A table is read as marked reads it too, its header over its separator and then its rows up to a
+ * line `endsTableRows` names, although the quote draws its lines as words. A lazy line after its
+ * rows opens a paragraph of its own. Until 2026-10-01 they counted as paragraph text, and a save
+ * wrote the lazy line straight under them, where marked read it as one more row. Two tables are
+ * someone else's to marked, and so is a lazy line after them, which a save writes under them as
+ * before. One is under a list item: a list item is taken to hold the lines after its marker until
+ * a heading (any `#`) or a rule breaks it, or a line at the quote's margin comes after a blank
+ * line, a fence or a quote. The other is right under a quote nested in this one, with no blank
+ * line between: marked takes the lines there that open no block for that quote's lazy lines.
+ */
+function quoteTail(depth: number): QuoteTail {
+  let fence: string | null = null
+  /** Whether a lazy line may join the lines so far: they end in words, a heading or a rule. */
+  let paragraph = false
+  /** Whether they end in words, under which a line four columns in is more words, not code. */
+  let words = false
+  let table = false
+  /** The line before, where it is words that may be a table's header. */
+  let header: string | null = null
+  /** Whether a list item may still hold the lines, as marked reads them. */
+  let listed = false
+  /** Whether the lines since a quote nested in this one are that quote's lazy lines to marked. */
+  let afterNested = false
+  let blank = false
+  let nested: QuoteTail | null = null
+  const cut = () => {
+    paragraph = words = table = false
+    header = null
+  }
+  return {
+    take(line) {
+      const afterBlank = blank
+      blank = !line.trim()
+      if (fence !== null) {
+        fence = closesFence(line, fence) ? null : fence
+        return
+      }
+      const atMargin = !/^[ \t]/.test(line)
+      const quoted = depth < NESTED_QUOTE_LIMIT ? quoteLineContent(line) : null
+      if (quoted !== null) {
+        cut()
+        listed &&= !atMargin
+        afterNested = true
+        nested ??= quoteTail(depth + 1)
+        nested.take(quoted)
+        return
+      }
+      nested = null
+      const opened = openingFence(line)
+      if (blank || opened !== null) {
+        cut()
+        listed &&= !(opened !== null && atMargin)
+        afterNested = false
+        fence = opened?.fence ?? null
+        return
+      }
+      if (table && !endsTableRows(line)) {
+        return
+      }
+      listed &&= !(afterBlank && atMargin)
+      afterNested &&= continuesParagraphLazily(line, undefined)
+      table = !listed && !afterNested && header !== null && opensTable(header, line)
+      if (table) {
+        cut()
+        table = true
+        return
+      }
+      if (/^ {0,3}#/.test(line) || isThematicBreak(line)) {
+        listed = false
+      } else {
+        listed ||= LIST_ITEM.test(line)
+      }
+      const code = !words && INDENTED_CODE.test(line)
+      const oneLine =
+        ATX_HEADING.test(line) || isThematicBreak(line) || (words && setextLevel(line) !== null)
+      paragraph = !code
+      words = !code && !oneLine
+      header =
+        !afterNested && !INDENTED_CODE.test(line) && continuesParagraphLazily(line, undefined)
+          ? line
+          : null
+    },
+    lazyPlace() {
+      if (fence !== null) {
+        return null
+      }
+      if (nested !== null) {
+        const inner = nested.lazyPlace()
+        return inner === null ? null : { ...inner, markers: `> ${inner.markers}` }
+      }
+      if (table || paragraph) {
+        return { markers: '', opensParagraph: table }
+      }
+      return null
+    }
+  }
+}
+
+/** How a quote's lines are told apart from the lines around it. */
+export type QuoteLines = {
+  /** A line's content with its markers off, where it is one of the quote's marked lines. */
+  marked: (line: string) => string | null
+  /** Whether a line the quote does not mark may still be one of its lazy lines. */
+  mayBeLazy: (line: string) => boolean
+  /** The quote's lines read before the first one, markers off: one on an item's marker line. */
+  before: readonly string[]
+}
+
+const DOCUMENT_QUOTE: QuoteLines = { marked: quoteLineContent, mayBeLazy: () => true, before: [] }
+
+/**
+ * A quote's lines from `index`, markers off: its marked lines, and after a paragraph the lazy lines
+ * that continue it (markdown-lazy-line.ts), each under the markers that put it in that paragraph,
+ * so '> a\nb' reads as '> a\n> b' and '> > a\nb' as '> > a\n> > b'. Until 2026-09-30 the quote
+ * ended at the first line with no marker, and a save wrote a blank line there: the wrapped words
+ * left the quote. Never after a blank quote line, a fence or indented code, where there is no
+ * paragraph to continue. After a table's rows the lazy line is a paragraph of the quote's own, as
+ * marked reads it, so a blank quote line goes before it: '> | a |\n> | - |\nb' reads as
+ * '> | a |\n> | - |\n>\n> b'.
+ */
+export function readQuoteLines(
+  lines: readonly string[],
+  index: number,
+  quote: QuoteLines = DOCUMENT_QUOTE
+): { lines: string[]; nextIndex: number } {
+  const tail = quoteTail(1)
+  const read: string[] = []
+  const take = (content: string) => {
+    read.push(content)
+    tail.take(content)
+  }
+  quote.before.forEach(take)
+  let next = index
+  while (next < lines.length) {
+    const line = lines[next] ?? ''
+    const content = quote.marked(line)
+    if (content !== null) {
+      take(content)
+      next += 1
+      continue
+    }
+    const place =
+      quote.mayBeLazy(line) && continuesParagraphLazily(line, lines[next + 1]) ? tail.lazyPlace() : null
+    if (place === null) {
+      break
+    }
+    if (place.opensParagraph) {
+      take(place.markers.trimEnd())
+    }
+    take(`${place.markers}${line.trimStart()}`)
+    next += 1
+  }
+  return { lines: read, nextIndex: next }
 }
 
 /** An element's markup with one more attribute on its opening tag. */

@@ -76,32 +76,34 @@ export function paragraphParts(
 }
 
 /**
- * The lines under a list item that continue it: indented, non-blank, and neither an item of their
- * own nor the start of another block. Without this the list ENDED at the first continuation line
- * and the rest of the item became a paragraph at the left margin, outside the list — which is what
- * the device screenshot showed for numbered item 2 (2026-09-15).
+ * The lines under a list item that continue it: non-blank, and neither an item of their own nor
+ * the start of another block. Without this the list ENDED at the first continuation line and the
+ * rest of the item became a paragraph at the left margin, outside the list — which is what the
+ * device screenshot showed for numbered item 2 (2026-09-15).
+ *
+ * A line at the margin continues it too, lazily, where `opensBlock` lets it (markdown-lazy-line.ts).
+ * This ended the item at every unindented line until 2026-09-30, so a save cut a git-wrapped item
+ * in two with a blank line.
  *
  * `opensItem` and `opensBlock` are the list's and the block reader's own grammars, handed in so
  * this module reads neither and imports neither: the block reader imports the list parser.
- * `opensBlock` is given the line under the one it tests too, since a table opens on two.
+ * `opensBlock` is given the line under the one it tests too, since a table opens on two, and the
+ * line over it as written where that is one of the lines gathered here (undefined under the first
+ * line, which the caller has read), since a lazy line continues only paragraph text.
  */
 export function gatherListItemContinuation(
   lines: readonly string[],
   startIndex: number,
   text: string,
   opensItem: (line: string) => boolean,
-  opensBlock: (line: string, under: string | undefined) => boolean
+  opensBlock: (line: string, under: string | undefined, above: string | undefined) => boolean
 ): { text: string; nextIndex: number } {
   const tail = [text]
   let index = startIndex
   while (index < lines.length) {
     const next = lines[index] ?? ''
-    if (
-      !next.trim() ||
-      !/^\s/.test(next) ||
-      opensItem(next) ||
-      opensBlock(next, lines[index + 1])
-    ) {
+    const above = index > startIndex ? lines[index - 1] : undefined
+    if (!next.trim() || opensItem(next) || opensBlock(next, lines[index + 1], above)) {
       break
     }
     tail.push(next.trim())

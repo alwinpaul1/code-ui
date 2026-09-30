@@ -2,7 +2,13 @@ import { inlineMarkdown } from './html-inline-markdown'
 import { codeBlockMarkdown, writesIndented } from './html-code-block-markdown'
 import { CODE_BLANK_ATTRIBUTE, CODE_INDENT_ATTRIBUTE } from './markdown-code-fence'
 import { INDENTED_CODE_ATTRIBUTE } from './markdown-leaf-blocks'
-import { ITEM_TIGHT_ATTRIBUTE, LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
+import {
+  ITEM_BLANK_ATTRIBUTE,
+  ITEM_TIGHT_ATTRIBUTE,
+  LIST_DELIMITER_ATTRIBUTE,
+  LIST_INDENT_ATTRIBUTE,
+  ORDERED_TASK_ATTRIBUTE
+} from './markdown-list-render'
 
 /** One piece of what an item holds, in order: words, a code block, a quote, a table or a list. */
 type ItemPart =
@@ -241,7 +247,10 @@ function itemMarkdown(
  * `b` then ended the ordered list and split it in two.
  *
  * An ordered item's own number is preferred over its position, because the browser renumbers a
- * pasted or split item in the markup, and the source has to say what the surface shows.
+ * pasted or split item in the markup, and the source has to say what the surface shows. The `)`
+ * its source wrote after it is kept (LIST_DELIMITER_ATTRIBUTE); every number was written with `.`
+ * until 2026-09-30. A numbered task list is the task list's markup with its first number on it
+ * (ORDERED_TASK_ATTRIBUTE), and is written numbered, box and all: '1. [ ] a'.
  *
  * `writeBlock` writes an item's quote or table (BlockWriter); html-block-markdown.ts always passes
  * one.
@@ -254,28 +263,34 @@ export function listMarkdown(
 ): string {
   const tag = element.tagName.toLowerCase()
   const isTask = element.getAttribute('data-type') === 'taskList'
-  const parsedStart = tag === 'ol' ? Number.parseInt(element.getAttribute('start') ?? '1', 10) : 1
+  const orderedTask = isTask ? element.getAttribute(ORDERED_TASK_ATTRIBUTE) : null
+  const ordered = tag === 'ol' || orderedTask !== null
+  const parsedStart = Number.parseInt(
+    (tag === 'ol' ? element.getAttribute('start') : orderedTask) ?? '1',
+    10
+  )
   const orderedStart = Number.isFinite(parsedStart) ? parsedStart : 1
   return Array.from(element.children)
     .map((item, index) => {
       if (item.tagName.toLowerCase() !== 'li') {
         return ''
       }
-      let marker: string
-      // A task's box is its words, so its children go where a bullet's do.
-      let markerColumns = 2
-      if (isTask) {
-        const input = item.querySelector<HTMLInputElement>('input[type="checkbox"]')
-        marker = `- [${input && input.checked ? 'x' : ' '}] `
-      } else {
-        // `||` rather than `??`: an empty attribute is no number, and the next source answers.
-        const listNumber = item.getAttribute('data-list-number') || item.getAttribute('value')
-        marker = tag === 'ol' ? `${listNumber || orderedStart + index}. ` : '- '
-        markerColumns = marker.length
-      }
+      // `||` rather than `??`: an empty attribute is no number, and the next source answers.
+      const listNumber = item.getAttribute('data-list-number') || item.getAttribute('value')
+      const delimiter = item.getAttribute(LIST_DELIMITER_ATTRIBUTE) === ')' ? ')' : '.'
+      const bullet = ordered ? `${listNumber || orderedStart + index}${delimiter} ` : '- '
+      const input = isTask ? item.querySelector<HTMLInputElement>('input[type="checkbox"]') : null
+      const marker = isTask ? `${bullet}[${input && input.checked ? 'x' : ' '}] ` : bullet
+      // A task's box is its words, so its children go where its marker's would without one.
+      const markerColumns = bullet.length
       const itemColumn =
         parentMarkerColumns === null ? column : column + remembered(item, parentMarkerColumns)
-      return itemMarkdown(item, itemColumn, marker, markerColumns, writeBlock)
+      const written = itemMarkdown(item, itemColumn, marker, markerColumns, writeBlock)
+      // A loose sublist keeps the blank line above it (ITEM_BLANK_ATTRIBUTE), but a list at the
+      // margin opens on its first item, with nothing above it in the list.
+      const blank =
+        item.hasAttribute(ITEM_BLANK_ATTRIBUTE) && (index > 0 || parentMarkerColumns !== null)
+      return blank ? `\n${written}` : written
     })
     .filter(Boolean)
     .join('\n')

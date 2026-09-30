@@ -106,6 +106,8 @@ describe('reopening a chat while its option picks are still being written', () =
     agent: 'claude',
     valuesByModel: { opus: { effort: { value: effort, source: 'dispatched' } } }
   })
+  const effortRead = (read: Awaited<ReturnType<typeof readSessionOptionRecord>>): unknown =>
+    read.status === 'record' ? read.record.valuesByModel.opus?.effort?.value : read.status
 
   it('restores the effort picked last, not the one before it', async () => {
     await writeSessionOptionRecord('scope', record('high'))
@@ -116,7 +118,7 @@ describe('reopening a chat while its option picks are still being written', () =
     holdWrites?.()
     await picked
 
-    expect((await reopened)?.valuesByModel.opus?.effort?.value).toBe('max')
+    expect(effortRead(await reopened)).toBe('max')
   })
 
   it('still answers after the write in front of it failed', async () => {
@@ -129,7 +131,8 @@ describe('reopening a chat while its option picks are still being written', () =
     holdWrites?.()
     await expect(failed).rejects.toThrow('SQLITE_FULL')
 
-    expect((await reopened)?.valuesByModel.opus?.effort?.value).toBe('high')
+    // A record, not a refusal: the write in front failed, the read did not.
+    expect(effortRead(await reopened)).toBe('high')
   })
 })
 

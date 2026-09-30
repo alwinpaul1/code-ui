@@ -8,6 +8,7 @@ import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 import { SEND_MESSAGE_BY_ID_2026_09_26 } from './fixtures/claude-send-message-2026-09-26'
+import { CODE_MODE_POLL, CODE_MODE_START } from './fixtures/codex-code-mode-exec-cells-0.153.4'
 
 const mocks = vi.hoisted(() => ({
   reduced: false,
@@ -340,7 +341,9 @@ describe('a batch of tool calls in one run header', () => {
 
   // Review of c714c9bc: one call `failed` with its error result, another
   // `failed` with no result. The run failed twice; the sentence, counting
-  // error results, says "(1 failed)", and the label was withheld.
+  // error results, can say only one of them, and the label was withheld.
+  // Then the row said "(1 failed)" and "2 failed" at once (review,
+  // 2026-09-30), so the sentence now leaves the count to the label.
   it.each(['light', 'dark'] as const)(
     'says 2 failed when the sentence can only count 1 of them, in %s',
     (scheme) => {
@@ -349,11 +352,79 @@ describe('a batch of tool calls in one run header', () => {
         { type: 'tool-result', output: 'exit 1', isError: true },
         { type: 'tool-call', name: 'shell', input: { command: 'b' }, state: 'failed' }
       ]
-      const { texts } = render(mixed, scheme)
-      expect(texts).toContain('Ran 2 commands (1 failed)')
+      render(mixed, scheme)
+      expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe('Ran 2 commands')
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.children).toBe('2 failed')
       expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 2')
+    }
+  )
+
+  // A failed Codex exec_command polled by a write_stdin that failed too read
+  // "Ran a command (1 failed)" beside "2 failed": the poll folds into the
+  // command, and its error into no group (regression from 4f1a6153). The row
+  // draws one count, on the label, in both shapes Codex sends.
+  const EXITED = 'Process exited with code 1'
+  it.each([
+    [
+      'function-call',
+      [
+        { type: 'tool-call', name: 'exec_command', input: { cmd: 'npm test' } },
+        { type: 'tool-result', output: EXITED, isError: true },
+        { type: 'tool-call', name: 'write_stdin', input: { session_id: 3 } },
+        { type: 'tool-result', output: EXITED, isError: true }
+      ]
+    ],
+    [
+      'code-mode',
+      [
+        { type: 'tool-call', name: 'exec', input: CODE_MODE_START },
+        { type: 'tool-result', output: EXITED, isError: true },
+        { type: 'tool-call', name: 'exec', input: CODE_MODE_POLL(1000) },
+        { type: 'tool-result', output: EXITED, isError: true }
+      ]
+    ]
+  ] as const)(
+    'draws one failure count for a failed Codex command whose poll failed too (%s shape)',
+    (_shape, blocks) => {
+      for (const scheme of ['light', 'dark'] as const) {
+        render([...blocks], scheme)
+        expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe('Ran a command')
+        const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
+        expect(mark.props.children).toBe('2 failed')
+        expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+        act(() => renderer!.unmount())
+        renderer = null
+      }
+    }
+  )
+
+  it.each(['light', 'dark'] as const)(
+    'keeps a failed Claude Bash call as "Ran a command (1 failed)" with no label, and a clean polled run bare, in %s',
+    (scheme) => {
+      render(
+        [
+          { type: 'tool-call', name: 'Bash', input: { command: 'false' } },
+          { type: 'tool-result', output: 'exit 1', isError: true }
+        ],
+        scheme
+      )
+      expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe(
+        'Ran a command (1 failed)'
+      )
+      expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
+      act(() => renderer!.unmount())
+      render(
+        [
+          { type: 'tool-call', name: 'exec_command', input: { cmd: 'npm test' } },
+          { type: 'tool-result', output: '' },
+          { type: 'tool-call', name: 'write_stdin', input: { session_id: 3, chars: '' } },
+          { type: 'tool-result', output: '' }
+        ],
+        scheme
+      )
+      expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe('Ran a command')
+      expect(renderer!.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
     }
   )
 

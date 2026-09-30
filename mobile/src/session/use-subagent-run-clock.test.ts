@@ -9,7 +9,7 @@ import { makePaneKey } from '../../../src/shared/stable-pane-id'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { formatBackgroundTaskElapsed } from './mobile-background-task-labels'
 import { RESUMED_AGENT_ID, RESUMED_AGENT_ROSTER_ROW, RESUMED_AGENT_TIMES, resumeRecords } from './fixtures/claude-resumed-agent-2.1.283'
-import { advanceSubagentRunClock, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
+import { advanceSubagentRunClock, CLOCK_CAP, resetSubagentRunClocksForTest } from './use-subagent-run-clock'
 
 const NOW = Date.parse('2026-09-29T15:00:00Z')
 const pane = { paneKey: 'pane-1', prompt: 'go', stateHistory: [{ state: 'done' as const, prompt: '', startedAt: NOW - 80 * 60_000 }] }
@@ -94,6 +94,84 @@ describe('a roster subagent’s run clock', () => {
   it('has no clock from a stand-in alone, or from a status with no pane', () => {
     expect(advanceSubagentRunClock(standIn, NOW)).toBeUndefined()
     expect(advanceSubagentRunClock({ subagents: [agent] }, NOW)).toBeUndefined()
+  })
+})
+
+// Review of 2026-09-30 (F5): with more panes seen in one launch than the cap
+// (CLOCK_CAP, 64), the pane whose clock went was the first one seen, not the
+// one untouched longest: `set` on a pane already held keeps its first place
+// in the Map's order. That first pane is usually the long-lived one the user
+// works in, so its next status read every running subagent as already working
+// when the phone began watching, and the tasks sheet drew no time for runs it
+// had been timing.
+describe('the run clocks of more panes than the cap', () => {
+  const T0 = 1790694000000
+  const running = (paneKey: string) => ({
+    paneKey,
+    prompt: 'go',
+    subagents: [{ id: 'a1', description: 'Sweep', agentType: 'general-purpose', state: 'working' as const, startedAt: T0 - 1000 }]
+  })
+  /** Panes `from` to `to - 1`, each seen once, all running one subagent. */
+  const seePanes = (from: number, to: number, now: number) => {
+    for (let index = from; index < to; index += 1) {
+      advanceSubagentRunClock(running(`pane-${index}`), now)
+    }
+  }
+  /** The start the pane's clock holds for its subagent two minutes on: the
+   *  host's start while the clock is kept, null (no time drawn) once it went. */
+  const keptStart = (paneKey: string) => advanceSubagentRunClock(running(paneKey), T0 + 120_000)?.get('a1')
+
+  beforeEach(() => resetSubagentRunClocksForTest())
+
+  it('keeps the clock of the pane in use when a 65th pane is seen', () => {
+    advanceSubagentRunClock(running('pane-0'), T0)
+    seePanes(1, CLOCK_CAP, T0)
+    advanceSubagentRunClock(running('pane-0'), T0 + 10)
+    advanceSubagentRunClock(running(`pane-${CLOCK_CAP}`), T0 + 20)
+    expect(keptStart('pane-0')).toBe(T0 - 1000)
+  })
+
+  it('forgets the pane untouched longest instead', () => {
+    advanceSubagentRunClock(running('pane-0'), T0)
+    seePanes(1, CLOCK_CAP, T0)
+    advanceSubagentRunClock(running('pane-0'), T0 + 10)
+    advanceSubagentRunClock(running(`pane-${CLOCK_CAP}`), T0 + 20)
+    expect(keptStart('pane-1')).toBeNull()
+  })
+
+  // Orca's stand-in for the pane (no roster) is the pane in use too, whether
+  // it is the first since the roster or one more after it.
+  for (const which of ['the first since its roster', 'one more after the first'] as const) {
+    it(`keeps the clock of a pane whose last status was Orca’s stand-in, ${which}`, () => {
+      const standInFor = (paneKey: string) => ({ paneKey, prompt: '', stateHistory: [] })
+      advanceSubagentRunClock(running('pane-0'), T0)
+      if (which === 'one more after the first') {
+        advanceSubagentRunClock(standInFor('pane-0'), T0 + 5)
+      }
+      seePanes(1, CLOCK_CAP, T0 + 6)
+      advanceSubagentRunClock(standInFor('pane-0'), T0 + 10)
+      advanceSubagentRunClock(running(`pane-${CLOCK_CAP}`), T0 + 20)
+      expect(keptStart('pane-0')).toBe(T0 - 1000)
+      expect(keptStart('pane-1')).toBeNull()
+    })
+  }
+
+  // The boundaries: at the cap nothing goes; one past it, the one seen first
+  // and never since.
+  it('keeps every pane at exactly the cap, and forgets only the oldest one past it', () => {
+    seePanes(0, CLOCK_CAP, T0)
+    const atCap = Array.from({ length: CLOCK_CAP }, (_, index) => keptStart(`pane-${index}`))
+    expect(atCap.every((start) => start === T0 - 1000)).toBe(true)
+    resetSubagentRunClocksForTest()
+    seePanes(0, CLOCK_CAP + 1, T0)
+    expect(keptStart(`pane-${CLOCK_CAP}`)).toBe(T0 - 1000)
+    expect(keptStart('pane-1')).toBe(T0 - 1000)
+    expect(keptStart('pane-0')).toBeNull()
+  })
+
+  it('keeps the clock of a single pane', () => {
+    advanceSubagentRunClock(running('pane-0'), T0)
+    expect(keptStart('pane-0')).toBe(T0 - 1000)
   })
 })
 

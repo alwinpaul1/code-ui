@@ -8,12 +8,14 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
+import { claudeQueueBox, codexQueueBox } from './queue-box-screens.test-support'
 import { echoMemoryId } from './mobile-native-chat-remember-echo'
-import { useAbsorbedQueueWitness } from './use-absorbed-queue-echoes'
+import { useAbsorbedQueueWitness, type BoxSighting } from './use-absorbed-queue-echoes'
 import { queuedDeskWitnesses } from './use-queued-desk-witnesses'
-import type { WitnessToRemember } from './mobile-native-chat-witness-memory'
+import { absorbedMemoryId, type WitnessToRemember } from './mobile-native-chat-witness-memory'
 
 const row = (id: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [], timestamp: 1, source: 'transcript' })
+const userRow = (id: string, text: string): NativeChatMessage => ({ id, role: 'user', blocks: [{ type: 'text', text }], timestamp: 1, source: 'transcript' })
 
 /** The box as the chat draws it, read through the queue-box witness whose
  *  sightings it remembers the messages at, as the overlay wires the two. */
@@ -139,4 +141,65 @@ describe('a message the queue box lists', () => {
     expect(show(['keep going'], [row('a1'), row('a2'), row('a3')]).map((witness) => witness.id)).toEqual([echoMemoryId('keep going', 'a1')])
     act(() => renderer?.unmount())
   })
+})
+
+// Review of 2026-09-30 (F13): a short desk message queued mid-turn with the
+// words of an earlier turn, "keep going", was drawn in the queue box but never
+// remembered. A user row of its words ANYWHERE in the transcript counted as
+// its own landed row, so if the chat closed, the tab switched or the app
+// relaunched before the agent's next row, the message was gone: Claude Code
+// writes no transcript row for a message it takes mid-turn. Only a row from
+// the one it arrived after on can be its own, the rule the queue-box
+// witness's echoes are retired by (rowsFromAnchor).
+describe('a message the queue box lists with the words of an earlier turn', () => {
+  const WORDS = 'keep going'
+  const slot = (sighting: string | null, firstRead = false): BoxSighting => ({ row: 0, text: WORDS, sighting, firstRead })
+  const u1 = userRow('u1', WORDS)
+
+  it('is remembered where it arrived though an earlier turn had the same words', () => {
+    expect(queuedDeskWitnesses([WORDS], [slot('a2')], [u1, row('a1'), row('a2')])).toEqual([
+      { id: absorbedMemoryId(WORDS, 'a2', false), text: WORDS, anchorId: 'a2' }
+    ])
+  })
+
+  // Round 2 of the review of fix/midturn-gaps, kept: the chat opened as Claude
+  // dequeued it at a turn's end, and the row Claude dequeued it as was already
+  // the last row, the one the box first listed it after.
+  it('is not remembered when the row it arrived after is its own, dequeued at a turn end', () => {
+    expect(queuedDeskWitnesses([WORDS], [slot('u3', true)], [u1, row('a1'), row('a2'), userRow('u3', WORDS)])).toEqual([])
+  })
+
+  it('is not remembered once a row of its words lands after where it arrived', () => {
+    expect(queuedDeskWitnesses([WORDS], [slot('a2')], [u1, row('a1'), row('a2'), userRow('u3', WORDS)])).toEqual([])
+  })
+
+  // The row it arrived after paged out above the loaded window: every row
+  // held is after it, so a row of its words is its own, as before.
+  it('is not remembered when the row it arrived after is no longer loaded and a row of its words is', () => {
+    expect(queuedDeskWitnesses([WORDS], [slot('a0')], [u1, row('a1'), row('a2')])).toEqual([])
+  })
+
+  // Degenerate sizes: no box, no transcript, one row.
+  it('remembers nothing for an empty box or an empty transcript, and after a single row only when that row is not its own', () => {
+    expect(queuedDeskWitnesses([], [], [u1, row('a1')])).toEqual([])
+    expect(queuedDeskWitnesses([WORDS], [slot(null)], [])).toEqual([])
+    expect(queuedDeskWitnesses([WORDS], [slot('u1')], [u1])).toEqual([])
+    expect(queuedDeskWitnesses([WORDS], [slot('a1')], [row('a1')])).toEqual([
+      { id: absorbedMemoryId(WORDS, 'a1', false), text: WORDS, anchorId: 'a1' }
+    ])
+  })
+
+  // Both agents' boxes, as the phone's own readers take them off the screen.
+  for (const [agent, box] of [
+    ['Claude Code', claudeQueueBox],
+    ['Codex', codexQueueBox]
+  ] as const) {
+    it(`is remembered where it arrived though an earlier turn had the same words, on ${agent}`, () => {
+      expect(box([WORDS])).toEqual([WORDS])
+      expect(box([])).toEqual([])
+      const read = reader()
+      read(box([]), [u1, row('a1')])
+      expect(read(box([WORDS]), [u1, row('a1'), row('a2')])).toEqual([{ id: echoMemoryId(WORDS, 'a2'), text: WORDS, anchorId: 'a2' }])
+    })
+  }
 })

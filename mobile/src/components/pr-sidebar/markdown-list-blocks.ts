@@ -74,8 +74,57 @@ function readItem(line: string): Item | null {
     : { ordered, indent, content, number, text: rest }
 }
 
+// The list line past the blank lines at `i` that nests under an open item,
+// a loose sublist ('- a\n\n  - b'): indented to the deepest open item's words
+// it reaches, and less than four columns past them, where CommonMark reads
+// code. Null where there is none, and the list ends at the blank line as it
+// always has: '- a\n\n- b' is still two lists. Until 2026-09-30 every blank
+// line ended the list, so a bot's loose sublist drew as a list of its own at
+// the margin and cut a numbered list in three.
+function nestedAfterBlank(lines: string[], i: number, levels: Level[]): number | null {
+  let j = i
+  while (j < lines.length && lines[j]!.trim() === '') {
+    j += 1
+  }
+  const next = j > i && j < lines.length && !HR.test(lines[j]!) ? readItem(lines[j]!) : null
+  if (!next) {
+    return null
+  }
+  for (let depth = levels.length - 1; depth >= 0; depth -= 1) {
+    const content = levels[depth]!.content
+    if (next.indent >= content) {
+      return next.indent < content + 4 ? j : null
+    }
+  }
+  return null
+}
+
+// An ATX heading's opening: one to six `#`, then a space, a tab or the end.
+const ATX_HEADING = /^#{1,6}(?:[ \t]|$)/
+
+// Whether an item's line, its own or an indented one under it, is words a
+// lazy line can continue (CommonMark 5.2: a lazy line continues a paragraph).
+// An empty item, a heading and a rule are not: marked and CommonMark both
+// draw the line after the list there. Without this check '- \nlazy' drew one
+// bullet reading " lazy" and '- # H\nlazy' one reading "# H lazy" (review,
+// 2026-10-01). After a task's box the line is words whatever it holds:
+// '- [ ] ***' is a task reading "***".
+function endsInWords(line: string, boxed: boolean): boolean {
+  const text = line.trim()
+  return text !== '' && (boxed || (!ATX_HEADING.test(text) && !HR.test(text)))
+}
+
 // The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
-export function parseList(lines: string[], i: number, body: LexedCommentBody, blocks: MarkdownBlock[]): number {
+// `lazy` says whether the line at an index, at the margin, opens no block of
+// its own (markdown-blocks.ts reads that, as it reads every other block); it
+// is asked only where the item's last line is words (endsInWords).
+export function parseList(
+  lines: string[],
+  i: number,
+  body: LexedCommentBody,
+  blocks: MarkdownBlock[],
+  lazy: (at: number) => boolean
+): number {
   const levels: Level[] = []
   let items: string[] = []
   let shapes: ListItemShape[] = []
@@ -120,16 +169,27 @@ export function parseList(lines: string[], i: number, body: LexedCommentBody, bl
     // continuation line, that line became a paragraph at the left margin,
     // and the next item opened a fresh list — so every item was numbered 1.
     // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
+    // A line at the margin continues it too where it opens no block (`lazy`)
+    // and the item's last line is words (endsInWords), as CommonMark reads it
+    // and the chat draws it: '- a\nlazy' is one item, '- # H\nlazy' is not.
     const parts = fence ? [] : [item.text.trim()]
+    let words = endsInWords(item.text, item.checked !== undefined)
     i += 1
     while (!fence && i < lines.length) {
       const next = lines[i]!
-      if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
+      const indented = /^\s/.test(next)
+      if (
+        !next.trim() ||
+        (!indented && !(words && lazy(i))) ||
+        ORDERED.test(next) ||
+        UNORDERED.test(next)
+      ) {
         break
       }
       fence = body.fenceOn(next)?.code ?? null
       if (!fence) {
         parts.push(next.trim())
+        words = !indented || endsInWords(next, false)
       }
       i += 1
     }
@@ -149,6 +209,7 @@ export function parseList(lines: string[], i: number, body: LexedCommentBody, bl
       flush()
       blocks.push({ kind: 'code', ...fence })
     }
+    i = nestedAfterBlank(lines, i, levels) ?? i
     // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
     // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
     item = i < lines.length && !HR.test(lines[i]!) ? readItem(lines[i]!) : null

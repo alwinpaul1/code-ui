@@ -7,6 +7,7 @@ import {
   codeFenceStarts,
   collectOptionLists,
   introIndex,
+  lineAnswersYesOrNo,
   lineAsks,
   lineIntroduces,
   unwrapEmphasis,
@@ -107,6 +108,11 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   // Conservative gate: a single bare option with no introducing prompt is more
   // likely stray prose (a lone "- item") than a real choice list.
   if (options.length < 2 && !lineIntroduces(question)) {
+    return null
+  }
+  // "Run these? (y/n)" over a list asks for y or n about it: a tap sent a
+  // step's digit as the answer (review, 2026-10-01).
+  if (lineAnswersYesOrNo(question)) {
     return null
   }
   // "Here's my plan: 1. … 2. … Shall I proceed?" asks for a yes, not a step.

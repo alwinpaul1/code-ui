@@ -47,6 +47,22 @@ describe('toolRunSentence', () => {
     ).toBe('Read blade_flow_check.png, ran a command')
   })
 
+  // The file-name reader knew file_path, path and filePath; a notebook tool
+  // names its notebook in `notebook_path`, which the created-file count's own
+  // list already read (review, 2026-09-30).
+  it('names the notebook a NotebookRead opened, and counts NotebookEdits of it as one file', () => {
+    const notebook = (name: string): NativeChatBlock => ({
+      type: 'tool-call',
+      id: `nb-${name}-${Math.random()}`,
+      name,
+      input: { notebook_path: '/repo/analysis.ipynb' }
+    })
+    expect(toolRunSentence([notebook('NotebookRead'), result()])).toBe('Read analysis.ipynb')
+    expect(
+      toolRunSentence([notebook('NotebookEdit'), result(), notebook('NotebookEdit'), result()])
+    ).toBe('Edited a file')
+  })
+
   it('counts failures against the kind that failed', () => {
     const blocks: NativeChatBlock[] = []
     for (let i = 0; i < 12; i += 1) {

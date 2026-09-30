@@ -75,7 +75,16 @@ describe('a figure the desktop refused for a reason about its runtime, not the f
       'remote_runtime_unavailable',
       'Remote Orca runtime closed the connection'
     ],
-    ['the cause is one this build does not know', 'internal', 'Something new went wrong on the desktop']
+    ['the cause is one this build does not know', 'internal', 'Something new went wrong on the desktop'],
+    // A "not found" about something other than the file (review 2026-09-30, round 4): previewError
+    // read any "not found" as "File not found", and that is kept as the file's own answer. No real
+    // body of these is captured; a transient repo-scan rejection answers selector_not_found for a
+    // live worktree (use-live-worktree-name.ts), and these are the shapes such refusals take.
+    ['the desktop could not find the worktree', 'selector_not_found', 'Worktree not found'],
+    ['the desktop could not find its remote runtime', 'runtime_error', 'Remote Orca runtime not found'],
+    ['the desktop did not know the method', 'method_not_found', 'Method not found'],
+    ['the worktree selector matched nothing', 'runtime_error', 'Unknown worktree selector id:wt (not found)'],
+    ['the worktree was said not to exist', 'runtime_error', 'Worktree does not exist']
   ])('is drawn after a new connection when %s', async (_why, code, message) => {
     const host = liveHost([{ ok: false, error: { code, message } }, { ok: true, result: PNG }])
     await expect(host.resolve('p.png')).resolves.toBeNull()
@@ -136,6 +145,9 @@ describe("a figure the file itself answered for", () => {
   })
 
   it.each([
+    ['not there, by the file read\'s own not_found code', { ok: false, error: { code: 'not_found', message: '' } }],
+    ['not there, said in words', { ok: false, error: { code: 'runtime_error', message: 'File not found' } }],
+    ['not there, said to not exist', { ok: false, error: { code: 'runtime_error', message: 'File does not exist' } }],
     ['too large', { ok: false, error: { code: 'runtime_error', message: 'file_too_large' } }],
     ['too large, said by its code alone', { ok: false, error: { code: 'file_too_large', message: '' } }],
     ['binary, refused as such', { ok: false, error: { code: 'runtime_error', message: 'binary_file' } }],

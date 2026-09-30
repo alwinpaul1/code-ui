@@ -2,6 +2,7 @@ import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { RpcFailure } from '../transport/types'
 import { isMarkdownPath } from './file-tree'
+import { refusalMissingSubject } from './refusal-missing-subject'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
@@ -58,9 +59,10 @@ export function normalizeMobileFilePreviewResult(
   return normalizeTextPreviewResult(relativePath, result)
 }
 
-/** The refused arm. The code is the fallback copy, which is why the refusal itself is needed. */
+/** The refused arm. The code is the fallback copy, and it names what a "not found" is about
+ *  (`selector_not_found` is not the file), which is why the refusal itself is needed. */
 export function previewErrorFromRefusal(error: RpcFailure['error']): MobileFilePreviewResult {
-  return previewError(error.message || error.code)
+  return previewErrorFor(error.message || error.code, error.code)
 }
 
 const BINARY_PREVIEW_UNAVAILABLE = 'Binary preview unavailable'
@@ -76,6 +78,8 @@ const FILE_OWN_ERRORS: ReadonlySet<string> = new Set([
 
 /**
  * Whether an error is the file's own answer: it is not there, too large for the phone, or binary.
+ * "Not there" is 'File not found', which a refusal gets only when it names the FILE as missing
+ * (`refusalMissingSubject`): a worktree, runtime or method not found is the generic copy below.
  * A caller that keeps a read (the markdown figure resolver) keeps these and nothing else that
  * failed. A positive list on purpose: a refusal about the link or the runtime, a stale grant, and
  * the generic 'Unable to load preview: ...' for a cause this build has not seen are all outside it,
@@ -88,6 +92,10 @@ export function isFileOwnPreviewError(result: MobileFilePreviewResult): boolean 
 }
 
 export function previewError(message: string): MobileFilePreviewResult {
+  return previewErrorFor(message, '')
+}
+
+function previewErrorFor(message: string, code: string): MobileFilePreviewResult {
   const normalized = message.toLowerCase()
   if (normalized === 'binary_file' || normalized.includes('binary_file')) {
     return { status: 'error', message: BINARY_PREVIEW_UNAVAILABLE, reconnect: false }
@@ -106,12 +114,9 @@ export function previewError(message: string): MobileFilePreviewResult {
   ) {
     return { status: 'error', message: 'Unable to reach the desktop filesystem', reconnect: true }
   }
-  if (
-    normalized.includes('enoent') ||
-    normalized.includes('no such file') ||
-    normalized.includes('not found') ||
-    normalized.includes('does not exist')
-  ) {
+  // Only when it is the FILE that is missing: "Worktree not found", "Remote Orca runtime not
+  // found" and `method_not_found` are about the desktop, and fall to the generic copy below.
+  if (refusalMissingSubject(code, message) === 'file') {
     return { status: 'error', message: FILE_NOT_FOUND, reconnect: false }
   }
   // Why: the raw text is the only clue when a new read path fails on a host

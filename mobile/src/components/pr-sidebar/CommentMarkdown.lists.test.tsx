@@ -104,6 +104,20 @@ describe('a nested list and a task list in a PR comment', () => {
     act(() => renderer.unmount())
   })
 
+  it.each(SCHEMES)('steps a nested item after a blank line in under its parent (%s)', (scheme) => {
+    // Review, 2026-09-30: it drew as a list of its own at the margin, and cut the numbers in three.
+    const renderer = render('3. a\n\n   - x\n4. b', scheme)
+    const drawn = rows(renderer)
+    expect(drawn.map(({ marker, words }) => [marker, words])).toEqual([
+      ['3.', 'a'],
+      ['◦', 'x'],
+      ['4.', 'b']
+    ])
+    expect(drawn[1]!.indent).toBeGreaterThan(0)
+    expect(drawn[2]!.indent).toBe(0)
+    act(() => renderer.unmount())
+  })
+
   it.each(SCHEMES)('draws a flat list as it always did (%s)', (scheme) => {
     const renderer = render('3. c\n4. d', scheme)
     expect(rows(renderer)).toEqual([

@@ -273,7 +273,8 @@ export type DetailPayload =
       assignee?: string
       project?: LinearProject
       children: LinearIssueChild[]
-      /** The desktop refused the comment read, so `comments` is empty for want of a list, not
-       *  because the issue has none. Absent when the list was read, empty or not. */
+      /** The desktop refused the comment read, so `comments` is no list of the issue's: it holds
+       *  only what this sheet posted since (empty until then), never the issue's total. Absent
+       *  when the list was read, empty or not. */
       commentsFailed?: true
     }

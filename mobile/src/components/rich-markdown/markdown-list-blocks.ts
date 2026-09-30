@@ -1,5 +1,5 @@
 import { closesFence, openingFence, outdentCodeLine, type OpeningFence } from './markdown-code-fence'
-import { quoteLineContent } from './markdown-quote'
+import { quoteLineContent, readQuoteLines } from './markdown-quote'
 import { opensTable, readTableRows } from './markdown-table-rows'
 
 /**
@@ -143,24 +143,23 @@ function itemQuoteLine(line: string, contentColumn: number): string | null {
     : null
 }
 
-/** A quote whose first line, marker off, is `first`, and the item's quote lines from `index` on. */
+/**
+ * A quote whose first line, marker off, is `first`, and the item's quote lines from `index` on:
+ * its marked lines, and the lazy lines left of the item's words that continue its paragraph
+ * (markdown-quote.ts), as marked reads '- a\n  > q\nlazy'. A line at the item's words with no
+ * marker stays what it was, the item's own words after the quote, written back where it was.
+ */
 function readItemQuoteLines(
   lines: readonly string[],
   index: number,
   first: string,
   contentColumn: number
 ): { lines: string[]; nextIndex: number } {
-  const quoted = [first]
-  let next = index
-  while (next < lines.length) {
-    const content = itemQuoteLine(lines[next] ?? '', contentColumn)
-    if (content === null) {
-      break
-    }
-    quoted.push(content)
-    next += 1
-  }
-  return { lines: quoted, nextIndex: next }
+  return readQuoteLines(lines, index, {
+    marked: (line) => itemQuoteLine(line, contentColumn),
+    mayBeLazy: (line) => leadingSpaces(line) < contentColumn,
+    before: [first]
+  })
 }
 
 /** The quote an item holds from `index`, or null when that line opens none there. */
@@ -185,8 +184,9 @@ function opensQuoteUnder(line: string, contentColumn: number): boolean {
 /**
  * Whether a line and the one under it open a table an item whose words start at `contentColumn`
  * holds: its header up to three columns past that column, and its separator not left of it. A
- * table left of it stays what it always was, the item's words; marked takes it into the item as a
- * lazy line, and the item's reader does not read lines lazily.
+ * table left of it stays what it always was: indented, the item's words, and at the margin the end
+ * of the item (markdown-lazy-line.ts). marked takes either into the item as a lazy line, and the
+ * item's reader holds no table it has not opened at its words.
  */
 function opensTableUnder(line: string, under: string | undefined, contentColumn: number): boolean {
   const spaces = leadingSpaces(line)

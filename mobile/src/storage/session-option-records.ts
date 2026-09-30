@@ -50,8 +50,8 @@ function trackedValues(values: unknown): Record<string, TrackedNativeChatSession
 
 /** What storage holds is checked, not trusted. Null when the record itself is
  *  unusable (no agent, no per-model map); otherwise the good picks, with a
- *  model left out when none of its picks is good. The hook sets this record
- *  as the live one when it has none, so nothing downstream meets a bad entry. */
+ *  model left out when none of its picks is good, so nothing downstream meets
+ *  a bad entry. */
 function storedRecord(value: unknown): NativeChatSessionOptionRecord | null {
   if (!isPlainObject(value) || typeof value.agent !== 'string' || !isPlainObject(value.valuesByModel)) {
     return null
@@ -70,6 +70,26 @@ function storedRecord(value: unknown): NativeChatSessionOptionRecord | null {
   }
 }
 
+/** What a read of a tab's stored picks found. `none` covers a record that
+ *  is there but unusable: saving over it loses nothing a picker could show.
+ *  `refused` is the store itself failing, and only that: the picks may well
+ *  be on disk, so nothing may be saved over them on the strength of this read. */
+export type StoredSessionOptionRead =
+  | { status: 'none' }
+  | { status: 'record'; record: NativeChatSessionOptionRecord }
+  | { status: 'refused'; error: unknown }
+
+/** The stored text as a record, or why it is not one. */
+function parseStoredRecord(raw: string): NativeChatSessionOptionRecord | string {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw) as unknown
+  } catch (error: unknown) {
+    return `the stored record does not parse (${error instanceof Error ? error.message : String(error)})`
+  }
+  return storedRecord(parsed) ?? 'the stored record has no agent or no per-model map'
+}
+
 /**
  * The model / effort / fast-mode picks made in Chat UI, per host+worktree+tab.
  *
@@ -78,28 +98,36 @@ function storedRecord(value: unknown): NativeChatSessionOptionRecord | null {
  * that memory freely while the user is in another worktree or app, and the
  * pickers then reopened showing the catalog default even though the agent was
  * still running with the picked values.
+ *
+ * A refused read used to come back as null, the same answer as "nothing
+ * stored", so the hook took the tab as restored and saved its live record,
+ * which held only the reported model, over every pick on disk.
  */
-export async function readSessionOptionRecord(
-  scopeKey: string
-): Promise<NativeChatSessionOptionRecord | null> {
-  try {
-    // A chat can come back while its last pick is still being written; a read
-    // that beat the write restored the pick before it. The barrier never
-    // rejects, so a failed write in front of it cannot fail this read. With
-    // no write in flight the read starts at once, in the caller's own tick,
-    // as it always did.
-    const writing = writeBarriers.get(scopeKey)
-    if (writing) {
-      await writing
-    }
-    const raw = await AsyncStorage.getItem(sessionOptionRecordKey(scopeKey))
-    if (raw === null) {
-      return null
-    }
-    return storedRecord(JSON.parse(raw) as unknown)
-  } catch {
-    return null
+export async function readSessionOptionRecord(scopeKey: string): Promise<StoredSessionOptionRead> {
+  // A chat can come back while its last pick is still being written; a read
+  // that beat the write restored the pick before it. The barrier never
+  // rejects, so a failed write in front of it cannot fail this read. With
+  // no write in flight the read starts at once, in the caller's own tick,
+  // as it always did.
+  const writing = writeBarriers.get(scopeKey)
+  if (writing) {
+    await writing
   }
+  let raw: string | null
+  try {
+    raw = await AsyncStorage.getItem(sessionOptionRecordKey(scopeKey))
+  } catch (error: unknown) {
+    return { status: 'refused', error }
+  }
+  if (raw === null) {
+    return { status: 'none' }
+  }
+  const record = parseStoredRecord(raw)
+  if (typeof record === 'string') {
+    console.warn(`[session-options] picks for ${JSON.stringify(scopeKey)} not restored: ${record}`)
+    return { status: 'none' }
+  }
+  return { status: 'record', record }
 }
 
 const writeBarriers = new Map<string, Promise<void>>()
@@ -125,12 +153,12 @@ export function writeSessionOptionRecord(
 }
 
 /**
- * Fold a stored record into the live one. The hook report usually lands before
- * the disk read resolves and has already created a record holding only the
- * reported model, so the stored one cannot simply replace it. The report stays
- * authoritative for the model; the user's own option picks (effort, toggles) are
- * carried over per model unless a newer pick already exists in memory.
- * Returns true when the live record changed.
+ * Fold a stored record into the live one. The live record exists before the
+ * disk read resolves (the pickers' snapshot makes it during render) and may
+ * already hold the reported model or a pick made meanwhile, so the stored one
+ * cannot simply replace it. The report stays authoritative for the model; the
+ * user's own option picks (effort, toggles) are carried over per model unless a
+ * newer pick already exists in memory. Returns true when the live record changed.
  *
  * `stored` came off disk. `readSessionOptionRecord` checks it, and this checks
  * each entry again for any caller that did not: a null model entry or a null

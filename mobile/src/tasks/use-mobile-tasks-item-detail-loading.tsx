@@ -3,9 +3,10 @@ import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
   useEffect,
+  useRef,
   useState
 } from './mobile-tasks-dependencies'
-import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
+import { type DetailComment, type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import { useTaskReadAgainAfterReconnect } from './use-task-read-again-after-reconnect'
 import {
   githubItemDetailRead,
@@ -40,8 +41,31 @@ export function useMobileTasksItemDetailLoading(
   // This read's own failure, which the error line cannot stand for: a rejection with an empty
   // message leaves that line '' over a sheet with no detail.
   const [readFailed, setReadFailed] = useState(false)
+  // What this sheet posted over a Linear comment list the desktop refused, and the issue it is on.
+  // Under `commentsFailed` the payload's list holds only that (the post appends to it, in
+  // use-mobile-tasks-linear-item-actions.tsx), and a read of the same issue refused again keeps
+  // it: an empty list there hid a comment the desktop holds, and the user posted it again (fix
+  // round 1, F12). It is held here, not read back from the payload when a read starts, because
+  // every read clears the payload first and one that fails outright or is still in flight leaves
+  // it cleared, so the read after it, refused again, dropped the comment (fix round 2,
+  // 2026-10-01). A list that is read replaces it, the posted comment included, and another issue
+  // opening drops it.
+  const postedOverRefusedListRef = useRef<{ issueId: string; comments: DetailComment[] } | null>(
+    null
+  )
   useEffect(() => {
     setReadFailed(false)
+    const held = postedOverRefusedListRef.current
+    if (actionItem?.provider !== 'linear' || held?.issueId !== actionItem.source.id) {
+      postedOverRefusedListRef.current = null
+    } else if (detailPayload?.provider === 'linear' && detailPayload.commentsFailed === true) {
+      // The list on screen, with whatever was posted since the last read. No payload (a read
+      // that failed or is still in flight) keeps what is held.
+      postedOverRefusedListRef.current = {
+        issueId: actionItem.source.id,
+        comments: detailPayload.comments
+      }
+    }
     if (!tasksSupported || !actionItem || !client) {
       setDetailPayload(null)
       setDetailLoading(false)
@@ -50,6 +74,7 @@ export function useMobileTasksItemDetailLoading(
     }
 
     let stale = false
+    const postedOverRefusedList = postedOverRefusedListRef.current?.comments ?? []
     setDetailPayload(null)
     setDetailError('')
     setDetailLoading(true)
@@ -178,7 +203,7 @@ export function useMobileTasksItemDetailLoading(
       ])
       const issue = linearIssueRead.interpret(issueReply)
       const accepted = linearIssueCommentsRead.interpret(commentsReply)
-      const comments = accepted.accepted ? (accepted.value ?? []) : []
+      const comments = accepted.accepted ? (accepted.value ?? []) : postedOverRefusedList
       if (!issue) {
         throw new Error('Details not found')
       }
@@ -194,6 +219,9 @@ export function useMobileTasksItemDetailLoading(
               : { code: commentsReply.error.code, cause: commentsReply.error.message })
           })
         }
+        postedOverRefusedListRef.current = accepted.accepted
+          ? null
+          : { issueId: actionItem.source.id, comments }
         setDetailPayload({
           provider: 'linear',
           description: issue.description ?? '',

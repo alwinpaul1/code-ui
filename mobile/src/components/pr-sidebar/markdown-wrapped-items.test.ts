@@ -56,9 +56,14 @@ describe('a PR comment whose list items are hard-wrapped', () => {
     ])
   })
 
-  it('does not swallow an unindented line under an item', () => {
-    const blocks = parseMarkdownBlocks(['- One', 'Flush against the margin.'].join('\n'))
-    expect(blocks).toEqual([
+  it('keeps an unindented line under an item in it, and a line after a blank line out', () => {
+    // This pinned the unindented line as a paragraph after the list until 2026-09-30. CommonMark
+    // reads it as more of the item's words (a lazy continuation line), and the chat draws it so;
+    // markdown-lazy-lines.test.ts has the lines that still end the item.
+    expect(parseMarkdownBlocks(['- One', 'Flush against the margin.'].join('\n'))).toEqual([
+      { kind: 'list', ordered: false, items: ['One Flush against the margin.'] }
+    ])
+    expect(parseMarkdownBlocks(['- One', '', 'Flush against the margin.'].join('\n'))).toEqual([
       { kind: 'list', ordered: false, items: ['One'] },
       { kind: 'paragraph', text: 'Flush against the margin.' }
     ])

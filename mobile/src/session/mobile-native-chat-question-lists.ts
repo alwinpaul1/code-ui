@@ -90,14 +90,38 @@ export function unwrapEmphasis(line: string): string {
   return wrapped && !wrapped[2].includes(wrapped[1][0]) ? wrapped[2] + wrapped[3] : trimmed
 }
 
-/** The line as its asking tests read it: unwrapped, and without marks that
- *  trail its last `?` or `:` (`Then **which one?**`). A bold question ends in
- *  `**`, and asked nothing, before this (review, 2026-09-30). */
-function askingText(line: string): string {
+/**
+ * An answer hint that closes a line: `(y/n)`, `[y/N]`, `(yes/no)` or a bare
+ * `y/n`, in any case, maybe in marks, maybe with a `?` or `:` after it. It
+ * says the line asks, and that the answer is y or n. A bare `yes/no` is no
+ * hint: "The old config took yes/no" asks nothing.
+ */
+const YES_NO_HINT =
+  /[*_`]*(?:[([]\s*(?:y|yes)\s*\/\s*(?:n|no)\s*[)\]]|(?:^|[^\p{L}\p{N}])y\/n)[*_`]*\s*[?:]?\s*$/iu
+
+/** The line unwrapped, and without marks that trail its last `?` or `:`
+ *  (`Then **which one?**`). A bold question ends in `**`, and asked nothing,
+ *  before this (review, 2026-09-30). */
+function plainLine(line: string): string {
   return unwrapEmphasis(line).replace(/([?:])[*_`]+$/, '$1')
 }
 
-/** Whether a line asks (`?`), bold or not. */
+/** The line as its asking tests read it: plain, with a closing answer hint
+ *  read as the `?` it stands for. "Shall I proceed? (y/n)" ends in `)`, and
+ *  asked nothing, before this (review, 2026-10-01). */
+function askingText(line: string): string {
+  const text = plainLine(line)
+  const hint = YES_NO_HINT.exec(text)
+  return hint ? `${text.slice(0, hint.index).trimEnd()}?` : text
+}
+
+/** Whether a line closes on a y/n answer hint (YES_NO_HINT): its answer is y
+ *  or n, never one of a list's choices. */
+export function lineAnswersYesOrNo(line: string): boolean {
+  return YES_NO_HINT.test(plainLine(line))
+}
+
+/** Whether a line asks (`?`, or a closing y/n answer hint), bold or not. */
 export function lineAsks(line: string): boolean {
   return ASKS.test(askingText(line))
 }

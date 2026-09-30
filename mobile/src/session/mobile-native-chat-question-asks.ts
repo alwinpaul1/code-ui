@@ -1,7 +1,11 @@
 // What the lines around a reply's choice list ask, for the question card
 // (mobile-native-chat-question.ts).
 
-import { lineAsks, type OptionList } from './mobile-native-chat-question-lists'
+import {
+  lineAnswersYesOrNo,
+  lineAsks,
+  type OptionList
+} from './mobile-native-chat-question-lists'
 
 /** Words that ask the reader to choose. */
 const CHOOSES = /\b(?:which|pick|choose|select|prefer\w*)\b/i
@@ -60,10 +64,14 @@ function namesTwoChoices(line: string, list: OptionList): boolean {
  * listed change as the reply (review, 2026-09-30). Only a line that names two
  * of the choices or asks which, pick, choose, select or prefer, and does not
  * ask leave to go on, keeps the card; anything else, "What do you think?"
- * too, is a guess.
+ * too, is a guess. A line that closes on a y/n hint ("1 or 2? (y/n)") asks
+ * for y or n, never for a choice (2026-10-01).
  */
 export function asksToChoose(line: string, list: OptionList): boolean {
-  return namesTwoChoices(line, list) || (CHOOSES.test(line) && !CONFIRMS.test(line))
+  return (
+    !lineAnswersYesOrNo(line) &&
+    (namesTwoChoices(line, list) || (CHOOSES.test(line) && !CONFIRMS.test(line)))
+  )
 }
 
 /**

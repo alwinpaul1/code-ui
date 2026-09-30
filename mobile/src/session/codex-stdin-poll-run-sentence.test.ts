@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { toolRunSentence, toolRunSentenceShowsFailures } from './mobile-native-chat-tool-sentence'
+import { CODE_MODE_POLL, CODE_MODE_START } from './fixtures/codex-code-mode-exec-cells-0.153.4'
 
 // One Codex command read "Ran 5 commands" when Codex polled it four times.
 // Unified exec starts a long command with exec_command and, while it runs,
@@ -19,17 +20,6 @@ function result(output = '', isError = false): NativeChatBlock {
 function poll(session: number): NativeChatBlock[] {
   return [call('write_stdin', { session_id: session, chars: '' }), result()]
 }
-
-// Codex 0.153.4 in code mode, rollout of 2026-09-06: one `sleep 90`, started by
-// an `exec` cell that calls tools.exec_command and then polled by `exec` cells
-// that call tools.write_stdin with empty chars. Orca's Codex decoder
-// (src/main/native-chat/transcript-line-decoders-codex.ts) hands a
-// custom_tool_call to the phone as a tool-call named `exec` whose input is the
-// cell's source text, verbatim.
-const CODE_MODE_START =
-  'text(await tools.exec_command({cmd:"sleep 90",yield_time_ms:1000,max_output_tokens:100}));\n'
-const CODE_MODE_POLL = (yieldMs: number): string =>
-  `text(await tools.write_stdin({session_id:68964,chars:"",yield_time_ms:${yieldMs},max_output_tokens:100}));\n`
 
 describe('a Codex command polled with write_stdin reads as the one command it is', () => {
   it('reads one exec_command polled four times as "Ran a command", as a Claude run of the same work reads', () => {
@@ -144,5 +134,57 @@ describe('a Codex command polled with write_stdin reads as the one command it is
     expect(toolRunSentence([call('write_stdin', { session_id: 3, chars: '' }), result('', true)])).toBe(
       'Ran a command (1 failed)'
     )
+  })
+})
+
+// One code-mode command whose cmd held a brace read "Ran 2 commands" once
+// Codex polled it: the cell reader took the argument object as `{[^{}]*}`, so
+// an awk program, a shell ${VAR}, a JSON body or a nested object failed the
+// match, the start went unrecorded, and its poll counted as a command of its
+// own. The same poll after a brace-free cmd folded (review, 2026-09-30).
+describe('a code-mode command with braces in it reads as the one command it is', () => {
+  const pollCell = 'text(await tools.write_stdin({session_id: 7, yield_time_ms: 5000}));'
+  const startCell = (args: string): string => `text(await tools.exec_command({${args}}));`
+
+  it.each([
+    ['an awk program', `cmd: "awk '{print $1}' big.log | sort", yield_time_ms: 1000`],
+    ['a shell ${VAR}', 'cmd: "echo ${HOME}/build && ls ${OUT_DIR:-dist}", yield_time_ms: 1000'],
+    ['a JSON body', `cmd: "curl -s -d '{\\"name\\":\\"a\\",\\"tags\\":[1,2]}' localhost:3000", yield_time_ms: 1000`],
+    ['a nested env object', 'cmd: "npm test", env: {CI: "1", NODE_OPTIONS: "--max-old-space-size=4096"}, yield_time_ms: 1000'],
+    ['a single-quoted cmd', "cmd: 'jq \\'{a: .b}\\' data.json', yield_time_ms: 1000"],
+    ['a template-literal cmd', 'cmd: `find . -name "*.ts" -exec wc -l {} +`, yield_time_ms: 1000']
+  ])('reads a command holding %s, then polled, as "Ran a command"', (_what, args) => {
+    const blocks = [call('exec', startCell(args)), result(), call('exec', pollCell), result()]
+    expect(toolRunSentence(blocks)).toBe('Ran a command')
+  })
+
+  it('reads the function-call shape with braces as one command, as it already did', () => {
+    const blocks = [
+      call('exec_command', { cmd: "awk '{print $1}' big.log | sort", yield_time_ms: 1000 }),
+      result(),
+      call('write_stdin', { session_id: 7, yield_time_ms: 5000 }),
+      result()
+    ]
+    expect(toolRunSentence(blocks)).toBe('Ran a command')
+    expect(
+      toolRunSentence([
+        call('exec_command', JSON.stringify({ cmd: 'echo ${HOME}', env: { CI: '1' } })),
+        result(),
+        call('write_stdin', JSON.stringify({ session_id: 7 })),
+        result()
+      ])
+    ).toBe('Ran a command')
+  })
+
+  it('still counts a braced command polled by a cell that types input as two', () => {
+    const typed = 'text(await tools.write_stdin({session_id: 7, chars: "q"}));'
+    expect(
+      toolRunSentence([
+        call('exec', startCell(`cmd: "awk '{print $1}' big.log | less"`)),
+        result(),
+        call('exec', typed),
+        result()
+      ])
+    ).toBe('Ran 2 commands')
   })
 })

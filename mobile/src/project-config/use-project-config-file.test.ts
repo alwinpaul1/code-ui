@@ -12,23 +12,31 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
 
 function harness(client: RpcClient, worktreeId = 'w1', relativePath = '.mcp.json') {
   let latest!: ReturnType<typeof useProjectConfigFile>
+  // The file the screen shows, which Permission Rules changes with its Project/Local pills.
+  const shown = { relativePath }
   function Harness(): null {
-    latest = useProjectConfigFile({ client, hostId: 'h1', worktreeId, relativePath })
+    latest = useProjectConfigFile({ client, hostId: 'h1', worktreeId, relativePath: shown.relativePath })
     return null
   }
   let renderer!: ReactTestRenderer
   act(() => {
     renderer = create(createElement(Harness))
   })
+  /** A render with nothing changed but what the test changed (the connection, say). */
+  const rerender = async () => {
+    await act(async () => {
+      renderer.update(createElement(Harness))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
   return {
     get: () => latest,
-    /** A render with nothing changed but what the test changed (the connection, say). */
-    rerender: async () => {
-      await act(async () => {
-        renderer.update(createElement(Harness))
-        await Promise.resolve()
-        await Promise.resolve()
-      })
+    rerender,
+    /** The screen switching to another file, as a destination pill does. */
+    switchTo: async (path: string) => {
+      shown.relativePath = path
+      await rerender()
     },
     unmount: () => act(() => renderer.unmount())
   }
@@ -394,6 +402,305 @@ describe('useProjectConfigFile', () => {
     const state = h.get().state
     expect(state.status).toBe('ready')
     expect(state.status === 'ready' && state.content).toBe('')
+  })
+})
+
+// Permission Rules shows one of two files and switches with its Project/Local pills. A switch read
+// the other file into the one state and a switch back read the first again, so an unsaved add or
+// remove was thrown away with no prompt and Save went back to disabled (review, 2026-09-30).
+describe('switching to another file and back', () => {
+  let cleanup: (() => void) | null = null
+  afterEach(() => {
+    cleanup?.()
+    cleanup = null
+  })
+
+  const fileReply = (content: string) => ({
+    ok: true,
+    result: { content, truncated: false, byteLength: content.length }
+  })
+
+  /** A client answering each path's reads in turn (a reply, or a promise of one), and every write. */
+  function filesClient(reads: Record<string, unknown[]>) {
+    const sendRequest = vi.fn(async (method: string, params: { relativePath: string }): Promise<unknown> => {
+      if (method !== 'files.read') {
+        return { ok: true, result: {} }
+      }
+      const next = reads[params.relativePath]?.shift()
+      if (next === undefined) {
+        throw new Error(`no read scripted for ${params.relativePath}`)
+      }
+      return next
+    })
+    return { client: { sendRequest } as unknown as RpcClient, sendRequest }
+  }
+
+  const readsOf = (sendRequest: ReturnType<typeof vi.fn>, path: string) =>
+    sendRequest.mock.calls.filter(
+      ([method, params]) =>
+        method === 'files.read' && (params as { relativePath: string }).relativePath === path
+    ).length
+
+  it('keeps an unsaved edit across a switch away and back, without reading the file again', async () => {
+    const { client, sendRequest } = filesClient({
+      // A second read is served so a switch back that reads again shows what it did: the file as
+      // saved, over the edit.
+      'project.json': [fileReply('P0'), fileReply('P0')],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+
+    await h.switchTo('local.json')
+    await settle()
+    expect(h.get().state).toMatchObject({ status: 'ready', content: 'L0', isDirty: false })
+
+    await h.switchTo('project.json')
+    await settle()
+    expect(h.get().state).toEqual({
+      status: 'ready',
+      content: 'P1',
+      savedContent: 'P0',
+      isDirty: true,
+      saving: false,
+      saveError: null,
+      creating: false,
+      createError: null
+    })
+    expect(readsOf(sendRequest, 'project.json')).toBe(1)
+  })
+
+  it('keeps each file its own draft', async () => {
+    const { client } = filesClient({
+      'project.json': [fileReply('P0')],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.switchTo('local.json')
+    await settle()
+    act(() => h.get().setContent('L1'))
+
+    await h.switchTo('project.json')
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'P1', isDirty: true })
+    await h.switchTo('local.json')
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'L1', savedContent: 'L0', isDirty: true })
+  })
+
+  it('reads a file with no unsaved edit again, so a change made at the desk shows', async () => {
+    const { client, sendRequest } = filesClient({
+      'project.json': [fileReply('P0'), fileReply('P0 changed at the desk')],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    // Edited and edited back: nothing unsaved.
+    act(() => h.get().setContent('P1'))
+    act(() => h.get().setContent('P0'))
+
+    await h.switchTo('local.json')
+    await settle()
+    await h.switchTo('project.json')
+    await settle()
+    expect(readsOf(sendRequest, 'project.json')).toBe(2)
+    expect(h.get().state).toMatchObject({ content: 'P0 changed at the desk', isDirty: false })
+  })
+
+  it('writes the kept draft to its own file on Save, and holds nothing for it after', async () => {
+    const { client, sendRequest } = filesClient({
+      'project.json': [fileReply('P0'), fileReply('P1')],
+      'local.json': [fileReply('L0'), fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.switchTo('local.json')
+    await settle()
+    await h.switchTo('project.json')
+    await settle()
+
+    await act(async () => {
+      await h.get().save()
+    })
+    expect(sendRequest).toHaveBeenLastCalledWith('files.write', {
+      worktree: 'id:w1',
+      relativePath: 'project.json',
+      content: 'P1'
+    })
+    expect(h.get().state).toMatchObject({ content: 'P1', savedContent: 'P1', isDirty: false })
+
+    // Saved, so nothing is held for it: the next visit reads the file.
+    await h.switchTo('local.json')
+    await settle()
+    await h.switchTo('project.json')
+    await settle()
+    expect(readsOf(sendRequest, 'project.json')).toBe(2)
+  })
+
+  it("does not let the other file's late read land on the draft switched back to", async () => {
+    let releaseLocal!: (reply: unknown) => void
+    const { client } = filesClient({
+      'project.json': [fileReply('P0')],
+      'local.json': [
+        new Promise((resolve) => {
+          releaseLocal = resolve
+        })
+      ]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.switchTo('local.json')
+    expect(h.get().state).toEqual({ status: 'loading' })
+
+    await h.switchTo('project.json')
+    await act(async () => {
+      releaseLocal(fileReply('L0'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(h.get().state).toMatchObject({ status: 'ready', content: 'P1', isDirty: true })
+  })
+
+  it("keeps a refused save's draft and its refusal across a switch", async () => {
+    const { client, sendRequest } = filesClient({
+      'project.json': [fileReply('P0')],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    sendRequest.mockImplementationOnce(async () => ({
+      ok: false,
+      error: { code: 'forbidden', message: "Method 'files.write' is not available to mobile clients" }
+    }))
+    await act(async () => {
+      await h.get().save()
+    })
+    const refused = h.get().state
+    expect(refused).toMatchObject({ content: 'P1', isDirty: true })
+    expect(refused.status === 'ready' && refused.saveError).toMatch(/can't save/i)
+
+    await h.switchTo('local.json')
+    await settle()
+    await h.switchTo('project.json')
+    await settle()
+    expect(h.get().state).toEqual(refused)
+  })
+
+  // Permission Rules does not let a switch happen mid-save (its pills wait for the write); this
+  // pins what the hook does if a screen ever does switch then.
+  it('holds a draft switched away from mid-save as not saving, and drops the write’s answer', async () => {
+    let releaseWrite!: (reply: unknown) => void
+    const { client, sendRequest } = filesClient({
+      'project.json': [fileReply('P0')],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    sendRequest.mockImplementationOnce(
+      () =>
+        new Promise<unknown>((resolve) => {
+          releaseWrite = resolve
+        })
+    )
+    let saved!: Promise<void>
+    act(() => {
+      saved = h.get().save()
+    })
+    expect(h.get().state).toMatchObject({ saving: true })
+
+    await h.switchTo('local.json')
+    await settle()
+    await h.switchTo('project.json')
+    await settle()
+    await act(async () => {
+      releaseWrite({ ok: true, result: {} })
+      await saved
+    })
+    // Not stuck on "Saving…": the draft is unsaved as far as this screen can tell, and Save offers
+    // it again.
+    expect(h.get().state).toMatchObject({
+      content: 'P1',
+      savedContent: 'P0',
+      isDirty: true,
+      saving: false
+    })
+  })
+
+  it('does not read over a restored draft when the host reconnects', async () => {
+    const { client, sendRequest } = filesClient({
+      'project.json': [fileReply('P0'), fileReply('P0')],
+      'local.json': [{ ok: false, error: { code: 'runtime_error', message: 'Not connected' } }]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.switchTo('local.json')
+    await settle()
+    expect(h.get().state.status).toBe('error')
+    await h.switchTo('project.json')
+    await settle()
+
+    connection.lastConnectedAt = 2000
+    await h.rerender()
+    await settle()
+    expect(readsOf(sendRequest, 'project.json')).toBe(1)
+    expect(readsOf(sendRequest, 'local.json')).toBe(1)
+    expect(h.get().state).toMatchObject({ content: 'P1', isDirty: true })
+  })
+
+  it('degenerate: a switch while the first read is still loading holds nothing, and reads on return', async () => {
+    let releaseFirst!: (reply: unknown) => void
+    const { client, sendRequest } = filesClient({
+      'project.json': [
+        new Promise((resolve) => {
+          releaseFirst = resolve
+        }),
+        fileReply('P0 again')
+      ],
+      'local.json': [fileReply('L0')]
+    })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await h.switchTo('local.json')
+    await settle()
+    await act(async () => {
+      releaseFirst(fileReply('P0'))
+      await Promise.resolve()
+    })
+    // The first read answered for a file no longer shown.
+    expect(h.get().state).toMatchObject({ content: 'L0' })
+
+    await h.switchTo('project.json')
+    await settle()
+    expect(readsOf(sendRequest, 'project.json')).toBe(2)
+    expect(h.get().state).toMatchObject({ content: 'P0 again', isDirty: false })
+  })
+
+  it('degenerate: a render that names the same file holds nothing and reads nothing', async () => {
+    const { client, sendRequest } = filesClient({ 'project.json': [fileReply('P0')] })
+    const h = harness(client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.switchTo('project.json')
+    await settle()
+    expect(readsOf(sendRequest, 'project.json')).toBe(1)
+    expect(h.get().state).toMatchObject({ content: 'P1', isDirty: true })
   })
 })
 
