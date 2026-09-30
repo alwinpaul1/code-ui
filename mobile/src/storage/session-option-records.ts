@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 import type {
   NativeChatSessionOptionRecord,
   TrackedNativeChatSessionOption
@@ -113,7 +114,7 @@ export function writeSessionOptionRecord(
   const write = (writeBarriers.get(scopeKey) ?? Promise.resolve()).then(() =>
     AsyncStorage.setItem(key, payload)
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'session options', 'save')
   writeBarriers.set(scopeKey, barrier)
   void barrier.then(() => {
     if (writeBarriers.get(scopeKey) === barrier) {

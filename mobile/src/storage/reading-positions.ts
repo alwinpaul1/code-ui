@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 
 /**
  * Where the reader last was in a document, so a 200-page PDF put down at page
@@ -180,7 +181,8 @@ function writeNow(): Promise<void> {
   const snapshot = capped(memory)
   const write = writeBarrier.then(() => AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot)))
   // The barrier only orders writes; a failed one must not poison the chain.
-  writeBarrier = write.catch(() => undefined)
+  // It also logs the refusal, once, so the timer's catch below adds nothing.
+  writeBarrier = barrierAfterWrite(write, 'reading positions', 'save')
   return write
 }
 
