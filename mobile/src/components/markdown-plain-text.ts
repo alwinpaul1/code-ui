@@ -3,7 +3,7 @@ import {
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
-import { isIntrawordUnderscoreToken, trimAutolinkTrailingPunctuation } from './markdown-inline-token-rules'
+import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { isRemoteImageUrl } from './markdown-image-source'
 import { listMarker } from './mobile-markdown-list-marker'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
@@ -65,8 +65,10 @@ function imagePlainText(markedAlt: string, url: string): string {
  *  italic, strike and code dropped, links read as `linkText`, an image as its
  *  alt text. Finds the same tokens as MobileMarkdown's `renderInline`, and a
  *  link's label and an image's alt are read the same way the screen reads them
- *  (mobile-markdown-link-label.tsx). */
-export function markdownInlinePlainText(text: string): string {
+ *  (mobile-markdown-link-label.tsx): in a `label`, an image is its words
+ *  alone (a badge's picture is not drawn, so its address is not copied), and
+ *  a link or an address is drawn as written. */
+export function markdownInlinePlainText(text: string, label = false): string {
   const pattern = createMarkdownInlineMatcher(text, markdownInlineTokenPattern(), true, true)
   let out = ''
   let pendingStart = 0
@@ -79,22 +81,24 @@ export function markdownInlinePlainText(text: string): string {
     }
     out += text.slice(pendingStart, match.index)
     pendingStart = pattern.lastIndex
-    const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-    if (image) {
-      const words = markdownInlinePlainText(image[1] ?? '') || 'image'
-      out += DATA_URL.test(destination(image[2]!)) ? words : linkText(words, image[2]!)
+    const link = match.link
+    const address = /^<?https?:\/\//i.test(token)
+    if (link?.image) {
+      const words = markdownInlinePlainText(link.label) || 'image'
+      out += label || DATA_URL.test(destination(link.href)) ? words : linkText(words, link.href)
+    } else if (label && (link || address)) {
+      out += token
     } else if (link) {
-      out += linkText(markdownInlinePlainText(link[1]!), link[2]!)
-    } else if (/^https?:\/\//i.test(token)) {
-      const { url, trailing } = trimAutolinkTrailingPunctuation(token)
+      out += linkText(markdownInlinePlainText(link.label, true), link.href)
+    } else if (address) {
+      const { url, trailing } = autolinkParts(token)
       out += url + trailing
     } else if (token.startsWith('`')) {
       out += codeSpanContent(token)
     } else if (token.startsWith('~~') || token.startsWith('**') || token.startsWith('__')) {
-      out += markdownInlinePlainText(token.slice(2, -2))
+      out += markdownInlinePlainText(token.slice(2, -2), label)
     } else {
-      out += markdownInlinePlainText(token.slice(1, -1))
+      out += markdownInlinePlainText(token.slice(1, -1), label)
     }
   }
   return out + text.slice(pendingStart)
@@ -123,7 +127,7 @@ function blockPlainText(block: MobileMarkdownBlock): string {
     case 'image':
       return block.url ? imagePlainText(block.alt, block.url) : block.alt
     case 'table':
-      return [block.headers, ...block.rows].map((row) => row.map(markdownInlinePlainText).join('\t')).join('\n')
+      return [block.headers, ...block.rows].map((row) => row.map((cell) => markdownInlinePlainText(cell)).join('\t')).join('\n')
     case 'rule':
       return ''
     default: {

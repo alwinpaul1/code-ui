@@ -20,10 +20,7 @@ import {
   normalizeFilePath
 } from './markdown-file-path-detection'
 import { routeMarkdownHref } from './markdown-href-routing'
-import {
-  isIntrawordUnderscoreToken,
-  trimAutolinkTrailingPunctuation
-} from './markdown-inline-token-rules'
+import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
@@ -170,22 +167,15 @@ function renderInline(
     }
     pendingStart = pattern.lastIndex
     const key = `${match.index}:${token}`
-    const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
-    const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
-    if (image) {
+    const link = match.link
+    if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {markdownInlinePlainText(image[1] ?? '') || 'image'}
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link.href, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
+          {link.image ? markdownInlinePlainText(link.label) || 'image' : renderLinkLabel(styles, link.label)}
         </Text>
       )
-    } else if (link) {
-      parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {renderLinkLabel(styles, link[1]!)}
-        </Text>
-      )
-    } else if (/^https?:\/\//i.test(token)) {
-      const { url, trailing } = trimAutolinkTrailingPunctuation(token)
+    } else if (/^<?https?:\/\//i.test(token)) {
+      const { url, trailing } = autolinkParts(token)
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
           {url}

@@ -1,7 +1,17 @@
-export type MarkdownInlineMatch = { 0: string; index: number; end: number }
+import { createMarkdownLinkFinder } from './markdown-inline-links'
+
+export type MarkdownInlineMatch = {
+  0: string
+  index: number
+  end: number
+  /** A link's or an image's words and address, as written. A label can hold
+   *  a whole image and an address balanced parentheses
+   *  (markdown-inline-links.ts), so neither is read back off the token. */
+  link?: { image: boolean; label: string; href: string }
+}
 
 /** The inline tokens a chat reply draws besides links and code spans:
- *  strike, bold, italic and bare URLs. One source for the renderer and for the
+ *  strike, bold, italic and web addresses. One source for the renderer and for the
  *  reply's plain-text copy (markdown-plain-text.ts), so a mark the screen
  *  draws as style is never left on the clipboard. A fresh regex per call: the
  *  matcher moves its `lastIndex`.
@@ -14,9 +24,14 @@ export type MarkdownInlineMatch = { 0: string; index: number; end: number }
  *  start on a character that is not a space, so `Name: *** Date: ***` and
  *  `___ Date: ___`, blanks to fill in, stay as they were. Every alternative
  *  inside the group starts on a different character, so the pattern stays
- *  linear. */
+ *  linear.
+ *
+ *  An address in angle brackets, `<https://x.dev/a>`, is an autolink with
+ *  the brackets as its bounds, as in CommonMark. A bare address ends at
+ *  either bracket: it ran on through `>`, so `<https://x.dev/a>` drew its
+ *  brackets and opened `https://x.dev/a>` (review, 2026-09-30). */
 export function markdownInlineTokenPattern(): RegExp {
-  return /(~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g
+  return /(~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+)/g
 }
 
 /** Merge a global non-link regex with links; search starts must advance between calls. */
@@ -33,42 +48,20 @@ export function createMarkdownInlineMatcher(
   let nextCode: MarkdownInlineMatch | null | undefined
   /** Every backtick run in the text, found once: [start, length]. */
   let runs: [number, number][] | undefined
-  let labelEnd = -1
-  let destinationEnd = -1
-  let noMoreLabels = false
-  let noMoreDestinations = false
+  const linkFinder = createMarkdownLinkFinder(text, images)
 
   function findLink(from: number): MarkdownInlineMatch | null {
-    if (noMoreLabels || noMoreDestinations) {
+    const span = linkFinder(from)
+    if (!span) {
       return null
     }
-    let open = text.indexOf('[', from)
-    while (open !== -1) {
-      if (labelEnd < open + 1) {
-        labelEnd = text.indexOf(']', open + 1)
-      }
-      if (labelEnd === -1) {
-        noMoreLabels = true
-        return null
-      }
-      const image = images && open > from && text[open - 1] === '!'
-      if ((image || labelEnd > open + 1) && text[labelEnd + 1] === '(') {
-        if (destinationEnd < labelEnd + 2) {
-          destinationEnd = text.indexOf(')', labelEnd + 2)
-        }
-        if (destinationEnd === -1) {
-          noMoreDestinations = true
-          return null
-        }
-        if (destinationEnd > labelEnd + 2) {
-          const index = image ? open - 1 : open
-          return { 0: text.slice(index, destinationEnd + 1), index, end: destinationEnd + 1 }
-        }
-      }
-      // Every opener before this closing bracket shares the same invalid suffix.
-      open = text.indexOf('[', labelEnd + 1)
+    const { index, end, image, labelEnd } = span
+    return {
+      0: text.slice(index, end),
+      index,
+      end,
+      link: { image, label: text.slice(image ? index + 2 : index + 1, labelEnd), href: text.slice(labelEnd + 2, end - 1) }
     }
-    return null
   }
 
   /**

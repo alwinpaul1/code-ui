@@ -6,6 +6,7 @@ import {
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { markdownInlinePlainText } from './markdown-plain-text'
 import type { MarkdownStyles } from './mobile-markdown-styles'
 
 const STRUCK_LINK = { textDecorationLine: 'underline line-through' } as const
@@ -18,8 +19,11 @@ const STRUCK_LINK = { textDecorationLine: 'underline line-through' } as const
  * Code in a label is a monospace span in the link's colour, never a pill: a
  * pill is an inline View, and one inside the link's Text would take the tap
  * that opens the link. Nothing in a label is a link or a file of its own, since
- * the whole label is already one. (A README badge, `[![CI](badge.svg)](…)`,
- * never gets here: the matcher closes a label at its first `]`.)
+ * the whole label is already one: a link or an address in it is drawn as
+ * written. An image in it is drawn as its words, the way an image is drawn in
+ * prose, so a README badge, `[![CI](badge.svg)](repo)`, reads "CI" and opens
+ * the repo. The matcher closed a label at its first `]` before, which drew
+ * that badge as `![CI` linked to the badge image (review, 2026-09-30).
  */
 export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix = 'l'): ReactNode[] {
   const pattern = createMarkdownInlineMatcher(label, markdownInlineTokenPattern(), true, true)
@@ -37,7 +41,9 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
     }
     pendingStart = pattern.lastIndex
     const key = `${keyPrefix}${match.index}`
-    if (token.startsWith('[') || token.startsWith('![') || /^https?:\/\//i.test(token)) {
+    if (match.link?.image) {
+      parts.push(markdownInlinePlainText(match.link.label) || 'image')
+    } else if (match.link || /^<?https?:\/\//i.test(token)) {
       parts.push(token)
     } else if (token.startsWith('`')) {
       parts.push(

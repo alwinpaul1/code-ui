@@ -231,9 +231,51 @@ describe('markdownPlainText', () => {
     )
   })
 
+  // Review, 2026-09-30: an address was cut at its first `)` and a label at
+  // its first `]`, so the Copy of these held a stray bracket, a cut address,
+  // or a badge's `![`, `](` and image address. The screen is pinned in
+  // MobileMarkdown.link-shapes.test.ts.
+  it('copies an address with parentheses in it whole, with nothing after it', () => {
+    expect(markdownPlainText('[https://x.dev/a_(b)](https://x.dev/a_(b))')).toBe('https://x.dev/a_(b)')
+    expect(markdownPlainText('see [notes](docs/a_(b).md) now')).toBe('see notes now')
+    expect(markdownPlainText('[w](https://x.dev/a_((b)c)) ok')).toBe('w (https://x.dev/a_((b)c)) ok')
+  })
+
+  it('copies a README badge as its words and the address it links to, with no brackets', () => {
+    expect(markdownPlainText('[![CI](https://img.shields.io/b.svg)](https://github.com/x/y)')).toBe(
+      'CI (https://github.com/x/y)'
+    )
+    expect(markdownPlainText('[![CI](https://a.dev/ci.svg)](https://x.dev/ci) [![npm](https://a.dev/n.svg)](https://x.dev/n)')).toBe(
+      'CI (https://x.dev/ci) npm (https://x.dev/n)'
+    )
+    expect(markdownPlainText('[![](https://a.dev/b.svg)](https://x.dev/y)')).toBe('image (https://x.dev/y)')
+  })
+
+  it('copies a badge whose link never closes as the image it still is', () => {
+    expect(markdownPlainText('[![CI](https://a.dev/b.svg)] and more')).toBe('[CI (https://a.dev/b.svg)] and more')
+  })
+
+  it('copies an address in angle brackets without them', () => {
+    expect(markdownPlainText('<https://x.dev/a>,')).toBe('https://x.dev/a,')
+    expect(markdownPlainText('<https://x.dev/a.>')).toBe('https://x.dev/a.')
+  })
+
+  it('keeps a link whose address or label never closes as written', () => {
+    expect(markdownPlainText('[w](docs/a_(b.md')).toBe('[w](docs/a_(b.md')
+    expect(markdownPlainText('[w](')).toBe('[w](')
+    expect(markdownPlainText('[](x)')).toBe('[](x)')
+    expect(markdownPlainText('[x]()')).toBe('[x]()')
+  })
+
   it('copies a table as tab-separated rows, marks off each cell', () => {
     expect(markdownPlainText('| Name | Size |\n| --- | --- |\n| `a.ts` | **2 KB** |')).toBe(
       'Name\tSize\na.ts\t2 KB'
+    )
+  })
+
+  it('copies a link in any column of a table with its address', () => {
+    expect(markdownPlainText('| a | b |\n| --- | --- |\n| [x](https://x.dev) | [y](https://y.dev) |')).toBe(
+      'a\tb\nx (https://x.dev)\ty (https://y.dev)'
     )
   })
 

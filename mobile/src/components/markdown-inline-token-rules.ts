@@ -55,3 +55,11 @@ export function trimAutolinkTrailingPunctuation(url: string): { url: string; tra
   }
   return { url: url.slice(0, end), trailing: url.slice(end) }
 }
+
+/** An autolink as the address it opens and the text drawn after it. An
+ *  address in angle brackets opens whole, closing punctuation and all:
+ *  CommonMark takes the brackets as its bounds. A bare one leaves sentence
+ *  punctuation behind. */
+export function autolinkParts(token: string): { url: string; trailing: string } {
+  return token.startsWith('<') ? { url: token.slice(1, -1), trailing: '' } : trimAutolinkTrailingPunctuation(token)
+}
