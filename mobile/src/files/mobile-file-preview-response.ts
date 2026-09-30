@@ -111,6 +111,11 @@ export function previewError(message: string): MobileFilePreviewResult {
  */
 export const DESKTOP_TEXT_READ_CAP = '512 KB'
 
+/** "512 B", "4 KB", "1.5 MB". Rounds first and names the unit of what it
+ *  rounded to: choosing KB first said "1024 KB" for 1,048,064-1,048,575 bytes
+ *  in the preview and the save toast (review, 2026-09-30). No caller reaches
+ *  a GiB today (the save is capped at MOBILE_CHUNKED_READ_MAX_BYTES, 80 MiB);
+ *  the GB step keeps the MB edge from saying "1024.0 MB" if that moves. */
 export function formatPreviewByteLength(byteLength: number): string {
   if (!Number.isFinite(byteLength) || byteLength < 0) {
     return 'unknown size'
@@ -118,10 +123,15 @@ export function formatPreviewByteLength(byteLength: number): string {
   if (byteLength < 1024) {
     return `${byteLength} B`
   }
-  if (byteLength < 1024 * 1024) {
-    return `${Math.round(byteLength / 1024)} KB`
+  const kb = Math.round(byteLength / 1024)
+  if (kb < 1024) {
+    return `${kb} KB`
   }
-  return `${(byteLength / (1024 * 1024)).toFixed(1)} MB`
+  const tenthsMb = Math.round((byteLength * 10) / (1024 * 1024))
+  if (tenthsMb < 10240) {
+    return `${(tenthsMb / 10).toFixed(1)} MB`
+  }
+  return `${(Math.round((byteLength * 10) / (1024 * 1024 * 1024)) / 10).toFixed(1)} GB`
 }
 
 function normalizeImagePreviewResult(result: unknown): MobileFilePreviewResult {
