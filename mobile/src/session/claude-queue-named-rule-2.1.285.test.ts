@@ -11,21 +11,19 @@ import { claudeQueueViewFromScreen, queuedMessagesFromScreen } from './mobile-te
 // Claude Code 2.1.285 (reported 2026-09-30). The fixture's provenance, and what
 // only a live capture can settle, are in the fixture file.
 describe('Claude Code 2.1.285 queue under a named prompt rule', () => {
-  it('keeps a queued message queued when the rule under the spinner carries the session name', () => {
-    for (const [shape, rule] of Object.entries(NAMED_RULES)) {
-      expect(queuedMessagesFromScreen(queuedScreen2_1_285(rule)), shape).toEqual([QUEUED_ROW_TEXT])
-    }
+  it('keeps a queued message queued when the rule under the spinner carries the session name, as captured from a live 2.1.285 tab', () => {
+    expect(queuedMessagesFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152))).toEqual([QUEUED_ROW_TEXT])
   })
 
   it('reads the same with the blank rows a real terminal has and Orca drops', () => {
-    const screen = queuedScreen2_1_285(NAMED_RULES.labelAtEnd)
+    const screen = queuedScreen2_1_285(NAMED_RULES.captured1152)
     const spinner = screen.findIndex((line) => line.startsWith('*'))
     const withBlanks = [...screen.slice(0, spinner), '', screen[spinner]!, '', ...screen.slice(spinner + 1)]
     expect(queuedMessagesFromScreen(withBlanks)).toEqual([QUEUED_ROW_TEXT])
   })
 
   it('is not a selection: the view reads the entry with nothing marked', () => {
-    const view = claudeQueueViewFromScreen(queuedScreen2_1_285(NAMED_RULES.labelAtEnd))
+    const view = claudeQueueViewFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152))
     expect(view.entries).toEqual([QUEUED_ROW_TEXT])
     expect(view.selecting).toBe(false)
   })
@@ -41,7 +39,7 @@ describe('Claude Code 2.1.285 queue under a named prompt rule', () => {
   })
 
   it('refuses when the send-now row has no marked row above it', () => {
-    const screen = queuedScreen2_1_285(NAMED_RULES.labelAtEnd).filter((line) => !line.startsWith('❯ Can'))
+    const screen = queuedScreen2_1_285(NAMED_RULES.captured1152).filter((line) => !line.startsWith('❯ Can'))
     expect(queuedMessagesFromScreen(screen)).toEqual([])
   })
 
@@ -56,6 +54,6 @@ describe('Claude Code 2.1.285 queue under a named prompt rule', () => {
   })
 
   it('leaves Codex alone: it has its own reader and this screen is no Codex queue', () => {
-    expect(codexQueuedMessagesFromScreen(queuedScreen2_1_285(NAMED_RULES.labelAtEnd))).toEqual([])
+    expect(codexQueuedMessagesFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152))).toEqual([])
   })
 })

@@ -188,9 +188,10 @@ under the spinner: a session with a name draws the name at the rule's right end
 ("──────── paper-review"), and the reader skipped only a bare rule, so it saw
 no send-now row and the chat drew a queued message as sent. `isPromptRule`
 (`mobile-terminal-queue-block.ts`) now accepts the labelled rule. Test:
-`claude-queue-named-rule-2.1.285.test.ts`; the fixture is transcribed from the
-phone's screenshot plus the binary, not a live capture (its header says which
-is which). Only the send-now layout (2.1.277 on) is changed; the older
+`claude-queue-named-rule-2.1.285.test.ts`; the queued rows are transcribed from the
+phone's screenshot plus the binary, and the named rule and the rows around it
+are captured live (2026-09-30, `orca terminal read --screen`, a session named
+"1152": 119 x "─", " 1152 ", one "─"; the fixture header says which is which). Only the send-now layout (2.1.277 on) is changed; the older
 indented block still stops at a labelled rule.
 
 Stock, no environment changes, three queued messages: the middle one was
