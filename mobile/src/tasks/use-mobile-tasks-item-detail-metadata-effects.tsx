@@ -20,8 +20,6 @@ export function useMobileTasksItemDetailMetadataEffects(
     actionItem,
     client,
     detailPayload,
-    itemAssignableUsersError,
-    itemLabelsError,
     setItemAssignableUsers,
     setItemAssignableUsersError,
     setItemAssignableUsersLoading,
@@ -33,6 +31,10 @@ export function useMobileTasksItemDetailMetadataEffects(
   } = model
   const [labelReads, setLabelReads] = useState(0)
   const [assigneeReads, setAssigneeReads] = useState(0)
+  // Each read's own failure, which its error line cannot stand for: a rejection with an empty
+  // message leaves that line ''.
+  const [labelsFailed, setLabelsFailed] = useState(false)
+  const [assigneesFailed, setAssigneesFailed] = useState(false)
   useEffect(() => {
     if (!detailPayload) {
       setItemBodyDraft('')
@@ -44,6 +46,7 @@ export function useMobileTasksItemDetailMetadataEffects(
   }, [detailPayload])
 
   useEffect(() => {
+    setLabelsFailed(false)
     if (
       !tasksSupported ||
       !client ||
@@ -71,6 +74,7 @@ export function useMobileTasksItemDetailMetadataEffects(
       .catch((err) => {
         if (!stale) {
           setItemLabelsError(err instanceof Error ? err.message : 'Failed to load labels')
+          setLabelsFailed(true)
         }
       })
       .finally(() => {
@@ -85,6 +89,7 @@ export function useMobileTasksItemDetailMetadataEffects(
   }, [actionItem, client, tasksSupported, labelReads])
 
   useEffect(() => {
+    setAssigneesFailed(false)
     if (!tasksSupported || !client || actionItem?.provider !== 'github') {
       setItemAssignableUsers([])
       setItemAssignableUsersLoading(false)
@@ -109,6 +114,7 @@ export function useMobileTasksItemDetailMetadataEffects(
           setItemAssignableUsersError(
             err instanceof Error ? err.message : 'Failed to load assignees'
           )
+          setAssigneesFailed(true)
         }
       })
       .finally(() => {
@@ -122,17 +128,16 @@ export function useMobileTasksItemDetailMetadataEffects(
     }
   }, [actionItem, client, tasksSupported, assigneeReads])
 
-  // Both errors are written by these reads alone.
   const pickerItem = actionItem?.provider === 'github' ? actionItem.source.id : null
   useTaskReadAgainAfterReconnect({
     key: pickerItem === null ? null : `${pickerItem}\u0000labels`,
-    failed: itemLabelsError !== '',
+    failed: labelsFailed,
     lastConnectedAt,
     readAgain: () => setLabelReads((current) => current + 1)
   })
   useTaskReadAgainAfterReconnect({
     key: pickerItem === null ? null : `${pickerItem}\u0000assignees`,
-    failed: itemAssignableUsersError !== '',
+    failed: assigneesFailed,
     lastConnectedAt,
     readAgain: () => setAssigneeReads((current) => current + 1)
   })

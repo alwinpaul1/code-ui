@@ -387,6 +387,24 @@ describe('an item detail sheet whose read failed, once the host reconnects', () 
     expect(sheet.held.state.detailError).toBe('relay down')
   })
 
+  it('reads the item again after a failure that carried no message', async () => {
+    // The transport can reject with an Error whose message is empty (the recordings'
+    // transport-rejection-no-message arm). The sheet's error line is then '', and a re-read keyed
+    // on that line would never see the failure.
+    script(
+      'github.workItemDetails',
+      { throw: '' },
+      { ok: true, result: { body: 'the body', comments: [], assignees: [] } }
+    )
+    const sheet = await mountItemDetail(GITHUB_PR_ITEM, 1)
+    expect(sheet.held.state.detailError).toBe('')
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await sheet.connectedAt(2)
+    expect(reads('github.workItemDetails')).toBe(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ provider: 'github', body: 'the body' })
+  })
+
   it('leaves a detail that loaded alone when the host reconnects', async () => {
     script('github.workItemDetails', { ok: true, result: { body: 'the body' } })
     const sheet = await mountItemDetail(GITHUB_PR_ITEM, 1)
@@ -567,6 +585,20 @@ describe('the label and assignee pickers, once the host reconnects', () => {
     expect(reads('github.listAssignableUsers')).toBe(2)
     expect(reads('github.listLabels')).toBe(1)
     expect(pickers.held.state.itemAssignableUsersError).toBe('')
+    expect(pickers.held.state.itemAssignableUsers).toEqual([OCTOCAT])
+  })
+
+  it('reads a picker again after a failure that carried no message', async () => {
+    script('github.listLabels', { throw: '' }, { ok: true, result: ['bug'] })
+    script('github.listAssignableUsers', { throw: '' }, { ok: true, result: [OCTOCAT] })
+    const pickers = await mountItemMetadata(1)
+    expect([pickers.held.state.itemLabelsError, pickers.held.state.itemAssignableUsersError]).toEqual(
+      ['', '']
+    )
+
+    await pickers.connectedAt(2)
+    expect([reads('github.listLabels'), reads('github.listAssignableUsers')]).toEqual([2, 2])
+    expect(pickers.held.state.itemAvailableLabels).toEqual(['bug'])
     expect(pickers.held.state.itemAssignableUsers).toEqual([OCTOCAT])
   })
 

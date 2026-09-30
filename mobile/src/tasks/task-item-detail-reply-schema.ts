@@ -26,7 +26,7 @@ import {
  * A GitHub work item's detail pane.
  *
  * Object or `null`, and nothing inside is required: `if (!details) throw` at
- * use-mobile-tasks-item-detail-loading.tsx:65 is the whole identity test, and :71-82 reads every
+ * use-mobile-tasks-item-detail-loading.tsx:69 is the whole identity test, and :75-86 reads every
  * member behind `??` or `?.`. What the schema adds is the container — main read `details.body` off
  * a string reply and published an empty sheet as if the host had answered, and off `null` it threw
  * a property-read TypeError the sheet showed verbatim.
@@ -59,7 +59,7 @@ export const githubWorkItemDetailSchema = z
 
 /**
  * A GitLab work item's detail pane, read the same way and required the same amount: not at all
- * past the container (use-mobile-tasks-item-detail-loading.tsx:100-123).
+ * past the container (use-mobile-tasks-item-detail-loading.tsx:104-127).
  *
  * `mergeable` is a closed arm set that degrades to absent rather than to an arm. The three arms
  * are what the row's merge affordance is keyed on, so coercing an arm this build has not heard of
@@ -169,7 +169,7 @@ export const linearIssueSchema = linearIssueRowSchema.nullable()
  * The comment list beside a Linear issue.
  *
  * Nullish as well as an array, because the call site reads it as `accepted.value ?? []`
- * (use-mobile-tasks-item-detail-loading.tsx:177): a host that answers `null` still means "no
+ * (use-mobile-tasks-item-detail-loading.tsx:181): a host that answers `null` still means "no
  * comments", and rejecting it would turn a reply main rendered into an error the sheet shows.
  */
 export const linearIssueCommentsSchema = detailCommentListSchema.nullish()

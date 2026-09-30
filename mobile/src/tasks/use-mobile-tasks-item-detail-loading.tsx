@@ -2,7 +2,8 @@ import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-det
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
-  useEffect
+  useEffect,
+  useState
 } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
 import { useTaskReadAgainAfterReconnect } from './use-task-read-again-after-reconnect'
@@ -26,7 +27,6 @@ export function useMobileTasksItemDetailLoading(
   const {
     actionItem,
     client,
-    detailError,
     detailPayload,
     detailRefreshSeq,
     setActionItem,
@@ -37,7 +37,11 @@ export function useMobileTasksItemDetailLoading(
     setItems,
     tasksSupported
   } = model
+  // This read's own failure, which the error line cannot stand for: a rejection with an empty
+  // message leaves that line '' over a sheet with no detail.
+  const [readFailed, setReadFailed] = useState(false)
   useEffect(() => {
+    setReadFailed(false)
     if (!tasksSupported || !actionItem || !client) {
       setDetailPayload(null)
       setDetailLoading(false)
@@ -221,6 +225,7 @@ export function useMobileTasksItemDetailLoading(
       .catch((err) => {
         if (!stale) {
           setDetailError(err instanceof Error ? err.message : 'Failed to load details')
+          setReadFailed(true)
         }
       })
       .finally(() => {
@@ -234,13 +239,11 @@ export function useMobileTasksItemDetailLoading(
     }
   }, [actionItem, client, detailRefreshSeq, tasksSupported])
 
-  // `detailError` is written by this read alone (the item's mutations report through `error`). A
-  // Linear comment list the desktop refused is read again with the rest of the detail.
+  // A Linear comment list the desktop refused is read again with the rest of the detail.
   useTaskReadAgainAfterReconnect({
     key: actionItem ? `${actionItem.provider}:${actionItem.source.id}` : null,
     failed:
-      detailError !== '' ||
-      (detailPayload?.provider === 'linear' && detailPayload.commentsFailed === true),
+      readFailed || (detailPayload?.provider === 'linear' && detailPayload.commentsFailed === true),
     lastConnectedAt,
     readAgain: () => setDetailRefreshSeq((current) => current + 1)
   })
