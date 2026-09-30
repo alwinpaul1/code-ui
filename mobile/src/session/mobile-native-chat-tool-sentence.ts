@@ -2,6 +2,7 @@ import { isToolCallBlock, isToolResultBlock, type NativeChatBlock } from '../../
 import { createCodexPollFolder } from './codex-stdin-poll'
 import { editedFileCount, soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
 import { toolCallKind, type ToolRunKind as Kind } from './mobile-native-chat-tool-kind'
+import { toolCallPath } from './tool-call-path-keys'
 
 export { toolCallKind }
 
@@ -41,9 +42,8 @@ function readFileName(block: NativeChatBlock): string | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
     return null
   }
-  const input = record(block.input)
-  const path = input ? (input.file_path ?? input.path ?? input.filePath) : undefined
-  if (typeof path !== 'string') {
+  const path = toolCallPath(block.input)
+  if (path === null) {
     return null
   }
   const name = path.split(/[/\\]/).pop()?.trim()

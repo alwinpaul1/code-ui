@@ -40,6 +40,24 @@ function edit(path: string, isError = false): NativeChatBlock[] {
   ]
 }
 
+// Claude Code's NotebookEdit: the notebook in `notebook_path`, the cell and
+// its new source beside it. Null leaves the path out.
+function notebookEdit(path: string | null): NativeChatBlock[] {
+  return [
+    {
+      type: 'tool-call',
+      name: 'NotebookEdit',
+      input: {
+        ...(path === null ? {} : { notebook_path: path }),
+        cell_id: 'cell-1',
+        new_source: 'print(1)',
+        edit_mode: 'replace'
+      }
+    },
+    { type: 'tool-result', output: 'Updated cell cell-1 with print(1)' }
+  ]
+}
+
 describe('the run sentence counts the files an edit changed, as the chip beside it does', () => {
   it('says "Edited 3 files" for one apply_patch that updates two files and adds a third', () => {
     const run = applyPatch({ input: THREE_FILE_PATCH })
@@ -83,6 +101,42 @@ describe('the run sentence counts the files an edit changed, as the chip beside 
       { type: 'tool-result', output: 'ok' }
     ]
     expect(toolRunSentence(blind)).toBe('Edited 3 files')
+  })
+
+  // Two NotebookEdits of one notebook read "Edited 2 files": the path reader
+  // knew file_path, path and filePath, and Claude Code's NotebookEdit names its
+  // notebook in `notebook_path`, so each call counted as an unnamed file of its
+  // own (review, 2026-09-30).
+  it('reads two NotebookEdits of one notebook as "Edited a file"', () => {
+    expect(
+      toolRunSentence([...notebookEdit('/x/a.ipynb'), ...notebookEdit('/x/a.ipynb')])
+    ).toBe('Edited a file')
+    expect(
+      toolRunSentence([...notebookEdit('/x/a.ipynb'), ...notebookEdit('/x/b.ipynb')])
+    ).toBe('Edited 2 files')
+    // A notebook and an Edit of another file are two files.
+    expect(toolRunSentence([...notebookEdit('/x/a.ipynb'), ...edit('/x/a.py')])).toBe(
+      'Edited 2 files'
+    )
+  })
+
+  it('never merges NotebookEdits that name no notebook', () => {
+    expect(toolRunSentence([...notebookEdit(null), ...notebookEdit(null)])).toBe('Edited 2 files')
+    expect(toolRunSentence([...notebookEdit(null), ...notebookEdit('/x/a.ipynb')])).toBe(
+      'Edited 2 files'
+    )
+    expect(toolRunSentence(notebookEdit(null))).toBe('Edited a file')
+  })
+
+  it('still counts Codex apply_patch calls on one file as one file', () => {
+    const updateA = '*** Begin Patch\n*** Update File: a.ts\n@@\n-x\n+y\n*** End Patch'
+    const updatedA = 'Success. Updated the following files:\nM a.ts\n'
+    expect(toolRunSentence([...applyPatch(updateA, updatedA), ...applyPatch(updateA, updatedA)])).toBe(
+      'Edited a file'
+    )
+    expect(toolRunSentence([...applyPatch(updateA, updatedA), ...applyPatch(THREE_FILE_PATCH)])).toBe(
+      'Edited 3 files'
+    )
   })
 
   it('keeps the one-file and empty runs as they were', () => {

@@ -44,6 +44,7 @@ import { commandLeavesFileAlone } from './mobile-native-chat-created-file-comman
 import { backgroundWorkRunningAt } from './mobile-native-chat-created-file-work'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 import { toolCallKind } from './mobile-native-chat-tool-sentence'
+import { toolCallPath } from './tool-call-path-keys'
 
 /** A Write whose content the wire cut: the path it names, and what the wire
  *  kept. The key is both, so two creates of one path with different content
@@ -63,7 +64,6 @@ export type CreatedFileText = { content: string; truncated: boolean }
 const READ_ONLY_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS'])
 /** Tools that change the one file their structured path names. */
 const PATH_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'NotebookEdit'])
-const PATH_KEYS = ['file_path', 'notebook_path', 'path'] as const
 /** A character that continues a file name on its left. A `.` does, since
  *  `a.queue.sh` is not `queue.sh`. */
 const NAME_BEFORE = /[A-Za-z0-9._-]/
@@ -300,7 +300,8 @@ function mayTouch(call: NativeChatToolCallBlock, path: string): boolean {
   }
   const target = normalizedPath(path)
   if (PATH_EDIT_TOOLS.has(call.name)) {
-    const named = PATH_KEYS.map((key) => stringField(call.input, key)).find((value) => value)
+    // The one path reader the run sentence uses too (tool-call-path-keys.ts).
+    const named = toolCallPath(call.input)
     if (named && !named.endsWith(MOBILE_CUT)) {
       return samePath(normalizedPath(named), target)
     }
