@@ -183,19 +183,43 @@ export function readNotifications(
 }
 
 /** Each notification's body: from its opening tag to the LAST closing tag
- *  before the next opening tag (or the end of the text), or to that point
- *  when it has none (a record the transcript cut). Not the first closing tag:
- *  the model-written `<result>` can quote one, and a cut there left a finished
- *  workflow's `<usage>` outside the body, so its card lost its totals
- *  (review, 2026-09-30). */
+ *  before the next genuine opening tag (or the end of the text), or to that
+ *  point when it has none (a record the transcript cut). Not the first closing
+ *  tag: the model-written `<result>` can quote one, and a cut there left a
+ *  finished workflow's `<usage>` outside the body, so its card lost its totals
+ *  (review, 2026-09-30). Nor every opening tag: one inside the record's own
+ *  model-written text is a quote, and cutting there lost the same totals and
+ *  began a phantom record (second review, 2026-09-30). */
 function notificationBodies(text: string): string[] {
   const openings = [...text.matchAll(NOTIFICATION_OPENING)]
-  return openings.map((opening, index) => {
+  const bodies: string[] = []
+  let index = 0
+  while (index < openings.length) {
+    const opening = openings[index]
     const start = opening.index + opening[0].length
-    const segment = text.slice(start, openings[index + 1]?.index ?? text.length)
+    let next = index + 1
+    while (next < openings.length && endsInsideResult(text.slice(start, openings[next].index))) {
+      next += 1
+    }
+    const segment = text.slice(start, openings[next]?.index ?? text.length)
     const end = segment.lastIndexOf(NOTIFICATION_CLOSING)
-    return end === -1 ? segment : segment.slice(0, end)
-  })
+    bodies.push(end === -1 ? segment : segment.slice(0, end))
+    index = next
+  }
+  return bodies
+}
+
+/** Whether a record, read up to a later opening tag, leaves that tag inside a
+ *  `<result>` still open: the model wrote that text, so the tag is a quote.
+ *  The `<summary>` needs no such care, because Claude escapes it
+ *  (`&amp;&amp;`, see mobile-background-task-agent-titles.ts). The last
+ *  `<result>` against the last `</result>`, not a count of the two: a result
+ *  that quotes a lone `<result>` would keep a count open past its own record
+ *  and swallow the next one. The price is a result that quotes a `</result>`
+ *  before the tag, which still ends there and loses its totals, as it did
+ *  before. */
+function endsInsideResult(recordSoFar: string): boolean {
+  return recordSoFar.lastIndexOf('<result>') > recordSoFar.lastIndexOf('</result>')
 }
 
 /** The sentence a background launch, a teammate's spawn or a remote launch

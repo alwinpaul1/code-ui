@@ -23,9 +23,16 @@ export function normalizeBrowserUrl(value: string): string | null {
     // typed without one was refused while the same host with no port opened (review, 2026-09-30).
     return isSchemelessHostWithPort(trimmed) ? withHttps(trimmed) : null
   } catch {
-    return withHttps(trimmed)
+    // A value with a scheme that does not parse (`http://example.com:99999`, `http://a b`,
+    // `https:`) is refused. Putting `https://` in front of it again opened a host named "http"
+    // (review, 2026-09-30).
+    return SCHEME_PREFIX.test(trimmed) ? null : withHttps(trimmed)
   }
 }
+
+/** A URL scheme and its colon: a letter, then letters, digits, `+`, `-` or `.`. `my_host:3000`
+ *  and `8.8.8.8:53` are not one, and fail to parse only for want of one. */
+const SCHEME_PREFIX = /^[a-z][a-z\d+.-]*:/i
 
 function withHttps(value: string): string | null {
   try {

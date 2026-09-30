@@ -3,6 +3,7 @@ import { maskMarkdownEscapes, unescapeMarkdownText } from '../components/markdow
 import { createMarkdownLinkFinder, type MarkdownLinkSpan } from '../components/markdown-inline-links'
 import { codeSpanContent } from '../components/markdown-inline-matcher'
 import { markdownHeadingText } from '../text/markdown-heading-text'
+import { endsWithBoundaryPipe, maskEscapedPipes, splitOnPipes } from './table-row-pipes'
 
 /**
  * Agents summarise their turn in Markdown; Android notifications take plain
@@ -20,7 +21,12 @@ export function notificationPlainText(markdown: string): string {
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .flatMap((line) => reflowInlineTable(line))
+  const tableLines = classifyTableLines(raw)
+  // A row's escaped pipes stand aside until its cells are apart
+  // (table-row-pipes.ts); a line of prose keeps its `\|` for the inline rules.
+  const pipe = absentCharacter(markdown)
   const lines = raw
+    .map((line, index) => (tableLines[index] === 'row' ? maskEscapedPipes(line, pipe) : line))
     .map((line) =>
       line
         // A rule first: the bullet rewrite below turned `* * *` and `- - -`
@@ -44,7 +50,6 @@ export function notificationPlainText(markdown: string): string {
         // 951 ms for a line holding 40,000 of them. The same characters go.
         .trimEnd()
     )
-  const tableLines = classifyTableLines(raw)
   const flattened: string[] = []
   lines.forEach((line, index) => {
     const kind = tableLines[index]
@@ -55,7 +60,7 @@ export function notificationPlainText(markdown: string): string {
       // and the content row falls below the fold.
       return
     }
-    flattened.push(kind === 'row' ? flattenTableRow(line) : line)
+    flattened.push(kind === 'row' ? flattenTableRow(line).replaceAll(pipe, '|') : line)
   })
   return flattened
     .filter(
@@ -256,7 +261,7 @@ function reflowInlineTable(line: string): string[] {
   // The header: the N cells whose closing pipe is the last thing before the
   // delimiter. Fewer segments than that, or a non-blank tail, and there is no
   // header, only prose.
-  const head = before.split('|')
+  const head = splitOnPipes(before)
   let prose = before
   if (head.length >= columns + 2 && head[head.length - 1]!.trim() === '') {
     const cells = head.slice(-(columns + 1), -1)
@@ -271,7 +276,7 @@ function reflowInlineTable(line: string): string[] {
   out.push(delimiter[0].trim())
   // Body rows: after the delimiter's closing pipe comes a blank segment, then
   // N cells, then the blank the next row's opening pipe leaves, and so on.
-  const tail = after.split('|')
+  const tail = splitOnPipes(after)
   let at = 0
   while (at < tail.length) {
     const boundary = tail[at]!
@@ -324,7 +329,7 @@ function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | un
     // both sides is a row on its own evidence, which is what keeps a truncated
     // table readable. It is also why a line of prose wrapped in pipes is
     // flattened: a mid-table excerpt is far likelier than that.
-    /^\s*\|.+\|\s*$/.test(line) ? 'row' : undefined
+    /^\s*\|.+\|\s*$/.test(line) && endsWithBoundaryPipe(line) ? 'row' : undefined
   )
   lines.forEach((line, index) => {
     if (!isTableSeparator(line)) {
@@ -355,7 +360,9 @@ function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | un
  * One table row as a single readable line. A table is a layout and the shade has
  * no columns, so cells are joined by a middot. Before this, a row kept every
  * pipe and an agent answering with a table filled the notification with "||||"
- * and no readable summary (reported from the phone 2026-09-17).
+ * and no readable summary (reported from the phone 2026-09-17). Every pipe
+ * left in the line is a boundary: the escaped ones were masked before the
+ * inline rules ran (table-row-pipes.ts).
  */
 function flattenTableRow(line: string): string {
   return line
