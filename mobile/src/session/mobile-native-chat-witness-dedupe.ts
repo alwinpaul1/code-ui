@@ -20,6 +20,11 @@ export function extendsAtWordBoundary(shorter: string, longer: string): boolean 
  * "…dude Running 1 shell command…" and "…dude Capturing the phone screen
  * right now" beside the clean text (2026-09-13). The clean one wins.
  *
+ * Only for two readings that may be one message. Two entries of the queue
+ * box, or two readings it first listed with a row written between, are two
+ * messages whatever their words (2026-09-30): use-absorbed-queue-echoes.ts and
+ * the store (preferredStoredReading) tell those apart before asking.
+ *
  * Returns which of the two to keep, or null when they are different messages.
  */
 export function preferredWitnessReading(a: string, b: string): 'a' | 'b' | null {
