@@ -36,6 +36,8 @@ type Props = {
   // Threaded to sections for github.* fetches + mutations.
   client: RpcClient | null
   connState: ConnectionState
+  // Moves on each new connection to the host; a section whose read failed reads again when it does.
+  lastConnectedAt: number | null
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
@@ -53,6 +55,7 @@ export function MobilePRSidebar({
   refetch,
   client,
   connState,
+  lastConnectedAt,
   worktreeId,
   gitBranch,
   gitStatus,
@@ -130,6 +133,7 @@ export function MobilePRSidebar({
         refetch={refetch}
         client={client}
         connState={connState}
+        lastConnectedAt={lastConnectedAt}
         worktreeId={worktreeId}
         gitBranch={gitBranch}
         gitStatus={gitStatus}
@@ -151,6 +155,7 @@ function PrSidebarContent({
   refetch,
   client,
   connState,
+  lastConnectedAt,
   worktreeId,
   gitBranch,
   gitStatus,
@@ -167,6 +172,7 @@ function PrSidebarContent({
   refetch: () => void
   client: RpcClient | null
   connState: ConnectionState
+  lastConnectedAt: number | null
   worktreeId: string
   gitBranch: string | null
   gitStatus: MobileGitStatusResult | null
@@ -237,6 +243,7 @@ function PrSidebarContent({
       <PrSidebarSections
         data={state.data}
         client={client}
+        lastConnectedAt={lastConnectedAt}
         worktreeId={worktreeId}
         actions={actions}
         commentActions={commentActions}
@@ -254,6 +261,7 @@ function PrSidebarContent({
 function PrSidebarSections({
   data,
   client,
+  lastConnectedAt,
   worktreeId,
   actions,
   commentActions,
@@ -265,6 +273,7 @@ function PrSidebarSections({
 }: {
   data: Extract<PrSidebarState, { kind: 'ready' }>['data']
   client: RpcClient | null
+  lastConnectedAt: number | null
   worktreeId: string
   actions: MobilePrActions
   commentActions: MobilePrCommentActions
@@ -332,6 +341,7 @@ function PrSidebarSections({
         actions={actions}
         client={client}
         worktreeId={worktreeId}
+        lastConnectedAt={lastConnectedAt}
       />
       <PRChecksSection
         checks={data.checks}

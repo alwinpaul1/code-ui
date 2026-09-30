@@ -124,6 +124,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               refetch={controller.refetchPRSidebar}
               client={controller.client}
               connState={controller.connState}
+              lastConnectedAt={controller.prSidebarLastConnectedAt}
               worktreeId={controller.worktreeId}
               gitBranch={controller.prSidebarBranch}
               gitStatus={gitStatus}
@@ -145,6 +146,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             refetch={controller.refetchPRSidebar}
             client={controller.client}
             connState={controller.connState}
+            lastConnectedAt={controller.prSidebarLastConnectedAt}
             worktreeId={controller.worktreeId}
             gitBranch={controller.prSidebarBranch}
             gitStatus={gitStatus}

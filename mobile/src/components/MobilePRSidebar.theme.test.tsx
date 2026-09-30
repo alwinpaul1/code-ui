@@ -72,6 +72,7 @@ describe('the PR sidebar main panel error state', () => {
             refetch={() => undefined}
             client={null}
             connState={'disconnected' satisfies ConnectionState}
+            lastConnectedAt={null}
             worktreeId="worktree-1"
             gitBranch={null}
             gitStatus={null}

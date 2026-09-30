@@ -74,6 +74,7 @@ export function MobilePrViewPanelBody({
         refetch={controller.refetchPRSidebar}
         client={client}
         connState={connState}
+        lastConnectedAt={controller.prSidebarLastConnectedAt}
         worktreeId={worktreeId}
         gitBranch={branch}
         gitStatus={gitStatus}

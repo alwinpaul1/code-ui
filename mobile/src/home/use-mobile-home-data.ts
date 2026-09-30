@@ -6,7 +6,6 @@ import { hasRenderableUsage } from '../components/AccountUsage'
 import { loadHomeSnapshot, saveHomeSnapshot } from '../cache/home-snapshot-cache'
 import { getCachedWorktrees, setCachedWorktrees } from '../cache/worktree-cache'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
 import {
   selectConnectableHostProfiles,
   sortHostsByLastConnected
@@ -20,6 +19,7 @@ import {
 } from '../worktree/last-visited-worktree-repo'
 import { selectHomeResumeCard } from '../worktree/home-resume-card'
 import { refreshAccountUsage } from './refresh-account-usage'
+import type { HomeTaskSources } from './home-task-sources'
 import {
   fetchMobileHomeAccounts,
   fetchMobileHomeStats,
@@ -36,7 +36,9 @@ export function useMobileHomeData() {
   const [statsByHost, setStatsByHost] = useState<Record<string, HomeStatsRow>>({})
   const [worktreeInfo, setWorktreeInfo] = useState<Record<string, HostWorktreeInfo>>({})
   const [accountsByHost, setAccountsByHost] = useState<Record<string, AccountsSnapshot>>({})
-  const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, TaskProvider[]>>({})
+  const [taskProvidersByHost, setTaskProvidersByHost] = useState<Record<string, HomeTaskSources>>(
+    {}
+  )
   const [lastVisited, setLastVisited] = useState<{ hostId: string; worktreeId: string } | null>(
     null
   )
@@ -179,9 +181,12 @@ export function useMobileHomeData() {
     [sortedHosts, connections.hostStates]
   )
   const primaryHost = connectedHosts[0] ?? null
-  // Undefined until the desktop's provider read answers: the card says it is checking rather than
-  // claim GitHub for a user whose sources are GitLab and Linear (review, 2026-09-30).
-  const primaryTaskProviders: TaskProvider[] | undefined = primaryHost
+  // Undefined until the desktop's first provider read ends: the card says it is checking rather
+  // than claim GitHub for a user whose sources are GitLab and Linear (review, 2026-09-30). A read
+  // that ended without an answer is TASK_SOURCES_READ_FAILED, which the card says in so many words
+  // until the next focus or new connection reads again; it no longer sits on "Checking sources…"
+  // after nothing is checking (review round 3). A failed read after a good one keeps the good one.
+  const primaryTaskProviders: HomeTaskSources | undefined = primaryHost
     ? taskProvidersByHost[primaryHost.id]
     : []
   const hostConnections = useMemo(

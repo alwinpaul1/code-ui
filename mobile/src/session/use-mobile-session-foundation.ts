@@ -80,7 +80,10 @@ export function useMobileSessionFoundation() {
       client: isFloatingWorkspaceRoute ? null : client,
       connState,
       worktreeId,
-      includeBranchIdentity: false
+      includeBranchIdentity: false,
+      // Why: a failed probe runs again on a new connection even while connState stays
+      // 'connected' (a LAN->relay swap), or the PR entry stays hidden for the whole visit.
+      lastConnectedAt
     })
   useEffect(() => {
     if (prRepoContextLoaded && !prIsGithubRepo && activePanel === 'pr') {

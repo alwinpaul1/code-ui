@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
-import { Check } from 'lucide-react-native'
+import { Check, RotateCw } from 'lucide-react-native'
 import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../../transport/stale-after-reconnect'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
 import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
@@ -13,6 +17,9 @@ type Props = {
   onClose: () => void
   client: RpcClient | null
   worktreeId: string
+  // Moves on each new connection to the host. The client is the same object across reconnects, so
+  // this is what lets a failed people read try again once the link is back.
+  lastConnectedAt: number | null
   // Logins already requested/reviewing (+ author) — surfaced at the top of the list.
   seededLogins: string[]
   // Resolves the optimistic requested-state for a login (so a just-toggled row reflects it).
@@ -35,6 +42,7 @@ export function ReviewerPickerDrawer({
   onClose,
   client,
   worktreeId,
+  lastConnectedAt,
   seededLogins,
   isRequested,
   onToggle
@@ -43,6 +51,9 @@ export function ReviewerPickerDrawer({
   const styles = useThemedStyles(mobilePrSidebarStyles)
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
+  // Bumped by Retry and by a reconnect after a failed read; the load effect keys on it.
+  const [attempt, setAttempt] = useState(0)
+  const staleLedger = useRef(createStaleAfterReconnectLedger())
 
   useEffect(() => {
     if (!visible || !client) {
@@ -69,7 +80,26 @@ export function ReviewerPickerDrawer({
     return () => {
       cancelled = true
     }
-  }, [visible, client, worktreeId])
+  }, [visible, client, worktreeId, attempt])
+
+  // A read that failed with the link used to stay a dead end until the drawer was closed and
+  // reopened (review round 3, 2026-09-30). It reads again once per NEW connection, never once per
+  // render, so a host that stays down is not read in a loop. Idle is left out: the open itself reads.
+  // Closing forgets the failure, so a reopen after a reconnect reads once, not once for the open
+  // and again for the reconnect.
+  useEffect(() => {
+    if (!visible) {
+      staleLedger.current.clear()
+      return
+    }
+    if (load.status === 'idle') {
+      return
+    }
+    const status = load.status === 'loaded' ? 'ready' : load.status
+    if (shouldRefetchAfterReconnect(staleLedger.current, 'people', status, lastConnectedAt)) {
+      setAttempt((count) => count + 1)
+    }
+  }, [visible, load.status, lastConnectedAt])
 
   const ordered = useMemo(() => {
     if (load.status !== 'loaded') {
@@ -110,6 +140,16 @@ export function ReviewerPickerDrawer({
       ) : load.status === 'error' ? (
         <View style={styles.pickerStateArea}>
           <Text style={styles.emptyText}>{load.message}</Text>
+          {/* For a read that failed on a link that is up; a reconnect reads again by itself. */}
+          <Pressable
+            style={styles.retryButton}
+            onPress={() => setAttempt((count) => count + 1)}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading people"
+          >
+            <RotateCw size={14} color={colors.text} strokeWidth={2.2} />
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
         </View>
       ) : ordered.length === 0 ? (
         <View style={styles.pickerStateArea}>

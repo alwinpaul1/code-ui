@@ -289,6 +289,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     // The probe itself failed: not an answer, so neither "GitHub" nor "unavailable for this provider".
     prSidebarRepoProbeFailed: repoProbe.probe === 'failed',
     retryPrSidebarRepoProbe: repoProbe.retry,
+    // The connection these reads are keyed on, for the sidebar's own sections (the reviewer picker).
+    prSidebarLastConnectedAt: input.lastConnectedAt,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,

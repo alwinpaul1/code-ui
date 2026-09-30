@@ -4,7 +4,8 @@
 // segment's controller did. The session reads that pair to close a docked PR panel
 // (use-mobile-session-foundation.ts: `repoLoaded && !isGithubRepo`), so one relay timeout closed
 // the panel the user had open on a GitHub repo. A failed probe is "not known yet": repoLoaded stays
-// false, and the probe runs again on the next connection.
+// false, and the probe runs again on the next connection. The bounded retries while a connection
+// stays up are in pr-branch-context-probe-retry.test.ts.
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'

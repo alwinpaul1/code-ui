@@ -25,7 +25,7 @@ vi.mock('../components/TaskProviderLogo', () => ({
 
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import { TASK_SOURCES_READ_FAILED, type HomeTaskSources } from './home-task-sources'
 import { MobileHomeTasksCard } from './MobileHomeTasksCard'
 
 let renderer: ReactTestRenderer | null = null
@@ -36,7 +36,7 @@ afterEach(() => {
 
 function render(
   scheme: 'light' | 'dark',
-  providers: TaskProvider[] | undefined
+  providers: HomeTaskSources | undefined
 ): ReactTestInstance {
   act(() => {
     renderer = create(
@@ -82,6 +82,19 @@ describe.each([
       expect(flat(caption?.node.props.style).color).toBe(palette.textSecondary)
       expect(lines(root).map(({ text }) => text)).not.toContain('GitHub')
       expect(providerButtons(root)).toHaveLength(0)
+    })
+
+    // Round 3: a read that had already failed still said "Checking sources…" while connected.
+    it('says the sources could not be read, in the caption tone, once a read failed', () => {
+      const root = render(scheme, TASK_SOURCES_READ_FAILED)
+      const caption = lines(root).find(({ text }) => text === "Couldn't read task sources")
+      expect(caption).toBeDefined()
+      expect(flat(caption?.node.props.style).color).toBe(palette.textSecondary)
+      expect(lines(root).map(({ text }) => text)).not.toContain('Checking sources…')
+      expect(providerButtons(root)).toHaveLength(0)
+      const card = root.find((node) => String(node.type) === 'PressScale')
+      expect(card.props.disabled).toBe(false)
+      expect(flat(card.props.style).backgroundColor).toBe(palette.bgPanel)
     })
 
     it('names the sources once read, and says so when there are none', () => {
