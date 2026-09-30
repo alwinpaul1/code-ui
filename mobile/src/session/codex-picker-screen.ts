@@ -1,4 +1,5 @@
 import { hasCodexFooter } from './mobile-terminal-hud-parse'
+import { codexPendingInputPreviewRows } from './codex-terminal-queued-messages'
 // Codex's `/model` picker as it renders in the terminal screen buffer. Codex
 // 0.153.x has no non-interactive way to set the model or reasoning effort
 // mid-session — `/model <slug>` is unreliable and a second argument is sent to
@@ -117,20 +118,57 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
   return { step, model, rows, cursorIndex }
 }
 
+/** How many rows up from the bottom the working row and the prompt are looked
+ *  for: the working row, a status detail, the composer and the footer. */
+const BOTTOM_ROWS = 6
+
+/**
+ * The bottom rows of a Codex screen, with its pending-input preview taken out.
+ *
+ * Codex 0.153.4 draws its bottom pane as the working row, then the preview of
+ * messages waiting (steers, end-of-turn retries, queued follow-ups), then the
+ * composer and its footer (codex-rs/tui/src/bottom_pane/mod.rs at
+ * rust-v0.153.4). Two queued messages, or one that wraps, put the working row
+ * seventh from the bottom or higher, so a plain six-row tail read a running
+ * turn as idle and the queue editor's bare Enter steered into it. The preview
+ * rows are skipped by the bounds the queue reader knows, never by widening the
+ * tail: a wider tail reaches "esc to interrupt" in the transcript. Blank rows
+ * are skipped too; Orca drops them already, and Codex paints them between the
+ * sections.
+ *
+ * A live steer group counts as a running turn: Codex holds a steer only while a
+ * turn runs, and hides the working row while an answer streams. It counts by
+ * its header's shape, wrapped or not, and not by the "esc to interrupt" in it.
+ */
+function codexBottomRows(lines: readonly string[]): { text: string; working: boolean } {
+  const preview = codexPendingInputPreviewRows(lines)
+  const rows: string[] = []
+  let steerWaiting = false
+  for (let index = lines.length - 1; index >= 0 && rows.length < BOTTOM_ROWS; index -= 1) {
+    steerWaiting ||= preview.steerHeaders.has(index)
+    const line = lines[index]!
+    if (!preview.rows.has(index) && line.trim()) {
+      rows.unshift(line)
+    }
+  }
+  const text = rows.join('\n')
+  return { text, working: steerWaiting || /esc to interrupt/.test(text) }
+}
+
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
  *  placeholder disappears once the composer holds a draft, so the footer line
  *  ("<model> <effort> · <cwd>") counts as evidence of the prompt too. */
 export function isCodexIdle(lines: readonly string[]): boolean {
-  const tail = lines.slice(-6).join('\n')
-  if (/esc to interrupt/.test(tail) || parseCodexPickerScreen(lines)) {
+  const bottom = codexBottomRows(lines)
+  if (bottom.working || parseCodexPickerScreen(lines)) {
     return false
   }
-  return /Ask Codex to do anything/.test(tail) || hasCodexFooter(lines)
+  return /Ask Codex to do anything/.test(bottom.text) || hasCodexFooter(lines)
 }
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
-  return /esc to interrupt/.test(lines.slice(-6).join('\n'))
+  return codexBottomRows(lines).working
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */
