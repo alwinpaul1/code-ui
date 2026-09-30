@@ -8,6 +8,7 @@ import {
   type TaskProvider
 } from '../tasks/mobile-task-providers'
 import type { RpcClient } from '../transport/rpc-client'
+import type { RpcResponse } from '../transport/types'
 import { homeHostAccountsRead, homeHostStatsRead } from './mobile-home-host-operations'
 
 type HomeTaskSettings = {
@@ -61,6 +62,13 @@ export function fetchMobileHomeAccounts(
     .catch(() => {})
 }
 
+/** Which read the desktop refused, and the reason it gave, for the one line a refusal leaves. */
+function refusedTaskSourceRead(method: string, reply: RpcResponse) {
+  return reply.ok
+    ? { method, code: 'not-accepted' }
+    : { method, code: reply.error.code, message: reply.error.message }
+}
+
 export function fetchMobileHomeTaskProviders(
   client: RpcClient,
   hostId: string,
@@ -77,19 +85,34 @@ export function fetchMobileHomeTaskProviders(
         return
       }
       const settingsResult = settingsRead.interpret(settingsResponse)
-      const settings = settingsResult.accepted
-        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
-          ((settingsResult.value ?? {}) as HomeTaskSettings)
-        : {}
       const preflightResult = taskPreflightRead.interpret(preflightResponse)
-      const preflight = preflightResult.accepted ? preflightResult.value : null
       const linearResult = taskLinearStatusRead.interpret(linearResponse)
-      const linear = linearResult.accepted ? linearResult.value : null
+      if (!settingsResult.accepted || !preflightResult.accepted || !linearResult.accepted) {
+        // An { ok:false } answer says nothing about which sources the desktop has. Reading it as
+        // "none" let GitHub, which needs no setup, stand in for the answer, and a refused Linear
+        // or tooling check dropped a source the desktop does have. So the whole round counts as
+        // unread, exactly like a dropped link below (review round 2, 2026-09-30).
+        const refused = [
+          [settingsRead.operation.method, settingsResult.accepted, settingsResponse] as const,
+          [taskPreflightRead.operation.method, preflightResult.accepted, preflightResponse] as const,
+          [taskLinearStatusRead.operation.method, linearResult.accepted, linearResponse] as const
+        ]
+          .filter(([, accepted]) => !accepted)
+          .map(([method, , reply]) => refusedTaskSourceRead(method, reply))
+        console.warn('[home] the desktop refused a task source read, so its sources stay unread', {
+          hostId,
+          refused
+        })
+        return
+      }
+      const settings =
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+        (settingsResult.value ?? {}) as HomeTaskSettings
       const providers = filterAvailableTaskProviders(
         normalizeVisibleTaskProviders(settings.visibleTaskProviders),
         {
-          gitlabInstalled: preflight?.glab?.installed === true,
-          linearConnected: linear?.connected === true
+          gitlabInstalled: preflightResult.value?.glab?.installed === true,
+          linearConnected: linearResult.value?.connected === true
         }
       )
       setProviders((previous) => ({ ...previous, [hostId]: providers }))

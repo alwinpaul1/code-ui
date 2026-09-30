@@ -103,3 +103,91 @@ describe('the task sources Home reads for a desktop', () => {
     expect(store.read()).toEqual({ mac: ['gitlab', 'linear'] })
   })
 })
+
+/**
+ * The same false claim, reached by an answer rather than a dropped link. A desktop that replies
+ * { ok:false } to a read has not said which sources it has; `interpret` reads that as "not
+ * accepted", and falling back to {} or null let GitHub (which needs no setup) stand in for an
+ * answer nobody gave (review round 2, 2026-09-30).
+ */
+function refusedReply(code: string, message: string) {
+  return async () => ({ id: 'r', ok: false, error: { code, message } })
+}
+
+describe('the task sources Home reads when the desktop answers with a refusal', () => {
+  it('stays unread, never GitHub, when the desktop refuses all three reads', async () => {
+    const store = providersStore({})
+    const refusedAll = clientAnswering({
+      'settings.get': refusedReply('internal_error', 'boom'),
+      'preflight.check': refusedReply('internal_error', 'boom'),
+      'linear.status': refusedReply('internal_error', 'boom')
+    })
+    fetchMobileHomeTaskProviders(refusedAll, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({})
+    expect(store.set).not.toHaveBeenCalled()
+  })
+
+  it('stays unread when only the settings read is refused', async () => {
+    const store = providersStore({})
+    const settingsRefused = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'settings.get': refusedReply('internal_error', 'settings store locked')
+    })
+    fetchMobileHomeTaskProviders(settingsRefused, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({})
+  })
+
+  it('keeps GitLab and Linear when only the Linear status read is refused', async () => {
+    const store = providersStore({ mac: ['gitlab', 'linear'] })
+    const linearRefused = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'linear.status': refusedReply('internal_error', 'keychain unavailable')
+    })
+    fetchMobileHomeTaskProviders(linearRefused, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ mac: ['gitlab', 'linear'] })
+  })
+
+  it('does not drop GitLab when the tooling check alone is refused beside two good reads', async () => {
+    const store = providersStore({})
+    const preflightRefused = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'preflight.check': refusedReply('timeout', 'glab --version did not answer')
+    })
+    fetchMobileHomeTaskProviders(preflightRefused, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({})
+  })
+
+  it('keeps the sources it read last when a later round is refused in-band', async () => {
+    const store = providersStore({ mac: ['gitlab', 'linear'] })
+    const refusedAll = clientAnswering({
+      'settings.get': refusedReply('internal_error', 'boom'),
+      'preflight.check': refusedReply('internal_error', 'boom'),
+      'linear.status': refusedReply('internal_error', 'boom')
+    })
+    fetchMobileHomeTaskProviders(refusedAll, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ mac: ['gitlab', 'linear'] })
+  })
+
+  it('names each refused read and its error code in one log line', async () => {
+    const refusedTwo = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'preflight.check': refusedReply('timeout', 'glab --version did not answer'),
+      'linear.status': refusedReply('internal_error', 'keychain unavailable')
+    })
+    fetchMobileHomeTaskProviders(refusedTwo, 'mac', providersStore({}).set, () => false)
+    await settle()
+    const warned = vi.mocked(console.warn).mock.calls
+    expect(warned).toHaveLength(1)
+    const line = JSON.stringify(warned[0])
+    expect(line).toContain('preflight.check')
+    expect(line).toContain('timeout')
+    expect(line).toContain('linear.status')
+    expect(line).toContain('internal_error')
+    expect(line).not.toContain('settings.get')
+  })
+})
