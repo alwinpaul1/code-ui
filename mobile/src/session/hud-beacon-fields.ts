@@ -1,5 +1,5 @@
 import type { AgentHudBeacon } from './agent-hud-beacon'
-import { shortTokenLabel } from './hud-agent-status-fields'
+import { NO_SCREEN_HUD_OBSERVATION, shortTokenLabel } from './hud-agent-status-fields'
 import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
 
 /**
@@ -35,13 +35,10 @@ export function applyAgentHudBeaconFields(
   if (!beacon) {
     return screen
   }
-  const base: TerminalHudObservation = screen ?? {
-    modelLabel: '',
-    modelId: null,
-    effort: null,
-    context: null,
-    permissionMode: 'default'
-  }
+  // No screen read: the mode is unknown, not Manual. The beacon carries no
+  // footer state, and a 'default' here drew Manual on the pill over a footer
+  // nobody had read (review, 2026-09-30).
+  const base: TerminalHudObservation = screen ?? NO_SCREEN_HUD_OBSERVATION
   const used = beacon.usedTokens
   const window = beacon.windowTokens
   const context =

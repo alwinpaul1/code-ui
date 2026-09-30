@@ -16,7 +16,26 @@ export function indentationWidth(value: string): number {
   return value.replace(/\t/g, '    ').length
 }
 
+/**
+ * A thematic break: one of `-`, `*` or `_` three or more times, with spaces or tabs between them
+ * allowed (CommonMark 4.1), as the PR renderer's HR reads it. The rule test took only an unbroken
+ * run, so `* * *` and `- - -` read as a bullet holding the rest of the marks and saved as a list
+ * item, and `_ _ _` as words (review, 2026-09-30).
+ *
+ * Here rather than in the block reader because both readers need it and the block reader imports
+ * this one. A break wins over a list item where a line could be either, as in CommonMark. Any
+ * indent, as the editor's rule test has always allowed rather than CommonMark's three columns: an
+ * indented `---` under a list item has always ended the item as a rule, and three columns would
+ * gather it into the item's words instead.
+ */
+export function isThematicBreak(line: string): boolean {
+  return /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line)
+}
+
 export function parseListLine(line: string): ParsedListItem | null {
+  if (isThematicBreak(line)) {
+    return null
+  }
   const match = line.match(/^(\s*)((?:[-*+])|(?:\d+[.)]))\s+(.+)$/)
   if (!match) {
     return null

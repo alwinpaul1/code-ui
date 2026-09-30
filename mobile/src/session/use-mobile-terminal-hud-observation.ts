@@ -52,8 +52,12 @@ export function useMobileTerminalHudObservation(args: {
    *  the phone reads has lost (`mobile-terminal-sent-photos.ts`). */
   sentPhotos: ScreenSentPhotos[]
   /** Background-task completions the agent has stated on its scrollback,
-   *  as this read saw them (`mobile-terminal-task-completions.ts`). */
-  taskCompletions: ScreenTaskCompletion[]
+   *  as this read saw them (`mobile-terminal-task-completions.ts`). Null
+   *  until the first read of this terminal since the chat began watching it,
+   *  and while it is not watching: an unread screen is not one without rows,
+   *  and read as one it made a row still on screen look like it had left
+   *  (use-active-tab-screen-completions.ts). */
+  taskCompletions: ScreenTaskCompletion[] | null
   /** The peer-message rows on its scrollback, one per row, as this read saw
    *  them (`mobile-terminal-peer-notices.ts`). Null until the first read
    *  since the chat began watching this screen: the rows that read finds
@@ -86,7 +90,9 @@ export function useMobileTerminalHudObservation(args: {
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [sentPhotos, setSentPhotos] = useState<ScreenSentPhotos[]>([])
-  const [taskCompletions, setTaskCompletions] = useState<ScreenTaskCompletion[]>([])
+  // Tagged with the terminal it was read from, so a new terminal's rows are
+  // unread until its own first read lands.
+  const [taskCompletions, setTaskCompletions] = useState<{ handleKey: string; rows: ScreenTaskCompletion[] } | null>(null)
   const [peerNotices, setPeerNotices] = useState<ScreenPeerRow[] | null>(null)
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
@@ -102,6 +108,7 @@ export function useMobileTerminalHudObservation(args: {
   useEffect(() => {
     setPermissionDismissed(false)
     setQueuedMessages((current) => (current.length ? [] : current))
+    setTaskCompletions(null)
     setObservation(null)
     setSpinner(null)
     setDialogOptions(null)
@@ -184,7 +191,9 @@ export function useMobileTerminalHudObservation(args: {
         const completions =
           agent === 'claude' || agent === 'openclaude' ? taskCompletionsFromScreen(lines) : []
         setTaskCompletions((current) =>
-          JSON.stringify(current) === JSON.stringify(completions) ? current : completions
+          current?.handleKey === handleKey && JSON.stringify(current.rows) === JSON.stringify(completions)
+            ? current
+            : { handleKey, rows: completions }
         )
         const photos = agent === 'claude' || agent === 'openclaude' ? sentPhotosFromScreen(lines) : []
         setSentPhotos((current) => (JSON.stringify(current) === JSON.stringify(photos) ? current : photos))
@@ -278,7 +287,7 @@ export function useMobileTerminalHudObservation(args: {
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     sentPhotos: enabled && queueScopeRef.current === handleKey ? sentPhotos : [],
-    taskCompletions: enabled && queueScopeRef.current === handleKey ? taskCompletions : [],
+    taskCompletions: enabled && taskCompletions?.handleKey === handleKey ? taskCompletions.rows : null,
     peerNotices: enabled && queueScopeRef.current === handleKey ? peerNotices : null,
     spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,
     permissionDismissed

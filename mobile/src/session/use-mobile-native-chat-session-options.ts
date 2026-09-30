@@ -206,20 +206,28 @@ export function useMobileNativeChatSessionOptions(args: {
       return
     }
     let active = true
-    void readSessionOptionRecord(scopeKey).then((stored) => {
-      if (!active || !stored || stored.agent !== agent) {
-        return
-      }
-      const live = recordsByScope.get(scopeKey)
-      if (!live) {
-        recordsByScope.set(scopeKey, stored)
-        bump()
-        return
-      }
-      if (mergeStoredSessionOptionRecord(live, stored)) {
-        bump()
-      }
-    })
+    void readSessionOptionRecord(scopeKey)
+      .then((stored) => {
+        if (!active || !stored || stored.agent !== agent) {
+          return
+        }
+        const live = recordsByScope.get(scopeKey)
+        if (!live) {
+          recordsByScope.set(scopeKey, stored)
+          bump()
+          return
+        }
+        if (mergeStoredSessionOptionRecord(live, stored)) {
+          bump()
+        }
+      })
+      // Nobody awaits this promise: a throw here was an unhandled rejection
+      // with no line behind it, and the picks fell back to catalog defaults
+      // for the rest of the run. Not retried: the scope stays consulted.
+      .catch((error: unknown) => {
+        const why = error instanceof Error ? error.message : String(error)
+        console.warn(`[session-options] picks for ${JSON.stringify(scopeKey)} not restored: ${why}`)
+      })
     return () => {
       active = false
     }

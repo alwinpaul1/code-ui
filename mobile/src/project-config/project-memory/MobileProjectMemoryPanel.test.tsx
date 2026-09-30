@@ -24,10 +24,15 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), canGoBack: ()
 
 const fakes = vi.hoisted(() => ({
   client: null as RpcClient | null,
-  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown'
+  filesWrite: 'allowed' as 'allowed' | 'forbidden' | 'unknown',
+  lastConnectedAt: 1000 as number | null
 }))
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
+}))
+// Which connection the host is on; a failed read is read again when it moves.
+vi.mock('../../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => fakes.lastConnectedAt
 }))
 // The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
 // Faked so this suite tests what the screen does with the answer, not the probe.
@@ -90,6 +95,44 @@ async function openRow(renderer: ReactTestRenderer, relativePath: string): Promi
 describe('MobileProjectMemoryPanel', () => {
   beforeEach(() => {
     fakes.filesWrite = 'allowed'
+    fakes.lastConnectedAt = 1000
+  })
+
+  // Opened while the relay was still dialling, every read failed ('Not connected') and the screen
+  // said so, with Retry, for as long as the connection then stayed healthy (review, 2026-09-30).
+  it('reads its files again by itself when the relay connects after they failed', async () => {
+    let connected = false
+    const client = mockClient({ 'CLAUDE.md': '# hi' })
+    const send = client.sendRequest as unknown as ReturnType<typeof vi.fn>
+    const answer = send.getMockImplementation() as unknown as (
+      method: string,
+      params: Record<string, unknown>
+    ) => Promise<unknown>
+    send.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+      if (!connected) {
+        throw new Error('Not connected')
+      }
+      return answer(method, params)
+    })
+    const renderer = await render(client)
+    expect(allText(renderer).filter((t) => /Not connected|couldn't|could not/i.test(t)).length).toBeGreaterThan(0)
+    expect(send).toHaveBeenCalledTimes(3)
+
+    connected = true
+    fakes.lastConnectedAt = 2000
+    await act(async () => {
+      renderer.update(
+        createElement(MobileProjectMemoryPanel, { hostId: 'h1', worktreeId: 'w1', name: 'my-repo' })
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(send).toHaveBeenCalledTimes(6)
+    const text = allText(renderer)
+    expect(text).toContain('4 bytes')
+    expect(text.filter((t) => t === 'Not created yet')).toHaveLength(2)
+    act(() => renderer.unmount())
   })
 
   // 2026-09-18: Orca 1.4.205's mobile-scope dispatch gate refuses every

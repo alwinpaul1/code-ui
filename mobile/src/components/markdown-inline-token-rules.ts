@@ -20,6 +20,22 @@ export function isIntrawordUnderscoreToken(text: string, index: number, token: s
 }
 
 /**
+ * Where the scan goes on after an intraword underscore token at `index` is refused: past the
+ * underscore run it opens with. A token opening anywhere else in that run has `_` before it, which
+ * isIntrawordUnderscoreToken refuses too, so nothing is lost; but finding each one cost a scan,
+ * and from the second underscore of `a__b__` an italic holding bold spans runs to the end of the
+ * text before it closes. Going on one character at a time did that once per underscore: copying
+ * `a__b__` 20,000 times took 6.7 s (review, 2026-09-30).
+ */
+export function afterRefusedUnderscoreOpener(text: string, index: number): number {
+  let end = index + 1
+  while (text[end] === '_') {
+    end += 1
+  }
+  return end
+}
+
+/**
  * Split sentence punctuation off an autolinked URL tail ("see https://x.com/a."),
  * keeping a trailing ')' only when the URL itself opened a paren.
  */
@@ -54,4 +70,53 @@ export function trimAutolinkTrailingPunctuation(url: string): { url: string; tra
     break
   }
   return { url: url.slice(0, end), trailing: url.slice(end) }
+}
+
+/**
+ * A bold (`width` 2) or italic (`width` 1) of one mark, `\\*` or `_`, as a
+ * RegExp source, for the chat (markdown-inline-matcher.ts), the rich editor
+ * and PR comments, so the three read one grammar.
+ *
+ * Its inside starts and ends on a character that is not a space: CommonMark
+ * opens no emphasis on a run with a space after it and closes none on a run
+ * with a space before it. Every star in `x ** 2 + y ** 2` and `2 * 3 * 4` has
+ * a space on both sides, and an inside of "any character but the mark" drew
+ * " 2 + y " bold and copied "2  3  4" (review, 2026-09-30). So a blank to
+ * fill in, `Name: *** Date: ***`, is text too.
+ *
+ * Written as a first piece, then a run of spaces and a piece at a time, so a
+ * match can only end on a piece: `\S(?:.*\S)?` without a choice of where the
+ * last `\S` goes. A piece is one character that is neither the mark nor a
+ * space, or, where `holdsOtherWidth`, a whole span of the other width with
+ * the same rule (`***x***` is bold around `*x*`, `*a **b** c*` italic around
+ * `**b**`). Only the inner span starts on the mark, so no two alternatives
+ * compete for a character and the pattern stays linear on text that never
+ * closes. An inner span stays on one line; the outer one crosses a line break
+ * where `overLines`.
+ */
+export function emphasisSource(mark: '\\*' | '_', width: 1 | 2, overLines: boolean, holdsOtherWidth = true): string {
+  const open = mark.repeat(width)
+  const inner = mark.repeat(3 - width)
+  const word = `[^${mark}\\s]`
+  const piece = holdsOtherWidth ? `(?:${word}|${inner}${word}(?:[^${mark}\\n]*${word})?${inner})` : word
+  return `${open}${piece}(?:${overLines ? '\\s' : '[^\\S\\n]'}*${piece})*${open}`
+}
+
+/** An email address as CommonMark reads one between angle brackets, as a
+ *  RegExp source: `<noreply@anthropic.com>` is a link that writes to it. */
+export const EMAIL_AUTOLINK_SOURCE =
+  "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
+
+/** An autolink as the address it opens, the words drawn for it, and the
+ *  text drawn after it. An address in angle brackets opens whole, closing
+ *  punctuation and all: CommonMark takes the brackets as its bounds. An email
+ *  address in them is drawn as itself and opens a `mailto:`. A bare address
+ *  leaves sentence punctuation behind. */
+export function autolinkParts(token: string): { url: string; words: string; trailing: string } {
+  if (!token.startsWith('<')) {
+    const { url, trailing } = trimAutolinkTrailingPunctuation(token)
+    return { url, words: url, trailing }
+  }
+  const words = token.slice(1, -1)
+  return { url: words.includes(':') ? words : `mailto:${words}`, words, trailing: '' }
 }

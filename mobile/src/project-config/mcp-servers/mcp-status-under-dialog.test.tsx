@@ -32,6 +32,10 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
+// The connection counter a failed read is retried on; it never moves here.
+vi.mock('../../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => 1000
+}))
 vi.mock('../../transport/host-mobile-capabilities', () => ({
   useHostMobileCapabilityVerdict: (_hostId: string, key: string) =>
     key === 'files.write' ? fakes.filesWrite : 'unknown'

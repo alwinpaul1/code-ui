@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parseInline, parseMarkdownBlocks } from './markdown-blocks'
 
@@ -74,6 +75,55 @@ describe('parseMarkdownBlocks', () => {
     expect(() => parseMarkdownBlocks('   \n\n  ')).not.toThrow()
     const open = parseMarkdownBlocks('```\nunterminated')
     expect(open).toEqual([{ kind: 'code', text: 'unterminated', lang: '' }])
+  })
+
+  // Swept 2026-09-30 with the notification reader, which drew `* * *` as
+  // "• * *": here the list rule took `* * *` and `- - -` for a bullet reading
+  // "* *", and `_ _ _` and an indented ` ---` stayed text. CommonMark 4.1: one
+  // character three or more times, spaces between allowed, at most three in.
+  it('draws a spaced or indented rule as a rule, not a bullet', () => {
+    for (const rule of ['* * *', '- - -', '_ _ _', ' ---', '   ***', '-\t-\t-', '___']) {
+      expect(parseMarkdownBlocks(`a\n\n${rule}\n\nb`), rule).toEqual([
+        { kind: 'paragraph', text: 'a' },
+        { kind: 'hr' },
+        { kind: 'paragraph', text: 'b' }
+      ])
+    }
+  })
+
+  // Swept 2026-09-30 from the rich editor's spaced rule: under a list item,
+  // the list rule still took `* * *` for the next bullet, reading "* *", and an
+  // indented `  - - -` too. A rule wins over a list item where a line could be
+  // either (CommonMark 4.1), so it ends the list.
+  it('ends a list at a spaced rule under its items', () => {
+    for (const rule of ['* * *', '- - -', '  * * *', '***']) {
+      expect(parseMarkdownBlocks(`- a\n${rule}\n- b`), rule).toEqual([
+        { kind: 'list', ordered: false, items: ['a'] },
+        { kind: 'hr' },
+        { kind: 'list', ordered: false, items: ['b'] }
+      ])
+    }
+    expect(parseMarkdownBlocks('1. a\n* * *')).toEqual([
+      { kind: 'list', ordered: true, items: ['a'] },
+      { kind: 'hr' }
+    ])
+  })
+
+  it('keeps a bullet that holds marks, and a mixed or deep run, as it was', () => {
+    expect(parseMarkdownBlocks('- - item')).toEqual([{ kind: 'list', ordered: false, items: ['- item'] }])
+    expect(parseMarkdownBlocks('- * -')).toEqual([{ kind: 'list', ordered: false, items: ['* -'] }])
+    expect(parseMarkdownBlocks('    ---').some((block) => block.kind === 'hr')).toBe(false)
+  })
+
+  // A closing run of '#' set apart by a space is markup (CommonMark 4.2);
+  // one touching the last word is the word's. Swept 2026-09-30 with the
+  // release-notes heading, which had the opposite half wrong.
+  it('drops a heading closing run of hashes but keeps a hash in the last word', () => {
+    expect(parseMarkdownBlocks('## Title ##')).toEqual([{ kind: 'heading', level: 2, text: 'Title' }])
+    expect(parseMarkdownBlocks('# Fix the C# #')).toEqual([
+      { kind: 'heading', level: 1, text: 'Fix the C#' }
+    ])
+    expect(parseMarkdownBlocks('### F#')).toEqual([{ kind: 'heading', level: 3, text: 'F#' }])
   })
 
   it('captures the fence language (e.g. mermaid) on the code block', () => {
@@ -213,6 +263,46 @@ describe('parseInline', () => {
     }
   })
 
+  // Review, 2026-09-30: `_var and `code` and other_` matched the italic rule,
+  // was refused as intraword, and was then pushed whole as text with the scan
+  // resumed past its end, so the span between two identifiers drew with its
+  // backticks or stars. The chat renderer resumes past a refused opener's
+  // underscore run (afterRefusedUnderscoreOpener); so does this now.
+  it('draws the code span or bold between two snake_case identifiers', () => {
+    expect(parseInline('use my_var and `code` and other_var')).toEqual([
+      { kind: 'text', text: 'use my_var and ' },
+      { kind: 'code', text: 'code' },
+      { kind: 'text', text: ' and other_var' }
+    ])
+    expect(parseInline('foo_bar **bold** baz_qux')).toEqual([
+      { kind: 'text', text: 'foo_bar ' },
+      { kind: 'bold', text: 'bold' },
+      { kind: 'text', text: ' baz_qux' }
+    ])
+    expect(parseInline('snake_case and _em_')).toEqual([
+      { kind: 'text', text: 'snake_case and ' },
+      { kind: 'italic', text: 'em' }
+    ])
+  })
+
+  it('leaves an identifier whole at the degenerate sizes', () => {
+    expect(parseInline('_')).toEqual([{ kind: 'text', text: '_' }])
+    expect(parseInline('a_b')).toEqual([{ kind: 'text', text: 'a_b' }])
+    expect(parseInline('a_b_c')).toEqual([{ kind: 'text', text: 'a_b_c' }])
+  })
+
+  // After a refused opener the scan goes on past its underscore run, so it
+  // must stay linear where refusals pile up.
+  it.each([
+    ['an identifier with thousands of parts', `x${'_a'.repeat(40_000)}`],
+    ['a bold of italics after a letter', `a__${'_b_ '.repeat(15_000)}__`],
+    ['two long underscore runs around a word', `x${'_'.repeat(20_000)}y${'_'.repeat(20_000)}z`],
+    ['dunder names end to end', 'a__b__'.repeat(20_000)]
+  ])('reads %s inside the deadline', (_name, text) => {
+    const tokens = runInNewContext('parse(text)', { parse: parseInline, text }, { timeout: 250 })
+    expect(Array.isArray(tokens)).toBe(true)
+  })
+
   it('still reads underscores around a word as emphasis', () => {
     expect(parseInline('say _hello_ and __bye__')).toEqual([
       { kind: 'text', text: 'say ' },
@@ -237,6 +327,21 @@ describe('parseInline', () => {
 
   it('leaves unbalanced markers as literal text', () => {
     expect(parseInline('a * b')).toEqual([{ kind: 'text', text: 'a * b' }])
+  })
+
+  // The loop stopped after 5,000 tokens and nothing after it kept the rest,
+  // so a long generated comment lost its end: 9,999 of 12,007 characters drew
+  // (review sweep, 2026-09-30).
+  it('keeps the end of a paragraph that holds thousands of spans', () => {
+    const text = '**b** '.repeat(6000) + 'THE END'
+    const tokens = parseInline(text)
+    expect(tokens.filter((token) => token.kind === 'bold')).toHaveLength(6000)
+    expect(tokens.map((token) => token.text).join('')).toBe('b '.repeat(6000) + 'THE END')
+  })
+
+  it('reads an empty string and a one-character string', () => {
+    expect(parseInline('')).toEqual([])
+    expect(parseInline('*')).toEqual([{ kind: 'text', text: '*' }])
   })
 })
 

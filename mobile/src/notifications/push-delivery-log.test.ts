@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 let store = new Map<string, string>()
 let failStorage = false
@@ -22,6 +22,8 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     })
   }
 }))
+
+const { default: AsyncStorage } = await import('@react-native-async-storage/async-storage')
 
 const {
   recordDeliveredPush,
@@ -193,5 +195,97 @@ describe('remembering which notifications arrived by push', () => {
   // has never read — that would report nothing while the store holds entries.
   it('reads nothing from the cache before the seed lands', () => {
     expect(cachedDeliveredPushes('host-a')).toEqual([])
+  })
+})
+
+// Review of 2026-09-30: the whole list lives under one key per host, and a
+// read the store refused was cached as an empty list. The next push wrote
+// itself alone over the stored list, so every push recorded before it was no
+// longer reported, and the next catch-up replayed each one as a second banner.
+describe('a push recorded while the stored list cannot be read', () => {
+  const unreadable = new Error('storage unavailable')
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    store = new Map()
+    failStorage = false
+    resetDeliveredPushCacheForTests()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => warn.mockRestore())
+
+  const onDisk = () => JSON.parse(store.get('orca:deliveredPushes:host-a') ?? '[]') as unknown[]
+
+  it('keeps every push already recorded, says why it wrote nothing, and saves it with the next push', async () => {
+    await recordDeliveredPush('host-a', entry(1))
+    await recordDeliveredPush('host-a', entry(2))
+    // A new process: the background task that shows the next push.
+    resetDeliveredPushCacheForTests()
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable).mockRejectedValueOnce(unreadable)
+
+    await recordDeliveredPush('host-a', entry(3))
+
+    expect(onDisk()).toEqual([entry(1), entry(2)])
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]).toEqual([
+      expect.stringMatching(/^\[storage\] could not save the delivered pushes: the stored ones could not be read/),
+      unreadable
+    ])
+    expect(cachedDeliveredPushes('host-a')).toEqual([entry(3)])
+
+    await recordDeliveredPush('host-a', entry(4))
+    expect(onDisk()).toEqual([entry(1), entry(2), entry(3), entry(4)])
+  })
+
+  it('records the push at once when the store refuses one read', async () => {
+    await recordDeliveredPush('host-a', entry(1))
+    resetDeliveredPushCacheForTests()
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+
+    await recordDeliveredPush('host-a', entry(2))
+
+    expect(onDisk()).toEqual([entry(1), entry(2)])
+  })
+
+  it('reads the store again after a warm-up it refused, instead of reporting nothing all run', async () => {
+    await recordDeliveredPush('host-a', entry(1))
+    resetDeliveredPushCacheForTests()
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable).mockRejectedValueOnce(unreadable)
+
+    expect(await loadDeliveredPushes('host-a')).toEqual([])
+    expect(warn.mock.calls).toEqual([['[storage] could not read the delivered pushes', unreadable]])
+    expect(await loadDeliveredPushes('host-a')).toEqual([entry(1)])
+  })
+
+  it('does not let a slow warm-up read undo a push recorded while it was out', async () => {
+    await recordDeliveredPush('host-a', entry(1))
+    resetDeliveredPushCacheForTests()
+    const staleRaw = store.get('orca:deliveredPushes:host-a') ?? null
+    let answerWarmUp: (raw: string | null) => void = () => undefined
+    vi.mocked(AsyncStorage.getItem).mockImplementationOnce(
+      () =>
+        new Promise<string | null>((resolve) => {
+          answerWarmUp = resolve
+        })
+    )
+
+    const warmUp = seedDeliveredPushes('host-a')
+    await recordDeliveredPush('host-a', entry(2))
+    answerWarmUp(staleRaw)
+    await warmUp
+    await recordDeliveredPush('host-a', entry(3))
+
+    expect(onDisk()).toEqual([entry(1), entry(2), entry(3)])
+    expect(cachedDeliveredPushes('host-a')).toEqual([entry(1), entry(2), entry(3)])
+  })
+
+  it('says in one line why a push was not saved, and saves it with the next one', async () => {
+    const full = new Error('database or disk is full')
+    vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(full)
+
+    await recordDeliveredPush('host-a', entry(1))
+
+    expect(warn.mock.calls).toEqual([['[storage] could not save the delivered pushes', full]])
+    await recordDeliveredPush('host-a', entry(2))
+    expect(onDisk()).toEqual([entry(1), entry(2)])
   })
 })

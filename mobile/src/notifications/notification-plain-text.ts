@@ -1,3 +1,6 @@
+import { createMarkdownLinkFinder, type MarkdownLinkSpan } from '../components/markdown-inline-links'
+import { markdownHeadingText } from '../text/markdown-heading-text'
+
 /**
  * Agents summarise their turn in Markdown; Android notifications take plain
  * strings and render none of it, so "**Done** — fixed `foo`" showed its
@@ -16,11 +19,21 @@ export function notificationPlainText(markdown: string): string {
   const lines = raw
     .map((line) =>
       line
+        // A rule first: the bullet rewrite below turned `* * *` and `- - -`
+        // into "• * *" and "• - -". One character repeated, as CommonMark
+        // has it, so `- * -` is still a bullet.
+        .replace(/^\s*([-*_])(?:\s*\1){2,}\s*$/, '')
         .replace(/^\s*(```+|~~~+)[^\n]*$/, '')
-        .replace(/^\s{0,3}#{1,6}\s+(.*)$/, (_, text: string) => styleText(text, 'bold'))
+        .replace(/^\s{0,3}#{1,6}\s+(.*)$/, (_, text: string) =>
+          styleText(markdownHeadingText(text), 'bold')
+        )
         .replace(/^(\s*)[*\-+]\s+/, '$1• ')
         .replace(/^\s*>\s?/, '')
-        .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+    )
+    // Links before code and emphasis, as always: a link's words are styled
+    // like any others.
+    .map((line) =>
+      linkWords(line)
         .replace(/`([^`]*)`/g, (_, text: string) => styleText(text, 'mono'))
         .replace(/(\*\*\*|___)(?=\S)([\s\S]*?\S)\1/g, (_, __, text: string) =>
           styleText(text, 'bolditalic')
@@ -33,8 +46,9 @@ export function notificationPlainText(markdown: string): string {
           lead + styleText(text, 'italic')
         )
         .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
-        .replace(/^\s*([-*_]\s*){3,}$/, '')
-        .replace(/\s+$/, '')
+        // Not `/\s+$/`: that tries again from every space of a long run,
+        // 951 ms for a line holding 40,000 of them. The same characters go.
+        .trimEnd()
     )
   const tableLines = classifyTableLines(raw)
   const flattened: string[] = []
@@ -55,6 +69,56 @@ export function notificationPlainText(markdown: string): string {
     )
     .join('\n')
     .trim()
+}
+
+/**
+ * A line with each link and image read as its words: `[w](a)` is `w`,
+ * `![alt](src)` is `alt`, and a README badge, `[![CI](b.svg)](r)`, is `CI`.
+ *
+ * Where each one ends is the chat's own reading (markdown-inline-links.ts), so
+ * an address ends at the `)` that balances it. The pattern this replaced
+ * stopped at the first `)`, which left `)` after the words of every Wikipedia
+ * link and drew a badge as `![CI](r)` (review, 2026-09-30). A link that never
+ * closes, or one with no words, stays as written, which is how the chat draws
+ * it; an image may have no words, and reads as nothing.
+ *
+ * One pass with a stack rather than a call per label: an image's words can
+ * hold another image, and a body nesting thousands of them would run out of
+ * stack.
+ */
+function linkWords(line: string): string {
+  const find = createMarkdownLinkFinder(line, true)
+  /** Links whose words are being read, the innermost last. */
+  const inside: MarkdownLinkSpan[] = []
+  let out = ''
+  let copied = 0
+  let next = find(0)
+  for (;;) {
+    const words = inside[inside.length - 1]
+    if (words && (next === null || next.index >= words.labelEnd)) {
+      // The words end: keep them, and drop the `](address)` after them.
+      out += line.slice(copied, words.labelEnd)
+      copied = words.end
+      inside.pop()
+      if (next !== null && next.index < copied) {
+        next = find(copied)
+      }
+      continue
+    }
+    if (next === null) {
+      return out + line.slice(copied)
+    }
+    if (words && next.end > words.labelEnd) {
+      // It starts in these words and ends past them. Only a whole image sits
+      // in a link's words, so here it is text.
+      next = find(next.index + 1)
+      continue
+    }
+    out += line.slice(copied, next.index)
+    copied = next.index + (next.image ? 2 : 1)
+    inside.push(next)
+    next = find(copied)
+  }
 }
 
 /**

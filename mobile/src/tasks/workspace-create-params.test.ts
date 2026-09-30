@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { startupAgentCreateFields, buildTaskWorkspaceCreateParams } from './workspace-create-params'
+import { startupAgentCreateFields, buildTaskWorkspaceCreateParams, type WorkspaceCreateTaskItem } from './workspace-create-params'
 
 describe('startupAgentCreateFields', () => {
   it('sends startupAgent + createdWithAgent so the host resolves launch args', () => {
@@ -104,6 +104,48 @@ describe('task workspace create params', () => {
       name: 'My workspace',
       displayName: 'My workspace',
       displayNameKind: 'user'
+    })
+  })
+
+  // Review of 2026-09-30: the name went to the host trimmed as `name` but
+  // untrimmed as `displayName`, so '  my name ' labelled the workspace with
+  // the spaces the user never meant.
+  describe('a workspace name the user typed with spaces around it', () => {
+    const items: WorkspaceCreateTaskItem[] = [
+      {
+        provider: 'github',
+        source: { type: 'issue', repoId: 'repo-1', number: 88, title: 'Login', url: 'https://github.com/acme/app/issues/88' }
+      },
+      {
+        provider: 'gitlab',
+        source: { type: 'mr', repoId: 'repo-2', number: 5, title: 'Login', url: 'https://gitlab.com/acme/app/-/merge_requests/5' }
+      },
+      { provider: 'linear', source: { identifier: 'ENG-12', title: 'Login', url: 'https://linear.app/acme/issue/ENG-12' } }
+    ]
+    const build = (item: WorkspaceCreateTaskItem, workspaceName: string) =>
+      buildTaskWorkspaceCreateParams({
+        item,
+        targetRepoId: 'repo-3',
+        setupDecision: 'skip',
+        workspaceName,
+        nameIsAutoManaged: false
+      })
+
+    it('labels the workspace with the name as trimmed, the same as its name', () => {
+      for (const item of items) {
+        expect(build(item, '  my name ')).toMatchObject({ name: 'my name', displayName: 'my name', displayNameKind: 'user' })
+      }
+    })
+
+    it('keeps a one-character name', () => {
+      expect(build(items[0]!, ' x ')).toMatchObject({ name: 'x', displayName: 'x', displayNameKind: 'user' })
+    })
+
+    it('falls back to the generated name for a name of only spaces, as before', () => {
+      const params = build(items[0]!, '   ')
+      expect(params.name).toBe('issue-88')
+      expect(params).not.toHaveProperty('displayName')
+      expect(params).not.toHaveProperty('displayNameKind')
     })
   })
 

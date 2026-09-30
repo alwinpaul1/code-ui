@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { createMarkdownLinkFinder } from '../components/markdown-inline-links'
 import { notificationPlainText, styleText } from './notification-plain-text'
 
 // Seen on the Galaxy S23 (2026-09-09): Claude's turn summary arrives as
@@ -35,6 +36,14 @@ describe('notification text keeps its emphasis without Markdown markers', () => 
 
   it('collapses runs of blank lines', () => {
     expect(notificationPlainText('a\n\n\n\nb')).toBe('a\n\nb')
+  })
+
+  // CommonMark 4.2: a closing run of '#' set apart by a space is markup, one
+  // touching the last word is the word's (swept 2026-09-30).
+  it('drops a heading closing run of hashes but keeps a hash in the last word', () => {
+    expect(notificationPlainText('## Summary ##')).toBe(styleText('Summary', 'bold'))
+    expect(notificationPlainText('## Ported to C#')).toBe(styleText('Ported to C#', 'bold'))
+    expect(styleText('Ported to C#', 'bold').endsWith('#')).toBe(true)
   })
 })
 
@@ -250,3 +259,156 @@ describe('a table the desktop flattened onto one line', () => {
     expect(notificationPlainText('| tsc | - |')).toBe('tsc \u00b7 -')
   })
 })
+
+/** Review, 2026-09-30: `* * *` and `- - -` are rules, as `---` is, but the
+ *  list-marker rewrite ran before the rule check and made them "\u2022 * *" and
+ *  "\u2022 - -", a bullet with two stray marks in a turn's preview. The fixtures
+ *  are built in the shapes each agent writes a turn summary (bold lead-in and
+ *  `-` bullets for Claude Code, a heading and `*` bullets for Codex); they
+ *  were not captured from a live session. */
+describe('a spaced rule between the parts of a turn summary', () => {
+  it('drops a Claude-style "* * *" and keeps the bullets around it', () => {
+    const summary = [
+      '**Fixed** the flaky queue test.',
+      '',
+      '- `parseQueue` now waits for the prompt row',
+      '- Added a regression test',
+      '',
+      '* * *',
+      '',
+      'All tests pass.'
+    ].join('\n')
+    expect(notificationPlainText(summary)).toBe(
+      [
+        `${styleText('Fixed', 'bold')} the flaky queue test.`,
+        '',
+        `\u2022 ${styleText('parseQueue', 'mono')} now waits for the prompt row`,
+        '\u2022 Added a regression test',
+        '',
+        'All tests pass.'
+      ].join('\n')
+    )
+  })
+
+  it('drops a Codex-style "- - -" and keeps the bullets around it', () => {
+    const summary = [
+      '## Summary',
+      '',
+      '* Updated `relay.ts`',
+      '* Ran `pnpm test`',
+      '',
+      '- - -',
+      '',
+      'Next: ship it.'
+    ].join('\n')
+    expect(notificationPlainText(summary)).toBe(
+      [
+        styleText('Summary', 'bold'),
+        '',
+        `\u2022 Updated ${styleText('relay.ts', 'mono')}`,
+        `\u2022 Ran ${styleText('pnpm test', 'mono')}`,
+        '',
+        'Next: ship it.'
+      ].join('\n')
+    )
+  })
+
+  it('drops every spelling of a rule, spaced or not', () => {
+    for (const rule of ['* * *', '- - -', '_ _ _', '***', '---', '___', '*  *  *  *', '  - - -']) {
+      expect(notificationPlainText(`a\n\n${rule}\n\nb`), rule).toBe('a\n\nb')
+    }
+  })
+
+  it('leaves a one-item bullet and a bullet holding marks as bullets', () => {
+    expect(notificationPlainText('- item')).toBe('\u2022 item')
+    expect(notificationPlainText('* a')).toBe('\u2022 a')
+    expect(notificationPlainText('- - item')).toBe('\u2022 - item')
+    // Mixed marks are no rule (CommonMark 4.1): a bullet holding "* -".
+    expect(notificationPlainText('- * -')).toBe('\u2022 * -')
+  })
+
+  it('reads a rule that is the whole body as nothing', () => {
+    expect(notificationPlainText('* * *')).toBe('')
+  })
+})
+
+// Review, 2026-09-30: the chat ends a link's address at the `)` that balances
+// it (markdown-inline-links.ts), but the shade still cut the address at its
+// first `)`, so a Wikipedia link left its tail after the words, and a README
+// badge drew `![CI](r)`. The shade now reads links the way the chat does.
+describe('a link in the shade reads as its words, however its address is spelled', () => {
+  it('leaves no stray ")" after a link whose address holds parentheses', () => {
+    expect(notificationPlainText('[Foo](https://en.wikipedia.org/wiki/Foo_(bar)) done')).toBe('Foo done')
+  })
+
+  it('keeps the alt text of an image whose address holds parentheses', () => {
+    expect(notificationPlainText('![alt](x_(y).png)')).toBe('alt')
+  })
+
+  it('reads a README badge as the words of its image', () => {
+    expect(notificationPlainText('[![CI](b.svg)](r)')).toBe('CI')
+    expect(notificationPlainText('Build [![CI](https://x.dev/b.svg?a=(1))](https://x.dev/r) green')).toBe(
+      'Build CI green'
+    )
+  })
+
+  it('reads two links on one line, the first holding parentheses', () => {
+    expect(notificationPlainText('See [Foo](https://w.org/Foo_(bar)) and [Baz](https://w.org/Baz) now')).toBe(
+      'See Foo and Baz now'
+    )
+  })
+
+  it('keeps a link that never closes as written', () => {
+    expect(notificationPlainText('[a](b(c')).toBe('[a](b(c')
+    expect(notificationPlainText('[a](b(c) tail')).toBe('[a](b(c) tail')
+  })
+
+  it('keeps a link with no words as written, as the chat draws it', () => {
+    expect(notificationPlainText('[](x)')).toBe('[](x)')
+    // An image may have no words: it reads as nothing, as before.
+    expect(notificationPlainText('a ![](x_(y).png) b')).toBe('a  b')
+  })
+
+  it('still styles the words of a link after it drops the address', () => {
+    expect(notificationPlainText('[**Foo**](https://w.org/Foo_(bar)) done')).toBe(
+      `${styleText('Foo', 'bold')} done`
+    )
+  })
+
+  // The shade reads nested words in one pass with a stack, so a body nesting
+  // images deeply cannot run out of stack. Held here to the obvious reading:
+  // each link's words read again, on their own, as a line.
+  it('reads every nesting of links and images as the obvious recursion does', () => {
+    const fragments = ['[', ']', '(', ')', '!', 'a', ' ', '[a](b)', '![a](b)', '[![a](b)](c)', '](', '![', '(b(c))']
+    let seed = 12345
+    const random = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+      return seed
+    }
+    for (let run = 0; run < 5000; run += 1) {
+      const text = Array.from({ length: 1 + (random() % 40) }, () => fragments[random() % fragments.length]).join('')
+      expect(notificationPlainText(text), text).toBe(recursiveLinkWords(text).trim())
+    }
+  })
+
+  // A call per label threw "Maximum call stack size exceeded" here in Node
+  // (and spent 6 s getting there); Hermes has less stack than Node. The one
+  // pass takes a few milliseconds.
+  it('reads twenty thousand images nested in each other without running out of stack', () => {
+    const depth = 20_000
+    const nested = `${'!['.repeat(depth)}deep${'](x_(1))'.repeat(depth)}`
+    expect(notificationPlainText(nested)).toBe('deep')
+  })
+})
+
+function recursiveLinkWords(text: string): string {
+  const find = createMarkdownLinkFinder(text, true)
+  let out = ''
+  let at = 0
+  for (let link = find(0); link; link = find(link.end)) {
+    const words = text.slice(link.index + (link.image ? 2 : 1), link.labelEnd)
+    out += text.slice(at, link.index) + recursiveLinkWords(words)
+    at = link.end
+  }
+  return out + text.slice(at)
+}

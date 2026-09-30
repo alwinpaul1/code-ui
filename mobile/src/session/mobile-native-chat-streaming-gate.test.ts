@@ -348,3 +348,55 @@ describe('the live reply after a row the phone drew', () => {
     expect(gate.baselineTailId).toBeNull()
   })
 })
+
+// Review of 2026-09-30: the stream was trimmed whole, which took the first
+// line's indent too, so a reply opening with an indented code block drew as
+// prose until its row landed (`<div>x</div>` as `x`). The landed reply keeps
+// that indent since 981e0dcd (markdownDocumentSource); the stream now reads
+// the same way, and still lands, segments and refuses a replay as before.
+describe('a streaming reply that opens with indented code', () => {
+  const indented = '    <div>x</div>\n    y'
+  const before = [assistant('a1', 'The tests pass.')]
+
+  it('keeps the first line’s indent while it streams, so it draws as code', () => {
+    expect(run([{ folded: before }, { folded: before, text: indented, live: true }]).results).toEqual([null, indented])
+  })
+
+  it('drops the blank lines above the first line and the whitespace after the last, as the landed reply does', () => {
+    expect(run([{ folded: before }, { folded: before, text: `\n\n${indented}\n\n  ` }]).results).toEqual([null, indented])
+  })
+
+  it('draws no bubble for a stream of whitespace, or of nothing', () => {
+    expect(run([{ folded: before }, { folded: before, text: '   \n\t\n' }]).results).toEqual([null, null])
+    expect(run([{ folded: before }, { folded: before, text: '' }]).results).toEqual([null, null])
+  })
+
+  it('draws one indented line whole', () => {
+    expect(run([{ folded: before }, { folded: before, text: '    x' }]).results).toEqual([null, '    x'])
+  })
+
+  it('keeps one bubble as the indented stream grows, and retires it when its row lands', () => {
+    const landed = [...before, assistant('a2', `\n${indented}\n`)]
+    const { results } = run([
+      { folded: before },
+      { folded: before, text: '    <div>', live: true },
+      { folded: before, text: indented, live: true },
+      { folded: landed, text: indented, live: true }
+    ])
+    expect(results).toEqual([null, '    <div>', indented, null])
+  })
+
+  it('keeps the indented text through a live tick with no text', () => {
+    const { results } = run([
+      { folded: before },
+      { folded: before, text: indented, live: true },
+      { folded: before, live: true }
+    ])
+    expect(results).toEqual([null, indented, indented])
+  })
+
+  it('does not draw the previous indented reply again under the next prompt', () => {
+    const previous = [assistant('a1', indented)]
+    expect(run([{ folded: previous }, { folded: previous, text: indented, live: true }]).results).toEqual([null, null])
+  })
+})

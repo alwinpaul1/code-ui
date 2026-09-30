@@ -11,6 +11,7 @@ import { photosOnlyPrompt } from './mobile-native-chat-image-transcript-markers'
 import { teammateTask } from './mobile-native-chat-peer-messages'
 import { joinedLineBetween, ownedByLaterSubmission, placeOfCopy, rowOwners, withoutLateHookTwins } from './desk-prompt-row-owners'
 import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT } from './desk-prompt-stand-in-place'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 
 
 /**
@@ -362,11 +363,11 @@ export function useDesktopPromptEchoes(
   const refusals = JSON.stringify([
     ...refused.map((prompt) => [
       `not-drawn:${prompt.nonce}`,
-      `[desk-prompt] not drawn: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" was found long after it arrived, and the row it was typed after (${prompt.anchorId}) is not in the transcript`
+      `[desk-prompt] not drawn: the beacon's copy of "${logQuote(prompt.text)}" was found long after it arrived, and the row it was typed after (${prompt.anchorId}) is not in the transcript`
     ]),
     ...drawnWhereFirstSeen.map((prompt) => [
       `first-seen:${prompt.nonce}`,
-      `[desk-prompt] drawn where first seen: the beacon's copy of "${prompt.text.slice(0, 32)}${prompt.text.length > 32 ? '…' : ''}" names a row the chat did not hold through its wait (${prompt.anchorId}), and ${deskTimeOf(prompt) === undefined ? 'its hook sent no time (a tab launched before the hook said when it ran)' : 'no row the chat holds carries a time'}, so nothing placed it closer`
+      `[desk-prompt] drawn where first seen: the beacon's copy of "${logQuote(prompt.text)}" names a row the chat did not hold through its wait (${prompt.anchorId}), and ${deskTimeOf(prompt) === undefined ? 'its hook sent no time (a tab launched before the hook said when it ran)' : 'no row the chat holds carries a time'}, so nothing placed it closer`
     ])
   ])
   useEffect(() => {
@@ -382,6 +383,13 @@ export function useDesktopPromptEchoes(
 
 /** The lines already logged, by kind and nonce, so each says so once. */
 const loggedRefusals = new Set<string>()
+
+/** A message's first 32 code units for a log line, and `…` when there is
+ *  more: never the first half of an emoji, which `slice` left there as a
+ *  lone surrogate (review of 2026-09-30). */
+function logQuote(text: string): string {
+  return `${cutWholeCharacters(text, 32)}${text.length > 32 ? '…' : ''}`
+}
 
 /**
  * Whether a beacon copy is one the chat found long after it arrived, with the

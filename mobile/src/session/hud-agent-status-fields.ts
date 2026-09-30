@@ -32,6 +32,24 @@ export function hudFieldsFromAgentStatus(
   return fields
 }
 
+/**
+ * The observation a HUD merge starts from when no screen was read. Every
+ * merge that fills in a missing screen starts here, so none can state footer
+ * state nobody saw: the mode is null, not 'default', which the pill draws as
+ * Manual. Each merge used to seed its own. The beacon merge's said null, but
+ * the host-status merge runs first and said 'default', so on a host that sends
+ * effort or context the pill claimed Manual while Claude was in Accept edits,
+ * Plan or Auto (review, 2026-09-30).
+ */
+export const NO_SCREEN_HUD_OBSERVATION: Readonly<TerminalHudObservation> = Object.freeze({
+  modelLabel: '',
+  modelId: null,
+  effort: null,
+  context: null,
+  permissionMode: null,
+  permissionModeSeen: null
+})
+
 /** "649.5k", "1.0M": the label the sheet prints beside the ring. Shared with
  *  the beacon merge so one formatter serves every source. */
 export function shortTokenLabel(tokens: number): string {
@@ -61,8 +79,7 @@ export function applyAgentStatusHudFields(
   if (!fields.effort && !hasContext) {
     return screen
   }
-  const base: TerminalHudObservation =
-    screen ?? { modelLabel: '', modelId: null, effort: null, context: null, permissionMode: 'default' }
+  const base: TerminalHudObservation = screen ?? NO_SCREEN_HUD_OBSERVATION
   const context = hasContext
     ? fields.contextWindowTokens
       ? {

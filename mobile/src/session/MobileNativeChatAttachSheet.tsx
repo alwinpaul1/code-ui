@@ -111,8 +111,11 @@ export function MobileNativeChatAttachSheet({
             <Txt variant="label" weight="semibold">
               Permission
             </Txt>
+            {/* No footer read: say so, never a mode name. This said 'Auto', a
+                real and riskier mode, whenever the mode was null (review,
+                2026-09-30). The row still opens the sheet to pick one. */}
             <Txt variant="caption" tone="secondary">
-              {permissionMode ? permissionModeLabel(permissionMode) : 'Auto'}
+              {permissionMode ? permissionModeLabel(permissionMode) : 'Not known yet'}
             </Txt>
           </View>
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />

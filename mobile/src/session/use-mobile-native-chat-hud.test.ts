@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
@@ -64,13 +65,15 @@ type Probe = {
   phase: NativeChatHudPhase
   /** `enabled`: chat shown over a connected relay. Off while backgrounded. */
   listening?: boolean
+  /** The tab's agent status from Orca; a newer host puts effort and context on it. */
+  agentStatus?: AgentStatusEntry | null
 }
 /** What the pill and the ring read (`live`), beside the footer state the
  *  other readers take from `observation`. */
 type Read = { live: NativeChatLiveHud; observation: TerminalHudObservation | null }
 let latest: Read | null = null
 const handleRef = { current: HANDLE as string | null }
-function Harness({ agent, sessionId, phase, listening = true }: Probe) {
+function Harness({ agent, sessionId, phase, listening = true, agentStatus = null }: Probe) {
   const hud = useMobileNativeChatHud({
     client: {} as RpcClient,
     enabled: listening,
@@ -80,7 +83,7 @@ function Harness({ agent, sessionId, phase, listening = true }: Probe) {
     sessionId,
     agent,
     phase,
-    agentStatus: null
+    agentStatus
   })
   latest = { live: hud.live, observation: hud.observation }
   return null
@@ -554,5 +557,76 @@ describe('the same rules on the Codex lane', () => {
     expect(nativeChatHudPhase(false, 'done', undefined)).toBe('idle')
     expect(nativeChatHudPhase(true, 'working', undefined)).toBe('working')
     expect(nativeChatHudPhase(false, 'blocked', undefined)).toBe('paused')
+  })
+})
+
+// `observation.permissionMode` is what the controller passes to the chat as
+// nativeChatPermissionMode. The merge runs the host's agentStatus fields
+// first, then the beacon; with no screen read, the host-status merge seeded
+// 'default' on its own, and the pill said Manual while Claude was in Accept
+// edits, Plan or Auto (review, 2026-09-30).
+describe('the permission pill on a host that sends effort and context', () => {
+  // The fields proposed for Orca's agentStatus on 2026-09-09
+  // (hud-agent-status-fields.test.ts).
+  const HOST_STATUS = {
+    state: 'working',
+    prompt: '',
+    updatedAt: 1,
+    stateStartedAt: 1,
+    paneKey: 'p',
+    stateHistory: [],
+    model: 'claude-opus-5',
+    effort: 'high',
+    contextUsedTokens: 217_000,
+    contextWindowTokens: 1_000_000
+  } as unknown as AgentStatusEntry
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_700_000_000_000)
+    resetAgentHudBeacons()
+    clearStickyLiveHudForTests()
+    fakes.screen = null
+    latest = null
+    handleRef.current = HANDLE
+    listen(HANDLE)
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  it('states no mode, not Manual, when no screen has been read', () => {
+    const read = render({ agent: 'claude', sessionId: S1, phase: 'idle', agentStatus: HOST_STATUS })
+    // The host's figures did merge…
+    expect(read.observation?.effort).toBe('high')
+    expect(read.observation?.context?.usedPercent).toBe(22)
+    // …and nothing states a mode nobody saw.
+    expect(read.observation?.permissionMode).toBeNull()
+    expect(read.observation?.permissionModeSeen ?? null).toBeNull()
+  })
+
+  it('states no mode with a live beacon merged over the host fields either', () => {
+    beacon(LIVE_OPUS)
+    const read = render({ agent: 'claude', sessionId: S1, phase: 'idle', agentStatus: HOST_STATUS })
+    expect(read.observation?.modelId).toBe('claude-opus-5')
+    expect(read.observation?.permissionMode).toBeNull()
+    expect(read.observation?.permissionModeSeen ?? null).toBeNull()
+  })
+
+  it('keeps the mode a screen read, with or without a status line', () => {
+    fakes.screen = parseTerminalHudObservation(DESK_SCREEN)
+    expect(render({ agent: 'claude', sessionId: S1, phase: 'idle', agentStatus: HOST_STATUS }).observation).toMatchObject({
+      permissionMode: 'acceptEdits',
+      permissionModeSeen: 'acceptEdits'
+    })
+    // The same footer with no status line above it: no badge, the mode still read.
+    fakes.screen = parseTerminalHudObservation(DESK_SCREEN.slice(1))
+    expect(render({ agent: 'claude', sessionId: S1, phase: 'idle', agentStatus: HOST_STATUS }).observation).toMatchObject({
+      effort: 'high',
+      permissionMode: 'acceptEdits',
+      permissionModeSeen: 'acceptEdits'
+    })
   })
 })

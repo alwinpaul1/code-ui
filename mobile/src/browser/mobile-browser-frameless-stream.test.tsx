@@ -1,7 +1,7 @@
 import { Buffer } from 'buffer'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   type BrowserScreencastFrame
@@ -174,6 +174,85 @@ describe('MobileBrowserPane with a stream that reports ready but sends no frames
       .map((image) => (image.props.source as { uri?: string } | null)?.uri)
       .find((uri) => typeof uri === 'string')
     expect(source).toContain(Buffer.from(makeFrame().image).toString('base64'))
+  })
+})
+
+// The startup timeout set its text and left the subscription open, so frames that came after it
+// drew under "Browser stream timed out." for as long as the stream lived. The desktop's session
+// also emits { type: 'error' } without ending the stream (orca-runtime-browser.ts, onError), and
+// frames after that drew under its text the same way (review, 2026-09-30).
+describe('MobileBrowserPane when the stream recovers from what it reported', () => {
+  const TIMED_OUT = 'Browser stream timed out.'
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('takes "Browser stream timed out." down when the stream turns out to be alive', async () => {
+    vi.useFakeTimers()
+    const { renderer, stream } = await renderStreamingPane()
+
+    act(() => {
+      vi.advanceTimersByTime(15_100)
+    })
+    expect(errorMessages(renderer)).toContain(TIMED_OUT)
+
+    act(() => {
+      stream.listener({ type: 'ready', tab: { url: 'https://dashboard.example' } })
+    })
+    act(() => {
+      stream.onBinaryFrame?.(makeFrame())
+    })
+
+    expect(errorMessages(renderer)).not.toContain(TIMED_OUT)
+    expect(spinnerCount(renderer)).toBe(0)
+  })
+
+  it('takes it down on a frame alone, with no ready before it', async () => {
+    vi.useFakeTimers()
+    const { renderer, stream } = await renderStreamingPane()
+    act(() => {
+      vi.advanceTimersByTime(15_100)
+    })
+
+    act(() => {
+      stream.onBinaryFrame?.(makeFrame())
+    })
+
+    expect(errorMessages(renderer)).not.toContain(TIMED_OUT)
+  })
+
+  it('takes a stream error down when frames keep coming after it', async () => {
+    const { renderer, stream } = await renderStreamingPane()
+    act(() => {
+      stream.listener({ type: 'ready', tab: { url: 'https://dashboard.example' } })
+      stream.onBinaryFrame?.(makeFrame())
+    })
+
+    act(() => {
+      stream.listener({ type: 'error', message: 'Screencast frame could not be acknowledged' })
+    })
+    expect(errorMessages(renderer)).toContain('Screencast frame could not be acknowledged')
+
+    act(() => {
+      stream.onBinaryFrame?.(makeFrame())
+    })
+    expect(errorMessages(renderer)).not.toContain('Screencast frame could not be acknowledged')
+  })
+
+  it('still says it timed out when nothing ever arrives', async () => {
+    vi.useFakeTimers()
+    const { renderer } = await renderStreamingPane()
+
+    act(() => {
+      vi.advanceTimersByTime(15_100)
+    })
+    act(() => {
+      vi.advanceTimersByTime(60_000)
+    })
+
+    expect(errorMessages(renderer)).toContain(TIMED_OUT)
+    expect(spinnerCount(renderer)).toBe(0)
   })
 })
 

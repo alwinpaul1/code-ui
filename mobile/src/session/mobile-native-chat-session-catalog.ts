@@ -142,10 +142,12 @@ export function mobileNativeChatSlashSuggestions(args: {
   ).map((command) => ({ kind: 'command', command }))
   // For agents that invoke skills with `/`, a name already in the command list
   // is a command, not a skill (desktop picker parity); `$` agents keep both.
+  // Compared on the dispatch token: a plugin's `review` is `/<plugin>:review`,
+  // which no built-in `/review` shadows.
   const prefix = (agent ? getNativeChatAgentProfile(agent)?.skillPrefix : null) ?? '/'
   const named = new Set(catalog.commands.map((command) => command.name))
   const skills: ComposerSuggestion[] = rankSkillSuggestions(catalog.skills, query, SLASH_MENU_LIMIT)
-    .filter((skill) => !(prefix === '/' && named.has(skill.name)))
+    .filter((skill) => !(prefix === '/' && named.has(nativeChatSkillCommandName(skill))))
     .map((skill) => ({ kind: 'skill', skill, prefix }))
   return orderSlashMenu([...commands, ...skills], query)
 }

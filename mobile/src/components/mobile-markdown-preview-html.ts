@@ -5,7 +5,8 @@ import {
   replaceMobileMarkdownPairedMarkupTags,
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
-import { markdownCodeRanges } from './markdown-code-ranges'
+import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
+import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -31,6 +32,37 @@ function restoreEscapedHtmlEntities(value: string): string {
     (next, entity) => next.replaceAll(entity.token, entity.value),
     value
   )
+}
+
+// Why: a backslash before `<` or `&` makes it text (CommonMark), so `\<b>`
+// is no tag and `\&amp;` no entity. This pass took `\<b>x\</b>` for a bold
+// tag pair, and the phone drew "\", bold x, "\" (review, 2026-09-30). The
+// escaped character stands aside through the pass and keeps its backslash,
+// which the inline pass drops (markdown-inline-escapes.ts). Only an odd run of
+// backslashes escapes: `\\<b>` is a backslash and a tag.
+const BACKSLASH_RUN = /\\+([<&]?)/g
+const ESCAPED_LT_TOKEN = '\uE000ORCA_MD_ESCAPED_LT\uE000'
+const ESCAPED_AMP_TOKEN = '\uE000ORCA_MD_ESCAPED_AMP\uE000'
+// An autolink the inline pass draws as a link (a web or `mailto:` address, or
+// an email address) is no tag either: this pass took `<a@b.c>` for an `<a>`
+// tag and dropped it, and drew `<img@x.dev>` as "image" (same review). Its
+// `<` stands aside the same way. Any other scheme is left to the tag rules,
+// which strip a namespaced tag such as `<svg:path>`.
+const AUTOLINK_OPENER = new RegExp(`<(?=(?:https?://[^\\s<>]+|mailto:[^\\s<>]+|${EMAIL_AUTOLINK_SOURCE})>)`, 'g')
+
+function protectEscapedMarkup(value: string): string {
+  const unescaped = value.includes('\\')
+    ? value.replace(BACKSLASH_RUN, (run: string, after: string) =>
+        after && (run.length - 1) % 2 === 1
+          ? `${run.slice(0, -1)}${after === '<' ? ESCAPED_LT_TOKEN : ESCAPED_AMP_TOKEN}`
+          : run
+      )
+    : value
+  return unescaped.replace(AUTOLINK_OPENER, ESCAPED_LT_TOKEN)
+}
+
+function restoreEscapedMarkup(value: string): string {
+  return value.replaceAll(ESCAPED_LT_TOKEN, '<').replaceAll(ESCAPED_AMP_TOKEN, '&')
 }
 
 function decodeHtmlEntities(value: string, preserveEscapedEntities = false): string {
@@ -200,79 +232,6 @@ function normalizeInlineHtml(value: string): string {
   return next
 }
 
-// Why: Markdown code is literal source, so it must bypass the HTML strip pass.
-const CODE_PLACEHOLDER_PREFIX_BASE = '\uE000ORCA_MD_CODE_'
-const CODE_PLACEHOLDER_SUFFIX = '\uE000'
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function codePlaceholderPrefix(content: string): string {
-  let suffixLength = 0
-  let cursor = 0
-  while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
-    cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
-    const suffixStart = cursor
-    while (content[cursor] === '_') {
-      cursor += 1
-    }
-    // One extra underscore keeps the prefix longer than every authored run.
-    suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
-  }
-  return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
-}
-
-function protectMarkdownCode(
-  content: string,
-  /** Indented code blocks too, which only a whole document can tell apart
-   *  from indented HTML (markdown-code-ranges.ts). */
-  indentedCode = false
-): {
-  protectedText: string
-  codeSpans: string[]
-  placeholderPrefix: string
-} {
-  const placeholderPrefix = codePlaceholderPrefix(content)
-  const codeSpans: string[] = []
-  const store = (match: string): string => {
-    const token = `${placeholderPrefix}${codeSpans.length}${CODE_PLACEHOLDER_SUFFIX}`
-    codeSpans.push(match)
-    return token
-  }
-
-  const lines = content.split('\n')
-  const protectedLines: string[] = []
-  const blocks = markdownCodeRanges(lines, { indentedCode })
-  let index = 0
-  while (index < lines.length) {
-    const line = lines[index] ?? ''
-    const blockEnd = blocks.get(index)
-    if (blockEnd !== undefined) {
-      protectedLines.push(store(lines.slice(index, blockEnd).join('\n')))
-      index = blockEnd
-      continue
-    }
-
-    protectedLines.push(line.replace(/`[^`\n]+`/g, store))
-    index += 1
-  }
-
-  return { protectedText: protectedLines.join('\n'), codeSpans, placeholderPrefix }
-}
-
-function restoreMarkdownCode(
-  value: string,
-  codeSpans: string[],
-  placeholderPrefix: string
-): string {
-  const placeholderPattern = new RegExp(
-    `${escapeRegExp(placeholderPrefix)}(\\d+)${escapeRegExp(CODE_PLACEHOLDER_SUFFIX)}`,
-    'g'
-  )
-  return value.replace(placeholderPattern, (_token, index) => codeSpans[Number(index)] ?? _token)
-}
-
 /**
  * A document as MobileMarkdown draws it and the reply's Copy reads it
  * (markdown-plain-text.ts): the blank lines before its first line and the
@@ -305,7 +264,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     content.replace(/\r\n?/g, '\n'),
     true
   )
-  let next = protectedText
+  let next = protectEscapedMarkup(protectedText)
 
   // Why: repository Markdown often uses small HTML islands for centered README
   // headers and badges. Preview mode should read like Markdown, while Source
@@ -328,5 +287,5 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   next = normalizeInlineHtml(next)
   next = stripTags(next)
 
-  return restoreMarkdownCode(restoreEscapedHtmlEntities(next), codeSpans, placeholderPrefix)
+  return restoreMarkdownCode(restoreEscapedMarkup(restoreEscapedHtmlEntities(next)), codeSpans, placeholderPrefix)
 }

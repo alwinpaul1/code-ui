@@ -250,12 +250,25 @@ export const QUEUE_ROW_MATCH_FLOOR = 24
  *  from the phone with screenshots, 2026-09-14). Compare the printing
  *  characters only — the drawn row's line breaks are Claude's wrapping, not the
  *  author's — and accept the drawn row as a prefix of what was sent once it is
- *  long enough to be unambiguous. */
+ *  long enough to be unambiguous.
+ *
+ *  The row as drawn is compared whole BEFORE a trailing "…" or "..." comes off
+ *  it as Claude's shortening mark: the author may have typed it. Stripping it
+ *  first left "wait..." against "wait", under the floor, so a short send that
+ *  ends in an ellipsis stood as a bubble AND a queue row until the agent took
+ *  it, on Claude and Codex alike (review, 2026-09-30). */
 export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
   const want = dense(sent)
-  const row = dense(drawn).replace(/(?:\u2026|\.{3})$/, '')
-  if (row.length === 0 || want.length === 0) {
+  const whole = dense(drawn)
+  if (whole.length === 0 || want.length === 0) {
+    return false
+  }
+  if (whole === want) {
+    return true
+  }
+  const row = whole.replace(/(?:\u2026|\.{3})$/, '')
+  if (row.length === 0) {
     return false
   }
   if (row === want) {

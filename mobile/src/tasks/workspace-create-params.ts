@@ -124,10 +124,13 @@ export function buildTaskWorkspaceCreateParams(args: {
           linearIdentifier: item.source.identifier
         })
       : getWorkspaceSourceName({ provider: item.provider, ...item.source })
+  // Trimmed as `name` is (resolveMobileWorkspaceCreateName): sent as typed,
+  // '  my name ' labelled the workspace with the spaces around it.
+  const typedName = workspaceName?.trim()
   const displayName = nameIsAutoManaged
     ? { displayName: sourceName.displayName, displayNameKind: 'generated' as const }
-    : workspaceName?.trim()
-      ? { displayName: workspaceName, displayNameKind: 'user' as const }
+    : typedName
+      ? { displayName: typedName, displayNameKind: 'user' as const }
       : {}
   const common = {
     setupDecision,

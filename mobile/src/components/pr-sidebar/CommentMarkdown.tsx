@@ -142,7 +142,7 @@ function BlockView({
           {block.items.map((item, i) => (
             <View key={i} style={styles.listItem}>
               <Text style={[styles.bullet, { fontSize: base }]}>
-                {block.ordered ? `${i + 1}.` : '•'}
+                {block.ordered ? `${(block.start ?? 1) + i}.` : '•'}
               </Text>
               <Text
                 style={[
@@ -255,17 +255,22 @@ function Inline({ text, base, styles }: { text: string; base: number; styles: St
   return (
     <>
       {tokens.map((token, i) => {
+        // Emphasis draws its inside through Inline again, as the chat does:
+        // `***x***` is bold around `*x*`, and a code span or link inside a
+        // bold is still one. The depth is bounded: a bold closes at the first
+        // run of its own two marks, so it cannot hold a bold of its own kind,
+        // and an italic's inside holds no mark of its own character.
         if (token.kind === 'bold') {
           return (
             <Text key={i} style={styles.bold}>
-              {token.text}
+              <Inline text={token.text} base={base} styles={styles} />
             </Text>
           )
         }
         if (token.kind === 'italic') {
           return (
             <Text key={i} style={styles.italic}>
-              {token.text}
+              <Inline text={token.text} base={base} styles={styles} />
             </Text>
           )
         }
@@ -277,9 +282,12 @@ function Inline({ text, base, styles }: { text: string; base: number; styles: St
           )
         }
         if (token.kind === 'link') {
+          // The label draws through Inline too, so [`<T>`](url) reads as a
+          // code chip inside the link rather than its backticks. A label ends
+          // at its first ']', so it cannot hold a link of its own.
           return (
             <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
-              {token.text}
+              <Inline text={token.text} base={base} styles={styles} />
             </Text>
           )
         }

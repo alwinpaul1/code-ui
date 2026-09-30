@@ -44,6 +44,22 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('__a _b_ c__')).toBe('a b c')
   })
 
+  // Review, 2026-09-30, the mirror image: an italic could hold no star, so
+  // `***x** y*` copied as "*x y*" (the screen is pinned in
+  // MobileMarkdown.nested-emphasis.test.tsx).
+  it('copies an italic holding bold without stray stars or underscores', () => {
+    expect(markdownPlainText('***x** y*')).toBe('x y')
+    expect(markdownPlainText('*a **b** c*')).toBe('a b c')
+    expect(markdownPlainText('*x **y** z **w** v*')).toBe('x y z w v')
+    expect(markdownPlainText('___x__ y_')).toBe('x y')
+    expect(markdownPlainText('_a __b__ c_')).toBe('a b c')
+    expect(markdownPlainText('*one **b** two* and ***x** y*')).toBe('one b two and x y')
+  })
+
+  it('keeps an underscore italic holding bold literal inside a word', () => {
+    expect(markdownPlainText('snake_a __b__ c_case')).toBe('snake_a b c_case')
+  })
+
   it('keeps the emphasis it already read the way it read it', () => {
     expect(markdownPlainText('**a**')).toBe('a')
     expect(markdownPlainText('*a*')).toBe('a')
@@ -60,18 +76,48 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('a *** b')).toBe('a *** b')
     // A line of three is a rule, which draws no words.
     expect(markdownPlainText('***')).toBe('')
-    // Blanks to fill in: a run followed by a space opens nothing.
-    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: * Date: *')
+    // Blanks to fill in: a run followed by a space opens nothing, and one
+    // after a space closes nothing. The stars copied as "Name: * Date: *",
+    // a star, bold " Date: ", a star, until every emphasis had to start and
+    // end on a word (MobileMarkdown.spaced-operators.test.tsx, 2026-09-30).
+    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: *** Date: ***')
     expect(markdownPlainText('Name: ___ Date: ___')).toBe('Name: ___ Date: ___')
-    // Today's reading, pinned so the nesting change leaves it where it was:
-    // the two stars pair as an italic " 3 ", though CommonMark opens nothing
-    // on a star with a space after it.
-    expect(markdownPlainText('2 * 3 * 4')).toBe('2  3  4')
+    // A star with a space on each side is text, as CommonMark reads it; it
+    // copied as "2  3  4" before the same change.
+    expect(markdownPlainText('2 * 3 * 4')).toBe('2 * 3 * 4')
   })
 
   it('copies a code pill as its words, backticks and padding off', () => {
     expect(markdownPlainText('only when someone runs `cdk deploy`.')).toBe('only when someone runs cdk deploy.')
     expect(markdownPlainText('`` `user` `` becomes `user`')).toBe('`user` becomes user')
+  })
+
+  // Review, 2026-09-30: the HTML pass protected only a one-backtick span on
+  // one line, so a tag in a span across a soft line break, or in a
+  // two-backtick span holding a backtick, was rewritten to `**x**` before
+  // the screen drew the span. The screen is pinned in
+  // MobileMarkdown.code-protection.test.tsx.
+  it('copies a code span across a line break with its tags as written', () => {
+    expect(markdownPlainText('a `<b>x\ny</b>` b')).toBe('a <b>x y</b> b')
+    expect(markdownPlainText('- a `<b>x\n  y</b>` b')).toBe('• a <b>x y</b> b')
+    expect(markdownPlainText('> a `<b>x\n> y</b>` b')).toBe('a <b>x y</b> b')
+    expect(markdownPlainText('a ``x`<b>y\nz</b>`` b')).toBe('a x`<b>y z</b> b')
+  })
+
+  it('copies a two-backtick span holding a backtick with its tags as written', () => {
+    expect(markdownPlainText('a ``x`b <b>y</b>`` c')).toBe('a x`b <b>y</b> c')
+    expect(markdownPlainText('use ``&amp;`` here')).toBe('use &amp; here')
+  })
+
+  it('reads no code span across a blank line, a heading or a new list item', () => {
+    expect(markdownPlainText('a `x <b>y</b>\n\nz` b')).toBe('a `x y\n\nz` b')
+    expect(markdownPlainText('# a `x\n<b>y</b>` b')).toBe('a `x\n\ny` b')
+    expect(markdownPlainText('- a `x\n- <b>y</b>` b')).toBe('• a `x\n• y` b')
+  })
+
+  it('reads an escaped backtick as no code span, so its tags are HTML', () => {
+    expect(markdownPlainText('a \\`<b>x</b>` b')).toBe('a `x` b')
+    expect(markdownPlainText('a \\\\`<b>x</b>` b')).toBe('a \\<b>x</b> b')
   })
 
   it('copies a code block as its code, without the fences or the language', () => {
@@ -89,6 +135,30 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('\t<b>x</b> &amp; y')).toBe('<b>x</b> &amp; y')
     expect(markdownPlainText('\n\n    <b>x</b>\n\nafter')).toBe('<b>x</b>\n\nafter')
     expect(markdownPlainText('\r\n    <b>x</b>\r\n')).toBe('<b>x</b>')
+  })
+
+  // Review, 2026-09-30: where marked had closed a list or a quote, the code
+  // ranges still thought it open, so an indented block after it went through
+  // the HTML pass and `<b>x</b>` copied as `**x**`. The ranges are pinned in
+  // markdown-code-ranges.test.ts, the screen in
+  // MobileMarkdown.code-protection.test.tsx.
+  it('copies an indented block after a heading that ended a list verbatim', () => {
+    expect(markdownPlainText('- item\n# Next\n\n    <b>x</b>')).toBe('• item\n\nNext\n\n<b>x</b>')
+    expect(markdownPlainText('text\n# Next\n\n    <b>x</b>')).toBe('text\n\nNext\n\n<b>x</b>')
+    expect(markdownPlainText('- item\n#hashtag\n\n    <b>x</b>')).toBe('• item\n\n#hashtag\n\n<b>x</b>')
+    expect(markdownPlainText('- # H\n        <b>x</b>')).toBe('H\n\n  <b>x</b>')
+  })
+
+  it('copies an indented block after a quote that ends in no paragraph verbatim', () => {
+    expect(markdownPlainText('> ```\n> x\n> ```\n    <b>x</b>')).toBe('x\n\n<b>x</b>')
+    expect(markdownPlainText('> # H\n    <b>x</b>')).toBe('# H\n\n<b>x</b>')
+    expect(markdownPlainText('>\n    <b>x</b>')).toBe('<b>x</b>')
+  })
+
+  it('still copies a lazy line of a quote\'s paragraph as that paragraph', () => {
+    expect(markdownPlainText('> quoted text\n    <b>x</b>')).toBe('quoted text x')
+    expect(markdownPlainText('> quote\n    <b>1</b>\n>     <b>2</b>')).toBe('quote 1 2')
+    expect(markdownPlainText('- item\n<div>\n\n    <b>x</b>')).toBe('• item\nx')
   })
 
   it('copies a one-line indented block, and nothing for lines of only spaces', () => {
@@ -231,9 +301,126 @@ describe('markdownPlainText', () => {
     )
   })
 
+  // Review, 2026-09-30: an address was cut at its first `)` and a label at
+  // its first `]`, so the Copy of these held a stray bracket, a cut address,
+  // or a badge's `![`, `](` and image address. The screen is pinned in
+  // MobileMarkdown.link-shapes.test.ts.
+  it('copies an address with parentheses in it whole, with nothing after it', () => {
+    expect(markdownPlainText('[https://x.dev/a_(b)](https://x.dev/a_(b))')).toBe('https://x.dev/a_(b)')
+    expect(markdownPlainText('see [notes](docs/a_(b).md) now')).toBe('see notes now')
+    expect(markdownPlainText('[w](https://x.dev/a_((b)c)) ok')).toBe('w (https://x.dev/a_((b)c)) ok')
+  })
+
+  it('copies a README badge as its words and the address it links to, with no brackets', () => {
+    expect(markdownPlainText('[![CI](https://img.shields.io/b.svg)](https://github.com/x/y)')).toBe(
+      'CI (https://github.com/x/y)'
+    )
+    expect(markdownPlainText('[![CI](https://a.dev/ci.svg)](https://x.dev/ci) [![npm](https://a.dev/n.svg)](https://x.dev/n)')).toBe(
+      'CI (https://x.dev/ci) npm (https://x.dev/n)'
+    )
+    expect(markdownPlainText('[![](https://a.dev/b.svg)](https://x.dev/y)')).toBe('image (https://x.dev/y)')
+  })
+
+  it('copies a badge whose link never closes as the image it still is', () => {
+    expect(markdownPlainText('[![CI](https://a.dev/b.svg)] and more')).toBe('[CI (https://a.dev/b.svg)] and more')
+  })
+
+  it('copies an address in angle brackets without them', () => {
+    expect(markdownPlainText('<https://x.dev/a>,')).toBe('https://x.dev/a,')
+    expect(markdownPlainText('<https://x.dev/a.>')).toBe('https://x.dev/a.')
+  })
+
+  // Found in the same sweep (2026-09-30): the HTML pass took `<a@b.c>` for an
+  // `<a>` tag and dropped it, and `<img@x.dev>` became the word "image". An
+  // email address in angle brackets is an autolink in CommonMark.
+  it('copies an email address in angle brackets as the address', () => {
+    expect(markdownPlainText('mail <a@b.c> now')).toBe('mail a@b.c now')
+    expect(markdownPlainText('mail <img@x.dev> or <p.q@x.dev>')).toBe('mail img@x.dev or p.q@x.dev')
+    expect(markdownPlainText('Co-Authored-By: Claude <noreply@anthropic.com>')).toBe(
+      'Co-Authored-By: Claude noreply@anthropic.com'
+    )
+    expect(markdownPlainText('see <mailto:a@b.c>')).toBe('see mailto:a@b.c')
+  })
+
+  it('keeps an address in angle brackets it does not open, and a tag, as they were', () => {
+    expect(markdownPlainText('see <ftp://x.dev/a>')).toBe('see <ftp://x.dev/a>')
+    expect(markdownPlainText('<@b.c> and <b>x</b>')).toBe('<@b.c> and x')
+    expect(markdownPlainText('\\<a@b.c>')).toBe('<a@b.c>')
+  })
+
+  it('keeps a link whose address or label never closes as written', () => {
+    expect(markdownPlainText('[w](docs/a_(b.md')).toBe('[w](docs/a_(b.md')
+    expect(markdownPlainText('[w](')).toBe('[w](')
+    expect(markdownPlainText('[](x)')).toBe('[](x)')
+    expect(markdownPlainText('[x]()')).toBe('[x]()')
+  })
+
+  // Review, 2026-09-30: a backslash before punctuation, which makes it
+  // literal in CommonMark, was never read: `\*not bold\*` drew italic with
+  // both backslashes kept, and `off\!` kept its backslash. The screen is
+  // pinned in MobileMarkdown.escapes.test.tsx.
+  it('copies an escaped mark as the mark, without its backslash', () => {
+    expect(markdownPlainText('\\*not bold\\*')).toBe('*not bold*')
+    expect(markdownPlainText('Price 50% off\\!')).toBe('Price 50% off!')
+    expect(markdownPlainText('\\_\\_init\\_\\_ and \\~\\~x\\~\\~')).toBe('__init__ and ~~x~~')
+    expect(markdownPlainText('\\[not a link](https://x.dev)')).toBe('[not a link](https://x.dev)')
+    expect(markdownPlainText('\\`not code`')).toBe('`not code`')
+    expect(markdownPlainText('\\<https://x.dev>')).toBe('<https://x.dev>')
+  })
+
+  it('reads a mark after an escaped backslash as a mark', () => {
+    expect(markdownPlainText('a \\\\ b')).toBe('a \\ b')
+    expect(markdownPlainText('\\\\*a*')).toBe('\\a')
+    expect(markdownPlainText('\\\\\\*a*')).toBe('\\*a*')
+    expect(markdownPlainText('\\**a**')).toBe('*a*')
+  })
+
+  it('keeps an escaped mark inside bold, italic and a link\'s words', () => {
+    expect(markdownPlainText('**a \\* b**')).toBe('a * b')
+    expect(markdownPlainText('*a \\* b*')).toBe('a * b')
+    expect(markdownPlainText('[a \\] b](https://x.dev)')).toBe('a ] b (https://x.dev)')
+  })
+
+  it('keeps a backslash before anything that is not punctuation', () => {
+    expect(markdownPlainText('C:\\Users\\x')).toBe('C:\\Users\\x')
+    expect(markdownPlainText('\\')).toBe('\\')
+    expect(markdownPlainText('a\\ b')).toBe('a\\ b')
+    expect(markdownPlainText('end \\é')).toBe('end \\é')
+  })
+
+  it('keeps the backslashes in code and in a link\'s address', () => {
+    expect(markdownPlainText('run `a\\*b` and `C:\\\\x`')).toBe('run a\\*b and C:\\\\x')
+    expect(markdownPlainText('```\n\\*x\\*\n```')).toBe('\\*x\\*')
+    expect(markdownPlainText('[a](docs/a\\_b.md)')).toBe('a')
+    expect(markdownPlainText('[a](https://x.dev/a\\_b)')).toBe('a (https://x.dev/a\\_b)')
+  })
+
+  it('reads escapes in a heading, a list, a quote, an image\'s words and a table once each', () => {
+    expect(markdownPlainText('# \\*h\\*')).toBe('*h*')
+    expect(markdownPlainText('- \\*x\\*')).toBe('• *x*')
+    expect(markdownPlainText('> \\*q\\*')).toBe('*q*')
+    expect(markdownPlainText('![a\\*b](fig/x.png)')).toBe('a*b\nfig/x.png')
+    // marked has already read the `\|` in a cell; `\\` is still the cell's.
+    expect(markdownPlainText('| h | i |\n| --- | --- |\n| x \\| y | a \\\\\\| b \\*c\\* |')).toBe('h\ti\nx | y\ta \\| b *c*')
+  })
+
+  it('leaves an escaped angle bracket or ampersand to the text, not to the HTML cleanup', () => {
+    expect(markdownPlainText('\\<b>x\\</b>')).toBe('<b>x</b>')
+    // The `</b>` is still a tag, as marked reads it, and is not drawn.
+    expect(markdownPlainText('\\<b>x</b> y')).toBe('<b>x y')
+    expect(markdownPlainText('\\\\<b>x</b>')).toBe('\\x')
+    expect(markdownPlainText('\\&amp; and &amp;')).toBe('&amp; and &')
+  })
+
   it('copies a table as tab-separated rows, marks off each cell', () => {
     expect(markdownPlainText('| Name | Size |\n| --- | --- |\n| `a.ts` | **2 KB** |')).toBe(
       'Name\tSize\na.ts\t2 KB'
+    )
+  })
+
+  it('copies a link in any column of a table with its address', () => {
+    expect(markdownPlainText('| a | b |\n| --- | --- |\n| [x](https://x.dev) | [y](https://y.dev) |')).toBe(
+      'a\tb\nx (https://x.dev)\ty (https://y.dev)'
     )
   })
 
@@ -258,7 +445,23 @@ describe('emphasis that never closes', () => {
     ['a bold opener on every line', '**a *b\n'.repeat(15_000)],
     ['a star after every word', `**${'x*y '.repeat(25_000)}`],
     ['italics joined end to end', `**${'*a*'.repeat(30_000)}`],
-    ['a star run', '*'.repeat(100_000)]
+    ['a star run', '*'.repeat(100_000)],
+    ['an italic over many bolds', `*${'a **b** '.repeat(15_000)}`],
+    ['an underscore italic over many bolds', `_${'a __b__ '.repeat(15_000)}`],
+    ['an italic opener on every line', '*a **b\n'.repeat(15_000)],
+    ['a bold opener after every word in an italic', `*${'**x '.repeat(25_000)}`],
+    ['bolds joined end to end in an italic', `*${'**a**'.repeat(30_000)}`],
+    ['italic openers before every bold', '* **a** '.repeat(20_000)],
+    ['an angle bracket before every letter', '<a'.repeat(50_000)],
+    ['an at sign after every letter in angle brackets', `<${'a@'.repeat(50_000)}`],
+    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`],
+    // Review, 2026-09-30: every underscore here sits inside a word, so each
+    // opener is refused and the scan went on from the next underscore, where
+    // an italic holding bold spans ran to the end of the text first: 6.7 s
+    // for this one, quadratic in its length.
+    ['dunder names end to end', 'a__b__'.repeat(20_000)],
+    ['dunder names end to end in an italic', `_x ${'a__b__'.repeat(20_000)}`],
+    ['long underscore runs inside words', `x${'_'.repeat(20_000)}y`.repeat(3)]
   ])('copies %s inside the deadline', (_name, text) => {
     const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
     expect(typeof copied).toBe('string')

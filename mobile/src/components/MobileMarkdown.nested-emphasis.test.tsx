@@ -90,6 +90,38 @@ describe('emphasis nested inside emphasis', () => {
     act(() => renderer.unmount())
   })
 
+  // Review, 2026-09-30, the mirror image: an italic could hold no star, so
+  // `*a **b** c*` drew b not bold, and `***x** y*` drew its stars.
+  it.each(SCHEMES)('draws *a **b** c* all italic with b bold, and ***x** y* with no stars (%s)', (scheme) => {
+    const renderer = render('*a **b** c* and ***x** y*', scheme)
+    expect(textOf(renderer.root)).toBe('a b c and x y')
+    expect(drawnAs(renderer, 'a ')).toEqual({ bold: false, italic: true })
+    expect(drawnAs(renderer, 'b')).toEqual({ bold: true, italic: true })
+    expect(drawnAs(renderer, ' c')).toEqual({ bold: false, italic: true })
+    expect(drawnAs(renderer, ' and ')).toEqual({ bold: false, italic: false })
+    expect(drawnAs(renderer, 'x')).toEqual({ bold: true, italic: true })
+    expect(drawnAs(renderer, ' y')).toEqual({ bold: false, italic: true })
+    act(() => renderer.unmount())
+  })
+
+  it.each(SCHEMES)('draws the underscore italic holding bold the same way (%s)', (scheme) => {
+    const renderer = render('_a __b__ c_ and ___x__ y_', scheme)
+    expect(textOf(renderer.root)).toBe('a b c and x y')
+    expect(drawnAs(renderer, 'b')).toEqual({ bold: true, italic: true })
+    expect(drawnAs(renderer, ' c')).toEqual({ bold: false, italic: true })
+    expect(drawnAs(renderer, 'x')).toEqual({ bold: true, italic: true })
+    act(() => renderer.unmount())
+  })
+
+  it('draws an italic holding two bold spans', () => {
+    const renderer = render('*x **y** z **w** v*', 'light')
+    expect(textOf(renderer.root)).toBe('x y z w v')
+    expect(drawnAs(renderer, 'y')).toEqual({ bold: true, italic: true })
+    expect(drawnAs(renderer, ' z ')).toEqual({ bold: false, italic: true })
+    expect(drawnAs(renderer, 'w')).toEqual({ bold: true, italic: true })
+    act(() => renderer.unmount())
+  })
+
   it('still draws plain bold and plain italic as one style each', () => {
     const renderer = render('**bold** and *italic*', 'light')
     expect(textOf(renderer.root)).toBe('bold and italic')

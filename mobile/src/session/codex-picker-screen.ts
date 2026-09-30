@@ -1,4 +1,5 @@
 import { hasCodexFooter } from './mobile-terminal-hud-parse'
+import { codexPendingInputPreviewRows } from './codex-terminal-queued-messages'
 // Codex's `/model` picker as it renders in the terminal screen buffer. Codex
 // 0.153.x has no non-interactive way to set the model or reasoning effort
 // mid-session — `/model <slug>` is unreliable and a second argument is sent to
@@ -165,11 +166,31 @@ function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
   return row?.includes(CODEX_BUSY_STATUS_MARKER) ?? false
 }
 
+/** A live steer group counts as a running turn: Codex holds a steer ("Messages to be submitted after
+ *  next tool call") only while a turn runs, and hides the busy row while an answer streams, so the
+ *  steer header is the only sign of the turn then. Found by the queue reader's own scan of the
+ *  pending-input preview, wrapped or not (codex-terminal-queued-messages.ts). */
+function isCodexTurnRunning(lines: readonly string[]): boolean {
+  if (hasBusyStatusRowAbove(lines)) {
+    return true
+  }
+  // Only a steer header in the preview directly above the composer: one quoted higher up in the
+  // transcript is not a live queue.
+  const composer = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
+  if (composer === -1) {
+    return false
+  }
+  const previewStart = pendingPreviewStart(lines, composer)
+  return [...codexPendingInputPreviewRows(lines).steerHeaders].some(
+    (index) => index >= previewStart && index < composer
+  )
+}
+
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
  *  placeholder disappears once the composer holds a draft, so the footer line
  *  ("<model> <effort> · <cwd>") counts as evidence of the prompt too. */
 export function isCodexIdle(lines: readonly string[]): boolean {
-  if (isCodexWorking(lines) || parseCodexPickerScreen(lines)) {
+  if (isCodexTurnRunning(lines) || parseCodexPickerScreen(lines)) {
     return false
   }
   return /Ask Codex to do anything/.test(lines.slice(-6).join('\n')) || hasCodexFooter(lines)
@@ -177,7 +198,7 @@ export function isCodexIdle(lines: readonly string[]): boolean {
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
-  return hasBusyStatusRowAbove(lines)
+  return isCodexTurnRunning(lines)
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */

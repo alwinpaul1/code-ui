@@ -8,15 +8,31 @@ import Animated, {
   useSharedValue
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import { ChevronLeft, ChevronRight, Smartphone, Type } from 'lucide-react-native'
+import { ChevronLeft, ChevronRight, Type } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
-import type { RpcClient } from '../src/transport/rpc-client'
 import { PickerModal, type PickerOption } from '../src/components/PickerModal'
 import { TerminalShortcutSettings } from '../src/components/TerminalShortcutSettings'
-import { setTerminalAutoRestoreFitMsForHost } from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  TERMINAL_AUTO_RESTORE_FIT_UNREADABLE,
+  claimTerminalAutoRestoreFitRead,
+  isKnownTerminalAutoRestoreFit,
+  readTerminalAutoRestoreFitReply,
+  releaseTerminalAutoRestoreFitRead,
+  setTerminalAutoRestoreFitMsForHost,
+  terminalAutoRestoreFitRowAction,
+  type TerminalAutoRestoreFitByHost,
+  type TerminalAutoRestoreFitReadLedger,
+  type TerminalAutoRestoreFitValue
+} from '../src/terminal/terminal-auto-restore-fit-state'
+import {
+  AUTO_RESTORE_FIT_OPTIONS,
+  TerminalAutoRestoreFitRow,
+  restoreValueFromMs,
+  type RestoreValue
+} from '../src/terminal/TerminalAutoRestoreFitRow'
 import { terminalSettingsScreenStyles } from '../src/terminal/terminal-settings-screen-styles'
 import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-settings-scroll-lock'
 import {
@@ -25,8 +41,6 @@ import {
   saveTerminalAutocompleteEnabled,
   saveTerminalTextScale
 } from '../src/storage/preferences'
-
-type RestoreValue = 'indefinite' | '60s' | '5m' | '30m'
 
 type TextSizeValue = 'smallest' | 'smaller' | 'default' | 'large' | 'larger' | 'largest'
 
@@ -49,81 +63,6 @@ function textSizeSummary(scale: number): string {
   return (TEXT_SIZE_OPTIONS.find((o) => o.scale === scale) ?? TEXT_SIZE_OPTIONS[0]!).label
 }
 
-const AUTO_RESTORE_FIT_OPTIONS: (PickerOption<RestoreValue> & { ms: number | null })[] = [
-  { value: 'indefinite', label: 'Keep at phone size (default)', ms: null },
-  { value: '60s', label: 'After 1 minute', ms: 60_000 },
-  { value: '5m', label: 'After 5 minutes', ms: 5 * 60_000 },
-  { value: '30m', label: 'After 30 minutes', ms: 30 * 60_000 }
-]
-
-function valueFromMs(ms: number | null | undefined): RestoreValue {
-  if (ms == null) {
-    return 'indefinite'
-  }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  if (exact) {
-    return exact.value
-  }
-  // Why: server may return a non-preset ms (custom value, future preset,
-  // or server-side clamp). Snap to the closest finite preset so the
-  // picker's selected radio agrees with the row sublabel rendered by
-  // autoRestoreSummary ("After Xs").
-  let closest: (typeof AUTO_RESTORE_FIT_OPTIONS)[number] | null = null
-  let bestDelta = Infinity
-  for (const opt of AUTO_RESTORE_FIT_OPTIONS) {
-    if (opt.ms == null) {
-      continue
-    }
-    const delta = Math.abs(opt.ms - ms)
-    if (delta < bestDelta) {
-      bestDelta = delta
-      closest = opt
-    }
-  }
-  return closest ? closest.value : 'indefinite'
-}
-
-function autoRestoreSummary(ms: number | null | undefined): string {
-  if (ms === undefined) {
-    return '…'
-  }
-  if (ms === null) {
-    return AUTO_RESTORE_FIT_OPTIONS[0]!.label
-  }
-  const exact = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.ms === ms)
-  return exact ? exact.label : `After ${Math.round(ms / 1000)}s`
-}
-
-function HostFitRow({
-  client,
-  hostName,
-  ms,
-  onPress,
-  styles
-}: {
-  client: RpcClient | null
-  hostName: string
-  ms: number | null | undefined
-  onPress: () => void
-  styles: ReturnType<typeof terminalSettingsScreenStyles>
-}): React.JSX.Element {
-  const { colors } = useTheme()
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
-      onPress={onPress}
-      disabled={!client}
-    >
-      <Smartphone size={16} color={colors.textSecondary} />
-      <View style={styles.rowContent}>
-        <Text style={styles.rowLabel}>{hostName}</Text>
-        <Text style={styles.rowSublabel}>{autoRestoreSummary(ms)}</Text>
-      </View>
-      <ChevronRight size={16} color={colors.textMuted} />
-    </Pressable>
-  )
-}
-
 export default function TerminalSettingsScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
@@ -133,8 +72,8 @@ export default function TerminalSettingsScreen() {
   const { hosts, loaded: hostsLoaded } = loadedHosts
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients } = useFocusedSettingsHostClients(hostIds)
-  const hostClientsById = useMemo(
-    () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
+  const hostEntriesById = useMemo(
+    () => new Map(hostClients.map((entry) => [entry.hostId, entry])),
     [hostClients]
   )
 
@@ -143,8 +82,29 @@ export default function TerminalSettingsScreen() {
   // level — embedding PickerModal inside a row clipped its BottomDrawer
   // absoluteFill backdrop to the ScrollView content frame and made the
   // drawer appear cut-off.
-  const [hostMs, setHostMs] = useState<Record<string, number | null | undefined>>({})
+  const [hostMs, setHostMs] = useState<TerminalAutoRestoreFitByHost>({})
   const [pickerHostId, setPickerHostId] = useState<string | null>(null)
+  const readLedgerRef = useRef<TerminalAutoRestoreFitReadLedger>(new Map())
+  // The latest read or write per desktop; an older answer landing after it is dropped.
+  const readSeqRef = useRef(new Map<string, number>())
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+  const beginHostRead = useCallback((hostId: string) => {
+    const seq = (readSeqRef.current.get(hostId) ?? 0) + 1
+    readSeqRef.current.set(hostId, seq)
+    return (value: TerminalAutoRestoreFitValue) => {
+      if (mountedRef.current && readSeqRef.current.get(hostId) === seq) {
+        // Why: preserving object identity for an unchanged value avoids
+        // rerendering every settings row again.
+        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, value))
+      }
+    }
+  }, [])
 
   const [textScale, setTextScale] = useState(1)
   const [textSizePickerOpen, setTextSizePickerOpen] = useState(false)
@@ -181,63 +141,73 @@ export default function TerminalSettingsScreen() {
     void saveTerminalAutocompleteEnabled(next)
   }, [])
 
+  // Why: `hostClients` changes on every connection-state tick of every desktop. Each desktop is
+  // read once per connection (claimTerminalAutoRestoreFitRead), and only while connected: a
+  // failed read says "Couldn't read" and waits for the next connection, or a tap on its row
+  // (retryHostRead), instead of spinning, or being drawn as the default. The answer is { ms }
+  // inside the reply envelope, not on it.
+  const [retryTaps, setRetryTaps] = useState(0)
   useEffect(() => {
-    let cancelled = false
-    for (const host of hosts) {
-      const client = hostClientsById.get(host.id) ?? null
-      if (!client) {
+    for (const { hostId, client, state } of hostClients) {
+      if (
+        state !== 'connected' ||
+        !claimTerminalAutoRestoreFitRead(readLedgerRef.current, hostId, client.getLastConnectedAt())
+      ) {
         continue
       }
-      void client
-        .sendRequest('terminal.getAutoRestoreFit')
-        .then((resp) => {
-          if (cancelled) {
-            return
-          }
-          const value = (resp as { ms?: number | null } | null)?.ms
-          // Why: reconnect/status ticks can replay the same value; preserving
-          // object identity avoids rerendering every settings row again.
-          setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, value))
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, host.id, null))
-          }
-        })
+      const settle = beginHostRead(hostId)
+      void client.sendRequest('terminal.getAutoRestoreFit').then(
+        (reply) => settle(readTerminalAutoRestoreFitReply(reply)),
+        () => settle(TERMINAL_AUTO_RESTORE_FIT_UNREADABLE)
+      )
     }
-    return () => {
-      cancelled = true
-    }
-  }, [hosts, hostClientsById])
+  }, [beginHostRead, hostClients, retryTaps])
+
+  // The connection is fine and the read failed anyway: the tap frees this desktop's claim, and the
+  // effect above reads it once more on the same connection. Two taps before a redraw still claim
+  // once; after one the row reads '…' and is disabled until the answer lands.
+  const retryHostRead = useCallback((hostId: string) => {
+    releaseTerminalAutoRestoreFitRead(readLedgerRef.current, hostId)
+    setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, undefined))
+    setRetryTaps((taps) => taps + 1)
+  }, [])
 
   async function selectValue(hostId: string, value: RestoreValue) {
-    const client = hostClientsById.get(hostId) ?? null
-    if (!client) {
-      return
-    }
+    const client = hostEntriesById.get(hostId)?.client ?? null
     const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
-    if (!opt) {
+    if (!client || !opt) {
       return
     }
+    const settle = beginHostRead(hostId)
     setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, opt.ms))
+    let confirmed: TerminalAutoRestoreFitValue = TERMINAL_AUTO_RESTORE_FIT_UNREADABLE
     try {
-      const resp = (await client.sendRequest('terminal.setAutoRestoreFit', {
-        ms: opt.ms
-      })) as { ms?: number | null } | null
-      setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+      const reply = await client.sendRequest('terminal.setAutoRestoreFit', { ms: opt.ms })
+      confirmed = readTerminalAutoRestoreFitReply(reply)
     } catch {
+      // Whether the write landed is unknown: read back what the desktop has.
+    }
+    if (confirmed === TERMINAL_AUTO_RESTORE_FIT_UNREADABLE) {
       try {
-        const resp = (await client.sendRequest('terminal.getAutoRestoreFit')) as {
-          ms?: number | null
-        } | null
-        setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, resp?.ms))
+        confirmed = readTerminalAutoRestoreFitReply(
+          await client.sendRequest('terminal.getAutoRestoreFit')
+        )
       } catch {
-        // give up silently — the next mount retries
+        // Still unknown: the row says "Couldn't read" and offers a retry, never the optimistic pick.
       }
     }
+    settle(confirmed)
   }
 
   const pickerHost = pickerHostId ? hosts.find((h) => h.id === pickerHostId) : null
+  const pickerValue = pickerHost ? hostMs[pickerHost.id] : undefined
+  const pickerKnown = isKnownTerminalAutoRestoreFit(pickerValue)
+  // The picker only preselects a value the desktop answered; one that became unknown closes it.
+  useEffect(() => {
+    if (pickerHostId && !isKnownTerminalAutoRestoreFit(hostMs[pickerHostId])) {
+      setPickerHostId(null)
+    }
+  }, [hostMs, pickerHostId])
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>()
   const scrollOffsetY = useSharedValue(0)
@@ -291,15 +261,18 @@ export default function TerminalSettingsScreen() {
         ) : (
           <View style={[styles.section, styles.sectionTopGap]}>
             {hosts.map((host, idx) => {
-              const client = hostClientsById.get(host.id) ?? null
+              const value = hostMs[host.id]
+              const action = terminalAutoRestoreFitRowAction(value, hostEntriesById.get(host.id))
               return (
                 <View key={host.id}>
                   {idx > 0 && <View style={styles.separator} />}
-                  <HostFitRow
-                    client={client}
+                  <TerminalAutoRestoreFitRow
+                    action={action}
                     hostName={host.name}
-                    ms={hostMs[host.id]}
-                    onPress={() => setPickerHostId(host.id)}
+                    value={value}
+                    onPress={() =>
+                      action === 'retry' ? retryHostRead(host.id) : setPickerHostId(host.id)
+                    }
                     styles={styles}
                   />
                 </View>
@@ -348,10 +321,10 @@ export default function TerminalSettingsScreen() {
       </Animated.ScrollView>
 
       <PickerModal<RestoreValue>
-        visible={pickerHost != null}
+        visible={pickerHost != null && pickerKnown}
         title={pickerHost ? `Restore ${pickerHost.name}` : ''}
         options={AUTO_RESTORE_FIT_OPTIONS}
-        selected={valueFromMs(pickerHost ? hostMs[pickerHost.id] : null)}
+        selected={restoreValueFromMs(pickerKnown ? pickerValue : null)}
         onSelect={(v) => {
           if (pickerHost) {
             void selectValue(pickerHost.id, v)

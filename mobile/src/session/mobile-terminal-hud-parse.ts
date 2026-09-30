@@ -3,6 +3,7 @@ import {
   readTerminalPermissionMode,
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
+import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
 
 // The footer's mode reader lives beside this parser; its callers import both from here.
 export { readTerminalPermissionMode, type TerminalPermissionMode }
@@ -28,8 +29,11 @@ export type TerminalHudObservation = {
    *  spinner is on screen. */
   activity?: string | null
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
-   *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
-  permissionMode: TerminalPermissionMode
+   *  edits on (shift+tab to cycle)"); 'default' when a screen was read and its
+   *  footer shows none; null when no screen was read at all (an observation the
+   *  beacon or host-status merge built from NO_SCREEN_HUD_OBSERVATION), so
+   *  nothing states a mode nobody saw. */
+  permissionMode: TerminalPermissionMode | null
   /** The mode the footer actually STATED, or null when no footer row was on
    *  screen. `permissionMode` collapses null to 'default' for the pill; anything
    *  that acts on the mode must read this instead. */
@@ -84,10 +88,14 @@ export const CODEX_AGENT_MODES: ReadonlyArray<{
   { id: 'plan', label: 'Plan', hint: 'Codex writes a plan before making changes' }
 ]
 
+/** Codex's Plan hint. Claude Code's own mode rows put "on" before theirs
+ *  ("⏸ plan mode on (shift+tab to cycle)"), so this matches none of them. */
+const CODEX_PLAN_HINT = /Plan mode \(shift\+tab to cycle\)/
+
 /** Codex prints "Plan mode (shift+tab to cycle)" at the footer's right edge in
  *  Plan mode and nothing in Default. The last few lines are the footer. */
 export function parseCodexAgentMode(lines: readonly string[]): TerminalAgentMode {
-  return /Plan mode \(shift\+tab to cycle\)/.test(lines.slice(-4).join('\n')) ? 'plan' : 'default'
+  return CODEX_PLAN_HINT.test(lines.slice(-4).join('\n')) ? 'plan' : 'default'
 }
 
 // Codex states its context window as what is LEFT; the ring shows what is used.
@@ -123,8 +131,9 @@ export function parseCodexStatusContext(lines: readonly string[]): TerminalHudCo
 }
 
 // Claude Code's spinner glyphs rotate through these; the verb follows, then an
-// ellipsis. Read from the bottom, where the live line sits.
-const ACTIVITY_LINE = /^\s*[✳✻✽✶✢·*⏺]\s+([A-Z][a-zA-Z]+)…/
+// ellipsis. Read from the bottom, where the live line sits. The same verb the
+// chat's status line reads (mobile-terminal-spinner-line.ts).
+const ACTIVITY_LINE = new RegExp(SPINNER_VERB_SOURCE, 'u')
 
 export function parseTerminalActivity(lines: readonly string[]): string | null {
   for (let index = lines.length - 1; index >= Math.max(0, lines.length - 12); index -= 1) {
@@ -384,30 +393,53 @@ export function parseTerminalHudObservation(
   }
   // No status-line badge, but Claude Code's own footer is on screen: read the
   // context figure Claude Code paints itself once the window runs low. The
-  // model then comes from Orca's hook (agentStatus.model), not from here.
+  // model is not the screen's to state here; the beacon names it, or nothing.
   // The footer is known by its hint or by its mode row: the footers captured
   // with a shell running, in manual mode, or at 46 columns paint no whole
   // "shift+tab to cycle" (review, 2026-09-30). Over a footer known only by
   // its row, only Claude Code's own warning is read: a "context 54%" above
   // one may be conversation, and those footers were never read for a figure.
-  const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line))
+  // Codex's Plan hint is not Claude Code's: taken for it, a Codex footer with
+  // no known agent lost its model, effort and Plan pill, and its "100% context
+  // left" read as 100% used (review, 2026-09-30).
+  const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line.replace(CODEX_PLAN_HINT, '')))
   if (hinted || hasClaudeModeFooter(lines)) {
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
       const context = parseTerminalHudContextWindow(lines[index] ?? '', { ownWarningOnly: !hinted })
       if (context) {
-        return {
-          modelLabel: '',
-          modelId: null,
-          effort: null,
-          context,
-          ...activityField(lines),
-          permissionMode: parseTerminalPermissionMode(lines),
-          permissionModeSeen: readTerminalPermissionMode(lines),
-          ...runningShellCountField(lines)
-        }
+        return claudeFooterObservation(lines, context)
       }
     }
   }
-  // No Claude badge on screen; try the Codex footer before giving up.
-  return parseCodexHudObservation(lines)
+  // No Claude badge or figure on screen; try the Codex footer, which names a
+  // model, and reads its own "context left" figures the right way round.
+  const codex = parseCodexHudObservation(lines)
+  if (codex || readTerminalPermissionMode(lines) === null) {
+    return codex
+  }
+  // A bare Claude footer with no figure is still the footer: its mode and its
+  // shell count are read, and the model and the ring are left blank. Returning
+  // nothing here meant a host with no status line never had its mode read, so
+  // the mode stepper pressed Shift+Tab six times on null reads and said the
+  // mode was not available (review, 2026-09-30). Only a footer ROW counts
+  // here, not the hint alone: "shift+tab to cycle" in the conversation would
+  // otherwise state Manual over a footer nobody saw.
+  return claudeFooterObservation(lines, null)
+}
+
+/** Claude Code's own footer with no badge above it: no model, no effort. */
+function claudeFooterObservation(
+  lines: readonly string[],
+  context: TerminalHudContextWindow | null
+): TerminalHudObservation {
+  return {
+    modelLabel: '',
+    modelId: null,
+    effort: null,
+    context,
+    ...activityField(lines),
+    permissionMode: parseTerminalPermissionMode(lines),
+    permissionModeSeen: readTerminalPermissionMode(lines),
+    ...runningShellCountField(lines)
+  }
 }

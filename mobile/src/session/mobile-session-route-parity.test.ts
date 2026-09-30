@@ -376,8 +376,12 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // `watching={connState === 'connected' && …}`, so a tab's reading notes no turn
 // while the phone is not watching the pane (native-chat-kept-session.ts). The
 // one new literal is that 'connected'.
+// 675 since 2026-09-30: MobileSessionActiveContent's permission-mode picker
+// reads the footer through terminal-mode-stepper's shownPermissionMode, which
+// is outside this family, so the 'default' and 'manual' of its old inline
+// asShown leave with it. No other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '01a61e9c8226c703a0783a2f01b28b7f67744c89164324292516d523a4d5484c'
+  '1c995658248303a4ed3a65e9a46e88c72abfbb598cc3c5418a0c496853ab04eb'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1051,7 +1055,8 @@ describe('mobile session route extraction parity', () => {
     // 681 since the same day: the reader's 'Read only' gives way to the reason.
     // 676 since 2026-09-26 (later): FileReader's source view moved out of the family.
     // 677 since 2026-09-29: the header's 'connected' check for the badge's `watching`.
-    expect(strings).toHaveLength(677)
+    // 675 since 2026-09-30: 'default' and 'manual' moved to shownPermissionMode.
+    expect(strings).toHaveLength(675)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

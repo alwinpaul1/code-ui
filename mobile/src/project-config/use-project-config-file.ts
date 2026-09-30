@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import {
   projectConfigFileCreate,
   projectConfigFileRead,
@@ -37,10 +42,12 @@ export type ProjectConfigFileState =
 
 export function useProjectConfigFile(args: {
   client: RpcClient | null
+  /** The host whose connections a failed read is retried on. */
+  hostId: string
   worktreeId: string
   relativePath: string
 }) {
-  const { client, worktreeId, relativePath } = args
+  const { client, hostId, worktreeId, relativePath } = args
   const [state, setState] = useState<ProjectConfigFileState>({ status: 'loading' })
   const readSeqRef = useRef(0)
   const saveSeqRef = useRef(0)
@@ -95,6 +102,23 @@ export function useProjectConfigFile(args: {
     void load()
   }, [load])
 
+  // A screen opened before the relay was up fails its read ('Not connected') and the client object
+  // is the same across reconnects, so `load` never changes: read again once per NEW connection
+  // (stale-after-reconnect.ts). Only a failed read: a ready draft, dirty or not, is never
+  // replaced, and a file the host said is missing was a good read.
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
+  useEffect(() => {
+    const status =
+      state.status === 'error' ? 'error' : state.status === 'loading' ? 'loading' : 'ready'
+    if (
+      shouldRefetchAfterReconnect(staleLedgerRef.current, relativePath, status, lastConnectedAt) &&
+      status === 'error'
+    ) {
+      void load()
+    }
+  }, [lastConnectedAt, load, relativePath, state.status])
+
   const setContent = useCallback((content: string) => {
     setState((prev) => {
       if (prev.status !== 'ready') {
@@ -108,9 +132,15 @@ export function useProjectConfigFile(args: {
     if (!client || state.status !== 'ready' || state.saving) {
       return
     }
+    // What the write carries is the draft at tap time. An edit made while it is on the wire never
+    // reached the host, so the answer marks `contentToSave` saved, not whatever the draft is now.
     const contentToSave = state.content
     setState((prev) => (prev.status === 'ready' ? { ...prev, saving: true, saveError: null } : prev))
     const seq = (saveSeqRef.current += 1)
+    // A read since the tap (another file on a screen that switches, or a refresh) replaced the
+    // state this write answers for; its answer must not land on that one.
+    const readSeq = readSeqRef.current
+    const superseded = () => saveSeqRef.current !== seq || readSeqRef.current !== readSeq
     try {
       const response = await projectConfigFileWrite.request(client, {
         worktree: `id:${worktreeId}`,
@@ -118,16 +148,22 @@ export function useProjectConfigFile(args: {
         content: contentToSave
       })
       projectConfigFileWrite.interpret(response)
-      if (saveSeqRef.current !== seq) {
+      if (superseded()) {
         return
       }
       setState((prev) =>
         prev.status === 'ready'
-          ? { ...prev, savedContent: prev.content, isDirty: false, saving: false, saveError: null }
+          ? {
+              ...prev,
+              savedContent: contentToSave,
+              isDirty: prev.content !== contentToSave,
+              saving: false,
+              saveError: null
+            }
           : prev
       )
     } catch (error) {
-      if (saveSeqRef.current !== seq) {
+      if (superseded()) {
         return
       }
       const message = error instanceof Error ? error.message : String(error)

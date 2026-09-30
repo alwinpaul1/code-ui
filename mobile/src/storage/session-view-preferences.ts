@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
+import { barrierAfterWrite } from './refused-write-log'
 
 /** How a supported agent session opens: the raw terminal or the native chat view. */
 export type MobileSessionView = 'terminal' | 'chat'
@@ -114,7 +115,7 @@ export function saveChatFocusView(enabled: boolean): Promise<void> {
   const write = (focusViewWriteBarrier ?? Promise.resolve()).then(() =>
     AsyncStorage.setItem(CHAT_FOCUS_VIEW_KEY, enabled ? 'on' : 'off')
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'Focus view', 'save')
   focusViewWriteBarrier = barrier
   void barrier.then(() => {
     if (focusViewWriteBarrier === barrier) {
@@ -233,7 +234,7 @@ export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
     // built synchronously, and what it reads is noted there on an accepted write (ruling 35).
     return persistMirrored(DEFAULT_SESSION_VIEW_KEY, view)
   })
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'default session view', 'save')
   defaultViewWriteBarrier = barrier
   void barrier.then(() => clearDefaultViewWriteBarrier(barrier))
   return write
@@ -329,7 +330,7 @@ export async function updateSessionViewOverride(
     const value = JSON.stringify(Object.fromEntries(current.overrides))
     await persistMirrored(key, value)
   })
-  const barrier = update.catch(() => undefined)
+  const barrier = barrierAfterWrite(update, 'session view overrides', 'save')
   overrideUpdateBarriers.set(key, barrier)
   try {
     await update

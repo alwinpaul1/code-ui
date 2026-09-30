@@ -117,7 +117,8 @@ export type BackgroundTaskDeriveOptions = {
    *  latched by the phone (`mobile-terminal-task-completions.ts`). Each names
    *  the task by the text Claude quotes — its `description`, else its
    *  command — and says how it ended. One entry retires one launch: the
-   *  oldest still-running shell with that label. Why: on a hand-started tab
+   *  oldest still-running shell with that label among the launches it is
+   *  bound to (`launchIds`). Why: on a hand-started tab
    *  there is no beacon, and a mid-turn completion is otherwise invisible
    *  until every shell has finished (2026-09-20). The launch is the phone's,
    *  the verdict the agent's; a row naming nothing the phone holds retires
@@ -147,8 +148,12 @@ export type BackgroundTaskDeriveOptions = {
 }
 
 /** A completion row as read off the agent's screen. `status` is the word the
- *  row uses (`completed`, `failed`, `stopped`), judged like a notification's. */
-export type ScreenTaskCompletion = { label: string; status: string }
+ *  row uses (`completed`, `failed`, `stopped`), judged like a notification's.
+ *  `launchIds` are the launches the row may retire, bound by the memory that
+ *  keeps it (`mobile-screen-completion-memory.ts`): those with its label the
+ *  transcript window held when the phone first saw it. Absent means unbound,
+ *  and the row judges every launch with its label. */
+export type ScreenTaskCompletion = { label: string; status: string; launchIds?: readonly string[] }
 
 /** `shell`, `agent` and `monitor` are what the transcript reader can name.
  *  `workflow` and `unknown` only ever arrive from the host's own roster
@@ -271,10 +276,17 @@ export function deriveBackgroundTasks(
   // Launch order is insertion order, so the first unsettled match is the
   // oldest; two shells sharing a description are retired one per row, oldest
   // first — the order Claude would have to deliver them in anyway.
+  // A row retires only a launch it is bound to. The phone keeps a row for the
+  // whole session, so once the first run's own notification settled it, the
+  // row went on to retire a relaunch under the same description the moment
+  // it started (2026-09-30). Bound by id, not by comparing the launch's time
+  // (the desk's clock) with when the phone saw the row (its own).
   for (const completion of options.screenCompletions ?? []) {
     const label = foldWhitespace(completion.label)
+    const bound = completion.launchIds ?? null
     for (const launch of launches.values()) {
-      if (launch.kind === 'shell' && launch.label === label && !notifications.has(launch.id)) {
+      const boundElsewhere = bound !== null && !bound.includes(launch.id)
+      if (launch.kind === 'shell' && launch.label === label && !notifications.has(launch.id) && !boundElsewhere) {
         notifications.set(launch.id, { status: completion.status, summary: null, at: position + 1, timestamp: null })
         break
       }

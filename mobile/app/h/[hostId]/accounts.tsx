@@ -7,6 +7,7 @@ import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
 import { ScreenHeader } from '../../../src/ui/ScreenHeader'
 import { Txt } from '../../../src/ui/Txt'
+import { Button } from '../../../src/ui/Button'
 import {
   type AccountsSnapshot,
   type ProviderKey,
@@ -74,10 +75,44 @@ export default function AccountsScreen() {
   // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
   const now = useNow(60_000, clockEnabled)
 
+  // One-shot read. With no snapshot on screen, its failure is what the screen says, with Retry.
+  const loadList = useCallback(async () => {
+    if (!client) {
+      return
+    }
+    try {
+      const res = await client.sendRequest('accounts.list')
+      if (res.ok) {
+        acceptSnapshot(decodeAccountsSnapshot(res.result))
+      } else {
+        setError(res.error.message)
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
+        rejectInvalidSnapshot()
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
+    }
+  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+
+  const refresh = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      await loadList()
+    } finally {
+      setRefreshing(false)
+    }
+  }, [loadList])
+
   // Why: subscribe to streaming snapshot updates so usage bars refresh in
   // place when the desktop's rate-limit poll completes (every 5 min) or
   // when the user switches accounts. Falls back to a one-shot accounts.list
-  // if the subscription stream errors.
+  // when the stream errors: the registry hands the listener
+  // { type: 'error', message } and drops the stream (a host that does not
+  // know the method, a refusal, "Connection interrupted"). Without this the
+  // screen said "Loading accounts…" until a pull to refresh. The effect runs
+  // again on each new connection, which subscribes again.
   useEffect(() => {
     if (!client || connState !== 'connected') {
       return
@@ -93,33 +128,12 @@ export default function AccountsScreen() {
         } catch {
           rejectInvalidSnapshot()
         }
+      } else if (evt.type === 'error') {
+        void loadList()
       }
     })
     return unsubscribe
-  }, [acceptSnapshot, client, connState, rejectInvalidSnapshot])
-
-  const refresh = useCallback(async () => {
-    if (!client) {
-      return
-    }
-    setRefreshing(true)
-    try {
-      const res = await client.sendRequest('accounts.list')
-      if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
-      } else {
-        setError(res.error.message)
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
-        rejectInvalidSnapshot()
-      } else {
-        setError(e instanceof Error ? e.message : String(e))
-      }
-    } finally {
-      setRefreshing(false)
-    }
-  }, [acceptSnapshot, client, rejectInvalidSnapshot])
+  }, [acceptSnapshot, client, connState, loadList, rejectInvalidSnapshot])
 
   const selectAccount = useCallback(
     async (provider: ProviderKey, accountId: string | null) => {
@@ -210,12 +224,15 @@ export default function AccountsScreen() {
     )
   }
 
-  const placeholder = (text: string, spinner = true) => (
+  const placeholder = (text: string, spinner = true, onRetry?: () => void) => (
     <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
       {spinner ? <ActivityIndicator color={colors.textSecondary} /> : null}
       <Txt variant="body" tone={spinner ? 'secondary' : 'danger'} align="center">
         {text}
       </Txt>
+      {onRetry ? (
+        <Button label="Retry" variant="secondary" align="center" onPress={onRetry} />
+      ) : null}
     </View>
   )
 
@@ -249,7 +266,7 @@ export default function AccountsScreen() {
         ) : connState !== 'connected' && !snapshot ? (
           placeholder(`Connecting to ${hostName || 'host'}…`)
         ) : error && !snapshot ? (
-          placeholder(error, false)
+          placeholder(error, false, () => void refresh())
         ) : !snapshot ? (
           placeholder('Loading accounts…')
         ) : (

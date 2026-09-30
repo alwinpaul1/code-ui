@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 
 const PREVIEW_PREFIX = 'orca:chatImagePreviews:'
 
@@ -30,6 +31,15 @@ export async function readNativeChatImagePreviews(
   sessionKey: string
 ): Promise<Record<string, string[]> | null> {
   try {
+    // A chat can come back while its last write is still landing (a removal
+    // included); a read that beat it brought the previous previews back. The
+    // barrier never rejects, so a failed write in front of it cannot fail
+    // this read. With no write in flight the read starts at once, in the
+    // caller's own tick, as it always did.
+    const writing = barriers.get(sessionKey)
+    if (writing) {
+      await writing
+    }
     const raw = await AsyncStorage.getItem(previewStorageKey(sessionKey))
     if (!raw) {
       return null
@@ -60,12 +70,11 @@ export function writeNativeChatImagePreviews(
 ): Promise<void> {
   const key = previewStorageKey(sessionKey)
   const kept = persistableImagePreviews(previews)
+  const saving = Object.keys(kept).length > 0
   const write = (barriers.get(sessionKey) ?? Promise.resolve()).then(() =>
-    Object.keys(kept).length > 0
-      ? AsyncStorage.setItem(key, JSON.stringify(kept))
-      : AsyncStorage.removeItem(key)
+    saving ? AsyncStorage.setItem(key, JSON.stringify(kept)) : AsyncStorage.removeItem(key)
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'chat photo previews', saving ? 'save' : 'erase')
   barriers.set(sessionKey, barrier)
   void barrier.then(() => {
     if (barriers.get(sessionKey) === barrier) {
