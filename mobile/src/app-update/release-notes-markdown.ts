@@ -1,4 +1,5 @@
 import { trimAutolinkTrailingPunctuation } from '../components/markdown-inline-token-rules'
+import { markdownHeadingText } from '../text/markdown-heading-text'
 
 // GitHub's generated release body is Markdown ("## What's changed", "- fix: …
 // by @x in https://…/pull/12", "**Full Changelog**: …"). The update alert
@@ -35,9 +36,13 @@ import { trimAutolinkTrailingPunctuation } from '../components/markdown-inline-t
 // are unsure they leave the line alone; a kept tail is a nuisance, a dropped
 // line is not.
 
-const HEADING = /^#{1,6}\s+(.+?)\s*#*\s*$/
+// Its closing run of '#' comes off in markdownHeadingText, which leaves the
+// '#' of "## Fix the C#" alone.
+const HEADING = /^#{1,6}\s+(.+)$/
 const FULL_CHANGELOG = /^\*\*full changelog\*\*:?\s*(https?:\/\/\S+)\s*$/i
-const MERGED_PR_TAIL = /\s+by\s+@[\w-]+\s+in\s+\S+$/i
+// Opens after a non-space or at the start: a bare `\s+` tried again from every
+// space of a long run, 988 ms for a line holding 40,000 of them.
+const MERGED_PR_TAIL = /(^|\S)\s+by\s+@[\w-]+\s+in\s+\S+$/i
 const BARE_BUMP_LINE = /^(?:(?:[-*+]|\d+\.)\s+)?release\s+v?\d+(\.\d+)*\s*$/i
 const FENCE_OPEN = /^\s*(`{3,}|~{3,})/
 const FENCE_CLOSE = /^\s*(`{3,}|~{3,})\s*$/
@@ -106,7 +111,11 @@ export function releaseNotesMarkdown(body: string | null | undefined): string {
     }
     const heading = HEADING.exec(trimmed)
     if (heading) {
-      lines.push(`**${unwrapEmphasis(heading[1]!)}**`)
+      const text = markdownHeadingText(heading[1]!)
+      // "## ##" is an empty heading; wrapped, it would draw a literal "****".
+      if (text) {
+        lines.push(`**${unwrapEmphasis(text)}**`)
+      }
       continue
     }
     const changelog = FULL_CHANGELOG.exec(trimmed)
@@ -117,7 +126,7 @@ export function releaseNotesMarkdown(body: string | null | undefined): string {
         continue
       }
     }
-    lines.push(line.replace(MERGED_PR_TAIL, ''))
+    lines.push(line.replace(MERGED_PR_TAIL, '$1'))
   }
   // A dropped line leaves its blank neighbours behind; more than one blank
   // line in a row is a taller gap in the card for nothing.

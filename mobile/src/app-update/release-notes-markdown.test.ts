@@ -188,3 +188,19 @@ describe('the transform against bodies GitHub does not generate', () => {
     )
   })
 })
+
+// A '#' is a closing sequence only when a space stands before it (CommonMark
+// 4.2). The heading rule stripped any trailing run, so a release section
+// about a C# change lost the '#' from its own name (review, 2026-09-30).
+describe('a release heading that ends in a hash', () => {
+  it('keeps the hash that is part of the last word', () => {
+    expect(releaseNotesMarkdown('## Fix the C#')).toBe('**Fix the C#**')
+    expect(releaseNotesMarkdown('### F#')).toBe('**F#**')
+  })
+
+  it('still strips a closing run that a space sets apart', () => {
+    expect(releaseNotesMarkdown('## Title ##')).toBe('**Title**')
+    expect(releaseNotesMarkdown('## Issue #')).toBe('**Issue**')
+    expect(releaseNotesMarkdown('## Fix the C# ##  ')).toBe('**Fix the C#**')
+  })
+})
