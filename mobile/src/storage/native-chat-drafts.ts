@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 
 const DRAFT_PREFIX = 'orca:chatDraft:'
 
@@ -39,7 +40,7 @@ export function writeNativeChatDraft(scopeKey: string, text: string): Promise<vo
   const write = (barriers.get(scopeKey) ?? Promise.resolve()).then(() =>
     text ? AsyncStorage.setItem(key, text) : AsyncStorage.removeItem(key)
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'chat draft', text ? 'save' : 'erase')
   barriers.set(scopeKey, barrier)
   void barrier.then(() => {
     if (barriers.get(scopeKey) === barrier) {
