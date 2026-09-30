@@ -20,6 +20,18 @@ describe('speech model size on the voice list', () => {
     expect(formatSpeechModelSize(1_000_000_000)).not.toContain('.0')
   })
 
+  // Review of 2026-09-30: MB was rounded only after the GB branch had been
+  // passed over, so anything from 999.5 MB to just under 1 GB read "1000 MB".
+  it('labels a model that rounds up to a thousand megabytes as 1 GB, never 1000 MB', () => {
+    expect(formatSpeechModelSize(999_499_999)).toBe('999 MB')
+    expect(formatSpeechModelSize(999_500_000)).toBe('1 GB')
+    expect(formatSpeechModelSize(999_600_000)).toBe('1 GB')
+    expect(formatSpeechModelSize(999_999_999)).toBe('1 GB')
+    expect(formatSpeechModelSize(1_000_000_000)).toBe('1 GB')
+    expect(formatSpeechModelSize(1_500_000_000)).toBe('1.5 GB')
+    expect(formatSpeechModelSize(0)).toBe('')
+  })
+
   it('shows nothing when the catalog has no size', () => {
     expect(formatSpeechModelSize(null)).toBe('')
     expect(formatSpeechModelSize(undefined)).toBe('')
