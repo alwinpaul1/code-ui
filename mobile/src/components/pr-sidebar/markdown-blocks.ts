@@ -151,15 +151,26 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
       continue
     }
 
-    const quote = QUOTE.exec(line)
-    if (quote) {
+    if (QUOTE.test(line)) {
       flushParagraph()
+      // Its `>` lines, and after its words the lazy lines that are still them,
+      // as the chat reads '> a\nb': one quote. It ended at the first line with
+      // no `>` until 2026-09-30.
       const quoted: string[] = []
-      let q: RegExpExecArray | null = quote
-      while (q) {
-        quoted.push(q[1])
+      const tail = quoteTail()
+      while (i < lines.length) {
+        const q = QUOTE.exec(lines[i])
+        const content = q
+          ? q[1]
+          : tail.inWords() && continuesLazily(lines, i, body)
+            ? lines[i].trim()
+            : null
+        if (content === null) {
+          break
+        }
+        quoted.push(content)
+        tail.take(content)
         i += 1
-        q = i < lines.length ? QUOTE.exec(lines[i]) : null
       }
       blocks.push({ kind: 'quote', text: quoted.join('\n').trim() })
       continue
@@ -197,6 +208,34 @@ function continuesLazily(lines: string[], i: number, body: LexedCommentBody): bo
     body.fenceOn(line) === null &&
     !(line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1]))
   )
+}
+
+// A quote's lines, markers off, as they are read: whether they end in words a
+// lazy line can continue. Not after a blank line, in or after a fence, after
+// code four columns in, or after a quote in the quote, where a lazy line would
+// be that quote's (the chat nests it; this draws a quote as text).
+const QUOTED_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/
+
+function quoteTail(): { take: (line: string) => void; inWords: () => boolean } {
+  let fence: string | null = null
+  let words = false
+  return {
+    take(line) {
+      const marks = QUOTED_FENCE.exec(line)
+      if (fence !== null) {
+        const closes = marks && marks[1][0] === fence[0] && marks[1].length >= fence.length
+        fence = closes && marks[2].trim() === '' ? null : fence
+        return
+      }
+      fence = marks ? marks[1] : null
+      words =
+        !marks &&
+        line.trim() !== '' &&
+        !QUOTE.test(line) &&
+        (words || !/^(?: {4}| {0,3}\t)/.test(line))
+    },
+    inWords: () => fence === null && words
+  }
 }
 
 // Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a

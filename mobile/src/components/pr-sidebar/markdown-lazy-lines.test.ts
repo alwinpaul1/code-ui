@@ -89,3 +89,43 @@ describe('a wrapped line at the margin under a PR comment’s list item', () => 
     ])
   })
 })
+
+// Sweep, 2026-09-30: the quote reader had the same defect as the list's. '> first line\nsecond
+// line' drew as a quote of the first line and a paragraph of the second; the chat, and CommonMark,
+// read one quote.
+describe('a wrapped line at the margin under a PR comment’s quote', () => {
+  it('keeps it in the quote, as the chat does', () => {
+    expect(parseMarkdownBlocks('> first line\nsecond line')).toEqual([
+      { kind: 'quote', text: 'first line\nsecond line' }
+    ])
+    expect(parseMobileMarkdown('> first line\nsecond line')).toMatchObject([
+      { type: 'quote', text: 'first line second line' }
+    ])
+  })
+
+  it('keeps every such line, the last one included', () => {
+    expect(parseMarkdownBlocks('> a\n> b\nc\nd\n')).toEqual([{ kind: 'quote', text: 'a\nb\nc\nd' }])
+  })
+
+  it.each([
+    ['a blank line', '> a\n\nb', [{ kind: 'quote', text: 'a' }]],
+    ['a blank quote line', '> a\n>\nb', [{ kind: 'quote', text: 'a' }]],
+    ['a fence in the quote', '> ```\n> x\n> ```\nb', [{ kind: 'quote', text: '```\nx\n```' }]],
+    [
+      'indented code in the quote',
+      '> a\n>\n>     code\nb',
+      [{ kind: 'quote', text: 'a\n\n    code' }]
+    ],
+    ['a quote in the quote', '> a\n> > q\nb', [{ kind: 'quote', text: 'a\n> q' }]]
+  ])('leaves a line after %s out of the quote', (_name, markdown, quote) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([...quote, { kind: 'paragraph', text: 'b' }])
+  })
+
+  it.each([
+    ['a heading', '> a\n# h', { kind: 'heading', level: 1, text: 'h' }],
+    ['a list', '> a\n- b', { kind: 'list', ordered: false, items: ['b'] }],
+    ['a rule', '> a\n***', { kind: 'hr' }]
+  ])('ends the quote at %s', (_name, markdown, after) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([{ kind: 'quote', text: 'a' }, after])
+  })
+})

@@ -130,9 +130,10 @@ describe('a real <details> or <blockquote> beside inline code', () => {
       { kind: 'quote', text: 'q' },
       paragraph('` d')
     ])
+    // `c` is the quote's lazy line (markdown-lazy-lines.test.ts); it was a paragraph until
+    // 2026-09-30. Its backtick is still no pair for the one after the tag.
     expect(parseMarkdownBlocks('> a ` b\nc <blockquote>q</blockquote> ` d')).toEqual([
-      { kind: 'quote', text: 'a ` b' },
-      paragraph('c'),
+      { kind: 'quote', text: 'a ` b\nc' },
       { kind: 'quote', text: 'q' },
       paragraph('` d')
     ])
