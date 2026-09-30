@@ -212,6 +212,14 @@ export function formatUsageUpdatedLabel(
 // Why: the usage UI must render for the system-default login, not only for
 // Orca-managed accounts. Show a provider when it has at least one managed
 // account OR active rate-limit data for the system-default target.
+/** The providers the Accounts screen draws a card for (app/h/[hostId]/accounts.tsx). */
+const ACCOUNT_USAGE_PROVIDERS: readonly ProviderKey[] = ['claude', 'codex', 'grok']
+
+/** Whether Accounts has any card to draw; false is a desktop that has reported nothing yet. */
+export function hasAnyRenderableUsage(snapshot: AccountsSnapshot): boolean {
+  return ACCOUNT_USAGE_PROVIDERS.some((provider) => hasRenderableUsage(snapshot, provider))
+}
+
 export function hasRenderableUsage(snapshot: AccountsSnapshot, provider: ProviderKey): boolean {
   if (provider === 'grok') {
     const limits = getActiveProviderRateLimits(snapshot, provider)

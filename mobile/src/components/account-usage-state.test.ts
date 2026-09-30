@@ -7,6 +7,7 @@ import {
   formatUsageUpdatedLabel,
   getWindowResetLabel,
   hasActiveProviderUsage,
+  hasAnyRenderableUsage,
   hasFableWindow,
   hasRenderableUsage,
   type AccountsSnapshot,
@@ -127,6 +128,28 @@ describe('hasRenderableUsage', () => {
       })
     })
     expect(hasRenderableUsage(snapshot, 'grok')).toBe(true)
+  })
+})
+
+describe('whether Accounts has any provider to draw', () => {
+  // The Accounts screen drew only its header for a snapshot with nothing in it (review,
+  // 2026-09-30); this is what it asks before it says so instead.
+  it('is false for a snapshot with no accounts and no usage at all', () => {
+    expect(hasAnyRenderableUsage(makeSnapshot())).toBe(false)
+    expect(
+      hasAnyRenderableUsage(makeSnapshot({ claudeLimits: makeLimits({ status: 'unavailable' }) }))
+    ).toBe(false)
+  })
+
+  it('is true when any one of the three has something, Grok included', () => {
+    const codex = { id: 'c', email: 'dev@example.com', updatedAt: 1 }
+    expect(hasAnyRenderableUsage(makeSnapshot({ codexAccounts: [codex] }))).toBe(true)
+    const grok = makeLimits({
+      provider: 'grok',
+      status: 'ok',
+      monthly: { usedPercent: 22, windowMinutes: 43200, resetsAt: null, resetDescription: null }
+    })
+    expect(hasAnyRenderableUsage(makeSnapshot({ grokLimits: grok }))).toBe(true)
   })
 })
 
