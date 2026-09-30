@@ -29,8 +29,8 @@ import { useScreenSentPhotos } from './use-screen-sent-photos'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { DesktopPrompt } from './agent-hud-beacon'
-import { useAbsorbedQueueEchoes } from './use-absorbed-queue-echoes'
-import { useQueuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
+import { useAbsorbedQueueWitness } from './use-absorbed-queue-echoes'
+import { queuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
 import { openImageMarkup } from './image-markup-store'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
@@ -248,9 +248,11 @@ export function MobileNativeChatOverlay({
   // listed them are drawn too: a box row that left may be one of them.
   // Not a status copy held back: it is never drawn, so a message the box
   // lets go of would then show nowhere (agent-status-prompts.ts, 2026-09-27).
+  // A message remembered from the box comes with its row: it is the copy of
+  // one echo, not of every echo of its words (RememberedBoxCopy, 2026-09-30).
   const ownPrompts = useMemo(
     () => [
-      ...projectedQueue.pending.map((p) => p.text),
+      ...projectedQueue.pending.map((p) => (p.id.startsWith('absorbed-') ? { text: p.text, anchorId: p.baselineTailMessageId } : p.text)),
       ...projectedQueue.unlisted.map((p) => p.text),
       ...desktopPrompts.flatMap((p) => (p.heldBack === true ? [] : [p.text]))
     ],
@@ -266,7 +268,7 @@ export function MobileNativeChatOverlay({
     session.status === 'ready' && session.baseRetained !== true,
     controller.nativeChatPromptHook === true
   )
-  const absorbedEchoes = useAbsorbedQueueEchoes(
+  const { echoes: absorbedEchoes, box: boxSightings } = useAbsorbedQueueWitness(
     queuedMessages ?? [],
     controller.nativeChatScreenPrompts ?? NO_SCREEN_PROMPTS,
     baseFolded,
@@ -331,7 +333,7 @@ export function MobileNativeChatOverlay({
   // A message still in the agent's queue box too (use-queued-desk-witnesses.ts).
   useRememberedWitnesses(
     [...absorbedEchoes, ...desktopEchoes],
-    useQueuedDeskWitnesses(projectedQueue.queue, session.messages, controller.nativeChatStreamScopeKey),
+    queuedDeskWitnesses(projectedQueue.queue, boxSightings, session.messages),
     controller.rememberEcho
   )
   const pendingWithDesktopPrompts = useMemo(() => {

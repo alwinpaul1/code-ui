@@ -65,6 +65,10 @@ export type MobileNativeChatPendingMessage = {
   /** Held from the first screen reading, anchored to whatever the tail was
    *  then: drawn, but never written to disk (2026-09-13). */
   provisional?: boolean
+  /** A queue-box echo only: the box already listed the message when the chat
+   *  first read it, so it may be one the chat remembered before a remount, at
+   *  another row. It is remembered by its words alone (absorbedMemoryId). */
+  listedAtFirstRead?: true
   /** The phone's own send only: when, by the phone's clock, the agent took it
    *  out of its queue box. Claude Code writes no row for a prompt it takes
    *  mid-turn (see `isTakenSend`), so from then on the send waits for none. */
