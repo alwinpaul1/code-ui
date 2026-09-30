@@ -95,8 +95,8 @@ export function useMobileNativeChatSkills(args: {
   const inFlightRef = useRef(false)
   const unsupportedRef = useRef(false)
   const generationRef = useRef(0)
-  /** Per browse key, on this connection: when it was last walked, and which
-   *  walks are in flight. */
+  /** Per browse key, on this connection: when the last walk that reached the
+   *  home folder started, and which walks are in flight. */
   const browsedAtRef = useRef(new Map<string, number>())
   const browsingRef = useRef(new Set<string>())
   /** What the menu is for now. Read when a walk starts and when it reports, so
@@ -128,7 +128,7 @@ export function useMobileNativeChatSkills(args: {
     }
     const generation = generationRef.current
     browsingRef.current.add(key)
-    browsedAtRef.current.set(key, Date.now())
+    const startedAt = Date.now()
     void browseClaudeSkills({
       client,
       worktreePath: worktreePathFromId(worktreeId),
@@ -140,11 +140,20 @@ export function useMobileNativeChatSkills(args: {
           setNativeChatSkills(skills)
         }
       }
-    }).finally(() => {
-      if (generationRef.current === generation) {
-        browsingRef.current.delete(key)
-      }
     })
+      .then((reachedHome) => {
+        // Only a walk that reached the home folder is a list: one that could not list even
+        // that (a drop) left the menu built-ins only, and stamping it skipped every `/` for
+        // BROWSED_SKILLS_STALE_MS over a link that had come back (review, 2026-09-30).
+        if (reachedHome && generationRef.current === generation) {
+          browsedAtRef.current.set(key, startedAt)
+        }
+      })
+      .finally(() => {
+        if (generationRef.current === generation) {
+          browsingRef.current.delete(key)
+        }
+      })
   }, [client, worktreeId])
 
   // A layout effect, so it lands before any passive one: the composer asks for
