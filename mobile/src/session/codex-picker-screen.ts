@@ -117,16 +117,33 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
   return { step, model, rows, cursorIndex }
 }
 
-/** Codex's busy row, above the composer while a turn runs: "• Working (5s • esc to interrupt)". The
- *  parenthesis ends the line, so a sentence in the transcript that mentions the key does not match. */
-const CODEX_BUSY_ROW = /\((?:[^()]*[•·]\s*)?esc to interrupt\)\s*$/
+// Ported from Orca's `hasBusyStatusRowAbove` (src/main/runtime/codex-terminal-readiness.ts, v1.4.217).
+// Why "to interrupt)" and not "working": reasoning summaries replace the word, and a remapped key
+// still ends the row this way.
+const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
+// Why only a tip: it is the one line Codex draws between its status row and the composer.
+const CODEX_STATUS_TIP_PREFIX = '└ tip:'
+const CODEX_COMPOSER_ROW = /^\s*[›❯>]\s/
 
-/** How far above the bottom of the screen the busy row is looked for. It sat 6 lines up in Codex
- *  0.155 and sits 7 up in 0.158.0, whose footer gained a "? for shortcuts" line under the composer
- *  (real captures, Orca 1.4.217 runtime fixtures), so a fixed six-line tail read a running turn as
- *  idle. The row is not a fixed distance from the bottom anyway: each queued message adds a line
- *  under it. The window is the whole live area; the row is only there while a turn runs. */
-const CODEX_BUSY_ROW_WINDOW = 16
+/**
+ * Whether Codex's busy row ("• Working (5s • esc to interrupt)") is the row directly above the
+ * composer. Only that row counts: the last non-blank line above it, or the one above a `└ Tip:` line.
+ * A finished answer can quote the row anywhere higher up, and 0.158 puts a timestamp between a
+ * quoted row and the composer. The row is not a fixed distance from the bottom (0.155: sixth line up;
+ * 0.158.0, whose footer gained "? for shortcuts": seventh; a queued message adds one more), which is
+ * why a tail window was wrong in both directions.
+ */
+function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
+  const composer = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
+  if (composer === -1) {
+    return false
+  }
+  const above = lines.slice(0, composer).filter((line) => line.trim() !== '')
+  const row = above.at(-1)?.trimStart().toLowerCase().startsWith(CODEX_STATUS_TIP_PREFIX)
+    ? above.at(-2)
+    : above.at(-1)
+  return row?.includes(CODEX_BUSY_STATUS_MARKER) ?? false
+}
 
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
  *  placeholder disappears once the composer holds a draft, so the footer line
@@ -140,7 +157,12 @@ export function isCodexIdle(lines: readonly string[]): boolean {
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
-  return lines.slice(-CODEX_BUSY_ROW_WINDOW).some((line) => CODEX_BUSY_ROW.test(line))
+  if (hasBusyStatusRowAbove(lines)) {
+    return true
+  }
+  // A busy row painted below the last input row (the picker's cursor row is one) is the same fact.
+  const last = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
+  return lines.slice(last + 1).some((line) => line.includes(CODEX_BUSY_STATUS_MARKER))
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */

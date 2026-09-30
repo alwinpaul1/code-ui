@@ -211,4 +211,66 @@ describe('Codex 0.158.0 screens', () => {
     expect(isCodexIdle(TRUST_PROMPT)).toBe(false)
     expect(isCodexWorking(TRUST_PROMPT)).toBe(false)
   })
+
+  // The next three are Orca's own screens from src/main/runtime/codex-quiet-ready-screen.test.ts
+  // (v1.4.217), pasted verbatim.
+  it('reads an idle composer under an answer that quotes the busy row as idle', () => {
+    const quotedInAnswer = [
+      '>_ OpenAI Codex (v0.158.0)',
+      '   ~/repo',
+      '',
+      '› what does the status row look like mid-turn?',
+      '',
+      '• It reads like this:',
+      '',
+      '  • Working (0s • esc to interrupt)',
+      '',
+      '  The timer counts up until the turn ends, and the row',
+      '  disappears once the answer is complete.',
+      '',
+      '› Ask Codex to do anything',
+      '',
+      '  gpt-5.6-sol medium · ~/repo',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(quotedInAnswer)).toBe(false)
+    expect(isCodexIdle(quotedInAnswer)).toBe(true)
+    // The same screen mid-turn: the row sits above the composer, with Codex's one Tip line allowed between.
+    const composer = quotedInAnswer.indexOf('› Ask Codex to do anything')
+    const busy = [
+      ...quotedInAnswer.slice(0, composer),
+      '• Working (3s • esc to interrupt)',
+      '  └ Tip: start a fresh idea with /new',
+      '',
+      ...quotedInAnswer.slice(composer)
+    ]
+    expect(isCodexWorking(busy)).toBe(true)
+    expect(isCodexIdle(busy)).toBe(false)
+  })
+
+  it("reads 0.158's turn timestamp above the composer as the end of a quoted status row", () => {
+    // Live 0.158 screen after a worker answered with a status row verbatim (STA-8834).
+    const afterQuotedRow = [
+      '  === TASK ===',
+      '  Reply with exactly this line and nothing else: • Working (0s • esc to interrupt) — then call worker_done.',
+      '• • Working (0s • esc to interrupt)',
+      '• Ran orca-dev orchestration send --from term_f496fcd2-a874-4fa6-a9bd-550a515ac928 --dispatch-capability dcap_PTgPpvf-B…',
+      '  └ Sent msg_ff7be3f25d7e',
+      '    + Show details',
+      '• • Working (0s • esc to interrupt)',
+      '  11:15 PM',
+      '› Ask Codex to do anything',
+      '  GPT-6-Sol medium · ~/orca-lanes/sta8834/live3/scratch · Report task outcome',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(afterQuotedRow)).toBe(false)
+    expect(isCodexIdle(afterQuotedRow)).toBe(true)
+  })
+
+  it('still reads a remapped interrupt key as busy', () => {
+    const remapped = [...WORKING]
+    const at = remapped.findIndex((line) => line.includes('esc to interrupt'))
+    remapped[at] = '• Working (0s • ctrl+c to interrupt)'
+    expect(isCodexWorking(remapped)).toBe(true)
+  })
 })
