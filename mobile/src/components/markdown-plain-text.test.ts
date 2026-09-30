@@ -328,6 +328,24 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('<https://x.dev/a.>')).toBe('https://x.dev/a.')
   })
 
+  // Found in the same sweep (2026-09-30): the HTML pass took `<a@b.c>` for an
+  // `<a>` tag and dropped it, and `<img@x.dev>` became the word "image". An
+  // email address in angle brackets is an autolink in CommonMark.
+  it('copies an email address in angle brackets as the address', () => {
+    expect(markdownPlainText('mail <a@b.c> now')).toBe('mail a@b.c now')
+    expect(markdownPlainText('mail <img@x.dev> or <p.q@x.dev>')).toBe('mail img@x.dev or p.q@x.dev')
+    expect(markdownPlainText('Co-Authored-By: Claude <noreply@anthropic.com>')).toBe(
+      'Co-Authored-By: Claude noreply@anthropic.com'
+    )
+    expect(markdownPlainText('see <mailto:a@b.c>')).toBe('see mailto:a@b.c')
+  })
+
+  it('keeps an address in angle brackets it does not open, and a tag, as they were', () => {
+    expect(markdownPlainText('see <ftp://x.dev/a>')).toBe('see <ftp://x.dev/a>')
+    expect(markdownPlainText('<@b.c> and <b>x</b>')).toBe('<@b.c> and x')
+    expect(markdownPlainText('\\<a@b.c>')).toBe('<a@b.c>')
+  })
+
   it('keeps a link whose address or label never closes as written', () => {
     expect(markdownPlainText('[w](docs/a_(b.md')).toBe('[w](docs/a_(b.md')
     expect(markdownPlainText('[w](')).toBe('[w](')
@@ -431,7 +449,10 @@ describe('emphasis that never closes', () => {
     ['an italic opener on every line', '*a **b\n'.repeat(15_000)],
     ['a bold opener after every word in an italic', `*${'**x '.repeat(25_000)}`],
     ['bolds joined end to end in an italic', `*${'**a**'.repeat(30_000)}`],
-    ['italic openers before every bold', '* **a** '.repeat(20_000)]
+    ['italic openers before every bold', '* **a** '.repeat(20_000)],
+    ['an angle bracket before every letter', '<a'.repeat(50_000)],
+    ['an at sign after every letter in angle brackets', `<${'a@'.repeat(50_000)}`],
+    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`]
   ])('copies %s inside the deadline', (_name, text) => {
     const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
     expect(typeof copied).toBe('string')

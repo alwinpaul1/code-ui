@@ -1,6 +1,7 @@
 import { createMarkdownCodeSpanFinder } from './markdown-code-spans'
 import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
+import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
 
 export type MarkdownInlineMatch = {
   0: string
@@ -44,13 +45,24 @@ export type MarkdownInlineMatch = {
  *  An address in angle brackets, `<https://x.dev/a>`, is an autolink with
  *  the brackets as its bounds, as in CommonMark. A bare address ends at
  *  either bracket: it ran on through `>`, so `<https://x.dev/a>` drew its
- *  brackets and opened `https://x.dev/a>` (review, 2026-09-30). */
+ *  brackets and opened `https://x.dev/a>` (review, 2026-09-30). So are
+ *  `<mailto:…>` and an email address, `<noreply@anthropic.com>`; an address
+ *  of any other scheme stays as written. */
 export function markdownInlineTokenPattern(): RegExp {
-  return /(~~[^~]+~~)|(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__)|(\*(?:[^*\n]|\*\*[^*\s][^*\n]*\*\*)+\*|_(?:[^_\n]|__[^_\s][^_\n]*__)+_)|(<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+)/g
+  return new RegExp(INLINE_TOKEN_SOURCE, 'g')
 }
 
-/** The capture group of markdownInlineTokenPattern() a bold token matched. */
+const INLINE_TOKEN_SOURCE = [
+  /(~~[^~]+~~)/.source,
+  /(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__)/.source,
+  /(\*(?:[^*\n]|\*\*[^*\s][^*\n]*\*\*)+\*|_(?:[^_\n]|__[^_\s][^_\n]*__)+_)/.source,
+  `(${/<https?:\/\/[^\s<>]+>|<mailto:[^\s<>]+>/.source}|<${EMAIL_AUTOLINK_SOURCE}>|${/https?:\/\/[^\s<>]+/.source})`
+].join('|')
+
+/** The capture groups of markdownInlineTokenPattern() a bold token and a
+ *  web or email address matched. */
 export const BOLD_TOKEN_GROUP = 2
+export const ADDRESS_TOKEN_GROUP = 4
 
 /** Merge a global non-link regex with links; search starts must advance between calls. */
 export function createMarkdownInlineMatcher(

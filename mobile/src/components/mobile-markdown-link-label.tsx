@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text } from 'react-native'
 import {
+  ADDRESS_TOKEN_GROUP,
   BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
@@ -45,7 +46,7 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
     const key = `${keyPrefix}${match.index}`
     if (match.link?.image) {
       parts.push(markdownInlinePlainText(match.link.label) || 'image')
-    } else if (match.link || /^<?https?:\/\//i.test(token)) {
+    } else if (match.link || match.group === ADDRESS_TOKEN_GROUP) {
       parts.push(token)
     } else if (token.startsWith('`')) {
       parts.push(

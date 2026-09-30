@@ -6,6 +6,7 @@ import {
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
 import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
+import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -42,16 +43,22 @@ function restoreEscapedHtmlEntities(value: string): string {
 const BACKSLASH_RUN = /\\+([<&]?)/g
 const ESCAPED_LT_TOKEN = '\uE000ORCA_MD_ESCAPED_LT\uE000'
 const ESCAPED_AMP_TOKEN = '\uE000ORCA_MD_ESCAPED_AMP\uE000'
+// An autolink the inline pass draws as a link (a web or `mailto:` address, or
+// an email address) is no tag either: this pass took `<a@b.c>` for an `<a>`
+// tag and dropped it, and drew `<img@x.dev>` as "image" (same review). Its
+// `<` stands aside the same way. Any other scheme is left to the tag rules,
+// which strip a namespaced tag such as `<svg:path>`.
+const AUTOLINK_OPENER = new RegExp(`<(?=(?:https?://[^\\s<>]+|mailto:[^\\s<>]+|${EMAIL_AUTOLINK_SOURCE})>)`, 'g')
 
 function protectEscapedMarkup(value: string): string {
-  if (!value.includes('\\')) {
-    return value
-  }
-  return value.replace(BACKSLASH_RUN, (run: string, after: string) =>
-    after && (run.length - 1) % 2 === 1
-      ? `${run.slice(0, -1)}${after === '<' ? ESCAPED_LT_TOKEN : ESCAPED_AMP_TOKEN}`
-      : run
-  )
+  const unescaped = value.includes('\\')
+    ? value.replace(BACKSLASH_RUN, (run: string, after: string) =>
+        after && (run.length - 1) % 2 === 1
+          ? `${run.slice(0, -1)}${after === '<' ? ESCAPED_LT_TOKEN : ESCAPED_AMP_TOKEN}`
+          : run
+      )
+    : value
+  return unescaped.replace(AUTOLINK_OPENER, ESCAPED_LT_TOKEN)
 }
 
 function restoreEscapedMarkup(value: string): string {

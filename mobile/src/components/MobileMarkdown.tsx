@@ -1,4 +1,5 @@
 import {
+  ADDRESS_TOKEN_GROUP,
   BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
@@ -176,11 +177,11 @@ function renderInline(
           {link.image ? markdownInlinePlainText(link.label) || 'image' : renderLinkLabel(styles, link.label)}
         </Text>
       )
-    } else if (/^<?https?:\/\//i.test(token)) {
-      const { url, trailing } = autolinkParts(token)
+    } else if (match.group === ADDRESS_TOKEN_GROUP) {
+      const { url, words, trailing } = autolinkParts(token)
       parts.push(
         <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
-          {url}
+          {words}
         </Text>
       )
       if (trailing) {

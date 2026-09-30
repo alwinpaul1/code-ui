@@ -1,4 +1,5 @@
 import {
+  ADDRESS_TOKEN_GROUP,
   BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
@@ -84,7 +85,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
     out += unescapeMarkdownText(text.slice(pendingStart, match.index))
     pendingStart = pattern.lastIndex
     const link = match.link
-    const address = /^<?https?:\/\//i.test(token)
+    const address = match.group === ADDRESS_TOKEN_GROUP
     if (link?.image) {
       const words = markdownInlinePlainText(link.label) || 'image'
       out += label || DATA_URL.test(destination(link.href)) ? words : linkText(words, link.href)
@@ -93,8 +94,8 @@ export function markdownInlinePlainText(text: string, label = false): string {
     } else if (link) {
       out += linkText(markdownInlinePlainText(link.label, true), link.href)
     } else if (address) {
-      const { url, trailing } = autolinkParts(token)
-      out += url + trailing
+      const { words, trailing } = autolinkParts(token)
+      out += words + trailing
     } else if (token.startsWith('`')) {
       out += codeSpanContent(token)
     } else if (token.startsWith('~~') || match.group === BOLD_TOKEN_GROUP) {

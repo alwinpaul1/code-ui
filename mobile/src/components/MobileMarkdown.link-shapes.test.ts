@@ -122,6 +122,23 @@ describe('a chat link whose address or words hold brackets', () => {
     expect(openURL).toHaveBeenLastCalledWith('https://x.dev/a.')
   })
 
+  // Found in the same sweep: `<a@b.c>` was dropped by the HTML pass as an
+  // `<a>` tag, and `<img@x.dev>` drawn as the word "image".
+  it('draws an email address in angle brackets as a link that writes to it', () => {
+    const tree = render('mail <a@b.c> or <img@x.dev> now')
+    expect(flattenText(tree.root)).toBe('mail a@b.c or img@x.dev now')
+    expect(pressables(tree).map(flattenText)).toEqual(['a@b.c', 'img@x.dev'])
+    pressByText(tree, 'a@b.c')
+    expect(openURL).toHaveBeenLastCalledWith('mailto:a@b.c')
+  })
+
+  it('draws a mailto address in angle brackets as a link, and one it does not open as written', () => {
+    const tree = render('see <mailto:a@b.c> and <ftp://x.dev/a>')
+    expect(flattenText(tree.root)).toBe('see mailto:a@b.c and <ftp://x.dev/a>')
+    pressByText(tree, 'mailto:a@b.c')
+    expect(openURL).toHaveBeenLastCalledWith('mailto:a@b.c')
+  })
+
   it('never opens an address with a closing angle bracket on it', () => {
     const tree = render('an unopened https://x.dev/a> here')
     pressByText(tree, 'https://x.dev/a')
