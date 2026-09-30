@@ -411,11 +411,13 @@ function MobileMarkdownInner({
         if (block.type === 'quote') {
           // One bar down the whole quote, text indented beside it, as the Claude
           // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
+          // A quote a fence cut in two joins its bar to the one above
+          // (mobile-markdown-quote-blocks.ts).
           const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
           const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
           const quoted = renderInline(styles, block.text, onOpenFile, pills)
           return (
-            <View key={index} style={styles.quoteBlock}>
+            <View key={index} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
               <Text
                 key={pills.keyFor('quote')}
                 selectable={selectable}

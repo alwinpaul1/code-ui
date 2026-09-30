@@ -20,6 +20,7 @@
 // columns a phone has, the same document wraps every source line AND breaks
 // after it, which is the ragged column the user reported. The phone reflows.
 import { marked, type Token, type Tokens } from 'marked'
+import { quoteBlocks } from './mobile-markdown-quote-blocks'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -39,8 +40,23 @@ export type MobileMarkdownListItem = {
 export type MobileMarkdownBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
-  | { type: 'quote'; text: string }
-  | { type: 'code'; text: string; language?: string; closed: boolean }
+  | {
+      type: 'quote'
+      text: string
+      /** The rest of the quote the block above is part of, after a fence in
+       *  it: its bar joins that one's (mobile-markdown-quote-blocks.ts). */
+      continuesQuote?: boolean
+    }
+  | {
+      type: 'code'
+      text: string
+      language?: string
+      closed: boolean
+      /** Came out of a quote, so it is drawn inside the quote's bar. */
+      quoted?: boolean
+      /** As on a quote block: its bar joins the one above it. */
+      continuesQuote?: boolean
+    }
   | { type: 'list'; ordered: boolean; items: MobileMarkdownListItem[] }
   | { type: 'image'; alt: string; url: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
@@ -136,19 +152,6 @@ function standaloneImage(token: Tokens.Paragraph): MobileMarkdownBlock | null {
     return null
   }
   return { type: 'image', alt: image.text ?? '', url: image.href }
-}
-
-/** Blockquote contents render inside one quoted Text. Prose reflows; anything
- *  else keeps the source it came from, so nothing is dropped. */
-function quotedText(token: Tokens.Blockquote): string {
-  return token.tokens
-    .map((child) =>
-      child.type === 'paragraph'
-        ? reflowProse((child as Tokens.Paragraph).text)
-        : child.raw.replace(/\n+$/, '')
-    )
-    .filter((part) => part.trim())
-    .join('\n\n')
 }
 
 /** Nested lists are flattened to one run of items carrying their depth: the
@@ -279,7 +282,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         break
       }
       case 'blockquote':
-        blocks.push({ type: 'quote', text: quotedText(token as Tokens.Blockquote) })
+        // A quote can come back as several blocks: a fence inside it is drawn
+        // as code between them rather than as the quote's text.
+        blocks.push(...quoteBlocks(token as Tokens.Blockquote, reflowProse, toBlocks))
         break
       case 'list': {
         const list = token as Tokens.List

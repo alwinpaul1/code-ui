@@ -115,12 +115,52 @@ describe('markdownPlainText', () => {
   })
 
   // Review, 2026-09-30: the HTML pass rewrote the code of a fence inside a
-  // quote, so the Copy held "**x** &" for `<b>x</b> &amp;`. The quote still
-  // draws a fence as its source (quotedText), so only the code is pinned here.
+  // quote, so the Copy held "**x** &" for `<b>x</b> &amp;`.
   it('copies the code of a fence inside a quote as written', () => {
-    expect(markdownPlainText('> ```\n> <b>x</b> &amp;\n> ```')).toContain('<b>x</b> &amp;')
-    expect(markdownPlainText('> ```tsx\n> <Text>a</Text>\n> ```')).toContain('<Text>a</Text>')
-    expect(markdownPlainText('> > ```\n> > <b>x</b>\n> > ```')).toContain('<b>x</b>')
+    expect(markdownPlainText('> ```\n> <b>x</b> &amp;\n> ```')).toBe('<b>x</b> &amp;')
+    expect(markdownPlainText('> ```tsx\n> <Text>a</Text>\n> ```')).toBe('<Text>a</Text>')
+    expect(markdownPlainText('> > ```\n> > <b>x</b>\n> > ```')).toBe('<b>x</b>')
+  })
+
+  // Review, 2026-09-30, the same day: a fence inside a quote was still the
+  // quote's TEXT, so the inline pass read its backticks as a code span across
+  // lines and its tildes as strikethrough. The Copy is built to match the
+  // screen, and both held the fence's marks, its language and a stray newline
+  // at each end. The fence is now a code block of its own
+  // (mobile-markdown-quote-fence.test.ts), and it copies as one.
+  it('copies a quoted fence as its code, with no fence marks or stray newlines', () => {
+    expect(markdownPlainText('> ```\n> x = 1\n> ```')).toBe('x = 1')
+    expect(markdownPlainText('> ~~~\n> a\n> ~~~')).toBe('a')
+  })
+
+  it('copies the prose around a quoted fence without its language tag or extra blank lines', () => {
+    expect(markdownPlainText('> intro\n>\n> ```sh\n> ls *.ts\n> ```\n>\n> outro')).toBe(
+      'intro\n\nls *.ts\n\noutro'
+    )
+    expect(markdownPlainText('> a\n>\n> > ```\n> > x\n> > ```\n>\n> c')).toBe('a\n\nx\n\nc')
+  })
+
+  it('copies an unclosed quoted fence as code to the end of the quote, backticks inside it kept', () => {
+    expect(markdownPlainText('> ```\n> unclosed `x`')).toBe('unclosed `x`')
+  })
+
+  it('keeps the emphasis marks inside a quoted tilde fence', () => {
+    expect(markdownPlainText('> ~~~\n> git commit -m "**wip**" *.ts\n> ~~~')).toBe('git commit -m "**wip**" *.ts')
+    expect(markdownPlainText('> ```\n> git commit -m "**wip**" *.ts\n> ```')).toBe('git commit -m "**wip**" *.ts')
+  })
+
+  it('copies a quoted fence as written and the prose after the quote without its tags', () => {
+    expect(markdownPlainText('> ```\n> <b>x</b>\n> ```\n\nafter <b>y</b>')).toBe('<b>x</b>\n\nafter y')
+  })
+
+  it('copies a quoted fence under a list item after the item, as code', () => {
+    expect(markdownPlainText('- item\n  > ```\n  > <b>x</b>\n  > ```')).toBe('• item\n\n<b>x</b>')
+  })
+
+  it('copies an empty quoted fence, or one that has only opened, as nothing', () => {
+    expect(markdownPlainText('> ```\n> ```')).toBe('')
+    expect(markdownPlainText('> ```')).toBe('')
+    expect(markdownPlainText('> quoted **text**')).toBe('quoted text')
   })
 
   it('writes the markers the screen draws for bullets, numbers and tasks', () => {
