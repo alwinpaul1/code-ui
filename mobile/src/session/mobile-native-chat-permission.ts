@@ -123,8 +123,12 @@ function looksLikePermissionAsk(text: string): boolean {
 // How an option of an approval menu begins, once the emphasis in front of it
 // is gone: a way to say yes, or a way to say no. Claude Code's plan review
 // says no with "Tell Claude what to change" (claude-plan-permission.ts).
+// "Decline", "Not now" and "Not yet" are agent prose, no captured screen: a
+// menu of "Approve / Decline" or "Yes / Not now" lost its card to the question
+// card without them (2026-10-01). "Not sure" is no way to say no.
 const AFFIRMS = /^(?:yes|allow|approve|always|proceed)(?![\p{L}\p{N}])/iu
-const REFUSES = /^(?:no|deny|reject|cancel|skip|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
+const REFUSES =
+  /^(?:no|deny|decline|reject|cancel|skip|not\s+(?:now|yet)|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
 
 function approvalAnswer(label: string): 'yes' | 'no' | null {
   const plain = label.replace(/^[*_`]+/, '')
@@ -215,7 +219,8 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   }
   // "Which database do you want to use? 1. Postgres 2. SQLite" asks for a
   // choice, not a yes: leave it to the question card. A list of Yes and No
-  // bullets, or one lone "1. Yes", still asks for a yes.
+  // bullets, or one lone "1. Yes", still asks for a yes, and so do steps
+  // around a "(y/n)" ask, which draw no question card at all.
   const question = parseAgentQuestion(text)
   if (question && !readsAsApproval(question.options)) {
     return null

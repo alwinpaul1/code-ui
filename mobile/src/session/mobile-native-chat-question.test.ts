@@ -792,6 +792,60 @@ describe('the question card for a list followed by a question', () => {
   })
 })
 
+// 2026-10-01 review: a line asked only when it ended in `?`, so a plan that
+// ended "Shall I proceed? (y/n)" kept a card whose answers were its steps, and
+// a tap sent a step's digit to an ask whose answer is y or n. A closing
+// answer hint, `(y/n)`, `[y/N]`, `(yes/no)` or a bare `y/n`, asks, and asks
+// for y or n: never for one of the listed choices. The asks here are agent
+// prose, not a captured screen.
+describe('the question card for a list around a (y/n) ask', () => {
+  const plan = 'The plan:\n1. Edit the parser\n2. Add the test\n\n'
+
+  it('shows no card when a (y/n) confirmation follows the list', () => {
+    for (const ask of [
+      'Shall I proceed? (y/n)',
+      'Allow running them? (y/n)',
+      'Proceed? [y/N]',
+      'Continue [Y/n]:',
+      'Apply both? (yes/no)',
+      'Go ahead? y/n',
+      '**Shall I proceed? (y/n)**'
+    ]) {
+      expect(parseAgentQuestion(plan + ask), ask).toBeNull()
+    }
+  })
+
+  it('shows no card for a list under a (y/n) ask', () => {
+    expect(parseAgentQuestion('Run these? (y/n)\n1. npm install\n2. npm test')).toBeNull()
+    expect(parseAgentQuestion('Run this? [y/N]\n- npm install')).toBeNull()
+  })
+
+  it('shows no card when the (y/n) ask names two of the choices', () => {
+    expect(parseAgentQuestion(`${plan}Should I do 1 or 2? (y/n)`)).toBeNull()
+  })
+
+  it('ends the list at a (y/n) ask run straight on from its last item', () => {
+    expect(parseAgentQuestion('The plan:\n1. Edit the parser\n2. Add the test\nOK? (y/n)')).toBeNull()
+  })
+
+  it('keeps the card when the (y/n) sits in a code fence after the choices', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n1. A\n2. B\n\nThe script then asks:\n```\nContinue? (y/n)\n```'
+    )
+    expect(q?.question).toBe('Which one?')
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('keeps the card when a y or an n is only part of the last line', () => {
+    for (const tail of ['The old config took yes/no', 'Answer y/n in the terminal.', 'Run it (y)']) {
+      expect(parseAgentQuestion(`Which one?\n1. A\n2. B\n\n${tail}`)?.options, tail).toEqual([
+        'A',
+        'B'
+      ])
+    }
+  })
+})
+
 // A line that asks had to end in `?` or `:`, and `**Which one?**` ends in
 // `**`, so a bold question asked nothing and the card was lost (review,
 // 2026-09-30). The marks that wrap a line, or trail its `?`, are not the line.
