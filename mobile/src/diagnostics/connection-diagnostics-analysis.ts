@@ -372,8 +372,11 @@ function parseRetryDelayMs(evidence: string): number | null {
   return match ? Number(match[1]) : null
 }
 
+/** Rounds first, then names the unit: choosing seconds first said "60s" for
+ *  59.5-59.999 s (review, 2026-09-30). */
 function formatDelay(ms: number): string {
-  return ms < 60_000 ? `${Math.round(ms / 1000)}s` : `${Math.round(ms / 60_000)}m`
+  const seconds = Math.round(ms / 1000)
+  return seconds < 60 ? `${seconds}s` : `${Math.round(ms / 60_000)}m`
 }
 
 function formatPath(path: MobileConnectionDiagnosticPath): string {
