@@ -167,7 +167,7 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
 
     if (ORDERED.test(line) || UNORDERED.test(line)) {
       flushParagraph()
-      i = parseList(lines, i, body, blocks)
+      i = parseList(lines, i, body, blocks, (at) => continuesLazily(lines, at, body))
       continue
     }
 
@@ -176,6 +176,27 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
+}
+
+// A line at the margin under a list item's words that is still those words
+// (a lazy continuation line, CommonMark 5.2): '- a\nlazy' is one item, as the
+// chat draws it. Never a line that opens a block: a marker, an empty one too,
+// a `#`, a `>`, a tag, a fence, a rule, a table's header or an underline,
+// the lines marked (which the desktop reads with) ends an item at. Every line
+// at the margin ended the item until 2026-09-30, and the wrapped words drew as
+// a paragraph after the list.
+const LAZY_OPENER =
+  /^\s*(?:[-*+]|\d+[.)])(?:\s|$)|^ {0,3}(?:#|>|<[A-Za-z/!?]|`{3}|~{3})|^ {0,3}(?:=+|-+)[ \t]*$/
+
+function continuesLazily(lines: string[], i: number, body: LexedCommentBody): boolean {
+  const line = lines[i]!
+  return (
+    line.trim() !== '' &&
+    !LAZY_OPENER.test(line) &&
+    !HR.test(line) &&
+    body.fenceOn(line) === null &&
+    !(line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1]))
+  )
 }
 
 // Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a

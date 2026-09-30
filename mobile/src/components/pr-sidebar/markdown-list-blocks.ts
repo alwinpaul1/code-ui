@@ -100,7 +100,15 @@ function nestedAfterBlank(lines: string[], i: number, levels: Level[]): number |
 }
 
 // The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
-export function parseList(lines: string[], i: number, body: LexedCommentBody, blocks: MarkdownBlock[]): number {
+// `lazy` says whether the line at an index, at the margin, is still the words
+// above it (markdown-blocks.ts reads that, as it reads every other block).
+export function parseList(
+  lines: string[],
+  i: number,
+  body: LexedCommentBody,
+  blocks: MarkdownBlock[],
+  lazy: (at: number) => boolean
+): number {
   const levels: Level[] = []
   let items: string[] = []
   let shapes: ListItemShape[] = []
@@ -145,11 +153,18 @@ export function parseList(lines: string[], i: number, body: LexedCommentBody, bl
     // continuation line, that line became a paragraph at the left margin,
     // and the next item opened a fresh list — so every item was numbered 1.
     // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
+    // A line at the margin continues it too where it opens no block (`lazy`),
+    // as CommonMark reads it and the chat draws it: '- a\nlazy' is one item.
     const parts = fence ? [] : [item.text.trim()]
     i += 1
     while (!fence && i < lines.length) {
       const next = lines[i]!
-      if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
+      if (
+        !next.trim() ||
+        (!/^\s/.test(next) && !lazy(i)) ||
+        ORDERED.test(next) ||
+        UNORDERED.test(next)
+      ) {
         break
       }
       fence = body.fenceOn(next)?.code ?? null
