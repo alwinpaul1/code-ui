@@ -105,6 +105,18 @@ export async function recallNativeQueue(
   if (!queue.length) {
     throw new Error('That message is no longer queued.')
   }
+  // Orca publishes `draft` only when its own composer detector accepts the row
+  // above Claude's `❯`, and it accepts only a bare rule. Under a rule that
+  // carries the session name or the fast-mode tag `draft` is '' even while
+  // Claude paints its queue placeholder, so after a recall the phone could not
+  // read the queue back out of the input, and the next send cleared it
+  // (Claude Code 2.1.285, review of 2026-09-30). The queue still shows; only
+  // the editing is refused, and before any key is sent.
+  if (agent === 'claude' && !before.draft) {
+    throw new Error(
+      'Edit this queued message on the desktop. Orca cannot read the input box on this screen, so the phone cannot recall the queue safely.'
+    )
+  }
   const target = index ?? queue.length - 1
   if (target < 0 || target >= queue.length) {
     throw new Error('That message is no longer queued.')
