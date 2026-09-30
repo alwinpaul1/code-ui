@@ -84,6 +84,8 @@ export function MobileMcpServersPanel({
   const styles = useThemedStyles(mcpStyles)
   const { colors } = useTheme()
   const parsed = state.status === 'ready' ? parseMcpConfig(state.content) : null
+  // The write carries the list as it was at the tap; no add, edit or remove until it lands.
+  const saving = state.status === 'ready' && state.saving
 
   function commit(servers: McpServerEntry[]) {
     setContent(serializeMcpConfig(servers))
@@ -180,8 +182,8 @@ export function MobileMcpServersPanel({
               parsed.servers.map((entry, index) => (
                 <Pressable
                   key={entry.name}
-                  style={styles.row}
-                  disabled={!canWrite}
+                  style={[styles.row, saving && styles.disabled]}
+                  disabled={!canWrite || saving}
                   onPress={() => {
                     setForm(mcpServerFormForEntry(entry))
                     setEditing({ mode: 'edit', index })
@@ -199,7 +201,13 @@ export function MobileMcpServersPanel({
                     ))}
                   </View>
                   {canWrite ? (
-                    <Pressable accessibilityLabel={`Remove ${entry.name}`} onPress={() => setRemoveIndex(index)} hitSlop={8}>
+                    <Pressable
+                      accessibilityLabel={`Remove ${entry.name}`}
+                      onPress={() => setRemoveIndex(index)}
+                      disabled={saving}
+                      style={saving ? styles.disabled : undefined}
+                      hitSlop={8}
+                    >
                       <Trash2 size={16} color={colors.danger} />
                     </Pressable>
                   ) : null}
@@ -239,6 +247,7 @@ export function MobileMcpServersPanel({
                   label="Add server"
                   icon={Plus}
                   variant="secondary"
+                  disabled={saving}
                   onPress={() => {
                     setForm(EMPTY_MCP_SERVER_FORM)
                     setEditing({ mode: 'add' })
@@ -298,6 +307,8 @@ function mcpStyles({ colors, radius, space }: Theme) {
       borderColor: colors.border
     },
     footer: { padding: space.md, borderTopWidth: 1, borderTopColor: colors.border },
-    footerRow: { flexDirection: 'row' as const, gap: space.sm }
+    footerRow: { flexDirection: 'row' as const, gap: space.sm },
+    // The same dim as a disabled Button, over the theme's own colours.
+    disabled: { opacity: 0.5 }
   }
 }

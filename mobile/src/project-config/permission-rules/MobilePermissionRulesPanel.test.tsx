@@ -39,6 +39,7 @@ vi.mock('../../transport/host-mobile-capabilities', () => ({
 
 import { MobilePermissionRulesPanel } from './MobilePermissionRulesPanel'
 import { PROJECT_CONFIG_READ_ONLY_NOTICE } from '../ProjectConfigReadOnlyNotice'
+import { ThemeProvider } from '../../theme/theme-context'
 
 function mockClient(reads: Record<string, unknown>): RpcClient {
   const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
@@ -214,6 +215,124 @@ describe('MobilePermissionRulesPanel', () => {
     const renderer = await render(mockClient({ '.claude/settings.json': '{\n  "permissions": {\n' }))
     expect(allText(renderer).join(' ')).toMatch(/Line \d+:/)
     act(() => renderer.unmount())
+  })
+
+  // The write carries the rules as they were when Save was tapped; an add or remove made while it
+  // is on the wire never reaches the host. Only Save was disabled (review, 2026-09-30).
+  describe('while a save is on the wire', () => {
+    const TWO_ALLOW_RULES = JSON.stringify({ permissions: { allow: ['Read', 'Bash(npm run *)'] } })
+
+    async function savingPanel(scheme: 'light' | 'dark') {
+      let releaseWrite!: (reply: unknown) => void
+      const reads: Record<string, string> = {
+        '.claude/settings.json': TWO_ALLOW_RULES,
+        '.claude/settings.local.json': JSON.stringify({ permissions: { deny: ['WebFetch'] } })
+      }
+      const client = mockClient(reads)
+      const send = client.sendRequest as unknown as ReturnType<typeof vi.fn>
+      const fallback = send.getMockImplementation() as unknown as (
+        method: string,
+        params: Record<string, unknown>
+      ) => Promise<unknown>
+      send.mockImplementation(async (method: string, params: Record<string, unknown>) =>
+        method === 'files.write'
+          ? new Promise((resolve) => {
+              releaseWrite = resolve
+            })
+          : fallback(method, params)
+      )
+      fakes.client = client
+      let renderer!: ReactTestRenderer
+      await act(async () => {
+        renderer = create(
+          <ThemeProvider initialPreference={scheme}>
+            <MobilePermissionRulesPanel hostId="h1" worktreeId="w1" name="my-repo" />
+          </ThemeProvider>
+        )
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      act(() => removeRule(renderer, 'Bash(npm run *)').props.onPress())
+      act(() => saveButton(renderer).props.onPress())
+      return { renderer, send, release: (reply: unknown) => releaseWrite(reply) }
+    }
+
+    function removeRule(renderer: ReactTestRenderer, rule: string) {
+      return renderer.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === `Remove ${rule}`
+      )
+    }
+
+    /** The footer's Save (the add-rule dialog has a Save of its own). */
+    function saveButton(renderer: ReactTestRenderer) {
+      const footerSave = renderer.root.find(
+        (node) => node.props?.block === true && /^Sav(e|ing…)$/.test(String(node.props.label))
+      )
+      return footerSave.findAll((node) => node.props?.accessibilityRole === 'button')[0]!
+    }
+
+    /** The block holding the three categories' rows and "Add rule" rows. */
+    function ruleLists(renderer: ReactTestRenderer) {
+      return renderer.root.find(
+        (node) => String(node.type) === 'View' && node.props.testID === 'permission-rule-lists'
+      )
+    }
+
+    it.each(['light', 'dark'] as const)(
+      'will not add or remove a rule, and looks disabled until it lands (%s)',
+      async (scheme) => {
+        const { renderer, send, release } = await savingPanel(scheme)
+        expect(saveButton(renderer).props.accessibilityLabel).toBe('Saving…')
+        expect(send).toHaveBeenLastCalledWith('files.write', {
+          worktree: 'id:w1',
+          relativePath: '.claude/settings.json',
+          content: JSON.stringify({ permissions: { allow: ['Read'] } }, null, 2) + '\n'
+        })
+
+        const lists = ruleLists(renderer)
+        expect(lists.props.pointerEvents).toBe('none')
+        expect(lists.props.accessibilityState).toEqual({ disabled: true })
+        expect(Object.assign({}, ...[lists.props.style].flat().filter(Boolean)).opacity).toBe(0.5)
+        // A tap that reaches a row anyway changes nothing, and opens no add dialog.
+        act(() => removeRule(renderer, 'Read').props.onPress())
+        act(() => addRuleRows(renderer)[0]!.props.onPress())
+        expect(allText(renderer)).toContain('Read')
+        expect(
+          renderer.root.findAll((node) => node.props?.title === 'Add an allow rule')
+        ).toHaveLength(0)
+
+        await act(async () => {
+          release({ ok: true, result: {} })
+          await Promise.resolve()
+        })
+        expect(ruleLists(renderer).props.pointerEvents).toBe('auto')
+        expect(saveButton(renderer).props.accessibilityState).toEqual({ disabled: true })
+        act(() => renderer.unmount())
+      }
+    )
+
+    it('does not mark the other destination saved when its tab is switched to mid-save', async () => {
+      const { renderer, release } = await savingPanel('light')
+      const localToggle = renderer.root
+        .findAllByType('Pressable' as never)
+        .find((node) => node.findAllByType('Text' as never).some((t) => t.props.children === 'Local'))!
+      await act(async () => {
+        localToggle.props.onPress()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(allText(renderer)).toContain('WebFetch')
+
+      await act(async () => {
+        release({ ok: true, result: {} })
+        await Promise.resolve()
+      })
+      // The local file was only read: nothing to save, and nothing claimed saved over it.
+      expect(allText(renderer)).toContain('WebFetch')
+      expect(saveButton(renderer).props.accessibilityLabel).toBe('Save')
+      expect(saveButton(renderer).props.accessibilityState).toEqual({ disabled: true })
+      act(() => renderer.unmount())
+    })
   })
 
   it('a jailed path read error is shown as the host’s refusal', async () => {

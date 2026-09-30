@@ -162,6 +162,84 @@ describe('useProjectConfigFile', () => {
     expect(state.status === 'ready' && state.saveError).toBeNull()
   })
 
+  // The write carries the draft as it was when Save was tapped. An edit made while it is on the
+  // wire never reached the host, so it must stay unsaved (review, 2026-09-30).
+  it('keeps an edit made while a save is in flight unsaved, with Save live again', async () => {
+    let releaseWrite!: (reply: unknown) => void
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: { content: 'A', truncated: false, byteLength: 1 } })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseWrite = resolve
+          })
+      )
+    const client = { sendRequest } as unknown as RpcClient
+    const h = harness(client)
+    cleanup = h.unmount
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    act(() => h.get().setContent('B'))
+    let saved!: Promise<void>
+    act(() => {
+      saved = h.get().save()
+    })
+    act(() => h.get().setContent('C'))
+    await act(async () => {
+      releaseWrite({ ok: true, result: {} })
+      await saved
+    })
+
+    expect(sendRequest).toHaveBeenLastCalledWith('files.write', {
+      worktree: 'id:w1',
+      relativePath: '.mcp.json',
+      content: 'B'
+    })
+    const state = h.get().state
+    expect(state.status === 'ready' && state.content).toBe('C')
+    expect(state.status === 'ready' && state.savedContent).toBe('B')
+    expect(state.status === 'ready' && state.isDirty).toBe(true)
+    expect(state.status === 'ready' && state.saving).toBe(false)
+  })
+
+  it('is clean after a save when the draft was edited back to what was written', async () => {
+    let releaseWrite!: (reply: unknown) => void
+    const sendRequest = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, result: { content: 'A', truncated: false, byteLength: 1 } })
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            releaseWrite = resolve
+          })
+      )
+    const client = { sendRequest } as unknown as RpcClient
+    const h = harness(client)
+    cleanup = h.unmount
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    act(() => h.get().setContent('B'))
+    let saved!: Promise<void>
+    act(() => {
+      saved = h.get().save()
+    })
+    act(() => h.get().setContent('BX'))
+    act(() => h.get().setContent('B'))
+    await act(async () => {
+      releaseWrite({ ok: true, result: {} })
+      await saved
+    })
+
+    const state = h.get().state
+    expect(state.status === 'ready' && state.savedContent).toBe('B')
+    expect(state.status === 'ready' && state.isDirty).toBe(false)
+  })
+
   it('create() re-reads after a successful files.createFile, landing on "ready" with empty content', async () => {
     const sendRequest = vi
       .fn()

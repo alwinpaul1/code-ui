@@ -108,9 +108,15 @@ export function useProjectConfigFile(args: {
     if (!client || state.status !== 'ready' || state.saving) {
       return
     }
+    // What the write carries is the draft at tap time. An edit made while it is on the wire never
+    // reached the host, so the answer marks `contentToSave` saved, not whatever the draft is now.
     const contentToSave = state.content
     setState((prev) => (prev.status === 'ready' ? { ...prev, saving: true, saveError: null } : prev))
     const seq = (saveSeqRef.current += 1)
+    // A read since the tap (another file on a screen that switches, or a refresh) replaced the
+    // state this write answers for; its answer must not land on that one.
+    const readSeq = readSeqRef.current
+    const superseded = () => saveSeqRef.current !== seq || readSeqRef.current !== readSeq
     try {
       const response = await projectConfigFileWrite.request(client, {
         worktree: `id:${worktreeId}`,
@@ -118,16 +124,22 @@ export function useProjectConfigFile(args: {
         content: contentToSave
       })
       projectConfigFileWrite.interpret(response)
-      if (saveSeqRef.current !== seq) {
+      if (superseded()) {
         return
       }
       setState((prev) =>
         prev.status === 'ready'
-          ? { ...prev, savedContent: prev.content, isDirty: false, saving: false, saveError: null }
+          ? {
+              ...prev,
+              savedContent: contentToSave,
+              isDirty: prev.content !== contentToSave,
+              saving: false,
+              saveError: null
+            }
           : prev
       )
     } catch (error) {
-      if (saveSeqRef.current !== seq) {
+      if (superseded()) {
         return
       }
       const message = error instanceof Error ? error.message : String(error)
