@@ -1,6 +1,7 @@
 import { gatherListItemContinuation } from './markdown-reflow'
 import { openingFence, outdentCodeLine } from './markdown-code-fence'
-import { readIndentedCode } from './markdown-leaf-blocks'
+import { readIndentedCode, setextLevel } from './markdown-leaf-blocks'
+import { continuesParagraphLazily, isThematicBreak } from './markdown-lazy-line'
 import { opensTable } from './markdown-table-rows'
 import {
   endsItemWords,
@@ -30,22 +31,6 @@ export type ParsedListItem = {
 /** A tab indents as far as four spaces, so mixed indentation still nests the way it looks. */
 export function indentationWidth(value: string): number {
   return value.replace(/\t/g, '    ').length
-}
-
-/**
- * A thematic break: one of `-`, `*` or `_` three or more times, with spaces or tabs between them
- * allowed (CommonMark 4.1), as the PR renderer's HR reads it. The rule test took only an unbroken
- * run, so `* * *` and `- - -` read as a bullet holding the rest of the marks and saved as a list
- * item, and `_ _ _` as words (review, 2026-09-30).
- *
- * Here rather than in the block reader because both readers need it and the block reader imports
- * this one. A break wins over a list item where a line could be either, as in CommonMark. Any
- * indent, as the editor's rule test has always allowed rather than CommonMark's three columns: an
- * indented `---` under a list item has always ended the item as a rule, and three columns would
- * gather it into the item's words instead.
- */
-export function isThematicBreak(line: string): boolean {
-  return /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line)
 }
 
 export function parseListLine(line: string): ParsedListItem | null {
@@ -96,6 +81,26 @@ function isItem(level: ListLevel): level is ParsedListItem {
 function endsInBlock(owner: ParsedListItem): boolean {
   const last = owner.blocks[owner.blocks.length - 1]
   return last !== undefined && last.kind !== 'paragraph' && last.afterChildren === owner.children.length
+}
+
+/**
+ * Whether a line ends an item's words, or a paragraph after them: it opens a block of its own
+ * (`opensBlock`, or a fence, a quote or a table the item holds), or it sits at the margin and is no
+ * lazy line (markdown-lazy-line.ts). Nor is an underline there: marked reads '- a\n===' as a
+ * heading inside the item, which the item's reader cannot hold, so the item ends at it as it
+ * always did. A line indented less than the item's words has always been more of them.
+ */
+function endsWords(
+  line: string,
+  under: string | undefined,
+  contentIndent: number,
+  opensBlock: (line: string) => boolean
+): boolean {
+  return (
+    opensBlock(line) ||
+    endsItemWords(line, under, contentIndent) ||
+    (!/^\s/.test(line) && (!continuesParagraphLazily(line, under) || setextLevel(line) !== null))
+  )
 }
 
 type OwnedBlock = { depth: number; block: ItemBlock; nextIndex: number }
@@ -154,7 +159,7 @@ function readBlockOf(
     next + 1,
     line.trim(),
     (candidate) => parseListLine(candidate) !== null,
-    (candidate, under) => opensBlock(candidate) || endsItemWords(candidate, under, owner.contentIndent)
+    (candidate, under) => endsWords(candidate, under, owner.contentIndent, opensBlock)
   )
   const offset = leadingSpaces(line) - owner.indent
   return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
@@ -241,7 +246,7 @@ export function parseListTree(
       index,
       item.text,
       (line) => parseListLine(line) !== null,
-      (line, under) => opensBlock(line) || endsItemWords(line, under, item.contentIndent)
+      (line, under) => endsWords(line, under, item.contentIndent, opensBlock)
     )
     item.text = continued.text
     index = continued.nextIndex

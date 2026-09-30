@@ -1,6 +1,7 @@
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
-import { isThematicBreak, parseListTree } from './markdown-list-parse'
+import { parseListTree } from './markdown-list-parse'
+import { isThematicBreak } from './markdown-lazy-line'
 import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
 import { frontMatterEnd, frontMatterHtml } from './markdown-front-matter'
 import {
@@ -12,7 +13,7 @@ import {
 import { opensTable, readTableRows, tableHtml } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { paragraphParts, reflowLines } from './markdown-reflow'
-import { quoteHtml, quoteLineContent } from './markdown-quote'
+import { quoteHtml, quoteLineContent, readQuoteLines } from './markdown-quote'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
@@ -78,12 +79,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       continue
     }
     if (quoteLineContent(line) !== null) {
-      const quote: string[] = []
-      while (index < lines.length && quoteLineContent(lines[index] ?? '') !== null) {
-        quote.push(quoteLineContent(lines[index] ?? '')!)
-        index += 1
-      }
-      html.push(quoteHtml(quote))
+      const quote = readQuoteLines(lines, index)
+      html.push(quoteHtml(quote.lines))
+      index = quote.nextIndex
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
