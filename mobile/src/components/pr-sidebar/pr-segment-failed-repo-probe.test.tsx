@@ -42,7 +42,8 @@ vi.mock('../../source-control/mobile-pr-link', () => ({
   fetchWorktreeLinkedPR: vi.fn(async () => null)
 }))
 
-const { useMobilePrSidebarController } = await import('../../session/use-mobile-pr-sidebar-controller')
+const { useMobilePrSidebarController } =
+  await import('../../session/use-mobile-pr-sidebar-controller')
 const { MobilePrViewPanelBody } = await import('./MobilePrViewPanel')
 
 const client = { sendRequest: vi.fn() } as unknown as RpcClient
@@ -166,9 +167,7 @@ describe('the Pull Request segment after a failed repo probe', () => {
     fetchGithubRepoSlug.mockResolvedValue({ ok: true, result: null })
     await mount('connected')
 
-    expect(texts()).toContain(
-      'sidebar:blocked:Hosted review panel unavailable for this provider.'
-    )
+    expect(texts()).toContain('sidebar:blocked:Hosted review panel unavailable for this provider.')
     expect(retryButton()).toBeUndefined()
     expect(warn).not.toHaveBeenCalled()
   })

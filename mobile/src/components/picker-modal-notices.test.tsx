@@ -81,7 +81,12 @@ describe('PickerModal notices', () => {
   it('draws one row for one option, and the rows for several, when no notice is set', () => {
     render({ options: [{ value: 'a', label: 'Alpha' }] })
     expect(texts()).toEqual(['Pick', 'Alpha'])
-    render({ options: [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta', subtitle: 'two' }] })
+    render({
+      options: [
+        { value: 'a', label: 'Alpha' },
+        { value: 'b', label: 'Beta', subtitle: 'two' }
+      ]
+    })
     expect(texts()).toEqual(['Pick', 'Alpha', 'Beta', 'two'])
   })
 

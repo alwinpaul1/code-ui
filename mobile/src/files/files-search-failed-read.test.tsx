@@ -32,7 +32,11 @@ vi.mock('react-native', async () => {
     FlatList: (props: {
       data: unknown[]
       keyExtractor: (item: unknown, index: number) => string
-      renderItem: (info: { item: unknown; index: number; separators: Record<string, never> }) => ReactNode
+      renderItem: (info: {
+        item: unknown
+        index: number
+        separators: Record<string, never>
+      }) => ReactNode
     }) =>
       React.createElement(
         'FlatList',
@@ -226,7 +230,9 @@ describe('the Files search after the host search failed', () => {
   it('searches again on Retry and shows the matches', async () => {
     let fail = true
     const sendRequest = clientAnswering(() =>
-      fail ? Promise.reject(new Error('connection closed')) : Promise.resolve(found(['docs/readme.md']))
+      fail
+        ? Promise.reject(new Error('connection closed'))
+        : Promise.resolve(found(['docs/readme.md']))
     )
     await mountAndSearch('readme')
     fail = false

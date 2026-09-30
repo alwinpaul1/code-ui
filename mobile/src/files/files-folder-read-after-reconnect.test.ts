@@ -15,12 +15,10 @@ import type { RpcResponse } from '../transport/types'
 
 type MockClient = { sendRequest: ReturnType<typeof vi.fn> }
 
-const mockTransport = vi.hoisted(
-  (): { client: MockClient | null; connectionState: string } => ({
-    client: null,
-    connectionState: 'connected'
-  })
-)
+const mockTransport = vi.hoisted((): { client: MockClient | null; connectionState: string } => ({
+  client: null,
+  connectionState: 'connected'
+}))
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -29,7 +27,11 @@ vi.mock('react-native', async () => {
     FlatList: (props: {
       data: unknown[]
       keyExtractor: (item: unknown, index: number) => string
-      renderItem: (info: { item: unknown; index: number; separators: Record<string, never> }) => unknown
+      renderItem: (info: {
+        item: unknown
+        index: number
+        separators: Record<string, never>
+      }) => unknown
     }) =>
       React.createElement(
         'FlatList',
@@ -93,8 +95,7 @@ function workingClient(): MockClient {
 }
 
 function srcReads(client: MockClient): number {
-  return client.sendRequest.mock.calls.filter(([, params]) => params?.relativePath === 'src')
-    .length
+  return client.sendRequest.mock.calls.filter(([, params]) => params?.relativePath === 'src').length
 }
 
 describe('a folder read that could not happen while the link was down', () => {
@@ -166,12 +167,14 @@ describe('a folder read that could not happen while the link was down', () => {
 
   it('reads a folder whose read failed with the connection again on the next connection', async () => {
     const client = workingClient()
-    client.sendRequest.mockImplementation(async (_method: string, params: { relativePath: string }) => {
-      if (params.relativePath === 'src') {
-        throw new Error('Connection interrupted')
+    client.sendRequest.mockImplementation(
+      async (_method: string, params: { relativePath: string }) => {
+        if (params.relativePath === 'src') {
+          throw new Error('Connection interrupted')
+        }
+        return ok(TREE[params.relativePath] ?? [])
       }
-      return ok(TREE[params.relativePath] ?? [])
-    })
+    )
     mockTransport.client = client
     await mount()
     await openSrc()
@@ -179,8 +182,9 @@ describe('a folder read that could not happen while the link was down', () => {
 
     await connection(client, 'reconnecting')
     expect(srcReads(client)).toBe(1)
-    client.sendRequest.mockImplementation(async (_method: string, params: { relativePath: string }) =>
-      ok(TREE[params.relativePath] ?? [])
+    client.sendRequest.mockImplementation(
+      async (_method: string, params: { relativePath: string }) =>
+        ok(TREE[params.relativePath] ?? [])
     )
     await connection(client, 'connected')
 
@@ -207,10 +211,16 @@ describe('a folder read that could not happen while the link was down', () => {
 
   it('does not loop on a folder the host refuses on a healthy connection', async () => {
     const client = workingClient()
-    client.sendRequest.mockImplementation(async (_method: string, params: { relativePath: string }) =>
-      params.relativePath === 'src'
-        ? { id: 'r', ok: false, error: { code: 'internal', message: 'read failed' }, _meta: { runtimeId: 'r' } }
-        : ok(TREE[params.relativePath] ?? [])
+    client.sendRequest.mockImplementation(
+      async (_method: string, params: { relativePath: string }) =>
+        params.relativePath === 'src'
+          ? {
+              id: 'r',
+              ok: false,
+              error: { code: 'internal', message: 'read failed' },
+              _meta: { runtimeId: 'r' }
+            }
+          : ok(TREE[params.relativePath] ?? [])
     )
     mockTransport.client = client
     await mount()

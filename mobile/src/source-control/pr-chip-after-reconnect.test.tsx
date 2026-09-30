@@ -109,7 +109,17 @@ const PR = {
   headSha: 'sha-1'
 }
 const DETAILS = {
-  item: { id: 'PR_node_7', type: 'pr', number: 7, title: 'Feat', state: 'open', url: '', labels: [], updatedAt: 'now', author: null },
+  item: {
+    id: 'PR_node_7',
+    type: 'pr',
+    number: 7,
+    title: 'Feat',
+    state: 'open',
+    url: '',
+    labels: [],
+    updatedAt: 'now',
+    author: null
+  },
   body: 'real body',
   comments: []
 }
@@ -142,7 +152,11 @@ describe('the PR chip and segment after the host reconnects', () => {
     tab = initialTab
     await act(async () => {
       renderer = create(
-        createElement(MobileSourceControlPanel, { hostId: 'host-a', worktreeId: 'wt-1', initialTab })
+        createElement(MobileSourceControlPanel, {
+          hostId: 'host-a',
+          worktreeId: 'wt-1',
+          initialTab
+        })
       )
     })
     await flush()
@@ -154,7 +168,11 @@ describe('the PR chip and segment after the host reconnects', () => {
     doubles.lastConnectedAt = lastConnectedAt
     await act(async () => {
       renderer?.update(
-        createElement(MobileSourceControlPanel, { hostId: 'host-a', worktreeId: 'wt-1', initialTab: tab })
+        createElement(MobileSourceControlPanel, {
+          hostId: 'host-a',
+          worktreeId: 'wt-1',
+          initialTab: tab
+        })
       )
     })
     await flush()

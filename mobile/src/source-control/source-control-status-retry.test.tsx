@@ -26,7 +26,9 @@ vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCar
 vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))
 vi.mock('../components/mobile-pr-url', () => ({ openMobilePrUrl: () => {} }))
-vi.mock('../transport/client-context-connection-metrics', () => ({ useLastConnectedAt: () => null }))
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./use-mobile-source-control-action-sheet', () => ({
   useMobileSourceControlActionSheet: () => ({})
 }))

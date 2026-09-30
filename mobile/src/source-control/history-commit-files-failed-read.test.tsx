@@ -42,7 +42,9 @@ vi.mock('../transport/client-context', () => ({ useForceReconnect: () => () => P
 const HISTORY = {
   ok: true,
   result: {
-    items: [{ id: 'commit-1', displayId: 'c0mm1t1', subject: 'Fix it', author: 'Ada', parentIds: [] }]
+    items: [
+      { id: 'commit-1', displayId: 'c0mm1t1', subject: 'Fix it', author: 'Ada', parentIds: [] }
+    ]
   }
 }
 const FILES = { ok: true, result: { entries: [{ path: 'src/app.ts', added: 3, removed: 1 }] } }
@@ -98,7 +100,8 @@ describe('an expanded commit whose file list could not be read', () => {
     })
     await flush()
     const header = renderer!.root.findAll(
-      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === undefined
+      (node) =>
+        (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === undefined
     )[0]!
     await act(async () => {
       header.props.onPress()

@@ -100,7 +100,10 @@ function PickerModalNotice({
 }) {
   const { colors, radius, space } = useTheme()
   return (
-    <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.md, alignItems: 'flex-start' }}>
+    <Surface
+      rounded="lg"
+      style={{ padding: space.md + 2, gap: space.md, alignItems: 'flex-start' }}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
         <Txt variant="body" tone="muted">

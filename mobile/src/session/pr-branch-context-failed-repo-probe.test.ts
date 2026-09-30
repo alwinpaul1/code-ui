@@ -21,7 +21,11 @@ import {
 let captured: MobilePrBranchContext | null = null
 
 function Harness(props: { client: RpcClient; connState: ConnectionState }) {
-  captured = useMobilePrBranchContext({ ...props, worktreeId: 'repo::/wt', includeBranchIdentity: false })
+  captured = useMobilePrBranchContext({
+    ...props,
+    worktreeId: 'repo::/wt',
+    includeBranchIdentity: false
+  })
   return null
 }
 

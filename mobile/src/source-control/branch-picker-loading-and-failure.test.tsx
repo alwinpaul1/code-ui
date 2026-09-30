@@ -271,7 +271,10 @@ describe('the Switch Branch picker', () => {
     ['light', lightColors],
     ['dark', darkColors]
   ] as const)('paints the failure from the %s theme', async (scheme, palette) => {
-    await openPicker(sender(() => Promise.reject(new Error('runtime_timeout'))), scheme)
+    await openPicker(
+      sender(() => Promise.reject(new Error('runtime_timeout'))),
+      scheme
+    )
 
     const message = renderer!.root
       .findAllByType('Text' as never)

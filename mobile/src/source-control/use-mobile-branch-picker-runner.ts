@@ -56,7 +56,9 @@ export function useMobileBranchPickerRunner(params: {
       if (!mountedRef.current || request !== requestRef.current) {
         return
       }
-      console.warn(`[source-control] branches not loaded for Switch Branch: ${why || 'no reason given'}`)
+      console.warn(
+        `[source-control] branches not loaded for Switch Branch: ${why || 'no reason given'}`
+      )
       setLocalBranchesFailed(true)
     }
     if (!client) {
