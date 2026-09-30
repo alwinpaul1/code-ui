@@ -61,3 +61,16 @@ export function backgroundTaskStatusLabel(status: BackgroundTaskStatus): string 
     }
   }
 }
+
+/** "4.9M tokens", "147K tokens": how a workflow's total reads on its card.
+ *  Whole tokens under a thousand; never a decimal on the K figure. */
+export function formatTokenCount(tokens: number): string {
+  if (tokens >= 999_500) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`
+  }
+  return tokens >= 1000 ? `${Math.round(tokens / 1000)}K` : String(tokens)
+}
+
+export function formatAgentCount(count: number, running = false): string {
+  return `${count} agent${count === 1 ? '' : 's'}${running ? ' running' : ''}`
+}
