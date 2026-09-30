@@ -44,6 +44,12 @@ describe('two desk messages of the same words the queue box let go of', () => {
     expect(sweepWitnessedEchoes(stored).map((item) => item.baselineTailMessageId)).toEqual(['a1', 'a2'])
   })
 
+  // Each waits for a row of its own, as two phone sends of the same words do:
+  // one later row of the words retires the first, not both.
+  it('each wait for a row of their own', () => {
+    expect(remember([echo(WORDS, 'a1'), echo(WORDS, 'a2')]).map((item) => item.expectedOccurrence)).toEqual([1, 2])
+  })
+
   it('keep a later message beside the one an earlier build stored by its words', () => {
     const stored = remember([echo(WORDS, 'a2')], [storedByWords(WORDS, 'a1')])
     expect(stored.map((item) => item.baselineTailMessageId)).toEqual(['a1', 'a2'])

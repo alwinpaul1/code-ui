@@ -30,9 +30,16 @@ let observation: ReturnType<typeof useMobileTerminalHudObservation>
 afterEach(async () => {
   await act(async () => renderer?.unmount())
   renderer = null
+  vi.useRealTimers()
 })
+/** The next once-a-second poll while the agent works. */
+const nextPoll = () =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
 
 function harness() {
+  vi.useFakeTimers()
   let answer: (value: unknown) => void = () => undefined
   const sendRequest = vi.fn(
     () =>
@@ -88,14 +95,10 @@ describe('the queue box the chat is handed', () => {
     const { render, land } = harness()
     await render(true)
     await land(QUEUED, HINT)
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1050))
-    })
+    await nextPoll()
     await land(PERMISSION)
     expect(observation).toMatchObject({ queuedMessages: [], queueReadable: false })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1050))
-    })
+    await nextPoll()
     await land(IDLE)
     expect(observation).toMatchObject({ queuedMessages: [], queueReadable: true })
   })
@@ -105,9 +108,7 @@ describe('the queue box the chat is handed', () => {
     const { render, land, answer } = harness()
     await render(true)
     await land(QUEUED, HINT)
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 1050))
-    })
+    await nextPoll()
     await answer({ ok: false, error: { message: 'timed out' } })
     expect(observation).toMatchObject({ queuedMessages: ['bravo short second'], queueReadable: true })
   })
