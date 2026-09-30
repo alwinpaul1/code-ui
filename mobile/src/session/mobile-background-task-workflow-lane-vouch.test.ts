@@ -15,6 +15,7 @@ const at = (clock: string) => Date.parse(`2026-09-30T${clock}Z`)
 const CALL_AT = at('10:00:10.000')
 const WINDOW: WindowTaskEvidence = {
   ownAgentIds: [],
+  shellLaunches: [],
   retiredTaskIds: [],
   pendingAgentCalls: [{ key: 'agent-call-1', at: CALL_AT, subagentType: null }],
   oldestAt: at('09:59:00.000')
