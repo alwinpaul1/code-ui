@@ -83,7 +83,7 @@ export function createMarkdownImageResolver(args: {
   documentRelativePath: string
 }): MarkdownImageResolver {
   const cache = new Map<string, Promise<MarkdownImageSource | null>>()
-  const resolve: MarkdownImageResolver = (url) => {
+  const read = (url: string): Promise<MarkdownImageSource | null> => {
     const { client, worktreeId, documentRelativePath } = args
     const path = resolveMarkdownImagePath(documentRelativePath, url)
     // A PDF cannot be drawn as a figure, and the preview loader pages the whole file over first.
@@ -110,6 +110,19 @@ export function createMarkdownImageResolver(args: {
     }
     cache.set(path, pending)
     return pending
+  }
+  // Nothing this does may throw out of the caller, which is a figure's effect: a throw there takes
+  // the document viewer down instead of drawing the link (`![chart](100%.png)`, review 2026-09-30).
+  const resolve: MarkdownImageResolver = (url) => {
+    try {
+      return read(url)
+    } catch (error: unknown) {
+      console.warn('[markdown-image] a figure path could not be resolved', {
+        url,
+        error: error instanceof Error ? error.message : String(error)
+      })
+      return Promise.resolve(null)
+    }
   }
   const { client } = args
   if (client?.getLastConnectedAt && client.onStateChange) {

@@ -77,6 +77,24 @@ describe('images a markdown document names', () => {
     await expect(offline('fig/plot.png')).resolves.toBeNull()
   })
 
+  it('reads a figure named with a bare percent sign instead of throwing out of the caller', async () => {
+    // `![chart](100%.png)`: the path was decoded before the promise existed, so the URIError
+    // escaped the resolver synchronously, past its own catch.
+    const h = host({
+      'docs/100%.png': { isBinary: true, isImage: true, mimeType: 'image/png', content: 'AAAA' }
+    })
+    const resolve = createMarkdownImageResolver({
+      client: h.client,
+      worktreeId: 'wt',
+      documentRelativePath: 'docs/README.md'
+    })
+    let answer: Promise<unknown> | null = null
+    expect(() => {
+      answer = resolve('100%.png')
+    }).not.toThrow()
+    await expect(answer).resolves.toEqual({ kind: 'bitmap', uri: 'data:image/png;base64,AAAA' })
+  })
+
   it('does not pass off a text file, or a cut SVG, as an image', async () => {
     const h = host({
       'notes.svg': { content: '<svg viewBox="0 0 1 1">', truncated: true, byteLength: 999999 },

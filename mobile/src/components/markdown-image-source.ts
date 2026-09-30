@@ -57,9 +57,19 @@ export function resolveMarkdownImagePath(
       parts.pop()
       continue
     }
-    parts.push(decodeURIComponent(part))
+    parts.push(decodePathPart(part))
   }
   return parts.length > 0 ? parts.join('/') : null
+}
+
+/** `%20` is a space; a bare `%` (`100%.png`) is the file's own name. decodeURIComponent throws
+ *  URIError on the second, which escaped a figure's effect and took the viewer down. */
+function decodePathPart(part: string): string {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    return part
+  }
 }
 
 export function isSvgPath(path: string): boolean {

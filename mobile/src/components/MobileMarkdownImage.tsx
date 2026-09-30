@@ -40,6 +40,26 @@ function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): M
   return cache
 }
 
+/**
+ * A resolver's answer, with a throw or a rejection read as no figure: either one is the link.
+ * Called from an effect, where a throw took the document viewer down through the nearest error
+ * boundary instead (`![chart](100%.png)` threw URIError, review 2026-09-30).
+ */
+function askResolver(resolve: MarkdownImageResolver, url: string): Promise<MarkdownImageSource | null> {
+  const refused = (error: unknown) => {
+    console.warn('[markdown-image] a figure could not be resolved', {
+      url,
+      error: error instanceof Error ? error.message : String(error)
+    })
+    return null
+  }
+  try {
+    return resolve(url).catch(refused)
+  } catch (error: unknown) {
+    return Promise.resolve(refused(error))
+  }
+}
+
 /** The host's last connection as the resolver's client reports it; null with nothing to watch. */
 function useLastConnectedAtOf(connection: MarkdownImageConnection | undefined): number | null {
   const [connectedAt, setConnectedAt] = useState(() => connection?.lastConnectedAt() ?? null)
@@ -132,7 +152,7 @@ export function MobileMarkdownImage({
         () => settle(null)
       )
     } else if (resolve) {
-      void resolve(url).then((source) => {
+      void askResolver(resolve, url).then((source) => {
         if (!source) {
           settle(null)
           return

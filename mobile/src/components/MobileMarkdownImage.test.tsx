@@ -198,6 +198,24 @@ describe('a figure in a markdown document', () => {
     expect(host.listening()).toBe(0)
   })
 
+  it('stays the link when resolving the figure throws, instead of taking the document down', async () => {
+    // Review 2026-09-30: `![chart](100%.png)` threw URIError out of the figure's effect, which
+    // tore the viewer down through the nearest error boundary. Whatever a resolver does, the
+    // figure falls back to the link.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const r = await render(() => {
+        throw new URIError('URI malformed')
+      })
+      layout(360)
+      expect(r.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(1)
+      const rejected = await render(() => Promise.reject(new Error('remote connection dropped')))
+      expect(rejected.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(1)
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('draws the link, not a zero-width picture, before the document is measured', async () => {
     const xml = '<svg viewBox="0 0 800 400"></svg>'
     const r = await render(async () => ({ kind: 'svg', xml }))
