@@ -51,6 +51,8 @@ import { ShimmerText } from './MobileNativeChatShimmerText'
 /** Calls a run's body shows before a "Show N more tool calls" button. This
  *  client's own: the desktop's NativeChatToolRun draws every call. */
 const MAX_VISIBLE_TOOL_PAIRS = 6
+/** Diff rows a run's first page shares out, two diffs a call: the call's own
+ *  and its result's (ToolRun's `diffLineLimit`). */
 const MAX_TOOL_RUN_DIFF_ROWS = 240
 
 /** The files one edit call changed, or null when the model refuses to claim an
@@ -286,14 +288,29 @@ export function ToolRun({
       planPreview = mobileTaskListPreview(row.list)
     }
   }
-  const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
+  // Every line draws the diff budget of the run's first page: 240 rows over
+  // the calls shown before "Show N more tool calls", two diffs a call, so 20
+  // rows a diff once a run passes six calls. Worked out over the calls shown
+  // at the time, the tap cut the diffs the reader was reading, to 10 rows for
+  // 12 calls and 1 for 120 (review, 2026-09-30). The calls the tap reveals
+  // draw the same 20 but come in closed, even under the expand-all toggle
+  // (renderBody): opened together, 120 calls would draw thousands of rows at
+  // once. So a run never draws more diff rows at once than its first page,
+  // and every row past that is one the reader opened.
+  const shownByDefault = Math.min(allPairs.length, MAX_VISIBLE_TOOL_PAIRS)
+  const diffLineLimit = Math.max(
+    1,
+    Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (shownByDefault * 2 || 1))
+  )
   let callCount = 0
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       callCount++
     }
   }
-  callCount ||= pairs.length
+  // A run of nothing but results whose calls the window cut counts its rows,
+  // all of them: over the six shown it said "6 tool calls" for seven.
+  callCount ||= allPairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
   // A collapsed run that contained failures says so (Orca #21151), counted
   // over every call, not the latest: in the sentence's "(N failed)", and a
@@ -325,11 +342,11 @@ export function ToolRun({
   // A run of exactly one call IS that call's row — the Claude app shows a
   // run's calls first and opens the sheet per call, but with only one call
   // there is nothing to disclose first, so its header opens the sheet
-  // directly instead of revealing a single child line to tap again. A call
-  // still behind "Show N more tool calls" (pairs.length < callCount) keeps
-  // the old reveal-first behaviour: there is more than one call, it is just
-  // not all shown.
-  const singlePair = pairs.length === 1 && callCount === pairs.length ? pairs[0]! : null
+  // directly instead of revealing a single child line to tap again. So does
+  // a run that is one result whose call the window cut. Counted over every
+  // row, not the ones shown: a run with rows behind "Show N more tool calls"
+  // keeps the reveal-first behaviour, since it has more than one to disclose.
+  const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
   const detailSheet = (
@@ -432,7 +449,8 @@ export function ToolRun({
             key={i}
             pair={pair}
             taskList={taskLists[i] ?? null}
-            defaultExpanded={expandChildren ?? defaultExpanded}
+            // A call "Show N more" revealed opens on its own tap (diffLineLimit).
+            defaultExpanded={i < MAX_VISIBLE_TOOL_PAIRS && (expandChildren ?? defaultExpanded)}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}
             onOpenDetail={setDetailPair}
@@ -442,9 +460,11 @@ export function ToolRun({
             styles={styles}
           />
         ))}
-        {callCount > pairs.length ? (
+        {/* Rows, not calls: a result whose call the window cut is a row of
+            its own, and counted by calls it hid the last call (2026-09-30). */}
+        {allPairs.length > pairs.length ? (
           <ShowMoreCalls
-            count={callCount - pairs.length}
+            count={allPairs.length - pairs.length}
             onPress={() => setShowAllPairs(true)}
             styles={styles}
           />

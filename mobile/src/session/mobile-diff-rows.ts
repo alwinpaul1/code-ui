@@ -16,6 +16,13 @@ const CONTEXT_ROWS = 3
  * can no longer spend itself on unchanged rows and cut before the change (a 3,000-line file changed
  * on line 2,900 used to draw 2,500 unchanged rows and nothing else). Only if the folded diff is
  * still over the cap is it cut, and the last row then says which changed rows it left out.
+ *
+ * The cap counts the file's rows and the fold's "N unchanged lines" rows. git's "\ No newline at
+ * end of file" is not counted: it rides with the changed row above it, drawn whenever that row is
+ * and never on its own, so a diff whose rows fit is drawn whole with its notes (at most two rows
+ * past the cap), and a note can neither push out the last changed row nor be the row the cap
+ * refuses. Counted, it cut a replaced block of exactly 2,500 rows, or said it was truncated with
+ * nothing left out (review, 2026-09-30).
  */
 export function emitMobileDiffRows(
   segments: readonly DiffSegment[],
@@ -31,15 +38,18 @@ export function emitMobileDiffRows(
   const total = segments.reduce((sum, segment) => sum + segment.length, 0)
   const fold = total > MAX_MOBILE_DIFF_LINES
   const lines: MobileDiffLine[] = []
+  // The rows the cap counts: every row but the no-newline notes.
+  let counted = 0
   let dropped = false
   let hiddenAdded = 0
   let hiddenDeleted = 0
   const push = (line: MobileDiffLine): boolean => {
-    if (lines.length >= MAX_MOBILE_DIFF_LINES) {
+    if (counted >= MAX_MOBILE_DIFF_LINES) {
       dropped = true
       return false
     }
     lines.push(line)
+    counted += 1
     return true
   }
   const pushContext = (
@@ -103,7 +113,8 @@ export function emitMobileDiffRows(
           ? ends.oldUnterminated && row.oldLineNumber === oldLines.length
           : ends.newUnterminated && row.newLineNumber === newLines.length
       if (lacksNewline) {
-        push(noNewlineDiffRow())
+        // Not through `push`: the cap does not count it, and its row was just drawn.
+        lines.push(noNewlineDiffRow())
       }
     }
   })
