@@ -1,3 +1,4 @@
+import { createMarkdownCodeSpanFinder } from './markdown-code-spans'
 import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
 
@@ -66,12 +67,11 @@ export function createMarkdownInlineMatcher(
   let nextOther: MarkdownInlineMatch | null | undefined
   let nextLink: MarkdownInlineMatch | null | undefined
   let nextCode: MarkdownInlineMatch | null | undefined
-  /** Every backtick run in the text, found once: [start, length]. */
-  let runs: [number, number][] | undefined
   // Marks are looked for where an escaped one cannot be seen; every token is
   // cut from the text itself (markdown-inline-escapes.ts).
   const source = images ? maskMarkdownEscapes(text) : text
   const linkFinder = createMarkdownLinkFinder(source, images)
+  const codeSpanFinder = createMarkdownCodeSpanFinder(source, images)
   const other = (index: number, end: number, found?: RegExpExecArray): MarkdownInlineMatch => {
     const group = found ? found.findIndex((value, at) => at > 0 && value !== undefined) : -1
     return group > 0 ? { 0: text.slice(index, end), index, end, group } : { 0: text.slice(index, end), index, end }
@@ -92,46 +92,13 @@ export function createMarkdownInlineMatcher(
   }
 
   /**
-   * The next code span at or after `from`, by CommonMark's rule: a run of N
-   * backticks opens a span that closes at the next run of EXACTLY N; a run
-   * with no such partner is literal text and the scan moves to the run after
-   * it. "A backtick, then anything up to the next backtick" was the rule
-   * before, and on "`` `user` `` becomes `user`, blank lines…" it paired the
-   * wrong backticks and chipped the rest of the paragraph (2026-09-19).
-   *
-   * In a chat reply a run right after an escaping backslash opens with one
-   * backtick fewer, that one literal (`` \`not code` `` is no span). Only
-   * an opener: a backslash inside a span is literal, so `` `a\` `` closes.
+   * The next code span at or after `from`, by CommonMark's rule, escapes and
+   * all in a chat reply (markdown-code-spans.ts, shared with the HTML pass so
+   * the two find the same spans).
    */
   function findCodeSpan(from: number): MarkdownInlineMatch | null {
-    if (runs === undefined) {
-      runs = []
-      let at = source.indexOf('`')
-      while (at !== -1) {
-        let length = 1
-        while (source[at + length] === '`') {
-          length += 1
-        }
-        runs.push([at, length])
-        at = source.indexOf('`', at + length)
-      }
-    }
-    for (let open = 0; open < runs.length; open += 1) {
-      const [runStart, runLength] = runs[open]!
-      const escaped = images && source[runStart - 1] === '\\' ? 1 : 0
-      const start = runStart + escaped
-      const length = runLength - escaped
-      if (start < from || length === 0) {
-        continue
-      }
-      for (let close = open + 1; close < runs.length; close += 1) {
-        const [closeStart, closeLength] = runs[close]!
-        if (closeLength === length) {
-          return other(start, closeStart + closeLength)
-        }
-      }
-    }
-    return null
+    const span = codeSpanFinder(from)
+    return span ? other(span.index, span.end) : null
   }
 
   const matcher = {

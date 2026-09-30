@@ -262,7 +262,11 @@ describe('mobile inline link scanning', () => {
     { name: 'escaped stars', text: '\\*'.repeat(50_000) },
     { name: 'a backslash run before every star', text: '\\\\\\*a*'.repeat(20_000) },
     { name: 'one long backslash run', text: `${'\\'.repeat(100_000)}*a*` },
-    { name: 'escaped backticks', text: '\\`'.repeat(50_000) }
+    { name: 'escaped backticks', text: '\\`'.repeat(50_000) },
+    // Each call looked for its span from the first run in the text again,
+    // so a paragraph of many spans cost the square of their number.
+    { name: 'many code spans', text: '`a` '.repeat(25_000) },
+    { name: 'an unmatched run of every length', text: Array.from({ length: 400 }, (_, k) => `${'`'.repeat(k + 1)} x `).join('') }
   ])('reads $name in a chat reply within the parser deadline', ({ text }) => {
     const count = runInNewContext(
       'let n = 0; const m = create(text, pattern(), true, true); while (m.exec()) n++; n',

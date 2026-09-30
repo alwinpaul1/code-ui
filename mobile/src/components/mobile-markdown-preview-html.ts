@@ -5,7 +5,7 @@ import {
   replaceMobileMarkdownPairedMarkupTags,
   stripMobileMarkdownMarkupTags
 } from './mobile-markdown-preview-tag-stripper'
-import { markdownCodeRanges } from './markdown-code-ranges'
+import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -223,79 +223,6 @@ function normalizeInlineHtml(value: string): string {
     return text ? `\`${text}\`` : ''
   })
   return next
-}
-
-// Why: Markdown code is literal source, so it must bypass the HTML strip pass.
-const CODE_PLACEHOLDER_PREFIX_BASE = '\uE000ORCA_MD_CODE_'
-const CODE_PLACEHOLDER_SUFFIX = '\uE000'
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function codePlaceholderPrefix(content: string): string {
-  let suffixLength = 0
-  let cursor = 0
-  while ((cursor = content.indexOf(CODE_PLACEHOLDER_PREFIX_BASE, cursor)) !== -1) {
-    cursor += CODE_PLACEHOLDER_PREFIX_BASE.length
-    const suffixStart = cursor
-    while (content[cursor] === '_') {
-      cursor += 1
-    }
-    // One extra underscore keeps the prefix longer than every authored run.
-    suffixLength = Math.max(suffixLength, cursor - suffixStart + 1)
-  }
-  return CODE_PLACEHOLDER_PREFIX_BASE + '_'.repeat(suffixLength)
-}
-
-function protectMarkdownCode(
-  content: string,
-  /** Indented code blocks too, which only a whole document can tell apart
-   *  from indented HTML (markdown-code-ranges.ts). */
-  indentedCode = false
-): {
-  protectedText: string
-  codeSpans: string[]
-  placeholderPrefix: string
-} {
-  const placeholderPrefix = codePlaceholderPrefix(content)
-  const codeSpans: string[] = []
-  const store = (match: string): string => {
-    const token = `${placeholderPrefix}${codeSpans.length}${CODE_PLACEHOLDER_SUFFIX}`
-    codeSpans.push(match)
-    return token
-  }
-
-  const lines = content.split('\n')
-  const protectedLines: string[] = []
-  const blocks = markdownCodeRanges(lines, { indentedCode })
-  let index = 0
-  while (index < lines.length) {
-    const line = lines[index] ?? ''
-    const blockEnd = blocks.get(index)
-    if (blockEnd !== undefined) {
-      protectedLines.push(store(lines.slice(index, blockEnd).join('\n')))
-      index = blockEnd
-      continue
-    }
-
-    protectedLines.push(line.replace(/`[^`\n]+`/g, store))
-    index += 1
-  }
-
-  return { protectedText: protectedLines.join('\n'), codeSpans, placeholderPrefix }
-}
-
-function restoreMarkdownCode(
-  value: string,
-  codeSpans: string[],
-  placeholderPrefix: string
-): string {
-  const placeholderPattern = new RegExp(
-    `${escapeRegExp(placeholderPrefix)}(\\d+)${escapeRegExp(CODE_PLACEHOLDER_SUFFIX)}`,
-    'g'
-  )
-  return value.replace(placeholderPattern, (_token, index) => codeSpans[Number(index)] ?? _token)
 }
 
 /**

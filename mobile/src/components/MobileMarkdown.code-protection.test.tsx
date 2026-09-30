@@ -49,6 +49,18 @@ describe('code the HTML pass must leave as written', () => {
     act(() => renderer.unmount())
   })
 
+  it.each(SCHEMES)('draws a code span across a line break with its tags, not as bold (%s)', (scheme) => {
+    const renderer = render('a `<b>x\ny</b>` b', scheme)
+    expect(textOf(renderer.root)).toBe('a <b>x y</b> b')
+    const bold = renderer.root.findAll(
+      (node) =>
+        node.type === ('Text' as never) &&
+        [node.props.style].flat(4).some((style) => style && typeof style === 'object' && 'fontWeight' in style && textOf(node) === 'x y')
+    )
+    expect(bold).toEqual([])
+    act(() => renderer.unmount())
+  })
+
   it.each(SCHEMES)('draws an indented block after a quote that ends in a fence with its tags (%s)', (scheme) => {
     const renderer = render('> ```\n> x\n> ```\n    <b>x</b>', scheme)
     expect(textOf(renderer.root)).toContain('<b>x</b>')

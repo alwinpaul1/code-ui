@@ -90,6 +90,34 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('`` `user` `` becomes `user`')).toBe('`user` becomes user')
   })
 
+  // Review, 2026-09-30: the HTML pass protected only a one-backtick span on
+  // one line, so a tag in a span across a soft line break, or in a
+  // two-backtick span holding a backtick, was rewritten to `**x**` before
+  // the screen drew the span. The screen is pinned in
+  // MobileMarkdown.code-protection.test.tsx.
+  it('copies a code span across a line break with its tags as written', () => {
+    expect(markdownPlainText('a `<b>x\ny</b>` b')).toBe('a <b>x y</b> b')
+    expect(markdownPlainText('- a `<b>x\n  y</b>` b')).toBe('• a <b>x y</b> b')
+    expect(markdownPlainText('> a `<b>x\n> y</b>` b')).toBe('a <b>x y</b> b')
+    expect(markdownPlainText('a ``x`<b>y\nz</b>`` b')).toBe('a x`<b>y z</b> b')
+  })
+
+  it('copies a two-backtick span holding a backtick with its tags as written', () => {
+    expect(markdownPlainText('a ``x`b <b>y</b>`` c')).toBe('a x`b <b>y</b> c')
+    expect(markdownPlainText('use ``&amp;`` here')).toBe('use &amp; here')
+  })
+
+  it('reads no code span across a blank line, a heading or a new list item', () => {
+    expect(markdownPlainText('a `x <b>y</b>\n\nz` b')).toBe('a `x y\n\nz` b')
+    expect(markdownPlainText('# a `x\n<b>y</b>` b')).toBe('a `x\n\ny` b')
+    expect(markdownPlainText('- a `x\n- <b>y</b>` b')).toBe('• a `x\n• y` b')
+  })
+
+  it('reads an escaped backtick as no code span, so its tags are HTML', () => {
+    expect(markdownPlainText('a \\`<b>x</b>` b')).toBe('a `x` b')
+    expect(markdownPlainText('a \\\\`<b>x</b>` b')).toBe('a \\<b>x</b> b')
+  })
+
   it('copies a code block as its code, without the fences or the language', () => {
     expect(markdownPlainText('Run:\n\n```bash\nnpm test\nnpm run lint\n```\n\nThen push.')).toBe(
       'Run:\n\nnpm test\nnpm run lint\n\nThen push.'
