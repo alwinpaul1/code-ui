@@ -516,8 +516,7 @@ describe("the Tasks screen's detail stages", () => {
     'useMobileTasksProjectDetailLoading'
   ])('hands %s the host connection time, so a failed read is read again', (stage) => {
     const call = new RegExp(`=\\s*${stage}\\(\\s*stage\\d+\\s*,\\s*([^)]*?)\\s*\\)`).exec(screen)
-    expect(call?.[1]).toBe('lastConnectedAt')
     // Stage 1 is where the screen reads it, as useLastConnectedAt(hostId).
-    expect(screen).toMatch(/const \{ lastConnectedAt \} = stage1\b/)
+    expect(call?.[1]).toBe('stage1.lastConnectedAt')
   })
 })
