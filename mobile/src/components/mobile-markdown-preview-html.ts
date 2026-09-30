@@ -8,6 +8,7 @@ import {
 import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
 import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
 import { decodeMarkdownHtmlEntities } from './markdown-html-entities'
+import { markTableRowBreaks } from './markdown-inline-breaks'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -258,7 +259,9 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     content.replace(/\r\n?/g, '\n'),
     true
   )
-  let next = protectEscapedMarkup(protectedText)
+  // A `<br>` on a table row stands aside until marked has split the row
+  // (markdown-inline-breaks.ts); normalizeInlineHtml below takes the rest.
+  let next = markTableRowBreaks(protectEscapedMarkup(protectedText))
 
   // Why: repository Markdown often uses small HTML islands for centered README
   // headers and badges. Preview mode should read like Markdown, while Source

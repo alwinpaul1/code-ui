@@ -99,6 +99,21 @@ export function markdownInlinePlainText(text: string, label = false): string {
   return out + unescapeMarkdownText(text.slice(pendingStart))
 }
 
+/** A table cell as a Copy pastes it: a `<br>` in it, drawn as a line break
+ *  inside the cell, is a space, so the row stays one line of tab-separated
+ *  cells (markdown-inline-breaks.ts). */
+function cellPlainText(cell: string): string {
+  const plain = markdownInlinePlainText(cell)
+  if (!plain.includes('\n')) {
+    return plain
+  }
+  return plain
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '')
+    .join(' ')
+}
+
 /** Two spaces a level, the way the screen steps a nested item in. */
 const LIST_INDENT = '  '
 
@@ -122,7 +137,7 @@ function blockPlainText(block: MobileMarkdownBlock): string {
     case 'image':
       return block.url ? imagePlainText(block.alt, block.url) : block.alt
     case 'table':
-      return [block.headers, ...block.rows].map((row) => row.map((cell) => markdownInlinePlainText(cell)).join('\t')).join('\n')
+      return [block.headers, ...block.rows].map((row) => row.map(cellPlainText).join('\t')).join('\n')
     case 'rule':
       return ''
     default: {
