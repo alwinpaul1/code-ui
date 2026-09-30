@@ -106,12 +106,23 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
     expect(toolCallKind('update_plan')).toBe(toolCallKind('TodoWrite'))
   })
 
+  // An empty-chars write_stdin is a poll of the exec_command it follows, so the
+  // two are one command (codex-stdin-poll-run-sentence.test.ts); a write_stdin
+  // that types input counts as a command, never as a tool.
   it('reads a write_stdin poll beside its exec_command as commands, not tools', () => {
     expect(
       toolRunSentence([
         call('exec_command', { cmd: 'npm test' }),
         result(),
         call('write_stdin', { session_id: 3, chars: '' }),
+        result()
+      ])
+    ).toBe('Ran a command')
+    expect(
+      toolRunSentence([
+        call('exec_command', { cmd: 'npm init' }),
+        result(),
+        call('write_stdin', { session_id: 3, chars: 'y\n' }),
         result()
       ])
     ).toBe('Ran 2 commands')

@@ -10,6 +10,7 @@ import {
   nativeChatToolCategory,
   type NativeChatToolCategory
 } from '../../../src/shared/native-chat-tool-icon'
+import { createCodexPollFolder } from './codex-stdin-poll'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 
 /**
@@ -23,7 +24,8 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * call, a SendMessage, and a whole-file write. Tool names are grouped by what
  * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
  * and Codex's `shell`, `local_shell`, `exec_command`, `shell_command` and
- * `write_stdin` all read as commands.
+ * `write_stdin` all read as commands — a `write_stdin` that only polls a
+ * command already counted folding into it (codex-stdin-poll.ts).
  */
 type Kind = 'command' | 'read' | 'edit' | 'search' | 'agent' | 'web' | 'skill' | 'message' | 'other'
 
@@ -239,9 +241,18 @@ type Group = {
 function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const groups: Group[] = []
   const indexByKind = new Map<Kind, number>()
-  const pending: number[] = []
+  // Null for a call that counts as none: a Codex poll of a command already
+  // counted, whose result is then no group's (codex-stdin-poll.ts). A poll's
+  // error is left to the run header's own "N failed" label, which a sentence
+  // that does not state it keeps drawn (toolRunSentenceShowsFailures).
+  const pending: (number | null)[] = []
+  const foldsIntoCommand = createCodexPollFolder()
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
+      if (foldsIntoCommand(block.name, block.input)) {
+        pending.push(null)
+        continue
+      }
       const kind = toolCallKind(block.name)
       let index = indexByKind.get(kind)
       if (index === undefined) {
@@ -263,7 +274,7 @@ function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
     } else if (isToolResultBlock(block)) {
       // FIFO by ordinal, the pairing rule the fold itself uses.
       const index = pending.shift()
-      const entry = index === undefined ? undefined : groups[index]
+      const entry = index === undefined || index === null ? undefined : groups[index]
       if (!entry) {
         continue
       }
