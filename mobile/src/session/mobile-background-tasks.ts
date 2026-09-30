@@ -46,6 +46,7 @@ import {
 } from './mobile-background-task-transcript'
 import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 import { applyAgentResumes, createResumeTracker, trackCall, trackMessage, trackResult } from './mobile-background-task-resumes'
+import { foldWorkflowAgents, type WorkflowDetail } from './mobile-background-task-workflows'
 import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
@@ -171,6 +172,9 @@ export type BackgroundTask = {
    *  foreground subagent inside a live turn arrives as `false`: the SDK has no
    *  way to reach it, so drawing a Stop there is a dead button. */
   stoppable?: boolean
+  /** A Workflow's card: description, phases, its running agents, and the
+   *  totals once it has finished (`mobile-background-task-workflows.ts`). */
+  workflow?: WorkflowDetail
 }
 
 export type BackgroundTasks = {
@@ -296,7 +300,8 @@ export function deriveBackgroundTasks(
     runBoundary: options.runBoundaryAt === undefined ? stateStart : working ? options.runBoundaryAt : null,
     ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
   })
-  return fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
+  const fitted = fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
+  return foldWorkflowAgents(fitted, hostStatus?.subagents, hostStatus?.state === 'done')
 }
 
 type SplitContext = {
@@ -365,7 +370,8 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
           ...launch,
           status: isFailureStatus(notification.status) ? 'failed' : 'completed',
           elapsedMs: null,
-          ...(summary ? { summary } : {})
+          ...(summary ? { summary } : {}),
+          ...(launch.workflow ? { workflow: { ...launch.workflow, usage: notification.usage ?? null } } : {})
         }
       })
       continue
