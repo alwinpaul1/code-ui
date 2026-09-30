@@ -7,7 +7,7 @@
 // 0b2c7a92). A folder whose read failed mid-drop stayed on its error the same way. Each is now
 // read again once on the next connection, and never while the host is still down.
 
-import { createElement } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { MobileDirEntry } from './file-tree'
@@ -31,7 +31,7 @@ vi.mock('react-native', async () => {
         item: unknown
         index: number
         separators: Record<string, never>
-      }) => unknown
+      }) => ReactNode
     }) =>
       React.createElement(
         'FlatList',

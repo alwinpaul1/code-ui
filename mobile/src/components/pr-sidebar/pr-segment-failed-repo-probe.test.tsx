@@ -95,10 +95,10 @@ describe('the Pull Request segment after a failed repo probe', () => {
   })
 
   function element(connState: ConnectionState, scheme: 'light' | 'dark' = 'light') {
-    return createElement(
-      ThemeProvider,
-      { initialPreference: scheme },
-      createElement(Segment, { connState })
+    return (
+      <ThemeProvider initialPreference={scheme}>
+        {createElement(Segment, { connState })}
+      </ThemeProvider>
     )
   }
 

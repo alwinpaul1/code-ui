@@ -100,7 +100,7 @@ describe('folded and cut rows of a long diff', () => {
 
   function render(element: ReactElement, scheme: 'light' | 'dark') {
     act(() => {
-      renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, element))
+      renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
     })
   }
 

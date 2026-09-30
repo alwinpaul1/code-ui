@@ -128,15 +128,15 @@ describe('the Files search after the host search failed', () => {
   }
 
   function element(scheme: 'light' | 'dark') {
-    return createElement(
-      ThemeProvider,
-      { initialPreference: scheme },
-      createElement(MobileFileExplorerPanel, {
-        hostId: 'host-a',
-        worktreeId: 'wt-1',
-        name: 'Example Worktree',
-        embedded: true
-      })
+    return (
+      <ThemeProvider initialPreference={scheme}>
+        {createElement(MobileFileExplorerPanel, {
+          hostId: 'host-a',
+          worktreeId: 'wt-1',
+          name: 'Example Worktree',
+          embedded: true
+        })}
+      </ThemeProvider>
     )
   }
 

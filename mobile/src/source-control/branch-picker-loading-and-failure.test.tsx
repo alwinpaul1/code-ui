@@ -148,10 +148,10 @@ describe('the Switch Branch picker', () => {
   })
 
   function element(send: SendGitRequest, scheme: 'light' | 'dark') {
-    return createElement(
-      ThemeProvider,
-      { initialPreference: scheme },
-      createElement(Hub, { send, client })
+    return (
+      <ThemeProvider initialPreference={scheme}>
+        {createElement(Hub, { send, client })}
+      </ThemeProvider>
     )
   }
 

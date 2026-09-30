@@ -77,7 +77,7 @@ describe('the final-newline and line-endings rows', () => {
 
   function render(element: ReactElement, scheme: 'light' | 'dark') {
     act(() => {
-      renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, element))
+      renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
     })
   }
 

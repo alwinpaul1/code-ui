@@ -73,16 +73,16 @@ describe('an expanded commit whose file list could not be read', () => {
   }
 
   function list(client: RpcClient | null, connState: ConnectionState, scheme: 'light' | 'dark') {
-    return createElement(
-      ThemeProvider,
-      { initialPreference: scheme },
-      createElement(MobileGitHistoryList, {
-        client,
-        connState,
-        worktreeId: 'wt-1',
-        hostId: 'host-1',
-        bottomInset: 0
-      })
+    return (
+      <ThemeProvider initialPreference={scheme}>
+        {createElement(MobileGitHistoryList, {
+          client,
+          connState,
+          worktreeId: 'wt-1',
+          hostId: 'host-1',
+          bottomInset: 0
+        })}
+      </ThemeProvider>
     )
   }
 

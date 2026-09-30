@@ -49,18 +49,16 @@ describe('PickerModal notices', () => {
   function render(props: Notices, scheme: 'light' | 'dark' = 'light') {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(PickerModal, {
+        <ThemeProvider initialPreference={scheme}>
+          {createElement(PickerModal, {
             visible: true,
             title: 'Pick',
             selected: 'a',
             onSelect: () => undefined,
             onClose: () => undefined,
             ...props
-          })
-        )
+          })}
+        </ThemeProvider>
       )
     })
   }
