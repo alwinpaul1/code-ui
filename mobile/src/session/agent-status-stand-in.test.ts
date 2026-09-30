@@ -114,9 +114,12 @@ describe('what the task readers read through a stand-in', () => {
       expect(readAll([cancelled, standIn()], [], null)).toBe(cancelled)
     })
 
-    it('reads the row through a done stand-in when the lead is done and the stamp is absent', () => {
-      const settled = row(leadDone())
-      expect(readAll([settled, standIn()], [], null)).toBe(settled)
+    it('does not read a bare done lead as work that outlived the turn', () => {
+      // What a nested `claude -p`'s SessionStart leaves in the shared lead record, under a lead that
+      // is still blocked in Bash: done, no outcome, no stamp.
+      const idle = standIn()
+      const reset = row(leadDone())
+      expect(readAll([reset, idle], [], null)).toBe(idle)
     })
 
     it('still reads a lead that is at work as a tool row, not what outlived the turn', () => {

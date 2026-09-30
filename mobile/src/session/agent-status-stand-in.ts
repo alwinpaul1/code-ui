@@ -77,7 +77,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 // on the row itself: `mainAgent: {state: 'done', outcome: 'cancellation', stateStartedAt}`. Under a
 // title stand-in's `done` the rule above needed the stamp, so the task readers dropped that shell.
 // The held row's `mainAgent` closes it: a lead the row says is done while the row is not is Orca's
-// word that work outlived the turn, cancelled or not (`leadDoneWhileWorkRuns`). Older hosts publish
+// word that work outlived a CANCELLED turn (`leadDoneWhileWorkRuns`); a bare done is not enough, since a nested `claude -p` resets the shared lead record to it under a lead still blocked in Bash. Older hosts publish
 // no `mainAgent` and keep the stamp rule alone.
 //
 // Every change to background work fires a hook (a launch is a tool call, an
@@ -186,10 +186,13 @@ function rowStandsThrough(row: Status, standIn: Status, turnCompletedAt: number 
   )
 }
 
-/** Orca 1.4.217 (#22452): the row itself says the lead is done while the row is not, so child work
- *  holds it open. Unlike the turn stamp it survives a cancel, which earns none. */
+/** Orca 1.4.217 (#22452, #22476): the row itself says the lead's turn was cancelled while the row is
+ *  not done, so child work holds it open, and a cancel earns no turn stamp. Only a cancellation: a bare
+ *  `done` is also what a nested `claude -p`'s SessionStart resets the shared lead record to. */
 function leadDoneWhileWorkRuns(row: Status): boolean {
-  return row.mainAgent?.state === 'done' && row.state !== 'done'
+  return (
+    row.mainAgent?.state === 'done' && row.mainAgent.outcome === 'cancellation' && row.state !== 'done'
+  )
 }
 
 /**
