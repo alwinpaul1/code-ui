@@ -10,10 +10,21 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
  *
  *  Why a count and not a set: two shells with the same description finish as
  *  two identical rows. What one poll sees is a multiset; the memory keeps,
- *  per row text, the most copies any single poll showed. Two identical rows
- *  never on screen together are counted once — the footer cap catches the
- *  rest — because counting every poll's sighting would count one row every
- *  second.
+ *  per row text, the most copies any single poll showed, because counting
+ *  every poll's sighting would count one row every second.
+ *
+ *  A row that left the screen and is back is a new copy only when the window
+ *  has gained a launch with its label since the row's latest copy was bound
+ *  (one copy per such launch, up to the rows on screen): a relaunch's own
+ *  row reads word for word like the first run's, and on 2026-09-30 it was
+ *  counted as the first row still remembered, so the relaunch never
+ *  finished. With no new launch the row back on screen is the same one — a
+ *  blank repaint, a dialog, a scroll — and a second copy would retire a
+ *  shell that still runs. So two identical rows never on screen together,
+ *  for two launches the window held from the first, are counted once; the
+ *  footer cap catches the rest. A row hidden and shown again after a
+ *  relaunch reads as that relaunch's row: the screen cannot tell the two
+ *  apart.
  *
  *  Why each copy is bound to launches: a row stays remembered for the whole
  *  session, long after its shell ended, and Claude often relaunches a command
@@ -40,6 +51,8 @@ export type ScreenCompletionMemory = {
   /** Every copy, in the order first seen. The same array until a copy is
    *  added or bound, so the rows handed on stay the same object. */
   copies: readonly RememberedCopy[]
+  /** The row texts the last poll folded in showed. */
+  onScreen: ReadonlySet<string>
 }
 
 type RememberedCopy = {
@@ -50,7 +63,7 @@ type RememberedCopy = {
   launchIds: readonly string[] | null
 }
 
-export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = { copies: [] }
+export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = { copies: [], onScreen: new Set() }
 
 /** Bounded like the finished-id memory; the oldest copies go first. */
 const MEMORY_MAX = 256
@@ -68,29 +81,35 @@ export function rememberScreenCompletions(
 ): ScreenCompletionMemory {
   const bound = bindWaitingCopies(remembered.copies, launches)
   let copies: RememberedCopy[] | null = bound === remembered.copies ? null : [...bound]
-  for (const [key, { completion, count }] of countByKey(seen)) {
-    const known = bound.filter((copy) => copy.key === key).length
-    if (known >= count) {
+  const counts = countByKey(seen)
+  for (const [key, { completion, count }] of counts) {
+    const known = bound.filter((copy) => copy.key === key)
+    const ids = launchIdsFor(completion.label, launches)
+    const latest = known.at(-1)
+    const back = latest !== undefined && !remembered.onScreen.has(key) ? Math.min(count, launchedSince(latest, ids)) : 0
+    const added = Math.max(count - known.length, back)
+    if (added <= 0) {
       continue
     }
-    // The copies this poll shows over the most any earlier poll showed were
-    // first seen now: they may retire only what the window holds now.
-    const ids = launchIdsFor(completion.label, launches)
+    // The copies this poll adds were first seen now: they may retire only
+    // what the window holds now.
     copies ??= [...bound]
-    for (let extra = known; extra < count; extra += 1) {
+    for (let extra = 0; extra < added; extra += 1) {
       copies.push({ key, completion, launchIds: ids.length > 0 ? ids : null })
     }
   }
-  if (copies === null) {
+  const onScreen = sameKeys(remembered.onScreen, counts) ? remembered.onScreen : new Set(counts.keys())
+  if (copies === null && onScreen === remembered.onScreen) {
     return remembered
   }
-  return { copies: copies.length > MEMORY_MAX ? copies.slice(copies.length - MEMORY_MAX) : copies }
+  const kept = copies ?? remembered.copies
+  return { copies: kept.length > MEMORY_MAX ? kept.slice(kept.length - MEMORY_MAX) : kept, onScreen }
 }
 
 /** The remembered rows as the reader takes them: one entry per copy, in the
  *  order first seen, each with the launches it may retire. A copy still
  *  waiting for its launch may retire none. */
-export function screenCompletionsFromMemory(memory: ScreenCompletionMemory): ScreenTaskCompletion[] {
+export function screenCompletionsFromMemory(memory: Pick<ScreenCompletionMemory, 'copies'>): ScreenTaskCompletion[] {
   return memory.copies.map(({ completion, launchIds }) => ({ ...completion, launchIds: launchIds ?? [] }))
 }
 
@@ -106,6 +125,23 @@ function countByKey(seen: readonly ScreenTaskCompletion[]): Map<string, { comple
     }
   }
   return counts
+}
+
+/** How many of `ids` (the window's launches with the row's label, oldest
+ *  first) came after every launch the copy was bound to. Launches paged in
+ *  from above the window sit before those and are not new; once the copy's
+ *  own have slid out of the window, every one left is. A copy still waiting
+ *  has seen none, and is bound before this is asked. */
+function launchedSince(copy: RememberedCopy, ids: readonly string[]): number {
+  const knew = copy.launchIds
+  if (knew === null) {
+    return 0
+  }
+  return ids.length - (ids.findLastIndex((id) => knew.includes(id)) + 1)
+}
+
+function sameKeys(shown: ReadonlySet<string>, counts: ReadonlyMap<string, unknown>): boolean {
+  return shown.size === counts.size && [...counts.keys()].every((key) => shown.has(key))
 }
 
 function launchIdsFor(label: string, launches: readonly LabelledShellLaunch[]): string[] {

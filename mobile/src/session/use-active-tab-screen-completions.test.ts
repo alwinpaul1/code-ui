@@ -139,6 +139,37 @@ describe('a completion row the screen showed once, and a relaunch under its desc
     // second row painted under the first.
     expect(show(T + 200_000, { messages: relaunched, screen: [GATE_ROW, GATE_ROW] })).toEqual(['host-monitoring'])
   })
+
+  it('retires the relaunch by its own row once the first run’s row has left the screen', () => {
+    const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
+    show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })
+    show(T + 62_000, { messages: firstRun, screen: [] })
+    const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
+    expect(show(T + 121_000, { messages: relaunched, screen: [] })).toEqual(['bgate0002'])
+
+    // Run 2 ends mid-turn: no notification, only its own row, word for word
+    // the first run's.
+    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  it('retires the relaunch by its own row when the first run’s row was still up as it launched', () => {
+    const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
+    show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })
+    const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
+    expect(show(T + 121_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+    expect(show(T + 150_000, { messages: relaunched, screen: [] })).toEqual(['bgate0002'])
+    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  // A blank repaint, a dialog or a scroll can hide a row and show it again.
+  // With no new launch behind it, the row back on screen is the same row, and
+  // a second copy would retire a shell that still runs.
+  it('keeps the second of two same-named shells running when a blank poll hides the first one’s row and it comes back', () => {
+    const twins = [...gateLaunch('bgate0001', T), ...gateLaunch('bgate0002', T + 5_000)]
+    expect(show(T + 61_000, { messages: twins, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+    expect(show(T + 62_000, { messages: twins, screen: [] })).toEqual(['bgate0002'])
+    expect(show(T + 63_000, { messages: twins, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+  })
 })
 
 // A shell that ends within a poll or two. The transcript stamps its launch

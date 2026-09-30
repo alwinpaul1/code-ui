@@ -124,3 +124,69 @@ describe('the launches each remembered row is bound to', () => {
     expect(bound(memory)).toEqual([['Run the gate', ['bgate0001']]])
   })
 })
+
+// A relaunch's own row reads word for word like the first run's. A row back
+// on screen after a poll without it is a new completion only when a launch
+// with its label came after the ones its latest copy was bound to.
+describe('a row that left the screen and came back', () => {
+  const gate3 = { id: 'bgate0003', label: 'Run the gate' }
+
+  it('adds a copy, bound to what the window holds now, when a launch with its label came since', () => {
+    let memory = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [gate1])
+    memory = rememberScreenCompletions(memory, [], [gate1])
+    memory = rememberScreenCompletions(memory, [], [gate1, gate2])
+    memory = rememberScreenCompletions(memory, [gate], [gate1, gate2])
+    expect(bound(memory)).toEqual([
+      ['Run the gate', ['bgate0001']],
+      ['Run the gate', ['bgate0001', 'bgate0002']]
+    ])
+    // Staying on screen adds nothing more.
+    expect(rememberScreenCompletions(memory, [gate], [gate1, gate2])).toBe(memory)
+  })
+
+  it('adds no copy when nothing was launched in between, with no launch at all or with one', () => {
+    let empty = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [])
+    empty = rememberScreenCompletions(empty, [], [])
+    empty = rememberScreenCompletions(empty, [gate], [])
+    expect(bound(empty)).toEqual([['Run the gate', []]])
+
+    let one = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [gate1])
+    one = rememberScreenCompletions(one, [], [gate1])
+    one = rememberScreenCompletions(one, [gate], [gate1])
+    expect(bound(one)).toEqual([['Run the gate', ['bgate0001']]])
+  })
+
+  it('does not take an older launch paged in from above the window for a new one', () => {
+    let memory = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [gate2])
+    memory = rememberScreenCompletions(memory, [], [gate2])
+    memory = rememberScreenCompletions(memory, [gate], [gate1, gate2])
+    expect(bound(memory)).toEqual([['Run the gate', ['bgate0002']]])
+  })
+
+  it('takes every launch left in the window as new once the ones the row knew have slid out', () => {
+    let memory = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [gate1])
+    memory = rememberScreenCompletions(memory, [], [gate1])
+    memory = rememberScreenCompletions(memory, [gate], [gate2])
+    expect(bound(memory)).toEqual([
+      ['Run the gate', ['bgate0001']],
+      ['Run the gate', ['bgate0002']]
+    ])
+  })
+
+  it('adds no more copies than rows on screen, however many launches came since', () => {
+    let memory = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate], [gate1])
+    memory = rememberScreenCompletions(memory, [], [gate1])
+    expect(screenCompletionsFromMemory(rememberScreenCompletions(memory, [gate], [gate1, gate2, gate3]))).toHaveLength(2)
+    expect(screenCompletionsFromMemory(rememberScreenCompletions(memory, [gate, gate], [gate1, gate2, gate3]))).toHaveLength(3)
+  })
+
+  it('judges each row text on its own: another row leaving does not make this one come back', () => {
+    let memory = rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [gate, build], [gate1, build1])
+    memory = rememberScreenCompletions(memory, [gate], [gate1, build1, gate2])
+    expect(bound(memory)).toEqual([
+      ['Run the gate', ['bgate0001']],
+      ['Build the release APK locally', ['bud7tazkw']]
+    ])
+  })
+})
+
