@@ -1,10 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Image, Pressable, Text, View, type TextStyle } from 'react-native'
 import { SvgXml } from 'react-native-svg'
 import { openImagePreviewSources } from '../session/image-preview-store'
 import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
+import {
   isRemoteImageUrl,
   svgAspectRatio,
+  type MarkdownImageConnection,
   type MarkdownImageResolver,
   type MarkdownImageSource
 } from './markdown-image-source'
@@ -35,6 +40,21 @@ function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): M
   return cache
 }
 
+/** The host's last connection as the resolver's client reports it; null with nothing to watch. */
+function useLastConnectedAtOf(connection: MarkdownImageConnection | undefined): number | null {
+  const [connectedAt, setConnectedAt] = useState(() => connection?.lastConnectedAt() ?? null)
+  useEffect(() => {
+    if (!connection) {
+      setConnectedAt(null)
+      return
+    }
+    const read = () => setConnectedAt(connection.lastConnectedAt())
+    read()
+    return connection.subscribe(read)
+  }, [connection])
+  return connectedAt
+}
+
 /**
  * An image block of a markdown document, drawn as the image, inside the
  * document's selectable prose run.
@@ -54,6 +74,11 @@ function loadedCache(resolve: MarkdownImageResolver | undefined, url: string): M
  *
  * Tapping a drawn figure opens the full-screen viewer, where it can be
  * pinched to read the labels in it (2026-09-19).
+ *
+ * A figure beside the document that came back as a link is read again once per NEW connection
+ * (CLAUDE.md "Nothing stays stale once the relay connects"): one opened during a drop stayed a
+ * link over a healthy connection until the document was closed (review, 2026-09-30). The resolver
+ * keeps a file's own answer, so a figure the host has not got costs no second read.
  */
 export function MobileMarkdownImage({
   alt,
@@ -74,6 +99,15 @@ export function MobileMarkdownImage({
   const [loaded, setLoaded] = useState<Loaded | null | undefined>(() =>
     loadedCache(resolve, url)?.get(url)
   )
+  const [readRun, setReadRun] = useState(0)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
+  const connectedAt = useLastConnectedAtOf(isRemoteImageUrl(url) ? undefined : resolve?.connection)
+  useEffect(() => {
+    const status = loaded === null ? 'error' : loaded === undefined ? 'loading' : 'ready'
+    if (shouldRefetchAfterReconnect(staleLedgerRef.current, url, status, connectedAt)) {
+      setReadRun((run) => run + 1)
+    }
+  }, [connectedAt, loaded, url])
   useEffect(() => {
     let cancelled = false
     const cache = loadedCache(resolve, url)
@@ -119,7 +153,7 @@ export function MobileMarkdownImage({
     return () => {
       cancelled = true
     }
-  }, [resolve, url])
+  }, [resolve, url, readRun])
 
   if (!loaded || !(width > 0)) {
     return (

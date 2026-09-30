@@ -1,9 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('expo-file-system', () => ({ File: class {}, Paths: { cache: 'file:///cache' } }))
 vi.mock('./mobile-pdf-cache', () => ({ resolveMobilePdfUri: vi.fn() }))
 
 import { createMarkdownImageResolver } from './markdown-image-resolver'
+import { resolveMobilePdfUri } from './mobile-pdf-cache'
 
 function host(answers: Record<string, unknown>) {
   const calls: { method: string; params: Record<string, unknown> }[] = []
@@ -84,5 +85,136 @@ describe('images a markdown document names', () => {
     const resolve = createMarkdownImageResolver({ client: h.client, worktreeId: 'wt', documentRelativePath: 'README.md' })
     await expect(resolve('notes.svg')).resolves.toBeNull()
     await expect(resolve('notes.txt')).resolves.toBeNull()
+  })
+})
+
+type ScriptedReply = { throw: string } | { ok: boolean; result?: unknown; error?: unknown }
+
+/** A client whose reads answer from a script, in order; `throw` rejects the way a dropped link does. */
+function scripted(replies: ScriptedReply[]) {
+  const calls: string[] = []
+  const client = {
+    sendRequest: vi.fn(async (method: string) => {
+      calls.push(method)
+      const next = replies.shift()
+      if (!next) {
+        throw new Error('no reply scripted')
+      }
+      if ('throw' in next) {
+        throw new Error(next.throw)
+      }
+      return next
+    })
+  }
+  return { client: client as never, calls }
+}
+
+const PNG = { isBinary: true, isImage: true, mimeType: 'image/png', content: 'AAAA' }
+
+function readmeResolver(client: never) {
+  return createMarkdownImageResolver({ client, worktreeId: 'wt', documentRelativePath: 'README.md' })
+}
+
+describe('a figure read while the host was not reachable', () => {
+  // Review 2026-09-30: a read that failed during a reconnect cached null for the life of the
+  // document, so the figure stayed a link over a healthy connection until the tab was closed.
+  beforeEach(() => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('is read again on the next render when the read rejected', async () => {
+    const h = scripted([{ throw: 'remote connection dropped' }, { ok: true, result: PNG }])
+    const resolve = readmeResolver(h.client)
+    await expect(resolve('p.png')).resolves.toBeNull()
+    await expect(resolve('p.png')).resolves.toEqual({
+      kind: 'bitmap',
+      uri: 'data:image/png;base64,AAAA'
+    })
+    expect(h.calls).toHaveLength(2)
+  })
+
+  it('is read again when the host answered that its filesystem was unreachable', async () => {
+    const h = scripted([
+      { ok: false, error: { code: 'unavailable', message: 'remote connection dropped' } },
+      { ok: true, result: PNG }
+    ])
+    const resolve = readmeResolver(h.client)
+    await expect(resolve('p.png')).resolves.toBeNull()
+    await expect(resolve('p.png')).resolves.toEqual({
+      kind: 'bitmap',
+      uri: 'data:image/png;base64,AAAA'
+    })
+  })
+
+  it('says in one line why a figure could not be read', async () => {
+    const h = scripted([{ throw: 'remote connection dropped' }])
+    await readmeResolver(h.client)('p.png')
+    const warned = vi.mocked(console.warn).mock.calls
+    expect(warned).toHaveLength(1)
+    expect(JSON.stringify(warned[0])).toContain('p.png')
+  })
+
+  it('shares one read between the renders that asked while it was out', async () => {
+    const h = scripted([{ throw: 'remote connection dropped' }, { ok: true, result: PNG }])
+    const resolve = readmeResolver(h.client)
+    await Promise.all([resolve('p.png'), resolve('p.png')])
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('still asks once for a file the host said it has not got', async () => {
+    const h = scripted([{ ok: false, error: { code: 'not_found', message: 'no such file' } }])
+    const resolve = readmeResolver(h.client)
+    await expect(resolve('gone.png')).resolves.toBeNull()
+    await expect(resolve('gone.png')).resolves.toBeNull()
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('still asks once for a text file that is not an image', async () => {
+    const h = scripted([{ ok: true, result: { content: 'hello', truncated: false, byteLength: 5 } }])
+    const resolve = readmeResolver(h.client)
+    await expect(resolve('notes.txt')).resolves.toBeNull()
+    await expect(resolve('notes.txt')).resolves.toBeNull()
+    expect(h.calls).toHaveLength(1)
+  })
+
+  it('never downloads a PDF a document names as an image, since none can be drawn', async () => {
+    // The preview loader pages a PDF over in chunks; the resolver threw the whole file away, and a
+    // PDF that failed to arrive would otherwise be paged over again on every new connection.
+    vi.mocked(resolveMobilePdfUri).mockClear()
+    const h = scripted([])
+    await expect(readmeResolver(h.client)('paper.pdf')).resolves.toBeNull()
+    expect(resolveMobilePdfUri).not.toHaveBeenCalled()
+    expect(h.calls).toHaveLength(0)
+  })
+
+  it('hands a figure the connection to watch when the client has one, and none otherwise', () => {
+    const listeners: (() => void)[] = []
+    let connectedAt: number | null = 1
+    const client = {
+      sendRequest: vi.fn(),
+      getLastConnectedAt: () => connectedAt,
+      onStateChange: (listener: () => void) => {
+        listeners.push(listener)
+        return () => {
+          listeners.splice(listeners.indexOf(listener), 1)
+        }
+      }
+    }
+    const resolve = readmeResolver(client as never)
+    const heard = vi.fn()
+    const stop = resolve.connection!.subscribe(heard)
+    connectedAt = 2
+    for (const listener of listeners) {
+      listener()
+    }
+    expect(resolve.connection!.lastConnectedAt()).toBe(2)
+    expect(heard).toHaveBeenCalledTimes(1)
+    stop()
+    expect(listeners).toHaveLength(0)
+    expect(readmeResolver(scripted([]).client).connection).toBeUndefined()
+    expect(readmeResolver(null as never).connection).toBeUndefined()
   })
 })
