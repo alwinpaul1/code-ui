@@ -266,3 +266,61 @@ describe.each(['light', 'dark'] as const)('the diffs of a run of edits past six 
     }
   })
 })
+
+// The button compared tool-call blocks with the rows shown, but a result
+// whose call the window cut (a run that opens part-way through) is a row of
+// its own. One such result and six calls made seven rows, six were shown,
+// no button was drawn, and the sixth call could not be reached (review,
+// 2026-09-30).
+
+const CUT_CALLS_RESULT: NativeChatBlock = { type: 'tool-result', output: 'ok' }
+
+describe.each(['light', 'dark'] as const)('a run that opens with a result whose call was cut, %s', (scheme) => {
+  it('offers its sixth call behind "Show 1 more tool call"', () => {
+    const root = render([CUT_CALLS_RESULT, ...commands(6)], scheme)
+    openRun(root)
+    expect(lines(root)).toHaveLength(6)
+    const [more] = moreButtons(root)
+    expect(more?.props.accessibilityLabel).toBe('Show 1 more tool call')
+    act(() => more!.props.onPress())
+    expect(lines(root)).toHaveLength(7)
+    expect(moreButtons(root)).toHaveLength(0)
+    const [preview] = lines(root)[6]!.findAllByProps({ testID: 'tool-line-preview' })
+    expect(preview?.props.children).toBe('cmd-6')
+  })
+
+  it('draws no button for six rows, one of them the cut call\'s result', () => {
+    const root = render([CUT_CALLS_RESULT, ...commands(5)], scheme)
+    openRun(root)
+    expect(lines(root)).toHaveLength(6)
+    expect(moreButtons(root)).toHaveLength(0)
+  })
+
+  it('opens a run that is only the cut call\'s result straight to its sheet, with no button', () => {
+    const root = render([CUT_CALLS_RESULT], scheme)
+    openRun(root)
+    expect(lines(root)).toHaveLength(0)
+    expect(moreButtons(root)).toHaveLength(0)
+    const sheet = root.findByType('MobileNativeChatToolDetailSheet' as never)
+    expect(sheet.props.pair).toEqual({ result: CUT_CALLS_RESULT })
+  })
+
+  it('counts all seven rows of a run of nothing but cut calls\' results in its header, before and after the tap', () => {
+    const root = render(Array.from({ length: 7 }, () => CUT_CALLS_RESULT), scheme)
+    const header = (): string =>
+      String(root.findByProps({ testID: 'tool-run-sentence' }).props.children)
+    expect(header()).toBe('7 tool calls')
+    openRun(root)
+    expect(lines(root)).toHaveLength(6)
+    tapMore(root)
+    expect(lines(root)).toHaveLength(7)
+    expect(header()).toBe('7 tool calls')
+  })
+
+  it('draws no row and no button for an empty run', () => {
+    const root = render([], scheme)
+    openRun(root)
+    expect(lines(root)).toHaveLength(0)
+    expect(moreButtons(root)).toHaveLength(0)
+  })
+})

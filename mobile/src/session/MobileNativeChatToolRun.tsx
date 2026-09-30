@@ -308,7 +308,9 @@ export function ToolRun({
       callCount++
     }
   }
-  callCount ||= pairs.length
+  // A run of nothing but results whose calls the window cut counts its rows,
+  // all of them: over the six shown it said "6 tool calls" for seven.
+  callCount ||= allPairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
   // A collapsed run that contained failures says so (Orca #21151), counted
   // over every call, not the latest: in the sentence's "(N failed)", and a
@@ -340,11 +342,11 @@ export function ToolRun({
   // A run of exactly one call IS that call's row — the Claude app shows a
   // run's calls first and opens the sheet per call, but with only one call
   // there is nothing to disclose first, so its header opens the sheet
-  // directly instead of revealing a single child line to tap again. A call
-  // still behind "Show N more tool calls" (pairs.length < callCount) keeps
-  // the old reveal-first behaviour: there is more than one call, it is just
-  // not all shown.
-  const singlePair = pairs.length === 1 && callCount === pairs.length ? pairs[0]! : null
+  // directly instead of revealing a single child line to tap again. So does
+  // a run that is one result whose call the window cut. Counted over every
+  // row, not the ones shown: a run with rows behind "Show N more tool calls"
+  // keeps the reveal-first behaviour, since it has more than one to disclose.
+  const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
   const detailSheet = (
@@ -458,9 +460,11 @@ export function ToolRun({
             styles={styles}
           />
         ))}
-        {callCount > pairs.length ? (
+        {/* Rows, not calls: a result whose call the window cut is a row of
+            its own, and counted by calls it hid the last call (2026-09-30). */}
+        {allPairs.length > pairs.length ? (
           <ShowMoreCalls
-            count={callCount - pairs.length}
+            count={allPairs.length - pairs.length}
             onPress={() => setShowAllPairs(true)}
             styles={styles}
           />
