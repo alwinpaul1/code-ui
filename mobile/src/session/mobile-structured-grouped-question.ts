@@ -21,7 +21,7 @@ export type GroupedQuestionDraft = {
 
 export type GroupedQuestionAdvance =
   | { kind: 'advance'; draft: GroupedQuestionDraft }
-  | { kind: 'submit'; optionId: string }
+  | { kind: 'submit'; optionId: string; answers: AgentSessionQuestionAnswer[] }
 
 const GROUPED_TOKEN_PREFIX = 'structured-grouped-question:'
 
@@ -218,6 +218,6 @@ export function advanceGroupedQuestion(args: {
   }
   // Never send a group the host would refuse — the user would see a silent failure with no way back.
   return isValidAgentSessionQuestionAnswers(args.questions, answers)
-    ? { kind: 'submit', optionId: encodeAgentSessionQuestionAnswers(answers) }
+    ? { kind: 'submit', optionId: encodeAgentSessionQuestionAnswers(answers), answers }
     : null
 }
