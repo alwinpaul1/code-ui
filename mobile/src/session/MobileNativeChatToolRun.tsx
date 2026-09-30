@@ -383,14 +383,18 @@ export function ToolRun({
       </View>
     )
   }
-  const sentenceSpans = focusView ? [] : toolRunSentenceSpans(blocks)
+  // Given the run's own count, the sentence states no "(N failed)" when it
+  // can count fewer failures than the run had (a folded Codex poll's error, a
+  // call failed by its own state alone): "(1 failed)" beside "2 failed" was
+  // two different counts for one run (review, 2026-09-30).
+  const sentenceSpans = focusView ? [] : toolRunSentenceSpans(blocks, failedCallCount)
   // The sentence says "(N failed)" itself, as the Claude app's row does; a
   // second "N failed" beside it said it twice and cut the sentence
   // (2026-09-26). The label stays wherever the row might not show every
   // failure: focus view's bare count, an empty sentence, a sentence that
-  // counts fewer failures than the run had (a call failed by its own state
-  // alone), or one whose count sits past what a phone row shows before its
-  // ellipsis (a SendMessage's preview, a command's description).
+  // counted fewer failures than the run had and so states none, or one whose
+  // count sits past what a phone row shows before its ellipsis (a
+  // SendMessage's preview, a command's description).
   const sentenceStatesFailures =
     sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
   return (

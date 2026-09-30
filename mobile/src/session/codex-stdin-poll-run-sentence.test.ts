@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { toolRunSentence, toolRunSentenceShowsFailures } from './mobile-native-chat-tool-sentence'
+import { CODE_MODE_POLL, CODE_MODE_START } from './fixtures/codex-code-mode-exec-cells-0.153.4'
 
 // One Codex command read "Ran 5 commands" when Codex polled it four times.
 // Unified exec starts a long command with exec_command and, while it runs,
@@ -19,17 +20,6 @@ function result(output = '', isError = false): NativeChatBlock {
 function poll(session: number): NativeChatBlock[] {
   return [call('write_stdin', { session_id: session, chars: '' }), result()]
 }
-
-// Codex 0.153.4 in code mode, rollout of 2026-09-06: one `sleep 90`, started by
-// an `exec` cell that calls tools.exec_command and then polled by `exec` cells
-// that call tools.write_stdin with empty chars. Orca's Codex decoder
-// (src/main/native-chat/transcript-line-decoders-codex.ts) hands a
-// custom_tool_call to the phone as a tool-call named `exec` whose input is the
-// cell's source text, verbatim.
-const CODE_MODE_START =
-  'text(await tools.exec_command({cmd:"sleep 90",yield_time_ms:1000,max_output_tokens:100}));\n'
-const CODE_MODE_POLL = (yieldMs: number): string =>
-  `text(await tools.write_stdin({session_id:68964,chars:"",yield_time_ms:${yieldMs},max_output_tokens:100}));\n`
 
 describe('a Codex command polled with write_stdin reads as the one command it is', () => {
   it('reads one exec_command polled four times as "Ran a command", as a Claude run of the same work reads', () => {
