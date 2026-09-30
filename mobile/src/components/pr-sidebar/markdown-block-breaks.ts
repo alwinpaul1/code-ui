@@ -1,4 +1,4 @@
-import { inlineBreaksAsNewlines, MARKDOWN_INLINE_BREAK, pipeTableRows } from '../markdown-inline-breaks'
+import { inlineBreaksAsLines, inlineBreaksAsNewlines, MARKDOWN_INLINE_BREAK, pipeTableRows } from '../markdown-inline-breaks'
 import type { MarkdownBlock } from './markdown-blocks'
 import type { LexedCommentBody } from './markdown-fences'
 import { HR, ORDERED, UNORDERED } from './markdown-list-blocks'
@@ -58,24 +58,6 @@ export function expandParagraphBreaks(text: string, body: LexedCommentBody): str
     .join('\n')
 }
 
-/**
- * An item's, a quote's or a heading's text with each MARKDOWN_INLINE_BREAK a
- * line break, drawn as GitHub draws one: the spaces and newline beside a
- * break are no line of their own, so '- a<br>\n  b' is two lines and not
- * three, and a break at either end draws no blank line, as one at either end
- * of a paragraph never did. Two in a row keep a blank line between them.
- */
-function breaksInBlock(text: string): string {
-  if (!text.includes(MARKDOWN_INLINE_BREAK)) {
-    return text
-  }
-  return text
-    .split(MARKDOWN_INLINE_BREAK)
-    .map((part) => part.trim())
-    .join('\n')
-    .trim()
-}
-
 /** A block with every MARKDOWN_INLINE_BREAK it kept as a line break: in its
  *  cells, its items, its words, and wherever else such a line was read, so
  *  none is drawn as a stand-in. */
@@ -84,9 +66,9 @@ export function withLineBreaks(block: MarkdownBlock): MarkdownBlock {
   switch (block.kind) {
     case 'heading':
     case 'quote':
-      return { ...block, text: breaksInBlock(block.text) }
+      return { ...block, text: inlineBreaksAsLines(block.text) }
     case 'list':
-      return { ...block, items: block.items.map(breaksInBlock) }
+      return { ...block, items: block.items.map(inlineBreaksAsLines) }
     case 'paragraph':
       return { ...block, text: breaks(block.text) }
     case 'table':

@@ -131,8 +131,9 @@ function blockPlainText(block: MobileMarkdownBlock): string {
           const marker = listMarker(item)
           const indent = LIST_INDENT.repeat(item.depth)
           // The rest of an item a fence cut in two sits under its words, and
-          // so does each line after a break in it (a `<br>`).
-          const words = markdownInlinePlainText(item.text).replaceAll('\n', `\n${indent}${LIST_INDENT}`)
+          // so does each line after a break in it (a `<br>`). The blank line
+          // two breaks leave stays blank, with no indent of spaces on it.
+          const words = markdownInlinePlainText(item.text).replace(/\n(?=[^\n])/g, `\n${indent}${LIST_INDENT}`)
           return `${indent}${marker ? `${marker} ` : LIST_INDENT}${words}`
         })
         .join('\n')
