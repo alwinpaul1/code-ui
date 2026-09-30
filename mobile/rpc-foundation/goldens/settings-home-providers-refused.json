@@ -3,7 +3,7 @@
   "family": "settings.home-providers",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "89fc2ee9482a504d7b50e1fe767da6674fb5ee9b",
+  "baseline": "21138c3412ede9df24cc668da4f0d57c9f992f01",
   "lockfileSha256": "dcfa93a88eaf3a0f2cf44a1a22bbc7a0e71d9fabebf6954856a3f0c03394689b",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "fc73116d95985606fe32f22d3f14f434a6d5cd49219416c9fa0f47f971fa6ff0",
@@ -48,6 +48,9 @@
       }
     },
     "44136fa355b3": {},
+    "46af1b449101": {
+      "host-1": "read-failed"
+    },
     "4777b5dc4e66": {
       "name": "preflight.check#1",
       "ordinal": 2,
@@ -134,6 +137,13 @@
             }
           }
         }
+      }
+    },
+    "82402ff442e4": {
+      "name": "providers",
+      "ordinal": 7,
+      "value": {
+        "host-1": "read-failed"
       }
     },
     "908e43fdefae": {
@@ -244,8 +254,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "44136fa355b3",
-          "effects": []
+          "state": "46af1b449101",
+          "effects": ["82402ff442e4"]
         }
       }
     ]
