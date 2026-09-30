@@ -97,3 +97,122 @@ describe('a line at the margin that is no lazy line', () => {
     expect(savedUntouched('- a\n| x | y |\n| - | - |')).toBe('- a\n\n| x | y |\n| - | - |')
   })
 })
+
+// Review, 2026-10-01: a lazy line after a table inside a quote was taken for more of a paragraph,
+// since the quote reader counted the table's rows as words, and saved behind the quote's marker as
+// one more row: '> | a | b |\n> |---|---|\n> | 1 | 2 |\nbody' saved '> | 1 | 2 |\n> body', which
+// marked reads as a second row holding `body`. marked reads the source's `body` as a paragraph of
+// the quote after its table. The quote holds no table block, so its rows are drawn as words.
+describe('a line at the margin after a table inside a quote', () => {
+  it.each([
+    [
+      'a table in a quote',
+      '> | a | b |\n> |---|---|\n> | 1 | 2 |\nbody',
+      '> | a | b |\n> |---|---|\n> | 1 | 2 |\n>\n> body'
+    ],
+    [
+      'a table in a quote on an item’s marker line',
+      '- > | a |\n  > | - |\nlazy',
+      '- > | a |\n  > | - |\n  >\n  > lazy'
+    ],
+    [
+      'a table in a quote inside an item',
+      '- a\n  > | a |\n  > | - |\nlazy',
+      '- a\n  > | a |\n  > | - |\n  >\n  > lazy'
+    ],
+    [
+      'a table in a quote inside a quote',
+      '> > | a | b |\n> > |---|---|\n> > | 1 | 2 |\nbody',
+      '> > | a | b |\n> > |---|---|\n> > | 1 | 2 |\n> >\n> > body'
+    ],
+    ['a table with no rows', '> | a | b |\n> |---|---|\nbody', '> | a | b |\n> |---|---|\n>\n> body'],
+    [
+      'a table after words',
+      '> text\n> | a | b |\n> |---|---|\nbody',
+      '> text\n> | a | b |\n> |---|---|\n>\n> body'
+    ],
+    ['a row with no outer pipes', '> | a |\n> | - |\n> x | y\nbody', '> | a |\n> | - |\n> x | y\n>\n> body'],
+    [
+      'a row that looks like a later numbered item',
+      '> | a |\n> | - |\n> 2. x\nbody',
+      '> | a |\n> | - |\n> 2. x\n>\n> body'
+    ],
+    ['a row that starts with `#`', '> | a |\n> | - |\n> #tag\nbody', '> | a |\n> | - |\n> #tag\n>\n> body'],
+    [
+      'a table, and the line under it too',
+      '> | a |\n> | - |\n> | 1 |\nbody\nmore',
+      '> | a |\n> | - |\n> | 1 |\n>\n> body\n> more'
+    ],
+    [
+      'a table after a list a blank line closed',
+      '> - a\n>\n> | b |\n> | - |\nbody',
+      '> - a\n>\n> | b |\n> | - |\n>\n> body'
+    ],
+    [
+      'a table after a heading that broke a list',
+      '> - a\n> # h\n> | b |\n> | - |\nbody',
+      '> - a\n> # h\n> | b |\n> | - |\n>\n> body'
+    ]
+  ])('keeps a lazy line after %s a paragraph of its quote rather than a row', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).not.toMatch(/<td>(?:body|lazy)<\/td>/)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  it('draws the line as a paragraph of its own inside the quote', () => {
+    const { editor } = openedSurface('> | a | b |\n> |---|---|\n> | 1 | 2 |\nbody')
+    expect(Array.from(editor.querySelectorAll('blockquote > p')).map((p) => p.textContent)).toEqual([
+      '| a | b ||---|---|| 1 | 2 |',
+      'body'
+    ])
+  })
+
+  it('ends the quote at the line after indented code under the table', () => {
+    // marked ends a table's rows at indented code, reads the line as code, and a lazy line after
+    // code is no quote's.
+    const markdown = '> | a |\n> | - |\n>     code\nbody'
+    expect(savedUntouched(markdown)).toBe('> | a |\n> | - |\n>     code\n\nbody')
+    expect(reading(savedUntouched(markdown))).toBe(reading(markdown))
+  })
+
+  it.each([
+    ['a pipe line with no separator under it', '> | a |\nbody', '> | a |\n> body'],
+    ['a separator of another width', '> | a | b |\n> | - |\nbody', '> | a | b |\n> | - |\n> body'],
+    ['a heading’s pipes', '> # a | b\n> |-|-|\nbody', '> # a | b\n> |-|-|\n> body'],
+    [
+      'a pipe line four columns in',
+      '> text\n>     | a |\n> | - |\nbody',
+      '> text\n>     | a |\n> | - |\n> body'
+    ],
+    ['a rule', '> ---\nbody', '> ---\n> body'],
+    ['a starred rule', '> ***\nbody', '> ***\n> body'],
+    ['a heading', '> # h\nbody', '> # h\n> body'],
+    ['a heading after words', '> a\n> # h\nlazy', '> a\n> # h\n> lazy'],
+    ['a heading on an item’s marker line', '- > # h\nlazy', '- > # h\n  > lazy'],
+    [
+      'words after a heading that ends the table',
+      '> | a |\n> | - |\n> # h\n> text\nbody',
+      '> | a |\n> | - |\n> # h\n> text\n> body'
+    ],
+    [
+      'a first numbered item that ends the table',
+      '> | a |\n> | - |\n> 1. x\nbody',
+      '> | a |\n> | - |\n> 1. x\n> body'
+    ],
+    ['a table under a list item', '> - a\n> | b |\n> | - |\nbody', '> - a\n> | b |\n> | - |\n> body'],
+    [
+      'a table under a numbered item',
+      '> 1. a\n> | b |\n> | - |\n> | 1 |\nbody',
+      '> 1. a\n> | b |\n> | - |\n> | 1 |\n> body'
+    ],
+    [
+      'a table under an item that ended a table',
+      '> | a |\n> | - |\n> - x\n> | c |\n> | - |\nbody',
+      '> | a |\n> | - |\n> - x\n> | c |\n> | - |\n> body'
+    ],
+    ['a fence', '> ```\n> x\n> ```\nbody', '> ```\n> x\n> ```\n\nbody']
+  ])('keeps a lazy line after %s where it was', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+})

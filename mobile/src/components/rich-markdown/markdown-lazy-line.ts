@@ -11,9 +11,11 @@ import { opensTable } from './markdown-table-rows'
  * wrote a blank line there, so the wrapped words left it and became a paragraph of their own, cut
  * mid-sentence.
  *
- * A lazy line only continues a paragraph: never after a blank line, a fence, indented code or a
- * table, which each reader checks for itself. And it is never a line that opens a block, which is
- * what this says. The set is marked's (the desktop's reader) where it is wider than CommonMark's:
+ * A lazy line only continues a paragraph: never after a blank line, a fence or indented code, which
+ * each reader checks for itself. After a table inside a quote it is a paragraph of the quote's own,
+ * behind a blank quote line, as marked reads it (markdown-quote.ts): until 2026-10-01 it was saved
+ * under the table as one more row. And it is never a line that opens a block, which is what this
+ * says. The set is marked's (the desktop's reader) where it is wider than CommonMark's:
  * any marker, an empty one too, any `#`, and a tag or an autolink at the start of the line all end
  * the item. Where the two readers disagree the line ends the item or the quote, as every line at
  * the margin did before, rather than guess.
