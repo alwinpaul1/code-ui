@@ -36,6 +36,14 @@ describe('notification text keeps its emphasis without Markdown markers', () => 
   it('collapses runs of blank lines', () => {
     expect(notificationPlainText('a\n\n\n\nb')).toBe('a\n\nb')
   })
+
+  // CommonMark 4.2: a closing run of '#' set apart by a space is markup, one
+  // touching the last word is the word's (swept 2026-09-30).
+  it('drops a heading closing run of hashes but keeps a hash in the last word', () => {
+    expect(notificationPlainText('## Summary ##')).toBe(styleText('Summary', 'bold'))
+    expect(notificationPlainText('## Ported to C#')).toBe(styleText('Ported to C#', 'bold'))
+    expect(styleText('Ported to C#', 'bold').endsWith('#')).toBe(true)
+  })
 })
 
 /** Reported from the phone 2026-09-17: a wall of "||||" in the shade. The

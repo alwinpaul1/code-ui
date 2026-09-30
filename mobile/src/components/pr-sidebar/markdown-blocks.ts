@@ -1,5 +1,6 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import { markdownHeadingText } from '../../text/markdown-heading-text'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -29,6 +30,7 @@ export type MarkdownBlock =
   // GFM pipe table. `align` is per-column, parallel to `headers`.
   | { kind: 'table'; headers: string[]; rows: string[][]; align: CellAlign[] }
 
+// Its closing run of '#' comes off in markdownHeadingText.
 const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
 // Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
@@ -145,7 +147,7 @@ function parseLines(content: string): MarkdownBlock[] {
     const heading = HEADING.exec(line)
     if (heading) {
       flushParagraph()
-      blocks.push({ kind: 'heading', level: heading[1].length, text: heading[2].trim() })
+      blocks.push({ kind: 'heading', level: heading[1].length, text: markdownHeadingText(heading[2]) })
       i += 1
       continue
     }

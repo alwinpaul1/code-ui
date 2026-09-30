@@ -76,6 +76,17 @@ describe('parseMarkdownBlocks', () => {
     expect(open).toEqual([{ kind: 'code', text: 'unterminated', lang: '' }])
   })
 
+  // A closing run of '#' set apart by a space is markup (CommonMark 4.2);
+  // one touching the last word is the word's. Swept 2026-09-30 with the
+  // release-notes heading, which had the opposite half wrong.
+  it('drops a heading closing run of hashes but keeps a hash in the last word', () => {
+    expect(parseMarkdownBlocks('## Title ##')).toEqual([{ kind: 'heading', level: 2, text: 'Title' }])
+    expect(parseMarkdownBlocks('# Fix the C# #')).toEqual([
+      { kind: 'heading', level: 1, text: 'Fix the C#' }
+    ])
+    expect(parseMarkdownBlocks('### F#')).toEqual([{ kind: 'heading', level: 3, text: 'F#' }])
+  })
+
   it('captures the fence language (e.g. mermaid) on the code block', () => {
     const blocks = parseMarkdownBlocks('```mermaid\ngraph TD; A-->B\n```')
     expect(blocks).toEqual([{ kind: 'code', text: 'graph TD; A-->B', lang: 'mermaid' }])
