@@ -3,6 +3,7 @@ import type { FlatList } from 'react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { getWorktreeLabel } from './worktree-label'
 import { getUnsentMobileDiffComments } from './mobile-diff-comment-edit'
 import {
@@ -219,12 +220,16 @@ export function useMobileDiffReviewController(input: ControllerInput) {
     screenState.kind === 'ready'
       ? (screenState.status.head ?? screenState.branchCompare?.summary.headOid ?? null)
       : null
+  // A PR read that failed with the connection is read again once the host reconnects: the docked
+  // load fires only for `hidden`, and the logical client is the same object across reconnects.
+  const lastConnectedAt = useLastConnectedAt(hostId)
   const prSidebar = useMobilePrSidebarController({
     client,
     connState,
     worktreeId,
     branch: prSidebarBranch,
-    headSha: prSidebarHeadSha
+    headSha: prSidebarHeadSha,
+    lastConnectedAt
   })
 
   const interactions = useMobileDiffReviewInteractions({

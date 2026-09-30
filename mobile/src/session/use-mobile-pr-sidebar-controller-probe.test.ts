@@ -66,7 +66,8 @@ describe('useMobilePrSidebarController repo probe', () => {
           connState: 'connected',
           worktreeId: 'w',
           branch: null,
-          headSha: 'sha'
+          headSha: 'sha',
+          lastConnectedAt: 1
         })
       )
     })
@@ -88,7 +89,8 @@ describe('useMobilePrSidebarController repo probe', () => {
           connState: 'connecting',
           worktreeId: 'w',
           branch: null,
-          headSha: 'sha'
+          headSha: 'sha',
+          lastConnectedAt: 1
         })
       )
     })

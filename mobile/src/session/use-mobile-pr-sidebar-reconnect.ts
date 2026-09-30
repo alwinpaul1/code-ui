@@ -21,8 +21,8 @@ import { isPrSidebarDetailsPlaceholder, type PrSidebarState } from './mobile-pr-
 export function useMobilePrSidebarReconnectRefetch(args: {
   identity: string | null
   state: PrSidebarState
-  // `undefined` when the caller does not pass one: then nothing is retried on reconnect.
-  lastConnectedAt: number | null | undefined
+  // useLastConnectedAt(hostId). Null until the host first connects.
+  lastConnectedAt: number | null
   reload: () => void
   refillDetails: () => void
 }): void {
@@ -40,16 +40,15 @@ export function useMobilePrSidebarReconnectRefetch(args: {
     isPrSidebarDetailsPlaceholder(state.data.details)
       ? 'error'
       : 'ready'
-  const connection = lastConnectedAt ?? null
 
   useEffect(() => {
     if (
       identity !== null &&
-      shouldRefetchAfterReconnect(ledgerRef.current, identity, loadStatus, connection)
+      shouldRefetchAfterReconnect(ledgerRef.current, identity, loadStatus, lastConnectedAt)
     ) {
       reloadRef.current()
     }
-  }, [connection, identity, loadStatus])
+  }, [identity, lastConnectedAt, loadStatus])
 
   useEffect(() => {
     if (
@@ -58,10 +57,10 @@ export function useMobilePrSidebarReconnectRefetch(args: {
         ledgerRef.current,
         `${identity}\u0000details`,
         detailsStatus,
-        connection
+        lastConnectedAt
       )
     ) {
       refillDetailsRef.current()
     }
-  }, [connection, detailsStatus, identity])
+  }, [detailsStatus, identity, lastConnectedAt])
 }

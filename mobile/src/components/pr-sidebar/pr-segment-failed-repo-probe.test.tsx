@@ -56,7 +56,8 @@ function Segment({ connState }: { connState: ConnectionState }): ReactElement {
     connState,
     worktreeId: 'wt-1',
     branch: null,
-    headSha: null
+    headSha: null,
+    lastConnectedAt: 1
   })
   return createElement(MobilePrViewPanelBody, {
     client,
