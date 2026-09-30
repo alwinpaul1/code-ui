@@ -19,6 +19,7 @@ import {
 } from './mobile-pr-sidebar-state'
 import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
 import { useMobilePrRepoProbe } from './use-mobile-pr-repo-probe'
+import { useMobilePrSidebarReconnectRefetch } from './use-mobile-pr-sidebar-reconnect'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -27,6 +28,9 @@ type PrSidebarControllerInput = {
   // branch/headSha come from git.status (not the branchCompare base ref nor worktree metadata, which carries no branch).
   branch: string | null
   headSha: string | null
+  // useLastConnectedAt(hostId): a failed load is read again once per NEW connection. A caller
+  // that leaves it out gets no reconnect refetch (the Retry button only).
+  lastConnectedAt?: number | null
 }
 
 // Load options: the hub chip needs only phase 1 (PR + checks); phase 2 (comments/body) is heavy and waits until the PR segment opens.
@@ -55,6 +59,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const stateRef = useRef(state)
   stateRef.current = state
   const headShaRef = useRef(headSha)
+  // What the latest load asked for, so a reconnect repeats that load and not a heavier one.
+  const lastLoadIncludedDetailsRef = useRef(true)
 
   // PR icon shows for any GitHub remote, regardless of an open PR — a no-PR branch shows an empty state rather than hiding the icon.
   const repoProbe = useMobilePrRepoProbe({
@@ -102,6 +108,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!deps || !branch || !loadIdentity) {
         return
       }
+      lastLoadIncludedDetailsRef.current = includeDetails
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
       // Don't invalidate in-flight phase 2 here: it's only claimed when this load's own phase 2 starts, so a superseded phase-1 load can't orphan the details fetch.
@@ -218,6 +225,14 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       data: { ...stateRef.current.data, details }
     })
   }, [buildDeps, identity, worktreeId])
+
+  useMobilePrSidebarReconnectRefetch({
+    identity,
+    state,
+    lastConnectedAt: input.lastConnectedAt,
+    reload: () => void load({ includeDetails: lastLoadIncludedDetailsRef.current }),
+    refillDetails: () => void ensurePrSidebarDetails()
+  })
 
   // Soft-refresh on same-branch HEAD advance; restart in-flight load so the advance isn't applied with a stale SHA.
   useEffect(() => {
