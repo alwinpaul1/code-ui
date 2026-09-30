@@ -16,11 +16,19 @@ type Props = {
   actions: MobilePrActions
   client: RpcClient | null
   worktreeId: string
+  // Handed to the picker so a failed people read tries again when the host reconnects.
+  lastConnectedAt: number | null
 }
 
 // Requested reviewers + their latest review status, with a picker to request /
 // remove (optimistic add/remove via the actions hook).
-export function PRReviewersSection({ details, actions, client, worktreeId }: Props) {
+export function PRReviewersSection({
+  details,
+  actions,
+  client,
+  worktreeId,
+  lastConnectedAt
+}: Props) {
   const { colors } = useTheme()
   const styles = useThemedStyles(mobilePrSidebarStyles)
   // details === null means phase 2 (work-item payload) is still in flight — same
@@ -117,6 +125,7 @@ export function PRReviewersSection({ details, actions, client, worktreeId }: Pro
         onClose={() => setPickerOpen(false)}
         client={client}
         worktreeId={worktreeId}
+        lastConnectedAt={lastConnectedAt}
         seededLogins={seededLogins}
         isRequested={isRequested}
         onToggle={(login) => {
