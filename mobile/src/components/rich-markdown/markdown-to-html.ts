@@ -1,15 +1,26 @@
-import { escapeAttr, escapeHtml } from './markdown-escaping'
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { isThematicBreak, parseListTree } from './markdown-list-parse'
-import { closesFence, openingFence } from './markdown-code-fence'
+import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
 import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { reflowLines } from './markdown-reflow'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
-  return isThematicBreak(line) || /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
+  return (
+    isThematicBreak(line) ||
+    openingFence(line) !== null ||
+    /^(#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
+  )
+}
+
+/**
+ * What ends a wrapped list item's words: a block start, but not a fence, which the list reader
+ * does not take into an item and whose indented lines are the item's words as they always were.
+ */
+function endsListItemWords(line: string): boolean {
+  return isBlockStart(line) && openingFence(line) === null
 }
 
 /**
@@ -34,15 +45,13 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       const code: string[] = []
       while (index < lines.length && !closesFence(lines[index] ?? '', fence.fence)) {
-        code.push(lines[index] ?? '')
+        code.push(outdentCodeLine(lines[index] ?? '', fence.indent))
         index += 1
       }
       if (index < lines.length) {
         index += 1
       }
-      html.push(
-        `<pre data-language="${escapeAttr(fence.language)}"><code>${escapeHtml(code.join('\n'))}</code></pre>`
-      )
+      html.push(fencedCodeHtml(fence, code.join('\n')))
       continue
     }
     if (isThematicBreak(line)) {
@@ -97,7 +106,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
-      const list = parseListTree(lines, index, isBlockStart)
+      const list = parseListTree(lines, index, endsListItemWords)
       // Why: a marker with nothing after it parses as no item, so the run is empty and the index
       // has not moved. Falling through rather than continuing makes the line the text it is.
       if (list.nextIndex > index) {
@@ -118,8 +127,8 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
     }
     if (paragraph.length === 0) {
       // Why: a line that opens a block by `isBlockStart` but matches no block reader's own grammar
-      // — `# `, `- `, a fence with a backtick in its language — is gathered by nothing, and the
-      // loop would read it again forever. It is text.
+      // — `# `, `- ` — is gathered by nothing, and the loop would read it again forever. It is
+      // text.
       paragraph.push(lines[index] ?? '')
       index += 1
     }

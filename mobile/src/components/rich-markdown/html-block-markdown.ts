@@ -1,4 +1,4 @@
-import { codeFenceFor } from './markdown-code-fence'
+import { codeBlockMarkdown } from './html-code-block-markdown'
 import {
   escapeTableCell,
   TABLE_BARE_ATTRIBUTE,
@@ -75,10 +75,7 @@ export function blockMarkdown(node: Node): string {
       .join('\n')
   }
   if (tag === 'pre') {
-    const language = node.getAttribute('data-language') ?? ''
-    const code = textContent(node.querySelector('code') ?? node).replace(/\n+$/g, '')
-    const fence = codeFenceFor(code)
-    return `${fence}${language}\n${code}\n${fence}`
+    return codeBlockMarkdown(node)
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)
