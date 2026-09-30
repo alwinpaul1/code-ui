@@ -117,20 +117,30 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
   return { step, model, rows, cursorIndex }
 }
 
+/** Codex's busy row, above the composer while a turn runs: "• Working (5s • esc to interrupt)". The
+ *  parenthesis ends the line, so a sentence in the transcript that mentions the key does not match. */
+const CODEX_BUSY_ROW = /\((?:[^()]*[•·]\s*)?esc to interrupt\)\s*$/
+
+/** How far above the bottom of the screen the busy row is looked for. It sat 6 lines up in Codex
+ *  0.155 and sits 7 up in 0.158.0, whose footer gained a "? for shortcuts" line under the composer
+ *  (real captures, Orca 1.4.217 runtime fixtures), so a fixed six-line tail read a running turn as
+ *  idle. The row is not a fixed distance from the bottom anyway: each queued message adds a line
+ *  under it. The window is the whole live area; the row is only there while a turn runs. */
+const CODEX_BUSY_ROW_WINDOW = 16
+
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
  *  placeholder disappears once the composer holds a draft, so the footer line
  *  ("<model> <effort> · <cwd>") counts as evidence of the prompt too. */
 export function isCodexIdle(lines: readonly string[]): boolean {
-  const tail = lines.slice(-6).join('\n')
-  if (/esc to interrupt/.test(tail) || parseCodexPickerScreen(lines)) {
+  if (isCodexWorking(lines) || parseCodexPickerScreen(lines)) {
     return false
   }
-  return /Ask Codex to do anything/.test(tail) || hasCodexFooter(lines)
+  return /Ask Codex to do anything/.test(lines.slice(-6).join('\n')) || hasCodexFooter(lines)
 }
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
-  return /esc to interrupt/.test(lines.slice(-6).join('\n'))
+  return lines.slice(-CODEX_BUSY_ROW_WINDOW).some((line) => CODEX_BUSY_ROW.test(line))
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */
