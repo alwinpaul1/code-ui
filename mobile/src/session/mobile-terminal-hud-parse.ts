@@ -4,15 +4,18 @@ import {
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
+import { parseClaudeRunningShellCount, runningShellCountField } from './claude-footer-shell-count'
 import {
   CODEX_STATUS_BOX_ROW,
   claudeRowsUnderInputBox,
   codexFooterFigureRows,
-  isClaudeConversationRow
+  isClaudeConversationRow,
+  rowsUnderAgentInput
 } from './mobile-terminal-hud-context-rows'
 
-// The footer's mode reader lives beside this parser; its callers import both from here.
-export { readTerminalPermissionMode, type TerminalPermissionMode }
+// The footer's mode and shell-count readers live beside this parser; its callers import them
+// from here.
+export { parseClaudeRunningShellCount, readTerminalPermissionMode, type TerminalPermissionMode }
 
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 /** Read as the badge's FIRST word, never as a substring of it. */
@@ -53,34 +56,6 @@ export type TerminalHudObservation = {
    *  lead's named shells, and is their floor only up to what the lead can
    *  have (`mobile-background-task-footer.ts`). Null when the footer states none. */
   runningShellCount?: number | null
-}
-
-// Claude Code's composer footer prints "· N shells" while background shells run
-// ("▶▶ auto mode on · 4 shells · ← for agents", real screen 2026-09-14). The
-// middot separator keeps it from matching "4 shells" inside ordinary output.
-const FOOTER_SHELL_COUNT = /[·•]\s*(\d+)\s+shells?\b/
-
-/** The background-shell count Claude Code's footer states, or null when the
- *  footer is not on screen (so the caller keeps its own derived count). */
-export function parseClaudeRunningShellCount(lines: readonly string[]): number | null {
-  for (const line of lines.slice(-8)) {
-    const match = FOOTER_SHELL_COUNT.exec(line)
-    if (match) {
-      const count = Number(match[1])
-      if (Number.isFinite(count) && count >= 0) {
-        return count
-      }
-    }
-  }
-  return null
-}
-
-/** Spread onto the observation only when a footer count is on screen, so a
- *  screen without one leaves the field absent rather than a null the caller
- *  would have to distinguish. */
-function runningShellCountField(lines: readonly string[]): { runningShellCount?: number } {
-  const count = parseClaudeRunningShellCount(lines)
-  return count === null ? {} : { runningShellCount: count }
 }
 
 export type TerminalAgentMode = 'default' | 'plan'
@@ -286,9 +261,11 @@ export function parseTerminalHudContextWindow(
  * the remembered pick as model sources earlier the same day, which left the
  * screen read carrying far more weight.
  *
- * A status line OPENS with its badge. Agent output never does — it is prefixed
- * by a glyph, an indent or prose. Anchoring is the project's own rule for an
- * ambiguous screen: refuse rather than guess, and let the beacon answer.
+ * A status line OPENS with its badge. Agent output is prefixed by a glyph, an
+ * indent or prose, but the `\s*` Claude's own two-space status line needs also
+ * passes a tool's five-space output, so the row must sit under the agent's own
+ * input row too (rowsUnderAgentInput). Anchoring is the project's own rule for
+ * an ambiguous screen: refuse rather than guess, and let the beacon answer.
  */
 const BADGE = /^\s*\[([^\]]+)\]/
 /** Separators and labels a status line may put between the model and the effort. */
@@ -355,7 +332,8 @@ export function parseCodexHudObservation(lines: readonly string[]): TerminalHudO
 export function parseTerminalHudObservation(
   lines: readonly string[]
 ): TerminalHudObservation | null {
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
+  const floor = rowsUnderAgentInput(lines)
+  for (let index = lines.length - 1; index >= floor; index -= 1) {
     const match = BADGE.exec(lines[index] ?? '')
     if (!match) {
       continue
