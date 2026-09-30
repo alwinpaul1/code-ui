@@ -79,13 +79,13 @@ function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
   return { ...rest, desktopPrompts: prompts, ...(kept ? { agentMessagePrompts: kept } : {}) }
 }
 
-/** Never throws: an unreadable store simply means no warm start. */
-export async function readWarmStartBeacons(): Promise<StoredBeacons> {
+/** The records a stored value holds. Missing or corrupt reads as none: there
+ *  is nothing in it to keep, so the next write heals it by writing fresh. */
+function parseStoredBeacons(raw: string | null): StoredBeacons {
+  if (!raw) {
+    return {}
+  }
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return {}
-    }
     const parsed: unknown = JSON.parse(raw)
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return {}
@@ -100,6 +100,60 @@ export async function readWarmStartBeacons(): Promise<StoredBeacons> {
   } catch {
     return {}
   }
+}
+
+/** The stored records, or why storage would not hand them over. A refused
+ *  read is kept apart from an empty store: only the second may be written
+ *  over. */
+async function readStoredBeacons(): Promise<{ beacons: StoredBeacons } | { refused: unknown }> {
+  let raw: string | null
+  try {
+    raw = await AsyncStorage.getItem(STORAGE_KEY)
+  } catch (error) {
+    return { refused: error }
+  }
+  return { beacons: parseStoredBeacons(raw) }
+}
+
+/** Never throws: an unreadable store simply means no warm start, and the log
+ *  says so, since every tab coming back without its pill looks the same
+ *  whatever the cause. */
+export async function readWarmStartBeacons(): Promise<StoredBeacons> {
+  const read = await readStoredBeacons()
+  if ('refused' in read) {
+    console.warn('[storage] could not read the warm-start beacons', read.refused)
+    return {}
+  }
+  return read.beacons
+}
+
+/**
+ * The records a write builds on, or null when storage refused to hand them
+ * over twice running.
+ *
+ * Every record lives under the one key, so a write is the whole store. A
+ * refused read taken as an empty store made the next write replace every
+ * other terminal's record with one, and after a restart those tabs had no
+ * model pill or context ring (review of 2026-09-30). One more read covers a
+ * store that refused once; one that still refuses gets no write, and this
+ * tab's record waits for the next one the beacon store sends
+ * (`storeForWarmStart` in agent-hud-beacon.ts: a changed reading at once, an
+ * unchanged one after its rewrite interval).
+ */
+async function storedBeaconsForWrite(): Promise<StoredBeacons | null> {
+  const first = await readStoredBeacons()
+  if ('beacons' in first) {
+    return first.beacons
+  }
+  const second = await readStoredBeacons()
+  if ('beacons' in second) {
+    return second.beacons
+  }
+  console.warn(
+    '[storage] could not save the warm-start beacons: the stored ones could not be read, and writing over them would erase every other terminal',
+    second.refused
+  )
+  return null
 }
 
 /**
@@ -124,7 +178,10 @@ export function rememberWarmStartBeacon(handle: string, beacon: AgentHudBeacon):
 
 async function writeWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Promise<void> {
   try {
-    const stored = await readWarmStartBeacons()
+    const stored = await storedBeaconsForWrite()
+    if (!stored) {
+      return
+    }
     // Delete first so re-inserting makes this handle the newest key, and the
     // cap sheds a tab nobody has touched rather than the live one.
     delete stored[handle]
@@ -134,8 +191,9 @@ async function writeWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Pro
       delete stored[stale]
     }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
-  } catch {
-    // Ignored on purpose (rememberWarmStartBeacon), and never passed on: a
-    // rejection here would stop every write queued behind this one.
+  } catch (error) {
+    // Logged, and never passed on: a rejection here would stop every write
+    // queued behind this one. It costs the next launch this tab's warm start.
+    console.warn('[storage] could not save the warm-start beacons', error)
   }
 }

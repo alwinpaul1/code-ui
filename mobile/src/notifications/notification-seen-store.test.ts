@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearSeenKeys, loadSeenKeys, persistSeenKeys } from './notification-seen-store'
 
 // Serial like the real store: each operation applies in submission order; a gate
@@ -76,5 +77,89 @@ describe('seen store writes', () => {
     await flush()
     const keys = keysOnDisk()!
     expect([keys.length, keys[0], keys[255]]).toEqual([256, 'k44', 'k299'])
+  })
+})
+
+// Review of 2026-09-30: a restart whose read of the stored keys the store
+// refused started from none, and the first notification it delivered wrote
+// that run's keys alone over the stored ones. When that run's catch-up could
+// not replay them either, the next restart re-posted popups already resolved,
+// the report this store was written for (2026-09-23).
+describe('seen keys written after the store refused to read them', () => {
+  const unreadable = new Error('storage unavailable')
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(async () => {
+    storage.clear()
+    gates.length = 0
+    gateWrites = false
+    // A host read successfully, so no earlier case's refusal carries over.
+    await loadSeenKeys('h')
+    storage.set(KEY, JSON.stringify({ epoch: 'e', keys: ['k1', 'k2'] }))
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => warn.mockRestore())
+
+  it('keeps the keys the previous run stored, under this run\'s newer ones', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    expect(await loadSeenKeys('h')).toBeNull()
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    expect(keysOnDisk()).toEqual(['k1', 'k2', 'k3'])
+    expect(warn.mock.calls).toEqual([['[storage] could not read the notification seen keys', unreadable]])
+  })
+
+  it('writes nothing, and says why, while the store still refuses; the next delivery lands them all', async () => {
+    vi.mocked(AsyncStorage.getItem)
+      .mockRejectedValueOnce(unreadable)
+      .mockRejectedValueOnce(unreadable)
+      .mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    expect(keysOnDisk()).toEqual(['k1', 'k2'])
+    expect(warn).toHaveBeenCalledTimes(2)
+    expect(warn.mock.calls[1]).toEqual([
+      expect.stringMatching(/^\[storage\] could not save the notification seen keys: the stored ones could not be read/),
+      unreadable
+    ])
+
+    persistSeenKeys('h', 'e', ['k3', 'k4'])
+    await flush()
+    expect(keysOnDisk()).toEqual(['k1', 'k2', 'k3', 'k4'])
+  })
+
+  it('does not carry keys over from another counter lifetime', async () => {
+    storage.set(KEY, JSON.stringify({ epoch: 'e-old', keys: ['k1', 'k2'] }))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    expect(JSON.parse(storage.get(KEY)!)).toEqual({ epoch: 'e', keys: ['k3'] })
+  })
+
+  it('writes a host read successfully straight away, without reading again', async () => {
+    const reads = vi.mocked(AsyncStorage.getItem).mock.calls.length
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    expect(keysOnDisk()).toEqual(['k3'])
+    expect(vi.mocked(AsyncStorage.getItem).mock.calls.length).toBe(reads)
+  })
+
+  it('says in one line why the keys were not saved', async () => {
+    const full = new Error('database or disk is full')
+    vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(full)
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    expect(warn.mock.calls).toEqual([['[storage] could not save the notification seen keys', full]])
   })
 })

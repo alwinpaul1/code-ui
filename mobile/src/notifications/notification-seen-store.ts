@@ -28,14 +28,11 @@ function seenStorageKey(hostId: string): string {
   return SEEN_STORAGE_KEY_PREFIX + encodeURIComponent(hostId)
 }
 
-/** The stored keys, or null when there are none or the record is unreadable.
- *  Fails open: without them a replay posts as it did before they existed. */
-export async function loadSeenKeys(hostId: string): Promise<PersistedSeen | null> {
+function parseSeen(raw: string | null): PersistedSeen | null {
+  if (raw == null) {
+    return null
+  }
   try {
-    const raw = await AsyncStorage.getItem(seenStorageKey(hostId))
-    if (raw == null) {
-      return null
-    }
     const parsed = JSON.parse(raw) as { epoch?: unknown; keys?: unknown }
     if (typeof parsed.epoch !== 'string' || parsed.epoch.length === 0 || !Array.isArray(parsed.keys)) {
       return null
@@ -47,6 +44,62 @@ export async function loadSeenKeys(hostId: string): Promise<PersistedSeen | null
   } catch {
     return null
   }
+}
+
+/**
+ * Hosts whose stored keys this run asked for and the store would not hand
+ * over. The run then starts from no keys, and its first write replaced the
+ * stored ones with its own: when that run's catch-up could not replay them
+ * either, the next restart re-posted popups already resolved (review of
+ * 2026-09-30). So the first write for such a host reads again and goes on top
+ * of what is stored.
+ */
+const unreadHosts = new Set<string>()
+
+/** The stored keys, or null when there are none or the record is unreadable.
+ *  Fails open: without them a replay posts as it did before they existed. */
+export async function loadSeenKeys(hostId: string): Promise<PersistedSeen | null> {
+  let raw: string | null
+  try {
+    raw = await AsyncStorage.getItem(seenStorageKey(hostId))
+  } catch (error) {
+    unreadHosts.add(hostId)
+    // One line, since popups already resolved coming back after a restart
+    // look the same whatever the cause.
+    console.warn('[storage] could not read the notification seen keys', error)
+    return null
+  }
+  unreadHosts.delete(hostId)
+  return parseSeen(raw)
+}
+
+/** `value` on top of the keys stored for its counter lifetime, or null when
+ *  the store still refuses to read them (after one more try). */
+async function withStoredKeys(hostId: string, value: PersistedSeen): Promise<PersistedSeen | null> {
+  let refused: unknown
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let raw: string | null
+    try {
+      raw = await AsyncStorage.getItem(seenStorageKey(hostId))
+    } catch (error) {
+      refused = error
+      continue
+    }
+    unreadHosts.delete(hostId)
+    const stored = parseSeen(raw)
+    // Keys from another counter lifetime index different notifications.
+    if (!stored || stored.epoch !== value.epoch) {
+      return value
+    }
+    const fresh = new Set(value.keys)
+    const older = stored.keys.filter((key) => !fresh.has(key))
+    return { epoch: value.epoch, keys: [...older, ...value.keys].slice(-PERSISTED_SEEN_CAP) }
+  }
+  console.warn(
+    '[storage] could not save the notification seen keys: the stored ones could not be read, and writing over them would lose them',
+    refused
+  )
+  return null
 }
 
 type WriteState = { inFlight: boolean; next: PersistedSeen | null }
@@ -77,13 +130,20 @@ async function drainSeenWrites(hostId: string, state: WriteState): Promise<void>
   state.inFlight = true
   try {
     while (state.next) {
-      const value = state.next
+      const next = state.next
       state.next = null
+      const value = unreadHosts.has(hostId) ? await withStoredKeys(hostId, next) : next
+      // Not written: the store refused the read (logged, and the next delivery
+      // carries every key again), or the host was cleared while it read.
+      if (!value || writesByHost.get(hostId) !== state) {
+        continue
+      }
       try {
         await AsyncStorage.setItem(seenStorageKey(hostId), JSON.stringify(value))
-      } catch {
+      } catch (error) {
         // Best effort, like the watermark: a lost write costs the next restart
         // its dedup, which is the behaviour before this store existed.
+        console.warn('[storage] could not save the notification seen keys', error)
       }
     }
   } finally {
@@ -98,5 +158,6 @@ export async function clearSeenKeys(hostId: string): Promise<void> {
     state.next = null
   }
   writesByHost.delete(hostId)
+  unreadHosts.delete(hostId)
   await AsyncStorage.removeItem(seenStorageKey(hostId)).catch(() => {})
 }

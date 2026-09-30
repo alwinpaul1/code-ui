@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = new Map<string, string>()
 
@@ -151,6 +151,74 @@ describe('two tabs writing their warm start at once', () => {
   it('writes one tab alone as before', async () => {
     await rememberWarmStartBeacon('term_a', beacon('opus'))
     expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a'])
+  })
+})
+
+// Review of 2026-09-30: a read the store refused came back as an empty store,
+// and the write built on it replaced every other terminal's record with one.
+// After the next restart those tabs had no model pill or context ring, and
+// nothing in the log said why.
+describe('a tab writing its warm start while the store cannot be read', () => {
+  const unreadable = new Error('storage unavailable')
+  let warn: ReturnType<typeof vi.spyOn>
+  beforeEach(() => {
+    store.clear()
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => warn.mockRestore())
+
+  it('keeps every other terminal, and lands its own record when the read fails once', async () => {
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    await rememberWarmStartBeacon('term_b', beacon('sonnet'))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await rememberWarmStartBeacon('term_c', beacon('fable'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a', 'term_b', 'term_c'])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('writes nothing, and says why in one line, when the store stays unreadable', async () => {
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    await rememberWarmStartBeacon('term_b', beacon('sonnet'))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable).mockRejectedValueOnce(unreadable)
+    await rememberWarmStartBeacon('term_c', beacon('fable'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a', 'term_b'])
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]).toEqual([expect.stringMatching(/^\[storage\] could not save the warm-start beacons: .*could not be read/), unreadable])
+  })
+
+  it('writes the one record when the only record there was could not be read', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a'])
+  })
+
+  it('still heals a corrupt store by writing fresh, since there is nothing in it to keep', async () => {
+    store.set('codeui:agent-hud-beacons.v2', '{not json')
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a'])
+    expect(warn).not.toHaveBeenCalled()
+  })
+
+  it('still lands the next tab once the store can be read again', async () => {
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable).mockRejectedValueOnce(unreadable)
+    await rememberWarmStartBeacon('term_b', beacon('sonnet'))
+    await rememberWarmStartBeacon('term_c', beacon('fable'))
+    expect(Object.keys(await readWarmStartBeacons())).toEqual(['term_a', 'term_c'])
+  })
+
+  it('names a refused write in one line too', async () => {
+    const full = new Error('database or disk is full')
+    vi.mocked(AsyncStorage.setItem).mockRejectedValueOnce(full)
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    expect(warn.mock.calls).toEqual([['[storage] could not save the warm-start beacons', full]])
+  })
+
+  it('says why a cold start restored nothing when the store could not be read', async () => {
+    await rememberWarmStartBeacon('term_a', beacon('opus'))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await expect(readWarmStartBeacons()).resolves.toEqual({})
+    expect(warn.mock.calls).toEqual([['[storage] could not read the warm-start beacons', unreadable]])
   })
 })
 
