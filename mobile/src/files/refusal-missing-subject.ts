@@ -31,8 +31,13 @@ export function refusalMissingSubject(code: string, message: string): RefusalMis
   return named.includes('file') ? 'file' : null
 }
 
+/** A quoted path or name ('…', "…", `…`) is data the refusal carries, not its words: ENOENT quotes
+ *  the path it could not open, and a file named "user_not_found.png" or "page not found.png" must
+ *  not read as something else missing (review 2026-10-01). */
+const QUOTED = /'[^']*'|"[^"]*"|`[^`]*`/g
+
 function namedMissing(text: string): RefusalMissingSubject[] {
-  const said = text.toLowerCase()
+  const said = text.toLowerCase().replace(QUOTED, "''")
   const named: RefusalMissingSubject[] = []
   if (/\benoent\b/.test(said)) {
     named.push('file')

@@ -107,3 +107,24 @@ describe("a preview error that is the file's own answer", () => {
     expect(previewError('binary_file')).toEqual({ status: 'error', message: 'Binary preview unavailable', reconnect: false })
   })
 })
+
+// Review 2026-10-01: the classifier scanned the whole message, the quoted path included, so a
+// missing file whose own name said "not found" read as something else missing: the preview said
+// "Unable to load preview" and a figure with that name was re-read on every connection. The path a
+// refusal quotes is data, not its words.
+describe('a missing file whose own path says "not found"', () => {
+  it.each([
+    ["img/user_not_found.png"],
+    ['img/page not found.png'],
+    ['/Users/me/runtime not found/a.png'],
+    ['Notes (not found).md']
+  ])('is still "File not found" for %s', (path) => {
+    const error = previewErrorFromRefusal({ code: 'runtime_error', message: `ENOENT: no such file or directory, open '${path}'` })
+    expect(error.message).toBe('File not found')
+    expect(isFileOwnPreviewError(error)).toBe(true)
+  })
+
+  it('still reads a quoted worktree name as the worktree being missing', () => {
+    expect(isFileOwnPreviewError(previewErrorFromRefusal({ code: 'runtime_error', message: "Worktree 'fig' not found" }))).toBe(false)
+  })
+})
