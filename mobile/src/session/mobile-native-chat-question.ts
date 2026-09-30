@@ -7,7 +7,8 @@ import {
   codeFenceStarts,
   collectOptionLists,
   introIndex,
-  QUESTION_LINE
+  QUESTION_LINE,
+  type OptionList
 } from './mobile-native-chat-question-lists'
 
 export type MobileChatQuestion = {
@@ -44,16 +45,43 @@ function cleanQuestionText(raw: string): string {
 }
 
 /**
+ * Which of the reply's lists holds the choices, or -1 when that is a guess.
+ * One list is the choices. With more, the choices are the one list under a
+ * line that asks (`?`): a reply often lists findings before it asks and
+ * reasons or notes after, and taking the last list sent a finding back as
+ * the answer, or dropped the card when notes followed the choices. Two lists
+ * under lines that ask, or none, and no card is shown. Nor when a list after
+ * the choices lacks a line of its own that introduces it (ends in `:`): with
+ * no line between, or only prose the numbering did not bridge, it may be
+ * more of the choices.
+ */
+function choicesListIndex(
+  lines: readonly string[],
+  lists: readonly OptionList[],
+  intros: readonly number[]
+): number {
+  if (lists.length <= 1) {
+    return lists.length - 1
+  }
+  const asking = intros.flatMap((intro, i) => (intro >= 0 && ASKS.test(lines[intro]) ? [i] : []))
+  if (asking.length !== 1) {
+    return -1
+  }
+  const [at] = asking
+  const laterIntroduced = intros
+    .slice(at + 1)
+    .every((intro) => intro >= 0 && QUESTION_LINE.test(lines[intro]))
+  return laterIntroduced ? at : -1
+}
+
+/**
  * Heuristically parse a question + its option list from agent text. Returns null
  * when no clear option list is present (so ordinary prose is never treated as a
  * question). Conservative on purpose: requires at least two option lines, or one
  * option line introduced by a question-like prompt line.
  *
- * The options are ONE list: the reply's last, under the line directly above it.
- * A reply often lists findings before it asks, and taking every bullet sent a
- * finding back as the answer. With more than one list, the last must sit under
- * a line that asks (`?`), and no earlier list may sit under one too; otherwise
- * which list answers is a guess, and no card is shown.
+ * The options are ONE list (choicesListIndex), under the line directly above
+ * it, which titles the card.
  */
 export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   if (typeof text !== 'string' || text.trim().length === 0) {
@@ -63,40 +91,29 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
   const fenceStarts = codeFenceStarts(lines)
   const lists = collectOptionLists(lines, fenceStarts)
-  const list = lists.at(-1)
-  if (!list) {
+  const intros = lists.map((list, i) => introIndex(lines, list, lists[i - 1] ?? null, fenceStarts))
+  const at = choicesListIndex(lines, lists, intros)
+  if (at < 0) {
     return null
   }
-  const previous = lists.at(-2) ?? null
+  const list = lists[at]
   const options = list.items.map((item) => item.label)
   const optionTokens = list.items.map((item) => item.token)
-
-  const questionIndex = introIndex(lines, list, previous, fenceStarts)
-  const question = questionIndex >= 0 ? lines[questionIndex] : ''
-  const questionLooksLikePrompt = QUESTION_LINE.test(question)
-  if (previous) {
-    if (!ASKS.test(question)) {
-      return null
-    }
-    const asksEarlier = lists
-      .slice(0, -1)
-      .some((earlier, i) =>
-        ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null, fenceStarts)] ?? '')
-      )
-    if (asksEarlier) {
-      return null
-    }
-  }
+  const question = intros[at] >= 0 ? lines[intros[at]] : ''
 
   // Conservative gate: a single bare option with no introducing prompt is more
   // likely stray prose (a lone "- item") than a real choice list.
-  if (options.length < 2 && !questionLooksLikePrompt) {
+  if (options.length < 2 && !QUESTION_LINE.test(question)) {
     return null
   }
 
-  // A hint in the findings above says nothing about this list.
-  const scope = previous ? lines.slice(previous.end + 1).join('\n') : text
-  const multiSelect = MULTI_SELECT_HINT.test(scope) && options.length > 1
+  // A hint in the findings above or the notes below says nothing about this
+  // list: read the lines from the list before it to the next list's intro.
+  const from = at > 0 ? lists[at - 1].end + 1 : 0
+  const next = lists[at + 1]
+  const to = next ? (intros[at + 1] >= 0 ? intros[at + 1] : next.start) : lines.length
+  const scope = lines.slice(from, to).filter((_, i) => fenceStarts[from + i] === -1)
+  const multiSelect = MULTI_SELECT_HINT.test(scope.join('\n')) && options.length > 1
 
   return {
     question: question.length > 0 ? cleanQuestionText(question) : 'Choose an option',

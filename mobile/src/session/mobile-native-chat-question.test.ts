@@ -137,20 +137,23 @@ describe('the question card for a reply with more than one list', () => {
     expect(q?.options).toEqual(['Yes, clear the cache'])
   })
 
-  it('shows no card when a notes list follows the choice list', () => {
-    expect(
-      parseAgentQuestion(
-        [
-          'Which fix do you want?',
-          '1. Clear the cache',
-          '2. Release the lock',
-          '',
-          'Notes:',
-          '- the cache is stale',
-          '- the lock is held'
-        ].join('\n')
-      )
-    ).toBeNull()
+  // This pinned null until 2026-09-30: the card took the reply's LAST list,
+  // so a notes list after the choices dropped the card (review, 2026-09-30).
+  it('keeps the card when a notes list follows the choice list', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which fix do you want?',
+        '1. Clear the cache',
+        '2. Release the lock',
+        '',
+        'Notes:',
+        '- the cache is stale',
+        '- the lock is held'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which fix do you want?')
+    expect(q?.options).toEqual(['Clear the cache', 'Release the lock'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
   })
 
   it('shows no card when the last list has no question directly above it', () => {
@@ -624,6 +627,91 @@ describe('the question card for a reply that quotes or draws a rule', () => {
     )
     expect(q?.question).toBe('Which should I do?')
     expect(q?.options).toEqual(['Retry', 'Skip'])
+  })
+})
+
+// The card took the reply's last list, so a list of reasons or notes after
+// the choices became "the options" with no question above them, and the card
+// vanished (review, 2026-09-30). The choices are the one list under the line
+// that asks; its title, markers and multi-select hint are that list's.
+describe('the question card for choices followed by a list of reasons or notes', () => {
+  it('keeps the choices when a reasons list follows them (Claude-shaped)', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n\n1. A\n2. B\n\nI recommend option 1 because:\n- fast\n- simple'
+    )
+    expect(q?.question).toBe('Which one?')
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+    expect(formatQuestionAnswerByIndexes(q!, [1])).toBe('2')
+  })
+
+  it('keeps the choices when a reasons list follows them (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which way do you want to go?',
+        '- **Quarantine** the flaky test',
+        '- **Fix** the ordering dependency now',
+        '',
+        'I lean to the second because:',
+        '- it is a one-line change',
+        '- the flake hides a real bug'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual([
+      '**Quarantine** the flaky test',
+      '**Fix** the ordering dependency now'
+    ])
+    expect(q?.optionTokens).toEqual([null, null])
+  })
+
+  it('keeps the choices between a findings list and a notes list', () => {
+    const q = parseAgentQuestion(
+      'Findings:\n- x is stale\n- y is held\n\nWhich should I fix?\na) x\nb) y\n\nNotes:\n1. both are safe\n2. neither needs a restart'
+    )
+    expect(q?.question).toBe('Which should I fix?')
+    expect(q?.options).toEqual(['x', 'y'])
+    expect(q?.optionTokens).toEqual(['a', 'b'])
+  })
+
+  it('reads a multi-select hint from the chosen list, not the notes after it', () => {
+    const notesHint = parseAgentQuestion(
+      'Which cache should I clear?\n1. a\n2. b\n\nNotes:\n- one or more of them may rebuild'
+    )
+    expect(notesHint?.options).toEqual(['a', 'b'])
+    expect(notesHint?.multiSelect).toBe(false)
+    const ownHint = parseAgentQuestion(
+      'Which caches should I clear? Select all that apply?\n1. a\n2. b\n\nNotes:\n- a is big'
+    )
+    expect(ownHint?.options).toEqual(['a', 'b'])
+    expect(ownHint?.multiSelect).toBe(true)
+  })
+
+  it('reads no multi-select hint from a code fence', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n1. A\n2. B\n\nThe config takes:\n```\nids: one or more, comma-separated\n```'
+    )
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.multiSelect).toBe(false)
+  })
+
+  it('keeps a single choice under a line that asks with notes after it', () => {
+    const q = parseAgentQuestion('Apply the fix?\n1. Yes, clear the cache\n\nNotes:\n- it is safe')
+    expect(q?.question).toBe('Apply the fix?')
+    expect(q?.options).toEqual(['Yes, clear the cache'])
+  })
+
+  it('shows no card when no list, or more than one, sits under a line that asks', () => {
+    expect(parseAgentQuestion('Done:\n- a\n- b\n\nNotes:\n- c\n- d')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n1. A\n2. B\n\nWhich order?\n- first\n- last')).toBeNull()
+    expect(parseAgentQuestion('No lists here, only prose.')).toBeNull()
+  })
+
+  it('shows no card when a later list may be more of the choices', () => {
+    // No line of its own above it: the question may cover it too.
+    expect(parseAgentQuestion('Which one?\n1. A\n2. B\n- C\n- D')).toBeNull()
+    // Prose that introduces nothing: a description the numbering did not bridge.
+    expect(parseAgentQuestion('Which one?\n\n1. A\n2. B\n\nBoth work.\n\n4. D')).toBeNull()
   })
 })
 
