@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { marked } from 'marked'
 import { describe, expect, it } from 'vitest'
 import { editedSurface, openedSurface, savedUntouched } from './rich-markdown-round-trip.test-support'
 
@@ -61,5 +62,64 @@ describe('a quote that holds more than one block', () => {
     const { editor, saved } = openedSurface('> a\n>\n> b')
     editor.querySelectorAll('blockquote > p')[1]!.textContent = 'b, edited'
     expect(saved()).toBe('> a\n>\n> b, edited')
+  })
+})
+
+/** marked's reading of a document (the desktop's), whitespace aside. */
+const reading = (source: string) =>
+  marked.parse(source, { async: false }).replace(/\s+/g, ' ').replace(/> </g, '><').trim()
+
+// Sweep, 2026-10-01, after the lazy line under a quote's table: the quote reader took a line four
+// columns in under a heading or a rule for more words, since it counts those as a paragraph a lazy
+// line may join, and then joined a lazy line to that code: '> # h\n>     code\nbody' saved
+// '> # h\n>     code\n> body', which marked reads with `body` inside the quote. marked reads the
+// line as code, and a lazy line after code is no quote's, as 0bf636a3 saved it.
+describe('a lazy line under a quote whose last line is code', () => {
+  it.each([
+    ['a heading', '> # h\n>     code\nbody', '> # h\n>     code\n\nbody'],
+    ['a rule', '> ---\n>     code\nbody', '> ---\n>     code\n\nbody'],
+    ['a rule after words', '> a\n> ***\n>     code\nbody', '> a\n> ***\n>     code\n\nbody'],
+    ['an underlined heading', '> a\n> ---\n>     code\nbody', '> a\n> ---\n>     code\n\nbody'],
+    ['a heading underlined with `=`', '> a\n> ===\n>     code\nbody', '> a\n> ===\n>     code\n\nbody']
+  ])('ends the quote above the line after code under %s', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  it.each([
+    ['words four columns in under words', '> a\n>     b\nbody', '> a\n>     b\n> body'],
+    ['an item’s words four columns in', '> - a\n>     b\nbody', '> - a\n>     b\n> body'],
+    ['words after a heading and its code', '> # h\n>     code\n> text\nbody', '> # h\n>     code\n> text\n> body'],
+    ['words four columns in under a heading’s words', '> # h\n> text\n>     more\nbody', '> # h\n> text\n>     more\n> body']
+  ])('keeps the line after %s in the quote', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+})
+
+// Review of the lazy line under a quote's table, 2026-10-01: a table the quote's own lines made
+// right under a quote nested in it is that nested quote's to marked, which takes those lines for
+// its own lazy ones, and so is a lazy line after it: '> > q\n> | a |\n> | - |\nbody' is one row
+// holding `body` inside the nested quote. The first fix read the table as the outer quote's and
+// saved `body` as a paragraph of its own.
+describe('a lazy line after a table right under a nested quote', () => {
+  it.each([
+    ['a table the nested quote takes', '> > q\n> | a |\n> | - |\nbody', '> > q\n> | a |\n> | - |\n> body'],
+    [
+      'a nested quote’s table header',
+      '> > | - |\n> | - |\n> | - |\n| 1 | 2 |',
+      '> > | - |\n> | - |\n> | - |\n> | 1 | 2 |'
+    ]
+  ])('keeps the line after %s where it was', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  it.each([
+    ['a blank line', '> > q\n>\n> | a |\n> | - |\nbody', '> > q\n>\n> | a |\n> | - |\n>\n> body'],
+    ['a heading', '> > q\n> # h\n> | a |\n> | - |\nbody', '> > q\n> # h\n> | a |\n> | - |\n>\n> body']
+  ])('keeps a lazy line a paragraph of the quote after a table %s put back in it', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
   })
 })
