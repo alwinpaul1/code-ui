@@ -31,18 +31,33 @@ export type StructuredAgentSessionMutationResult<TValue> =
   | { status: 'rejected' }
   | { status: 'unknown' }
 
+export type MutateOptions = {
+  /** Where a host refusal is said; the chat's banner when absent. A pick from the
+   *  open option drawer brings its own, because that banner draws under it. */
+  onError?: (message: string) => void
+  /** Rewords a failure before it is said, for a call whose failure has a cause the host's own
+   *  text does not name. `code` is the RPC error code of a pre-handler refusal, else null. */
+  explainFailure?: (failure: { code: string | null; message: string }) => string
+}
+
+/** The words a failed or refused mutation is reported in. */
+export function failureMessage(
+  result: { status: 'failed'; message: string; code?: string } | { status: 'refused'; message: string },
+  options?: MutateOptions
+): string {
+  return options?.explainFailure
+    ? options.explainFailure({
+        code: result.status === 'failed' ? (result.code ?? null) : null,
+        message: result.message
+      })
+    : result.message
+}
+
 export type StructuredAgentSessionMutate = <TValue>(
   method: string,
   fingerprintMethod: string,
   fields: Record<string, unknown>,
-  /** Where a host refusal is said; the chat's banner when absent. A pick from the
-   *  open option drawer brings its own, because that banner draws under it. */
-  options?: {
-    onError?: (message: string) => void
-    /** Rewords a failure before it is said, for a call whose failure has a cause the host's own
-     *  text does not name. `code` is the RPC error code of a pre-handler refusal, else null. */
-    explainFailure?: (failure: { code: string | null; message: string }) => string
-  }
+  options?: MutateOptions
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 class AgentSessionRpcResponseError extends Error {

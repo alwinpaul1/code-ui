@@ -21,7 +21,8 @@ import {
   requestStructuredAgentSessionMutation,
   retainStructuredSessionOperationId as retainStructuredOpId,
   timeoutForDeadline,
-  type StructuredAgentSessionMutate,
+  failureMessage,
+  type MutateOptions,
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 import type { RpcClient } from '../transport/rpc-client'
@@ -80,7 +81,7 @@ export function useMobileStructuredAgentSession(args: {
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>,
-      options?: Parameters<StructuredAgentSessionMutate>[3]
+      options?: MutateOptions
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
@@ -119,14 +120,7 @@ export function useMobileStructuredAgentSession(args: {
       }
       operationIdsRef.current.delete(key)
       const report = options?.onError ?? onSendError
-      report(
-        options?.explainFailure
-          ? options.explainFailure({
-              code: result.status === 'failed' ? (result.code ?? null) : null,
-              message: result.message
-            })
-          : result.message
-      )
+      report(failureMessage(result, options))
       return { status: 'rejected' }
     },
     [client, enabled, onSendError, sessionId, sessionKey]
@@ -161,11 +155,7 @@ export function useMobileStructuredAgentSession(args: {
       if (!client || !sessionId || !enabled || currentFence === null) {
         // A lost link (the logical client outlives a drop, so its state says
         // which, not its presence), or else a session still loading.
-        onSendError(
-          client?.getState() === 'connected'
-            ? 'Message not sent: the session on your desktop has not loaded yet'
-            : 'Message not sent: not connected to your desktop'
-        )
+        onSendError(client?.getState() === 'connected' ? 'Message not sent: the session on your desktop has not loaded yet' : 'Message not sent: not connected to your desktop')
         return 'rejected'
       }
       const timeoutMs = timeoutForDeadline(deadline)
@@ -260,22 +250,13 @@ export function useMobileStructuredAgentSession(args: {
 
   // Conversation only: the host wraps no file restore (see the dispatcher's header).
   const rewindToItem = useMobileStructuredRewind({
-    client,
-    sessionId,
-    enabled,
-    sessionKey,
-    stateRef,
-    operationIds: operationIdsRef.current,
-    onError: onSendError
+    client, sessionId, enabled, sessionKey, stateRef,
+    operationIds: operationIdsRef.current, onError: onSendError
   })
 
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void): Promise<boolean> =>
-      requestMobileStructuredBackgroundTaskStop({
-        mutate,
-        taskId,
-        onSendError: report ?? onSendError
-      }),
+      requestMobileStructuredBackgroundTaskStop({ mutate, taskId, onSendError: report ?? onSendError }),
     [mutate, onSendError]
   )
 
@@ -324,12 +305,7 @@ export function useMobileStructuredAgentSession(args: {
     sendWithOutcome,
     // What the send bridge waits on across a relay re-dial: a loaded session
     // (a fence to send against) on a live link, and still this session.
-    sendConditions: {
-      client,
-      target: sessionKey,
-      sendable:
-        client !== null && sessionId !== null && enabled && connected && state.fence !== null
-    },
+    sendConditions: { client, target: sessionKey, sendable: client !== null && sessionId !== null && enabled && connected && state.fence !== null },
     cancel: () => void requestCancel(),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
       requestCancel(prompt ?? pendingStructuredPromptIdentity(stateRef.current.items)),
