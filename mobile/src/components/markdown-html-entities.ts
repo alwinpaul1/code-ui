@@ -2,10 +2,10 @@ import { MARKDOWN_ESCAPE_SOURCE } from './markdown-inline-escapes'
 
 /**
  * The HTML entities a Markdown reader draws as characters: the chat's HTML
- * pass (mobile-markdown-preview-html.ts) and a PR comment's text runs
- * (parseInline in pr-sidebar/markdown-blocks.ts) read one table. A PR comment
- * drew `Vec&lt;T&gt;` as written (review, 2026-09-30), where GitHub and the
- * chat draw `Vec<T>`.
+ * pass (mobile-markdown-preview-html.ts), and a PR comment's text runs and
+ * link addresses (parseInline in pr-sidebar/markdown-blocks.ts), read one
+ * table. A PR comment drew `Vec&lt;T&gt;` as written (review, 2026-09-30),
+ * where GitHub and the chat draw `Vec<T>`.
  *
  * One pass, so an entity is decoded once: `&amp;lt;` is `&lt;`, never `<`.
  * A bare `&` and a name not in the table stay as written. `&nbsp;` is a plain

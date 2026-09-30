@@ -11,7 +11,8 @@ import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
 import { HR, ORDERED, parseList, UNORDERED } from './markdown-list-blocks'
-import { expandBreaksOffTableRows, inlineBreaksAsNewlines, MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
+import { MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
+import { expandParagraphBreaks, HEADING, QUOTE, withLineBreaks } from './markdown-block-breaks'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -50,10 +51,6 @@ export type MarkdownBlock =
   // GFM pipe table. `align` is per-column, parallel to `headers`.
   | { kind: 'table'; headers: string[]; rows: string[][]; align: CellAlign[] }
 
-// Its closing run of '#' comes off in markdownHeadingText.
-const HEADING = /^(#{1,6})\s+(.*)$/
-const QUOTE = /^>\s?(.*)$/
-
 // It moved to markdown-html-tags.ts beside the code-aware stripping.
 export { stripHtmlTags } from './markdown-html-tags'
 
@@ -61,37 +58,14 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Fences out first, with HTML comments and <br> handled around them
   // (markdown-fences.ts): nothing below reads a fence's lines.
   const body = lexCommentBody(content)
-  // A `<br>` is a line break, except on a table row, where it is one inside
-  // its cell once the cells are split (markdown-inline-breaks.ts). It was a
-  // line break everywhere, which cut a row in two.
-  const text = expandBreaksOffTableRows(body.text)
+  // A `<br>` on a table row, a list item, a quote or a heading is a line
+  // break inside its cell, item, quote or heading once the block is read,
+  // and a line break before the lines are read anywhere else
+  // (markdown-block-breaks.ts). It was a line break everywhere, which cut a
+  // row, an item, a quote or a heading in two.
+  const text = expandParagraphBreaks(body.text, body)
   const blocks = parseSegment(readHtmlBlocks(text), body)
   return text.includes(MARKDOWN_INLINE_BREAK) ? blocks.map(withLineBreaks) : blocks
-}
-
-/** A block with every `<br>` a table row kept as a line break: in its cells,
- *  and wherever else such a row was read, so none is drawn as a stand-in. */
-function withLineBreaks(block: MarkdownBlock): MarkdownBlock {
-  const breaks = inlineBreaksAsNewlines
-  switch (block.kind) {
-    case 'heading':
-    case 'quote':
-    case 'paragraph':
-      return { ...block, text: breaks(block.text) }
-    case 'list':
-      return { ...block, items: block.items.map(breaks) }
-    case 'table':
-      return { ...block, headers: block.headers.map(breaks), rows: block.rows.map((row) => row.map(breaks)) }
-    case 'details':
-      return { ...block, summary: breaks(block.summary), body: block.body.map(withLineBreaks) }
-    case 'code':
-    case 'hr':
-      return block
-    default: {
-      const unhandled: never = block
-      return unhandled
-    }
-  }
 }
 
 // The <details>/<blockquote> regions of a segment, a nested one inside the
@@ -285,6 +259,19 @@ const INLINE = new RegExp(
 )
 
 /**
+ * What a link or an image opens: its destination without a title, with its
+ * entities decoded as CommonMark decodes them there, numeric references too,
+ * as a text run's are. A bot-written `?a=1&amp;b=2` opened with the entity in
+ * its query (review, 2026-09-30). The title comes off first, so a decoded
+ * quote is never read as one. A scheme spelled with entities,
+ * `&#106;avascript:`, is the scheme it spells by the time the tap checks it
+ * (isAllowedMarkdownLinkUrl), and is refused as `javascript:` is.
+ */
+function linkAddress(href: string): string {
+  return decodeMarkdownHtmlEntities(markdownLinkDestination(href), true)
+}
+
+/**
  * A run of inline Markdown as tokens. Images, a link label that holds one,
  * and backslash escapes are read as the chat reads them (the matcher's
  * `images` reading): `![shot](i.png)` drew a stray "!" before a link, and a
@@ -295,8 +282,9 @@ const INLINE = new RegExp(
  * link or an address is drawn as written. A text run drops an escape's
  * backslash, as GitHub does: `\*a\*` is two stars around a word, and
  * `\![x](y)` is a "!" and a link. It draws the characters HTML entities stand
- * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts).
- * Code keeps its backslashes and entities as written.
+ * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts),
+ * and a link's address opens with its entities decoded (linkAddress). Code
+ * keeps its backslashes and entities as written.
  */
 export function parseInline(text: string, label = false): InlineToken[] {
   const tokens: InlineToken[] = []
@@ -337,7 +325,7 @@ export function parseInline(text: string, label = false): InlineToken[] {
     } else if (m.link && label) {
       tokens.push({ kind: 'text', text: token })
     } else if (m.link) {
-      tokens.push({ kind: 'link', text: m.link.label || 'image', url: markdownLinkDestination(m.link.href) })
+      tokens.push({ kind: 'link', text: m.link.label || 'image', url: linkAddress(m.link.href) })
     } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
