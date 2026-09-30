@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { tapTargetHitSlop } from '../src/ui/tap-target'
+import { Button } from '../src/ui/Button'
 import {
   ActivityIndicator,
   Pressable,
@@ -14,7 +15,13 @@ import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
 import { useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
+import { useLastConnectedAt } from '../src/transport/client-context-connection-metrics'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../src/transport/stale-after-reconnect'
 import type { RpcClient } from '../src/transport/rpc-client'
+import type { ConnectionState } from '../src/transport/types'
 import { BottomDrawer } from '../src/components/BottomDrawer'
 import { VoiceModelList } from '../src/components/VoiceModelList'
 import { VoiceSettingsSwitchRow } from '../src/components/VoiceSettingsSwitchRow'
@@ -32,6 +39,13 @@ import {
 
 const POLL_INTERVAL_MS = 1500
 
+// A desktop on its way to connected: the screen says so rather than asking for one.
+const CONNECTING_STATES: ReadonlySet<ConnectionState> = new Set([
+  'connecting',
+  'handshaking',
+  'reconnecting'
+])
+
 const DICTATION_MODES = [
   { value: 'toggle', label: 'Toggle' },
   { value: 'hold', label: 'Hold' }
@@ -45,17 +59,18 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useThemedStyles(voiceSettingsStyles)
 
-  const { hosts } = useLoadedHosts()
+  const { hosts, loaded: hostsLoaded } = useLoadedHosts()
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients, focused: routeFocused } = useFocusedSettingsHostClients(hostIds)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
-  const client: RpcClient | null = useMemo(
-    () => hostClients.find((entry) => entry.state === 'connected')?.client ?? null,
+  const connected = useMemo(
+    () => hostClients.find((entry) => entry.state === 'connected') ?? null,
     [hostClients]
   )
+  const client: RpcClient | null = connected?.client ?? null
+  const connecting = hostClients.some((entry) => CONNECTING_STATES.has(entry.state))
 
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busyAction, setBusyAction] = useState<ModelBusyAction | null>(null)
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false)
@@ -71,8 +86,6 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load voice settings')
       return undefined
-    } finally {
-      setLoading(false)
     }
   }, [client])
 
@@ -84,11 +97,34 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
     intervalMs: POLL_INTERVAL_MS
   })
 
+  // A first read that failed is read again once per new connection, not per render. With no
+  // desktop connected ('missing') the poller owns the next read: it reads when one connects.
+  const lastConnectedAt = useLastConnectedAt(connected?.hostId)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
   useEffect(() => {
-    if (routeFocused && client && setup === null) {
-      setLoading(true)
+    const status = !client ? 'missing' : setup ? 'ready' : error ? 'error' : 'loading'
+    const refetch = shouldRefetchAfterReconnect(
+      staleLedgerRef.current,
+      'voice-setup',
+      status,
+      lastConnectedAt
+    )
+    if (refetch && status === 'error') {
+      void refreshSetup()
     }
-  }, [routeFocused, client, setup])
+  }, [client, error, lastConnectedAt, refreshSetup, setup])
+
+  // The model sheet's buttons do nothing without a desktop; do not leave it open over one.
+  useEffect(() => {
+    if (!client) {
+      setModelDrawerOpen(false)
+    }
+  }, [client])
+
+  const retryRead = useCallback(() => {
+    setError(null)
+    void refreshSetup()
+  }, [refreshSetup])
 
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
@@ -202,7 +238,28 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
         <Text style={styles.heading}>Voice</Text>
       </View>
 
-      {loading && setup === null && client ? (
+      {/* The settings live on the desktop. Without one connected, or before its first answer,
+          there is nothing true to draw: no switch position, no mode, no model. */}
+      {!client ? (
+        <View style={styles.loading}>
+          {!hostsLoaded || connecting ? <ActivityIndicator color={colors.textSecondary} /> : null}
+          {hostsLoaded ? (
+            <Text style={[styles.emptyText, { textAlign: 'center' }]}>
+              {connecting
+                ? 'Connecting to your desktop…'
+                : 'Connect to a desktop to change voice settings'}
+            </Text>
+          ) : null}
+        </View>
+      ) : setup === null && error ? (
+        <View style={[styles.loading, { gap: spacing.sm }]}>
+          <Text style={styles.rowLabel}>Couldn't read voice settings</Text>
+          <Text style={[styles.errorText, { textAlign: 'center', paddingVertical: 0 }]}>
+            {error}
+          </Text>
+          <Button label="Retry" variant="secondary" align="center" onPress={retryRead} />
+        </View>
+      ) : setup === null ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.textSecondary} />
         </View>
