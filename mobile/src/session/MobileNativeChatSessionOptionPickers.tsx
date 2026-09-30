@@ -41,8 +41,8 @@ export type MobileNativeChatSessionOptionPickersProps = {
   /** The tab the chat shows (mobileNativeChatScopeKey): a failure is drawn only
    *  on the tab its pick was made on. */
   scopeKey: string | null
-  /** Pickers lock while the agent works — a mid-turn `/model` interleaves with
-   *  the agent's own output (desktop parity). */
+  /** The agent is working. It does not lock the pill (see `disabled` below);
+   *  it tells the Codex reader to say the list waits for the turn to end. */
   isWorking: boolean
   /** A composer send owns the TUI input line until it settles. The host spaces a
    *  send's body and its Enter ~500ms apart, so an apply dispatched inside that
@@ -140,9 +140,12 @@ export function MobileNativeChatSessionOptionPickers({
   if (!model) {
     return null
   }
-  // Why not `isWorking`: Claude Code queues a `/model` typed mid-turn and applies
-  // it when the turn ends, so the pill stays usable while the agent works. Only
-  // an in-flight change of ours, or a send in progress, holds it.
+  // Why not `isWorking`: both agents take a `/model` mid-turn. Claude Code
+  // queues it and applies it when the turn ends; Codex opens its picker during
+  // a turn (`available_during_task` lists Model, codex-rs 0.153.4), and the
+  // phone drives it there (codex-picker-apply.ts). So the pill stays usable
+  // while the agent works. Only an in-flight change of ours, or a send in
+  // progress, holds it.
   const disabled = pendingId !== null || sendInFlight
   const activeDescriptor = snapshot.find((descriptor) => descriptor.id === openDescriptorId)
   const modelView = activeDescriptor?.id === model.id

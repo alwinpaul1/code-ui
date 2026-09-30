@@ -1,10 +1,15 @@
 // Drive Codex's `/model` picker from the phone to set the model and reasoning
 // effort. See codex-picker-screen.ts for why the picker, not a command.
 //
-// Sequence: confirm the TUI is idle → type "/model" → wait for the model step
-// → arrow the cursor from its current row to the target → Enter → wait for the
-// effort step → (expand "More reasoning…" if the level hides behind it) → arrow
-// → Enter → wait for the picker to close and the footer to name the pair.
+// Sequence: confirm no dialog is up (a picker of ours left open is closed
+// first) → type "/model" → wait for the model step → arrow the cursor from its
+// current row to the target → Enter → wait for the effort step → (expand "More
+// reasoning…" if the level hides behind it) → arrow → Enter → wait for the
+// picker to close and the footer to name the pair.
+// A running turn does not stop it: Codex opens `/model` mid-turn (Model is in
+// `available_during_task`'s true arm in codex-rs/tui/src/slash_command.rs, at
+// rust-v0.153.4 and on main, read 2026-09-30), and effort changes during work
+// were allowed on purpose in 0.2.34 (codex-picker-apply.test.ts).
 // Every wait is bounded; on any miss the picker is escaped — but never while a
 // turn is running, because Esc there interrupts the agent.
 import type { RpcClient } from '../transport/rpc-client'
