@@ -273,4 +273,89 @@ describe('Codex 0.158.0 screens', () => {
     remapped[at] = '• Working (0s • ctrl+c to interrupt)'
     expect(isCodexWorking(remapped)).toBe(true)
   })
+
+  // Codex's bottom pane draws the status row, a blank line, the pending-input preview, then the
+  // composer (codex-rs/tui/src/bottom_pane/mod.rs, pending_input_preview.rs; the preview's own
+  // wording is the fork's codex-terminal-queued-messages fixtures). Typing `/model` and Enter into a
+  // running turn is what a wrong "idle" costs.
+  it('reads a running turn with queued follow-ups as working', () => {
+    const queued = [
+      '› List the files here and summarize in 2 bullets.',
+      '',
+      '• Working (12s • esc to interrupt)',
+      '',
+      '• Queued follow-up inputs',
+      '  ↳ then run the tests',
+      '    ⌥ + ↑ edit last queued message',
+      '',
+      '› Ask Codex to do anything',
+      '',
+      '  GPT-6-Sol medium · ~/orca-lanes/sta8834/corpus/scratch',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(queued)).toBe(true)
+    expect(isCodexIdle(queued)).toBe(false)
+    const steer = [
+      '• Working (3s • esc to interrupt)',
+      '',
+      '• Messages to be submitted after next tool call (press esc',
+      '  to interrupt and send immediately)',
+      '  ↳ steer from phone',
+      '',
+      '• Messages to be submitted at end of turn',
+      '  ↳ retry this',
+      '',
+      '› Ask Codex to do anything',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(steer)).toBe(true)
+  })
+
+  it('reads a running turn with an auto-review detail line under the status row as working', () => {
+    const review = [
+      '• Working (4s • esc to interrupt)',
+      '  └ Auto-reviewing: git push origin main',
+      '',
+      '› Ask Codex to do anything',
+      '',
+      '  GPT-6-Sol medium · ~/repo',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(review)).toBe(true)
+  })
+
+  it('does not read a quoted status row as working when the composer is not on screen', () => {
+    // A pager or a `cat`ed transcript: prose quoting the row, no composer row at all.
+    expect(isCodexWorking(['  It reads like this:', '  • Working (0s • esc to interrupt)'])).toBe(
+      false
+    )
+    expect(isCodexWorking(['$ cat notes.txt', '• Working (0s • esc to interrupt)', '$'])).toBe(
+      false
+    )
+  })
+
+  it('reads the row above the composer, and not one that a "> " line follows', () => {
+    const quoted = [
+      '› what does the row look like?',
+      '',
+      '• It looks like:',
+      '> quoting a shell prompt',
+      '• Working (0s • esc to interrupt)',
+      '',
+      '› Ask Codex to do anything',
+      '  ? for shortcuts'
+    ]
+    // The row above the composer IS a busy row here: this screen is a real turn, not a quote.
+    expect(isCodexWorking(quoted)).toBe(true)
+    const quotedAbove = [
+      '› what does the row look like?',
+      '',
+      '• Working (0s • esc to interrupt)',
+      '> a shell prompt quoted after it',
+      '',
+      '› Ask Codex to do anything',
+      '  ? for shortcuts'
+    ]
+    expect(isCodexWorking(quotedAbove)).toBe(false)
+  })
 })

@@ -853,7 +853,7 @@ tmux at 120x40. **Not run against a live Codex 0.158 tab.**
   the busy row. Those are unchanged in 0.158.0, with one exception the captures showed: the footer grew
   a "? for shortcuts" line under the composer, so the busy row (`• Working (0s • esc to interrupt)`)
   sits **seventh** from the bottom instead of sixth, and the phone's six-line tail read a running turn
-  as idle. It now applies Orca's own rule (`hasBusyStatusRowAbove`, v1.4.217): only the last non-blank line above the composer counts, allowing one `└ Tip:` line between, matched on `to interrupt)`. A sentence or status row quoted higher up in an answer, or above 0.158's timestamp, is not a running turn (`codex-picker-screen.ts`, pinned by
+  as idle. It now applies Orca's own rule (`hasBusyStatusRowAbove`, v1.4.217): only the last non-blank line above the composer counts, stepping over the queued-input preview and one `└` detail line, matched on `to interrupt)`; with no `›` composer on screen there is no verdict. A sentence or status row quoted higher up in an answer, or above 0.158's timestamp, is not a running turn (`codex-picker-screen.ts`, pinned by
   `codex-0158-screens.test.ts`).
 - **Trust prompt.** A first launch in an unknown folder opens "Trust this folder?" (`› 1. Trust and
   continue`). The phone has no card for it; it is neither an approval nor an idle prompt to the readers,
