@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { markdownDocumentSource } from '../components/mobile-markdown-preview-html'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { SCREEN_NOTICE_ID_PREFIX } from './screen-peer-notices'
 
@@ -120,7 +121,16 @@ export function deriveMobileNativeChatStreaming(
   const tailId = tail?.id ?? null
   // A live status gap is not a deletion. Keep the prose until its transcript
   // arrives; tearing down the bubble here flashes the entire list's layout.
-  const text = streamingText?.trim() || (options.streamLive ? scopedGate.prevText : '')
+  // The stream reads as the landed reply draws (markdownDocumentSource): the
+  // blank lines above its first line and the whitespace after its last go,
+  // and the first line keeps its indent. A whole trim took that indent too,
+  // so a reply opening with indented code drew as prose until its row
+  // landed (review, 2026-09-30).
+  const text = markdownDocumentSource(streamingText) || (options.streamLive ? scopedGate.prevText : '')
+  // Every comparison with the transcript reads both sides trimmed, as
+  // `assistantTailText` does, so the indent kept for drawing cannot keep a
+  // reply from landing or a replay from being caught.
+  const comparable = text.trimStart()
   if (!text) {
     // Only a textless tick that carries a real tail and is outside a live turn
     // is trustworthy pre-stream history. Mid-turn gaps (a tool call, a throttle
@@ -147,7 +157,7 @@ export function deriveMobileNativeChatStreaming(
   for (let index = folded.length - 1; !landedMessageId && index > baselineIndex; index -= 1) {
     const candidate = folded[index]!
     const candidateText = assistantTailText(candidate)
-    if (candidateText && (candidateText.startsWith(text) || text.startsWith(candidateText))) {
+    if (candidateText && (candidateText.startsWith(comparable) || comparable.startsWith(candidateText))) {
       landedMessageId = candidate.id
     }
   }
@@ -159,7 +169,7 @@ export function deriveMobileNativeChatStreaming(
   // that row, not a new reply; it shows again the moment it grows past it.
   // The price: a genuinely repeated reply stays hidden until it diverges or
   // its own row lands.
-  const replayed = !landedMessageId && isReplayOfLastReply(folded, baselineIndex, text)
+  const replayed = !landedMessageId && isReplayOfLastReply(folded, baselineIndex, comparable)
   return {
     gate: advanceGate(scopedGate, text, baselineTailId, landedMessageId),
     streaming: landedMessageId || replayed ? null : text

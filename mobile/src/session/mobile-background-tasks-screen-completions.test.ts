@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { countRunningBackgroundTasks, deriveBackgroundTasks } from './mobile-background-tasks'
+import {
+  EMPTY_SCREEN_COMPLETION_MEMORY,
+  rememberScreenCompletions,
+  screenCompletionsFromMemory
+} from './mobile-screen-completion-memory'
 
 // Message builders, as in mobile-background-tasks.test.ts: transcript blocks
 // carry no tool ids, so a call and its result pair by order.
@@ -123,5 +128,81 @@ describe('a completion the agent stated on its screen', () => {
       screenCompletions: [{ label: 'Build the release APK locally', status: 'completed' }]
     })
     expect(tasks.running.map((task) => task.id)).toEqual(['bgcig10bq', 'b9y349v6k', 'a-build'])
+  })
+})
+
+// The phone keeps a completion row for the rest of the session once it has
+// seen it (`mobile-screen-completion-memory.ts`), so a row outlives its own
+// shell. A later launch under the same description must not be the one it
+// retires: that launch had not started when the row was painted.
+describe('a remembered completion row and a later launch under the same description', () => {
+  const T = Date.UTC(2026, 8, 20, 18, 9, 0)
+  const pane = { state: 'working' as const, workingMode: 'monitoring' as const, stateStartedAt: T - 60_000 }
+  const gate = { command: 'npx vitest run', description: 'Run the gate' }
+  const firstRunNotified: NativeChatMessage = {
+    id: 'notification-bgate0001',
+    role: 'user',
+    timestamp: T + 60_000,
+    source: 'transcript',
+    blocks: [
+      {
+        type: 'text',
+        text: `<task-notification>
+<task-id>bgate0001</task-id>
+<tool-use-id>toolu_01MYrD6JLqm1Z39124tyRFCy</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Code-UI/7449d614-3e02-439b-8e71-5bed99eaf4f0/tasks/bgate0001.output</output-file>
+<status>completed</status>
+<summary>Background command "Run the gate" completed (exit code 0)</summary>
+</task-notification>`
+      }
+    ]
+  }
+  // The row as the phone remembers it: seen on the poll right after the first
+  // run finished, then scrolled away.
+  const rowSeenAfterFirstRun = screenCompletionsFromMemory(
+    rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [{ label: 'Run the gate', status: 'completed' }], T + 61_000)
+  )
+
+  it('keeps the relaunch running instead of showing it finished as soon as it starts', () => {
+    const relaunched = [...launched('bgate0001', gate, T), firstRunNotified, ...launched('bgate0002', gate, T + 120_000)]
+    const tasks = deriveBackgroundTasks(relaunched, T + 150_000, pane, { screenCompletions: rowSeenAfterFirstRun })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bgate0002'])
+    expect(tasks.finished.map((task) => task.id)).toEqual(['bgate0001'])
+    expect(countRunningBackgroundTasks(relaunched, pane, { screenCompletions: rowSeenAfterFirstRun }, T + 150_000)).toBe(1)
+  })
+
+  it('keeps the relaunch running when the beacon, not the transcript, settled the first run', () => {
+    const relaunched = [...launched('bgate0001', gate, T), ...launched('bgate0002', gate, T + 120_000)]
+    const tasks = deriveBackgroundTasks(relaunched, T + 150_000, pane, {
+      finishedTaskIds: ['bgate0001'],
+      screenCompletions: rowSeenAfterFirstRun
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bgate0002'])
+  })
+
+  it('still retires the one launch that started before the row was seen', () => {
+    const working = { state: 'working' as const, stateStartedAt: T - 60_000 }
+    const tasks = deriveBackgroundTasks(launched('bgate0001', gate, T), T + 150_000, working, { screenCompletions: rowSeenAfterFirstRun })
+    expect(tasks.running).toEqual([])
+    expect(tasks.finished.map((task) => [task.id, task.status])).toEqual([['bgate0001', 'completed']])
+  })
+
+  it('retires nothing when the only launch started after the row was seen', () => {
+    const tasks = deriveBackgroundTasks(launched('bgate0002', gate, T + 120_000), T + 150_000, pane, {
+      screenCompletions: rowSeenAfterFirstRun
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bgate0002'])
+  })
+
+  it('retires nothing, and throws nothing, when there are no launches at all', () => {
+    const tasks = deriveBackgroundTasks([], T + 150_000, pane, { screenCompletions: rowSeenAfterFirstRun })
+    expect(tasks.finished).toEqual([])
+    expect(tasks.running.map((task) => task.id)).toEqual(['host-monitoring'])
+  })
+
+  it('judges a launch with no recorded start time, which cannot be shown to be later', () => {
+    const untimed = launched('bgate0001', gate, T).map((message) => ({ ...message, timestamp: null }))
+    const tasks = deriveBackgroundTasks(untimed, T + 150_000, pane, { screenCompletions: rowSeenAfterFirstRun })
+    expect(tasks.finished.map((task) => task.id)).toEqual(['bgate0001'])
   })
 })

@@ -30,6 +30,15 @@ export async function readNativeChatImagePreviews(
   sessionKey: string
 ): Promise<Record<string, string[]> | null> {
   try {
+    // A chat can come back while its last write is still landing (a removal
+    // included); a read that beat it brought the previous previews back. The
+    // barrier never rejects, so a failed write in front of it cannot fail
+    // this read. With no write in flight the read starts at once, in the
+    // caller's own tick, as it always did.
+    const writing = barriers.get(sessionKey)
+    if (writing) {
+      await writing
+    }
     const raw = await AsyncStorage.getItem(previewStorageKey(sessionKey))
     if (!raw) {
       return null
