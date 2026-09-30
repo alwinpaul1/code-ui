@@ -116,11 +116,10 @@ export function useAbsorbedQueueEchoes(
     }
   }
   // A queued message that did land as its own user turn needs no echo.
-  const landedText = folded
-    .filter((message) => message.role === 'user')
-    .map((message) =>
-      message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
-    )
+  const landedRows = folded.filter((message) => message.role === 'user')
+  const landedText = landedRows.map((message) =>
+    message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')
+  )
   const landed = landedText.map(promptKey)
   const landedCutKeys = landedText.map(cutKey)
   // Messages this hook knows the words of, whichever copy they came from. A
@@ -204,16 +203,24 @@ export function useAbsorbedQueueEchoes(
   }
   previous.current = slots
   const knownBeforeRetiring = known()
+  const rowsSince = rowsFromAnchor(rawMessages, landedRows)
   for (const [seq, entry] of Array.from(held.current.entries())) {
     const key = entry.key
+    // Only a row from the one it is drawn after on can be its own: Claude
+    // writes no row for a message it takes mid-turn, and a row of its words
+    // from an earlier turn retired it the moment the box let go, so a
+    // mid-turn "keep going" was drawn nowhere (2026-09-30).
+    const since = rowsSince(entry.anchorId)
+    const after = <T>(rows: readonly T[]): T[] => rows.filter((_, index) => since[index])
+    const textAfter = after(landedText)
     if (
       // Not the box: a copy of these words it still lists is another message,
       // or this one listed again, which the loop above settles.
       own.some((other) => sameMessage(other, key)) ||
       // Held before the message it glues onto was known here.
       readingGluesToolRowsOnto(knownBeforeRetiring, entry.text) ||
-      landed.some((other) => sameMessage(other, key)) ||
-      landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other)) ||
+      after(landed).some((other) => sameMessage(other, key)) ||
+      after(landedCutKeys).some((other) => isCutOf(cutKey(entry.text), other)) ||
       // The witness reads the message off the agent's SCREEN, where it is
       // wrapped and can be shortened; the landed row carries what the author
       // typed. Comparing them exactly left a shortened reading standing beside
@@ -223,8 +230,8 @@ export function useAbsorbedQueueEchoes(
       // several stacked rows, so the reading is exactly those rows end to end.
       // A reading that merely extends one landed row is a different message and
       // must be kept (2026-09-14 review).
-      landedText.some((other) => queueRowIsPendingSend(other, entry.text)) ||
-      readingIsJoinedLandedRows(landedText, entry.text)
+      textAfter.some((other) => queueRowIsPendingSend(other, entry.text)) ||
+      readingIsJoinedLandedRows(textAfter, entry.text)
     ) {
       held.current.delete(seq)
     }
@@ -251,6 +258,36 @@ export function useAbsorbedQueueEchoes(
       ...(entry.provisional ? { provisional: true } : {})
     }))
   return useStableEchoes(echoes)
+}
+
+/**
+ * For the row a held echo is drawn after (the last row when the box first
+ * listed it), which landed user rows can be the message's own: that row and
+ * the ones after it. A row before it was written before the message was sent.
+ *
+ * The anchor row itself counts. A box read can be behind the transcript: the
+ * chat opened as Claude dequeued a message at a turn's end, its first read
+ * still listed the message, and the row Claude dequeued it as was already
+ * the last row (mobile-chat-midturn-queue-box.test.ts). What that costs: the
+ * same words sent twice with no row written between, the second taken
+ * mid-turn, read as one message. The words cannot tell those apart.
+ *
+ * An anchor the record no longer holds was paged out above the loaded
+ * window, so every row held is after it; a landed row the record does not
+ * hold counts, as every row did before this rule. The record is indexed on
+ * the first call, so a render with nothing held does not walk it.
+ */
+function rowsFromAnchor(
+  rawMessages: readonly NativeChatMessage[],
+  rows: readonly NativeChatMessage[]
+): (anchorId: string | null) => boolean[] {
+  let position: Map<string, number> | null = null
+  return (anchorId) => {
+    position ??= new Map(rawMessages.map((message, index) => [message.id, index]))
+    const at = position
+    const anchor = anchorId === null ? undefined : at.get(anchorId)
+    return rows.map((row) => anchor === undefined || (at.get(row.id) ?? Infinity) >= anchor)
+  }
 }
 
 /** A screen reading that stops short of the row that landed — the parser ends
