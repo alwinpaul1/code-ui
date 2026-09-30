@@ -10,7 +10,7 @@ import {
 import type { AgentProvenance } from './mobile-background-task-roster'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
-import { useActiveTabScreenCompletions } from './use-active-tab-screen-completions'
+import { resetScreenCompletionsForTests, useActiveTabScreenCompletions } from './use-active-tab-screen-completions'
 
 /** How long the session's last host status stands in for a missing one: long
  *  enough to bridge a snapshot that came without it, short enough that a
@@ -34,8 +34,11 @@ function remember(sessionId: string, evidence: SessionTaskEvidence): void {
   }
 }
 
+/** Clears everything the report remembers per session, the screen's
+ *  completion rows included. */
 export function resetTaskEvidenceForTests(): void {
   memories.clear()
+  resetScreenCompletionsForTests()
 }
 
 /** Folds this render's sighting into the session's memory. The clock is read
@@ -70,7 +73,9 @@ export function useActiveTabTaskReport(input: {
   transcriptSettled: boolean
   agentStatus: AgentStatusEntry | null
   onScreenShellCount: number | null
-  screenTaskCompletions: readonly ScreenTaskCompletion[]
+  /** The completion rows this screen read found; null while the screen is
+   *  unread, which is not a screen without rows. */
+  screenTaskCompletions: readonly ScreenTaskCompletion[] | null
 }): ActiveTabBackgroundTaskReport {
   const { report, sessionId, agentStatus, onScreenShellCount } = input
   const window = useMemo(() => readTaskEvidence(input.messages), [input.messages])

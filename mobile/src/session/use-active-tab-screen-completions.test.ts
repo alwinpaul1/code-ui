@@ -13,6 +13,7 @@ import { resetTaskEvidenceForTests, useActiveTabTaskReport } from './use-active-
 // same command again under the same description.
 
 const SESSION = '7449d614-3e02-439b-8e71-5bed99eaf4f0'
+const OTHER_SESSION = 'b1d1c0de-0000-4000-8000-000000000000'
 const T = Date.parse('2026-09-20T18:09:00.000Z')
 const EMPTY_REPORT: ActiveTabBackgroundTaskReport = {
   finishedTaskIds: [],
@@ -22,6 +23,7 @@ const EMPTY_REPORT: ActiveTabBackgroundTaskReport = {
 }
 const GATE_ROW: ScreenTaskCompletion = { label: 'Run the gate', status: 'completed' }
 const QUICK_ROW: ScreenTaskCompletion = { label: 'Quick check', status: 'completed' }
+const UNREAD = null
 
 let nextId = 0
 function message(role: 'assistant' | 'user', timestamp: number, block: NativeChatMessage['blocks'][number]): NativeChatMessage {
@@ -74,15 +76,22 @@ function monitoring(): AgentStatusEntry {
   }
 }
 
-type Frame = { messages: readonly NativeChatMessage[]; screen: readonly ScreenTaskCompletion[] }
+type Frame = {
+  messages: readonly NativeChatMessage[]
+  /** Null while the screen is unread. */
+  screen: readonly ScreenTaskCompletion[] | null
+  /** Another tab: its terminal and session. */
+  handle?: string
+  sessionId?: string
+}
 
 let latest: string[] = []
 function Probe({ frame }: { frame: Frame & { now: number } }) {
   const status = monitoring()
   const report = useActiveTabTaskReport({
     report: EMPTY_REPORT,
-    handle: 'pty-1',
-    sessionId: SESSION,
+    handle: frame.handle ?? 'pty-1',
+    sessionId: frame.sessionId ?? SESSION,
     agent: 'claude',
     messages: frame.messages,
     transcriptSettled: true,
@@ -138,6 +147,44 @@ describe('a completion row the screen showed once, and a relaunch under its desc
     // Its completion lands mid-turn: no transcript notification, only a
     // second row painted under the first.
     expect(show(T + 200_000, { messages: relaunched, screen: [GATE_ROW, GATE_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  // The chat unmounts for the Files tab and mounts again on the way back, and
+  // a tab switch hands the hook another terminal and back. Run 1's row is
+  // still on screen both times, and was seen before run 2 launched.
+  it('keeps the relaunch running when the chat is reopened with the first run’s row still on screen', () => {
+    const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
+    show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })
+    const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
+    expect(show(T + 121_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(show(T + 150_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+  })
+
+  it('keeps the relaunch running when the reopened chat reads its transcript before its screen', () => {
+    const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
+    show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })
+    const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
+    expect(show(T + 121_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+
+    act(() => renderer?.unmount())
+    renderer = null
+    // The screen's first read after the remount has not landed yet: what the
+    // HUD hands over for an unread screen (use-mobile-terminal-hud-observation.ts).
+    expect(show(T + 150_000, { messages: relaunched, screen: UNREAD })).toEqual(['bgate0002'])
+    expect(show(T + 151_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+  })
+
+  it('keeps the relaunch running after a switch to another tab and back', () => {
+    const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
+    show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })
+    const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
+    expect(show(T + 121_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
+
+    show(T + 130_000, { messages: [], screen: [], handle: 'pty-2', sessionId: OTHER_SESSION })
+    expect(show(T + 150_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
   })
 
   it('retires the relaunch by its own row once the first run’s row has left the screen', () => {
