@@ -220,8 +220,15 @@ describe('Codex mode and context from the screen', () => {
     expect(older?.context?.usedPercent).toBe(70)
   })
 
-  it('stays silent on a bare Claude footer with no figure rather than guessing', () => {
-    expect(parseTerminalHudObservation(['⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'])).toBeNull()
+  it('states the mode but no figure on a bare Claude footer rather than guessing', () => {
+    // The footer is still read for its mode (claude-footer-without-status-line.test.ts);
+    // no figure is on it, so the ring and the model stay blank.
+    expect(parseTerminalHudObservation(['⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'])).toMatchObject({
+      modelId: null,
+      effort: null,
+      context: null,
+      permissionModeSeen: 'auto'
+    })
   })
 })
 
@@ -305,7 +312,7 @@ describe("Claude Code's own low-context warning over the footers it paints", () 
     // 2.1.270's composer and footer, tmux 2026-09-13 (mobile-terminal-sent-prompts.test.ts).
     const rule = '─'.repeat(100)
     const screen = ['⏺ The ring said context 54% a minute ago.', '', rule, '❯\u00a0', rule, '  ⏸ manual mode on · ← for agents']
-    expect(parseTerminalHudObservation(screen)).toBeNull()
+    expect(parseTerminalHudObservation(screen)).toMatchObject({ context: null, permissionModeSeen: 'manual' })
     expect(parseTerminalHudObservation([LOW, ...screen.slice(1)])?.context?.usedPercent).toBe(92)
   })
 
@@ -314,8 +321,12 @@ describe("Claude Code's own low-context warning over the footers it paints", () 
     expect(parseTerminalHudObservation([LOW, 'I would not use bypass permissions on prod.'])).toBeNull()
   })
 
-  it('stays silent on a footer with a shell count but no figure, and on an empty screen', () => {
-    expect(parseTerminalHudObservation(['  ⏵⏵ auto mode on · 1 shell · ← for agents'])).toBeNull()
+  it('reads the shell count but no figure off a footer with no warning, and nothing off an empty screen', () => {
+    expect(parseTerminalHudObservation(['  ⏵⏵ auto mode on · 1 shell · ← for agents'])).toMatchObject({
+      context: null,
+      permissionModeSeen: 'auto',
+      runningShellCount: 1
+    })
     expect(parseTerminalHudObservation([])).toBeNull()
     expect(parseTerminalHudObservation([''])).toBeNull()
   })

@@ -28,8 +28,10 @@ export type TerminalHudObservation = {
    *  spinner is on screen. */
   activity?: string | null
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
-   *  edits on (shift+tab to cycle)"); 'default' when the footer shows none. */
-  permissionMode: TerminalPermissionMode
+   *  edits on (shift+tab to cycle)"); 'default' when a screen was read and its
+   *  footer shows none; null when no screen was read at all (an observation a
+   *  beacon built on its own), so nothing states a mode nobody saw. */
+  permissionMode: TerminalPermissionMode | null
   /** The mode the footer actually STATED, or null when no footer row was on
    *  screen. `permissionMode` collapses null to 'default' for the pill; anything
    *  that acts on the mode must read this instead. */
@@ -384,7 +386,7 @@ export function parseTerminalHudObservation(
   }
   // No status-line badge, but Claude Code's own footer is on screen: read the
   // context figure Claude Code paints itself once the window runs low. The
-  // model then comes from Orca's hook (agentStatus.model), not from here.
+  // model is not the screen's to state here; the beacon names it, or nothing.
   // The footer is known by its hint or by its mode row: the footers captured
   // with a shell running, in manual mode, or at 46 columns paint no whole
   // "shift+tab to cycle" (review, 2026-09-30). Over a footer known only by
@@ -395,19 +397,39 @@ export function parseTerminalHudObservation(
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
       const context = parseTerminalHudContextWindow(lines[index] ?? '', { ownWarningOnly: !hinted })
       if (context) {
-        return {
-          modelLabel: '',
-          modelId: null,
-          effort: null,
-          context,
-          ...activityField(lines),
-          permissionMode: parseTerminalPermissionMode(lines),
-          permissionModeSeen: readTerminalPermissionMode(lines),
-          ...runningShellCountField(lines)
-        }
+        return claudeFooterObservation(lines, context)
       }
     }
   }
-  // No Claude badge on screen; try the Codex footer before giving up.
-  return parseCodexHudObservation(lines)
+  // No Claude badge on screen; try the Codex footer, which names a model (its
+  // Plan mode paints the same "shift+tab to cycle" hint).
+  const codex = parseCodexHudObservation(lines)
+  if (codex || readTerminalPermissionMode(lines) === null) {
+    return codex
+  }
+  // A bare Claude footer with no figure is still the footer: its mode and its
+  // shell count are read, and the model and the ring are left blank. Returning
+  // nothing here meant a host with no status line never had its mode read, so
+  // the mode stepper pressed Shift+Tab six times on null reads and said the
+  // mode was not available (review, 2026-09-30). Only a footer ROW counts
+  // here, not the hint alone: "shift+tab to cycle" in the conversation would
+  // otherwise state Manual over a footer nobody saw.
+  return claudeFooterObservation(lines, null)
+}
+
+/** Claude Code's own footer with no badge above it: no model, no effort. */
+function claudeFooterObservation(
+  lines: readonly string[],
+  context: TerminalHudContextWindow | null
+): TerminalHudObservation {
+  return {
+    modelLabel: '',
+    modelId: null,
+    effort: null,
+    context,
+    ...activityField(lines),
+    permissionMode: parseTerminalPermissionMode(lines),
+    permissionModeSeen: readTerminalPermissionMode(lines),
+    ...runningShellCountField(lines)
+  }
 }
