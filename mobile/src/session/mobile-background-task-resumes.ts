@@ -19,12 +19,13 @@ import { readString, truncate, type Launch, type Notification } from './mobile-b
 // fails (`"success":false`). A teammate's resume ("Teammate … was not
 // running; resumed it…") names no task id; the roster judges teammates.
 //
-// What ends the new run: its next notification or TaskStop in the window, or
-// the roster dropping the row. An id-only finished list — the beacon's
-// `done=`, and every id an earlier window showed ending — cannot say which
-// run it names, so against a roster row it ends nothing. With no host status
-// at all it still ends the run: a resumed run that finishes mid-turn has its
-// notification dropped by Orca's reader, and nothing else would ever end it.
+// What ends the new run: its next notification, or a TaskStop in the window
+// whose answer says it went through, or the roster dropping the row. An
+// id-only finished list — the beacon's `done=`, and every id an earlier
+// window showed ending — cannot say which run it names, so against a roster
+// row it ends nothing. With no host status at all it still ends the run: a
+// resumed run that finishes mid-turn has its notification dropped by Orca's
+// reader, and nothing else would ever end it.
 //
 // Why the reader needs it (2026-09-28, Claude Code 2.1.283): a38e1687ac3722765
 // stalled at 13:34 ("Agent stalled: no progress for 600s") and never sent
