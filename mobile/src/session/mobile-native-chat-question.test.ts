@@ -481,6 +481,108 @@ describe('the question card for choices whose text sits at the list indent', () 
   })
 })
 
+// The card read every `- ` and `1.` line as a choice, inside a code fence
+// too. A fenced YAML file became the reply's last list: under prose that asks
+// nothing it hid the real choices above it, and under its own `plugins:` key
+// it was a card whose answers were YAML items (review, 2026-09-30).
+// Representative markdown, not captures: the parser reads the hook's
+// lastAssistantMessage, and agent CLIs may not be run from this shell.
+describe('the question card for a reply that holds a code fence', () => {
+  it('keeps the choices above a fenced file whose lines look like a list', () => {
+    const q = parseAgentQuestion(
+      'Which config do you want:\n1. Minimal\n2. Full\n\nFull looks like:\n```yaml\nplugins:\n- a\n- b\n```'
+    )
+    expect(q?.question).toBe('Which config do you want')
+    expect(q?.options).toEqual(['Minimal', 'Full'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('offers no line inside a fence as an answer', () => {
+    expect(
+      parseAgentQuestion(
+        'Here is the current file:\n```yaml\nplugins:\n- a\n- b\n```\nShould I keep it?'
+      )
+    ).toBeNull()
+    expect(parseAgentQuestion('Run this:\n```\n- a\n- b\n```\nDone.')).toBeNull()
+    expect(parseAgentQuestion('Run this:\n~~~\n1. a\n2. b\n~~~\nDone.')).toBeNull()
+  })
+
+  it('shows no card for a reply that is only a fence', () => {
+    expect(parseAgentQuestion('```\n- a\n- b\n```')).toBeNull()
+    expect(parseAgentQuestion('```sh\n1. a\n```')).toBeNull()
+    expect(parseAgentQuestion('```')).toBeNull()
+  })
+
+  it('reads a fence that never closes as running to the end of the reply', () => {
+    expect(parseAgentQuestion('Which one?\n```\n1. a\n2. b')).toBeNull()
+    const q = parseAgentQuestion('Which one?\n1. A\n2. B\n\nFor example:\n```sh\n- a\n- b')
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('closes a longer fence only on a run at least as long', () => {
+    // A four-backtick fence holding a three-backtick line: all of it is code.
+    expect(parseAgentQuestion('Here is the doc:\n````md\n```\n- a\n- b\n````\nDone.')).toBeNull()
+    // A closing run longer than the opener closes it; an info string does not.
+    expect(parseAgentQuestion('Example:\n```\n```sh\n- a\n- b\n`````\nDone.')).toBeNull()
+    const q = parseAgentQuestion('Example:\n````\n```\n- a\n````\n\nWhich one?\n1. A\n2. B')
+    expect(q?.question).toBe('Which one?')
+    expect(q?.options).toEqual(['A', 'B'])
+  })
+
+  it('keeps the choices around a fence indented under one of them (Claude-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which approach?',
+        '',
+        '1. Run the script',
+        '   ```sh',
+        '   - not a choice',
+        '   2. nor this',
+        '   ```',
+        '2. Edit by hand'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which approach?')
+    expect(q?.options).toEqual(['Run the script', 'Edit by hand'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('keeps the choices around a fence indented under one of them (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which way do you want to go?',
+        '- **Pin the plugin** in `config.yaml`:',
+        '  ```yaml',
+        '  plugins:',
+        '  - a@1.2.3',
+        '  ```',
+        '- **Leave the range** and accept the update'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual([
+      '**Pin the plugin** in `config.yaml`:',
+      '**Leave the range** and accept the update'
+    ])
+    expect(q?.optionTokens).toEqual([null, null])
+  })
+
+  it('keeps a numbered list going past a fence between its choices, as past a paragraph', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n\n1. Run the script:\n\n```sh\n- ./fix.sh\n```\n\n2. Edit by hand'
+    )
+    expect(q?.options).toEqual(['Run the script:', 'Edit by hand'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('takes no fence line as the title of the list under it', () => {
+    const q = parseAgentQuestion('```sh\nnpm test\n```\n1. Alpha\n2. Beta')
+    expect(q?.question).toBe('Choose an option')
+    expect(q?.options).toEqual(['Alpha', 'Beta'])
+  })
+})
+
 describe('formatQuestionAnswer', () => {
   const numbered: MobileChatQuestion = {
     question: 'Pick',

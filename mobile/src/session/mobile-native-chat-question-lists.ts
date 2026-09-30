@@ -101,6 +101,39 @@ function resumesAfterParagraph(
   )
 }
 
+/** A code fence's opening run: three or more backticks or tildes, first on
+ *  its line. */
+const FENCE_OPEN = /^\s*(`{3,}|~{3,})(.*)$/
+
+/**
+ * For each line, the index of the line that opened the code fence it is in
+ * (its own index on the opening line), or -1 when it is not code. A fence
+ * closes on a line holding only a run of its own character at least as long
+ * as the one that opened it, as in CommonMark, so a ```` fence can hold a
+ * ``` line and an info string closes nothing. One that never closes runs to
+ * the end of the reply. A backtick run with a backtick after it on the line
+ * is inline code, not a fence.
+ */
+export function codeFenceStarts(lines: readonly string[]): number[] {
+  let open: { run: string; start: number } | null = null
+  return lines.map((line, index) => {
+    if (open === null) {
+      const opener = FENCE_OPEN.exec(line)
+      if (!opener || (opener[1].startsWith('`') && opener[2].includes('`'))) {
+        return -1
+      }
+      open = { run: opener[1], start: index }
+      return index
+    }
+    const { run, start } = open
+    const trimmed = line.trim()
+    if (trimmed.length >= run.length && trimmed === run[0].repeat(trimmed.length)) {
+      open = null
+    }
+    return start
+  })
+}
+
 /**
  * The reply's lists, in order. One list is a run of items of one marker kind
  * at one indent; blank lines do not end it, and a deeper line (a sub-bullet, a
@@ -110,11 +143,38 @@ function resumesAfterParagraph(
  * by blank lines between two numbered or lettered items is part of a loose
  * list when the numbering goes on after it. A line that asks (`?` or `:`),
  * any other prose, or an item of another kind ends the list.
+ *
+ * No line of a code fence (`fenceStarts`, from codeFenceStarts) is an item:
+ * a fenced YAML file or shell listing is code, not choices. A fence indented
+ * under an item belongs to that item. One at the list's own indent is read
+ * as a paragraph is, so the list goes on after it only when the numbering
+ * does; a bullet list ends there.
  */
-export function collectOptionLists(lines: readonly string[]): OptionList[] {
+export function collectOptionLists(
+  lines: readonly string[],
+  fenceStarts: readonly number[]
+): OptionList[] {
   const lists: OptionList[] = []
   let current: OpenList | null = null
+  /** The list whose item holds the fence being read, if one does. */
+  let fenceOwner: OpenList | null = null
   lines.forEach((line, index) => {
+    if (fenceStarts[index] === index) {
+      fenceOwner = null
+      if (current?.paragraph) {
+        current.paragraph.blankAfter = false
+      } else if (current && lineIndent(line) > current.indent) {
+        fenceOwner = current
+      } else if (current) {
+        current.paragraph = { blankAfter: false }
+      }
+    }
+    if (fenceStarts[index] !== -1) {
+      if (fenceOwner) {
+        fenceOwner.list.end = index
+      }
+      return
+    }
     if (line.trim().length === 0) {
       if (current?.paragraph) {
         current.paragraph.blankAfter = true
@@ -161,16 +221,20 @@ export function collectOptionLists(lines: readonly string[]): OptionList[] {
   return lists
 }
 
-/** The nearest non-blank line above `list`, or -1 when there is none or it
- *  belongs to the list before it. */
+/** The nearest non-blank line above `list`, or -1 when there is none, it
+ *  belongs to the list before it, or it is code: a fence line is no title. */
 export function introIndex(
   lines: readonly string[],
   list: OptionList,
-  previous: OptionList | null
+  previous: OptionList | null,
+  fenceStarts: readonly number[]
 ): number {
   let index = list.start - 1
   while (index >= 0 && lines[index].trim().length === 0) {
     index--
   }
-  return previous && index <= previous.end ? -1 : index
+  if (index < 0 || (previous && index <= previous.end) || fenceStarts[index] !== -1) {
+    return -1
+  }
+  return index
 }

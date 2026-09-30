@@ -3,7 +3,12 @@
 // have no structured signal, so we parse the text conservatively and only treat
 // it as a question when a clear option list is present.
 
-import { collectOptionLists, introIndex, QUESTION_LINE } from './mobile-native-chat-question-lists'
+import {
+  codeFenceStarts,
+  collectOptionLists,
+  introIndex,
+  QUESTION_LINE
+} from './mobile-native-chat-question-lists'
 
 export type MobileChatQuestion = {
   question: string
@@ -56,7 +61,8 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   }
 
   const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const lists = collectOptionLists(lines)
+  const fenceStarts = codeFenceStarts(lines)
+  const lists = collectOptionLists(lines, fenceStarts)
   const list = lists.at(-1)
   if (!list) {
     return null
@@ -65,7 +71,7 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   const options = list.items.map((item) => item.label)
   const optionTokens = list.items.map((item) => item.token)
 
-  const questionIndex = introIndex(lines, list, previous)
+  const questionIndex = introIndex(lines, list, previous, fenceStarts)
   const question = questionIndex >= 0 ? lines[questionIndex] : ''
   const questionLooksLikePrompt = QUESTION_LINE.test(question)
   if (previous) {
@@ -75,7 +81,7 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
     const asksEarlier = lists
       .slice(0, -1)
       .some((earlier, i) =>
-        ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null)] ?? '')
+        ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null, fenceStarts)] ?? '')
       )
     if (asksEarlier) {
       return null
