@@ -9,15 +9,26 @@ import {
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
 
+/** An element that is a block of its own wherever the engine puts it. */
+function isBlockElement(node: Node): node is Element {
+  return (
+    node instanceof Element &&
+    /^(p|div|h[1-6]|pre|ul|ol|blockquote|table|hr)$/i.test(node.tagName)
+  )
+}
+
 /**
- * A paragraph that carries a list, as the blocks it really holds: text, the list, then text.
+ * An element that holds blocks, as the blocks it really holds: a run of text, a list, a paragraph,
+ * each its own block, in order.
  *
  * `insertUnorderedList` nests the `<ul>` inside the `<p>` it was given rather than replacing it —
  * measured on WebKit 26.4 and Chromium 147 both — and reading such a paragraph inline gave back its
  * own text with no marker, so a list the user typed did not survive a round trip. Structure decides
- * what a list is; the DOM is left as the engine made it.
+ * what a list is; the DOM is left as the engine made it. Enter inside a quote makes a second `<p>`
+ * or `<div>` inside it, and reading the quote inline glued the two paragraphs' words together
+ * (review, 2026-09-30), so every block element counts, not only a list.
  */
-function blocksAroundLists(element: Element): string {
+function containerBlocks(element: Element): string[] {
   const blocks: string[] = []
   let inline = ''
   const flushInline = () => {
@@ -27,25 +38,37 @@ function blocksAroundLists(element: Element): string {
     inline = ''
   }
   for (const child of Array.from(element.childNodes)) {
-    if (!(child instanceof Element)) {
-      inline += inlineMarkdown(child)
+    if (isBlockElement(child)) {
+      flushInline()
+      blocks.push(blockMarkdown(child))
       continue
     }
-    const tag = child.tagName.toLowerCase()
-    if (tag === 'ul' || tag === 'ol') {
+    if (child instanceof Element && holdsUnownedList(child)) {
       flushInline()
-      blocks.push(listMarkdown(child, 0))
-      continue
-    }
-    if (holdsUnownedList(child)) {
-      flushInline()
-      blocks.push(blocksAroundLists(child))
+      blocks.push(...containerBlocks(child))
       continue
     }
     inline += inlineMarkdown(child)
   }
   flushInline()
-  return blocks.filter(Boolean).join('\n\n')
+  return blocks.filter((block) => block.trim().length > 0)
+}
+
+/** Whether a paragraph holds blocks rather than only words: a list the engine nested, a `<p>`. */
+function holdsBlocks(element: Element): boolean {
+  return holdsUnownedList(element) || Array.from(element.childNodes).some(isBlockElement)
+}
+
+/** A quote as its blocks, each line marked, and a bare `>` between blocks rather than `> `. */
+function quoteMarkdown(quote: Element): string {
+  const inner = containerBlocks(quote).join('\n\n')
+  if (!inner) {
+    return '>'
+  }
+  return inner
+    .split('\n')
+    .map((line) => (line.trim() ? `> ${line}` : '>'))
+    .join('\n')
 }
 
 /**
@@ -66,14 +89,10 @@ export function blockMarkdown(node: Node): string {
     return `${'#'.repeat(Number(tag.slice(1)))} ${inlineChildren(node).trim()}`
   }
   if (tag === 'p' || tag === 'div') {
-    return holdsUnownedList(node) ? blocksAroundLists(node) : inlineChildren(node).trim()
+    return holdsBlocks(node) ? containerBlocks(node).join('\n\n') : inlineChildren(node).trim()
   }
   if (tag === 'blockquote') {
-    return inlineChildren(node)
-      .trim()
-      .split('\n')
-      .map((line) => `> ${line}`)
-      .join('\n')
+    return quoteMarkdown(node)
   }
   if (tag === 'pre') {
     // Raw text, not `textContent()`: a verbatim block is written back byte for byte, a no-break

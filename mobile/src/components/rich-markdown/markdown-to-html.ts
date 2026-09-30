@@ -25,6 +25,31 @@ function endsListItemWords(line: string): boolean {
 }
 
 /**
+ * A quote's lines, markers off, as its paragraphs. A blank quote line is a paragraph break, which
+ * a save writes back as a bare `>` (html-block-markdown.ts); it was two breaks inside one
+ * paragraph until 2026-09-30, and saved as `> ` with a trailing space. Inside a paragraph every
+ * source line is still drawn on its own line, as quotes always have been, with its hard-break
+ * spaces or backslash left in its text.
+ */
+function quoteHtml(lines: readonly string[]): string {
+  const paragraphs: string[][] = [[]]
+  for (const line of lines) {
+    if (line.trim()) {
+      paragraphs[paragraphs.length - 1]!.push(line)
+    } else if (paragraphs[paragraphs.length - 1]!.length > 0) {
+      paragraphs.push([])
+    }
+  }
+  const blocks = paragraphs
+    .filter((paragraph) => paragraph.length > 0)
+    .map(
+      (paragraph) =>
+        `<p>${renderInline(paragraph.join('\n').trim()).replace(/\n/g, '<br />')}</p>`
+    )
+  return `<blockquote>${blocks.join('') || '<p></p>'}</blockquote>`
+}
+
+/**
  * Markdown as the markup the editable surface holds.
  *
  * Block by block rather than by one pass of replacements, because fenced code, tables and lists
@@ -106,9 +131,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
         index += 1
       }
-      html.push(
-        `<blockquote><p>${renderInline(quote.join('\n').trim()).replace(/\n/g, '<br />')}</p></blockquote>`
-      )
+      html.push(quoteHtml(quote))
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
