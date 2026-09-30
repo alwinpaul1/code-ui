@@ -3,13 +3,14 @@ import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { useMobileLiveTranscription } from '../hooks/use-mobile-live-transcription'
-import { liveDictationDelta } from '../hooks/mobile-live-dictation-delta'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { chooseDictationEngine } from '../dictation/dictation-engine'
 import {
   deliverSessionDesktopDictation,
-  placeSpokenText
+  placeSpokenText,
+  type LiveDictationTarget
 } from '../dictation/place-dictation-transcript'
+import { eraseLiveTranscript, ptyDictationTarget } from '../dictation/live-terminal-dictation'
 import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import {
@@ -126,9 +127,7 @@ export function useMobileSessionNativeChatDictation(
   const composerCursorRef = useRef(0)
   const chatInsertRef = useRef({ prefix: '', suffix: '' })
   const [dictationPaint, setDictationPaint] = useState<DictationPaint | null>(null)
-  // Where a live transcript lands: the chat composer, the buffered command box,
-  // or (live terminal input) the PTY line itself, revised with backspaces.
-  const liveTargetRef = useRef<{ kind: 'chat' } | { kind: 'buffered' } | { kind: 'pty'; handle: string; typed: string }>({ kind: 'chat' })
+  const liveTargetRef = useRef<LiveDictationTarget>({ kind: 'chat' })
   const onSpoken = (text: string, _final?: boolean, interim = '') => {
     const { prefix, suffix } = chatInsertRef.current
     setDictationPaint(placeSpokenText(
@@ -182,7 +181,7 @@ export function useMobileSessionNativeChatDictation(
         liveBaseTextRef.current = draft
         setDictationPaint(null)
       } else if (activeHandle && liveInputTerminalHandles.has(activeHandle)) {
-        liveTargetRef.current = { kind: 'pty', handle: activeHandle, typed: '' }
+        liveTargetRef.current = ptyDictationTarget(activeHandle, liveTargetRef.current)
       } else {
         liveTargetRef.current = { kind: 'buffered' }
         setInput((current) => {
@@ -236,9 +235,8 @@ export function useMobileSessionNativeChatDictation(
         nativeChatController.setChatComposerText(() => base)
       } else if (target.kind === 'buffered') {
         setInput(() => base)
-      } else if (target.kind === 'pty' && target.typed) {
-        void sendLiveTerminalInput(target.handle, liveDictationDelta(target.typed, ''))
-        target.typed = ''
+      } else if (target.kind === 'pty') {
+        eraseLiveTranscript(target, sendLiveTerminalInput)
       }
     }
     void dictation.cancel()

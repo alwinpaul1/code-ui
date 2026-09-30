@@ -1,14 +1,13 @@
 import { applyLiveTranscript, paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-transcript'
-import { liveDictationDelta } from '../hooks/mobile-live-dictation-delta'
 import {
   appendBufferedDictation,
   routeDictationTranscript
 } from '../terminal/terminal-live-dictation-routing'
+import { typeLiveTranscript, type PtyDictationTarget } from './live-terminal-dictation'
 
-export type LiveDictationTarget =
-  | { kind: 'chat' }
-  | { kind: 'buffered' }
-  | { kind: 'pty'; handle: string; typed: string }
+/** Where a phone-recogniser transcript lands: the chat composer, the buffered command box, or (live
+ *  terminal input) the PTY line itself, revised with backspaces (`live-terminal-dictation.ts`). */
+export type LiveDictationTarget = { kind: 'chat' } | { kind: 'buffered' } | PtyDictationTarget
 
 type ComposerUpdate = (update: () => string) => void
 type InputUpdate = (update: (current: string) => string) => void
@@ -49,11 +48,7 @@ export function placeLiveTranscript(
     setInput(() => applyLiveTranscript(base, text))
     return
   }
-  const delta = liveDictationDelta(target.typed, text)
-  target.typed = text
-  if (delta) {
-    void sendLiveTerminalInput(target.handle, delta)
-  }
+  typeLiveTranscript(target, text, sendLiveTerminalInput)
 }
 
 type DesktopDictation = {

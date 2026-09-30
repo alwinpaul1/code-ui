@@ -211,7 +211,11 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // keeps the desktop's reason; readFileTab's generic copy carries the reason.
 // Then: it never reads the disk for a file the desktop called binary, read off
 // the refusal's code and message both.
-const HEAD_CALLBACK_BODY_SHA256 = 'f4b6162c9d5792a45af22d3ada917e9cf10c80f51c5f2076f042392a81bee929'
+// 2026-09-30: a live terminal dictation's target comes from ptyDictationTarget in
+// startDictation, and cancelDictation erases through eraseLiveTranscript instead of
+// sending its own delta (live-terminal-dictation.ts, which counts only the bytes the
+// terminal took). Only those two bodies moved. Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '5dc1e6de0a5e831d3f6e75e7abfa934350bdfbf0442b849d9a8ab8fa50593852'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -384,8 +388,13 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // reads the footer through terminal-mode-stepper's shownPermissionMode, which
 // is outside this family, so the 'default' and 'manual' of its old inline
 // asShown leave with it. No other literal moved.
+// 671 since 2026-09-30 (later): startDictation's `{ kind: 'pty', handle, typed: '' }`
+// and cancelDictation's own erase (`liveDictationDelta(target.typed, '')`, then
+// `target.typed = ''`) moved into live-terminal-dictation.ts, outside this family:
+// one 'pty' and three '' leave. Checked by diffing the reader's output against
+// 0bf636a3; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1c995658248303a4ed3a65e9a46e88c72abfbb598cc3c5418a0c496853ab04eb'
+  'f293dbb461a9c036c16df89414ac34578e56940df7405e57bb5c31c456a84b46'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1062,7 +1071,9 @@ describe('mobile session route extraction parity', () => {
     // 676 since 2026-09-26 (later): FileReader's source view moved out of the family.
     // 677 since 2026-09-29: the header's 'connected' check for the badge's `watching`.
     // 675 since 2026-09-30: 'default' and 'manual' moved to shownPermissionMode.
-    expect(strings).toHaveLength(675)
+    // 671 since 2026-09-30 (later): the live terminal dictation's 'pty' and three '' moved to
+    // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
+    expect(strings).toHaveLength(671)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
