@@ -74,6 +74,70 @@ describe('applyAutocomplete', () => {
   })
 })
 
+// A pick with the caret inside a mention replaced only the part before the
+// caret: 'open @src/app.ts now' with the caret on the `c` of `src` became
+// 'open @src/main.ts c/app.ts now', and the composer sent that.
+describe('a pick with the caret inside the token', () => {
+  const pick = (text: string, caret: number, value: string) => {
+    const trigger = detectAutocompleteTrigger(text, caret)
+    return trigger ? applyAutocomplete(text, trigger, value) : null
+  }
+
+  it('replaces the whole mention, not just the part before the caret', () => {
+    expect(detectAutocompleteTrigger('open @src/app.ts now', 8)).toEqual({
+      kind: 'file',
+      query: 'sr',
+      start: 5,
+      end: 16
+    })
+    expect(pick('open @src/app.ts now', 8, '@src/main.ts')).toEqual({
+      text: 'open @src/main.ts now',
+      // Just past the inserted token and the space that already followed it.
+      cursor: 'open @src/main.ts '.length
+    })
+  })
+
+  it('replaces the whole mention when it ends the draft', () => {
+    expect(pick('open @src/app.ts', 8, '@src/main.ts')).toEqual({
+      text: 'open @src/main.ts ',
+      cursor: 'open @src/main.ts '.length
+    })
+  })
+
+  it('replaces the whole slash token with the caret inside it', () => {
+    expect(detectAutocompleteTrigger('/revi ship', 3)).toMatchObject({ query: 're', end: 5 })
+    expect(pick('/revi ship', 3, '/review')).toEqual({
+      text: '/review ship',
+      cursor: '/review '.length
+    })
+  })
+
+  it('adds no second space when the caret was at the end of a token with words after it', () => {
+    expect(pick('look at @comp more', 13, '@src/App.tsx')).toEqual({
+      text: 'look at @src/App.tsx more',
+      cursor: 'look at @src/App.tsx '.length
+    })
+  })
+
+  it('replaces a lone trigger character', () => {
+    expect(pick('@', 1, '@src/a.ts')).toEqual({ text: '@src/a.ts ', cursor: 10 })
+    expect(pick('@ now', 1, '@src/a.ts')).toEqual({ text: '@src/a.ts now', cursor: 10 })
+    expect(pick('/', 1, '/clear')).toEqual({ text: '/clear ', cursor: 7 })
+  })
+
+  it('keeps a line break that follows the token', () => {
+    expect(pick('@sr\nnext', 2, '@src/a.ts')).toEqual({ text: '@src/a.ts \nnext', cursor: 10 })
+  })
+
+  it('offers no pick while the caret sits before the trigger character', () => {
+    // The caret is not in the token, so a pick would replace a token the user
+    // never typed into.
+    expect(detectAutocompleteTrigger('@src', 0)).toBeNull()
+    expect(detectAutocompleteTrigger('validate /rev', 9)).toBeNull()
+    expect(detectAutocompleteTrigger('', 0)).toBeNull()
+  })
+})
+
 describe('rankSuggestions', () => {
   it('prefers prefix matches on the basename', () => {
     const out = rankSuggestions(['src/app/Main.tsx', 'src/AppBar.tsx', 'lib/zapp.ts'], 'app')

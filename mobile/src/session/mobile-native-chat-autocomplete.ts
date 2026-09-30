@@ -10,11 +10,13 @@ export type AutocompleteKind = 'file' | 'slash'
 
 export type AutocompleteTrigger = {
   kind: AutocompleteKind
-  /** The query typed after the trigger char (may be empty). */
+  /** The text between the trigger char and the caret (may be empty). */
   query: string
   /** Index of the trigger char in the text (inclusive). */
   start: number
-  /** Index just past the cursor / token end (exclusive) — the replace span end. */
+  /** Index just past the token's end (exclusive): the next whitespace, or the
+   *  end of the text. This is the replace span's end, even with the caret
+   *  inside the token, so a pick replaces the whole token. */
   end: number
 }
 
@@ -28,7 +30,9 @@ const TOKEN_CHAR = /[^\s]/
  *  because the walk left stops at the token's own first character. Whether a
  *  pick is DISPATCHABLE is a separate question, and `classifyNativeChatSend`
  *  already answers it off the draft's first token alone. Returns null when the
- *  cursor is not inside such a token. */
+ *  cursor is not inside such a token, which includes a caret sitting just
+ *  before the trigger char: a pick there would replace a token the user never
+ *  typed into. */
 export function detectAutocompleteTrigger(
   text: string,
   cursor: number
@@ -40,6 +44,9 @@ export function detectAutocompleteTrigger(
     i--
   }
   const triggerIndex = i + 1
+  if (triggerIndex >= pos) {
+    return null
+  }
   const triggerChar = text[triggerIndex]
   if (triggerChar !== '@' && triggerChar !== '/') {
     return null
@@ -53,24 +60,37 @@ export function detectAutocompleteTrigger(
   if (/\s/.test(query)) {
     return null
   }
+  // Walk right from the caret to the token's end, so a pick with the caret
+  // mid-token replaces all of it rather than leaving its tail behind.
+  let end = pos
+  while (end < text.length && TOKEN_CHAR.test(text[end]!)) {
+    end++
+  }
   return {
     kind: triggerChar === '@' ? 'file' : 'slash',
     query,
     start: triggerIndex,
-    end: pos
+    end
   }
 }
 
-/** Replace the trigger span with `value`, leaving a trailing space and the
- *  cursor after it. Returns the new text and the new cursor position. */
+/** Replace the trigger span with `value` and a space, and put the cursor after
+ *  the space. A space that already follows the span is reused rather than
+ *  doubled. Returns the new text and the new cursor position. */
 export function applyAutocomplete(
   text: string,
   trigger: AutocompleteTrigger,
   value: string
 ): { text: string; cursor: number } {
+  const rest = text.slice(trigger.end)
+  if (rest.startsWith(' ')) {
+    return {
+      text: text.slice(0, trigger.start) + value + rest,
+      cursor: trigger.start + value.length + 1
+    }
+  }
   const inserted = `${value} `
-  const next = text.slice(0, trigger.start) + inserted + text.slice(trigger.end)
-  return { text: next, cursor: trigger.start + inserted.length }
+  return { text: text.slice(0, trigger.start) + inserted + rest, cursor: trigger.start + inserted.length }
 }
 
 /** Rank suggestions for a query: case-insensitive, prefix matches first, then
