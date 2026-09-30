@@ -234,6 +234,19 @@ describe('skill suggestion bounds', () => {
     expect(substringChecks).toBeLessThanOrEqual(16)
   })
 
+  it('keeps a plugin skill beside the personal skill that shares its bare name', () => {
+    const home = { name: 'deploy', description: null, sourceKind: 'home' as const, sourceLabel: '' }
+    const plugin = {
+      name: 'deploy',
+      description: null,
+      sourceKind: 'plugin' as const,
+      sourceLabel: 'Claude plugin code-review'
+    }
+    expect(rankSkillSuggestions([home, home, plugin, plugin], 'deploy', 8)).toEqual([home, plugin])
+    expect(rankSkillSuggestions([plugin], 'deploy', 8)).toEqual([plugin])
+    expect(rankSkillSuggestions([], 'deploy', 8)).toEqual([])
+  })
+
   it('keeps prefix matches ahead of description matches', () => {
     const skills = [
       { name: 'deploy', description: 'run a review first' },

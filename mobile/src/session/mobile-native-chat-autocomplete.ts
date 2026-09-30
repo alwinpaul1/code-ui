@@ -4,6 +4,7 @@
 
 import type { SlashCommandSuggestion } from '../../../src/shared/native-chat-slash-commands'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
+import { nativeChatSkillCommandName } from './mobile-native-chat-skill-command'
 
 export type AutocompleteKind = 'file' | 'slash'
 
@@ -124,36 +125,42 @@ export function rankSlashCommandSuggestions(
   return [...prefix, ...substring].slice(0, limit)
 }
 
-/** Rank discovered skills for a `/` query: one row per name (the same skill can
- *  live in several roots), prefix matches first, then substring, capped. */
+/** Rank discovered skills for a `/` query: one row per dispatch token (the same
+ *  skill can live in several roots), prefix matches first, then substring,
+ *  capped. The token, not the bare name: a plugin's `deploy` is dispatched as
+ *  `/<plugin>:deploy`, a different command from a personal `deploy`, and
+ *  typing `/<plugin>:` has to find it. The bare name still matches too. */
 export function rankSkillSuggestions(
   skills: readonly DiscoveredSkill[],
   query: string,
   limit = 12
 ): DiscoveredSkill[] {
   const seen = new Set<string>()
-  const unique: DiscoveredSkill[] = []
+  const unique: { skill: DiscoveredSkill; token: string }[] = []
   for (const skill of skills) {
-    const name = skill.name.trim()
-    if (!name || seen.has(name)) {
+    const token = nativeChatSkillCommandName(skill)
+    if (!token || seen.has(token)) {
       continue
     }
-    seen.add(name)
-    unique.push(skill)
+    seen.add(token)
+    unique.push({ skill, token })
   }
   const q = query.toLowerCase()
   if (q.length === 0) {
-    return unique.slice(0, limit)
+    return unique.slice(0, limit).map((entry) => entry.skill)
   }
   const prefix: DiscoveredSkill[] = []
   const substring: DiscoveredSkill[] = []
-  for (const skill of unique) {
+  for (const { skill, token } of unique) {
     const lower = skill.name.toLowerCase()
-    if (lower.startsWith(q)) {
+    const tokenLower = token.toLowerCase()
+    if (lower.startsWith(q) || tokenLower.startsWith(q)) {
       prefix.push(skill)
     } else if (
       substring.length < limit &&
-      (lower.includes(q) || (skill.description ?? '').toLowerCase().includes(q))
+      (lower.includes(q) ||
+        (tokenLower !== lower && tokenLower.includes(q)) ||
+        (skill.description ?? '').toLowerCase().includes(q))
     ) {
       substring.push(skill)
     }
