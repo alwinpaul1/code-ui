@@ -1,11 +1,12 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { fileURLToPath } from 'node:url'
 import { z } from 'zod'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
-import { ANSWER_TOO_LONG_FOR_HOST } from './mobile-structured-question-response'
+import { ANSWER_TOO_LONG, ANSWER_TOO_LONG_FOR_HOST } from './mobile-structured-question-response'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -23,6 +24,17 @@ const OLD_RESPOND_PARAMS = z
     optionId: z.string().min(1, 'Invalid option id').max(1024, 'Invalid option id')
   })
   .strict()
+
+// The v1.4.217 host's own schema, loaded by a computed path (the params-contract boundary census reads
+// static specifiers; a test is not bundled).
+const HOST_PARAMS_MODULE = fileURLToPath(
+  new URL('../../../src/shared/rpc-contract/structured-agent-session-params.ts', import.meta.url)
+)
+const { RespondToQuestionParams } = (await import(
+  /* @vite-ignore */ HOST_PARAMS_MODULE
+)) as typeof import('../../../src/shared/rpc-contract/structured-agent-session-params')
+let hostSchema: { safeParse: (value: unknown) => z.ZodSafeParseResult<unknown> } =
+  OLD_RESPOND_PARAMS
 
 const LONG = `${'The migration plan needs a rollback step. '.repeat(40)}Then verify.`
 
@@ -77,7 +89,7 @@ describe('a long typed answer sent to a host older than Orca 1.4.217', () => {
   const onSendError = vi.fn()
   const sendRequest = vi.fn(async (method: string, params?: Record<string, unknown>) => {
     if (method === 'agentSession.respondToQuestion') {
-      const parsed = OLD_RESPOND_PARAMS.safeParse(params)
+      const parsed = hostSchema.safeParse(params)
       return parsed.success
         ? {
             ok: true,
@@ -120,6 +132,7 @@ describe('a long typed answer sent to a host older than Orca 1.4.217', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    hostSchema = OLD_RESPOND_PARAMS
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -154,6 +167,35 @@ describe('a long typed answer sent to a host older than Orca 1.4.217', () => {
       expect(
         await hook!.respondQuestion(formatQuestionFreeTextAnswer(hook!.question!, 'custom answer'))
       ).toBe(true)
+    })
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
+  it('says to shorten it, not to update Orca, when a 1.4.217 host refuses it as too big', async () => {
+    hostSchema = RespondToQuestionParams
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotWithQuestion()))
+    const seventyThousand = 'a'.repeat(70_000)
+
+    await act(async () => {
+      expect(
+        await hook!.respondQuestion(formatQuestionFreeTextAnswer(hook!.question!, seventyThousand))
+      ).toBe(false)
+    })
+
+    expect(onSendError).toHaveBeenCalledWith(ANSWER_TOO_LONG)
+    expect(onSendError).not.toHaveBeenCalledWith(ANSWER_TOO_LONG_FOR_HOST)
+    expect(hook!.question).toBeTruthy()
+  })
+
+  it('still accepts a long answer that fits on a 1.4.217 host', async () => {
+    hostSchema = RespondToQuestionParams
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() => listener?.(snapshotWithQuestion()))
+    await act(async () => {
+      expect(await hook!.respondQuestion(formatQuestionFreeTextAnswer(hook!.question!, LONG))).toBe(
+        true
+      )
     })
     expect(onSendError).not.toHaveBeenCalled()
   })

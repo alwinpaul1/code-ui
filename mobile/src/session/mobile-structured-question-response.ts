@@ -30,17 +30,24 @@ export function structuredQuestionResponseFields(target: {
 }
 
 /**
- * What the phone says when a host refuses a call carrying `answers` at the schema. A host older than
- * Orca 1.4.217 has a strict `respondToQuestion` that knows only `optionId`, so it answers with raw
- * zod text ("Invalid input: expected string, received undefined") that names nothing. The only
- * reason the phone sends `answers` is that the packed id would not fit, so the cause is the length.
+ * What the phone says when a host refuses a call carrying `answers` at the schema. Two hosts do:
+ * one older than Orca 1.4.217 has a strict `respondToQuestion` that knows only `optionId`, and
+ * answers with raw zod text that names nothing ("Invalid input: expected string, received
+ * undefined"); a 1.4.217 host takes the field but caps one answer at 64 KiB ("Too big: expected
+ * string to have <=65536 characters", or "Answer is too large" past the byte cap). The wording
+ * follows the refusal's cause, not the assumption that the host is old.
  */
 export const ANSWER_TOO_LONG_FOR_HOST =
   "This answer is too long for this desktop's Orca. Update Orca to 1.4.217 or shorten the answer."
+export const ANSWER_TOO_LONG = 'This answer is too long. Shorten it and send it again.'
+const HOST_SAYS_TOO_BIG = /too (?:big|large|long)|expected string to have <=\s*\d+/i
 
 export function explainLongAnswerFailure(failure: {
   code: string | null
   message: string
 }): string {
-  return failure.code === 'invalid_argument' ? ANSWER_TOO_LONG_FOR_HOST : failure.message
+  if (failure.code !== 'invalid_argument') {
+    return failure.message
+  }
+  return HOST_SAYS_TOO_BIG.test(failure.message) ? ANSWER_TOO_LONG : ANSWER_TOO_LONG_FOR_HOST
 }
