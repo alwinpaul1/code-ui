@@ -333,6 +333,107 @@ describe("an approval menu keeps each agent's own choices", () => {
       askWhileWaiting('Do you want to proceed?\n1. **Yes**\n2. **No**')?.options.map((o) => o.send)
     ).toEqual(['1', '2'])
   })
+
+  // The rows the wider refusal words and the (y/n) hint (2026-10-01) must
+  // leave alone: each agent's way to say no ("No, and tell Claude…", "No, and
+  // tell Codex…"), and the `(esc)` and `(p)` hints wrapped onto rows of their
+  // own. Claude Code's Bash dialog as mobile-terminal-permission-options.test.ts
+  // pins it (its build is not recorded there), cut out of its frame.
+  it("keeps Claude Code's Bash dialog with wrapped rows a numbered permission card", () => {
+    const permission = askWhileWaiting(
+      [
+        'Bash command',
+        '  rm -rf build',
+        '  Remove the build directory',
+        'Do you want to proceed?',
+        '❯ 1. Yes',
+        "  2. Yes, and don't ask again for rm commands in",
+        '     /Users/alwinpaul/Desktop/Project/Code UI',
+        '  3. No, and tell Claude what to do differently',
+        '     (esc)'
+      ].join('\n')
+    )
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: "Yes, and don't ask again for rm commands in", send: '2' },
+      { label: 'No, and tell Claude what to do differently', send: '3' }
+    ])
+  })
+
+  // The wrapped row codex-terminal-permission.test.ts pins for the same dialog.
+  it("keeps Codex's dialog with a wrapped don't-ask-again row a numbered permission card", () => {
+    const wrapped = [...CODEX_DIALOG]
+    wrapped.splice(
+      8,
+      1,
+      "  2. Yes, and don't ask again for commands that start with",
+      '     `pnpm exec vitest` (p)'
+    )
+    const permission = askWhileWaiting(wrapped.join('\n'))
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options.map((o) => o.send)).toEqual(['1', '2', '3'])
+    expect(permission?.options[2]?.label).toBe('No, and tell Codex what to do differently (esc)')
+  })
+})
+
+// 2026-10-01 review: an approval menu worded "Approve / Decline" or "Yes /
+// Not now" lost its "Permission requested" card. Neither "Decline" nor "Not
+// now" read as a way to say no, so the reply had no menu, and the question
+// card drew the two choices instead. These menus are agent prose, not a
+// captured screen: no agent build is recorded for them.
+describe('an approval menu worded outside Yes and No', () => {
+  it('keeps the permission card for a menu worded Approve and Decline', () => {
+    const permission = askWhileWaiting('Do you want to proceed?\n 1. Approve\n 2. Decline')
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options).toEqual([
+      { label: 'Approve', send: '1' },
+      { label: 'Decline', send: '2' }
+    ])
+  })
+
+  it('keeps the permission card for a menu worded Yes and Not now', () => {
+    const permission = askWhileWaiting('Do you want to proceed?\n 1. Yes\n 2. Not now')
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: 'Not now', send: '2' }
+    ])
+  })
+
+  it('keeps the permission card for a menu whose no is "Not yet…"', () => {
+    expect(
+      askWhileWaiting('Apply the migration? Please confirm.\n1. Yes\n2. Not yet, show me the SQL')
+        ?.options
+    ).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: 'Not yet, show me the SQL', send: '2' }
+    ])
+  })
+
+  it('does not read "Not sure" as a way to say no', () => {
+    const text = 'Do you want to proceed?\n1. Yes\n2. Not sure'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('does not read "Declined…" or "Nothing…" as a way to say no', () => {
+    for (const text of [
+      'Which do you want?\n1. Allow retries\n2. Declined payments first',
+      'Which do you want?\n1. Allow retries\n2. Nothing for now'
+    ]) {
+      expect(askWhileWaiting(text), text).toBeNull()
+      expect(parseAgentQuestion(text)?.optionTokens, text).toEqual(['1', '2'])
+    }
+  })
+
+  it('asks Allow or Deny for steps that all begin "Decline…" or "Not now…"', () => {
+    expect(
+      askWhileWaiting(
+        'Next steps:\n1. Decline the stale invites\n2. Not now: the migration\n\nDo you want to proceed?'
+      )?.options
+    ).toEqual(ALLOW_DENY)
+  })
 })
 
 describe('a numbered list in a permission ask, at its degenerate sizes and places', () => {

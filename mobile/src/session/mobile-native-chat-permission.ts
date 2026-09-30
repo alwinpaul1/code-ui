@@ -123,8 +123,12 @@ function looksLikePermissionAsk(text: string): boolean {
 // How an option of an approval menu begins, once the emphasis in front of it
 // is gone: a way to say yes, or a way to say no. Claude Code's plan review
 // says no with "Tell Claude what to change" (claude-plan-permission.ts).
+// "Decline", "Not now" and "Not yet" are agent prose, no captured screen: a
+// menu of "Approve / Decline" or "Yes / Not now" lost its card to the question
+// card without them (2026-10-01). "Not sure" is no way to say no.
 const AFFIRMS = /^(?:yes|allow|approve|always|proceed)(?![\p{L}\p{N}])/iu
-const REFUSES = /^(?:no|deny|reject|cancel|skip|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
+const REFUSES =
+  /^(?:no|deny|decline|reject|cancel|skip|not\s+(?:now|yet)|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
 
 function approvalAnswer(label: string): 'yes' | 'no' | null {
   const plain = label.replace(/^[*_`]+/, '')
