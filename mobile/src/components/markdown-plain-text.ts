@@ -8,6 +8,7 @@ import {
 import { afterRefusedUnderscoreOpener, autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { isRemoteImageUrl } from './markdown-image-source'
+import { markdownLinkDestination } from './markdown-link-destination'
 import { listMarker } from './mobile-markdown-list-marker'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
 import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
@@ -27,20 +28,11 @@ import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mo
 const WEB_HREF = /^(https?:|mailto:)/i
 const DATA_URL = /^data:/i
 
-/** A link's destination without its title: `https://x.dev "The docs"` is
- *  `https://x.dev`. Only a quoted title comes off; the link on screen opens
- *  an address with a space in it whole, so the copy keeps it whole too. (An
- *  `<…>` destination never gets here: the preview's HTML cleanup takes it for
- *  a tag first, on screen too.) */
-function destination(href: string): string {
-  return href.trim().replace(/\s+("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')$/, '')
-}
-
 /** A link's words, with the address after them when it is a web one the
  *  words do not already spell. A file link's path is the app's to open, not
  *  the reader's to paste. */
 function linkText(label: string, href: string): string {
-  const address = destination(href)
+  const address = markdownLinkDestination(href)
   if (!WEB_HREF.test(address) || label === address) {
     return label || address
   }
@@ -53,7 +45,7 @@ function linkText(label: string, href: string): string {
  *  file one as its words with the path under them, the fallback it draws. */
 function imagePlainText(markedAlt: string, url: string): string {
   const alt = markdownInlinePlainText(markedAlt)
-  const address = destination(url)
+  const address = markdownLinkDestination(url)
   if (DATA_URL.test(address)) {
     return alt
   }
@@ -88,7 +80,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
     const address = match.group === ADDRESS_TOKEN_GROUP
     if (link?.image) {
       const words = markdownInlinePlainText(link.label) || 'image'
-      out += label || DATA_URL.test(destination(link.href)) ? words : linkText(words, link.href)
+      out += label || DATA_URL.test(markdownLinkDestination(link.href)) ? words : linkText(words, link.href)
     } else if (label && (link || address)) {
       out += token
     } else if (link) {

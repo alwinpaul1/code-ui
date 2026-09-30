@@ -6,6 +6,7 @@ import {
 } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { unescapeMarkdownText } from '../markdown-inline-escapes'
+import { markdownLinkDestination } from '../markdown-link-destination'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
@@ -299,7 +300,7 @@ export function parseInline(text: string, label = false): InlineToken[] {
     } else if (m.link && label) {
       tokens.push({ kind: 'text', text: token })
     } else if (m.link) {
-      tokens.push({ kind: 'link', text: m.link.label || 'image', url: m.link.href })
+      tokens.push({ kind: 'link', text: m.link.label || 'image', url: markdownLinkDestination(m.link.href) })
     } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
