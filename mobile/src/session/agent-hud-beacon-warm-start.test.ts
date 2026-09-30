@@ -209,3 +209,27 @@ describe('a malformed record in the store', () => {
     expect((await readWarmStartBeacons())['terminal-1']?.desktopPrompts).toEqual([])
   })
 })
+
+// Review of 2026-09-30: a long desk prompt cut through a multibyte character
+// was read with U+FFFD at its end, and never retired against its transcript
+// row. The reader drops it now, but copies an older build stored keep it, and
+// a relaunch after the upgrade drew each of them twice again.
+describe('a cut desk prompt an older build stored', () => {
+  beforeEach(() => store.clear())
+
+  it('comes back without the half character the cut left, so it can retire', async () => {
+    const stored = {
+      ...beacon('opus'),
+      desktopPrompts: [
+        { nonce: '1', text: 'Schöne Grü\uFFFD', cut: true },
+        // Not cut: a U+FFFD the person typed is theirs.
+        { nonce: '2', text: 'typed \uFFFD' },
+        // Nothing left once the half character goes: no words to draw or retire.
+        { nonce: '3', text: '\uFFFD', cut: true }
+      ]
+    }
+    store.set('codeui:agent-hud-beacons.v2', JSON.stringify({ 'terminal-1': stored }))
+    const texts = (await readWarmStartBeacons())['terminal-1']?.desktopPrompts.map((prompt) => prompt.text)
+    expect(texts).toEqual(['Schöne Grü', 'typed \uFFFD'])
+  })
+})

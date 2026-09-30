@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
+import { withoutCutTail } from './agent-hud-beacon-desktop-prompt'
 
 /**
  * The last beacon each terminal wrote, kept across app launches.
@@ -65,7 +66,13 @@ function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
   // without it arrived no later than the record's last beacon.
   const arrivedBy = typeof record.receivedAt === 'number' ? record.receivedAt : 0
   const prompts = Array.isArray(record.desktopPrompts)
-    ? record.desktopPrompts.filter(wellFormedPrompt).map((prompt) => (typeof prompt.seenAt === 'number' ? prompt : { ...prompt, seenAt: arrivedBy }))
+    ? record.desktopPrompts
+        .filter(wellFormedPrompt)
+        .map((prompt) => (typeof prompt.seenAt === 'number' ? prompt : { ...prompt, seenAt: arrivedBy }))
+        // A cut copy an older build read keeps the U+FFFD of the character
+        // its cut split, and never retired (agent-hud-beacon-desktop-prompt.ts).
+        .map((prompt) => (prompt.cut === true ? { ...prompt, text: withoutCutTail(prompt.text) } : prompt))
+        .filter((prompt) => prompt.text.length > 0)
     : []
   // A list that is not one is left out, not kept: the restore maps over it.
   const kept = Array.isArray(agentMessagePrompts) ? agentMessagePrompts.filter(wellFormedPrompt) : undefined
