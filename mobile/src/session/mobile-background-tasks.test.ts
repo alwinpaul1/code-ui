@@ -186,8 +186,10 @@ describe('a Monitor is a background task too', () => {
       ],
       NOW
     )
+    // A monitor, not a shell: the card draws it as one, and the footer's shell
+    // count leaves it out (mobile-background-task-monitor-not-a-shell.test.ts).
     expect(tasks.running).toEqual([
-      expect.objectContaining({ id: 'biifjm40h', kind: 'shell', title: 'CI run for mobile-android-v0.2.82 release', status: 'running' })
+      expect.objectContaining({ id: 'biifjm40h', kind: 'monitor', title: 'CI run for mobile-android-v0.2.82 release', status: 'running' })
     ])
   })
 

@@ -102,10 +102,12 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
       : null
   }
   if (call.name === 'Monitor') {
-    // A monitor is a long-running shell; its event notifications carry no
-    // status and never retire it — only the "stream ended" one does.
+    // A monitor runs a command like a shell, but Claude Code counts it apart:
+    // the Stop hook's `background_tasks` types it "monitor", and the footer
+    // pill does not count it among its "N shells". Its event notifications
+    // carry no status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
+    return id ? { id, kind: 'monitor', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
   }
   return null
 }
