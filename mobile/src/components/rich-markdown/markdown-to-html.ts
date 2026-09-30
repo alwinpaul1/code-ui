@@ -1,15 +1,50 @@
-import { escapeAttr, escapeHtml } from './markdown-escaping'
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { isThematicBreak, parseListTree } from './markdown-list-parse'
-import { closesFence, openingFence } from './markdown-code-fence'
-import { isTableSeparator, splitTableRow } from './markdown-table-rows'
+import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
+import { frontMatterEnd, frontMatterHtml } from './markdown-front-matter'
+import {
+  indentedCodeHtml,
+  readIndentedCode,
+  setextHeadingHtml,
+  setextLevel
+} from './markdown-leaf-blocks'
+import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
-import { reflowLines } from './markdown-reflow'
+import { paragraphParts, reflowLines } from './markdown-reflow'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
-  return isThematicBreak(line) || /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
+  return (
+    isThematicBreak(line) ||
+    openingFence(line) !== null ||
+    /^(#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
+  )
+}
+
+/**
+ * A quote's lines, markers off, as its paragraphs. A blank quote line is a paragraph break, which
+ * a save writes back as a bare `>` (html-block-markdown.ts); it was two breaks inside one
+ * paragraph until 2026-09-30, and saved as `> ` with a trailing space. Inside a paragraph every
+ * source line is still drawn on its own line, as quotes always have been, with its hard-break
+ * spaces or backslash left in its text.
+ */
+function quoteHtml(lines: readonly string[]): string {
+  const paragraphs: string[][] = [[]]
+  for (const line of lines) {
+    if (line.trim()) {
+      paragraphs[paragraphs.length - 1]!.push(line)
+    } else if (paragraphs[paragraphs.length - 1]!.length > 0) {
+      paragraphs.push([])
+    }
+  }
+  const blocks = paragraphs
+    .filter((paragraph) => paragraph.length > 0)
+    .map(
+      (paragraph) =>
+        `<p>${renderInline(paragraph.join('\n').trim()).replace(/\n/g, '<br />')}</p>`
+    )
+  return `<blockquote>${blocks.join('') || '<p></p>'}</blockquote>`
 }
 
 /**
@@ -23,6 +58,11 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const html: string[] = []
   let index = 0
+  const frontMatter = frontMatterEnd(lines)
+  if (frontMatter !== null) {
+    html.push(frontMatterHtml(lines.slice(0, frontMatter)))
+    index = frontMatter
+  }
   while (index < lines.length) {
     const line = lines[index] ?? ''
     if (!line.trim()) {
@@ -34,15 +74,13 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       const code: string[] = []
       while (index < lines.length && !closesFence(lines[index] ?? '', fence.fence)) {
-        code.push(lines[index] ?? '')
+        code.push(outdentCodeLine(lines[index] ?? '', fence.indent))
         index += 1
       }
       if (index < lines.length) {
         index += 1
       }
-      html.push(
-        `<pre data-language="${escapeAttr(fence.language)}"><code>${escapeHtml(code.join('\n'))}</code></pre>`
-      )
+      html.push(fencedCodeHtml(fence, code.join('\n')))
       continue
     }
     if (isThematicBreak(line)) {
@@ -50,12 +88,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       continue
     }
-    if (
-      line.includes('|') &&
-      index + 1 < lines.length &&
-      isTableSeparator(lines[index + 1] ?? '')
-    ) {
+    if (opensTable(line, lines[index + 1])) {
       const headers = splitTableRow(line)
+      const source = tableSourceAttributes(line, lines[index + 1] ?? '')
       index += 2
       const rows: string[][] = []
       while (
@@ -78,7 +113,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
           return `<tr>${cells.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`
         })
         .join('')
-      html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
+      html.push(`<table${source}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
       continue
     }
     const heading = line.match(/^(#{1,6})\s+(.+)$/)
@@ -94,9 +129,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
         index += 1
       }
-      html.push(
-        `<blockquote><p>${renderInline(quote.join('\n').trim()).replace(/\n/g, '<br />')}</p></blockquote>`
-      )
+      html.push(quoteHtml(quote))
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
@@ -109,28 +142,44 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         continue
       }
     }
+    // Four columns in, where no other block took the line: code, as CommonMark reads it. A line
+    // four columns in under a paragraph is the paragraph's, and never reaches here.
+    const indented = readIndentedCode(lines, index, 0)
+    if (indented !== null) {
+      html.push(indentedCodeHtml(indented.code))
+      index = indented.nextIndex
+      continue
+    }
     const paragraph: string[] = []
-    while (
-      index < lines.length &&
-      (lines[index] ?? '').trim() &&
-      !isBlockStart(lines[index] ?? '') &&
-      !(
-        index + 1 < lines.length &&
-        (lines[index] ?? '').includes('|') &&
-        isTableSeparator(lines[index + 1] ?? '')
-      )
-    ) {
-      paragraph.push(lines[index] ?? '')
+    let underline: string | null = null
+    while (index < lines.length && (lines[index] ?? '').trim()) {
+      const current = lines[index] ?? ''
+      // A `=` or `-` run under a paragraph makes it a heading: `Title\n---` is a level-2 heading,
+      // not a paragraph and a rule, as CommonMark and GitHub read it.
+      if (paragraph.length > 0 && setextLevel(current) !== null) {
+        underline = current
+        index += 1
+        break
+      }
+      if (isBlockStart(current) || opensTable(current, lines[index + 1])) {
+        break
+      }
+      paragraph.push(current)
       index += 1
     }
     if (paragraph.length === 0) {
       // Why: a line that opens a block by `isBlockStart` but matches no block reader's own grammar
-      // — `# `, `- `, a fence with a backtick in its language — is gathered by nothing, and the
-      // loop would read it again forever. It is text.
+      // — `# `, `- ` — is gathered by nothing, and the loop would read it again forever. It is
+      // text.
       paragraph.push(lines[index] ?? '')
       index += 1
     }
-    html.push(`<p>${renderInline(reflowLines(paragraph)).replace(/\n/g, '<br />')}</p>`)
+    if (underline !== null) {
+      html.push(setextHeadingHtml(renderInline(reflowLines(paragraph).replace(/\n/g, ' ')), underline))
+      continue
+    }
+    const drawn = paragraphParts(paragraph, renderInline)
+    html.push(`<p${drawn.attributes}>${drawn.html}</p>`)
   }
   return html.join('\n') || '<p class="is-empty"><br /></p>'
 }

@@ -10,7 +10,8 @@ import {
   autolinkParts,
   isIntrawordUnderscoreToken
 } from '../markdown-inline-token-rules'
-import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
+import { escapeAttr, escapeHtml, escapeLiteralHtml, isSafeUrl } from './markdown-escaping'
+import { entitySourceAttribute, entityTextHtml } from './markdown-entity-source'
 
 /**
  * The attribute that says an `<a>` was drawn from an address written bare, `https://x.dev/a`, or
@@ -40,7 +41,7 @@ function tokenHtml(match: MarkdownInlineMatch, inLabel: boolean): string {
     // so it saves back as written; it fell through to the italic branch before and saved as
     // `*tap](javascript:alert(1*)`.
     if (!isSafeUrl(link.href) || (inLabel && !link.image)) {
-      return escapeHtml(token)
+      return entityTextHtml(token)
     }
     return link.image
       ? `<img src="${escapeAttr(link.href)}" alt="${escapeAttr(link.label)}" />`
@@ -48,15 +49,19 @@ function tokenHtml(match: MarkdownInlineMatch, inLabel: boolean): string {
   }
   if (match.group === ADDRESS_TOKEN_GROUP) {
     if (inLabel) {
-      return escapeHtml(token)
+      return entityTextHtml(token)
     }
     const { url, words, trailing } = autolinkParts(token)
     const written = token.startsWith('<') ? 'angle' : 'bare'
-    return `<a href="${escapeAttr(url)}" ${AUTOLINK_ATTRIBUTE}="${written}">${escapeHtml(words)}</a>${escapeHtml(trailing)}`
+    // The words keep their source where it holds an entity, as text does (markdown-entity-source).
+    return (
+      `<a href="${escapeAttr(url)}" ${AUTOLINK_ATTRIBUTE}="${written}"${entitySourceAttribute(words)}>` +
+      `${escapeHtml(words)}</a>${entityTextHtml(trailing)}`
+    )
   }
   const inside = (marks: number) => renderMarks(token.slice(marks, -marks), inLabel)
   if (token.startsWith('`')) {
-    return `<code>${escapeHtml(token.slice(1, -1))}</code>`
+    return `<code>${escapeLiteralHtml(token.slice(1, -1))}</code>`
   }
   if (token.startsWith('~~')) {
     return `<s>${inside(2)}</s>`
@@ -69,7 +74,7 @@ function renderMarks(text: string, inLabel: boolean): string {
   // is such words, and making a matcher for each drew a paragraph of 15,000 short italics four
   // times slower.
   if (!/[*_~`[<]|https?:\/\//.test(text)) {
-    return escapeHtml(text)
+    return entityTextHtml(text)
   }
   // Images, a label that holds one, and escapes, as the chat reads them (markdown-inline-matcher.ts).
   const matcher = createMarkdownInlineMatcher(text, inlineTokenPattern(), true)
@@ -87,11 +92,11 @@ function renderMarks(text: string, inLabel: boolean): string {
       match = matcher.exec()
       continue
     }
-    output += escapeHtml(text.slice(lastIndex, match.index)) + tokenHtml(match, inLabel)
+    output += entityTextHtml(text.slice(lastIndex, match.index)) + tokenHtml(match, inLabel)
     lastIndex = match.end
     match = matcher.exec()
   }
-  return output + escapeHtml(text.slice(lastIndex))
+  return output + entityTextHtml(text.slice(lastIndex))
 }
 
 /**
