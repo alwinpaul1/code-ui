@@ -126,8 +126,9 @@ const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
 // Codex draws its composer with `›`; a `>` or `❯` line is quoted text or a shell prompt.
 const CODEX_COMPOSER_ROW = /^\s*›\s/
 // The pending-input preview's section headers (codex-terminal-queued-messages.ts has their source).
+// Codex draws them at column 0 (pending_input_preview.rs); an indented one is quoted in an answer.
 const CODEX_PENDING_INPUT_HEADER =
-  /^\s*(?:• )?(?:Queued follow-up inputs|Messages to be submitted)/
+  /^(?:• )?(?:Queued follow-up inputs|Messages to be submitted)/
 
 /** Where the pending-input preview blocks that end at `composer` begin (`composer` when none). Only
  *  a block that opens with one of Codex's own headers counts, so indented prose above the composer is
@@ -148,8 +149,9 @@ function pendingPreviewStart(lines: readonly string[], composer: number): number
 /**
  * Whether Codex's busy row ("• Working (5s • esc to interrupt)") sits directly above the composer:
  * the last non-blank line above it, once the pending-input preview (a blank line, then "Queued
- * follow-up inputs" or "Messages to be submitted…" blocks) and one `└` detail line (a Tip, or the
- * auto-review status) are stepped over. A finished answer can quote the row anywhere higher up, and
+ * follow-up inputs" or "Messages to be submitted…" blocks, headers at column 0) and one `└` status
+ * detail with its wrapped rows (a Tip, the auto-review status, a retry error, parallel approval
+ * reviews) are stepped over. A finished answer can quote the row anywhere higher up, and
  * 0.158 puts a timestamp between a quoted row and the composer. The row is not a fixed distance from
  * the bottom (0.155: sixth line up; 0.158.0, whose footer gained "? for shortcuts": seventh; every
  * queued message adds lines between it and the composer), which is why a tail window was wrong in
@@ -162,7 +164,13 @@ function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
     return false
   }
   const above = lines.slice(0, pendingPreviewStart(lines, composer)).filter((line) => line.trim() !== '')
-  const row = above.at(-1)?.trimStart().startsWith('└') ? above.at(-2) : above.at(-1)
+  // Step over one status detail block: its wrapped rows (four-space indent, status_indicator_widget.rs
+  // wraps a detail under "  └ " then four spaces) back to the `└` row.
+  let detail = above.length - 1
+  while (detail >= 0 && /^\s{4,}\S/.test(above[detail] ?? '')) {
+    detail -= 1
+  }
+  const row = above[detail]?.trimStart().startsWith('└') ? above[detail - 1] : above.at(-1)
   return row?.includes(CODEX_BUSY_STATUS_MARKER) ?? false
 }
 
@@ -182,7 +190,7 @@ function isCodexTurnRunning(lines: readonly string[]): boolean {
   }
   const previewStart = pendingPreviewStart(lines, composer)
   return [...codexPendingInputPreviewRows(lines).steerHeaders].some(
-    (index) => index >= previewStart && index < composer
+    (index) => index >= previewStart && index < composer && /^\S/.test(lines[index] ?? '')
   )
 }
 
