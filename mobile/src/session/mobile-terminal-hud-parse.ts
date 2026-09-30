@@ -30,8 +30,9 @@ export type TerminalHudObservation = {
   activity?: string | null
   /** Claude Code's permission mode as its input footer states it ("⏵⏵ accept
    *  edits on (shift+tab to cycle)"); 'default' when a screen was read and its
-   *  footer shows none; null when no screen was read at all (an observation a
-   *  beacon built on its own), so nothing states a mode nobody saw. */
+   *  footer shows none; null when no screen was read at all (an observation the
+   *  beacon or host-status merge built from NO_SCREEN_HUD_OBSERVATION), so
+   *  nothing states a mode nobody saw. */
   permissionMode: TerminalPermissionMode | null
   /** The mode the footer actually STATED, or null when no footer row was on
    *  screen. `permissionMode` collapses null to 'default' for the pill; anything

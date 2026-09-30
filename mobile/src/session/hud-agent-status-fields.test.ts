@@ -60,4 +60,18 @@ describe('HUD fields from a newer Orca host', () => {
     expect(applyAgentStatusHudFields(screen, {})).toBe(screen)
     expect(applyAgentStatusHudFields(null, {})).toBeNull()
   })
+
+  // With no screen read, a 'default' seeded here drew Manual on the pill while
+  // Claude was in Accept edits, Plan or Auto: the host sends effort and
+  // context, never footer state (review, 2026-09-30).
+  it('states no permission mode, not Manual, when the host sends effort and no screen was read', () => {
+    const merged = applyAgentStatusHudFields(null, { effort: 'high' })
+    expect(merged?.effort).toBe('high')
+    expect(merged?.permissionMode).toBeNull()
+    expect(merged?.permissionModeSeen ?? null).toBeNull()
+    const tokensOnly = applyAgentStatusHudFields(null, { contextUsedTokens: 649_000, contextWindowTokens: 1_000_000 })
+    expect(tokensOnly?.context?.usedPercent).toBe(65)
+    expect(tokensOnly?.permissionMode).toBeNull()
+    expect(tokensOnly?.permissionModeSeen ?? null).toBeNull()
+  })
 })
