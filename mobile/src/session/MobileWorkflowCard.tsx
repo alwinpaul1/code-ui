@@ -93,7 +93,8 @@ export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onS
 
 function Facts({ children }: { children: React.ReactNode }) {
   const { space } = useTheme()
-  return <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>{children}</View>
+  // Wraps: four captions at a large font scale on a 360dp phone run past a row.
+  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: space.md, rowGap: space.xs }}>{children}</View>
 }
 
 /** Running: the lanes counted now, or nothing. Finished: the totals the
