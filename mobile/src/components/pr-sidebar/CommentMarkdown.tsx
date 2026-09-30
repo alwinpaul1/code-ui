@@ -255,17 +255,21 @@ function Inline({ text, base, styles }: { text: string; base: number; styles: St
   return (
     <>
       {tokens.map((token, i) => {
+        // Emphasis draws its inside through Inline again, as the chat does:
+        // `***x***` is bold around `*x*`, and a code span or link inside a
+        // bold is still one. The depth is bounded: a bold closes at the first
+        // run of its own two marks, so it cannot hold a bold of its own kind.
         if (token.kind === 'bold') {
           return (
             <Text key={i} style={styles.bold}>
-              {token.text}
+              <Inline text={token.text} base={base} styles={styles} />
             </Text>
           )
         }
         if (token.kind === 'italic') {
           return (
             <Text key={i} style={styles.italic}>
-              {token.text}
+              <Inline text={token.text} base={base} styles={styles} />
             </Text>
           )
         }

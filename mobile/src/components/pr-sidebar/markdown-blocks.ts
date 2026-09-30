@@ -272,7 +272,14 @@ function parseAlignRow(line: string): CellAlign[] {
 // Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
 // emitting plain-text runs between matches. Unbalanced markers stay literal text.
 // Code spans are found by backtick run inside the matcher, not here.
-const INLINE = /(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
+//
+// A bold span may hold whole italic spans of its own character, as the chat's
+// markdownInlineTokenPattern does (markdown-inline-matcher.ts has the why):
+// `***x***` is bold around `*x*`, and CommentMarkdown draws a bold token's
+// inside through parseInline again. `\*\*[^*]+\*\*` drew it as a star, bold x,
+// a star (review, 2026-09-30).
+const INLINE =
+  /(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*)|(__(?:[^_]|_[^_\s][^_\n]*_)+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []

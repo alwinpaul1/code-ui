@@ -8,10 +8,15 @@ import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
  * The pattern is built per call rather than shared: it is a global regex read with `exec`, so a
  * module-level one would carry its `lastIndex` into the next call — and this function recurses
  * into its own matches, so the next call is usually itself.
+ *
+ * A bold span may hold whole italic spans of its own character, as the chat's
+ * markdownInlineTokenPattern does (markdown-inline-matcher.ts has the why): `***x***` is bold
+ * around `*x*`, drawn as nested marks, and it saves back as it was. `\*\*[^*]+\*\*` drew it as a
+ * star, bold x, a star, and the stars were then text in the document (review, 2026-09-30).
  */
 export function renderInline(text: string): string {
   const pattern =
-    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
   let output = ''
   let lastIndex = 0
   let match = pattern.exec(text)
