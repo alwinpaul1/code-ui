@@ -1,5 +1,9 @@
 import { AUTOLINK_ATTRIBUTE } from './markdown-inline-render'
-import { ENTITY_SOURCE_ATTRIBUTE, entitySourceWriter } from './markdown-entity-source'
+import {
+  ENTITY_SOURCE_ATTRIBUTE,
+  entitySourceWriter,
+  sourceSpelling
+} from './markdown-entity-source'
 
 /** A node's text with non-breaking spaces turned back into the spaces the source wrote. */
 export function textContent(node: Node): string {
@@ -119,15 +123,16 @@ function markedMarkdown(node: Element, marks: string, context: InlineContext): s
  * Only while its words still spell what it opens. Words the user retitled, or marked bold, would
  * be lost or would open somewhere else as an autolink, so that link is written out in full. A
  * link with no mark, the toolbar's or a `[words](href)` in the source, stays explicit even when
- * its words are its address.
+ * its words are its address. An entity the source spelled the address with is written back
+ * (markdown-entity-source.ts): `&amp;` in a URL saved as `&` before 2026-09-30.
  */
 function autolinkMarkdown(node: Element, href: string, words: string): string | null {
   const written = node.getAttribute(AUTOLINK_ATTRIBUTE)
   if (written === 'bare' && words === href) {
-    return words
+    return sourceSpelling(node, words)
   }
   if (written === 'angle' && (words === href || `mailto:${words}` === href)) {
-    return `<${words}>`
+    return `<${sourceSpelling(node, words)}>`
   }
   return null
 }

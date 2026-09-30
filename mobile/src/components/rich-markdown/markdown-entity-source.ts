@@ -30,18 +30,36 @@ export function entityTextHtml(source: string): string {
   return source
     .split('\n')
     .map((line) => {
-      const drawn = escapeHtml(line)
-      if (decodeMarkdownEntities(line) === line) {
-        return drawn
-      }
-      try {
-        return `<span ${ENTITY_SOURCE_ATTRIBUTE}="${encodeURIComponent(line)}">${drawn}</span>`
-      } catch {
-        // A lone surrogate cannot be percent-encoded. The run is drawn as it always was.
-        return drawn
-      }
+      const attribute = entitySourceAttribute(line)
+      return attribute ? `<span${attribute}>${escapeHtml(line)}</span>` : escapeHtml(line)
     })
     .join('\n')
+}
+
+/**
+ * The attribute that keeps `source` for an element drawn from it, or nothing when it holds no
+ * entity to keep. An address's `<a>` carries it too (markdown-inline-render.ts).
+ */
+export function entitySourceAttribute(source: string): string {
+  if (decodeMarkdownEntities(source) === source) {
+    return ''
+  }
+  try {
+    return ` ${ENTITY_SOURCE_ATTRIBUTE}="${encodeURIComponent(source)}"`
+  } catch {
+    // A lone surrogate cannot be percent-encoded. The text is drawn as it always was.
+    return ''
+  }
+}
+
+/** How the source spelled `drawn`, where the element remembers it and it still spells that. */
+export function sourceSpelling(element: Element, drawn: string): string {
+  try {
+    const source = decodeURIComponent(element.getAttribute(ENTITY_SOURCE_ATTRIBUTE) ?? '')
+    return source && decodeMarkdownEntities(source) === drawn ? source : drawn
+  } catch {
+    return drawn
+  }
 }
 
 /** A run's source as pieces: each entity whole, every other character alone. */

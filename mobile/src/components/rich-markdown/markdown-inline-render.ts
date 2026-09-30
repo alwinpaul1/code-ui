@@ -11,7 +11,7 @@ import {
   isIntrawordUnderscoreToken
 } from '../markdown-inline-token-rules'
 import { escapeAttr, escapeHtml, escapeLiteralHtml, isSafeUrl } from './markdown-escaping'
-import { entityTextHtml } from './markdown-entity-source'
+import { entitySourceAttribute, entityTextHtml } from './markdown-entity-source'
 
 /**
  * The attribute that says an `<a>` was drawn from an address written bare, `https://x.dev/a`, or
@@ -53,7 +53,11 @@ function tokenHtml(match: MarkdownInlineMatch, inLabel: boolean): string {
     }
     const { url, words, trailing } = autolinkParts(token)
     const written = token.startsWith('<') ? 'angle' : 'bare'
-    return `<a href="${escapeAttr(url)}" ${AUTOLINK_ATTRIBUTE}="${written}">${escapeHtml(words)}</a>${escapeHtml(trailing)}`
+    // The words keep their source where it holds an entity, as text does (markdown-entity-source).
+    return (
+      `<a href="${escapeAttr(url)}" ${AUTOLINK_ATTRIBUTE}="${written}"${entitySourceAttribute(words)}>` +
+      `${escapeHtml(words)}</a>${entityTextHtml(trailing)}`
+    )
   }
   const inside = (marks: number) => renderMarks(token.slice(marks, -marks), inLabel)
   if (token.startsWith('`')) {

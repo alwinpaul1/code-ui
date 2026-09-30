@@ -82,6 +82,26 @@ describe('an entity written in the source', () => {
     expect(saved()).toBe('a < b')
   })
 
+  // The sweep for the same shape found it in addresses: a bare or bracketed address drew its
+  // words decoded and saved them that way, so a shields.io badge URL written inside raw HTML
+  // (ORCA-UPSTREAM-README.md) lost its `&amp;`s on save.
+  it.each([
+    ['a bare address', 'see https://x.dev/?a=1&amp;b=2 now'],
+    ['an address in angle brackets', 'see <https://x.dev/?a=1&amp;b=2> now'],
+    ['an address inside raw HTML', '<img src="https://img.shields.io/x?style=flat&amp;label=a" />']
+  ])('saves the entities in %s as written, and opens the address they spell', (_name, markdown) => {
+    const { editor, saved } = openedSurface(markdown)
+    expect(editor.querySelector('a')?.getAttribute('href')).toContain('&')
+    expect(editor.querySelector('a')?.getAttribute('href')).not.toContain('&amp;')
+    expect(saved()).toBe(markdown)
+  })
+
+  it('writes an address the user retitled as an explicit link, entities or not', () => {
+    const { editor, saved } = openedSurface('see https://x.dev/?a=1&amp;b=2 now')
+    editor.querySelector('a')!.textContent = 'docs'
+    expect(saved()).toBe('see [docs](https://x.dev/?a=1&b=2) now')
+  })
+
   it('still writes a < the user types as typed', () => {
     expect(editedSurface('<p>a < b</p>').saved()).toBe('a < b')
   })
