@@ -7,6 +7,7 @@ import {
 } from './mobile-markdown-preview-tag-stripper'
 import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
 import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
+import { decodeMarkdownHtmlEntities } from './markdown-html-entities'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -65,16 +66,9 @@ function restoreEscapedMarkup(value: string): string {
   return value.replaceAll(ESCAPED_LT_TOKEN, '<').replaceAll(ESCAPED_AMP_TOKEN, '&')
 }
 
+// The table is shared with a PR comment's text runs (markdown-html-entities.ts).
 function decodeHtmlEntities(value: string, preserveEscapedEntities = false): string {
-  const next = preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value
-
-  return next
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&amp;/gi, '&')
+  return decodeMarkdownHtmlEntities(preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value)
 }
 
 function stripTags(value: string): string {

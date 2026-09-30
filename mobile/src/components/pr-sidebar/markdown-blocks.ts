@@ -5,7 +5,7 @@ import {
   isIntrawordUnderscoreToken
 } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
-import { unescapeMarkdownText } from '../markdown-inline-escapes'
+import { decodeMarkdownHtmlEntities, markdownTextRunWithEntities } from '../markdown-html-entities'
 import { markdownLinkDestination } from '../markdown-link-destination'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
@@ -75,7 +75,11 @@ function parseSegment(pieces: HtmlBlockPiece[], body: LexedCommentBody): Markdow
       // A quote block holds text, so a fence in it reads as it was written.
       return [{ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(piece.text)).trim() }]
     }
-    const summary = piece.summary === null ? '' : stripHtmlTagsOutsideCode(body.restore(piece.summary)).trim()
+    // Drawn as it is, so its entities are decoded here, after its tags are off.
+    const summary =
+      piece.summary === null
+        ? ''
+        : decodeMarkdownHtmlEntities(stripHtmlTagsOutsideCode(body.restore(piece.summary)), true).trim()
     return [{ kind: 'details', summary: summary || 'Details', body: parseSegment(piece.body, body) }]
   })
 }
@@ -259,7 +263,9 @@ const INLINE = new RegExp(
  * image is its alt text alone, so a badge is one link to its target, and a
  * link or an address is drawn as written. A text run drops an escape's
  * backslash, as GitHub does: `\*a\*` is two stars around a word, and
- * `\![x](y)` is a "!" and a link. Code keeps its backslashes.
+ * `\![x](y)` is a "!" and a link. It draws the characters HTML entities stand
+ * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts).
+ * Code keeps its backslashes and entities as written.
  */
 export function parseInline(text: string, label = false): InlineToken[] {
   const tokens: InlineToken[] = []
@@ -268,7 +274,7 @@ export function parseInline(text: string, label = false): InlineToken[] {
   const plain = stripHtmlTagsOutsideCode(text)
   const matcher = createMarkdownInlineMatcher(plain, INLINE, true, true)
   const textRun = (from: number, to?: number): void => {
-    tokens.push({ kind: 'text', text: unescapeMarkdownText(plain.slice(from, to)) })
+    tokens.push({ kind: 'text', text: markdownTextRunWithEntities(plain.slice(from, to)) })
   }
   let cursor = 0
   // Every pass moves matcher.lastIndex forward, so the text's length bounds
