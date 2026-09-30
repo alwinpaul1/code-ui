@@ -630,7 +630,7 @@ describe('background tasks bounded by the current working run', () => {
     expect(tasks.running.map((task) => task.id)).toEqual(['bnotime1'])
   })
 
-  it('treats a TaskStop call as the end of that task', () => {
+  it('treats a TaskStop that went through as the end of that task', () => {
     const transcript = [
       ...shellAt('b6ishmlqf', 'Simulate 45 s of Doze on the phone', T0),
       call('TaskStop', { task_id: 'b6ishmlqf' }, T0 + 30_000),

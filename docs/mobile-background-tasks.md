@@ -318,11 +318,12 @@ and changed 38 times; the sources, one by one:
   at 13:34 with no SubagentStop, the lead resumed it at 16:28, and its row
   still read 12:18, so the reader took the 13:34 failure for the end of the
   running run and the status row showed no task. The resumed run ends at its
-  next notification or TaskStop, or when the roster drops its row. An id-only
-  finished list (`done=`, earlier windows' endings) cannot say which run it
-  names, so against a roster row it ends nothing; with no host status at all
-  it does end the run, since a resumed run that finishes mid-turn has its
-  notification dropped by Orca's reader and would otherwise show for ever.
+  next notification or a TaskStop that went through, or when the roster
+  drops its row. An id-only finished list (`done=`, earlier windows'
+  endings) cannot say which run it names, so against a roster row it ends
+  nothing; with no host status at all it does end the run, since a resumed
+  run that finishes mid-turn has its notification dropped by Orca's reader
+  and would otherwise show for ever.
   A resume counts only when its `resumedAgentId` is the agent a SendMessage
   of the same step addressed (by id, or `a<name>-<hex>` by name) and that
   call still waits for its result. A step is the stretch of calls and
@@ -399,8 +400,17 @@ and changed 38 times; the sources, one by one:
   `done` (a queued prompt starting the moment a turn ends, or the phone on
   another tab). The first working state the phone sees stands in, as
   before; after a `waiting` it has no start for, it retires nothing.
-- Ids a window showed ending (a notification, a TaskStop) are remembered for
-  the session, so a slid window cannot bring them back.
+- Ids a window showed ending (a notification, a TaskStop that went through)
+  are remembered for the session, so a slid window cannot bring them back.
+- A TaskStop ends its task once its answer says it went through: anything
+  but a failure, or TaskStop's own word that the task had already ended
+  (`Task <id> is not running (status: completed|failed|killed)`). A stop the
+  user turned down, cancelled or had denied, one that errored, and one still
+  waiting on its permission prompt leave the task running (review,
+  2026-09-30: a turned-down stop moved a running shell to Finished and the
+  memory kept it retired). The answer is paired first in, first out, as for
+  every call. The stop is placed at its call, and a notification the task
+  sent while the stop waited keeps its own status and summary.
 - A host status missing from one snapshot is bridged by the last one for up
   to 60 s.
 

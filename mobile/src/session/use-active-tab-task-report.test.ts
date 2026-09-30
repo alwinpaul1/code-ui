@@ -123,6 +123,39 @@ describe('what the running-task count keeps when a source looks away', () => {
     expect(show({ messages: scrolledPast, agentStatus: status([]), report: beacon })).toEqual([])
   })
 
+  it('keeps counting a shell whose stop the user turned down, before and after the stop scrolls out', () => {
+    // The same stop, turned down at the permission prompt: the shell runs on
+    // and the status line goes on naming it. The memory must not keep the
+    // stop's id as retired (review, 2026-09-30).
+    const beacon: ActiveTabBackgroundTaskReport = {
+      ...EMPTY_REPORT,
+      runningTaskIds: ['bhcfbe9vf'],
+      runningTaskIdsAt: Date.parse('2026-09-26T00:20:00.000Z'),
+      launchedTaskIds: ['bhcfbe9vf']
+    }
+    const [stopCall, accepted] = taskStop('bhcfbe9vf', '2026-09-26T00:20:27.659Z', '2026-09-26T00:20:27.733Z')
+    const turnedDown: NativeChatMessage = {
+      ...accepted,
+      blocks: [
+        {
+          type: 'tool-result',
+          output:
+            "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed.",
+          isError: true
+        }
+      ]
+    }
+    const withStop = [
+      ...movedToBackgroundLaunch('bhcfbe9vf', '2026-09-25T23:24:54.203Z', '2026-09-25T23:26:57.378Z'),
+      stopCall,
+      turnedDown
+    ]
+    expect(show({ messages: withStop, agentStatus: status([]), report: beacon })).toEqual(['bhcfbe9vf'])
+
+    const scrolledPast = filler(3, '2026-09-26T00:21:00.000Z')
+    expect(show({ messages: scrolledPast, agentStatus: status([]), report: beacon })).toEqual(['bhcfbe9vf'])
+  })
+
   it('keeps counting the lead’s agent after its launch scrolls out, and never the reviewer it starts', () => {
     // The first look comes before abe6's SubagentStart reached the roster;
     // then abe6 alone; then, minutes later, a3a4 starts while abe6 is there

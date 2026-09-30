@@ -66,9 +66,11 @@ export type SessionTaskEvidence = {
   placedAgentIds: readonly string[]
   /** Unanswered Agent calls already matched to a row. */
   vouchedCallKeys: readonly string[]
-  /** Ids a window showed ending (a notification, a TaskStop). A stopped shell
-   *  has no notification at all — bhcfbe9vf, stopped at 00:20:27 — and the
-   *  status line's `bg=` and `live=` keep naming it. */
+  /** Ids a window showed ending (a notification, a TaskStop whose answer
+   *  says it went through). A stopped shell has no notification at all —
+   *  bhcfbe9vf, stopped at 00:20:27 — and the status line's `bg=` and `live=`
+   *  keep naming it. A stop the user turned down is not here: kept for good,
+   *  it would retire a shell that runs on. */
   retiredTaskIds: readonly string[]
   /** The last host status seen, and when (phone clock). */
   lastStatus: { status: AgentStatusEntry; at: number } | null

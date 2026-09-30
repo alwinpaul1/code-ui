@@ -37,7 +37,7 @@ import {
   foldWhitespace,
   readLaunch,
   readNotifications,
-  readString,
+  stoppedTaskId,
   takeAnsweredCall,
   truncate,
   type Launch,
@@ -207,7 +207,7 @@ export function deriveBackgroundTasks(
   hostStatus: BackgroundTaskHostStatus | null = null,
   options: BackgroundTaskDeriveOptions = {}
 ): BackgroundTasks {
-  const pending: PendingCall[] = []
+  const pending: (PendingCall & { at: number })[] = []
   const launches = new Map<string, Launch>()
   const notifications = new Map<string, Notification>()
   const sends = createResumeTracker()
@@ -218,14 +218,8 @@ export function deriveBackgroundTasks(
     trackMessage(sends, message)
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp })
+        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at: position })
         trackCall(sends, block.name, block.input)
-        // Why: stopping a task is the one completion the transcript records
-        // even mid-turn — the model asked for it, so the call itself is there.
-        const stoppedId = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
-        if (stoppedId) {
-          notifications.set(stoppedId, { status: 'stopped', summary: null, at: position, timestamp: message.timestamp })
-        }
       } else if (isToolResultBlock(block)) {
         // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
         // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts), save
@@ -234,6 +228,18 @@ export function deriveBackgroundTasks(
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
           launches.set(launch.id, launch)
+        }
+        // Why: stopping a task is the one completion the transcript records
+        // even mid-turn, and no notification follows it. The call alone is
+        // only the lead asking: a stop the user turned down, or that errored,
+        // left the task running (review, 2026-09-30), so the stop counts once
+        // its answer says it went through, placed and timed at its call. A
+        // notification the task sent while the stop waited is the later word,
+        // and keeps its status and summary.
+        const stoppedId = call ? stoppedTaskId(call, block) : null
+        const known = stoppedId ? notifications.get(stoppedId) : undefined
+        if (call && stoppedId && (known?.at ?? 0) <= call.at) {
+          notifications.set(stoppedId, { status: 'stopped', summary: null, at: call.at, timestamp: call.startedAt })
         }
         // A SendMessage that resumed a stopped agent starts a new run of it.
         // Read off whichever result names the agent a waiting SendMessage of

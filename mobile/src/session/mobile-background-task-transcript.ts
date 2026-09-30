@@ -1,3 +1,4 @@
+import type { NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { BackgroundTaskKind } from './mobile-background-tasks'
 import { readWorkflowLaunch, readWorkflowUsage, type WorkflowDetail, type WorkflowUsage } from './mobile-background-task-workflows'
@@ -235,6 +236,47 @@ const AGENT_RESULT = new RegExp(
 /** A failure any tool can answer with: a tool error, or the user turning the
  *  call down. It says nothing about which call it answers. */
 export const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
+
+const CANCELLED = /^\s*The user doesn't want to take this action right now/
+const DENIED = /^\s*Permission (?:for this |to use )[\s\S]*?(?:was|has been) denied/
+const ENDED = ['completed', 'failed', 'killed']
+
+/** An answer saying its call did not do what it was asked: a
+ *  `<tool_use_error>`, a turn-down, a cancel, a denial, or an answer Orca
+ *  marks as an error. */
+export function isFailedAnswer(answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>): boolean {
+  return (
+    answer.isError === true ||
+    ANY_TOOL_FAILURE.test(answer.output) ||
+    CANCELLED.test(answer.output) ||
+    DENIED.test(answer.output)
+  )
+}
+
+/** Whether an answer is TaskStop's own word that `id` is no longer running:
+ *  its data as JSON, stopped or outlived by a loop, or its input check on a
+ *  task that had ended (Claude Code 2.1.283). */
+export function saysStopped(output: string, id: string): boolean {
+  const answer = output.trimStart()
+  return [
+    `{"message":"Successfully stopped task: ${id} (`,
+    `{"message":"Task ${id} `,
+    ...ENDED.map((status) => `<tool_use_error>Task ${id} is not running (status: ${status})`)
+  ].some((opening) => answer.startsWith(opening))
+}
+
+/** The task a TaskStop ended, read off the answer the pairing handed it: its
+ *  `task_id`, unless that answer is a failure that is not TaskStop's word
+ *  that the task had already ended. Null for any other call and for a stop
+ *  that names no task. Only an answer ends a task, so a stop still waiting on
+ *  its permission prompt ends nothing yet: the row lags the stop by a moment
+ *  rather than guess it went through. The pairing is first in, first out, as
+ *  for every call, so a stop beside another call whose answers landed out of
+ *  call order can be handed the other's answer. */
+export function stoppedTaskId(call: PendingCall, answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>): string | null {
+  const id = call.name === 'TaskStop' ? readString(call.input, 'task_id') : null
+  return id !== null && (!isFailedAnswer(answer) || saysStopped(answer.output, id)) ? id : null
+}
 
 /** The call a result answers. First in, first out — transcript blocks carry
  *  no tool ids — except that an Agent call is taken only by a result shaped
