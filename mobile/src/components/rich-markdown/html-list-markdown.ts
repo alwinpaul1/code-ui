@@ -2,7 +2,7 @@ import { inlineMarkdown } from './html-inline-markdown'
 import { codeBlockMarkdown, writesIndented } from './html-code-block-markdown'
 import { CODE_BLANK_ATTRIBUTE, CODE_INDENT_ATTRIBUTE } from './markdown-code-fence'
 import { INDENTED_CODE_ATTRIBUTE } from './markdown-leaf-blocks'
-import { ITEM_TIGHT_ATTRIBUTE, LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
+import { ITEM_BLANK_ATTRIBUTE, ITEM_TIGHT_ATTRIBUTE, LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
 
 /** One piece of what an item holds, in order: words, a code block, a quote, a table or a list. */
 type ItemPart =
@@ -275,7 +275,12 @@ export function listMarkdown(
       }
       const itemColumn =
         parentMarkerColumns === null ? column : column + remembered(item, parentMarkerColumns)
-      return itemMarkdown(item, itemColumn, marker, markerColumns, writeBlock)
+      const written = itemMarkdown(item, itemColumn, marker, markerColumns, writeBlock)
+      // A loose sublist keeps the blank line above it (ITEM_BLANK_ATTRIBUTE), but a list at the
+      // margin opens on its first item, with nothing above it in the list.
+      const blank =
+        item.hasAttribute(ITEM_BLANK_ATTRIBUTE) && (index > 0 || parentMarkerColumns !== null)
+      return blank ? `\n${written}` : written
     })
     .filter(Boolean)
     .join('\n')

@@ -41,6 +41,13 @@ function indentAttribute(item: ParsedListItem, parent: ParsedListItem | null): s
  */
 export const ITEM_TIGHT_ATTRIBUTE = 'data-md-tight'
 
+/**
+ * The attribute on a nested item its source wrote after a blank line, a loose sublist
+ * ('- a\n\n  - b'), so a save writes the blank line back (html-list-markdown.ts). Without it the
+ * sublist would be written tight, which CommonMark reads as a different list.
+ */
+export const ITEM_BLANK_ATTRIBUTE = 'data-md-item-blank'
+
 /** One of an item's blocks as markup, with where the source put it where the writer would not. */
 function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
   const width = listMarkerColumns(item.ordered, item.orderedNumber)
@@ -131,7 +138,8 @@ export function renderListItems(
     const rendered = group
       .map((item) => {
         const body = itemBodyHtml(scope, item)
-        const indent = indentAttribute(item, parent)
+        const blank = item.blankBefore ? ` ${ITEM_BLANK_ATTRIBUTE}="true"` : ''
+        const indent = `${indentAttribute(item, parent)}${blank}`
         if (kind === 'task') {
           const checked = item.task === true
           return (

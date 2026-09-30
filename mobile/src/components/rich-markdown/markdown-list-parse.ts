@@ -26,6 +26,11 @@ export type ParsedListItem = {
   children: ParsedListItem[]
   /** The blocks after the item's words (markdown-list-blocks.ts), in order. */
   blocks: ItemBlock[]
+  /**
+   * Whether a blank line stood above the item, which only a nested one can have: past a blank line
+   * the list goes on only into an open item's words, a loose sublist ('- a\n\n  - b').
+   */
+  blankBefore: boolean
 }
 
 /** A tab indents as far as four spaces, so mixed indentation still nests the way it looks. */
@@ -56,7 +61,8 @@ export function parseListLine(line: string): ParsedListItem | null {
     task: task ? task[1]!.toLowerCase() === 'x' : null,
     text: task ? task[2]! : rawText,
     children: [],
-    blocks: []
+    blocks: [],
+    blankBefore: false
   }
 }
 
@@ -196,6 +202,33 @@ function readOwnedBlock(
 }
 
 /**
+ * The list line past the blank lines at `index` that nests under an open item, a loose sublist
+ * ('- a\n\n  - b'): indented to the item's words, and less than four columns past them, where it
+ * would be the item's code. Null where there is none. A marker left of every open item's words
+ * ends the list there, as any line that opens a block does (readOwnedBlock).
+ *
+ * The list ended at every blank line before a marker until 2026-09-30, so a save wrote `b` at the
+ * margin as `a`'s sibling, and under a numbered item cut the numbering in two.
+ */
+function nestedItemAfterBlank(lines: string[], index: number, stack: ListLevel[]): number | null {
+  let next = index
+  while (next < lines.length && !(lines[next] ?? '').trim()) {
+    next += 1
+  }
+  const item = next > index ? parseListLine(lines[next] ?? '') : null
+  if (item === null) {
+    return null
+  }
+  for (let depth = stack.length - 1; depth >= 1; depth -= 1) {
+    const owner = stack[depth]!
+    if (isItem(owner) && item.indent >= owner.contentIndent) {
+      return item.indent < owner.contentIndent + 4 ? next : null
+    }
+  }
+  return null
+}
+
+/**
  * The run of list lines starting at an index, as a tree, and where the run ended.
  *
  * A stack rather than recursion because indentation can drop by more than one level at a time, and
@@ -213,9 +246,16 @@ export function parseListTree(
   const root: ListLevel = { indent: -1, children: [] }
   const stack: ListLevel[] = [root]
   let index = startIndex
+  let blankBefore = false
   while (index < lines.length) {
     const item = parseListLine(lines[index] ?? '')
     if (!item) {
+      const nested = nestedItemAfterBlank(lines, index, stack)
+      if (nested !== null) {
+        index = nested
+        blankBefore = true
+        continue
+      }
       const owned = readOwnedBlock(lines, index, stack, opensBlock)
       if (owned === null) {
         break
@@ -228,6 +268,8 @@ export function parseListTree(
     while (stack.length > 1 && item.indent <= stack[stack.length - 1]!.indent) {
       stack.pop()
     }
+    item.blankBefore = blankBefore
+    blankBefore = false
     stack[stack.length - 1]!.children.push(item)
     stack.push(item)
     index += 1
