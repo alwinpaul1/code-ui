@@ -109,7 +109,10 @@ const HOST_COMPONENT_NAMES = new Set([
 // 303 since 2026-09-26: useMobileSessionSaveToPhonePresence in the controller, which tells a
 // tab-menu Save to Phone whether the user is still in the session. Not expanded here: its own
 // refs, focus effect and memo stay inside it, so the callback, effect and JSX pins held.
-const HEAD_MAIN_HOOK_SHA256 = 'cd8240c0471804bae7d54d452d06191f4ac0a0462a9de578ce06456406394451'
+// 304 since 2026-09-30: useClipboardWriter in the dictation hook, for desktop dictation that no
+// field on screen can take (the live terminal refused it, or the command box is not drawn). The
+// hook and binding pins moved, and only those.
+const HEAD_MAIN_HOOK_SHA256 = 'c77536152d714ea9944233d310dd4b375e569b0ca90800a125226709a50025c3'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -118,7 +121,8 @@ const HEAD_MAIN_HOOK_SHA256 = 'cd8240c0471804bae7d54d452d06191f4ac0a0462a9de578c
 // 2026-09-25 (later): the file actions also take fileTapMatchPicker out of
 // useMobileFileTapHandlers, the drawer for a bare chat name found in several folders.
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
-const HEAD_HOOK_BINDING_SHA256 = 'be919c549cf9f0dd18137f8e4dd89e21e9bae17fedfc49eaaf36d6dc476631c7'
+// 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
+const HEAD_HOOK_BINDING_SHA256 = '4ffe099f8704d04ceaadfb99834c58c9844eb3c05e9f8d52f1c4d71c3926a675'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -939,7 +943,9 @@ describe('mobile session route extraction parity', () => {
     // one useTerminalTextFieldSubmitBinding per field in the send actions (Orca #22300).
     // 302 since 2026-09-25: the Markdown actions' page Back claim (Orca #22362).
     // 303 since 2026-09-26: useMobileSessionSaveToPhonePresence (the tab menu's Save to Phone).
-    expect(main.hooks).toHaveLength(303)
+    // 304 since 2026-09-30: useClipboardWriter in the dictation hook, where desktop dictation goes
+    // when no field on screen can take it.
+    expect(main.hooks).toHaveLength(304)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
