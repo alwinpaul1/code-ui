@@ -63,9 +63,11 @@ export function makeMarkdownStyles(theme: Theme) {
   const codeHeaderHeight =
     Math.max(MARKDOWN_CODE_COPY_ICON_SIZE, Math.ceil(spScale.toDp(CODE_COPIED_LINE_HEIGHT))) +
     2 * CODE_COPY_PADDING_VERTICAL
+  // Between one block and the next.
+  const blockGap = space.sm + 2
   return StyleSheet.create({
     root: {
-      gap: space.sm + 2
+      gap: blockGap
     },
     paragraph: {
       fontFamily: fonts.regular,
@@ -179,6 +181,13 @@ export function makeMarkdownStyles(theme: Theme) {
       borderLeftWidth: 3,
       borderLeftColor: colors.borderStrong,
       paddingLeft: space.md
+    },
+    /** A block that carries on the quote above it (a fence cut the quote in
+     *  two): it closes the document's gap so the bar runs on unbroken, and
+     *  keeps the same distance inside the bar. */
+    quoteJoin: {
+      marginTop: -blockGap,
+      paddingTop: blockGap
     },
     quoteText: {
       fontFamily: fonts.regular,
