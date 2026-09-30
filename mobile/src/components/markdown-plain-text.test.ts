@@ -454,7 +454,14 @@ describe('emphasis that never closes', () => {
     ['italic openers before every bold', '* **a** '.repeat(20_000)],
     ['an angle bracket before every letter', '<a'.repeat(50_000)],
     ['an at sign after every letter in angle brackets', `<${'a@'.repeat(50_000)}`],
-    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`]
+    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`],
+    // Review, 2026-09-30: every underscore here sits inside a word, so each
+    // opener is refused and the scan went on from the next underscore, where
+    // an italic holding bold spans ran to the end of the text first: 6.7 s
+    // for this one, quadratic in its length.
+    ['dunder names end to end', 'a__b__'.repeat(20_000)],
+    ['dunder names end to end in an italic', `_x ${'a__b__'.repeat(20_000)}`],
+    ['long underscore runs inside words', `x${'_'.repeat(20_000)}y`.repeat(3)]
   ])('copies %s inside the deadline', (_name, text) => {
     const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
     expect(typeof copied).toBe('string')

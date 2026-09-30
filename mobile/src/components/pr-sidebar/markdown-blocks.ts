@@ -1,5 +1,9 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
-import { emphasisSource, isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import {
+  afterRefusedUnderscoreOpener,
+  emphasisSource,
+  isIntrawordUnderscoreToken
+} from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
@@ -337,11 +341,11 @@ export function parseInline(text: string): InlineToken[] {
     }
     const token = m[0]
     // An underscore inside a word (snake_case, src/__init__.py) is text, as CommonMark reads it.
-    // Only its opener is refused: the scan goes on from the next character, as the chat's does,
-    // so a span inside it still draws. Taking the whole match as text swallowed the code span in
-    // "my_var and `code` and other_var" (review, 2026-09-30).
+    // Only its opener is refused: the scan goes on past the opener's underscore run, as the chat's
+    // does, so a span inside it still draws. Taking the whole match as text swallowed the code span
+    // in "my_var and `code` and other_var" (review, 2026-09-30).
     if (isIntrawordUnderscoreToken(plain, m.index, token)) {
-      matcher.lastIndex = m.index + 1
+      matcher.lastIndex = afterRefusedUnderscoreOpener(plain, m.index)
       continue
     }
     if (m.index > cursor) {

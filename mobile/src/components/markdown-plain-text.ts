@@ -5,7 +5,7 @@ import {
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
-import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { afterRefusedUnderscoreOpener, autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { isRemoteImageUrl } from './markdown-image-source'
 import { listMarker } from './mobile-markdown-list-marker'
@@ -79,7 +79,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
   while ((match = pattern.exec())) {
     const token = match[0]
     if (token.startsWith('_') && isIntrawordUnderscoreToken(text, match.index, token)) {
-      pattern.lastIndex = match.index + 1
+      pattern.lastIndex = afterRefusedUnderscoreOpener(text, match.index)
       continue
     }
     out += unescapeMarkdownText(text.slice(pendingStart, match.index))

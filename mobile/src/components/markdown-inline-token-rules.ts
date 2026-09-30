@@ -20,6 +20,22 @@ export function isIntrawordUnderscoreToken(text: string, index: number, token: s
 }
 
 /**
+ * Where the scan goes on after an intraword underscore token at `index` is refused: past the
+ * underscore run it opens with. A token opening anywhere else in that run has `_` before it, which
+ * isIntrawordUnderscoreToken refuses too, so nothing is lost; but finding each one cost a scan,
+ * and from the second underscore of `a__b__` an italic holding bold spans runs to the end of the
+ * text before it closes. Going on one character at a time did that once per underscore: copying
+ * `a__b__` 20,000 times took 6.7 s (review, 2026-09-30).
+ */
+export function afterRefusedUnderscoreOpener(text: string, index: number): number {
+  let end = index + 1
+  while (text[end] === '_') {
+    end += 1
+  }
+  return end
+}
+
+/**
  * Split sentence punctuation off an autolinked URL tail ("see https://x.com/a."),
  * keeping a trailing ')' only when the URL itself opened a paren.
  */
