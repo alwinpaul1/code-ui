@@ -65,6 +65,16 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 //   held none (Orca's last resort for a pane with no renderer row,
 //   `buildPtyMobileAgentStatus`, is a `done` with the stand-in's exact shape).
 //
+// Orca 1.4.217 (checked against the v1.4.217 source, 2026-09-30) leaves the stand-in alone: the
+// title projection is byte-equal to v1.4.216's and copies no `mainAgent`. What changed is the row
+// beside it. Every Claude hook row now carries `mainAgent: {state, outcome?, stateStartedAt}`
+// (#22452), the lead's own state before child work is folded into `state`, and reads
+// `turnCompletedAt` off that lead record rather than off the Stop event alone, so a child's
+// lifecycle row built while the record still holds the stamp carries it too. A cancelled turn
+// still earns none (#22476), and a settled lead held open by a WAITING child is stamped as well
+// as one held by working children. This file reads none of that yet: it keeps the rules above,
+// which stay right for the older hosts it also serves, and `mainAgent` is the field to read next.
+//
 // Every change to background work fires a hook (a launch is a tool call, an
 // agent's end is SubagentStop, a shell's end starts a turn), and a hook row
 // newer than the title takes the pane back, so the held row is the host's
