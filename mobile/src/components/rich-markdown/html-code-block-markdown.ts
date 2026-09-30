@@ -2,6 +2,7 @@ import {
   CODE_FENCE_ATTRIBUTE,
   CODE_INDENT_ATTRIBUTE,
   CODE_INFO_ATTRIBUTE,
+  CODE_LINES_ATTRIBUTE,
   writtenFence
 } from './markdown-code-fence'
 import { textContent } from './html-inline-markdown'
@@ -50,7 +51,11 @@ export function codeBlockMarkdown(
   indentable = true
 ): string {
   const code = preCode(pre)
-  const lines = code.split('\n')
+  // An empty block is as many blank lines as its source had (CODE_LINES_ATTRIBUTE), or one.
+  const lines =
+    code === ''
+      ? Array.from({ length: rememberedColumns(pre, CODE_LINES_ATTRIBUTE, 1) }, () => '')
+      : code.split('\n')
   const indented = pre.hasAttribute(INDENTED_CODE_ATTRIBUTE)
   if (writesIndented(pre, indentable)) {
     const columns = ' '.repeat(

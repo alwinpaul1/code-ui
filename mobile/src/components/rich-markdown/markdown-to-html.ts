@@ -12,6 +12,7 @@ import {
 import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { paragraphParts, reflowLines } from './markdown-reflow'
+import { quoteHtml, quoteLineContent } from './markdown-quote'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
@@ -20,31 +21,6 @@ export function isBlockStart(line: string): boolean {
     openingFence(line) !== null ||
     /^(#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
   )
-}
-
-/**
- * A quote's lines, markers off, as its paragraphs. A blank quote line is a paragraph break, which
- * a save writes back as a bare `>` (html-block-markdown.ts); it was two breaks inside one
- * paragraph until 2026-09-30, and saved as `> ` with a trailing space. Inside a paragraph every
- * source line is still drawn on its own line, as quotes always have been, with its hard-break
- * spaces or backslash left in its text.
- */
-function quoteHtml(lines: readonly string[]): string {
-  const paragraphs: string[][] = [[]]
-  for (const line of lines) {
-    if (line.trim()) {
-      paragraphs[paragraphs.length - 1]!.push(line)
-    } else if (paragraphs[paragraphs.length - 1]!.length > 0) {
-      paragraphs.push([])
-    }
-  }
-  const blocks = paragraphs
-    .filter((paragraph) => paragraph.length > 0)
-    .map(
-      (paragraph) =>
-        `<p>${renderInline(paragraph.join('\n').trim()).replace(/\n/g, '<br />')}</p>`
-    )
-  return `<blockquote>${blocks.join('') || '<p></p>'}</blockquote>`
 }
 
 /**
@@ -80,7 +56,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       if (index < lines.length) {
         index += 1
       }
-      html.push(fencedCodeHtml(fence, code.join('\n')))
+      html.push(fencedCodeHtml(fence, code))
       continue
     }
     if (isThematicBreak(line)) {
@@ -123,10 +99,10 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       continue
     }
-    if (/^>\s?/.test(line)) {
+    if (quoteLineContent(line) !== null) {
       const quote: string[] = []
-      while (index < lines.length && /^>\s?/.test(lines[index] ?? '')) {
-        quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
+      while (index < lines.length && quoteLineContent(lines[index] ?? '') !== null) {
+        quote.push(quoteLineContent(lines[index] ?? '')!)
         index += 1
       }
       html.push(quoteHtml(quote))

@@ -14,7 +14,8 @@ import { closesFence, openingFence, outdentCodeLine, type OpeningFence } from '.
 export type ItemCodeBlock = {
   kind: 'code'
   fence: OpeningFence
-  code: string
+  /** The code's lines, with the item's columns taken off. */
+  code: readonly string[]
   /**
    * Columns from the item's own line to the fence, or null for a fence on the item's marker line,
    * which always sits at the marker's width.
@@ -75,7 +76,7 @@ export function readItemFenceBody(
   index: number,
   fence: OpeningFence,
   contentColumn: number
-): { code: string; nextIndex: number } {
+): { code: string[]; nextIndex: number } {
   const codeColumns = contentColumn + fence.indent
   const code: string[] = []
   let next = index
@@ -90,7 +91,7 @@ export function readItemFenceBody(
     }
     code.push(outdentCodeLine(line, codeColumns))
   }
-  return { code: code.join('\n'), nextIndex: next }
+  return { code, nextIndex: next }
 }
 
 /**
