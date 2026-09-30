@@ -103,6 +103,26 @@ describe('mobileStructuredSendDelivery', () => {
     )
   })
 
+  it("lets Retry send under a fresh id after the host could not restart the chat's agent", () => {
+    // Orca 1.4.217 (#22364, 6ae6ed08bb): a send to a chat whose provider had died makes the host restart
+    // it first. When that fails the host refuses the send with this code and the restart's own
+    // cause as the message, in the wording of ownerRestartFailedOutcome. The refusal is final for
+    // that send, so a retry under the same id would only replay it.
+    for (const agentName of ['Claude', 'Codex']) {
+      expect(
+        mobileStructuredSendDelivery({
+          status: 'refused',
+          code: 'agent_session_owner_restart_failed',
+          message: `${agentName} couldn't restart: the process exited with code 1.`
+        })
+      ).toEqual({
+        outcome: 'rejected',
+        operationIdSpent: true,
+        error: `${agentName} couldn't restart: the process exited with code 1.`
+      })
+    }
+  })
+
   it('never releases an ambiguous id on a later RPC refusal or failure', () => {
     expect(
       mobileStructuredSendDelivery(

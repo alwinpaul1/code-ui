@@ -9,6 +9,10 @@ import {
 } from './mobile-structured-agent-prompts'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
 import {
+  explainLongAnswerFailure,
+  structuredQuestionResponseFields
+} from './mobile-structured-question-response'
+import {
   advanceGroupedQuestion,
   groupedQuestionPromptKey,
   type GroupedQuestionDraft
@@ -80,10 +84,17 @@ export function useMobileStructuredPromptResponses(args: {
           setCollected({ sessionKey, draft: grouped.draft })
           return true
         }
+        const fields = structuredQuestionResponseFields({
+          itemId: prompt.itemId,
+          expectedRevision: prompt.revision,
+          optionId: grouped.optionId,
+          answers: grouped.answers
+        })
         const result = await mutate<AgentSessionPromptResult>(
           'agentSession.respondToQuestion',
           'agentSession.respondTo:question',
-          { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: grouped.optionId }
+          fields,
+          'answers' in fields ? { explainFailure: explainLongAnswerFailure } : undefined
         )
         if (result.status === 'unknown') {
           // The group may have left the phone; a retry must start from the first question, not a stale tail.
@@ -105,10 +116,12 @@ export function useMobileStructuredPromptResponses(args: {
       if (!target) {
         return false
       }
+      const fields = structuredQuestionResponseFields(target)
       const result = await mutate<AgentSessionPromptResult>(
         'agentSession.respondToQuestion',
         'agentSession.respondTo:question',
-        target
+        fields,
+        'answers' in fields ? { explainFailure: explainLongAnswerFailure } : undefined
       )
       if (result.status === 'unknown') {
         onSendError('Answer unconfirmed — check chat before retrying')

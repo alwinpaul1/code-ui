@@ -33,6 +33,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   continue: require('../../../src/shared/agent-icons/continue.png'),
   cursor: require('../../../src/shared/agent-icons/cursor.png'),
   muse: require('../../../src/shared/agent-icons/muse.png'),
+  zcode: require('../../../src/shared/agent-icons/zcode.png'),
   droid: require('../../../src/shared/agent-icons/droid.png'),
   kimi: require('../../../src/shared/agent-icons/kimi.png'),
   'mistral-vibe': require('../../../src/shared/agent-icons/mistral-vibe.png'),

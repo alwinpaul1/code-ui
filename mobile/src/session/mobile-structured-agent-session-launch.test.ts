@@ -335,4 +335,55 @@ describe('mobile structured agent-session launch', () => {
       })
     }
   )
+
+  // Orca 1.4.217 (#22364) stamps a durably failed create with what it proved about the provider
+  // process. The shape is failedCreateRefusal's: a refusal code plus `ownerVerdict`.
+  it.each(['agent_session_ownership_unknown', 'agent_session_operation_invalid'])(
+    'reads a %s refusal with an exited owner as failed, so the terminal fallback is offered',
+    async (code) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        {
+          ok: true,
+          result: {
+            ok: false,
+            refusal: {
+              code,
+              message: "Codex couldn't restart: the process exited with code 1.",
+              ownerVerdict: 'exited'
+            }
+          }
+        }
+      )
+      await expect(
+        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+      ).resolves.toEqual({
+        kind: 'failed',
+        message: "Codex couldn't restart: the process exited with code 1."
+      })
+    }
+  )
+
+  it.each(['live', 'unverifiable', undefined])(
+    'keeps an ownership-unknown refusal unknown when the owner verdict is %s',
+    async (ownerVerdict) => {
+      const client = clientReturning(
+        { ok: true, result: { supported: true } },
+        {
+          ok: true,
+          result: {
+            ok: false,
+            refusal: {
+              code: 'agent_session_ownership_unknown',
+              message: 'create outcome ambiguous',
+              ...(ownerVerdict ? { ownerVerdict } : {})
+            }
+          }
+        }
+      )
+      await expect(
+        createMobileStructuredAgentSession(client, 'workspace-1', 'codex')
+      ).resolves.toEqual({ kind: 'unknown', message: 'create outcome ambiguous' })
+    }
+  )
 })

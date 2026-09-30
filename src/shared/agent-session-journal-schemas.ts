@@ -13,6 +13,7 @@
 // newer build must not be misread as malformed (see journal-row-schema.ts).
 
 import { z } from 'zod'
+import { AgentSessionContextUsageSchema } from './agent-session-context-usage-schema'
 import type {
   AgentJournalItemBody,
   AgentJournalMessageItem,
@@ -85,6 +86,15 @@ const PromptOption = z.object({ id: z.string(), label: z.string() })
 const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
+  answers: z
+    .array(
+      z.object({
+        questionId: z.string(),
+        optionIds: z.array(z.string()),
+        other: z.string().optional()
+      })
+    )
+    .optional(),
   resolvedBy: z.string().nullable(),
   resolvedAt: z.number().nullable()
 })
@@ -189,7 +199,8 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     startedAt: z.number().finite().positive().optional(),
     requestedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
-    durationMs: z.number().finite().nonnegative().optional()
+    durationMs: z.number().finite().nonnegative().optional(),
+    contextUsage: AgentSessionContextUsageSchema.optional()
   })
 ])
 
@@ -216,6 +227,7 @@ export const AgentJournalRenderItemSchema = z.object({
   sequence: z.number().int(),
   observedAt: z.number(),
   recovered: z.literal(true).optional(),
+  recoveredAt: z.number().optional(),
   ...AgentJournalProducerLinkageFields
 })
 

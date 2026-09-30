@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionQuestionAnswer } from '../../../src/shared/agent-session-question-answer'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import {
@@ -19,6 +20,9 @@ export type StructuredPromptResponseTarget = {
   itemId: string
   expectedRevision: number
   optionId: string
+  /** The same answer as structured fields. Only a typed answer carries it: it is what a host that
+   *  advertises `agent-session.question-answers.v1` reads when the packed `optionId` is too long. */
+  answers?: AgentSessionQuestionAnswer[]
 }
 
 type PromptTokenPayload =
@@ -247,7 +251,8 @@ export function structuredQuestionResponseTarget(
       ? {
           itemId: freeText.payload.itemId,
           expectedRevision: freeText.payload.revision,
-          optionId: encodeQuestionAnswer(freeText.payload.questionId, answer)
+          optionId: encodeQuestionAnswer(freeText.payload.questionId, answer),
+          answers: [{ questionId: freeText.payload.questionId, optionIds: [], other: answer }]
         }
       : null
   }
@@ -269,7 +274,10 @@ export function structuredQuestionResponseTarget(
     ? {
         itemId: currentPrompt.itemId,
         expectedRevision: currentPrompt.revision,
-        optionId: encodeQuestionAnswer(currentPrompt.body.freeTextQuestionId, trimmed)
+        optionId: encodeQuestionAnswer(currentPrompt.body.freeTextQuestionId, trimmed),
+        answers: [
+          { questionId: currentPrompt.body.freeTextQuestionId, optionIds: [], other: trimmed }
+        ]
       }
     : null
 }

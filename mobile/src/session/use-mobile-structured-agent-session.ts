@@ -21,6 +21,8 @@ import {
   requestStructuredAgentSessionMutation,
   retainStructuredSessionOperationId as retainStructuredOpId,
   timeoutForDeadline,
+  failureMessage,
+  type MutateOptions,
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 import type { RpcClient } from '../transport/rpc-client'
@@ -79,7 +81,7 @@ export function useMobileStructuredAgentSession(args: {
       method: string,
       fingerprintMethod: string,
       fields: Record<string, unknown>,
-      options?: { onError?: (message: string) => void }
+      options?: MutateOptions
     ): Promise<StructuredAgentSessionMutationResult<TValue>> => {
       const current = stateRef.current
       if (!client || !sessionId || !enabled || current.fence === null) {
@@ -118,7 +120,7 @@ export function useMobileStructuredAgentSession(args: {
       }
       operationIdsRef.current.delete(key)
       const report = options?.onError ?? onSendError
-      report(result.message)
+      report(failureMessage(result, options))
       return { status: 'rejected' }
     },
     [client, enabled, onSendError, sessionId, sessionKey]

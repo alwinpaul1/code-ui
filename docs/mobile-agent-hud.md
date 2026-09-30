@@ -826,3 +826,36 @@ quotes and `$IsWindows` for it, and use the `AppDomain` assembly fallback), and
 the end-to-end pass on a Windows console. A Windows host with Git Bash *or*
 PowerShell now has a path; the first run on real Windows decides whether the
 console attach lands where the reasoning says it does.
+
+## Codex under Orca 1.4.217 and Codex 0.158.0 (2026-09-30)
+
+Checked against Orca's v1.4.217 source and its recorded Codex captures
+(`src/main/runtime/__fixtures__/codex-0-158-0-*.txt`, `codex-0-155-1-timed-turn.txt`), rendered through
+tmux at 120x40. **Not run against a live Codex 0.158 tab.**
+
+- **Isolation (#23900, #23907).** Orca's shell function for `codex` now puts `--no-daemon` in front of
+  the arguments of every launch in an Orca terminal (unless `ORCA_CODEX_ISOLATE=0`, or the command is
+  `agents`, `queue` or names `--remote`/`--no-daemon` itself; it probes `codex --help` first, so 0.155 and
+  older are left alone). Codex 0.156+ otherwise shares one background app-server per `CODEX_HOME`, which
+  ran every tab's hooks with the first tab's Orca environment. The captures record the launch as
+  `codex --no-daemon -c check_for_update_on_startup=false …`. What the phone reads does not move:
+  `providerSession` and the `rollout-*.jsonl` path still come from the hook payload and still sit under
+  `<CODEX_HOME>/sessions/YYYY/MM/DD/`, and no phone code names an app-server. The one dependency worth
+  knowing is the notify beacon: its script finds the PTY by walking at most six parents of the notify
+  process with `ps -o tty=`. Under a shared server that chain ends in a daemon with no terminal, so a
+  phone-launched tab would have written nowhere; in process, the parent is the tab's own Codex. That is
+  reasoning from the script, not something observed. A user who sets `ORCA_CODEX_ISOLATE=0` gets the
+  shared server back.
+- **Readiness (#23475, #23765).** Codex 0.158 dropped `model:` and `directory:` from its startup box
+  (it says `loading`, then nothing). Orca's `worker-start` waited on those rows; the phone never did.
+  It gates a send on the link and the input lease, and reads Codex's screen only for the model picker
+  and the queue editor (`isCodexIdle`, `isCodexWorking`): the composer placeholder, the input footer and
+  the busy row. Those are unchanged in 0.158.0, with one exception the captures showed: the footer grew
+  a "? for shortcuts" line under the composer, so the busy row (`• Working (0s • esc to interrupt)`)
+  sits **seventh** from the bottom instead of sixth, and the phone's six-line tail read a running turn
+  as idle. It now applies Orca's own rule (`hasBusyStatusRowAbove`, v1.4.217): only the last non-blank line above the composer counts, stepping over the queued-input preview and one `└` detail line, matched on `to interrupt)`; with no `›` composer on screen there is no verdict. A sentence or status row quoted higher up in an answer, or above 0.158's timestamp, is not a running turn (`codex-picker-screen.ts`, pinned by
+  `codex-0158-screens.test.ts`).
+- **Trust prompt.** A first launch in an unknown folder opens "Trust this folder?" (`› 1. Trust and
+  continue`). The phone has no card for it; it is neither an approval nor an idle prompt to the readers,
+  so nothing is typed into it.
+

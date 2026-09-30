@@ -414,5 +414,47 @@ describe('same-session boundaries and a taken follow-up, through Orca’s real h
     expect(leadTool.payload?.toolName).toBe('Read')
     expect(leadTool.session).toBe(LEAD)
   })
-})
 
+  // Orca 1.4.217 (#22452): a nested `claude -p` shares the pane's lead record, and its SessionStart
+  // resets that record to `done`. A row the lead's own background subagent then builds says
+  // `mainAgent: {state: 'done'}` with no stamp and no outcome while the lead is still blocked in
+  // Bash. That is not "the lead is done": reading it as background work opened the claim, and the
+  // nested run's held Stop took the chat (found by review, sequence below).
+  it('keeps the chat on the lead when a nested run resets the shared record under a live subagent', () => {
+    const state = createHookListenerState()
+    const subscribedTo: (string | null)[] = []
+    const step = (session: string, hook: string, extra: Status = {}) => {
+      const result = post(state, session, hook, extra)
+      subscribedTo.push(result.session)
+      return result
+    }
+    step(LEAD, 'SessionStart', { source: 'startup' })
+    step(LEAD, 'UserPromptSubmit', { prompt: 'review the diff with a background helper' })
+    step(LEAD, 'PreToolUse', {
+      tool_name: 'Task',
+      tool_input: { description: 'review', run_in_background: true },
+      tool_use_id: 'task-1'
+    })
+    step(LEAD, 'SubagentStart', { agent_id: 'sub-1', agent_type: 'general-purpose' })
+    step(LEAD, 'PostToolUse', { tool_name: 'Task', tool_input: {}, tool_use_id: 'task-1' })
+    step(LEAD, 'PreToolUse', {
+      tool_name: 'Bash',
+      tool_input: { command: 'claude -p "summarise"' },
+      tool_use_id: 'bash-1'
+    })
+    step(NESTED, 'SessionStart', { source: 'startup' })
+    const child = step(LEAD, 'PreToolUse', {
+      agent_id: 'sub-1',
+      tool_name: 'Read',
+      tool_input: { file_path: '/tmp/a' },
+      tool_use_id: 'read-1'
+    })
+    // The row the reviewer proved: working, the shared record already reset to done, no stamp.
+    expect(child.payload).toMatchObject({ state: 'working', mainAgent: { state: 'done' } })
+    expect(child.payload?.turnCompletedAt).toBeUndefined()
+    step(NESTED, 'UserPromptSubmit', { prompt: 'summarise' })
+    step(NESTED, 'Stop', { last_assistant_message: 'Summary.' })
+
+    expect(subscribedTo.every((id) => id === LEAD)).toBe(true)
+  })
+})

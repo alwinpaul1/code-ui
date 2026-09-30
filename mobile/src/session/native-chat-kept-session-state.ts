@@ -165,6 +165,11 @@ export type StatusTurnEvidence = {
   /** The status is Orca's title stand-in (agent-status-stand-in.ts) that
    *  copied the row's identity: its `done` is the title's, not the host's. */
   titleStandIn?: boolean
+  /** The row's own `mainAgent` says the lead's turn was CANCELLED (Orca 1.4.217, #22452, #22476): a
+   *  `working` row is then background work outliving the turn, and a cancel earns no turn stamp. Only
+   *  a cancellation: a bare `done` is also what a nested `claude -p`'s SessionStart resets the shared
+   *  lead record to, under a lead that is still blocked in Bash. */
+  leadDone?: boolean
 }
 
 /** A session's own status on the turn: running a tool while `working`; its
@@ -179,9 +184,10 @@ export function statusTurn(
   evidence: StatusTurnEvidence = {}
 ): { turn: NativeChatTurn; finishedOne: boolean; fromStandIn: boolean; boundary?: boolean } | null {
   const gated = evidence.turnCompletedAt != null
+  const leadDone = evidence.leadDone === true
   const fromStandIn = evidence.titleStandIn === true
   if (state === 'working') {
-    return workingMode === 'monitoring' || gated
+    return workingMode === 'monitoring' || gated || leadDone
       ? { turn: 'background', finishedOne: true, fromStandIn }
       : { turn: 'working', finishedOne: false, fromStandIn }
   }

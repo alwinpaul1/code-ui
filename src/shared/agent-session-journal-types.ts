@@ -9,7 +9,10 @@
 
 import type { AgentType } from './agent-status-types'
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
+import type { AgentSessionQuestionAnswer } from './agent-session-question-answer'
+import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
+import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
 
 export { type AgentType }
@@ -129,8 +132,11 @@ export type AgentJournalResolutionState = (typeof AGENT_JOURNAL_RESOLUTION_STATE
  *  invoking the provider callback twice. */
 export type AgentJournalResolution = {
   state: AgentJournalResolutionState
-  /** Option id the winner picked; null while pending or cancelled. */
+  /** Option id the winner picked; null while pending or cancelled. For a question, the answer in the
+   *  packed form older clients read; `answers` is the same answer structured. */
   selectedOptionId: string | null
+  /** Question answers. Absent on approvals and on rows written before hosts recorded it. */
+  answers?: AgentSessionQuestionAnswer[]
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
@@ -196,6 +202,10 @@ export const AGENT_JOURNAL_TURN_LIFECYCLE_STATES = [
 ] as const
 export type AgentJournalTurnLifecycleState = (typeof AGENT_JOURNAL_TURN_LIFECYCLE_STATES)[number]
 
+// The turn verdict vocabulary lives in agent-turn-outcome.ts so the agent-status
+// row can share it without importing the journal; re-exported to keep one import site.
+export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './agent-turn-outcome'
+
 export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
@@ -210,6 +220,9 @@ export type AgentJournalTurnLifecycle = {
   completedAt?: number
   /** The provider's own measured turn duration, preferred over the host interval. */
   durationMs?: number
+  /** What the provider said about its context window during or after this turn.
+   *  Usually written by a later revision, since the provider answers after the end. */
+  contextUsage?: AgentSessionContextUsage
 }
 
 /** Provider thread-goal lifecycle. Open like other persisted vocabularies: a
@@ -323,6 +336,8 @@ export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
   observedAt: number
   /** Set when the row was appended by crash reconciliation rather than live. */
   recovered?: true
+  /** When crash reconciliation wrote this revision; present exactly when `recovered` is. */
+  recoveredAt?: number
 }
 
 // ─── Submissions ────────────────────────────────────────────────────────────

@@ -3,22 +3,22 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md)
-src/shared/structured-agent-session-mutation.ts: 8999a0028
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/agent-session-definitive-refusal.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/agent-session-question-answer.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
+src/shared/agent-session-definitive-refusal.test.ts: d443320af2 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-question-answer.ts: add99c908b (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
-src/shared/structured-agent-session-create.ts: 1ae7aa8bb
-src/shared/agent-session-provider-handle.test.ts: 1ae7aa8bb
+src/shared/structured-agent-session-create.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-provider-handle.test.ts: eb746a6d32 (v1.4.211..v1.4.217 shared halves)
 src/shared/runtime-mobile-session-tab-contracts.ts: 53852c9ca4a34e741d68115caa474ebb622bed4e
 src/shared/native-chat-session-option-defaults.ts: c287a5d9b
 src/shared/native-chat-session-option-defaults.test.ts: c287a5d9b
 src/shared/native-chat-session-options.ts: c287a5d9b
-src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk and the #20506 hunk, see LOCAL-FILES.md)
+src/shared/native-chat-session-option-snapshot.ts: 546fd9b21 (plus a local hunk and the #20506 hunk, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change e0144a9eb6), see LOCAL-FILES.md
 src/shared/native-chat-session-option-snapshot.test.ts: c287a5d9b
 src/shared/native-chat-session-option-state.ts: ae9c06c94 (plus a local hunk, see LOCAL-FILES.md)
 src/shared/native-chat-session-option-state.test.ts: ae9c06c94
@@ -30,32 +30,32 @@ src/shared/omp-model-list-probe.ts: ae9c06c94
 src/shared/agent-image-paste.ts: e7da72c3d
 src/shared/agent-image-paste.test.ts: e7da72c3d
 src/shared/file-uri-path.ts: e7da72c3d
-src/shared/structured-agent-session-options.ts: c287a5d9b
-src/shared/structured-agent-session-options.test.ts: c287a5d9b
+src/shared/structured-agent-session-options.ts: e0144a9eb6 (v1.4.211..v1.4.217 shared halves)
+src/shared/structured-agent-session-options.test.ts: e0144a9eb6 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-option-picks.test.ts: c287a5d9b
 src/shared/structured-agent-session-option-codec.ts: c287a5d9b
 src/shared/structured-agent-session-option-codec.test.ts: c287a5d9b
-src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md)
+src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6627c6503c), see LOCAL-FILES.md
 src/shared/agent-session-background-task-wire.ts: f2af92b2f
 src/shared/remote-runtime-client-capabilities.ts: 2626e2eca
 src/shared/agent-session-background-task-state-equality.ts: 2626e2eca
 src/shared/agent-session-turn-record.ts: 2626e2eca
 src/shared/agent-session-turn-record.test.ts: 2626e2eca
 src/shared/agent-turn-lifecycle-text.ts: 2626e2eca
-src/shared/structured-agent-session-turn-timing.ts: 533b0bd02
-src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02
+src/shared/structured-agent-session-turn-timing.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
+src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6ae6ed08bb), see LOCAL-FILES.md
 src/shared/structured-agent-turn-clock-anchor.ts: 533b0bd02
 src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
-src/shared/structured-agent-session-outbox.ts: f55b7ba68
+src/shared/structured-agent-session-outbox.ts: f55b7ba68; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/structured-agent-session-message-projection.ts: 434365d2d
 src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
-src/shared/structured-agent-session-send-disposition.test.ts: f55b7ba68
-src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md)
+src/shared/structured-agent-session-send-disposition.test.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
 src/shared/agent-session-conversation-command.ts: f1d854502
-src/shared/agent-session-operation-ledger.ts: f1d854502
+src/shared/agent-session-operation-ledger.ts: f1d854502; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
 src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode)
 src/shared/native-chat-diff.ts: 0d4d059ae
 src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
@@ -72,7 +72,7 @@ src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02
 src/shared/native-chat-turn-status.test.ts: 533b0bd02
-src/shared/structured-agent-session-live-turn.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299's root-row filter and #22349's tool line between calls)
+src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-live-turn.test.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299, #22349)
 src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
@@ -100,7 +100,7 @@ src/shared/project-host-setup-projection.ts: c35a47958
 src/shared/project-host-setup-projection.test.ts: 2c5cd845a2ec3512cf983f62f10bd88eea61ee25
 src/shared/session-tab-placement.ts: 5287c5cdb
 src/shared/session-tab-placement.test.ts: 5287c5cdb
-src/shared/agent-launch-intent.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291's reserved pane, over #22037/#22108)
+src/shared/agent-launch-intent.ts: 6627c6503c (v1.4.211..v1.4.217 shared halves)
 src/shared/github/owner-slug.ts: 85d1ffc07
 src/shared/github/owner-slug.test.ts: 85d1ffc07
 src/shared/pr-comment-audience.ts: dcc1f9012
@@ -114,8 +114,8 @@ src/shared/crash-reporting.ts: 90d363afc9 (v1.4.209..v1.4.210 shared halves; fir
 src/shared/daemon-adoption-telemetry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171's daemon code identity)
 src/shared/daemon-adoption-telemetry.test.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
 src/shared/developer-permissions-types.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
-src/shared/telemetry-daemon-event-schemas.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
-src/shared/telemetry-event-registry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
+src/shared/telemetry-daemon-event-schemas.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves)
+src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves)
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -126,7 +126,7 @@ The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018)
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
 src/shared/rpc-contract/accounts-params.ts: c84007c54
 src/shared/rpc-contract/agent-hooks-params.ts: c84007c54
-src/shared/rpc-contract/agent-launch-params.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291's reserved pane)
+src/shared/rpc-contract/agent-launch-params.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/rpc-contract/agent-launch-params.test.ts: d60043787b (v1.4.209..v1.4.210 shared halves; new)
 src/shared/rpc-contract/agent-session-params.ts: a375936c04 (v1.4.210..v1.4.211 shared halves; #22291; also brings #20620's terminalKittyKeyboardProtocol field, which the c84007c54 copy lacked)
 src/shared/rpc-contract/ai-vault-params.ts: c84007c54
@@ -138,8 +138,8 @@ src/shared/rpc-contract/browser-params.ts: c84007c54
 src/shared/rpc-contract/browser-screencast-params.ts: c84007c54
 src/shared/rpc-contract/browser-tab-create-params.ts: c84007c54
 src/shared/rpc-contract/client-events-params.ts: c84007c54
-src/shared/rpc-contract/client-settings-params.ts: c84007c54
-src/shared/rpc-contract/client-ui-params.ts: c84007c54
+src/shared/rpc-contract/client-settings-params.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves)
+src/shared/rpc-contract/client-ui-params.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves)
 src/shared/rpc-contract/client-ui-workspace-filter-fields-params.ts: c84007c54
 src/shared/rpc-contract/clipboard-params.ts: c84007c54
 src/shared/rpc-contract/computer-params.ts: c84007c54
@@ -187,15 +187,15 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
-src/shared/rpc-contract/session-tabs-schemas-params.ts: c84007c54
+src/shared/rpc-contract/session-tabs-schemas-params.ts: 2ed6505a41 (v1.4.211..v1.4.217 shared halves)
 src/shared/rpc-contract/skills-params.ts: c84007c54
 src/shared/rpc-contract/speech-params.ts: c84007c54
 src/shared/rpc-contract/ssh-params.ts: c84007c54
-src/shared/rpc-contract/structured-agent-session-params.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's ThreadGoalParams; also brings #21096's restart schemas, which the f55b7ba68 copy lacked)
+src/shared/rpc-contract/structured-agent-session-params.ts: add99c908b (v1.4.211..v1.4.217 shared halves)
 src/shared/rpc-contract/task-resume-state-params.ts: c84007c54
 src/shared/rpc-contract/terminal-orphan-params.ts: c84007c54
 src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54
@@ -240,8 +240,8 @@ src/shared/agent-detection.ts: b6b974cb8
 src/shared/shell-process-detection.ts: b6b974cb8
 src/shared/ws-outbound-backpressure-queue.ts: a445abadd
 src/shared/agent-session-resume.test.ts: ff934256a
-src/shared/agent-session-resume.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse resume)
-src/shared/agent-process-recognition.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-session-resume.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-process-recognition.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-process-recognition.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/tui-agent-startup.ts: cd59678394 (v1.4.209..v1.4.210 shared halves; buildAgentDraftLaunchPlan's sessionOptionsOverrideAgentArgs passthrough)
 src/shared/tui-agent-startup-session-options.test.ts: 52a1e2875b (v1.4.210..v1.4.211 shared halves; #22383's Muse case)
@@ -254,38 +254,38 @@ src/shared/omp-fresh-config.ts: c62eca398 (v1.4.206)
 src/shared/omp-fresh-launch-shell.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-fresh-launch.test.ts: c62eca398 (v1.4.206)
 src/shared/omp-fresh-launch.ts: c62eca398 (v1.4.206)
-src/shared/agent-hook-listener-transport.test.ts: c62eca398
-src/shared/agent-hook-listener/provider-dispatch.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216 routes Muse events)
-src/shared/agent-hook-listener/provider-event-routing.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-hook-listener-transport.test.ts: 14087c8e32 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-hook-listener/provider-dispatch.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-hook-listener/provider-event-routing.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/providers/opencode-family-events.ts: c62eca398
-src/shared/agent-hook-listener/source-routing.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
-src/shared/agent-hook-relay.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
-src/shared/agent-kind.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216's Muse entry, then #22601's revert of #18790)
-src/shared/agent-name-token-match.ts: c62eca398
-src/shared/agent-type-label.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
+src/shared/agent-hook-listener/source-routing.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-hook-relay.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-kind.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-name-token-match.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-type-label.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/ai-vault-resume-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/ai-vault-types.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/commit-message-agent-spec.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
 src/shared/commit-message-agent-specs-primary.ts: 4085e1cf6 (v1.4.209 shared halves)
 src/shared/opencode-database-name.ts: c62eca398
-src/shared/opencode-launch-command.test.ts: c62eca398
-src/shared/opencode-launch-command.ts: c62eca398
+src/shared/opencode-launch-command.test.ts: bdb897b735 (v1.4.211..v1.4.217 shared halves)
+src/shared/opencode-launch-command.ts: bdb897b735 (v1.4.211..v1.4.217 shared halves)
 src/shared/pane-agent-identity-inventory.test.ts: c62eca398
-src/shared/skills-cli-agent-keys.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
+src/shared/skills-cli-agent-keys.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/source-control-ai-action-recipes.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216)
-src/shared/telemetry-property-schemas.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
+src/shared/telemetry-property-schemas.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/terminal-title-agent-type.ts: c62eca398
-src/shared/tui-agent-config.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216's Muse config, #22546, #22593's comment fix and #22601's revert of #18790)
-src/shared/tui-agent-display-names.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
-src/shared/tui-agent-selection.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216, then #22601's revert of #18790)
-src/shared/tui-agent.ts: d72bb0e734 (v1.4.210..v1.4.211 shared halves; #22216 adds muse to TuiAgent, then #22601's revert of #18790)
+src/shared/tui-agent-config.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/tui-agent-display-names.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/tui-agent-selection.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/tui-agent.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/constants.ts: c62eca398
 src/shared/pairing-local-ui-fields.ts: c62eca398
 src/shared/pairing-local-ui-fields.test.ts: c62eca398
-src/shared/persisted-ui-state-types.ts: c62eca398
+src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/listener-event.ts: c62eca398
 src/shared/agent-status-ipc-payload.ts: c62eca398
-src/shared/agent-status-observation.ts: c62eca398
+src/shared/agent-status-observation.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves)
 src/shared/runtime-worktree-contracts.ts: c62eca398
 src/shared/agent-status-run.ts: c62eca398
 
@@ -296,11 +296,11 @@ src/shared/agent-hook-listener-opencode-reattribution.test.ts: 646fa3645
 src/shared/agent-hook-listener-opencode-session-correlation.test.ts: 646fa3645
 src/shared/agent-hook-listener-opencode-session-registry.test.ts: 646fa3645
 src/shared/agent-hook-listener.ts: 646fa3645
-src/shared/agent-hook-listener/listener-state.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse session-log state)
+src/shared/agent-hook-listener/listener-state.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/opencode-session-correlation.ts: 646fa3645
 src/shared/agent-hook-listener/opencode-session-registry.ts: 646fa3645
-src/shared/agent-prompt-injection.test.ts: ea5152f1c
-src/shared/agent-prompt-injection.ts: ea5152f1c
+src/shared/agent-prompt-injection.test.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-prompt-injection.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-status-legacy-adapter.ts: 646fa3645
 src/shared/agent-status-legacy-ingress-manifest.ts: 646fa3645
 src/shared/agent-status-run-capability.ts: 646fa3645
@@ -311,26 +311,26 @@ src/shared/codex-usage-types.ts: 347d399bb (297cfe0cf3, the v1.4.209..v1.4.210 r
 src/shared/commit-message-agent-spec.ts: 253f0e394
 src/shared/commit-message-agent-specs-secondary.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse spec)
 src/shared/commit-message-model-parsers.ts: 253f0e394
-src/shared/tui-agent-permissions.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; #22216's Muse --yolo)
+src/shared/tui-agent-permissions.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/tui-agent-prompt-transport.test.ts: 663d67087
 
 v1.4.210..v1.4.211 shared halves (#22295, #22299, #22340, #22105, #22171, #22216, #22383, #22349, #22291, #22377,
 #22432, #22546, #22444, #22593, #22601). First pins of files that were still at vendor base,
 and files new here or pulled in only because a file above imports them:
-src/shared/agent-headless-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener-claude-compatible-vendors.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-hook-listener-relay-dependency.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-hook-listener-test-harness.ts: 9ab0a18e82 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; last changed before the range, taken because the Muse tests need its seedLegacyAgentStatusForTests)
-src/shared/agent-hook-types.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-types.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/ai-vault-resume-command.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/commit-message-plan.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings the cases added between the base and the range)
-src/shared/skill-install-providers.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
+src/shared/skill-install-providers.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/tui-agent-config.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/tui-agent-permissions.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/browser-page-zoom.ts: dfff3915c4 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/claude-background-task-inventory.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
-src/shared/claude-background-task-status.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
-src/shared/agent-hook-listener/providers/claude-roster-state.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20530's comment)
+src/shared/claude-background-task-status.test.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-hook-listener/providers/claude-roster-state.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
 src/shared/draft-paste-ready-scanner.test.ts: fe51c804b8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-interrupt-intent.ts: a7a3c021d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20149's change)
 src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment)
@@ -342,17 +342,118 @@ src/shared/codex-rollout-jsonl-cursor.ts: ebed0964a2 (v1.4.210..v1.4.211 shared 
 src/shared/muse-headless-command.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because agent-headless-command.ts imports it)
 src/shared/agent-icons/muse.png: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new; mobile/src/components/mobile-agent-icon-assets.ts requires it)
 src/shared/agent-session-option-catalog-muse.ts: 52a1e2875b (v1.4.210..v1.4.211 shared halves; new, pulled in because agent-session-option-catalog.ts imports it)
-src/shared/agent-lead-status-fold.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-roster-state.ts imports it)
-src/shared/agent-lead-status-fold.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
-src/shared/agent-status-child-work-liveness.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-roster-state.ts and claude-background-task-inventory.ts import it)
-src/shared/agent-status-child-work-liveness.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
-src/shared/agent-status-child-work.ts: 0325f1a22e (v1.4.210..v1.4.211 shared halves; new here, pulled in because agent-status-child-work-liveness.ts imports it; unchanged in the range)
-src/shared/agent-status-subject.ts: 3cd60e76e9 (v1.4.210..v1.4.211 shared halves; new here, pulled in because agent-status-child-work.ts imports it; unchanged in the range)
+src/shared/agent-lead-status-fold.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-lead-status-fold.test.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-status-child-work-liveness.ts: fec8fe4822 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-status-child-work-liveness.test.ts: b4d732685c (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-status-child-work.ts: 58ba75b5a5 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-status-subject.ts: acf8e679ea (v1.4.211..v1.4.217 shared halves)
 src/shared/claude-background-task-kind.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-background-task-inventory.ts imports it)
 src/shared/claude-background-task-kind.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
-src/shared/agent-session-journal-producer.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts imports it)
+src/shared/agent-session-journal-producer.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-journal-producer.test.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new)
 src/shared/structured-agent-session-tool-call-block.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts and the projection import it; minus the `callId` line, a local hunk, see LOCAL-FILES.md)
 src/shared/agent-hook-listener/listener-limits.ts: 2ce252f47 (#20523's shared half, which the later re-vendors took only in part; first pin recorded here, was at vendor base; agent-hook-listener.ts at 646fa3645 imports its `normalizeGrokPromptId`; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
-src/shared/agent-hook-listener/providers/grok-events.ts: 2ce252f47 (#20523's shared half; first pin recorded here, was at vendor base, whose `isGrokIdleNotification` import provider-event-routing.ts at ebed0964a2 no longer exports; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
+src/shared/agent-hook-listener/providers/grok-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/providers/grok-tool-fields.ts: 2ce252f47 (#20523's shared half; first pin recorded here, was at vendor base; its one `stop_cancelled` line belongs with grok-events.ts; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
+
+v1.4.211..v1.4.217 shared halves (Orca v1.4.217, b11a88dc84). Every vendored file the range changed that the phone's typecheck
+or a shared test reaches. Taken whole and byte-equal to v1.4.217, except the
+hand-merged files listed in LOCAL-FILES.md. Files new here are pulled in only because one of those imports them. Vendored files
+the range changed that a whole take would have dragged an unported desktop or orchestration surface in behind are NOT taken;
+LOCAL-FILES.md lists them. The three files upstream deleted (#22783) are deleted here.
+src/shared/agent-command-line-entrypoint.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-command-plan.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener-claude-subagents.test.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener-claude-turn-state.test.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener-codex-main-agent.test.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener-interactive-prompts.test.ts: 14087c8e32 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/main-agent-turn-state.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener/providers/claude-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/claude-lifecycle-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/claude-status-build.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/codex-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/codex-state.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-hook-listener/providers/zcode-events.test.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener/providers/zcode-events.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener/request-body.ts: 14087c8e32 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-icons/zcode.png: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-context-usage-schema.ts: 25d7c21fcb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-context-usage.ts: 25d7c21fcb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-launch-args.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-legacy-handoff-lease.ts: 067975bfd1 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-mutation-envelope.test.ts: 16784c1a67 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-mutation-envelope.ts: 067975bfd1 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-option-catalog-types.ts: e0144a9eb6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-provider-handle.ts: eb746a6d32 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-record.test-fixture.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-refusal-retry.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-session-surface-tab-id.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-state-history.ts: 5e6fcca0b3 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-status-field-normalization.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/agent-turn-outcome.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/browser-url.test.ts: 2ce47d9bc2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/browser-url.ts: 2ce47d9bc2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/claude-subagent-roster.ts: 517ef56c66 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/claude-subagent-row-lifecycle.test.ts: 517ef56c66 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/codex-subagent-reviewer.ts: 66e0847398 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/codex-subagent-roster.test.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/codex-subagent-roster.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/codex-subagent-transcript.ts: 66e0847398 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/command-environment.ts: f6eab381ce (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/commit-message-plan.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/commit-message-prompt.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/draft-paste-ready-scanner.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/feature-tips.test.ts: 64704daac5 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/feature-tips.ts: 64704daac5 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/file-link-location.ts: 845db9e5e2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/keybindings-keyboard-layout.test.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/keybindings/definitions-core-1.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/local-build-compatibility-contract.json: 0cabc02fff (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/local-build-compatibility-contract.ts: 0cabc02fff (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/machine-name.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/main-agent-status.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/main-process-ndjson-framer.ts: fed613bab7 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/native-chat-href-routing.test.ts: 845db9e5e2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/native-chat-href-routing.ts: 845db9e5e2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/nested-repo-telemetry.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/non-secure-context-uuid.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/orca-dispatch-status-prompt.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/orcad-artifacts.ts: 6fc3cdcad6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/orchestration-compatibility-evidence.ts: 18bbf6f209 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/plugins/plugin-events.ts: 85642d0d88 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/powershell-native-argument.test.ts: 58d1ff3b6a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/powershell-native-argument.ts: 58d1ff3b6a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/process-table-index.ts: 1c2cf120e3 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/quick-open-install-rg.ts: 7ea01279cd (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/relay-artifacts.ts: da6d483ab9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/remote-runtime-subscription-frame-router.test.ts: 841503152c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/remote-runtime-subscription-frame-router.ts: 841503152c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/remote-runtime-subscription-request.test.ts: 841503152c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/ripgrep-process-availability.ts: be5d10c830 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/runtime-session-contracts.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/runtime-terminal-contracts.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/setup-agent-sequencing.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/setup-agent-sequencing.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/setup-agent-sequencing.windows.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/setup-runner-command.test.ts: cff202c16a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/status-bar-defaults.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/structured-agent-session-coalescer.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/synthetic-agent-title.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/tab-types.ts: 98e5ea3d5f (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/telemetry-events.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-mode-reset-profiles.test.ts: fe46138716 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-mode-reset-profiles.ts: f559c0588a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-render-desync-evidence.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-startup-cwd.test.ts: 1069bb053f (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-startup-cwd.ts: 1069bb053f (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/terminal-tab-types.ts: ff74506c0b (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/tui-agent-startup-shell.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/tui-agent-startup-shell.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/ui-chrome-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/window-shortcut-policy.test.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/windows-cmd-runner-delayed-launch.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/zcode-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
+src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md

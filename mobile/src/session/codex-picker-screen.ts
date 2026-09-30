@@ -117,20 +117,67 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
   return { step, model, rows, cursorIndex }
 }
 
+// Ported from Orca's `hasBusyStatusRowAbove` (src/main/runtime/codex-terminal-readiness.ts, v1.4.217),
+// extended for the rows Codex draws between the status row and the composer.
+// Why "to interrupt)" and not "working": reasoning summaries replace the word, and a remapped key
+// still ends the row this way.
+const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
+// Codex draws its composer with `›`; a `>` or `❯` line is quoted text or a shell prompt.
+const CODEX_COMPOSER_ROW = /^\s*›\s/
+// The pending-input preview's section headers (codex-terminal-queued-messages.ts has their source).
+const CODEX_PENDING_INPUT_HEADER =
+  /^\s*(?:• )?(?:Queued follow-up inputs|Messages to be submitted)/
+
+/** Where the pending-input preview blocks that end at `composer` begin (`composer` when none). Only
+ *  a block that opens with one of Codex's own headers counts, so indented prose above the composer is
+ *  not mistaken for one. */
+function pendingPreviewStart(lines: readonly string[], composer: number): number {
+  let start = composer
+  for (let i = composer - 1; i >= 0; i -= 1) {
+    const line = lines[i] ?? ''
+    if (CODEX_PENDING_INPUT_HEADER.test(line)) {
+      start = i
+    } else if (line.trim() !== '' && !/^\s{2,}\S/.test(line) && !/^\s*↳/.test(line)) {
+      break
+    }
+  }
+  return start
+}
+
+/**
+ * Whether Codex's busy row ("• Working (5s • esc to interrupt)") sits directly above the composer:
+ * the last non-blank line above it, once the pending-input preview (a blank line, then "Queued
+ * follow-up inputs" or "Messages to be submitted…" blocks) and one `└` detail line (a Tip, or the
+ * auto-review status) are stepped over. A finished answer can quote the row anywhere higher up, and
+ * 0.158 puts a timestamp between a quoted row and the composer. The row is not a fixed distance from
+ * the bottom (0.155: sixth line up; 0.158.0, whose footer gained "? for shortcuts": seventh; every
+ * queued message adds lines between it and the composer), which is why a tail window was wrong in
+ * both directions. No composer on screen means no verdict: a pager or a `cat`ed transcript can hold
+ * any text.
+ */
+function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
+  const composer = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
+  if (composer === -1) {
+    return false
+  }
+  const above = lines.slice(0, pendingPreviewStart(lines, composer)).filter((line) => line.trim() !== '')
+  const row = above.at(-1)?.trimStart().startsWith('└') ? above.at(-2) : above.at(-1)
+  return row?.includes(CODEX_BUSY_STATUS_MARKER) ?? false
+}
+
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
  *  placeholder disappears once the composer holds a draft, so the footer line
  *  ("<model> <effort> · <cwd>") counts as evidence of the prompt too. */
 export function isCodexIdle(lines: readonly string[]): boolean {
-  const tail = lines.slice(-6).join('\n')
-  if (/esc to interrupt/.test(tail) || parseCodexPickerScreen(lines)) {
+  if (isCodexWorking(lines) || parseCodexPickerScreen(lines)) {
     return false
   }
-  return /Ask Codex to do anything/.test(tail) || hasCodexFooter(lines)
+  return /Ask Codex to do anything/.test(lines.slice(-6).join('\n')) || hasCodexFooter(lines)
 }
 
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
-  return /esc to interrupt/.test(lines.slice(-6).join('\n'))
+  return hasBusyStatusRowAbove(lines)
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */

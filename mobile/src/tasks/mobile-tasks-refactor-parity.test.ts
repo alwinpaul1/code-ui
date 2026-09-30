@@ -126,7 +126,9 @@ const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff's declaration gains the `useTheme()` line and the
 // `palette={syntax}` attribute on its <MobileSyntaxSegments>. 194 declarations still.
 // Later the same day, the Tasks surface onto the live theme: 194 -> 200 (note above the hooks pin).
-const PRESS_FEEDBACK_DECLARATIONS = 'dfeee267e57463591730cc85d504e558b4833b902e56bd4b37a1c20d1323df37'
+// 2026-09-30 (Orca #22279, the v1.4.217 re-vendor): `reconcileTeamSelection`'s `saved` becomes `unknown`,
+// upstream's own change to this declaration and the only one. 200 declarations still.
+const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205eed3195cb9c08bf1ad49a'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
