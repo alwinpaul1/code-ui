@@ -56,6 +56,8 @@ export function MobileFileExplorerPanel(props: {
   const scope = `${hostId}:${worktreeId}`
   scopeRef.current = scope
   const directoryLoadRevisionsRef = useRef<DirectoryLoadRevisions>(createDirectoryLoadRevisions())
+  // Folders to read again on the next `connected` (the effect below drains it once per connection):
+  // one opened while the host was down, one whose read failed, and one whose Retry was tapped.
   const pendingDirectoryRetriesRef = useRef<Set<string>>(new Set())
   const directoryCacheRef = useRef<DirectoryCache>({})
   const [directoryCache, setDirectoryCache] = useState<DirectoryCache>({})
@@ -98,6 +100,7 @@ export function MobileFileExplorerPanel(props: {
           // Why: transient reconnects should not blank an already browsable tree.
           setError(hasLoadedRoot ? null : message)
         } else {
+          pendingDirectoryRetriesRef.current.add(relativePath)
           setDirectoryCache((prev) => ({
             ...prev,
             [relativePath]: {
@@ -176,6 +179,7 @@ export function MobileFileExplorerPanel(props: {
           return
         }
         const entries = directory.value
+        pendingDirectoryRetriesRef.current.delete(relativePath)
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
@@ -195,6 +199,8 @@ export function MobileFileExplorerPanel(props: {
           // only a cold load surfaces the full-screen error.
           setError(hadLoadedRoot ? null : message)
         } else {
+          // A read that failed with the connection (or at all) is read again on the next one.
+          pendingDirectoryRetriesRef.current.add(relativePath)
           setDirectoryCache((prev) => ({
             ...prev,
             [relativePath]: {
