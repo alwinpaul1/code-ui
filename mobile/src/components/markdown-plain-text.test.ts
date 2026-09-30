@@ -107,6 +107,30 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('\r\n    <b>x</b>\r\n')).toBe('<b>x</b>')
   })
 
+  // Review, 2026-09-30: where marked had closed a list or a quote, the code
+  // ranges still thought it open, so an indented block after it went through
+  // the HTML pass and `<b>x</b>` copied as `**x**`. The ranges are pinned in
+  // markdown-code-ranges.test.ts, the screen in
+  // MobileMarkdown.code-protection.test.tsx.
+  it('copies an indented block after a heading that ended a list verbatim', () => {
+    expect(markdownPlainText('- item\n# Next\n\n    <b>x</b>')).toBe('• item\n\nNext\n\n<b>x</b>')
+    expect(markdownPlainText('text\n# Next\n\n    <b>x</b>')).toBe('text\n\nNext\n\n<b>x</b>')
+    expect(markdownPlainText('- item\n#hashtag\n\n    <b>x</b>')).toBe('• item\n\n#hashtag\n\n<b>x</b>')
+    expect(markdownPlainText('- # H\n        <b>x</b>')).toBe('H\n\n  <b>x</b>')
+  })
+
+  it('copies an indented block after a quote that ends in no paragraph verbatim', () => {
+    expect(markdownPlainText('> ```\n> x\n> ```\n    <b>x</b>')).toBe('x\n\n<b>x</b>')
+    expect(markdownPlainText('> # H\n    <b>x</b>')).toBe('# H\n\n<b>x</b>')
+    expect(markdownPlainText('>\n    <b>x</b>')).toBe('<b>x</b>')
+  })
+
+  it('still copies a lazy line of a quote\'s paragraph as that paragraph', () => {
+    expect(markdownPlainText('> quoted text\n    <b>x</b>')).toBe('quoted text x')
+    expect(markdownPlainText('> quote\n    <b>1</b>\n>     <b>2</b>')).toBe('quote 1 2')
+    expect(markdownPlainText('- item\n<div>\n\n    <b>x</b>')).toBe('• item\nx')
+  })
+
   it('copies a one-line indented block, and nothing for lines of only spaces', () => {
     expect(markdownPlainText('    <b>x</b>')).toBe('<b>x</b>')
     expect(markdownPlainText('    ')).toBe('')
