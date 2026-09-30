@@ -15,6 +15,15 @@ function draftStorageKey(scopeKey: string): string {
  */
 export async function readNativeChatDraft(scopeKey: string): Promise<string | null> {
   try {
+    // A route can reopen while the send's empty write is still removing the
+    // entry; a read that beat it handed the sent text back as the draft. The
+    // barrier never rejects, so a failed write in front of it cannot fail
+    // this read. With no write in flight the read starts at once, in the
+    // caller's own tick, as it always did.
+    const writing = barriers.get(scopeKey)
+    if (writing) {
+      await writing
+    }
     return await AsyncStorage.getItem(draftStorageKey(scopeKey))
   } catch {
     return null

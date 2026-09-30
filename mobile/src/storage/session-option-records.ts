@@ -32,6 +32,15 @@ export async function readSessionOptionRecord(
   scopeKey: string
 ): Promise<NativeChatSessionOptionRecord | null> {
   try {
+    // A chat can come back while its last pick is still being written; a read
+    // that beat the write restored the pick before it. The barrier never
+    // rejects, so a failed write in front of it cannot fail this read. With
+    // no write in flight the read starts at once, in the caller's own tick,
+    // as it always did.
+    const writing = writeBarriers.get(scopeKey)
+    if (writing) {
+      await writing
+    }
     const raw = await AsyncStorage.getItem(sessionOptionRecordKey(scopeKey))
     if (raw === null) {
       return null
