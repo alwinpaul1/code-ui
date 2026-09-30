@@ -143,7 +143,9 @@ describe('a figure read while the host was not reachable', () => {
     vi.restoreAllMocks()
   })
 
-  it('is read again on the next render when the read rejected', async () => {
+  // A client with no connection to watch; a live one waits for a new connection instead
+  // (markdown-image-refused-read-again.test.ts).
+  it('is read again on the next render when the read rejected and nothing tells it of a new connection', async () => {
     const h = scripted([{ throw: 'remote connection dropped' }, { ok: true, result: PNG }])
     const resolve = readmeResolver(h.client)
     await expect(resolve('p.png')).resolves.toBeNull()

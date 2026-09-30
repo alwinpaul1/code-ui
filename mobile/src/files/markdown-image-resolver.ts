@@ -1,10 +1,12 @@
 import { loadMobileFilePreview } from './mobile-file-preview-request'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
+import { isFileOwnPreviewError } from './mobile-file-preview-response'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   isSvgPath,
   resolveMarkdownImagePath,
+  type MarkdownImageConnection,
   type MarkdownImageResolver,
   type MarkdownImageSource
 } from '../components/markdown-image-source'
@@ -24,6 +26,7 @@ type ImageRead = { source: MarkdownImageSource | null; settled: boolean }
 const UNSETTLED: ImageRead = { source: null, settled: false }
 const NO_IMAGE: ImageRead = { source: null, settled: true }
 
+/** Settled only on the file's own answer, listed here; every other outcome is unsettled. */
 async function readImage(
   client: MarkdownImageClient,
   worktreeId: string,
@@ -31,36 +34,46 @@ async function readImage(
 ): Promise<ImageRead> {
   try {
     const preview = await loadMobileFilePreview(client, worktreeId, path)
-    if (
-      preview.status === 'waiting' ||
-      preview.status === 'loading' ||
-      (preview.status === 'error' && preview.reconnect)
-    ) {
-      console.warn('[markdown-image] the host could not read a figure yet', {
-        path,
-        message: preview.message
-      })
-      return UNSETTLED
-    }
-    if (preview.status !== 'ready') {
+    if (preview.status === 'ready') {
+      if (preview.kind === 'image') {
+        return { source: { kind: 'bitmap', uri: preview.dataUri }, settled: true }
+      }
+      if (
+        preview.kind !== 'pdf' &&
+        isSvgPath(path) &&
+        !preview.truncated &&
+        /<svg[\s>]/i.test(preview.content)
+      ) {
+        return { source: { kind: 'svg', xml: preview.content }, settled: true }
+      }
+      // A PDF, a text file, a cut SVG: the file is there and is not a figure.
       return NO_IMAGE
     }
-    if (preview.kind === 'image') {
-      return { source: { kind: 'bitmap', uri: preview.dataUri }, settled: true }
-    }
-    if (preview.kind === 'pdf') {
+    if (preview.status === 'empty' || isFileOwnPreviewError(preview)) {
       return NO_IMAGE
     }
-    if (isSvgPath(path) && !preview.truncated && /<svg[\s>]/i.test(preview.content)) {
-      return { source: { kind: 'svg', xml: preview.content }, settled: true }
-    }
-    return NO_IMAGE
+    console.warn('[markdown-image] the host did not answer for a figure; read again on a new connection', {
+      path,
+      message: preview.message
+    })
+    return UNSETTLED
   } catch (error: unknown) {
-    console.warn('[markdown-image] a figure read was refused', {
+    console.warn('[markdown-image] a figure read was refused; read again on a new connection', {
       path,
       error: error instanceof Error ? error.message : String(error)
     })
     return UNSETTLED
+  }
+}
+
+/** The connection a figure watches, when the client reports one. Unanswered reads are keyed on it. */
+function connectionOf(client: MarkdownImageClient | null): MarkdownImageConnection | undefined {
+  if (!client?.getLastConnectedAt || !client.onStateChange) {
+    return undefined
+  }
+  return {
+    lastConnectedAt: () => client.getLastConnectedAt?.() ?? null,
+    subscribe: (listener) => client.onStateChange?.(() => listener()) ?? (() => {})
   }
 }
 
@@ -72,17 +85,26 @@ async function readImage(
  * outside the worktree, resolves to null and the document shows the link it
  * always showed.
  *
- * Only the file's own answer is kept (an image, not found, a PDF, a non-image). A read that
- * rejected or found the host unreachable is dropped once it settles, so the next render reads it
- * again: kept, a figure opened during a reconnect stayed a link until the document was closed
- * (review, 2026-09-30). `connection` is what the figure watches to know when that is.
+ * Only the file's own answer is kept for the document: an image, an SVG, not found, a PDF or other
+ * non-image, too large, binary (`readImage` and `isFileOwnPreviewError` list them between them).
+ * Every other read is unanswered: a rejection, a refusal about the link or the runtime ("Remote
+ * Orca runtime is not connected.", "Request timed out"), or the generic 'Unable to load preview:
+ * ...' for a cause this build has not seen. One of those stands for the connection it was asked on
+ * and no longer, so a figure asks again once per NEW connection (`connection` tells it when) and
+ * never once per render on the same one. With no connection to watch it is dropped once it
+ * settles, and the next render asks. The rule this replaced listed four recoverable phrases and
+ * kept every other refusal as the file's answer, so a figure refused while the desktop's runtime
+ * reconnected stayed a link until the document was closed (review 2026-09-30, round 3).
  */
 export function createMarkdownImageResolver(args: {
   client: MarkdownImageClient | null
   worktreeId: string
   documentRelativePath: string
 }): MarkdownImageResolver {
+  const connection = connectionOf(args.client)
   const cache = new Map<string, Promise<MarkdownImageSource | null>>()
+  // An unanswered read, and the connection it was asked on: it answers only while that one lasts.
+  const unansweredOn = new WeakMap<Promise<MarkdownImageSource | null>, number | null>()
   const read = (url: string): Promise<MarkdownImageSource | null> => {
     const { client, worktreeId, documentRelativePath } = args
     const path = resolveMarkdownImagePath(documentRelativePath, url)
@@ -90,14 +112,20 @@ export function createMarkdownImageResolver(args: {
     if (!client || !path || classifyMobileArtifact(path) === 'pdf') {
       return Promise.resolve(null)
     }
+    const askedOn = connection?.lastConnectedAt() ?? null
     const cached = cache.get(path)
-    if (cached) {
+    if (cached && (!unansweredOn.has(cached) || unansweredOn.get(cached) === askedOn)) {
       return cached
     }
+    cache.delete(path)
     const pending: Promise<MarkdownImageSource | null> = readImage(client, worktreeId, path).then(
       (read) => {
         if (!read.settled && cache.get(path) === pending) {
-          cache.delete(path)
+          if (connection) {
+            unansweredOn.set(pending, askedOn)
+          } else {
+            cache.delete(path)
+          }
         }
         return read.source
       }
@@ -124,12 +152,8 @@ export function createMarkdownImageResolver(args: {
       return Promise.resolve(null)
     }
   }
-  const { client } = args
-  if (client?.getLastConnectedAt && client.onStateChange) {
-    resolve.connection = {
-      lastConnectedAt: () => client.getLastConnectedAt?.() ?? null,
-      subscribe: (listener) => client.onStateChange?.(() => listener()) ?? (() => {})
-    }
+  if (connection) {
+    resolve.connection = connection
   }
   return resolve
 }
