@@ -1,5 +1,5 @@
 import type { MobileDiffLine } from './mobile-diff-lines'
-import { collapsedDiffRow, truncatedDiffRow } from './mobile-diff-notes'
+import { collapsedDiffRow, noNewlineDiffRow, truncatedDiffRow } from './mobile-diff-notes'
 import type { DiffSegment } from './mobile-diff-segments'
 
 export const MAX_MOBILE_DIFF_LINES = 2_500
@@ -20,7 +20,13 @@ const CONTEXT_ROWS = 3
 export function emitMobileDiffRows(
   segments: readonly DiffSegment[],
   oldLines: readonly string[],
-  newLines: readonly string[]
+  newLines: readonly string[],
+  // A side whose last line has no newline: its row, when changed, is followed by git's
+  // "\ No newline at end of file".
+  ends: { oldUnterminated: boolean; newUnterminated: boolean } = {
+    oldUnterminated: false,
+    newUnterminated: false
+  }
 ): { lines: MobileDiffLine[]; truncated: boolean } {
   const total = segments.reduce((sum, segment) => sum + segment.length, 0)
   const fold = total > MAX_MOBILE_DIFF_LINES
@@ -91,6 +97,13 @@ export function emitMobileDiffRows(
           hiddenAdded += segment.length - offset
         }
         return
+      }
+      const lacksNewline =
+        segment.kind === 'delete'
+          ? ends.oldUnterminated && row.oldLineNumber === oldLines.length
+          : ends.newUnterminated && row.newLineNumber === newLines.length
+      if (lacksNewline) {
+        push(noNewlineDiffRow())
       }
     }
   })

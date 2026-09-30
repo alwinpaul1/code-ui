@@ -13,6 +13,12 @@ function isChangedLine(line: MobileDiffLine): boolean {
   return line.kind === 'add' || line.kind === 'delete'
 }
 
+// git's "\ No newline at end of file" sits between a change's '-' and '+' rows (or after them);
+// it belongs to that change, so it must not split it into two hunks.
+function continuesHunk(line: MobileDiffLine): boolean {
+  return line.note?.kind === 'no-newline'
+}
+
 function lineNumberForHunk(line: MobileDiffLine): number | null {
   return line.newLineNumber ?? line.oldLineNumber ?? null
 }
@@ -43,6 +49,9 @@ export function buildMobileDiffHunks(lines: readonly MobileDiffLine[]): MobileDi
   }
 
   lines.forEach((line, index) => {
+    if (startIndex !== null && continuesHunk(line)) {
+      return
+    }
     if (!isChangedLine(line)) {
       closeHunk(index - 1)
       return

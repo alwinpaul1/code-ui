@@ -1,10 +1,12 @@
-import type { MobileDiffLine, MobileDiffLineNote } from './mobile-diff-lines'
+import type { MobileDiffLine, MobileDiffLineNote, MobileLineEndings } from './mobile-diff-lines'
 
 /**
  * Rows of the mobile diff preview that stand for something other than a line of the file: a run of
- * unchanged lines folded away, or the rows the mobile cap left out. They are `context` rows with
- * no line numbers (so nothing anchors a review note on them, and a hunk ends before them), and
- * their text says what they stand for, so a renderer that knows nothing of `note` still reads right.
+ * unchanged lines folded away, the rows the mobile cap left out, git's "\ No newline at end of
+ * file", or line endings that changed. They are `context` rows with no line numbers (so nothing
+ * anchors a review note on them, and a hunk ends before them, save the no-newline row, which
+ * belongs to its change), and their text says what they stand for, so a renderer that knows
+ * nothing of `note` still reads right.
  */
 
 /** 2896 → "2,896", the same on every phone (no locale: `toLocaleString(undefined)` follows the
@@ -45,6 +47,35 @@ export function truncatedDiffRow(hiddenAdded: number, hiddenDeleted: number): Mo
       ? `... ${leftOut} not shown on mobile ...`
       : '... diff truncated for mobile preview ...',
     note: { kind: 'truncated', hiddenAdded, hiddenDeleted }
+  }
+}
+
+export function noNewlineDiffRow(): MobileDiffLine {
+  return { kind: 'context', text: '\\ No newline at end of file', note: { kind: 'no-newline' } }
+}
+
+const ENDINGS_LABEL: Record<MobileLineEndings, string> = {
+  crlf: 'CRLF',
+  lf: 'LF',
+  mixed: 'mixed',
+  none: 'none'
+}
+
+/** Lines are compared without their CR, so a change of line endings alone draws no changed row:
+ *  this row is how the preview says it. The direction is named only when both sides have one. */
+export function lineEndingsDiffRow(
+  from: MobileLineEndings,
+  to: MobileLineEndings,
+  only: boolean
+): MobileDiffLine {
+  const direction =
+    from !== to && from !== 'none' && to !== 'none'
+      ? ` (${ENDINGS_LABEL[from]} → ${ENDINGS_LABEL[to]})`
+      : ''
+  return {
+    kind: 'context',
+    text: `${only ? 'Only line endings changed' : 'Line endings changed too'}${direction}`,
+    note: { kind: 'line-endings', from, to, only }
   }
 }
 
