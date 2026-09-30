@@ -87,20 +87,23 @@ export function paragraphParts(
  *
  * `opensItem` and `opensBlock` are the list's and the block reader's own grammars, handed in so
  * this module reads neither and imports neither: the block reader imports the list parser.
- * `opensBlock` is given the line under the one it tests too, since a table opens on two.
+ * `opensBlock` is given the line under the one it tests too, since a table opens on two, and the
+ * line over it as written where that is one of the lines gathered here (undefined under the first
+ * line, which the caller has read), since a lazy line continues only paragraph text.
  */
 export function gatherListItemContinuation(
   lines: readonly string[],
   startIndex: number,
   text: string,
   opensItem: (line: string) => boolean,
-  opensBlock: (line: string, under: string | undefined) => boolean
+  opensBlock: (line: string, under: string | undefined, above: string | undefined) => boolean
 ): { text: string; nextIndex: number } {
   const tail = [text]
   let index = startIndex
   while (index < lines.length) {
     const next = lines[index] ?? ''
-    if (!next.trim() || opensItem(next) || opensBlock(next, lines[index + 1])) {
+    const above = index > startIndex ? lines[index - 1] : undefined
+    if (!next.trim() || opensItem(next) || opensBlock(next, lines[index + 1], above)) {
       break
     }
     tail.push(next.trim())

@@ -98,6 +98,87 @@ describe('a line at the margin that is no lazy line', () => {
   })
 })
 
+// Review, 2026-10-01: a line at the margin was joined into a list item whose last line was no
+// paragraph text: '- # H\nlazy' saved '- # H lazy', which marked reads as the heading `H lazy`, and
+// '- ***\nlazy' saved '- *** lazy', a rule turned into words. marked reads the source's `lazy` as a
+// paragraph after the list. 0bf636a3 saved both as '...\n\nlazy'. The reviewer's fuzz of 2,500
+// documents found 51 that saved right before and did not after, all of this shape.
+describe('a line at the margin under an item whose last line is no paragraph text', () => {
+  it.each([
+    ['a heading', '- # H\nlazy', '- # H\n\nlazy'],
+    ['a heading of a numbered item', '1. # H\nlazy', '1. # H\n\nlazy'],
+    ['a heading of an item numbered past 9', '10. # H\nlazy', '10. # H\n\nlazy'],
+    ['a heading two columns past the marker', '1.  # H\nlazy', '1. # H\n\nlazy'],
+    ['a heading after a tab', '-\t# H\nlazy', '- # H\n\nlazy'],
+    ['a heading written with a tab', '- #\tH\nlazy', '- #\tH\n\nlazy'],
+    ['a heading with a closing `#`', '- # H #\nlazy', '- # H #\n\nlazy'],
+    ['an empty heading', '- #\nlazy', '- #\n\nlazy'],
+    ['a `#` with no space after it', '- #H\nlazy', '- #H\n\nlazy'],
+    ['seven `#`', '- ####### x\nlazy', '- ####### x\n\nlazy'],
+    ['a `#` wrapped under the item’s words', '- a\n  #tag\nlazy', '- a #tag\n\nlazy'],
+    ['a rule', '- ***\nlazy', '- ***\n\nlazy'],
+    ['a rule of a numbered item', '1. ***\nlazy', '1. ***\n\nlazy'],
+    ['a spaced rule', '- * * *\nlazy', '- * * *\n\nlazy'],
+    ['an underscored rule', '- ___\nlazy', '- ___\n\nlazy'],
+    ['a heading in a later paragraph of the item', '- a\n\n  # h\nlazy', '- a\n\n  # h\n\nlazy'],
+    ['a heading after the item’s quote', '- a\n  > q\n  # h\nlazy', '- a\n  > q\n  # h\n\nlazy'],
+    ['a line four columns past the item’s words', '- a\n      more\nlazy', '- a more\n\nlazy']
+  ])('ends the item above the line after %s', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  // The item already reads each of these headings, and the code, as its words: marked draws a
+  // heading (or code) inside the item, the editor draws text. That is older than the lazy line.
+  // The line at the margin must still stay out of the item, as 0bf636a3 saved it.
+  it.each([
+    ['a heading wrapped under the item’s words', '- a\n  # h\nlazy', '- a # h\n\nlazy'],
+    ['a heading wrapped under a later paragraph', '- a\n\n  b\n  # h\nlazy', '- a\n\n  b # h\n\nlazy'],
+    ['a heading wrapped under a task', '- [x] a\n  # h\nlazy', '- [x] a # h\n\nlazy'],
+    ['a heading wrapped under a numbered item', '1. a\n   # h\nlazy', '1. a # h\n\nlazy'],
+    ['a heading of a nested item', '- a\n  - # H\nlazy', '- a\n  - # H\n\nlazy'],
+    ['code on the marker line', '-     code\nlazy', '- code\n\nlazy']
+  ])('keeps the line after %s out of the item', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toMatch(/<\/(?:ul|ol)><p>lazy<\/p>$/)
+  })
+
+  it.each([
+    ['a heading alone', '- # H', '- # H'],
+    ['a heading and a blank line', '- # H\n', '- # H'],
+    ['an empty heading alone', '- #', '- #'],
+    ['a heading and a blank line before the line', '- # H\n\nlazy', '- # H\n\nlazy']
+  ])('keeps an item holding %s as it was', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  it.each([
+    ['rule-like words', '- ---x\nlazy', '- ---x lazy'],
+    ['a task box before a `#`', '- [ ] # H\nlazy', '- [ ] # H lazy'],
+    ['a `#` two columns past the item’s words', '- a\n    #tag\nlazy', '- a #tag lazy'],
+    ['words two columns past the item’s words', '- a\n    b\nlazy', '- a b lazy'],
+    ['words a tab past the item’s words', '- a\n\tb\nlazy', '- a b lazy'],
+    ['a tag', '- <div>\nlazy', '- <div> lazy'],
+    ['pipes', '- a\n  | b |\nlazy', '- a | b | lazy'],
+    ['a nested item under a heading', '- # H\n  - b\nlazy', '- # H\n  - b lazy'],
+    ['a second item after a heading', '1. # H\n2. b\nlazy', '1. # H\n2. b lazy']
+  ])('still joins the line after %s into the item', (_name, markdown, saved) => {
+    expect(savedUntouched(markdown)).toBe(saved)
+    expect(reading(saved)).toBe(reading(markdown))
+  })
+
+  it('still ends the item at a rule written under its words, as 0bf636a3 did', () => {
+    // marked reads the rule inside the item; the editor has always ended the item there.
+    expect(savedUntouched('- a\n  ***\nlazy')).toBe('- a\n\n---\n\nlazy')
+  })
+
+  it('still ends the item at an underline at the margin', () => {
+    // marked reads '- a\n===' as a heading inside the item, which the item's reader cannot hold.
+    expect(savedUntouched('- a\n===')).toBe('- a\n\n===')
+  })
+})
+
 // Review, 2026-10-01: a lazy line after a table inside a quote was taken for more of a paragraph,
 // since the quote reader counted the table's rows as words, and saved behind the quote's marker as
 // one more row: '> | a | b |\n> |---|---|\n> | 1 | 2 |\nbody' saved '> | 1 | 2 |\n> body', which

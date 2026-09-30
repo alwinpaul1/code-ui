@@ -40,11 +40,14 @@ export function indentationWidth(value: string): number {
   return value.replace(/\t/g, '    ').length
 }
 
+/** A list line: its indent, its marker, the gap after it, and its words. */
+const LIST_LINE = /^(\s*)((?:[-*+])|(?:\d+[.)]))(\s+)(.+)$/
+
 export function parseListLine(line: string): ParsedListItem | null {
   if (isThematicBreak(line)) {
     return null
   }
-  const match = line.match(/^(\s*)((?:[-*+])|(?:\d+[.)]))(\s+)(.+)$/)
+  const match = line.match(LIST_LINE)
   if (!match) {
     return null
   }
@@ -96,23 +99,59 @@ function endsInBlock(owner: ParsedListItem): boolean {
   return last !== undefined && last.kind !== 'paragraph' && last.afterChildren === owner.children.length
 }
 
+/** An item's marker line with its marker as spaces, so its words sit at the item's content column. */
+function markerAsSpaces(line: string): string {
+  return line.replace(
+    LIST_LINE,
+    (_line, indent: string, marker: string, gap: string, words: string) =>
+      `${indent}${' '.repeat(marker.length)}${gap}${words}`
+  )
+}
+
+/**
+ * Whether an item's line, with the columns up to its words taken off, is paragraph text that a
+ * line at the margin may continue lazily. It is not when it is blank, four columns or more past
+ * the item's words, a fence, a rule, or a heading: marked (the desktop's reader) ends the item
+ * under any `#` up to `reach` columns in, `#H` included, and CommonMark under an ATX heading up to
+ * three. Where the two disagree the item ends there too, rather than guess.
+ */
+function takesLazyLine(words: string, reach: number): boolean {
+  return (
+    words.trim() !== '' &&
+    !/^(?: {4}| {0,3}\t)/.test(words) &&
+    !(words.trimStart().startsWith('#') && leadingSpaces(words) <= reach) &&
+    !/^ {0,3}#{1,6}(?:[ \t]|$)/.test(words) &&
+    openingFence(words) === null &&
+    !isThematicBreak(words)
+  )
+}
+
 /**
  * Whether a line ends an item's words, or a paragraph after them: it opens a block of its own
  * (`opensBlock`, or a fence, a quote or a table the item holds), or it sits at the margin and is no
- * lazy line (markdown-lazy-line.ts). Nor is an underline there: marked reads '- a\n===' as a
- * heading inside the item, which the item's reader cannot hold, so the item ends at it as it
- * always did. A line indented less than the item's words has always been more of them.
+ * lazy line (markdown-lazy-line.ts), or the line `above` it, as written, is no paragraph text that
+ * a lazy line continues (`takesLazyLine`). Until 2026-10-01 a line at the margin joined whatever
+ * the item's last line was, so '- # H\nlazy' saved '- # H lazy', one heading to marked, and
+ * '- ***\nlazy' saved '- *** lazy', a rule become words. Nor is an underline there: marked reads
+ * '- a\n===' as a heading inside the item, which the item's reader cannot hold, so the item ends at
+ * it as it always did. A line indented less than the item's words has always been more of them.
  */
 function endsWords(
   line: string,
   under: string | undefined,
-  contentIndent: number,
+  above: string,
+  item: ParsedListItem,
   opensBlock: (line: string) => boolean
 ): boolean {
+  // marked tests the line above for a `#` up to one column short of the item's words, three at most.
+  const reach = Math.min(3, item.contentIndent - item.indent - 1)
   return (
     opensBlock(line) ||
-    endsItemWords(line, under, contentIndent) ||
-    (!/^\s/.test(line) && (!continuesParagraphLazily(line, under) || setextLevel(line) !== null))
+    endsItemWords(line, under, item.contentIndent) ||
+    (!/^\s/.test(line) &&
+      (!continuesParagraphLazily(line, under) ||
+        setextLevel(line) !== null ||
+        !takesLazyLine(outdentCodeLine(above, item.contentIndent), reach)))
   )
 }
 
@@ -177,7 +216,7 @@ function readBlockOf(
     next + 1,
     line.trim(),
     (candidate) => parseListLine(candidate) !== null,
-    (candidate, under) => endsWords(candidate, under, owner.contentIndent, opensBlock)
+    (candidate, under, above) => endsWords(candidate, under, above ?? line, owner, opensBlock)
   )
   const offset = leadingSpaces(line) - owner.indent
   return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
@@ -295,12 +334,13 @@ export function parseListTree(
       index = opened.nextIndex
       continue
     }
+    const markerLine = markerAsSpaces(lines[index - 1] ?? '')
     const continued = gatherListItemContinuation(
       lines,
       index,
       item.text,
       (line) => parseListLine(line) !== null,
-      (line, under) => endsWords(line, under, item.contentIndent, opensBlock)
+      (line, under, above) => endsWords(line, under, above ?? markerLine, item, opensBlock)
     )
     item.text = continued.text
     index = continued.nextIndex
