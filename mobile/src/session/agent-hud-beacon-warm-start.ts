@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
+import { withoutCutTail } from './agent-hud-beacon-desktop-prompt'
 
 /**
  * The last beacon each terminal wrote, kept across app launches.
@@ -65,7 +66,13 @@ function withWellFormedPrompts(record: AgentHudBeacon): AgentHudBeacon {
   // without it arrived no later than the record's last beacon.
   const arrivedBy = typeof record.receivedAt === 'number' ? record.receivedAt : 0
   const prompts = Array.isArray(record.desktopPrompts)
-    ? record.desktopPrompts.filter(wellFormedPrompt).map((prompt) => (typeof prompt.seenAt === 'number' ? prompt : { ...prompt, seenAt: arrivedBy }))
+    ? record.desktopPrompts
+        .filter(wellFormedPrompt)
+        .map((prompt) => (typeof prompt.seenAt === 'number' ? prompt : { ...prompt, seenAt: arrivedBy }))
+        // A cut copy an older build read keeps the U+FFFD of the character
+        // its cut split, and never retired (agent-hud-beacon-desktop-prompt.ts).
+        .map((prompt) => (prompt.cut === true ? { ...prompt, text: withoutCutTail(prompt.text) } : prompt))
+        .filter((prompt) => prompt.text.length > 0)
     : []
   // A list that is not one is left out, not kept: the restore maps over it.
   const kept = Array.isArray(agentMessagePrompts) ? agentMessagePrompts.filter(wellFormedPrompt) : undefined
@@ -95,15 +102,27 @@ export async function readWarmStartBeacons(): Promise<StoredBeacons> {
   }
 }
 
+/**
+ * The last write queued. Each write reads the whole store, changes one record
+ * and writes it back, so each waits for the one before it: unserialised, two
+ * tabs' beacons in the same tick both read the store before either wrote, and
+ * the second write dropped the first tab's record, which then had no model
+ * pill or context ring after a restart (review of 2026-09-30). A write never
+ * rejects (see `writeWarmStartBeacon`), so a refused one cannot wedge the rest.
+ */
+let lastWrite: Promise<void> = Promise.resolve()
+
 /** Best effort: a failed write only costs the next launch its warm start. */
-export async function rememberWarmStartBeacon(
-  handle: string,
-  beacon: AgentHudBeacon
-): Promise<void> {
+export function rememberWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Promise<void> {
   if (!signed(beacon)) {
     // Nothing could believe it on the next launch; see `signed`.
-    return
+    return Promise.resolve()
   }
+  lastWrite = lastWrite.then(() => writeWarmStartBeacon(handle, beacon))
+  return lastWrite
+}
+
+async function writeWarmStartBeacon(handle: string, beacon: AgentHudBeacon): Promise<void> {
   try {
     const stored = await readWarmStartBeacons()
     // Delete first so re-inserting makes this handle the newest key, and the
@@ -116,6 +135,7 @@ export async function rememberWarmStartBeacon(
     }
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(stored))
   } catch {
-    // Ignored on purpose; see the doc comment.
+    // Ignored on purpose (rememberWarmStartBeacon), and never passed on: a
+    // rejection here would stop every write queued behind this one.
   }
 }
