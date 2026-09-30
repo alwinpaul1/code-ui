@@ -4,6 +4,7 @@ import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-paste
 import {
   footerWindow,
   isLegacyQueueSeparator,
+  isPromptRule,
   queueBlockRows,
   queueFooterIndex,
   SELECTED_HINT,
@@ -168,7 +169,7 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
   let details = 0
   for (let i = footer - 1; i >= Math.max(0, footer - 8); i--) {
     const line = lines[i]!
-    if (/^[\s─━—-]*$/.test(line) || /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
+    if (isPromptRule(line) || /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
       continue
     }
     if (SPINNER_DETAIL_ROW.test(line)) {

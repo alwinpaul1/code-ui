@@ -45,6 +45,26 @@ export function isLegacyQueueSeparator(line: string): boolean {
   return /^[\s─━—-]*$/.test(line) && !/^ {4,}\S/.test(line)
 }
 
+/**
+ * The rule that closes the transcript above Claude's input box: a run of "─",
+ * or that row with a label in it. The label is the session's name from the
+ * banner row (`fv` in Claude Code 2.1.285, `Ub` in 2.1.284) and the fast-mode
+ * and ultracode tags from the composer's `borderText`. The real row, captured
+ * 2026-09-30 via orca terminal read --screen: 119 x "─", " 1152 ", one "─".
+ *
+ * Claude builds it as the glyph run (columns - name width - 3), " name", " ─";
+ * a tag takes more columns; a name wider than the row is cut with "…" and the
+ * row then starts with a space, no glyph before it. So the row is not held to
+ * a run length or a label length: it is a run of glyphs (possibly none), a
+ * space, a label, and it always ends in " ─", one glyph after a space. Text
+ * that ends in words is not a rule. A row of this shape sat where only a bare
+ * rule was skipped, and the whole queue was refused, so the chat drew a queued
+ * message as sent.
+ */
+export function isPromptRule(line: string): boolean {
+  return /^[\s─━—-]*$/.test(line) || /^[─━]*\s\S(?:.*\S)?\s[─━]$/.test(line)
+}
+
 export function isQueueBound(line: string): boolean {
   return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
