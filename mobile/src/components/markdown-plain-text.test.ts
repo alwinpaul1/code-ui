@@ -267,6 +267,63 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('[x]()')).toBe('[x]()')
   })
 
+  // Review, 2026-09-30: a backslash before punctuation, which makes it
+  // literal in CommonMark, was never read: `\*not bold\*` drew italic with
+  // both backslashes kept, and `off\!` kept its backslash. The screen is
+  // pinned in MobileMarkdown.escapes.test.tsx.
+  it('copies an escaped mark as the mark, without its backslash', () => {
+    expect(markdownPlainText('\\*not bold\\*')).toBe('*not bold*')
+    expect(markdownPlainText('Price 50% off\\!')).toBe('Price 50% off!')
+    expect(markdownPlainText('\\_\\_init\\_\\_ and \\~\\~x\\~\\~')).toBe('__init__ and ~~x~~')
+    expect(markdownPlainText('\\[not a link](https://x.dev)')).toBe('[not a link](https://x.dev)')
+    expect(markdownPlainText('\\`not code`')).toBe('`not code`')
+    expect(markdownPlainText('\\<https://x.dev>')).toBe('<https://x.dev>')
+  })
+
+  it('reads a mark after an escaped backslash as a mark', () => {
+    expect(markdownPlainText('a \\\\ b')).toBe('a \\ b')
+    expect(markdownPlainText('\\\\*a*')).toBe('\\a')
+    expect(markdownPlainText('\\\\\\*a*')).toBe('\\*a*')
+    expect(markdownPlainText('\\**a**')).toBe('*a*')
+  })
+
+  it('keeps an escaped mark inside bold, italic and a link\'s words', () => {
+    expect(markdownPlainText('**a \\* b**')).toBe('a * b')
+    expect(markdownPlainText('*a \\* b*')).toBe('a * b')
+    expect(markdownPlainText('[a \\] b](https://x.dev)')).toBe('a ] b (https://x.dev)')
+  })
+
+  it('keeps a backslash before anything that is not punctuation', () => {
+    expect(markdownPlainText('C:\\Users\\x')).toBe('C:\\Users\\x')
+    expect(markdownPlainText('\\')).toBe('\\')
+    expect(markdownPlainText('a\\ b')).toBe('a\\ b')
+    expect(markdownPlainText('end \\é')).toBe('end \\é')
+  })
+
+  it('keeps the backslashes in code and in a link\'s address', () => {
+    expect(markdownPlainText('run `a\\*b` and `C:\\\\x`')).toBe('run a\\*b and C:\\\\x')
+    expect(markdownPlainText('```\n\\*x\\*\n```')).toBe('\\*x\\*')
+    expect(markdownPlainText('[a](docs/a\\_b.md)')).toBe('a')
+    expect(markdownPlainText('[a](https://x.dev/a\\_b)')).toBe('a (https://x.dev/a\\_b)')
+  })
+
+  it('reads escapes in a heading, a list, a quote, an image\'s words and a table once each', () => {
+    expect(markdownPlainText('# \\*h\\*')).toBe('*h*')
+    expect(markdownPlainText('- \\*x\\*')).toBe('• *x*')
+    expect(markdownPlainText('> \\*q\\*')).toBe('*q*')
+    expect(markdownPlainText('![a\\*b](fig/x.png)')).toBe('a*b\nfig/x.png')
+    // marked has already read the `\|` in a cell; `\\` is still the cell's.
+    expect(markdownPlainText('| h | i |\n| --- | --- |\n| x \\| y | a \\\\\\| b \\*c\\* |')).toBe('h\ti\nx | y\ta \\| b *c*')
+  })
+
+  it('leaves an escaped angle bracket or ampersand to the text, not to the HTML cleanup', () => {
+    expect(markdownPlainText('\\<b>x\\</b>')).toBe('<b>x</b>')
+    // The `</b>` is still a tag, as marked reads it, and is not drawn.
+    expect(markdownPlainText('\\<b>x</b> y')).toBe('<b>x y')
+    expect(markdownPlainText('\\\\<b>x</b>')).toBe('\\x')
+    expect(markdownPlainText('\\&amp; and &amp;')).toBe('&amp; and &')
+  })
+
   it('copies a table as tab-separated rows, marks off each cell', () => {
     expect(markdownPlainText('| Name | Size |\n| --- | --- |\n| `a.ts` | **2 KB** |')).toBe(
       'Name\tSize\na.ts\t2 KB'

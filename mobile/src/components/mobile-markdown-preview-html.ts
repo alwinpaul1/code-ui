@@ -33,6 +33,31 @@ function restoreEscapedHtmlEntities(value: string): string {
   )
 }
 
+// Why: a backslash before `<` or `&` makes it text (CommonMark), so `\<b>`
+// is no tag and `\&amp;` no entity. This pass took `\<b>x\</b>` for a bold
+// tag pair, and the phone drew "\", bold x, "\" (review, 2026-09-30). The
+// escaped character stands aside through the pass and keeps its backslash,
+// which the inline pass drops (markdown-inline-escapes.ts). Only an odd run of
+// backslashes escapes: `\\<b>` is a backslash and a tag.
+const BACKSLASH_RUN = /\\+([<&]?)/g
+const ESCAPED_LT_TOKEN = '\uE000ORCA_MD_ESCAPED_LT\uE000'
+const ESCAPED_AMP_TOKEN = '\uE000ORCA_MD_ESCAPED_AMP\uE000'
+
+function protectEscapedMarkup(value: string): string {
+  if (!value.includes('\\')) {
+    return value
+  }
+  return value.replace(BACKSLASH_RUN, (run: string, after: string) =>
+    after && (run.length - 1) % 2 === 1
+      ? `${run.slice(0, -1)}${after === '<' ? ESCAPED_LT_TOKEN : ESCAPED_AMP_TOKEN}`
+      : run
+  )
+}
+
+function restoreEscapedMarkup(value: string): string {
+  return value.replaceAll(ESCAPED_LT_TOKEN, '<').replaceAll(ESCAPED_AMP_TOKEN, '&')
+}
+
 function decodeHtmlEntities(value: string, preserveEscapedEntities = false): string {
   const next = preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value
 
@@ -305,7 +330,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     content.replace(/\r\n?/g, '\n'),
     true
   )
-  let next = protectedText
+  let next = protectEscapedMarkup(protectedText)
 
   // Why: repository Markdown often uses small HTML islands for centered README
   // headers and badges. Preview mode should read like Markdown, while Source
@@ -328,5 +353,5 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
   next = normalizeInlineHtml(next)
   next = stripTags(next)
 
-  return restoreMarkdownCode(restoreEscapedHtmlEntities(next), codeSpans, placeholderPrefix)
+  return restoreMarkdownCode(restoreEscapedMarkup(restoreEscapedHtmlEntities(next)), codeSpans, placeholderPrefix)
 }

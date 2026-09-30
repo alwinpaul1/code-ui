@@ -1,3 +1,4 @@
+import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
 
 export type MarkdownInlineMatch = {
@@ -38,6 +39,9 @@ export function markdownInlineTokenPattern(): RegExp {
 export function createMarkdownInlineMatcher(
   text: string,
   nonLinkPattern: RegExp,
+  /** A chat reply's reading (MobileMarkdown, its Copy, a link's words):
+   *  `![alt](src)` images, a label that holds one, and backslash escapes.
+   *  The PR renderer reads none of them. */
   images = false,
   /** Find code spans by backtick RUN, as CommonMark does; the regex must
    *  then carry no backtick rule of its own. */
@@ -48,7 +52,11 @@ export function createMarkdownInlineMatcher(
   let nextCode: MarkdownInlineMatch | null | undefined
   /** Every backtick run in the text, found once: [start, length]. */
   let runs: [number, number][] | undefined
-  const linkFinder = createMarkdownLinkFinder(text, images)
+  // Marks are looked for where an escaped one cannot be seen; every token is
+  // cut from the text itself (markdown-inline-escapes.ts).
+  const source = images ? maskMarkdownEscapes(text) : text
+  const linkFinder = createMarkdownLinkFinder(source, images)
+  const other = (index: number, end: number): MarkdownInlineMatch => ({ 0: text.slice(index, end), index, end })
 
   function findLink(from: number): MarkdownInlineMatch | null {
     const span = linkFinder(from)
@@ -71,30 +79,36 @@ export function createMarkdownInlineMatcher(
    * it. "A backtick, then anything up to the next backtick" was the rule
    * before, and on "`` `user` `` becomes `user`, blank lines…" it paired the
    * wrong backticks and chipped the rest of the paragraph (2026-09-19).
+   *
+   * In a chat reply a run right after an escaping backslash opens with one
+   * backtick fewer, that one literal (`` \`not code` `` is no span). Only
+   * an opener: a backslash inside a span is literal, so `` `a\` `` closes.
    */
   function findCodeSpan(from: number): MarkdownInlineMatch | null {
     if (runs === undefined) {
       runs = []
-      let at = text.indexOf('`')
+      let at = source.indexOf('`')
       while (at !== -1) {
         let length = 1
-        while (text[at + length] === '`') {
+        while (source[at + length] === '`') {
           length += 1
         }
         runs.push([at, length])
-        at = text.indexOf('`', at + length)
+        at = source.indexOf('`', at + length)
       }
     }
     for (let open = 0; open < runs.length; open += 1) {
-      const [start, length] = runs[open]!
-      if (start < from) {
+      const [runStart, runLength] = runs[open]!
+      const escaped = images && source[runStart - 1] === '\\' ? 1 : 0
+      const start = runStart + escaped
+      const length = runLength - escaped
+      if (start < from || length === 0) {
         continue
       }
       for (let close = open + 1; close < runs.length; close += 1) {
         const [closeStart, closeLength] = runs[close]!
         if (closeLength === length) {
-          const end = closeStart + closeLength
-          return { 0: text.slice(start, end), index: start, end }
+          return other(start, closeStart + closeLength)
         }
       }
     }
@@ -107,8 +121,8 @@ export function createMarkdownInlineMatcher(
       const from = matcher.lastIndex
       if (nextOther === undefined || (nextOther !== null && nextOther.index < from)) {
         nonLinkPattern.lastIndex = from
-        const match = nonLinkPattern.exec(text)
-        nextOther = match ? { 0: match[0], index: match.index, end: nonLinkPattern.lastIndex } : null
+        const match = nonLinkPattern.exec(source)
+        nextOther = match ? other(match.index, nonLinkPattern.lastIndex) : null
       }
       if (nextLink === undefined || (nextLink !== null && nextLink.index < from)) {
         nextLink = findLink(from)
@@ -131,8 +145,8 @@ export function createMarkdownInlineMatcher(
         nextOther.end < nextCode.end
       ) {
         nonLinkPattern.lastIndex = nextOther.index + 1
-        const again = nonLinkPattern.exec(text)
-        nextOther = again ? { 0: again[0], index: again.index, end: nonLinkPattern.lastIndex } : null
+        const again = nonLinkPattern.exec(source)
+        nextOther = again ? other(again.index, nonLinkPattern.lastIndex) : null
       }
       let match =
         nextLink && (!nextOther || nextLink.index < nextOther.index) ? nextLink : nextOther

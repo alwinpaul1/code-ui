@@ -6,6 +6,7 @@ import {
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import type { MarkdownStyles } from './mobile-markdown-styles'
 
@@ -37,7 +38,7 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
       continue
     }
     if (match.index > pendingStart) {
-      parts.push(label.slice(pendingStart, match.index))
+      parts.push(unescapeMarkdownText(label.slice(pendingStart, match.index)))
     }
     pendingStart = pattern.lastIndex
     const key = `${keyPrefix}${match.index}`
@@ -68,7 +69,7 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
     }
   }
   if (pendingStart < label.length) {
-    parts.push(label.slice(pendingStart))
+    parts.push(unescapeMarkdownText(label.slice(pendingStart)))
   }
   return parts
 }

@@ -225,6 +225,53 @@ describe('mobile inline link scanning', () => {
     expect(matcher.exec()).toBeNull()
   })
 
+  // Review, 2026-09-30: a backslash never escaped anything, so `\*a\*` was
+  // an italic. In a chat reply a mark after an odd run of backslashes is now
+  // text; the PR renderer reads it as before.
+  it('skips a mark an odd run of backslashes escapes, in a chat reply only', () => {
+    const texts = (text: string, chat: boolean) => tokens(text, chat).map((token) => token.text)
+    expect(texts('\\*a\\*', true)).toEqual([])
+    expect(texts('\\\\*a*', true)).toEqual(['*a*'])
+    expect(texts('\\\\\\*a*', true)).toEqual([])
+    expect(texts('\\**a**', true)).toEqual(['*a*'])
+    expect(texts('**a \\* b**', true)).toEqual(['**a \\* b**'])
+    expect(texts('\\[a](b) [c](d)', true)).toEqual(['[c](d)'])
+    expect(texts('[a](b\\)c)', true)).toEqual(['[a](b\\)c)'])
+    expect(texts('\\*a*', false)).toEqual(['*a*'])
+  })
+
+  it('opens no code span on an escaped backtick, and closes one after a backslash', () => {
+    const code = (text: string) => {
+      const matcher = createMarkdownInlineMatcher(text, /(?!)/g, true, true)
+      const found: string[] = []
+      let match
+      while ((match = matcher.exec())) {
+        found.push(match[0])
+      }
+      return found
+    }
+    expect(code('\\`not code`')).toEqual([])
+    expect(code('`a\\` b')).toEqual(['`a\\`'])
+    expect(code('\\``x`')).toEqual(['`x`'])
+    expect(code('\\\\`x`')).toEqual(['`x`'])
+    expect(code('\\')).toEqual([])
+    expect(code('')).toEqual([])
+  })
+
+  it.each([
+    { name: 'escaped stars', text: '\\*'.repeat(50_000) },
+    { name: 'a backslash run before every star', text: '\\\\\\*a*'.repeat(20_000) },
+    { name: 'one long backslash run', text: `${'\\'.repeat(100_000)}*a*` },
+    { name: 'escaped backticks', text: '\\`'.repeat(50_000) }
+  ])('reads $name in a chat reply within the parser deadline', ({ text }) => {
+    const count = runInNewContext(
+      'let n = 0; const m = create(text, pattern(), true, true); while (m.exec()) n++; n',
+      { create: createMarkdownInlineMatcher, pattern: () => new RegExp(CHAT_OTHER), text },
+      { timeout: 250 }
+    )
+    expect(typeof count).toBe('number')
+  })
+
   it('does not repeatedly search the suffix for absent non-link tokens', () => {
     const text = '[a](b)'.repeat(10_000)
     const pattern = new RegExp(REVIEW_OTHER)

@@ -4,6 +4,7 @@ import {
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
 import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { isRemoteImageUrl } from './markdown-image-source'
 import { listMarker } from './mobile-markdown-list-marker'
 import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
@@ -79,7 +80,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
       pattern.lastIndex = match.index + 1
       continue
     }
-    out += text.slice(pendingStart, match.index)
+    out += unescapeMarkdownText(text.slice(pendingStart, match.index))
     pendingStart = pattern.lastIndex
     const link = match.link
     const address = /^<?https?:\/\//i.test(token)
@@ -101,7 +102,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
       out += markdownInlinePlainText(token.slice(1, -1), label)
     }
   }
-  return out + text.slice(pendingStart)
+  return out + unescapeMarkdownText(text.slice(pendingStart))
 }
 
 /** Two spaces a level, the way the screen steps a nested item in. */

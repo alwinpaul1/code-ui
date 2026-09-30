@@ -21,6 +21,7 @@ import {
 } from './markdown-file-path-detection'
 import { routeMarkdownHref } from './markdown-href-routing'
 import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
@@ -162,7 +163,7 @@ function renderInline(
     }
     if (match.index > pendingStart) {
       parts.push(
-        renderTextRun(styles, text.slice(pendingStart, match.index), `t${pendingStart}`, onOpenFile)
+        renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart, match.index)), `t${pendingStart}`, onOpenFile)
       )
     }
     pendingStart = pattern.lastIndex
@@ -253,7 +254,8 @@ function renderInline(
   }
 
   if (pendingStart < text.length) {
-    parts.push(renderTextRun(styles, text.slice(pendingStart), `t${pendingStart}`, onOpenFile))
+    // An escape's backslash is not drawn (markdown-inline-escapes.ts).
+    parts.push(renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart)), `t${pendingStart}`, onOpenFile))
   }
   return parts
 }
