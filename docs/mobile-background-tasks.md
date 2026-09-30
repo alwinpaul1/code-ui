@@ -400,8 +400,8 @@ and changed 38 times; the sources, one by one:
   `done` (a queued prompt starting the moment a turn ends, or the phone on
   another tab). The first working state the phone sees stands in, as
   before; after a `waiting` it has no start for, it retires nothing.
-- Ids a window showed ending (a notification, a TaskStop) are remembered for
-  the session, so a slid window cannot bring them back.
+- Ids a window showed ending (a notification, a TaskStop that went through)
+  are remembered for the session, so a slid window cannot bring them back.
 - A TaskStop ends its task once its answer says it went through: anything
   but a failure, or TaskStop's own word that the task had already ended
   (`Task <id> is not running (status: completed|failed|killed)`). A stop the
