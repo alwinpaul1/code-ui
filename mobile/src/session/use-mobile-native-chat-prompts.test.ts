@@ -222,3 +222,45 @@ describe('useMobileNativeChatPrompts question card', () => {
     expect(promptsFor({ state: 'working', lastAssistantMessage: reply }).question).toBeNull()
   })
 })
+
+// 2026-09-30: "do you want to" made this a "Permission requested" card whose
+// buttons were the choices, and a permission card hides the question card.
+describe('useMobileNativeChatPrompts: a question or a plan is not a permission', () => {
+  const database = 'Which database do you want to use?\n\n1. Postgres\n2. SQLite'
+  const plan = 'I will make these changes:\n1. Edit a.ts\n2. Edit b.ts\n\nDo you want to go ahead?'
+
+  it.each(['waiting', 'blocked'] as const)(
+    'shows a %s agent’s choice of database as a question card, not a permission',
+    (state) => {
+      const prompts = promptsFor({ state, lastAssistantMessage: database })
+      expect(prompts.permission).toBeNull()
+      expect(prompts.question).toEqual({
+        question: 'Which database do you want to use?',
+        options: ['Postgres', 'SQLite'],
+        multiSelect: false,
+        optionTokens: ['1', '2']
+      })
+    }
+  )
+
+  it('asks Allow or Deny for a plan that asks to go ahead, and shows no question card', () => {
+    const prompts = promptsFor({ state: 'waiting', lastAssistantMessage: plan })
+    expect(prompts.permission?.options).toEqual([
+      { label: 'Allow', send: 'y' },
+      { label: 'Deny', send: 'n' }
+    ])
+    expect(prompts.question).toBeNull()
+  })
+
+  // The host's approval envelope is a pending permission whatever the last
+  // message says, so it still takes the card after a question is left alone.
+  it('keeps the host approval envelope over a question in the last message', () => {
+    const prompts = promptsFor({
+      state: 'waiting',
+      interactivePrompt: APPROVAL,
+      lastAssistantMessage: database
+    })
+    expect(prompts.permission).toMatchObject({ title: 'Allow Bash?' })
+    expect(prompts.question).toBeNull()
+  })
+})

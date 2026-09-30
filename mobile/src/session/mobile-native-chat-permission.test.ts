@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { detectAgentPermission, parseApprovalFromStatus } from './mobile-native-chat-permission'
+import { parseAgentQuestion } from './mobile-native-chat-question'
 
 describe('detectAgentPermission', () => {
   it('returns null for a working agent even with permission-like text', () => {
@@ -182,6 +185,203 @@ describe('a permission card whose detail has an emoji at the 160-character cap',
     })
     expect(result?.detail).not.toMatch(LONE_HALF)
     expect(result?.detail).toBe(`${ROCKET.repeat(79)}…`)
+  })
+})
+
+// 2026-09-30: on a waiting or blocked tab, a last message with an approval
+// word in it ("do you want to", "would you like to", "allow", "confirm")
+// became a "Permission requested" card, and every numbered line anywhere in it
+// became a button sending its digit. A choice of database showed as a
+// permission, and a plan's steps were offered as the answers to "go ahead?",
+// with no Allow or Deny at all.
+const ALLOW_DENY = [
+  { label: 'Allow', send: 'y' },
+  { label: 'Deny', send: 'n' }
+]
+const askWhileWaiting = (lastAssistantMessage: string) =>
+  detectAgentPermission({ state: 'waiting', lastAssistantMessage })
+
+describe('a paused agent asking a question or listing a plan', () => {
+  it('leaves a choice of database to the question card, not "Permission requested"', () => {
+    const text = 'Which database do you want to use?\n\n1. Postgres\n2. SQLite'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(detectAgentPermission({ state: 'blocked', lastAssistantMessage: text })).toBeNull()
+    // The card that draws instead: the two choices.
+    expect(parseAgentQuestion(text)?.options).toEqual(['Postgres', 'SQLite'])
+  })
+
+  it('asks Allow or Deny for a plan that asks to go ahead, never offering its steps', () => {
+    const permission = askWhileWaiting(
+      'I will make these changes:\n1. Edit a.ts\n2. Edit b.ts\n\nDo you want to go ahead?'
+    )
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options).toEqual(ALLOW_DENY)
+  })
+
+  // "Skip" and "Cancel" can answer an approval, but steps that all begin with
+  // one are still steps: a menu offers a way to say yes AND a way to say no.
+  it('asks Allow or Deny for a plan whose steps begin with approval words', () => {
+    const permission = askWhileWaiting(
+      'Next steps:\n1. Skip the flaky test\n2. Cancel the old job\n\nDo you want to proceed?'
+    )
+    expect(permission?.options).toEqual(ALLOW_DENY)
+  })
+
+  it('leaves a bulleted choice of database to the question card', () => {
+    const text = 'Which database would you like to use?\n- Postgres\n- SQLite'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.options).toEqual(['Postgres', 'SQLite'])
+  })
+
+  it('still asks Allow or Deny when the bullets are Yes and No', () => {
+    expect(askWhileWaiting('Do you want to proceed?\n- Yes\n- No')?.options).toEqual(ALLOW_DENY)
+  })
+
+  // A known limit, not a goal: choices that begin with a yes and a no read
+  // as a menu. The card is titled wrong, but each button still sends the
+  // agent's own digit, so the answer it gives is the one the agent listed.
+  it('still titles a choice between "Allow…" and "Skip…" a permission, by its own digits', () => {
+    const permission = askWhileWaiting(
+      'Which do you want?\n1. Allow retries with backoff\n2. Skip retries entirely'
+    )
+    expect(permission?.title).toBe('Permission requested')
+    expect(permission?.options.map((o) => o.send)).toEqual(['1', '2'])
+  })
+})
+
+/** The screen rows under a fixture's `=== screen: … ===` marker. */
+function readScreen(name: string): string[] {
+  const text = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)), 'utf8')
+  const rows = text.split('\n')
+  const marker = rows.findIndex((row) => /^=== screen: .* ===$/.test(row))
+  return rows.slice(marker + 1)
+}
+
+describe("an approval menu keeps each agent's own choices", () => {
+  // Claude Code 2.1.283's Bash dialog, from its title row down (a
+  // transcription of the user's screen; see the fixture's header).
+  const claudeRows = readScreen('claude-screen-subagent-bash-permission-2.1.283.txt')
+  const CLAUDE_DIALOG = claudeRows
+    .slice(claudeRows.indexOf(' Bash command · from the general-purpose agent'))
+    .join('\n')
+  // The Codex approval dialog pinned in codex-terminal-permission.test.ts
+  // (2026-09-06). Which Codex build drew it is not recorded there.
+  const CODEX_DIALOG = [
+    'Would you like to run the following command?',
+    '',
+    'Environment: local',
+    'Reason: May I run the full test suite, including the local WebSocket integration tests?',
+    '',
+    '  $ pnpm exec vitest run > /tmp/codeui-026-tests.log 2>&1',
+    '',
+    '› 1. Yes, proceed (y)',
+    "  2. Yes, and don't ask again for commands that start with `pnpm exec vitest` (p)",
+    '  3. No, and tell Codex what to do differently (esc)',
+    '',
+    'Press enter to confirm or esc to cancel'
+  ]
+
+  // The selected row carries a `❯` (Claude) or `›` (Codex) in front of its
+  // digit, which dropped it from the card before 2026-09-30.
+  it("offers Claude Code's three choices by their digits, the selected one too", () => {
+    const permission = detectAgentPermission({
+      state: 'blocked',
+      lastAssistantMessage: CLAUDE_DIALOG
+    })
+    expect(permission?.options).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: 'Yes, and don’t ask again for: git *', send: '2' },
+      { label: 'No', send: '3' }
+    ])
+  })
+
+  it("offers Codex's three choices by their digits, the selected one too", () => {
+    expect(askWhileWaiting(CODEX_DIALOG.join('\n'))?.options).toEqual([
+      { label: 'Yes, proceed (y)', send: '1' },
+      {
+        label: "Yes, and don't ask again for commands that start with `pnpm exec vitest` (p)",
+        send: '2'
+      },
+      { label: 'No, and tell Codex what to do differently (esc)', send: '3' }
+    ])
+  })
+
+  it('asks Allow or Deny for the Codex ask when no menu came with it', () => {
+    const head = CODEX_DIALOG.slice(0, CODEX_DIALOG.indexOf('› 1. Yes, proceed (y)')).join('\n')
+    expect(askWhileWaiting(head)?.options).toEqual(ALLOW_DENY)
+  })
+
+  // Claude Code 2.1.276's plan review, as claude-plan-permission.ts records
+  // it: its way to say no is "Tell Claude what to change", which the card
+  // needs to open the feedback sheet.
+  it("keeps Claude Code's plan review a permission card, feedback option and all", () => {
+    const permission = askWhileWaiting(
+      'Claude has written up a plan and is ready to execute. Would you like to proceed?\n' +
+        '1. Yes, and use auto mode\n' +
+        '2. Yes, manually approve edits\n' +
+        '3. Tell Claude what to change'
+    )
+    expect(permission?.options).toEqual([
+      { label: 'Yes, and use auto mode', send: '1' },
+      { label: 'Yes, manually approve edits', send: '2' },
+      { label: 'Tell Claude what to change', send: '3' }
+    ])
+  })
+
+  it('reads a bold Yes and No as an approval menu', () => {
+    expect(
+      askWhileWaiting('Do you want to proceed?\n1. **Yes**\n2. **No**')?.options.map((o) => o.send)
+    ).toEqual(['1', '2'])
+  })
+})
+
+describe('a numbered list in a permission ask, at its degenerate sizes and places', () => {
+  it('asks Allow or Deny for a single numbered Yes', () => {
+    expect(askWhileWaiting('Do you want to proceed?\n1. Yes')?.options).toEqual(ALLOW_DENY)
+  })
+
+  it('leaves a single numbered step under a question to the question card', () => {
+    const text = 'Would you like to run this step:\n1. Build the app'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.options).toEqual(['Build the app'])
+  })
+
+  it('offers no line of a code fence as a choice', () => {
+    expect(
+      askWhileWaiting('Do you want to run this script?\n```\n1. echo a\n2. echo b\n```')?.options
+    ).toEqual(ALLOW_DENY)
+  })
+
+  it('does not answer a Yes/No menu quoted in a code fence by its digits', () => {
+    expect(
+      askWhileWaiting('Claude Code showed:\n```\n1. Yes\n2. No\n```\nShould I allow it?')?.options
+    ).toEqual(ALLOW_DENY)
+  })
+
+  it('offers the Yes/No menu at the end, not the numbered findings above it', () => {
+    const permission = askWhileWaiting(
+      'I found these issues:\n1. Missing null check\n2. Unused import\n\n' +
+        'Do you want to apply the fixes?\n1. Yes\n2. No'
+    )
+    expect(permission?.options).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: 'No', send: '2' }
+    ])
+  })
+
+  it('offers the Yes/No menu, not a numbered notes list after it', () => {
+    const permission = askWhileWaiting(
+      'Do you want to proceed?\n1. Yes\n2. No\n\nNotes:\n1. This deletes build/\n2. It cannot be undone'
+    )
+    expect(permission?.options).toEqual([
+      { label: 'Yes', send: '1' },
+      { label: 'No', send: '2' }
+    ])
+  })
+
+  it('shows nothing for an empty message', () => {
+    expect(askWhileWaiting('')).toBeNull()
+    expect(askWhileWaiting('\n\n')).toBeNull()
   })
 })
 
