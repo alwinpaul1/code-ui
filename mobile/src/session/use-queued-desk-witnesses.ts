@@ -1,14 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
-import { echoMemoryId } from './mobile-native-chat-remember-echo'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { witnessesToRemember, type WitnessToRemember } from './mobile-native-chat-witness-memory'
-
-/** Sightings remembered at once, per chat scope. */
-const SIGHTING_CAP = 64
+import { absorbedMemoryId, witnessesToRemember, type WitnessToRemember } from './mobile-native-chat-witness-memory'
+import type { BoxSighting } from './use-absorbed-queue-echoes'
 
 /**
  * The messages the agent's queue box lists that are not the phone's own
@@ -22,46 +19,37 @@ const SIGHTING_CAP = 64
  * its run's start, was on a page not loaded: the message was lost (final
  * review of fix/midturn-prompt-at-end, 2026-09-29).
  *
- * `entries` is the box as the chat draws it (useQueuedOwnSends): a row the
- * phone's own send stands in is not a string and is left out. A row that
- * carries a tool's rows (`⏺`, `●`, `⎿`) is the reader running into the
- * transcript and is left out too (mobile-native-chat-witness-dedupe.ts). A
- * message already in the box when the chat opened is placed where the chat
- * first saw it, which can be below rows written after it was sent.
+ * Where each arrived is the queue-box witness's own sighting of its entry
+ * (`box`, BoxSighting), not one kept here: its echo is remembered at that row
+ * once the agent takes it, and both must name one message by one id
+ * (absorbedMemoryId). A sighting kept here by the words, for good, put a later
+ * message of the same words at the first one's row under the first one's id,
+ * so one the agent took while the chat was closed was lost (review,
+ * 2026-09-30); per entry, it goes when its entry leaves the box.
+ *
+ * `entries` is the box as the chat draws it (useQueuedOwnSends), index for
+ * index with the box as read: a row the phone's own send stands in is not a
+ * string and is left out. A reading that carries a tool's rows (`⏺`, `●`,
+ * `⎿`) is the reader running into the transcript and is left out too
+ * (mobile-native-chat-witness-dedupe.ts). A message already in the box when
+ * the chat opened is placed where the chat first saw it, which can be below
+ * rows written after it was sent.
  */
-export function useQueuedDeskWitnesses(
+export function queuedDeskWitnesses(
   entries: readonly MobileChatQueueEntry[],
-  rawMessages: readonly NativeChatMessage[],
-  scopeKey: string
+  box: readonly BoxSighting[],
+  rawMessages: readonly NativeChatMessage[]
 ): WitnessToRemember[] {
-  const sightings = useRef({ scope: scopeKey, byKey: new Map<string, string>() })
-  if (sightings.current.scope !== scopeKey) {
-    sightings.current = { scope: scopeKey, byKey: new Map() }
-  }
-  const tail = rawMessages.at(-1)?.id
   const out: WitnessToRemember[] = []
-  for (const entry of entries) {
-    if (typeof entry !== 'string' || entry.split('\n').some((line) => /^[⏺●⎿]/.test(line.trim()))) {
+  for (const slot of box) {
+    if (typeof entries[slot.row] !== 'string' || slot.sighting === null || slot.text.split('\n').some((line) => /^[⏺●⎿]/.test(line.trim()))) {
       continue
     }
-    const key = normalizeNativeChatUserText(asPaintedPrompt(entry))
+    const key = normalizeNativeChatUserText(asPaintedPrompt(slot.text))
     if (key.length === 0 || landedRowOf(key, rawMessages)) {
       continue
     }
-    const byKey = sightings.current.byKey
-    if (!byKey.has(key) && tail !== undefined) {
-      byKey.set(key, tail)
-      if (byKey.size > SIGHTING_CAP) {
-        const oldest = byKey.keys().next()
-        if (!oldest.done) {
-          byKey.delete(oldest.value)
-        }
-      }
-    }
-    const anchorId = byKey.get(key)
-    if (anchorId !== undefined) {
-      out.push({ id: echoMemoryId(entry), text: entry, anchorId })
-    }
+    out.push({ id: absorbedMemoryId(slot.text, slot.sighting, slot.firstRead), text: slot.text, anchorId: slot.sighting })
   }
   return out
 }
@@ -89,7 +77,7 @@ function landedRowOf(key: string, rawMessages: readonly NativeChatMessage[]): bo
  * Keep what the chat witnessed with the phone's own sends, so it survives a
  * reconnect, a tab switch and a relaunch (2026-09-13): the echoes it drew
  * (witnessesToRemember says which, and under what id), and the messages the
- * agent's queue box lists (useQueuedDeskWitnesses).
+ * agent's queue box lists (queuedDeskWitnesses).
  */
 export function useRememberedWitnesses(
   echoes: readonly MobileNativeChatPendingMessage[],

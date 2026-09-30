@@ -32,8 +32,27 @@ describe('which witnessed messages are written to disk', () => {
       witness({ id: 'absorbed-1', text: 'seen leaving the queue' })
     ])
     expect(remembered).toEqual([
-      { id: echoMemoryId('seen leaving the queue'), text: 'seen leaving the queue', anchorId: 'row-1' }
+      { id: echoMemoryId('seen leaving the queue', 'row-1'), text: 'seen leaving the queue', anchorId: 'row-1' }
     ])
+  })
+
+  // Two messages of the same words sent mid-turn ("keep going", twice) are
+  // two queue-box echoes at two rows; one id for both kept only the first
+  // (review, 2026-09-30).
+  it('gives two absorbed messages of the same words at two rows two ids', () => {
+    const ids = witnessesToRemember([
+      witness({ id: 'queued-1', text: 'keep going', baselineTailMessageId: 'a1' }),
+      witness({ id: 'queued-2', text: 'keep going', baselineTailMessageId: 'a2' })
+    ]).map((entry) => entry.id)
+    expect(ids).toEqual([echoMemoryId('keep going', 'a1'), echoMemoryId('keep going', 'a2')])
+  })
+
+  // One the box already listed when the chat first read it may be a message
+  // remembered before a remount, at another row: its words alone name it.
+  it('keeps a message the box listed at the chat’s first read under its words alone', () => {
+    expect(
+      witnessesToRemember([witness({ id: 'queued-1', text: 'keep going', baselineTailMessageId: 'a5', listedAtFirstRead: true })])
+    ).toEqual([{ id: echoMemoryId('keep going'), text: 'keep going', anchorId: 'a5' }])
   })
 
   // A restored echo with no boundary must never come back as a new send, so an
