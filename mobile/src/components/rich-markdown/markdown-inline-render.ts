@@ -1,5 +1,18 @@
-import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import { emphasisSource, isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
+
+/** The tokens renderInline reads, as a RegExp source. A function rather than a constant: a module
+ *  here does no work as it is parsed (rich-markdown-document-parse-time.test.ts). */
+function inlineTokenSource(): string {
+  return [
+    /!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~/.source,
+    emphasisSource('\\*', 2, true),
+    emphasisSource('_', 2, true),
+    emphasisSource('\\*', 1, false, false),
+    emphasisSource('_', 1, false, false),
+    /\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+/.source
+  ].join('|')
+}
 
 /**
  * One line of markdown as inline markup: images, code, strikethrough, emphasis, links and bare
@@ -13,10 +26,13 @@ import { escapeAttr, escapeHtml, isSafeUrl } from './markdown-escaping'
  * markdownInlineTokenPattern does (markdown-inline-matcher.ts has the why): `***x***` is bold
  * around `*x*`, drawn as nested marks, and it saves back as it was. `\*\*[^*]+\*\*` drew it as a
  * star, bold x, a star, and the stars were then text in the document (review, 2026-09-30).
+ *
+ * Every emphasis starts and ends on a character that is not a space (emphasisSource), so prose
+ * maths is text: `x ** 2 and y ** 3` drew as `x <strong> 2 and y </strong> 3`, and an edit inside
+ * that bold saved the user's maths as bold (same review).
  */
 export function renderInline(text: string): string {
-  const pattern =
-    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+  const pattern = new RegExp(inlineTokenSource(), 'g')
   let output = ''
   let lastIndex = 0
   let match = pattern.exec(text)

@@ -107,8 +107,10 @@ describe('a PR comment with emphasis nested inside emphasis', () => {
   })
 
   it('leaves fill-in blanks, an unclosed bold and a bare star run as they were', () => {
+    // `2 * 3 * 4` drew " 3 " italic and lost its stars until every emphasis
+    // had to start and end on a word (CommentMarkdown.spaced-operators.test.tsx).
     const renderer = render('___ Date: ___\n\n**a\n\n***\n\n2 * 3 * 4', 'light')
-    expect(textOf(renderer.root)).toBe('___ Date: ___**a2  3  4')
+    expect(textOf(renderer.root)).toBe('___ Date: ___**a2 * 3 * 4')
     act(() => renderer.unmount())
   })
 })

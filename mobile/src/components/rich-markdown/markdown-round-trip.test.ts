@@ -207,6 +207,47 @@ describe('the editor document, from markdown and back', () => {
     expect(currentMarkdown(scope)).toBe(markdown)
   })
 
+  // Review, 2026-09-30: prose maths drew as emphasis, `x ** 2 and y ** 3` as
+  // `x <strong> 2 and y </strong> 3`, the way the chat did
+  // (MobileMarkdown.spaced-operators.test.tsx). The source survived a save
+  // only because the serializer wrote the same stars back around the wrong
+  // words; any edit inside them saved the user's maths as bold.
+  it.each([
+    ['prose maths', 'area = x ** 2 + y ** 2, or 2 * 3 * 4'],
+    ['a spaced power', 'x ** 2 and y ** 3'],
+    ['a spaced product', 'a * b * c'],
+    ['a glob', 'glob: * and *'],
+    ['spaced underscores', 'x __ y __ z and x _ y _ z'],
+    ['a fill-in blank', 'Name: *** Date: ***']
+  ])('draws %s as the text it is and saves it back as written', (_name, markdown) => {
+    const { scope, html } = surface(markdown)
+    expect(html).toBe(`<p>${markdown}</p>`)
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
+
+  it('draws operators in a heading, a list item and a table cell as text', () => {
+    const markdown = [
+      '# Cost is n * m * 4',
+      '',
+      '- grows as 2 ** n',
+      '- or n * n',
+      '',
+      '| formula | note |',
+      '| --- | --- |',
+      '| w * h / 2 | x ** 2 |'
+    ].join('\n')
+    const { scope, html } = surface(markdown)
+    expect(html).not.toMatch(/<(strong|em)>/)
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
+
+  it('still draws emphasis whose runs touch its words beside the maths', () => {
+    const markdown = 'x ** 2 is **bold**, *it* and *a*, not 2 * 3'
+    const { scope, html } = surface(markdown)
+    expect(html).toBe('<p>x ** 2 is <strong>bold</strong>, <em>it</em> and <em>a</em>, not 2 * 3</p>')
+    expect(currentMarkdown(scope)).toBe(markdown)
+  })
+
   it('round-trips a table cell that holds a pipe, and the backslash that hid it', () => {
     // A cell's own pipe is the row separator unless a backslash claims it. Code UI: only the pipe's
     // backslash is the table's; `c\\d` shows as written, as it does in a paragraph (the editor

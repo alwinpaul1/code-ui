@@ -1,5 +1,5 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
-import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import { emphasisSource, isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
@@ -300,9 +300,21 @@ function parseAlignRow(line: string): CellAlign[] {
 // markdownInlineTokenPattern does (markdown-inline-matcher.ts has the why):
 // `***x***` is bold around `*x*`, and CommentMarkdown draws a bold token's
 // inside through parseInline again. `\*\*[^*]+\*\*` drew it as a star, bold x,
-// a star (review, 2026-09-30).
-const INLINE =
-  /(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*)|(__(?:[^_]|_[^_\s][^_\n]*_)+__)|(\*[^*]+\*)|(_[^_]+_)/g
+// a star (review, 2026-09-30). An italic holds no span, and may run over
+// lines, as it did. Every one starts and ends on a character that is not a
+// space (emphasisSource), so `x ** 2 + y ** 2` and `2 * 3 * 4` are text: they
+// drew " 2 + y " bold and " 3 " italic (same review).
+const INLINE = new RegExp(
+  [
+    emphasisSource('\\*', 2, true),
+    emphasisSource('_', 2, true),
+    emphasisSource('\\*', 1, true, false),
+    emphasisSource('_', 1, true, false)
+  ]
+    .map((source) => `(${source})`)
+    .join('|'),
+  'g'
+)
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []

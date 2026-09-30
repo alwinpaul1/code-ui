@@ -76,13 +76,15 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('a *** b')).toBe('a *** b')
     // A line of three is a rule, which draws no words.
     expect(markdownPlainText('***')).toBe('')
-    // Blanks to fill in: a run followed by a space opens nothing.
-    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: * Date: *')
+    // Blanks to fill in: a run followed by a space opens nothing, and one
+    // after a space closes nothing. The stars copied as "Name: * Date: *",
+    // a star, bold " Date: ", a star, until every emphasis had to start and
+    // end on a word (MobileMarkdown.spaced-operators.test.tsx, 2026-09-30).
+    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: *** Date: ***')
     expect(markdownPlainText('Name: ___ Date: ___')).toBe('Name: ___ Date: ___')
-    // Today's reading, pinned so the nesting change leaves it where it was:
-    // the two stars pair as an italic " 3 ", though CommonMark opens nothing
-    // on a star with a space after it.
-    expect(markdownPlainText('2 * 3 * 4')).toBe('2  3  4')
+    // A star with a space on each side is text, as CommonMark reads it; it
+    // copied as "2  3  4" before the same change.
+    expect(markdownPlainText('2 * 3 * 4')).toBe('2 * 3 * 4')
   })
 
   it('copies a code pill as its words, backticks and padding off', () => {
