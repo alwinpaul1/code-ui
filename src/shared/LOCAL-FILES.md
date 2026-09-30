@@ -308,3 +308,66 @@ their c1e15c400 pin and the field is back; the entry is gone.
   (It also re-exported `activeStructuredAgentSessionToolCall` until the
   v1.4.210..v1.4.211 shared halves, when #22349 dropped that reader from the
   live-turn module.) The entry is gone.
+
+## The v1.4.211..v1.4.217 shared halves (Orca v1.4.217, b11a88dc84)
+
+147 files taken whole and byte-equal to v1.4.217 (127 already here, 20 new), 12 merged by
+hand, 3 deleted (#22783 removed the unused terminal handoff: `agent-session-pty-write-admission.ts`,
+its test and `agent-session-pty-write-refusal-copy.ts`). The 12 were merged 3-way (this copy,
+upstream v1.4.211, upstream v1.4.217), so each carries only the v1.4.211..v1.4.217 change on top
+of everything the entries above already record:
+
+- `agent-session-wire.ts` — the terminal handoff types go (#22783: `AgentSessionHandoffDirection`,
+  `Mode`, `Action`, `Request`, `Result`, and the `handoff` field on `snapshot`, `event` and `reset`
+  frames; `AgentSessionHandoffStatus` stays as upstream's narrowed `owner: 'native' | 'none'`
+  reply). `contextUsage` on the options result, `tabId` on the attach result, `statusStartedAt`,
+  `AgentSessionModelCatalogResult` come in whole. `turnOutcome` on `AgentSessionStatusSummary`
+  is taken by hand (its `AgentJournalTurnOutcome` type exists here now, through
+  `agent-turn-outcome.ts`). NOT taken, for the reasons the entries above give:
+  `hostExecutionOwned` / `hostExecutionPhase`, `backgroundTasks` on the status summary, and the
+  turn-completion feed types (`AgentSessionTurnCompletion*`, `agentSessionTurnCompletionKey`),
+  which nothing on the phone reads. The refusal code list is still inline: upstream moved it to
+  `agent-session-wire-refusals.ts` (imports `agent-session-rewind.ts`, not vendored), and the new
+  `agent_session_owner_restart_failed` code (#22364, 6ae6ed08bb) is added to the inline list by
+  hand, marked `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
+- `agent-session-record.ts` — the launch-args check moves to `agent-session-launch-args.ts` and
+  the lease decode goes through `agent-session-legacy-handoff-lease.ts` (`isPersistedAgentSessionRecord`
+  replaces `isAgentSessionRecord`; both new files are vendored whole). This copy's own
+  `rewind` / `conversationName` conjuncts stay as hand-written above, so upstream's imports of
+  `agent-session-rewind.ts` and `agent-session-conversation-name.ts` are still left out.
+- `agent-status-types.ts` — `mainAgent` (`AgentMainAgentStatus`, #22452) on the row and payload with
+  its normalizer, `stateObservedAt`, `isAgentStatusState`, and `AgentStateHistoryEntry` moved into
+  `agent-state-history.ts`. The `OrchestrationFleetAttention` import stays out, as before.
+- `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts` — `answers` on a resolution,
+  `contextUsage` on a turn, `recoveredAt` on a recovered row. `AgentJournalTurnOutcome` now comes
+  from `agent-turn-outcome.ts` and is re-exported here, so the earlier note that this file has no
+  `AgentJournalTurnOutcome` is out of date. Journal-types' import block keeps the local
+  `presentation` / `tone` comment line beside upstream's new imports.
+- `protocol-version.ts` — `AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY` (constant and
+  `RUNTIME_CAPABILITIES` entry), `AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY`,
+  `AGENT_SESSION_ZCODE_RESUME_RUNTIME_CAPABILITY`, `AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY`.
+  `AGENT_SESSION_REWIND_RUNTIME_CAPABILITY` is still not taken.
+- `rpc-contract/rpc-params-catalog.generated.ts` — `agentSession.conversationOutline`,
+  `agentSession.modelCatalog` and `agentSession.respondToQuestion` (now `RespondToQuestionParams`);
+  `agentSession.requestHandoff` and its `HandoffParams` import go. The `agentSession.restart*`
+  rows are still not listed, as before.
+- `agent-session-operation-ledger.ts`, `structured-agent-session-outbox.ts`,
+  `structured-agent-session-reducer.ts` (the `handoff` state is gone, `unloadedTurnRevisions`
+  is new), `structured-agent-session-turn-timing.test.ts` and
+  `native-chat-session-option-snapshot.ts` — the range's own hunks on top of their older pins.
+
+Vendored files the range changed that are NOT taken, because a whole take would drag unported
+desktop settings, catalog or rewind code in behind them and nothing on the phone reads the change:
+`structured-agent-session-projection.ts` (the range's hunks are all in the status summary,
+`projectStructuredAgentSessionStatusSummary`, which this copy does not have) and its test,
+`agent-session-lease-adjudication.ts` and test (imports `agent-session-wire-refusals.ts`),
+`default-global-settings.ts`, `global-settings-types.ts`, `rate-limit-types.ts` and test
+(Cursor account fields), `worktree/types.ts` and `worktree/create-types.ts` (the
+`catalogVersion` and archive-hook types), `workspace-session-schema.ts` and its two tests,
+`tui-agent-detection-commands.ts`, `project-groups.ts`, `text-search.ts` and
+`text-search-glob-patterns.ts`, `growing-byte-buffer.ts` and test, `cli-argument-boundary.ts`,
+`ephemeral-vm-recipe-process.ts`, `git-binary-compatibility.test.ts`,
+`browser-network-tunnel-stream-framing.test.ts`, `child-process/*` (four files and two
+fixtures), `agent-status-types.test.ts` and
+`agent-hook-listener-extraction-characterization.test.ts`. None of them is imported by production code under
+`mobile/`.
