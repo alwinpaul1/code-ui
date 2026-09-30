@@ -56,7 +56,7 @@ export function placeLiveTranscript(
   }
 }
 
-export function deliverDesktopDictation(input: {
+type DesktopDictation = {
   text: string
   showNativeChat: boolean
   setChatComposerText: (update: (current: string) => string) => void
@@ -67,7 +67,9 @@ export function deliverDesktopDictation(input: {
   flushPending: (handle: string) => Promise<boolean>
   sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
   setInput: InputUpdate
-}): void {
+}
+
+export function deliverDesktopDictation(input: DesktopDictation): void {
   // The visible composer owns the words. Terminal mode still follows live-input routing.
   if (input.showNativeChat) {
     input.setChatComposerText((current) => appendBufferedDictation(current, input.text))
@@ -79,22 +81,47 @@ export function deliverDesktopDictation(input: {
     input.routeContext?.liveInputEnabled ?? input.liveInputEnabled
   )
   if (route.kind === 'live-insert') {
-    const insertHandle = input.routeContext?.handle ?? input.activeHandle
-    if (!insertHandle) {
-      return
-    }
-    void (async () => {
-      const flushedPendingInput = await input.flushPending(insertHandle)
-      if (!flushedPendingInput) {
-        return
-      }
-      const sent = await input.sendLiveTerminalInput(insertHandle, route.text)
-      if (sent) {
-        input.showToast('Dictation inserted')
-      }
-    })()
+    void insertLive(input, route.text)
     return
   }
   input.setInput((current) => appendBufferedDictation(current, route.text))
   input.showToast('Dictation inserted')
+}
+
+/** Toasted when the live insert could not land and the words went to the
+ *  command box instead. It follows the send's own "Input too large" when
+ *  that was the reason, and says nothing that contradicts it. */
+const DICTATION_KEPT_TOAST = 'Dictation not inserted — kept in the command box'
+
+/** The words go to the PTY, or, when that cannot happen, to the command box
+ *  as the buffered route would put them. Each of these returned in silence
+ *  before, and the words vanished (review, 2026-09-30): no handle, a flush
+ *  refused, and a send that came back false, which sendLiveTerminalInput does
+ *  on a rejected RPC, a dropped connection or a stale tab. */
+async function insertLive(input: DesktopDictation, text: string): Promise<void> {
+  const keepInBox = (why: string): void => {
+    console.warn(`[dictation] live insert failed (${why}); kept in the command box`)
+    input.setInput((current) => appendBufferedDictation(current, text))
+    input.showToast(DICTATION_KEPT_TOAST)
+  }
+  const handle = input.routeContext?.handle ?? input.activeHandle
+  if (!handle) {
+    keepInBox('no terminal handle')
+    return
+  }
+  let step = 'flush of pending live input'
+  try {
+    if (!(await input.flushPending(handle))) {
+      keepInBox(`${step} refused`)
+      return
+    }
+    step = 'send'
+    if (await input.sendLiveTerminalInput(handle, text)) {
+      input.showToast('Dictation inserted')
+      return
+    }
+    keepInBox('send refused: not connected, a stale tab, a rejected RPC or too large')
+  } catch (error) {
+    keepInBox(`${step} threw: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
