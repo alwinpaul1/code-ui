@@ -130,8 +130,10 @@ function blockPlainText(block: MobileMarkdownBlock): string {
         .map((item) => {
           const marker = listMarker(item)
           const indent = LIST_INDENT.repeat(item.depth)
-          // The rest of an item a fence cut in two sits under its words.
-          return `${indent}${marker ? `${marker} ` : LIST_INDENT}${markdownInlinePlainText(item.text)}`
+          // The rest of an item a fence cut in two sits under its words, and
+          // so does each line after a break in it (a `<br>`).
+          const words = markdownInlinePlainText(item.text).replaceAll('\n', `\n${indent}${LIST_INDENT}`)
+          return `${indent}${marker ? `${marker} ` : LIST_INDENT}${words}`
         })
         .join('\n')
     case 'image':

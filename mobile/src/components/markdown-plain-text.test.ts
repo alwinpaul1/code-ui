@@ -158,7 +158,9 @@ describe('markdownPlainText', () => {
   it('still copies a lazy line of a quote\'s paragraph as that paragraph', () => {
     expect(markdownPlainText('> quoted text\n    <b>x</b>')).toBe('quoted text x')
     expect(markdownPlainText('> quote\n    <b>1</b>\n>     <b>2</b>')).toBe('quote 1 2')
-    expect(markdownPlainText('- item\n<div>\n\n    <b>x</b>')).toBe('• item\nx')
+    // The item's second paragraph sits under its words, as a line after a
+    // <br> in an item does (markdown-br-line-breaks.test.ts).
+    expect(markdownPlainText('- item\n<div>\n\n    <b>x</b>')).toBe('• item\n  x')
   })
 
   it('copies a one-line indented block, and nothing for lines of only spaces', () => {

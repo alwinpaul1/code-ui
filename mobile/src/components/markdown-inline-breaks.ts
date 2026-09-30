@@ -2,7 +2,7 @@
  * A `<br>` in a table row, for the chat (the HTML pass in
  * mobile-markdown-preview-html.ts and the parser in mobile-markdown-parser.ts)
  * and for a PR comment (the lexer in pr-sidebar/markdown-fences.ts and
- * parseMarkdownBlocks).
+ * parseMarkdownBlocks), and in a chat heading.
  *
  * Bots and agents write a multi-line cell as `| a.ts | one<br>two |`. Both
  * readers turned the `<br>` into a newline before the table was read, so the
@@ -11,6 +11,11 @@
  * 2026-09-30). On a table row the `<br>` now stands aside as
  * MARKDOWN_INLINE_BREAK until the cells are split, and becomes a line break
  * inside its cell.
+ *
+ * A heading is one line too: the chat's `# Title<br>sub` drew "Title" as the
+ * heading and "sub" as a paragraph under it. Its `<br>` stands aside the same
+ * way and is a line break inside the heading. Anywhere else in a chat reply a
+ * `<br>` is a Markdown hard break (normalizeInlineHtml).
  */
 
 /** A `<br>` a table row keeps until its cells are split. A private-use
@@ -64,14 +69,26 @@ export function pipeTableRows(lines: readonly string[]): boolean[] {
   return rows
 }
 
-/** `text` with each `<br>` on a table row as MARKDOWN_INLINE_BREAK. */
-export function markTableRowBreaks(text: string): string {
-  if (!text.includes('|') || !/<br/i.test(text)) {
+/** An ATX heading line, as marked reads one. */
+const HEADING_LINE = /^ {0,3}#{1,6}(?:[ \t]|$)/
+
+/** `text` with each `<br>` as MARKDOWN_INLINE_BREAK, for a block that is
+ *  one line (a heading written as `<h2>…</h2>`). */
+export function keepBreaksInLine(text: string): string {
+  return text.replace(BREAK_TAG, MARKDOWN_INLINE_BREAK)
+}
+
+/** `text` with each `<br>` on a table row or a heading line as
+ *  MARKDOWN_INLINE_BREAK. */
+export function markOneLineBlockBreaks(text: string): string {
+  if (!/<br/i.test(text)) {
     return text
   }
   const lines = text.split('\n')
-  const rows = pipeTableRows(lines)
-  return lines.map((line, index) => (rows[index] ? line.replace(BREAK_TAG, MARKDOWN_INLINE_BREAK) : line)).join('\n')
+  const rows = text.includes('|') ? pipeTableRows(lines) : []
+  return lines
+    .map((line, index) => (rows[index] || HEADING_LINE.test(line) ? keepBreaksInLine(line) : line))
+    .join('\n')
 }
 
 /** `text` with each MARKDOWN_INLINE_BREAK off a table row as the line break
