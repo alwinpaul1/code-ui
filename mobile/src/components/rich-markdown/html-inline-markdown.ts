@@ -1,8 +1,24 @@
 import { AUTOLINK_ATTRIBUTE } from './markdown-inline-render'
+import { ENTITY_SOURCE_ATTRIBUTE, entitySourceWriter } from './markdown-entity-source'
 
 /** A node's text with non-breaking spaces turned back into the spaces the source wrote. */
 export function textContent(node: Node): string {
   return (node.textContent ?? '').replace(/ /g, ' ')
+}
+
+/**
+ * How the nodes under an element are written where something above them decides: a text node
+ * under a run the renderer drew from entities is written from its source
+ * (markdown-entity-source.ts).
+ */
+export type InlineContext = {
+  text?: (node: Node) => string
+}
+
+/** A run the renderer drew from entities, written back from its source where it still can be. */
+function entityRunMarkdown(run: Element, context: InlineContext): string {
+  const text = entitySourceWriter(run, (value) => value.replace(/ /g, ' '))
+  return inlineChildren(run, text === null ? context : { ...context, text })
 }
 
 /**
@@ -11,12 +27,12 @@ export function textContent(node: Node): string {
  * A task item's `<label>` is the checkbox's chrome rather than content, so it serializes to
  * nothing and the list writer supplies the marker instead.
  */
-export function inlineMarkdown(node: Node | null | undefined): string {
+export function inlineMarkdown(node: Node | null | undefined, context: InlineContext = {}): string {
   if (!node) {
     return ''
   }
   if (node.nodeType === Node.TEXT_NODE) {
-    return textContent(node)
+    return context.text?.(node) ?? textContent(node)
   }
   if (!(node instanceof Element)) {
     return ''
@@ -26,20 +42,20 @@ export function inlineMarkdown(node: Node | null | undefined): string {
     return '\n'
   }
   if (tag === 'strong' || tag === 'b') {
-    return markedMarkdown(node, '**')
+    return markedMarkdown(node, '**', context)
   }
   if (tag === 'em' || tag === 'i') {
-    return markedMarkdown(node, '*')
+    return markedMarkdown(node, '*', context)
   }
   if (tag === 's' || tag === 'del' || tag === 'strike') {
-    return markedMarkdown(node, '~~')
+    return markedMarkdown(node, '~~', context)
   }
   if (tag === 'code' && node.parentElement && node.parentElement.tagName.toLowerCase() !== 'pre') {
     return `\`${textContent(node)}\``
   }
   if (tag === 'a') {
     const href = node.getAttribute('href') ?? ''
-    const words = inlineChildren(node)
+    const words = inlineChildren(node, context)
     return autolinkMarkdown(node, href, words) ?? `[${words}](${href})`
   }
   if (tag === 'img') {
@@ -48,7 +64,10 @@ export function inlineMarkdown(node: Node | null | undefined): string {
   if (tag === 'label') {
     return ''
   }
-  return inlineChildren(node)
+  if (node.hasAttribute(ENTITY_SOURCE_ATTRIBUTE)) {
+    return entityRunMarkdown(node, context)
+  }
+  return inlineChildren(node, context)
 }
 
 /**
@@ -59,8 +78,8 @@ export function inlineMarkdown(node: Node | null | undefined): string {
  * in CommonMark: the desktop, the chat and the phone's own reload showed the stars (review,
  * 2026-09-30). A mark the engine left empty saved as `****`, which alone on a line is a rule.
  */
-function markedMarkdown(node: Element, marks: string): string {
-  const inner = inlineChildren(node)
+function markedMarkdown(node: Element, marks: string, context: InlineContext): string {
+  const inner = inlineChildren(node, context)
   const words = inner.trim()
   if (!words) {
     return inner
@@ -92,8 +111,8 @@ function autolinkMarkdown(node: Element, href: string, words: string): string | 
   return null
 }
 
-export function inlineChildren(element: Element): string {
+export function inlineChildren(element: Element, context: InlineContext = {}): string {
   return Array.from(element.childNodes)
-    .map((child) => inlineMarkdown(child))
+    .map((child) => inlineMarkdown(child, context))
     .join('')
 }

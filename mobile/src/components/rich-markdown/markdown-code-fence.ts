@@ -1,4 +1,4 @@
-import { escapeAttr, escapeHtml, escapeLiteralAttr } from './markdown-escaping'
+import { escapeAttr, escapeLiteralAttr, escapeLiteralHtml } from './markdown-escaping'
 
 /**
  * The run that opens and closes a fenced code block, on both halves of the round trip.
@@ -101,7 +101,7 @@ export function fencedCodeHtml(
   if (placement.blankBefore) {
     attrs.push(`${CODE_BLANK_ATTRIBUTE}="true"`)
   }
-  return `<pre ${attrs.join(' ')}><code>${escapeHtml(code)}</code></pre>`
+  return `<pre ${attrs.join(' ')}><code>${escapeLiteralHtml(code)}</code></pre>`
 }
 
 /**
