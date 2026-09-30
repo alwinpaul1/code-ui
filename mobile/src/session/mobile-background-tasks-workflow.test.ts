@@ -110,7 +110,7 @@ describe('a Workflow launch in the lead transcript', () => {
     expect(running).toEqual([])
     expect(finished).toHaveLength(1)
     expect(finished[0]).toMatchObject({ id: WORKFLOW_TASK_ID, kind: 'workflow', title: 'pre-release-review-sweep', status: 'completed' })
-    expect(finished[0]?.workflow?.usage).toEqual({ agents: 37, tokens: 4_853_603, durationMs: 5_057_662 })
+    expect(finished[0]?.workflow?.usage).toEqual({ agents: 37, tokens: 4_853_603, durationMs: 5_057_662, failed: 0, skipped: 0 })
   })
 
   it('a failed workflow is drawn as failed, and one whose notification has no usage block has no totals', () => {
@@ -124,6 +124,38 @@ describe('a Workflow launch in the lead transcript', () => {
     const { finished } = derive([...workflowLaunchMessages(), bare])
     expect(finished[0]?.status).toBe('failed')
     expect(finished[0]?.workflow?.usage).toBeNull()
+  })
+
+  it('reads the usage block after the result, not one the model-written result quotes', () => {
+    const notification = workflowFinishedMessage()
+    const block = notification.blocks[0]
+    const text = block?.type === 'text' ? block.text : ''
+    const quoting = text.replace(
+      /<result>[\s\S]*?<\/result>/,
+      '<result>The last run printed <usage><agent_count>99</agent_count><agents_error>7</agents_error><subagent_tokens>1</subagent_tokens><duration_ms>5</duration_ms></usage> and stopped.</result>'
+    )
+    expect(quoting).toContain('<agent_count>99</agent_count>')
+    const { finished } = derive([...workflowLaunchMessages(), { ...notification, blocks: [{ type: 'text', text: quoting }] }])
+    expect(finished[0]?.workflow?.usage).toMatchObject({ agents: 37, tokens: 4_853_603, durationMs: 5_057_662, failed: 0 })
+  })
+
+  it('a notification cut inside the result has no usage to read, and one that only quotes it has none either', () => {
+    const notification = workflowFinishedMessage()
+    const block = notification.blocks[0]
+    const text = block?.type === 'text' ? block.text : ''
+    const cutInside = text.slice(0, text.indexOf('</result>')).replace('<result>', '<result>quoted <usage><agent_count>99</agent_count></usage> ')
+    const { finished } = derive([...workflowLaunchMessages(), { ...notification, blocks: [{ type: 'text', text: cutInside }] }])
+    expect(finished[0]?.workflow?.usage).toBeNull()
+  })
+
+  it('carries the failed and skipped agents the usage block counts, and no failure when it counts none', () => {
+    const notification = workflowFinishedMessage()
+    const block = notification.blocks[0]
+    const text = block?.type === 'text' ? block.text : ''
+    const withFailures = text.replace('<agents_error>0</agents_error>', '<agents_error>3</agents_error>').replace('<agents_skipped>0</agents_skipped>', '<agents_skipped>2</agents_skipped>')
+    const failed = derive([...workflowLaunchMessages(), { ...notification, blocks: [{ type: 'text', text: withFailures }] }])
+    expect(failed.finished[0]?.workflow?.usage).toMatchObject({ failed: 3, skipped: 2 })
+    expect(derive([...workflowLaunchMessages(), notification]).finished[0]?.workflow?.usage).toMatchObject({ failed: 0, skipped: 0 })
   })
 
   it('a launch result whose id has no notification yet, on a done pane, is not left running', () => {

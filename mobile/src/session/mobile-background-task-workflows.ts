@@ -21,7 +21,14 @@ export type WorkflowAgent = { id: string; label: string | null }
 export type WorkflowPhase = { title: string; detail: string | null; agents: WorkflowAgent[] }
 /** The totals Claude states in a finished workflow's notification. A field
  *  the notification did not carry is null, never zero. */
-export type WorkflowUsage = { agents: number | null; tokens: number | null; durationMs: number | null }
+export type WorkflowUsage = {
+  agents: number | null
+  tokens: number | null
+  durationMs: number | null
+  /** `agents_error` and `agents_skipped`; null when the block does not say. */
+  failed: number | null
+  skipped: number | null
+}
 
 export type WorkflowDetail = {
   description: string | null
@@ -85,9 +92,17 @@ function scriptOf(input: unknown): string {
 }
 
 /** `<usage><agent_count>37</agent_count>…<subagent_tokens>…</subagent_tokens>
- *  …<duration_ms>…</duration_ms></usage>`; null with no such block. */
+ *  …<duration_ms>…</duration_ms></usage>`; null with no such block.
+ *  The notification's `<result>` comes first and is written by the model, so it
+ *  can quote a usage block: only the text after `</result>` is read, and a body
+ *  that ends inside the result has none. The last block wins. */
 export function readWorkflowUsage(notificationBody: string): WorkflowUsage | null {
-  const block = /<usage>([\S\s]*?)<\/usage>/.exec(notificationBody)?.[1]
+  const resultEnd = notificationBody.lastIndexOf('</result>')
+  if (resultEnd === -1 && notificationBody.includes('<result>')) {
+    return null
+  }
+  const tail = resultEnd === -1 ? notificationBody : notificationBody.slice(resultEnd)
+  const block = [...tail.matchAll(/<usage>([\S\s]*?)<\/usage>/g)].at(-1)?.[1]
   if (!block) {
     return null
   }
@@ -95,8 +110,14 @@ export function readWorkflowUsage(notificationBody: string): WorkflowUsage | nul
     const value = new RegExp(`<${tag}>\\s*(\\d+)\\s*</${tag}>`).exec(block)?.[1]
     return value === undefined ? null : Number(value)
   }
-  const usage = { agents: number('agent_count'), tokens: number('subagent_tokens'), durationMs: number('duration_ms') }
-  return usage.agents === null && usage.tokens === null && usage.durationMs === null ? null : usage
+  const usage = {
+    agents: number('agent_count'),
+    tokens: number('subagent_tokens'),
+    durationMs: number('duration_ms'),
+    failed: number('agents_error'),
+    skipped: number('agents_skipped')
+  }
+  return Object.values(usage).every((value) => value === null) ? null : usage
 }
 
 /** Move the roster's workflow lanes into the running workflow that owns them.
