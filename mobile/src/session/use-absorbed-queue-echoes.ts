@@ -30,8 +30,8 @@ import {
  * here and drawn where it was, until the transcript shows it (a prompt sent
  * while the agent is idle does land as a real user turn) or the tab changes.
  */
-/** Queue entries remembered at once: their first sightings (`appeared`), and
- *  the readings a glued copy is checked against (`listed`). */
+/** Queue readings remembered at once: the readings a glued copy is checked
+ *  against (`listed`). */
 const SIGHTING_CAP = 64
 
 export function useAbsorbedQueueEchoes(
@@ -81,12 +81,14 @@ export function useAbsorbedQueueEchoes(
   // blind it drew each of them a second time (2026-09-13).
   ownPrompts: readonly string[] = []
 ): MobileNativeChatPendingMessage[] {
-  const held = useRef(new Map<string, HeldEcho>())
-  const previous = useRef<readonly string[]>([])
+  /** By `seq`, not by words: two messages of the same words are two echoes. */
+  const held = useRef(new Map<number, HeldEcho>())
+  /** The box as last read, one slot per entry, each with the raw row that was
+   *  last when that entry was first seen: where the message was SENT, which is
+   *  where it is drawn (2026-09-23). Per entry, not per words, so two copies of
+   *  the same words each keep their own. */
+  const previous = useRef<readonly BoxSlot[]>([])
   const previousSent = useRef<readonly string[] | null>(null)
-  /** The raw row that was last when each queue entry was first seen, by key:
-   *  where the message was SENT, which is where it is drawn (2026-09-23). */
-  const appeared = useRef(new Map<string, string>())
   /** Every queue entry this scope has read, by key, newest last: what a
    *  reading with tool rows glued on is checked against even after the clean
    *  one has been held and retired (readingGluesToolRowsOnto). */
@@ -100,7 +102,6 @@ export function useAbsorbedQueueEchoes(
     previous.current = []
     provisional.current = new Set()
     previousSent.current = null
-    appeared.current = new Map()
     listed.current = []
   }
   // Keyed on collapsed whitespace: the queue box and the scrollback wrap the
@@ -126,82 +127,44 @@ export function useAbsorbedQueueEchoes(
   // reading that is one of them with a tool's rows glued under it is that
   // message, not a new one.
   const known = (): Set<string> =>
-    new Set([...own, ...landed, ...live, ...listed.current, ...held.current.keys()])
-  // The first sighting of each entry is its send: the Claude app draws a
-  // mid-turn message there, with the calls that ran while it waited below it,
-  // and the user chose that order over the desk terminal's, which draws it
-  // where the agent took it (2026-09-23). A stub that grows into the full text
-  // keeps the sighting its first reading had.
-  const sightingFor = (key: string): string | undefined => {
-    for (const [seen, sighting] of appeared.current) {
-      if (sameMessage(seen, key) || preferredWitnessReading(seen, key) !== null) {
-        return sighting
-      }
-    }
-    return undefined
-  }
-  if (anchorId !== null) {
-    for (const key of live) {
-      if (sightingFor(key) === undefined) {
-        appeared.current.set(key, anchorId)
-        // Bounded: a sighting is dropped once its message is held, and an entry
-        // that never leaves the box must not grow this for the whole session.
-        if (appeared.current.size > SIGHTING_CAP) {
-          const oldest = appeared.current.keys().next()
-          if (!oldest.done) {
-            appeared.current.delete(oldest.value)
-          }
-        }
-      }
-    }
-  }
-  const hold = (text: string, skipOwn: boolean, mayCreate = true): void => {
-    const key = promptKey(text)
+    new Set([...own, ...landed, ...live, ...listed.current, ...[...held.current.values()].map((entry) => entry.key)])
+  // The box as read now, each entry matched to the one it was in the last
+  // read (matchBoxSlots). An entry that matched none arrived; one of the last
+  // read that nothing matched left the box, and the agent has it.
+  const { slots, left, arrived } = matchBoxSlots(previous.current, queued, anchorId)
+  const hold = (slot: BoxSlot): void => {
     // No transcript yet means no row to anchor on, and a null anchor pins
-    // the echo to the bottom for good; it is picked up on a later render.
-    if (key.length === 0 || anchorId === null || live.some((k) => sameMessage(k, key))) {
+    // the echo to the bottom for good.
+    if (slot.key.length === 0 || anchorId === null) {
       return
     }
     // The prompt Claude took, read with the running tool's rows under it
     // (2026-09-27): never a second bubble, whether or not the phone still
     // counts the send as its own.
-    if (readingGluesToolRowsOnto(known(), text)) {
+    if (readingGluesToolRowsOnto(known(), slot.text)) {
       return
     }
-    // A reading that only glues the screen's rows onto one of the phone's
-    // own sends is that send, not a new message (2026-09-13: "phone test
-    // message from adb Reading 1 file…").
-    if (skipOwn && own.some((k) => sameMessage(k, key) || preferredWitnessReading(k, key) === 'a')) {
-      return
-    }
-    const existing = [...held.current.entries()].find(
-      ([k]) => sameMessage(k, key) || preferredWitnessReading(k, key) !== null
-    )
-    if (existing) {
-      // One message, two readings: the queue box's `…` stub grows into the
-      // full text, and a reading that only glues the screen's own rows onto
-      // a complete one loses to it (see `preferredWitnessReading`).
-      if (preferredWitnessReading(existing[0], key) === 'b') {
-        held.current.delete(existing[0])
-        held.current.set(key, { ...existing[1], text })
-      }
-      return
-    }
-    if (!mayCreate) {
-      return
-    }
+    // A new echo, even beside one of the same words: each entry the box let
+    // go of is a message the person sent (2026-09-30). Keyed by its words,
+    // the second of two "keep going" made no echo, and a longer
+    // message that went on from an earlier one at a word boundary was taken
+    // for the earlier one with the screen's rows glued on. The box reader
+    // stops at the transcript's tool rows now (queueBlockRows), so on this
+    // path that rule only cost a message. One message read two ways stays one
+    // slot (matchBoxSlots), so it is never held twice.
     counter.current += 1
-    held.current.set(key, {
-      text,
-      anchorId: sightingFor(key) ?? anchorId,
+    held.current.set(counter.current, {
+      key: slot.key,
+      text: slot.text,
+      // The first sighting of each entry is its send: the Claude app draws a
+      // mid-turn message there, with the calls that ran while it waited below
+      // it, and the user chose that order over the desk terminal's, which
+      // draws it where the agent took it (2026-09-23).
+      anchorId: slot.sighting ?? anchorId,
+      takenAt: anchorId,
       seq: counter.current,
-      provisional: provisional.current.has(key)
+      provisional: provisional.current.has(slot.key)
     })
-    for (const seen of Array.from(appeared.current.keys())) {
-      if (sameMessage(seen, key) || preferredWitnessReading(seen, key) !== null) {
-        appeared.current.delete(seen)
-      }
-    }
   }
   // The scrollback is a BACKLOG, not an event: every prompt of the session
   // still painted on screen is in it, including ones whose transcript rows
@@ -211,23 +174,46 @@ export function useAbsorbedQueueEchoes(
   // stacked like these where are my older responses"). So the first reading
   // of a scope is only a baseline; a prompt is held when it APPEARS while the
   // phone is already watching, which is exactly the mid-turn absorb this
-  // witness exists for. An entry already held still grows from a fuller
-  // reading, so a truncated queue entry is not stuck short.
+  // witness exists for.
   // Nothing is taken from the scrollback any more; see `_sentPrompts`. The
   // agent's queue box below is the only screen witness left.
-  for (const text of previous.current) {
-    hold(text, false)
+  for (const slot of left) {
+    hold(slot)
   }
-  previous.current = queued
+  // An entry back in the box with no row written since an echo of its words
+  // was held is that message listed again: a read that listed nothing for a
+  // moment let it go (a relay drop hands the chat an empty box, and the
+  // reader lists nothing while an entry is selected at the desk). The echo
+  // goes and the entry keeps its sighting. With a row between, it is a
+  // message sent after the agent took the first, and the first stays drawn
+  // while it waits (2026-09-30). What that costs: a box that lists nothing
+  // while rows land, then lists the same message again, draws it twice once
+  // the agent takes it. The words cannot tell those apart.
+  for (const index of arrived) {
+    const slot = slots[index]!
+    // Not a reading with a tool's rows glued under a message: the reader ran
+    // into the transcript, and the message it names is not back in the box.
+    const glued = readingGluesToolRowsOnto(known(), slot.text)
+    const echo = [...held.current.values()].findLast(
+      (entry) => !glued && entry.takenAt === anchorId && oneMessage(entry.text, slot.text)
+    )
+    if (echo !== undefined) {
+      held.current.delete(echo.seq)
+      slots[index] = { ...slot, sighting: echo.anchorId }
+    }
+  }
+  previous.current = slots
   const knownBeforeRetiring = known()
-  for (const key of Array.from(held.current.keys())) {
-    const entry = held.current.get(key)
+  for (const [seq, entry] of Array.from(held.current.entries())) {
+    const key = entry.key
     if (
-      [...live, ...own].some((other) => sameMessage(other, key)) ||
+      // Not the box: a copy of these words it still lists is another message,
+      // or this one listed again, which the loop above settles.
+      own.some((other) => sameMessage(other, key)) ||
       // Held before the message it glues onto was known here.
-      (entry != null && readingGluesToolRowsOnto(knownBeforeRetiring, entry.text)) ||
+      readingGluesToolRowsOnto(knownBeforeRetiring, entry.text) ||
       landed.some((other) => sameMessage(other, key)) ||
-      (entry != null && landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other))) ||
+      landedCutKeys.some((other) => isCutOf(cutKey(entry.text), other)) ||
       // The witness reads the message off the agent's SCREEN, where it is
       // wrapped and can be shortened; the landed row carries what the author
       // typed. Comparing them exactly left a shortened reading standing beside
@@ -237,10 +223,10 @@ export function useAbsorbedQueueEchoes(
       // several stacked rows, so the reading is exactly those rows end to end.
       // A reading that merely extends one landed row is a different message and
       // must be kept (2026-09-14 review).
-      (entry != null && landedText.some((other) => queueRowIsPendingSend(other, entry.text))) ||
-      (entry != null && readingIsJoinedLandedRows(landedText, entry.text))
+      landedText.some((other) => queueRowIsPendingSend(other, entry.text)) ||
+      readingIsJoinedLandedRows(landedText, entry.text)
     ) {
-      held.current.delete(key)
+      held.current.delete(seq)
     }
   }
   const echoes = [...held.current.values()]
@@ -288,8 +274,93 @@ function cutKey(text: string): string {
     .trim()
 }
 
-type HeldEcho = { text: string; anchorId: string | null; seq: number; provisional?: boolean }
+type HeldEcho = {
+  key: string
+  text: string
+  /** Where it is drawn: the row that was last when the box first listed it. */
+  anchorId: string | null
+  /** The row that was last when the box let it go. */
+  takenAt: string
+  seq: number
+  provisional?: boolean
+}
 
+/** One entry of the queue box, and the raw row that was last when the box
+ *  first listed it (null while there was no transcript to name one). */
+type BoxSlot = { text: string; key: string; sighting: string | null }
+
+/** Whether two readings are one message: the same words, the box's `…` stub
+ *  of them, or one that goes on from the other (preferredWitnessReading). */
+function oneMessage(a: string, b: string): boolean {
+  return sameMessage(promptKey(a), promptKey(b)) || preferredWitnessReading(a, b) !== null
+}
+
+/**
+ * The box as read now, each entry matched to at most one entry of the last
+ * read. A stub that grows into the full text, or a reading that grows by a
+ * word between two reads, is the same entry (oneMessage) and keeps the
+ * sighting its first reading had; of two readings it keeps the one
+ * preferredWitnessReading prefers, as the held echo did before (2026-09-13).
+ *
+ * The agent takes from the front of its queue and adds at the back, so the
+ * entries the last read ended with are matched to the ones this read starts
+ * with, the longest such run first: of two copies of the same words, the one
+ * that stays is the newer. What that leaves over (the reader running into the
+ * transcript above the box, 2026-09-27) is matched entry by entry, the same
+ * words first, then the box's `…` stub of them, then any other reading, each
+ * to the latest entry of the last read that is one.
+ *
+ * `left` is what the last read listed and nothing matched, oldest first;
+ * `arrived`, the indices of entries nothing in the last read matched.
+ */
+function matchBoxSlots(
+  before: readonly BoxSlot[],
+  queued: readonly string[],
+  anchorId: string | null
+): { slots: BoxSlot[]; left: BoxSlot[]; arrived: number[] } {
+  const now = queued.map((text) => ({ text, key: promptKey(text) })).filter((entry) => entry.key.length > 0)
+  const slots: (BoxSlot | null)[] = now.map(() => null)
+  const open = new Set(before.keys())
+  const take = (at: number, index: number): void => {
+    open.delete(at)
+    const was = before[at]!
+    const entry = now[index]!
+    const text = was.key !== entry.key && preferredWitnessReading(was.text, entry.text) === 'a' ? was.text : entry.text
+    slots[index] = { text, key: promptKey(text), sighting: was.sighting ?? anchorId }
+  }
+  let from = 0
+  while (
+    from < before.length &&
+    !(before.length - from <= now.length && before.slice(from).every((was, index) => oneMessage(was.text, now[index]!.text)))
+  ) {
+    from += 1
+  }
+  for (let at = from; at < before.length; at += 1) {
+    take(at, at - from)
+  }
+  const passes: ((a: BoxSlot, b: { text: string; key: string }) => boolean)[] = [
+    (a, b) => a.key === b.key,
+    (a, b) => sameMessage(a.key, b.key),
+    (a, b) => oneMessage(a.text, b.text)
+  ]
+  for (const matches of passes) {
+    for (const [index, entry] of now.entries()) {
+      const match = slots[index] === null ? [...open].findLast((at) => matches(before[at]!, entry)) : undefined
+      if (match !== undefined) {
+        take(match, index)
+      }
+    }
+  }
+  const arrived: number[] = []
+  const matched = slots.map((slot, index) => {
+    if (slot !== null) {
+      return slot
+    }
+    arrived.push(index)
+    return { ...now[index]!, sighting: anchorId }
+  })
+  return { slots: matched, left: [...open].map((at) => before[at]!), arrived }
+}
 
 /** One key for the same message however it reached here: the queue box, the
  *  scrollback and the transcript each wrap it differently, and only the
