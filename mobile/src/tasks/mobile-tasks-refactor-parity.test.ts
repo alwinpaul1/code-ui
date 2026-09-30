@@ -117,6 +117,17 @@ const hash = (parts: string[] | string): string =>
 // now keeps its own read-failed flag, as the board row already did: hooks 363 -> 366 and
 // statements 431 -> 434 (three `useState`), and `semantics` 3,292 -> 3,289, the three `''` the
 // error-line tests compared against leaving. Nothing else moves.
+// 2026-09-30 (fix round 1, F12): a comment posted over a Linear comment list the desktop refused
+// was held in the payload but never drawn, since the section drew only the failure. The failed
+// branch now draws the posted comments through `detailCommentGroups.map(renderDetailCommentGroup)`
+// under the failure line, whose text reads "Couldn't load the earlier comments" when there are
+// some. Checked by dumping every reader's output before and after and diffing: `semantics` 3,289
+// -> 3,291 (the line's two copies become string literals, "Couldn't load comments" and "Couldn't
+// load the earlier comments"); the render tree 35,514 -> 35,543, +29: the fragment's six tokens,
+// the conditional's 17 in place of the one JSX text token it replaces, and the map call's seven.
+// Hooks, statements, declarations and the StyleSheets do not move.
+// mobile-tasks-item-discussion.test.tsx and mobile-tasks-linear-comment-over-failed-list.test.tsx
+// guard the behaviour.
 const PROVIDER_RPC_SCREEN_HOOKS = 'b10fb182bf11303004ce3cdf56006d299ad6c28186a9ed2145b7da25fea41d6e'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
@@ -192,14 +203,16 @@ const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb
 // 2026-09-30 (b8 finding 6): 3,276 -> 3,278 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 1): 3,278 -> 3,282 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292, then 3,289 (notes above the hooks pin).
-const A11Y_BACK_SEMANTICS = 'f20c7b6dd3608c9b8155c8cba33ab73d25590a7eb4bd2fc5e21cdfa04648df51'
+// 2026-09-30 (fix round 1, F12): 3,289 -> 3,291 (note above the hooks pin).
+const A11Y_BACK_SEMANTICS = 'cc17b8102cc538816e7c3d26ebe8480b367c82989c011e99141c91c85353cb59'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
 // 2026-09-27 (theme pass 2): 35,299 -> 35,306 (note above the hooks pin).
 // 2026-09-30 (b8 finding 6): 35,306 -> 35,399 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 2): 35,399 -> 35,514 (note above the hooks pin).
-const A11Y_BACK_RENDER_TREE = 'dd5772f028ce846ee2341b061f365be457e579bf2308dd42d4dd0eb7448af87c'
+// 2026-09-30 (fix round 1, F12): 35,514 -> 35,543 (note above the hooks pin).
+const A11Y_BACK_RENDER_TREE = 'a90cdedea3327b69bf1aea640e4abc321f81c0288c9a6ff161ff2dc668febf9e'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -226,7 +239,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_289)
+    expect(semantics.split('\n')).toHaveLength(3_291)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
@@ -244,7 +257,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_514)
+    expect(tokens).toHaveLength(35_543)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 
