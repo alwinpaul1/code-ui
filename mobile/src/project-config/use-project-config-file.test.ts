@@ -1,13 +1,19 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useProjectConfigFile, type ProjectConfigFileState } from './use-project-config-file'
+
+// Which connection the host is on: moves each time it connects (useLastConnectedAt).
+const connection = vi.hoisted(() => ({ lastConnectedAt: 1000 as number | null }))
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: (hostId: string | undefined) => (hostId ? connection.lastConnectedAt : null)
+}))
 
 function harness(client: RpcClient, worktreeId = 'w1', relativePath = '.mcp.json') {
   let latest!: ReturnType<typeof useProjectConfigFile>
   function Harness(): null {
-    latest = useProjectConfigFile({ client, worktreeId, relativePath })
+    latest = useProjectConfigFile({ client, hostId: 'h1', worktreeId, relativePath })
     return null
   }
   let renderer!: ReactTestRenderer
@@ -16,16 +22,137 @@ function harness(client: RpcClient, worktreeId = 'w1', relativePath = '.mcp.json
   })
   return {
     get: () => latest,
-    rerender: () => act(() => {}),
+    /** A render with nothing changed but what the test changed (the connection, say). */
+    rerender: async () => {
+      await act(async () => {
+        renderer.update(createElement(Harness))
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+    },
     unmount: () => act(() => renderer.unmount())
   }
 }
 
+async function settle(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe('useProjectConfigFile', () => {
   let cleanup: (() => void) | null = null
+  beforeEach(() => {
+    connection.lastConnectedAt = 1000
+  })
   afterEach(() => {
     cleanup?.()
     cleanup = null
+  })
+
+  // Opened before the relay was up, the read failed ('Not connected', or 'relay session not
+  // connected') and the screen sat on the error with a Retry for as long as the connection then
+  // stayed healthy: the client object is the same across reconnects, so nothing re-read
+  // (review, 2026-09-30).
+  describe('after a failed read, when the relay connects', () => {
+    const notConnected = () => Promise.reject(new Error('Not connected'))
+    const file = { ok: true, result: { content: '{"mcpServers":{}}', truncated: false, byteLength: 18 } }
+
+    it('reads again by itself, once, and lands ready', async () => {
+      const sendRequest = vi.fn().mockImplementationOnce(notConnected).mockResolvedValue(file)
+      const h = harness({ sendRequest } as unknown as RpcClient)
+      cleanup = h.unmount
+      await settle()
+      expect(h.get().state.status).toBe('error')
+
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+
+      connection.lastConnectedAt = 2000
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(h.get().state.status).toBe('ready')
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+    })
+
+    it('does not loop while the read keeps failing: one read per new connection', async () => {
+      const sendRequest = vi.fn().mockImplementation(notConnected)
+      const h = harness({ sendRequest } as unknown as RpcClient)
+      cleanup = h.unmount
+      await settle()
+
+      connection.lastConnectedAt = 2000
+      await h.rerender()
+      await h.rerender()
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+      expect(h.get().state.status).toBe('error')
+
+      connection.lastConnectedAt = 3000
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(3)
+    })
+
+    it('never re-reads a ready draft, dirty or not, on a new connection', async () => {
+      const sendRequest = vi.fn().mockResolvedValue(file)
+      const h = harness({ sendRequest } as unknown as RpcClient)
+      cleanup = h.unmount
+      await settle()
+      act(() => h.get().setContent('{"mcpServers":{"x":{"command":"npx"}}}'))
+
+      connection.lastConnectedAt = 2000
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+      const state = h.get().state
+      expect(state.status === 'ready' && state.isDirty).toBe(true)
+      expect(state.status === 'ready' && state.content).toBe('{"mcpServers":{"x":{"command":"npx"}}}')
+    })
+
+    it('does not re-read a file the host said is missing', async () => {
+      const sendRequest = vi.fn().mockResolvedValue({
+        ok: false,
+        error: { code: 'runtime_error', message: "ENOENT: no such file or directory, open '.mcp.json'" }
+      })
+      const h = harness({ sendRequest } as unknown as RpcClient)
+      cleanup = h.unmount
+      await settle()
+      expect(h.get().state).toEqual({ status: 'missing' })
+
+      connection.lastConnectedAt = 2000
+      await h.rerender()
+      expect(sendRequest).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads again after a failed Create, so the next connection offers Create again', async () => {
+      const sendRequest = vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: false,
+          error: { code: 'runtime_error', message: "ENOENT: no such file or directory, open 'CLAUDE.md'" }
+        })
+        .mockImplementationOnce(notConnected)
+        .mockResolvedValueOnce({
+          ok: false,
+          error: { code: 'runtime_error', message: "ENOENT: no such file or directory, open 'CLAUDE.md'" }
+        })
+      const h = harness({ sendRequest } as unknown as RpcClient, 'w1', 'CLAUDE.md')
+      cleanup = h.unmount
+      await settle()
+      await act(async () => {
+        await h.get().create()
+      })
+      expect(h.get().state.status).toBe('error')
+
+      connection.lastConnectedAt = 2000
+      await h.rerender()
+      expect(sendRequest).toHaveBeenLastCalledWith('files.read', {
+        worktree: 'id:w1',
+        relativePath: 'CLAUDE.md'
+      })
+      expect(h.get().state).toEqual({ status: 'missing' })
+    })
   })
 
   it('reads the file and lands ready with the host content', async () => {

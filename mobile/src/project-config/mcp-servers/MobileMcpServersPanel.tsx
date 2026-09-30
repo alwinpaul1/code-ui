@@ -43,6 +43,7 @@ export function MobileMcpServersPanel({
   const canWrite = writeVerdict === 'allowed'
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
+    hostId,
     worktreeId,
     relativePath: MCP_CONFIG_RELATIVE_PATH
   })

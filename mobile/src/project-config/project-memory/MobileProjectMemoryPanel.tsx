@@ -42,9 +42,19 @@ export function MobileProjectMemoryPanel({
   // shared client, is what lets the chooser say which exist before the user
   // picks one.
   const files: Record<ProjectMemoryRelativePath, ReturnType<typeof useProjectConfigFile>> = {
-    'CLAUDE.md': useProjectConfigFile({ client, worktreeId, relativePath: 'CLAUDE.md' }),
-    '.claude/CLAUDE.md': useProjectConfigFile({ client, worktreeId, relativePath: '.claude/CLAUDE.md' }),
-    'CLAUDE.local.md': useProjectConfigFile({ client, worktreeId, relativePath: 'CLAUDE.local.md' })
+    'CLAUDE.md': useProjectConfigFile({ client, hostId, worktreeId, relativePath: 'CLAUDE.md' }),
+    '.claude/CLAUDE.md': useProjectConfigFile({
+      client,
+      hostId,
+      worktreeId,
+      relativePath: '.claude/CLAUDE.md'
+    }),
+    'CLAUDE.local.md': useProjectConfigFile({
+      client,
+      hostId,
+      worktreeId,
+      relativePath: 'CLAUDE.local.md'
+    })
   }
   const [selected, setSelected] = useState<ProjectMemoryRelativePath | null>(null)
   const styles = useThemedStyles(memoryStyles)

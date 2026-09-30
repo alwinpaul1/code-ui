@@ -69,6 +69,7 @@ export function MobilePermissionRulesPanel({
   const [destination, setDestination] = useState<PermissionRuleDestination>('project')
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
+    hostId,
     worktreeId,
     relativePath: PERMISSION_SETTINGS_RELATIVE_PATH[destination]
   })

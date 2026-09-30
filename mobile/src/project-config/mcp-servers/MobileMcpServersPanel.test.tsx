@@ -31,6 +31,10 @@ const fakes = vi.hoisted(() => ({
 vi.mock('../../transport/client-context', () => ({
   useHostClient: () => ({ client: fakes.client, clientId: 'c1', state: 'connected' })
 }))
+// The connection counter a failed read is retried on; it never moves here.
+vi.mock('../../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => 1000
+}))
 // The host's answer to "may a phone call files.write?" (host-mobile-capabilities.ts).
 // Faked so this suite tests what the screen does with the answer, not the probe.
 vi.mock('../../transport/host-mobile-capabilities', () => ({

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import {
+  createStaleAfterReconnectLedger,
+  shouldRefetchAfterReconnect
+} from '../transport/stale-after-reconnect'
 import {
   projectConfigFileCreate,
   projectConfigFileRead,
@@ -37,10 +42,12 @@ export type ProjectConfigFileState =
 
 export function useProjectConfigFile(args: {
   client: RpcClient | null
+  /** The host whose connections a failed read is retried on. */
+  hostId: string
   worktreeId: string
   relativePath: string
 }) {
-  const { client, worktreeId, relativePath } = args
+  const { client, hostId, worktreeId, relativePath } = args
   const [state, setState] = useState<ProjectConfigFileState>({ status: 'loading' })
   const readSeqRef = useRef(0)
   const saveSeqRef = useRef(0)
@@ -94,6 +101,23 @@ export function useProjectConfigFile(args: {
   useEffect(() => {
     void load()
   }, [load])
+
+  // A screen opened before the relay was up fails its read ('Not connected') and the client object
+  // is the same across reconnects, so `load` never changes: read again once per NEW connection
+  // (stale-after-reconnect.ts). Only a failed read: a ready draft, dirty or not, is never
+  // replaced, and a file the host said is missing was a good read.
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const staleLedgerRef = useRef(createStaleAfterReconnectLedger())
+  useEffect(() => {
+    const status =
+      state.status === 'error' ? 'error' : state.status === 'loading' ? 'loading' : 'ready'
+    if (
+      shouldRefetchAfterReconnect(staleLedgerRef.current, relativePath, status, lastConnectedAt) &&
+      status === 'error'
+    ) {
+      void load()
+    }
+  }, [lastConnectedAt, load, relativePath, state.status])
 
   const setContent = useCallback((content: string) => {
     setState((prev) => {
