@@ -13,7 +13,7 @@ import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight } from 'lucide-react-native'
 import { spacing } from '../src/theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../src/theme/theme-context'
-import { useLoadedHosts } from '../src/transport/use-loaded-hosts'
+import { emptyHostsNoticeCopy, useLoadedHosts } from '../src/transport/use-loaded-hosts'
 import { useFocusedSettingsHostClients } from '../src/transport/settings-host-client-connections'
 import { useLastConnectedAt } from '../src/transport/client-context-connection-metrics'
 import {
@@ -59,7 +59,8 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
   const { colors } = useTheme()
   const styles = useThemedStyles(voiceSettingsStyles)
 
-  const { hosts, loaded: hostsLoaded } = useLoadedHosts()
+  const loadedHosts = useLoadedHosts()
+  const { hosts, loaded: hostsLoaded } = loadedHosts
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients, focused: routeFocused } = useFocusedSettingsHostClients(hostIds)
   // Voice dictation runs on the paired desktop, so pick the first connected host.
@@ -239,15 +240,23 @@ export default function VoiceSettingsScreen(): React.JSX.Element {
       </View>
 
       {/* The settings live on the desktop. Without one connected, or before its first answer,
-          there is nothing true to draw: no switch position, no mode, no model. */}
+          there is nothing true to draw: no switch position, no mode, no model. "Connect to a
+          desktop" is for paired desktops that are not connected. With none in the list the line
+          says why: nothing paired, a list that could not be read, or a desktop whose credential
+          is locked or gone (emptyHostsNoticeCopy). */}
       {!client ? (
         <View style={styles.loading}>
           {!hostsLoaded || connecting ? <ActivityIndicator color={colors.textSecondary} /> : null}
           {hostsLoaded ? (
             <Text style={[styles.emptyText, { textAlign: 'center' }]}>
-              {connecting
-                ? 'Connecting to your desktop…'
-                : 'Connect to a desktop to change voice settings'}
+              {hosts.length === 0
+                ? emptyHostsNoticeCopy(
+                    loadedHosts,
+                    'No paired desktops yet. Pair one to change voice settings.'
+                  )
+                : connecting
+                  ? 'Connecting to your desktop…'
+                  : 'Connect to a desktop to change voice settings'}
             </Text>
           ) : null}
         </View>

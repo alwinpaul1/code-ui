@@ -11,10 +11,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type Entry = { hostId: string; client: unknown; state: string }
 
-const fakes = vi.hoisted(() => ({
-  entries: [] as Entry[],
-  lastConnectedAt: 1000 as number | null
-}))
+const fakes = vi.hoisted(() => {
+  const readyCatalog = async (): Promise<unknown[]> => [
+    {
+      id: 'host-1',
+      credentialStatus: 'ready',
+      profile: {
+        id: 'host-1',
+        name: 'Studio Mac',
+        endpoint: 'ws://192.168.1.10:6768',
+        publicKeyB64: 'key',
+        lastConnected: 0
+      }
+    }
+  ]
+  return {
+    entries: [] as Entry[],
+    lastConnectedAt: 1000 as number | null,
+    readyCatalog,
+    catalog: readyCatalog as () => Promise<unknown[]>
+  }
+})
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -29,21 +46,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'ChevronLeft', ChevronRight: 'ChevronRight' }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), push: vi.fn() }) }))
-vi.mock('./transport/host-store', () => ({
-  loadHostCatalog: async () => [
-    {
-      id: 'host-1',
-      credentialStatus: 'ready',
-      profile: {
-        id: 'host-1',
-        name: 'Studio Mac',
-        endpoint: 'ws://192.168.1.10:6768',
-        publicKeyB64: 'key',
-        lastConnected: 0
-      }
-    }
-  ]
-}))
+vi.mock('./transport/host-store', () => ({ loadHostCatalog: () => fakes.catalog() }))
 vi.mock('./transport/settings-host-client-connections', () => ({
   useFocusedSettingsHostClients: () => ({ clients: fakes.entries, focused: true })
 }))
@@ -54,6 +57,7 @@ vi.mock('./transport/client-context-connection-metrics', () => ({
 import VoiceSettingsScreen from '../app/voice-settings'
 import { ThemeProvider } from './theme/theme-context'
 import { darkColors, lightColors } from './theme/tokens'
+import { EMPTY_HOSTS_FAILED_COPY } from './transport/use-loaded-hosts'
 
 const SETUP = {
   enabled: true,
@@ -150,6 +154,7 @@ function expectNoInventedSettings(tree: ReactTestRenderer): void {
 beforeEach(() => {
   fakes.entries = []
   fakes.lastConnectedAt = 1000
+  fakes.catalog = fakes.readyCatalog
 })
 
 afterEach(() => {
@@ -245,5 +250,75 @@ describe('Voice settings without settings to show', () => {
 
     expect(texts(tree)).toContain('None selected')
     expect(tree.root.findByType('Switch' as never).props.value).toBe(false)
+  })
+})
+
+/**
+ * No desktop in the list the screen can connect to. useLoadedHosts reports that as an empty list
+ * for four different reasons, and the screen drew "Connect to a desktop to change voice settings"
+ * for all of them: over a catalog it could not read, over a desktop whose Keychain entry was locked
+ * for the moment, and over one whose credential is gone, it told someone with a paired desktop that
+ * the fix was to connect one (review, 2026-09-30). Terminal settings already words these through
+ * emptyHostsNoticeCopy; this screen now does too.
+ */
+describe('Voice settings with no desktop it can connect to', () => {
+  const CONNECT_COPY = 'Connect to a desktop to change voice settings'
+
+  function listedDesktop(credentialStatus: string): unknown {
+    return { id: 'host-1', name: 'Studio Mac', credentialStatus, profile: null }
+  }
+
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)(
+    'says the paired desktops could not be read, not "connect a desktop", when the list read fails (%s)',
+    async (scheme, palette) => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      fakes.catalog = () => Promise.reject(new Error('SecureStore is unavailable'))
+      const tree = await mount(scheme)
+
+      const line = lines(tree).find(({ text }) => text === EMPTY_HOSTS_FAILED_COPY)
+      expect(line?.color).toBe(palette.textSecondary)
+      expect(texts(tree)).not.toContain(CONNECT_COPY)
+      expectNoInventedSettings(tree)
+      expect(warn).toHaveBeenCalledWith(
+        '[hosts] paired-host list failed to load',
+        expect.objectContaining({ message: 'SecureStore is unavailable' })
+      )
+      warn.mockRestore()
+    }
+  )
+
+  it('says a paired desktop cannot be read right now when its Keychain entry is locked', async () => {
+    fakes.catalog = async () => [listedDesktop('temporarily-unavailable')]
+    const tree = await mount()
+
+    expect(texts(tree)).toContain(
+      "A paired desktop can't be read right now. Reopen this screen in a moment."
+    )
+    expect(texts(tree)).not.toContain(CONNECT_COPY)
+    expectNoInventedSettings(tree)
+  })
+
+  it('says a paired desktop must be paired again when its credential is gone', async () => {
+    fakes.catalog = async () => [listedDesktop('missing')]
+    const tree = await mount()
+
+    expect(texts(tree)).toContain(
+      'A paired desktop needs to be paired again. Scan its code from the home screen.'
+    )
+    expect(texts(tree)).not.toContain(CONNECT_COPY)
+    expectNoInventedSettings(tree)
+  })
+
+  it('says nothing is paired yet only when nothing is', async () => {
+    fakes.catalog = async () => []
+    const tree = await mount()
+
+    expect(texts(tree)).toContain('No paired desktops yet. Pair one to change voice settings.')
+    expect(texts(tree)).not.toContain(CONNECT_COPY)
+    expect(tree.root.findAll((node) => String(node.type) === 'ActivityIndicator')).toHaveLength(0)
+    expectNoInventedSettings(tree)
   })
 })
