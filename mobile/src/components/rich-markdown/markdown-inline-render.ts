@@ -21,16 +21,18 @@ export function renderInline(text: string): string {
   let lastIndex = 0
   let match = pattern.exec(text)
   while (match !== null) {
-    output += escapeHtml(text.slice(lastIndex, match.index))
     const token = match[0]
     // An underscore inside a word is text, as CommonMark reads it and as the chat renderer already
     // did: taking `_case_` in `snake_case_name` for italics saved it back as `snake*case*name`.
+    // Only its opener is refused: the scan goes on from the next character, as the chat's does, so
+    // a span inside it still draws. Writing the whole match out as text left the backticks of
+    // "my_var and `code` and other_var" in the document (review, 2026-09-30).
     if (isIntrawordUnderscoreToken(text, match.index, token)) {
-      output += escapeHtml(token)
-      lastIndex = pattern.lastIndex
+      pattern.lastIndex = match.index + 1
       match = pattern.exec(text)
       continue
     }
+    output += escapeHtml(text.slice(lastIndex, match.index))
     const image = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/)
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image && isSafeUrl(image[2])) {

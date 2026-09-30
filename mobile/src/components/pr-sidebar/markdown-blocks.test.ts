@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { parseInline, parseMarkdownBlocks } from './markdown-blocks'
 
@@ -222,6 +223,46 @@ describe('parseInline', () => {
       expect(parseInline(text).every((token) => token.kind === 'text')).toBe(true)
       expect(parseInline(text).map((token) => token.text).join('')).toBe(text)
     }
+  })
+
+  // Review, 2026-09-30: `_var and `code` and other_` matched the italic rule,
+  // was refused as intraword, and was then pushed whole as text with the scan
+  // resumed past its end, so the span between two identifiers drew with its
+  // backticks or stars. The chat renderer resumes one character after a
+  // refused opener; so does this now.
+  it('draws the code span or bold between two snake_case identifiers', () => {
+    expect(parseInline('use my_var and `code` and other_var')).toEqual([
+      { kind: 'text', text: 'use my_var and ' },
+      { kind: 'code', text: 'code' },
+      { kind: 'text', text: ' and other_var' }
+    ])
+    expect(parseInline('foo_bar **bold** baz_qux')).toEqual([
+      { kind: 'text', text: 'foo_bar ' },
+      { kind: 'bold', text: 'bold' },
+      { kind: 'text', text: ' baz_qux' }
+    ])
+    expect(parseInline('snake_case and _em_')).toEqual([
+      { kind: 'text', text: 'snake_case and ' },
+      { kind: 'italic', text: 'em' }
+    ])
+  })
+
+  it('leaves an identifier whole at the degenerate sizes', () => {
+    expect(parseInline('_')).toEqual([{ kind: 'text', text: '_' }])
+    expect(parseInline('a_b')).toEqual([{ kind: 'text', text: 'a_b' }])
+    expect(parseInline('a_b_c')).toEqual([{ kind: 'text', text: 'a_b_c' }])
+  })
+
+  // A refused opener is scanned again from its next character, so the scan
+  // must stay linear where refusals pile up.
+  it.each([
+    ['an identifier with thousands of parts', `x${'_a'.repeat(40_000)}`],
+    ['a bold of italics after a letter', `a__${'_b_ '.repeat(15_000)}__`],
+    ['two long underscore runs around a word', `x${'_'.repeat(20_000)}y${'_'.repeat(20_000)}z`],
+    ['dunder names end to end', 'a__b__'.repeat(20_000)]
+  ])('reads %s inside the deadline', (_name, text) => {
+    const tokens = runInNewContext('parse(text)', { parse: parseInline, text }, { timeout: 250 })
+    expect(Array.isArray(tokens)).toBe(true)
   })
 
   it('still reads underscores around a word as emphasis', () => {

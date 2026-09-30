@@ -300,14 +300,19 @@ export function parseInline(text: string): InlineToken[] {
       tokens.push({ kind: 'text', text: plain.slice(cursor) })
       break
     }
+    const token = m[0]
+    // An underscore inside a word (snake_case, src/__init__.py) is text, as CommonMark reads it.
+    // Only its opener is refused: the scan goes on from the next character, as the chat's does,
+    // so a span inside it still draws. Taking the whole match as text swallowed the code span in
+    // "my_var and `code` and other_var" (review, 2026-09-30).
+    if (isIntrawordUnderscoreToken(plain, m.index, token)) {
+      matcher.lastIndex = m.index + 1
+      continue
+    }
     if (m.index > cursor) {
       tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
     }
-    const token = m[0]
-    // An underscore inside a word (snake_case, src/__init__.py) is text, as CommonMark reads it.
-    if (isIntrawordUnderscoreToken(plain, m.index, token)) {
-      tokens.push({ kind: 'text', text: token })
-    } else if (token.startsWith('`')) {
+    if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
