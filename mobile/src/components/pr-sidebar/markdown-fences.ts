@@ -34,9 +34,10 @@ export type FencedCode = { text: string; lang: string }
 
 export type LexedCommentBody = {
   /** The body with its comments out, `<br>` as MARKDOWN_INLINE_BREAK (a
-   *  line break everywhere but a table row, markdown-inline-breaks.ts), and
-   *  each fence as one placeholder line, behind the list marker it opened
-   *  after. */
+   *  line break inside a table row's cell, a list item, a quote or a
+   *  heading, and one between lines anywhere else, markdown-block-breaks.ts),
+   *  and each fence as one placeholder line, behind the list marker it
+   *  opened after. */
   text: string
   /** The fence a line stands for, and the list marker before it if any. */
   fenceOn: (line: string) => { marker: boolean; code: FencedCode } | null

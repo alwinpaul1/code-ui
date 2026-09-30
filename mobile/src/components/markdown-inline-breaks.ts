@@ -16,6 +16,10 @@
  * heading and "sub" as a paragraph under it. Its `<br>` stands aside the same
  * way and is a line break inside the heading. Anywhere else in a chat reply a
  * `<br>` is a Markdown hard break (normalizeInlineHtml).
+ *
+ * A PR comment keeps it on a list item's lines and a quote's too, where a
+ * newline cut the item or the quote in two; which lines keep it is
+ * pr-sidebar/markdown-block-breaks.ts.
  */
 
 /** A `<br>` a table row keeps until its cells are split. A private-use
@@ -89,17 +93,6 @@ export function markOneLineBlockBreaks(text: string): string {
   return lines
     .map((line, index) => (rows[index] || HEADING_LINE.test(line) ? keepBreaksInLine(line) : line))
     .join('\n')
-}
-
-/** `text` with each MARKDOWN_INLINE_BREAK off a table row as the line break
- *  it was before, so only a table row keeps one. */
-export function expandBreaksOffTableRows(text: string): string {
-  if (!text.includes(MARKDOWN_INLINE_BREAK)) {
-    return text
-  }
-  const lines = text.split('\n')
-  const rows = pipeTableRows(lines)
-  return lines.map((line, index) => (rows[index] ? line : line.replaceAll(MARKDOWN_INLINE_BREAK, '\n'))).join('\n')
 }
 
 /** A cell's, or any text's, MARKDOWN_INLINE_BREAK as a line break. */

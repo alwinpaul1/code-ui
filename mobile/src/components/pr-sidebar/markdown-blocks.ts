@@ -11,7 +11,8 @@ import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
 import { HR, ORDERED, parseList, UNORDERED } from './markdown-list-blocks'
-import { expandBreaksOffTableRows, inlineBreaksAsNewlines, MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
+import { MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
+import { expandParagraphBreaks, HEADING, QUOTE, withLineBreaks } from './markdown-block-breaks'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -50,10 +51,6 @@ export type MarkdownBlock =
   // GFM pipe table. `align` is per-column, parallel to `headers`.
   | { kind: 'table'; headers: string[]; rows: string[][]; align: CellAlign[] }
 
-// Its closing run of '#' comes off in markdownHeadingText.
-const HEADING = /^(#{1,6})\s+(.*)$/
-const QUOTE = /^>\s?(.*)$/
-
 // It moved to markdown-html-tags.ts beside the code-aware stripping.
 export { stripHtmlTags } from './markdown-html-tags'
 
@@ -61,37 +58,14 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Fences out first, with HTML comments and <br> handled around them
   // (markdown-fences.ts): nothing below reads a fence's lines.
   const body = lexCommentBody(content)
-  // A `<br>` is a line break, except on a table row, where it is one inside
-  // its cell once the cells are split (markdown-inline-breaks.ts). It was a
-  // line break everywhere, which cut a row in two.
-  const text = expandBreaksOffTableRows(body.text)
+  // A `<br>` on a table row, a list item, a quote or a heading is a line
+  // break inside its cell, item, quote or heading once the block is read,
+  // and a line break before the lines are read anywhere else
+  // (markdown-block-breaks.ts). It was a line break everywhere, which cut a
+  // row, an item, a quote or a heading in two.
+  const text = expandParagraphBreaks(body.text, body)
   const blocks = parseSegment(readHtmlBlocks(text), body)
   return text.includes(MARKDOWN_INLINE_BREAK) ? blocks.map(withLineBreaks) : blocks
-}
-
-/** A block with every `<br>` a table row kept as a line break: in its cells,
- *  and wherever else such a row was read, so none is drawn as a stand-in. */
-function withLineBreaks(block: MarkdownBlock): MarkdownBlock {
-  const breaks = inlineBreaksAsNewlines
-  switch (block.kind) {
-    case 'heading':
-    case 'quote':
-    case 'paragraph':
-      return { ...block, text: breaks(block.text) }
-    case 'list':
-      return { ...block, items: block.items.map(breaks) }
-    case 'table':
-      return { ...block, headers: block.headers.map(breaks), rows: block.rows.map((row) => row.map(breaks)) }
-    case 'details':
-      return { ...block, summary: breaks(block.summary), body: block.body.map(withLineBreaks) }
-    case 'code':
-    case 'hr':
-      return block
-    default: {
-      const unhandled: never = block
-      return unhandled
-    }
-  }
 }
 
 // The <details>/<blockquote> regions of a segment, a nested one inside the
