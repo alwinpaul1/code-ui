@@ -11,9 +11,57 @@ describe("a preview error that is the file's own answer", () => {
     ['not there', { code: 'runtime_error', message: "ENOENT: no such file or directory, open '/w/fig.png'" }],
     ['too large', { code: 'runtime_error', message: 'file_too_large' }],
     ['too large, by its code alone', { code: 'file_too_large', message: '' }],
-    ['binary', { code: 'runtime_error', message: 'binary_file' }]
+    ['binary', { code: 'runtime_error', message: 'binary_file' }],
+    ['not there, by the file read\'s own not_found code', { code: 'not_found', message: '' }],
+    ['not there, by that code with the words behind it', { code: 'not_found', message: 'no such file' }],
+    ['not there, said in words', { code: 'runtime_error', message: 'File not found' }],
+    ['not there, said to not exist', { code: 'runtime_error', message: 'File does not exist' }]
   ])('is kept when the file is %s', (_why, refusal) => {
     expect(isFileOwnPreviewError(previewErrorFromRefusal(refusal))).toBe(true)
+  })
+
+  // Review 2026-09-30, round 4: previewError read ANY "not found" as "File not found", so a refusal
+  // about the desktop's worktree, runtime or method was kept as the file's answer and the figure
+  // stayed a link until the document closed. What the refusal names as missing decides: its code
+  // (`selector_not_found` names the selector), or the word its message puts before "not found".
+  it.each([
+    ['the worktree was not found', { code: 'selector_not_found', message: 'Worktree not found' }],
+    ['the remote runtime was not found', { code: 'runtime_error', message: 'Remote Orca runtime not found' }],
+    ['the method was not found', { code: 'method_not_found', message: 'Method not found' }],
+    ['the method was not found, by its code alone', { code: 'method_not_found', message: '' }],
+    ['the selector matched nothing', { code: 'runtime_error', message: 'Unknown worktree selector id:wt (not found)' }],
+    ['the selector token is the whole message', { code: 'runtime_error', message: 'selector_not_found' }],
+    ['the agent session was not found', { code: 'agent_session_not_found', message: 'Session not found' }],
+    ['the worktree is said not to exist', { code: 'runtime_error', message: 'Worktree does not exist' }],
+    ['the bare not_found code comes with words naming the worktree', { code: 'not_found', message: 'no such worktree' }],
+    ['the words name nothing at all', { code: 'runtime_error', message: 'Not found' }]
+  ])('is not kept when %s', (_why, refusal) => {
+    expect(isFileOwnPreviewError(previewErrorFromRefusal(refusal))).toBe(false)
+  })
+
+  it('shows a refusal about the worktree or the runtime as what it is, not as a missing file', () => {
+    expect(previewErrorFromRefusal({ code: 'selector_not_found', message: 'Worktree not found' })).toEqual({
+      status: 'error',
+      message: 'Unable to load preview: Worktree not found',
+      reconnect: false
+    })
+    expect(previewErrorFromRefusal({ code: 'runtime_error', message: 'Remote Orca runtime not found' })).toEqual({
+      status: 'error',
+      message: 'Unable to load preview: Remote Orca runtime not found',
+      reconnect: false
+    })
+    expect(previewErrorFromRefusal({ code: 'method_not_found', message: '' })).toEqual({
+      status: 'error',
+      message: 'Unable to load preview: method_not_found',
+      reconnect: false
+    })
+    // The screen's own previewError, fed a thrown error's message, reads it the same way.
+    expect(previewError('Worktree not found')).toEqual({
+      status: 'error',
+      message: 'Unable to load preview: Worktree not found',
+      reconnect: false
+    })
+    expect(previewError('File not found')).toEqual({ status: 'error', message: 'File not found', reconnect: false })
   })
 
   it.each([

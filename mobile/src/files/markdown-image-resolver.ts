@@ -85,16 +85,18 @@ function connectionOf(client: MarkdownImageClient | null): MarkdownImageConnecti
  * outside the worktree, resolves to null and the document shows the link it
  * always showed.
  *
- * Only the file's own answer is kept for the document: an image, an SVG, not found, a PDF or other
- * non-image, too large, binary (`readImage` and `isFileOwnPreviewError` list them between them).
- * Every other read is unanswered: a rejection, a refusal about the link or the runtime ("Remote
- * Orca runtime is not connected.", "Request timed out"), or the generic 'Unable to load preview:
- * ...' for a cause this build has not seen. One of those stands for the connection it was asked on
- * and no longer, so a figure asks again once per NEW connection (`connection` tells it when) and
- * never once per render on the same one. With no connection to watch it is dropped once it
- * settles, and the next render asks. The rule this replaced listed four recoverable phrases and
- * kept every other refusal as the file's answer, so a figure refused while the desktop's runtime
- * reconnected stayed a link until the document was closed (review 2026-09-30, round 3).
+ * Only the file's own answer is kept for the document: an image, an SVG, the file not found, a PDF
+ * or other non-image, too large, binary (`readImage` and `isFileOwnPreviewError` list them between
+ * them). Every other read is unanswered: a rejection, a refusal about the link or the runtime
+ * ("Remote Orca runtime is not connected.", "Request timed out"), a "not found" about something
+ * other than the file ("Worktree not found", `method_not_found`; `refusalMissingSubject`), or the
+ * generic 'Unable to load preview: ...' for a cause this build has not seen. One of those stands
+ * for the connection it was asked on and no longer, so a figure asks again once per NEW connection
+ * (`connection` tells it when) and never once per render on the same one. With no connection to
+ * watch it is dropped once it settles, and the next render asks. The rule this replaced listed four
+ * recoverable phrases and kept every other refusal as the file's answer, so a figure refused while
+ * the desktop's runtime reconnected stayed a link until the document was closed (review
+ * 2026-09-30, round 3); round 4 took any "not found" out of the file's answers but its own.
  */
 export function createMarkdownImageResolver(args: {
   client: MarkdownImageClient | null
