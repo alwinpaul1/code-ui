@@ -10,6 +10,7 @@ import {
   QUESTION_LINE,
   type OptionList
 } from './mobile-native-chat-question-lists'
+import { ASKS, asksAfter, asksToChoose } from './mobile-native-chat-question-asks'
 
 export type MobileChatQuestion = {
   question: string
@@ -32,8 +33,6 @@ export type MobileChatQuestion = {
 export function mobileChatQuestionKey(question: MobileChatQuestion): string {
   return JSON.stringify(question)
 }
-
-const ASKS = /\?\s*$/
 
 const MULTI_SELECT_HINT =
   /\b(select all|choose all|choose multiple|select multiple|pick multiple|all that apply|one or more|comma[- ]separated|multiple options)\b/i
@@ -81,7 +80,8 @@ function choicesListIndex(
  * option line introduced by a question-like prompt line.
  *
  * The options are ONE list (choicesListIndex), under the line directly above
- * it, which titles the card.
+ * it, which titles the card. A line that asks after it must ask to choose from
+ * it (asksToChoose), or the card is not shown.
  */
 export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   if (typeof text !== 'string' || text.trim().length === 0) {
@@ -104,6 +104,10 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   // Conservative gate: a single bare option with no introducing prompt is more
   // likely stray prose (a lone "- item") than a real choice list.
   if (options.length < 2 && !QUESTION_LINE.test(question)) {
+    return null
+  }
+  // "Here's my plan: 1. … 2. … Shall I proceed?" asks for a yes, not a step.
+  if (asksAfter(lines, lists, at, fenceStarts).some((ask) => !asksToChoose(ask, list))) {
     return null
   }
 

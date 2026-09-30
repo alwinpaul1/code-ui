@@ -715,6 +715,83 @@ describe('the question card for choices followed by a list of reasons or notes',
   })
 })
 
+// A plan or a list of changes followed by "Shall I proceed?" became a card
+// whose answers were the plan's steps, so a tap sent `1` to a yes/no
+// question, or typed a finding into the agent (review, 2026-09-30). A line
+// that asks after the list keeps the card only when it asks the reader to
+// choose from it; a confirmation, or anything unclear, shows no card, and
+// the user types the answer.
+describe('the question card for a list followed by a question', () => {
+  it('shows no card when a confirmation follows a plan (Claude-shaped)', () => {
+    expect(
+      parseAgentQuestion("Here's my plan:\n1. Edit the parser\n2. Add the test\n\nShall I proceed?")
+    ).toBeNull()
+  })
+
+  it('shows no card when a confirmation follows a list of changes (Codex-shaped)', () => {
+    expect(
+      parseAgentQuestion('Done. Changes:\n- edited a.ts\n- edited b.ts\n\nShall I commit?')
+    ).toBeNull()
+  })
+
+  it('shows no card for any confirmation after the list', () => {
+    const plan = 'The plan:\n1. Edit the parser\n2. Add the test\n\n'
+    for (const ask of [
+      'Should I go ahead?',
+      'Can I start?',
+      'Want me to do that?',
+      'Do you want me to pick one?',
+      'OK to proceed?',
+      'Proceed?',
+      'Sound good?',
+      'Does this look right?',
+      'Should I pick up the next task after this?'
+    ]) {
+      expect(parseAgentQuestion(plan + ask), ask).toBeNull()
+    }
+  })
+
+  it('shows no card when the question after the list is unclear', () => {
+    expect(parseAgentQuestion('The plan:\n1. A\n2. B\n\nWhat do you think?')).toBeNull()
+  })
+
+  it('shows no card when a confirmation follows the notes after the choices', () => {
+    expect(
+      parseAgentQuestion('Which one?\n1. A\n2. B\n\nNotes:\n- x is safe\n\nShall I proceed?')
+    ).toBeNull()
+  })
+
+  it('keeps the card when the question after the list asks to choose from it', () => {
+    const list =
+      'I can take this two ways:\n\n1. Patch the parser\n2. Capture a real screen first\n\n'
+    for (const ask of [
+      'Which do you want?',
+      'Which one should I do?',
+      'Pick one?',
+      'Would you prefer one of these?',
+      'Should I go with 1 or 2?',
+      'Option 1, or option 2?'
+    ]) {
+      const q = parseAgentQuestion(list + ask)
+      expect(q?.question, ask).toBe('I can take this two ways')
+      expect(q?.optionTokens, ask).toEqual(['1', '2'])
+    }
+  })
+
+  it('keeps the card when the question after a bullet list names two of its choices', () => {
+    const q = parseAgentQuestion('Two ways:\n- Rebase\n- Merge\n\nRebase or merge?')
+    expect(q?.options).toEqual(['Rebase', 'Merge'])
+    expect(q?.optionTokens).toEqual([null, null])
+    const lettered = parseAgentQuestion('Two ways:\na) Rebase\nb) Merge\n\nA or B?')
+    expect(lettered?.optionTokens).toEqual(['a', 'b'])
+  })
+
+  it('reads no question from a code fence after the list', () => {
+    const q = parseAgentQuestion('Options:\n1. A\n2. B\n\nExample:\n```\nready?\n```')
+    expect(q?.options).toEqual(['A', 'B'])
+  })
+})
+
 describe('formatQuestionAnswer', () => {
   const numbered: MobileChatQuestion = {
     question: 'Pick',
