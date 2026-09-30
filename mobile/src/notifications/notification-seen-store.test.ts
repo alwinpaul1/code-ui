@@ -110,6 +110,81 @@ describe('seen keys written after the store refused to read them', () => {
     expect(warn.mock.calls).toEqual([['[storage] could not read the notification seen keys', unreadable]])
   })
 
+  // The run never had those keys in memory (its load was refused), so every
+  // write it makes, not just the first, is its own keys alone unless the
+  // store carries the older ones under them.
+  it('keeps the keys the previous run stored through every later delivery, not just the first', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+    persistSeenKeys('h', 'e', ['k3', 'k4'])
+    await flush()
+
+    expect(keysOnDisk()).toEqual(['k1', 'k2', 'k3', 'k4'])
+  })
+
+  it('lets the previous run\'s keys fall out under the cap as this run\'s own fill it', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    persistSeenKeys('h', 'e', Array.from({ length: 255 }, (_, i) => `n${i}`))
+    await flush()
+    const keys = keysOnDisk()!
+    expect([keys.length, keys[0], keys[1], keys[255]]).toEqual([256, 'k2', 'n0', 'n254'])
+
+    persistSeenKeys('h', 'e', Array.from({ length: 256 }, (_, i) => `n${i}`))
+    await flush()
+    expect(keysOnDisk()!.some((key) => key.startsWith('k'))).toBe(false)
+  })
+
+  it('carries none of the previous run\'s keys into the next desktop counter or past a cleared host', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    persistSeenKeys('h', 'e2', ['m1'])
+    await flush()
+    expect(JSON.parse(storage.get(KEY)!)).toEqual({ epoch: 'e2', keys: ['m1'] })
+
+    storage.set(KEY, JSON.stringify({ epoch: 'e', keys: ['k1', 'k2'] }))
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+    await clearSeenKeys('h')
+    persistSeenKeys('h', 'e', ['z'])
+    await flush()
+    expect(JSON.parse(storage.get(KEY)!)).toEqual({ epoch: 'e', keys: ['z'] })
+  })
+
+  it('carries nothing from a read that was still out when the host was cleared', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValueOnce(unreadable)
+    await loadSeenKeys('h')
+    let release = () => {}
+    vi.mocked(AsyncStorage.getItem).mockImplementationOnce((key: string) => {
+      const found = storage.get(key) ?? null
+      return new Promise((resolve) => {
+        release = () => resolve(found)
+      })
+    })
+    persistSeenKeys('h', 'e', ['k3'])
+    await flush()
+
+    await clearSeenKeys('h')
+    release()
+    await flush()
+    expect(storage.has(KEY)).toBe(false)
+
+    persistSeenKeys('h', 'e', ['z'])
+    await flush()
+    expect(keysOnDisk()).toEqual(['z'])
+  })
+
   it('writes nothing, and says why, while the store still refuses; the next delivery lands them all', async () => {
     vi.mocked(AsyncStorage.getItem)
       .mockRejectedValueOnce(unreadable)
