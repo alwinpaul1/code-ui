@@ -9,6 +9,7 @@ import type { Theme } from '../../theme/theme-context'
 import type { ThemeColors } from '../../theme/tokens'
 import { MermaidDiagram } from './MermaidDiagram'
 import { isAllowedMarkdownLinkUrl } from './markdown-link-scheme'
+import { listMarker } from '../mobile-markdown-list-marker'
 import {
   parseInline,
   parseMarkdownBlocks,
@@ -24,6 +25,13 @@ type Props = {
 }
 
 type Styles = ReturnType<typeof commentMarkdownStyles>
+
+/** One level of list nesting, as the chat steps one in (LIST_INDENT_TEXT in
+ *  MobileMarkdown.tsx, four spaces, about 16 px). Past MAX_LIST_INDENT_LEVELS
+ *  the items stop stepping in, so a deep one keeps room for its words in a
+ *  comment card; its bullet still says how deep it is. */
+const LIST_INDENT = spacing.lg
+const MAX_LIST_INDENT_LEVELS = 6
 
 // Themed, dependency-free markdown for PR bodies + comments — the RN analogue of
 // the desktop CommentMarkdown. The previous third-party renderer hung the JS thread
@@ -139,22 +147,36 @@ function BlockView({
     case 'list':
       return (
         <View style={styles.list}>
-          {block.items.map((item, i) => (
-            <View key={i} style={styles.listItem}>
-              <Text style={[styles.bullet, { fontSize: base }]}>
-                {block.ordered ? `${(block.start ?? 1) + i}.` : '•'}
-              </Text>
-              <Text
-                style={[
-                  styles.paragraph,
-                  styles.listItemText,
-                  { fontSize: base, lineHeight: base + 7 }
-                ]}
+          {block.items.map((item, i) => {
+            // A flat list carries no shapes: every item at the margin, numbered from `start`.
+            const shape = block.shapes?.[i] ?? { depth: 0, ordered: block.ordered, number: (block.start ?? 1) + i }
+            const indent = Math.min(shape.depth, MAX_LIST_INDENT_LEVELS) * LIST_INDENT
+            const box = shape.checked === undefined ? null : { checked: shape.checked }
+            return (
+              <View
+                key={i}
+                testID="comment-list-item"
+                style={indent > 0 ? [styles.listItem, { marginLeft: indent }] : styles.listItem}
               >
-                <Inline text={item} base={base} styles={styles} />
-              </Text>
-            </View>
-          ))}
+                <Text
+                  style={[styles.bullet, { fontSize: base }]}
+                  accessibilityRole={box ? 'checkbox' : undefined}
+                  accessibilityState={box ?? undefined}
+                >
+                  {listMarker({ text: item, ...shape })}
+                </Text>
+                <Text
+                  style={[
+                    styles.paragraph,
+                    styles.listItemText,
+                    { fontSize: base, lineHeight: base + 7 }
+                  ]}
+                >
+                  <Inline text={item} base={base} styles={styles} />
+                </Text>
+              </View>
+            )
+          })}
         </View>
       )
     case 'paragraph':

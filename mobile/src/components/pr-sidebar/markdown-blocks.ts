@@ -8,6 +8,7 @@ import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
+import { HR, ORDERED, parseList, UNORDERED } from './markdown-list-blocks'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -24,6 +25,11 @@ export type InlineToken =
 
 export type CellAlign = 'left' | 'center' | 'right'
 
+/** Where a list item sits: 0 at the list's margin, one more per level of
+ *  nesting; the kind of the list it is in, which may not be the outermost
+ *  one's; its number in that list; and its box, where it is a task. */
+export type ListItemShape = { depth: number; ordered: boolean; number?: number; checked?: boolean }
+
 export type MarkdownBlock =
   | { kind: 'heading'; level: number; text: string }
   // `lang` carries the fence info string (e.g. 'mermaid'); empty when unspecified.
@@ -31,7 +37,9 @@ export type MarkdownBlock =
   | { kind: 'quote'; text: string }
   // `start` is the number an ordered list's first item draws, when it is not 1:
   // the list went on after a fence under one of its items, or opened at 3.
-  | { kind: 'list'; ordered: boolean; items: string[]; start?: number }
+  // `shapes`, one per item, only where an item is nested or a task
+  // (markdown-list-blocks.ts); each item then draws its own number.
+  | { kind: 'list'; ordered: boolean; items: string[]; start?: number; shapes?: ListItemShape[] }
   | { kind: 'hr' }
   | { kind: 'paragraph'; text: string }
   // GitHub comments use <details><summary>…</summary>…</details> for collapsibles.
@@ -42,12 +50,6 @@ export type MarkdownBlock =
 // Its closing run of '#' comes off in markdownHeadingText.
 const HEADING = /^(#{1,6})\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
-// One mark three or more times, spaces between allowed, at most three columns
-// in (CommonMark 4.1), as THEMATIC_BREAK in markdown-code-ranges.ts reads it.
-// `---+` alone let the list rule take `* * *` for a bullet reading "* *".
-const HR = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
-const UNORDERED = /^\s*[-*+]\s+(.*)$/
-const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 
 // It moved to markdown-html-tags.ts beside the code-aware stripping.
 export { stripHtmlTags } from './markdown-html-tags'
@@ -152,10 +154,9 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
       continue
     }
 
-    const ordered = ORDERED.test(line)
-    if (ordered || UNORDERED.test(line)) {
+    if (ORDERED.test(line) || UNORDERED.test(line)) {
       flushParagraph()
-      i = parseList(lines, i, ordered, body, blocks)
+      i = parseList(lines, i, body, blocks)
       continue
     }
 
@@ -164,66 +165,6 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
-}
-
-// The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
-function parseList(
-  lines: string[],
-  i: number,
-  ordered: boolean,
-  body: LexedCommentBody,
-  blocks: MarkdownBlock[]
-): number {
-  const marker = ordered ? ORDERED : UNORDERED
-  let items: string[] = []
-  // CommonMark numbers an ordered list from its first item's number, of at
-  // most nine digits; a longer one parseInt rounds, so that list counts from 1.
-  const number = ordered ? /\d+/.exec(lines[i]!)![0] : '1'
-  let start = number.length <= 9 ? Number(number) : 1
-  const flush = (): void => {
-    blocks.push(ordered && start !== 1 ? { kind: 'list', ordered, items, start } : { kind: 'list', ordered, items })
-    start += items.length
-    items = []
-  }
-  let match = marker.exec(lines[i]!)
-  while (match) {
-    // A fence can open on the item's own line; the item then holds only it.
-    let fence = body.fenceOn(match[1])?.code ?? null
-    // A wrapped item continues on the lines under it: indented, non-blank,
-    // and not a marker of its own. Without this the list ended at the first
-    // continuation line, that line became a paragraph at the left margin,
-    // and the next item opened a fresh list — so every item was numbered 1.
-    // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
-    const parts = fence ? [] : [match[1].trim()]
-    i += 1
-    while (!fence && i < lines.length) {
-      const next = lines[i]!
-      if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
-        break
-      }
-      fence = body.fenceOn(next)?.code ?? null
-      if (!fence) {
-        parts.push(next.trim())
-      }
-      i += 1
-    }
-    // Joined with a space: a single newline inside a paragraph is not a line
-    // break in markdown, it reflows.
-    items.push(parts.join(' '))
-    if (fence) {
-      // A fence under an item ends the item: the list so far, then the code,
-      // and the list goes on, still counting, at the next marker of its kind.
-      flush()
-      blocks.push({ kind: 'code', ...fence })
-    }
-    // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
-    // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
-    match = i < lines.length && !HR.test(lines[i]!) ? marker.exec(lines[i]!) : null
-  }
-  if (items.length > 0) {
-    flush()
-  }
-  return i
 }
 
 // Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a
