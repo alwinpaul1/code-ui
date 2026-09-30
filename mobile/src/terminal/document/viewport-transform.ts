@@ -52,6 +52,10 @@ export function getCellWidth(scope: TerminalDocumentScope) {
 //      but better than nothing.
 //   3. If both are 0, return 1 (no scale change). The retry loop in
 //      applyFitScale will keep trying until one is positive.
+// A viewport with no width (a WebView measured while collapsed or hidden, a
+// resize to 0) keeps the scale it had: 0 / termWidth was stored as the scale
+// and updateTransform drew scale(0), a blank terminal until the next resize
+// (review, 2026-09-30).
 export function computeFitScale(scope: TerminalDocumentScope) {
   if (!scope.term) {
     return 1
@@ -63,6 +67,9 @@ export function computeFitScale(scope: TerminalDocumentScope) {
     return 1
   }
   const vpWidth = window.innerWidth
+  if (!(vpWidth > 0)) {
+    return scope.currentScale
+  }
   return Math.min(1, vpWidth / termWidth)
 }
 

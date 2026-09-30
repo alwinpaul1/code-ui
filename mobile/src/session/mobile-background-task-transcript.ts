@@ -38,7 +38,8 @@ const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
 // Tolerant of both observed layouts — one tag per line, and the whole record on
 // a single line — plus the attributed opening tag and a record the transcript
 // truncated before its closing tag.
-const NOTIFICATION = /<task-notification\b[^>]*>([\S\s]*?)(?:<\/task-notification>|$)/g
+const NOTIFICATION_OPENING = /<task-notification\b[^>]*>/g
+const NOTIFICATION_CLOSING = '</task-notification>'
 const NOTIFICATION_ID = /<task-id>\s*([^<]+?)\s*<\/task-id>/
 const NOTIFICATION_STATUS = /<status>\s*([^<]+?)\s*<\/status>/
 const NOTIFICATION_SUMMARY = /<summary>\s*([\S\s]*?)\s*<\/summary>/
@@ -102,10 +103,12 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
       : null
   }
   if (call.name === 'Monitor') {
-    // A monitor is a long-running shell; its event notifications carry no
-    // status and never retire it — only the "stream ended" one does.
+    // A monitor runs a command like a shell, but Claude Code counts it apart:
+    // the Stop hook's `background_tasks` types it "monitor", and the footer
+    // pill does not count it among its "N shells". Its event notifications
+    // carry no status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
+    return id ? { id, kind: 'monitor', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
   }
   return null
 }
@@ -164,8 +167,7 @@ export function readNotifications(
     return []
   }
   const found: { id: string; value: Notification }[] = []
-  for (const match of text.matchAll(NOTIFICATION)) {
-    const body = match[1] ?? ''
+  for (const body of notificationBodies(text)) {
     const id = NOTIFICATION_ID.exec(body)?.[1]
     const status = NOTIFICATION_STATUS.exec(body)?.[1]
     if (!id || !status) {
@@ -178,6 +180,22 @@ export function readNotifications(
     })
   }
   return found
+}
+
+/** Each notification's body: from its opening tag to the LAST closing tag
+ *  before the next opening tag (or the end of the text), or to that point
+ *  when it has none (a record the transcript cut). Not the first closing tag:
+ *  the model-written `<result>` can quote one, and a cut there left a finished
+ *  workflow's `<usage>` outside the body, so its card lost its totals
+ *  (review, 2026-09-30). */
+function notificationBodies(text: string): string[] {
+  const openings = [...text.matchAll(NOTIFICATION_OPENING)]
+  return openings.map((opening, index) => {
+    const start = opening.index + opening[0].length
+    const segment = text.slice(start, openings[index + 1]?.index ?? text.length)
+    const end = segment.lastIndexOf(NOTIFICATION_CLOSING)
+    return end === -1 ? segment : segment.slice(0, end)
+  })
 }
 
 /** The sentence a background launch, a teammate's spawn or a remote launch

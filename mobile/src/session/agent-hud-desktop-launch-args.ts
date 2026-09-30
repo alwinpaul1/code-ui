@@ -3,7 +3,7 @@ import { resolveTuiAgentLaunchArgs } from '../../../src/shared/tui-agent-launch-
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import type { RpcClient } from '../transport/rpc-client'
 import { agentHudLaunchFlag, hostTakesAgentHudFlag } from './agent-hud-launch-args'
-import { readHudLaunchFlags, withoutSpans } from './agent-hud-launch-flag-owner'
+import { readHudLaunchFlags, withOurFlagLast, withoutSpans } from './agent-hud-launch-flag-owner'
 
 /**
  * Agents started on the DESKTOP get the HUD beacon the same way the phone's
@@ -50,12 +50,10 @@ export function withAgentHudDesktopFlag(
   if (!flags.readable) {
     return value
   }
-  const base = flags.ours.length > 0 ? withoutSpans(value, flags.ours) : value.trim()
   if (flags.usersOwn !== null) {
-    return base
+    return flags.ours.length > 0 ? withoutSpans(value, flags.ours) : value.trim()
   }
-  const flag = agentHudLaunchFlag(agent, hostPlatform)
-  return base ? `${base} ${flag}` : flag
+  return withOurFlagLast(value, flags.ours, agentHudLaunchFlag(agent, hostPlatform))
 }
 
 export function withoutAgentHudDesktopFlag(

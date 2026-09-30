@@ -627,6 +627,20 @@ binary). `parseClaudeRunningShellCount` reads only "N shells", so a mixed
 pill gives the phone no footer count to pad from. No real screen of that
 pill has been captured, so the parser is left alone.
 
+Fixed 2026-09-30: a Monitor is a monitor, not a shell. The transcript reader
+used to give a `Monitor started (task …)` launch the kind `shell`, so the
+card drew it as "Shell" with the terminal glyph, and the footer fit counted it
+against the pill's "N shells": a monitor beside one shell under "· 1 shell"
+retired the monitor as finished while it still ran. It is now kind `monitor`
+(the card's Activity glyph and "Monitor"; the Stop hook's `background_tasks`
+types it `monitor` too), and the footer fit
+(`mobile-background-task-footer.ts`) counts only kind `shell`. While any
+monitor runs, the phone fits nothing to the footer's count, neither retiring
+a shell nor padding an unnamed one, because the pill's wording beside a
+monitor is known only from the binary. A real capture of that pill, with a
+monitor and a shell running together, is still wanted; with one, the fit can
+read the shell figure out of it instead of standing down.
+
 
 ## A Workflow is one task (2026-09-30)
 

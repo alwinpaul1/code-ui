@@ -19,6 +19,7 @@ import {
   subscribeCodexVisibleModels
 } from './codex-visible-models'
 import { peekDiscoveredCodexModels } from './codex-model-discovery'
+import { sameCodexModel } from './codex-picker-screen'
 
 /** OpenAI's model ids as Codex names them (gpt-6-astra, gpt-5.3-codex-spark,
  *  o4-mini…). The fallback for the moment before the account list is known:
@@ -28,7 +29,9 @@ const CODEX_ID_SHAPE = /^(gpt-|o\d|codex)/i
 /** A reported model, if it is one this Codex account can run. Every source
  *  goes through this — the host's hook status and the terminal footer alike —
  *  because the host has labelled a Codex pane with a Claude session's model
- *  and a tab switch can read the other tab's screen. */
+ *  and a tab switch can read the other tab's screen. Returned as the known
+ *  slug, whatever case it was reported in: Codex 0.158.0's footer prints
+ *  "GPT-6-Sol" for the slug "gpt-6-sol". */
 export function acceptCodexStatusModel(
   reported: string | null | undefined,
   known: readonly string[]
@@ -38,7 +41,7 @@ export function acceptCodexStatusModel(
     return null
   }
   if (known.length > 0) {
-    return known.includes(model) ? model : null
+    return known.find((slug) => sameCodexModel(slug, model)) ?? null
   }
   return CODEX_ID_SHAPE.test(model) ? model : null
 }

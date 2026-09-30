@@ -1,5 +1,9 @@
 import { hasCodexFooter } from './mobile-terminal-hud-parse'
-import { codexPendingInputPreviewRows } from './codex-terminal-queued-messages'
+import {
+  CODEX_COMPOSER_ROW,
+  codexPendingInputPreviewRows,
+  codexPendingPreviewStart
+} from './codex-terminal-queued-messages'
 // Codex's `/model` picker as it renders in the terminal screen buffer. Codex
 // 0.153.x has no non-interactive way to set the model or reasoning effort
 // mid-session — `/model <slug>` is unreliable and a second argument is sent to
@@ -123,29 +127,6 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
 // Why "to interrupt)" and not "working": reasoning summaries replace the word, and a remapped key
 // still ends the row this way.
 const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
-// Codex draws its composer with `›`; a `>` or `❯` line is quoted text or a shell prompt.
-const CODEX_COMPOSER_ROW = /^\s*›\s/
-// The pending-input preview's section headers (codex-terminal-queued-messages.ts has their source).
-// Codex draws them at column 0 (pending_input_preview.rs); an indented one is quoted in an answer.
-const CODEX_PENDING_INPUT_HEADER =
-  /^(?:• )?(?:Queued follow-up inputs|Messages to be submitted)/
-
-/** Where the pending-input preview blocks that end at `composer` begin (`composer` when none). Only
- *  a block that opens with one of Codex's own headers counts, so indented prose above the composer is
- *  not mistaken for one. */
-function pendingPreviewStart(lines: readonly string[], composer: number): number {
-  let start = composer
-  for (let i = composer - 1; i >= 0; i -= 1) {
-    const line = lines[i] ?? ''
-    if (CODEX_PENDING_INPUT_HEADER.test(line)) {
-      start = i
-    } else if (line.trim() !== '' && !/^\s{2,}\S/.test(line) && !/^\s*↳/.test(line)) {
-      break
-    }
-  }
-  return start
-}
-
 /**
  * Whether Codex's busy row ("• Working (5s • esc to interrupt)") sits directly above the composer:
  * the last non-blank line above it, once the pending-input preview (a blank line, then "Queued
@@ -163,7 +144,7 @@ function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
   if (composer === -1) {
     return false
   }
-  const above = lines.slice(0, pendingPreviewStart(lines, composer)).filter((line) => line.trim() !== '')
+  const above = lines.slice(0, codexPendingPreviewStart(lines, composer)).filter((line) => line.trim() !== '')
   // Step over one status detail block: its wrapped rows (four-space indent, status_indicator_widget.rs
   // wraps a detail under "  └ " then four spaces) back to the `└` row.
   let detail = above.length - 1
@@ -182,16 +163,9 @@ function isCodexTurnRunning(lines: readonly string[]): boolean {
   if (hasBusyStatusRowAbove(lines)) {
     return true
   }
-  // Only a steer header in the preview directly above the composer: one quoted higher up in the
-  // transcript is not a live queue.
-  const composer = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
-  if (composer === -1) {
-    return false
-  }
-  const previewStart = pendingPreviewStart(lines, composer)
-  return [...codexPendingInputPreviewRows(lines).steerHeaders].some(
-    (index) => index >= previewStart && index < composer && /^\S/.test(lines[index] ?? '')
-  )
+  // The scan reads only the preview directly above the composer, headers at column 0: a steer header
+  // quoted higher up in the transcript, or indented in an answer, is not a live queue.
+  return codexPendingInputPreviewRows(lines).steerHeaders.size > 0
 }
 
 /** Whether the Codex TUI is idle at its prompt with no turn running. The
@@ -207,6 +181,13 @@ export function isCodexIdle(lines: readonly string[]): boolean {
 /** Whether a Codex turn is in progress (a stray Esc here would interrupt it). */
 export function isCodexWorking(lines: readonly string[]): boolean {
   return isCodexTurnRunning(lines)
+}
+
+/** Whether two Codex model names are the same model. Case does not count: Codex 0.158.0 prints the
+ *  footer's model as "GPT-6-Sol" where 0.155.1 printed the slug "gpt-6-sol" (codex-0158-screens.test.ts
+ *  holds both captures), and the account lists the slug. */
+export function sameCodexModel(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
 }
 
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */
