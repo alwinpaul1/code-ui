@@ -52,8 +52,9 @@ export const linearIssueRead = bindDeferredRpcOperation(
 
 /**
  * The comment list beside a Linear issue, asked in the same group as the issue itself. A refused
- * comment read leaves the sheet with no comments rather than failing it, so refusal is a skip —
- * which is exactly why the two legs of that group cannot share one policy.
+ * comment read does not fail the sheet, so refusal is a skip — which is exactly why the two legs of
+ * that group cannot share one policy. The sheet still says it could not load the comments
+ * (`commentsFailed` on the detail payload) rather than showing the issue as having none.
  */
 export const linearIssueCommentsRead = bindDeferredRpcOperation(
   defineRpcOperation({

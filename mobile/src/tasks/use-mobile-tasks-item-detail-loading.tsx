@@ -2,9 +2,11 @@ import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-det
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
-  useEffect
+  useEffect,
+  useState
 } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
+import { useTaskReadAgainAfterReconnect } from './use-task-read-again-after-reconnect'
 import {
   githubItemDetailRead,
   gitlabItemDetailRead,
@@ -12,19 +14,34 @@ import {
   linearIssueRead
 } from './mobile-task-item-detail-operations'
 
-export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
+/**
+ * The open item's detail read. `lastConnectedAt` is the host's (useLastConnectedAt, handed down by
+ * MobileTasksScreen): a failed read is read again once per NEW connection, the way the refresh icon
+ * reads it, through useTaskReadAgainAfterReconnect. It defaults to null for a mount that follows no
+ * connection, such as the RPC recordings, whose model carries no connection time.
+ */
+export function useMobileTasksItemDetailLoading(
+  model: ItemDetailMetadataEffectsModel,
+  lastConnectedAt: number | null = null
+) {
   const {
     actionItem,
     client,
+    detailPayload,
     detailRefreshSeq,
     setActionItem,
     setDetailError,
     setDetailLoading,
     setDetailPayload,
+    setDetailRefreshSeq,
     setItems,
     tasksSupported
   } = model
+  // This read's own failure, which the error line cannot stand for: a rejection with an empty
+  // message leaves that line '' over a sheet with no detail.
+  const [readFailed, setReadFailed] = useState(false)
   useEffect(() => {
+    setReadFailed(false)
     if (!tasksSupported || !actionItem || !client) {
       setDetailPayload(null)
       setDetailLoading(false)
@@ -166,6 +183,17 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
         throw new Error('Details not found')
       }
       if (!stale) {
+        // A refused comment read still shows the issue, but as a list it could not read, not as
+        // "No comments." (review, 2026-09-30). The flag is set only then, so a read list keeps the
+        // payload it always had.
+        if (!accepted.accepted) {
+          console.warn('[tasks] the Linear comment list could not be read', {
+            issueId: actionItem.source.id,
+            ...(commentsReply.ok
+              ? { cause: 'no list in the reply' }
+              : { code: commentsReply.error.code, cause: commentsReply.error.message })
+          })
+        }
         setDetailPayload({
           provider: 'linear',
           description: issue.description ?? '',
@@ -173,7 +201,8 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
           labels: issue.labels ?? [],
           assignee: issue.assignee?.displayName,
           project: issue.project,
-          children: issue.subIssues ?? []
+          children: issue.subIssues ?? [],
+          ...(accepted.accepted ? {} : { commentsFailed: true as const })
         })
         setActionItem((current) => {
           if (current?.provider !== 'linear' || current.source.id !== issue.id) {
@@ -196,6 +225,7 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
       .catch((err) => {
         if (!stale) {
           setDetailError(err instanceof Error ? err.message : 'Failed to load details')
+          setReadFailed(true)
         }
       })
       .finally(() => {
@@ -208,6 +238,15 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
       stale = true
     }
   }, [actionItem, client, detailRefreshSeq, tasksSupported])
+
+  // A Linear comment list the desktop refused is read again with the rest of the detail.
+  useTaskReadAgainAfterReconnect({
+    key: actionItem ? `${actionItem.provider}:${actionItem.source.id}` : null,
+    failed:
+      readFailed || (detailPayload?.provider === 'linear' && detailPayload.commentsFailed === true),
+    lastConnectedAt,
+    readAgain: () => setDetailRefreshSeq((current) => current + 1)
+  })
   return model
 }
 

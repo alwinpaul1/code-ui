@@ -15,8 +15,7 @@ import {
   SHOW_MOBILE_DETAIL_REVIEW_PANELS,
   isFailedGitHubCheck,
   formatDurationSeconds,
-  SHOW_MOBILE_LINEAR_DETAIL_TOOLS,
-  discussionSummary
+  SHOW_MOBILE_LINEAR_DETAIL_TOOLS
 } from './mobile-tasks-legacy-foundation'
 import {
   renderMobileTasksItemBodyEditor,
@@ -24,29 +23,21 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
+import { renderMobileTasksItemDiscussion } from './mobile-tasks-item-discussion'
 
 export function renderMobileTasksItemDetailContent(model: ConnectionPresentationModel) {
   const {
     actionItem,
-    addHostedItemComment,
-    addLinearComment,
     colors,
     createLinearSubIssue,
-    detailCommentGroups,
     detailError,
     detailLoading,
     detailPayload,
-    itemCommentDraft,
-    linearCommentDraft,
     linearSubIssueTitle,
     mutatingStatus,
     openLinearSubIssue,
     refreshGitHubChecks,
-    renderCommentComposer,
-    renderDetailCommentGroup,
     rerunGitHubChecks,
-    setItemCommentDraft,
-    setLinearCommentDraft,
     setLinearSubIssueTitle,
     styles
   } = model
@@ -261,36 +252,7 @@ export function renderMobileTasksItemDetailContent(model: ConnectionPresentation
         </View>
       ) : null}
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>Discussion</Text>
-          <Text style={styles.detailSectionMeta}>
-            {discussionSummary(detailPayload.comments.length)}
-          </Text>
-        </View>
-        {detailPayload.comments.length === 0 ? (
-          <Text style={styles.detailMuted}>No comments.</Text>
-        ) : (
-          detailCommentGroups.map(renderDetailCommentGroup)
-        )}
-        {(detailPayload.provider === 'github' && actionItem.provider === 'github') ||
-        (detailPayload.provider === 'gitlab' && actionItem.provider === 'gitlab')
-          ? renderCommentComposer({
-              value: itemCommentDraft,
-              onChangeText: setItemCommentDraft,
-              disabled: mutatingStatus,
-              onSubmit: () => void addHostedItemComment(actionItem)
-            })
-          : null}
-        {detailPayload.provider === 'linear' && actionItem.provider === 'linear'
-          ? renderCommentComposer({
-              value: linearCommentDraft,
-              onChangeText: setLinearCommentDraft,
-              disabled: mutatingStatus,
-              onSubmit: () => void addLinearComment(actionItem)
-            })
-          : null}
-      </View>
+      {renderMobileTasksItemDiscussion(model)}
     </>
   ) : null
 }
