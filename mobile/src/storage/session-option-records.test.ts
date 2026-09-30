@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatSessionOptionRecord } from '../../../src/shared/native-chat-session-option-state'
 import { mergeStoredSessionOptionRecord, readSessionOptionRecord } from './session-option-records'
 
@@ -128,6 +128,14 @@ describe('reading a stored option record that was half written', () => {
   const scope = 'host\u0000worktree\u0000tab'
   const storageKey = `orca:sessionOptions:${encodeURIComponent(scope)}`
 
+  beforeEach(async () => {
+    await AsyncStorage.clear()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('hands back the good picks and drops the bad entries, so nothing downstream meets them', async () => {
     await AsyncStorage.setItem(
       storageKey,
@@ -142,8 +150,11 @@ describe('reading a stored option record that was half written', () => {
       })
     )
     expect(await readSessionOptionRecord(scope)).toEqual({
-      agent: 'claude',
-      valuesByModel: { sonnet: { effort: { value: 'low', source: 'dispatched' } } }
+      status: 'record',
+      record: {
+        agent: 'claude',
+        valuesByModel: { sonnet: { effort: { value: 'low', source: 'dispatched' } } }
+      }
     })
   })
 
@@ -156,13 +167,62 @@ describe('reading a stored option record that was half written', () => {
       }
     }
     await AsyncStorage.setItem(storageKey, JSON.stringify(whole))
-    expect(await readSessionOptionRecord(scope)).toEqual(whole)
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'record', record: whole })
   })
 
-  it('refuses a record with no agent or no per-model map', async () => {
+  // Overwriting such a record loses nothing a picker could show, so the hook
+  // may save over it; the line says why the picks did not come back.
+  it('counts a record with no agent or no per-model map as nothing stored, and says so in one line', async () => {
     await AsyncStorage.setItem(storageKey, JSON.stringify({ valuesByModel: {} }))
-    expect(await readSessionOptionRecord(scope)).toBeNull()
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'none' })
     await AsyncStorage.setItem(storageKey, JSON.stringify({ agent: 'claude', valuesByModel: [] }))
-    expect(await readSessionOptionRecord(scope)).toBeNull()
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'none' })
+    expect(console.warn).toHaveBeenCalledTimes(2)
+    const line = String(vi.mocked(console.warn).mock.calls[0]?.[0])
+    expect(line).toContain('[session-options] picks for')
+    expect(line).toContain('worktree')
+    expect(line).toContain('no agent or no per-model map')
+  })
+
+  it('counts a record that does not parse as nothing stored, and says so in one line', async () => {
+    await AsyncStorage.setItem(storageKey, '{"agent":"claude","valuesByModel":{"opus":')
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'none' })
+    expect(console.warn).toHaveBeenCalledTimes(1)
+    const line = String(vi.mocked(console.warn).mock.calls[0]?.[0])
+    expect(line).toContain('[session-options] picks for')
+    expect(line).toContain('does not parse')
+  })
+})
+
+// A refused read used to come back as null, the same answer as "nothing was
+// ever stored". The hook then treated the tab as restored and wrote its live
+// record over picks the store had only declined to show it.
+describe('reading a stored option record the store refuses', () => {
+  const scope = 'host\u0000worktree\u0000tab'
+  const storageKey = `orca:sessionOptions:${encodeURIComponent(scope)}`
+
+  beforeEach(async () => {
+    await AsyncStorage.clear()
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('tells a refused read apart from nothing stored, and carries the store’s own error', async () => {
+    await AsyncStorage.setItem(
+      storageKey,
+      JSON.stringify({ agent: 'claude', valuesByModel: { opus: { effort: { value: 'high', source: 'dispatched' } } } })
+    )
+    const locked = new Error('database is locked (code 5 SQLITE_BUSY)')
+    vi.spyOn(AsyncStorage, 'getItem').mockRejectedValueOnce(locked)
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'refused', error: locked })
+    // The caller knows what the refusal costs, so it is the one that says so.
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('reads nothing stored as none, not as a refusal', async () => {
+    expect(await readSessionOptionRecord(scope)).toEqual({ status: 'none' })
+    expect(console.warn).not.toHaveBeenCalled()
   })
 })
