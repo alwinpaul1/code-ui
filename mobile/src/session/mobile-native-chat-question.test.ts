@@ -160,7 +160,9 @@ describe('the question card for a reply with more than one list', () => {
     ).toBeNull()
     // Another list, a blank line up.
     expect(
-      parseAgentQuestion('Findings so far:\n- the cache is stale\n- the lock is held\n\n1. Clear\n2. Release')
+      parseAgentQuestion(
+        'Findings so far:\n- the cache is stale\n- the lock is held\n\n1. Clear\n2. Release'
+      )
     ).toBeNull()
     // Another list, directly above.
     expect(parseAgentQuestion('Which fix?\n- the cache\n1. Clear\n2. Release')).toBeNull()
@@ -169,7 +171,9 @@ describe('the question card for a reply with more than one list', () => {
   it('shows no card when the reply asks two questions with a list each', () => {
     // Answering `2` would not say which question it answers.
     expect(
-      parseAgentQuestion('Which database?\n1. Postgres\n2. SQLite\n\nWhich ORM?\n1. Prisma\n2. Drizzle')
+      parseAgentQuestion(
+        'Which database?\n1. Postgres\n2. SQLite\n\nWhich ORM?\n1. Prisma\n2. Drizzle'
+      )
     ).toBeNull()
   })
 
@@ -257,6 +261,223 @@ describe('the question card for a reply with more than one list', () => {
   it('keeps a choice whose description wraps onto an indented line', () => {
     const q = parseAgentQuestion('Which?\n1. Clear\n   quick but lossy\n2. Release')
     expect(q?.options).toEqual(['Clear', 'Release'])
+  })
+})
+
+// Reading the reply as lists ended a list at any prose at the list's own
+// indent. A choice hard-wrapped to column 0, an unindented description under
+// each choice, or a paragraph between the choices of a loose list split one
+// list into several, the last had no question above it, and the card was lost.
+describe('the question card for choices whose text sits at the list indent', () => {
+  it('keeps both choices when a bullet wraps onto column 0', () => {
+    const q = parseAgentQuestion(
+      'Which branch?\n\n- main: the stable one that\nis wrapped at col 0\n- develop\n'
+    )
+    expect(q?.question).toBe('Which branch?')
+    expect(q?.options).toEqual(['main: the stable one that', 'develop'])
+    expect(q?.optionTokens).toEqual([null, null])
+  })
+
+  it('keeps both numbered choices when one wraps onto column 0', () => {
+    const q = parseAgentQuestion(
+      'Which?\n1. Option A which is a very long\nwrapped line\n2. Option B'
+    )
+    expect(q?.question).toBe('Which?')
+    // A choice's label is its first line; the wrapped rest is not appended.
+    expect(q?.options).toEqual(['Option A which is a very long', 'Option B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('answers a wrapped bullet choice with its first line', () => {
+    const q = parseAgentQuestion(
+      'Which branch?\n\n- main: the stable one that\nis wrapped at col 0\n- develop\n'
+    )!
+    expect(formatQuestionAnswerByIndexes(q, [0])).toBe('main: the stable one that')
+    expect(formatQuestionAnswerByIndexes(q, [1])).toBe('develop')
+  })
+
+  it('keeps both choices when each has an unindented description under it', () => {
+    const q = parseAgentQuestion(
+      'Which approach?\n\n1. Approach A\nThis one is quick.\n\n2. Approach B\nThis one is slow.'
+    )
+    expect(q?.question).toBe('Which approach?')
+    expect(q?.options).toEqual(['Approach A', 'Approach B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('keeps both choices of a loose numbered list with a paragraph under each', () => {
+    const q = parseAgentQuestion(
+      'Which do you prefer?\n\n1. Option A\n\nThis one is fast.\n\n2. Option B\n\nThis one is safe.'
+    )
+    expect(q?.question).toBe('Which do you prefer?')
+    expect(q?.options).toEqual(['Option A', 'Option B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('keeps both choices of a loose lettered list with a paragraph under each', () => {
+    const q = parseAgentQuestion(
+      'Which do you prefer?\n\na) Option A\n\nThis one is fast.\n\nb) Option B\n\nThis one is safe.'
+    )
+    expect(q?.options).toEqual(['Option A', 'Option B'])
+    expect(q?.optionTokens).toEqual(['a', 'b'])
+  })
+
+  // Bullets carry no numbering to say the list goes on, and bridging the
+  // paragraph would merge findings into the choices below them.
+  it('shows no card for a loose bullet list with a paragraph between its choices', () => {
+    expect(
+      parseAgentQuestion(
+        'Which do you prefer?\n\n- Option A\n\nThis one is fast.\n\n- Option B\n\nThis one is safe.'
+      )
+    ).toBeNull()
+    expect(
+      parseAgentQuestion(
+        'Findings:\n\n- the cache is stale\n\nBoth need a fix eventually.\n\n- Clear the cache\n- Release the lock'
+      )
+    ).toBeNull()
+  })
+
+  it('does not join a paragraph across numbering that restarts or skips', () => {
+    // Restarts: the second list is a new one under prose that asks nothing.
+    expect(
+      parseAgentQuestion(
+        'Findings:\n\n1. the cache is stale\n\nThat is the root cause.\n\n1. Clear the cache\n2. Release the lock'
+      )
+    ).toBeNull()
+    // Skips a number.
+    expect(
+      parseAgentQuestion('Which?\n\n1. Option A\n\nThis one is fast.\n\n3. Option C')
+    ).toBeNull()
+  })
+
+  it('does not join a paragraph run straight into the next choice', () => {
+    // No blank line between the paragraph and the next item: not a loose list.
+    expect(parseAgentQuestion('Which?\n\n1. Option A\n\nThis one is fast.\n2. Option B')).toBeNull()
+  })
+
+  it('shows no card when a line that asks separates two numbered lists', () => {
+    // The numbering goes on, but the second question makes it a second list.
+    expect(
+      parseAgentQuestion(
+        'Which database?\n1. Postgres\n2. SQLite\n\nWhich ORM?\n\n3. Prisma\n4. Drizzle'
+      )
+    ).toBeNull()
+    // A line that asks ends the first list even with no blank line before it.
+    expect(
+      parseAgentQuestion(
+        'Which database?\n1. Postgres\n2. SQLite\nWhich ORM?\n3. Prisma\n4. Drizzle'
+      )
+    ).toBeNull()
+  })
+
+  it('takes a line that asks directly under the findings as the question, not a wrapped finding', () => {
+    const numbered = parseAgentQuestion('- finding a\n- finding b\nWhich should I fix?\n1. a\n2. b')
+    expect(numbered?.question).toBe('Which should I fix?')
+    expect(numbered?.options).toEqual(['a', 'b'])
+    expect(numbered?.optionTokens).toEqual(['1', '2'])
+    const bullets = parseAgentQuestion('- finding a\n- finding b\nWhich should I fix?\n- a\n- b')
+    expect(bullets?.question).toBe('Which should I fix?')
+    expect(bullets?.options).toEqual(['a', 'b'])
+  })
+
+  it('keeps a single wrapped choice under a line that asks or introduces', () => {
+    const asks = parseAgentQuestion('Apply the fix?\n1. Yes, apply it\nand restart the server')
+    expect(asks?.question).toBe('Apply the fix?')
+    expect(asks?.options).toEqual(['Yes, apply it'])
+    const introduces = parseAgentQuestion(
+      'Next step:\n- Restart the server\nonce the build is done'
+    )
+    expect(introduces?.question).toBe('Next step')
+    expect(introduces?.options).toEqual(['Restart the server'])
+  })
+
+  it('keeps a single wrapped choice under a question after the findings', () => {
+    const q = parseAgentQuestion(
+      'Findings so far:\n- the cache is stale\n\nApply the fix?\n1. Yes, clear the cache\nand restart'
+    )
+    expect(q?.question).toBe('Apply the fix?')
+    expect(q?.options).toEqual(['Yes, clear the cache'])
+  })
+
+  // The cost of reading a wrap: prose run straight on from a bullet with no
+  // blank line is part of that bullet, as markdown draws it, so it cannot
+  // introduce a second list of the same kind. The text cannot tell a wrapped
+  // choice from an intro that neither asks nor ends in a colon.
+  it('reads prose run straight on from a bullet as part of it, as markdown draws it', () => {
+    const q = parseAgentQuestion('- a\n- b\nNow the choices\n- c\n- d')
+    expect(q?.question).toBe('Choose an option')
+    expect(q?.options).toEqual(['a', 'b', 'c', 'd'])
+    // An intro that ends in a colon still starts a list of its own.
+    expect(parseAgentQuestion('- a\n- b\nNow the choices:\n- c\n- d')).toBeNull()
+  })
+
+  it('keeps a wrap on the very last line of the reply', () => {
+    const q = parseAgentQuestion('Which branch?\n- main\n- develop, which is\nwrapped')
+    expect(q?.options).toEqual(['main', 'develop, which is'])
+  })
+
+  it('shows no card for a lone wrapped bullet or wrapped prose', () => {
+    expect(parseAgentQuestion('Done.\n- one stray bullet\nwrapped at col 0')).toBeNull()
+    expect(parseAgentQuestion('I wrapped this line\nat column 0 with no list.')).toBeNull()
+    expect(parseAgentQuestion('')).toBeNull()
+  })
+
+  it('reads a multi-select hint from the chosen list, not a wrapped finding above it', () => {
+    const findingHint = parseAgentQuestion(
+      'Checked one or more caches:\n- a is stale and was\nwrapped\n\nWhich cache should I clear?\n1. a\n2. b'
+    )
+    expect(findingHint?.options).toEqual(['a', 'b'])
+    expect(findingHint?.multiSelect).toBe(false)
+    const questionHint = parseAgentQuestion(
+      'Findings:\n- x\n\nSelect all that apply?\n1. Clear the cache and\nrestart\n2. Release the lock'
+    )
+    expect(questionHint?.options).toEqual(['Clear the cache and', 'Release the lock'])
+    expect(questionHint?.multiSelect).toBe(true)
+  })
+
+  // Representative markdown, not captures: the parser reads the hook's
+  // lastAssistantMessage, and agent CLIs may not be run from this shell.
+  it('offers the choices of a Claude-shaped reply that hard-wraps them', () => {
+    const text = [
+      'I found two ways to fix the flaky upload test.',
+      '',
+      'Which should I do?',
+      '',
+      '1. **Retry the upload** — wrap the call in the existing retry helper so a',
+      'transient 503 no longer fails the run',
+      '2. **Mock the storage client** — faster, but the test stops covering the',
+      'real network path',
+      ''
+    ].join('\n')
+    const q = parseAgentQuestion(text)
+    expect(q?.question).toBe('Which should I do?')
+    expect(q?.optionTokens).toEqual(['1', '2'])
+    expect(q?.options).toEqual([
+      '**Retry the upload** — wrap the call in the existing retry helper so a',
+      '**Mock the storage client** — faster, but the test stops covering the'
+    ])
+  })
+
+  it('offers the choices of a Codex-shaped reply that hard-wraps them', () => {
+    const text = [
+      'Summary:',
+      '- `upload.test.ts` fails about 1 in 20 runs on CI',
+      '- the failure is a 503 from the storage emulator',
+      '',
+      'Which way do you want to go?',
+      '- Retry the upload in the test helper so a transient 503 does not fail',
+      'the run',
+      '- Quarantine the test until the emulator is fixed'
+    ].join('\n')
+    const q = parseAgentQuestion(text)
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual([
+      'Retry the upload in the test helper so a transient 503 does not fail',
+      'Quarantine the test until the emulator is fixed'
+    ])
+    expect(formatQuestionAnswerByIndexes(q!, [1])).toBe(
+      'Quarantine the test until the emulator is fixed'
+    )
   })
 })
 

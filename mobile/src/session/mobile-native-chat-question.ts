@@ -80,43 +80,117 @@ type OptionList = {
   items: ParsedOption[]
 }
 
+type OpenList = {
+  list: OptionList
+  kind: number
+  indent: number
+  /** The last item's marker ("2", "b"), or null for a bullet. */
+  token: string | null
+  /** A paragraph after the last item that may sit inside a loose list, and
+   *  whether a blank line has followed it; null when there is none. */
+  paragraph: { blankAfter: boolean } | null
+}
+
+// Question-like introducing line: ends in ? or :.
+const QUESTION_LINE = /[?:]\s*$/
+
+/** Whether `next` is the marker after `previous`: 1 then 2, a then b. A bullet
+ *  has no marker, so nothing says a bullet list goes on past a paragraph. */
+function isNextMarker(previous: string | null, next: string | null): boolean {
+  if (previous == null || next == null) {
+    return false
+  }
+  if (/^\d+$/.test(previous) && /^\d+$/.test(next)) {
+    return Number(next) === Number(previous) + 1
+  }
+  return (
+    /^[a-z]$/i.test(previous) &&
+    /^[a-z]$/i.test(next) &&
+    next.charCodeAt(0) === previous.charCodeAt(0) + 1
+  )
+}
+
+/** Whether `option` resumes the loose list `open` after a paragraph. */
+function resumesAfterParagraph(
+  open: OpenList,
+  option: ParsedOption & { kind: number },
+  indent: number
+): boolean {
+  return (
+    open.paragraph?.blankAfter === true &&
+    option.kind === open.kind &&
+    indent === open.indent &&
+    isNextMarker(open.token, option.token)
+  )
+}
+
 /**
  * The reply's lists, in order. One list is a run of items of one marker kind
  * at one indent; blank lines do not end it, and a deeper line (a sub-bullet, a
- * wrapped description) belongs to the item above it. Prose at the list's own
- * indent, or an item of another kind, ends it.
+ * wrapped description) belongs to the item above it. So does a line at the
+ * list's own indent directly under the item with no blank line between (a
+ * hard wrap to column 0, CommonMark's lazy continuation). A paragraph set off
+ * by blank lines between two numbered or lettered items is part of a loose
+ * list when the numbering goes on after it. A line that asks (`?` or `:`),
+ * any other prose, or an item of another kind ends the list.
  */
 function collectOptionLists(lines: readonly string[]): OptionList[] {
   const lists: OptionList[] = []
-  let current: { list: OptionList; kind: number; indent: number } | null = null
+  let current: OpenList | null = null
   lines.forEach((line, index) => {
     if (line.trim().length === 0) {
+      if (current?.paragraph) {
+        current.paragraph.blankAfter = true
+      }
       return
     }
     const indent = lineIndent(line)
+    const option = parseOptionLine(line)
+    if (current?.paragraph) {
+      if (!option && !QUESTION_LINE.test(line)) {
+        current.paragraph.blankAfter = false
+        return
+      }
+      if (option && resumesAfterParagraph(current, option, indent)) {
+        current.paragraph = null
+      } else {
+        current = null
+      }
+    }
     if (current && indent > current.indent) {
       current.list.end = index
       return
     }
-    const option = parseOptionLine(line)
     if (option && current && option.kind === current.kind) {
       current.list.items.push(option)
       current.list.end = index
+      current.token = option.token
       return
     }
     if (!option) {
-      current = null
+      if (!current || QUESTION_LINE.test(line)) {
+        current = null
+      } else if (current.list.end === index - 1) {
+        current.list.end = index
+      } else {
+        current.paragraph = { blankAfter: false }
+      }
       return
     }
-    current = { list: { start: index, end: index, items: [option] }, kind: option.kind, indent }
-    lists.push(current.list)
+    const list = { start: index, end: index, items: [option] }
+    current = { list, kind: option.kind, indent, token: option.token, paragraph: null }
+    lists.push(list)
   })
   return lists
 }
 
 /** The nearest non-blank line above `list`, or -1 when there is none or it
  *  belongs to the list before it. */
-function introIndex(lines: readonly string[], list: OptionList, previous: OptionList | null): number {
+function introIndex(
+  lines: readonly string[],
+  list: OptionList,
+  previous: OptionList | null
+): number {
   let index = list.start - 1
   while (index >= 0 && lines[index].trim().length === 0) {
     index--
@@ -128,9 +202,6 @@ const ASKS = /\?\s*$/
 
 const MULTI_SELECT_HINT =
   /\b(select all|choose all|choose multiple|select multiple|pick multiple|all that apply|one or more|comma[- ]separated|multiple options)\b/i
-
-// Question-like introducing line: ends in ? or :.
-const QUESTION_LINE = /[?:]\s*$/
 
 // Drop a trailing ":" off a card title but keep a meaningful "?".
 function cleanQuestionText(raw: string): string {
@@ -174,7 +245,9 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
     }
     const asksEarlier = lists
       .slice(0, -1)
-      .some((earlier, i) => ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null)] ?? ''))
+      .some((earlier, i) =>
+        ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null)] ?? '')
+      )
     if (asksEarlier) {
       return null
     }
