@@ -100,6 +100,38 @@ describe('what the task readers read through a stand-in', () => {
     expect(readAll([row({ workingMode: undefined, toolName: 'Read' }), idle], [], null)).toBe(idle)
   })
 
+  // Orca 1.4.217 (#22452, #22476): a cancelled Stop beside a running shell publishes a row that stays
+  // `working`/`monitoring` with NO turn stamp (a cancelled turn earns none), and says on the row that
+  // the lead itself is done: `mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt }`
+  // (the shape agent-hook-listener-claude-turn-state.test.ts pins for the vendored listener).
+  describe('a lead the row itself says is done while its work runs', () => {
+    const leadDone = (outcome?: 'cancellation') => ({
+      mainAgent: { state: 'done' as const, ...(outcome ? { outcome } : {}), stateStartedAt: 2_050 }
+    })
+
+    it('reads the row through a done stand-in after a cancel, though Orca stamped no turn end', () => {
+      const cancelled = row(leadDone('cancellation'))
+      expect(readAll([cancelled, standIn()], [], null)).toBe(cancelled)
+    })
+
+    it('reads the row through a done stand-in when the lead is done and the stamp is absent', () => {
+      const settled = row(leadDone())
+      expect(readAll([settled, standIn()], [], null)).toBe(settled)
+    })
+
+    it('still reads a lead that is at work as a tool row, not what outlived the turn', () => {
+      const idle = standIn()
+      const working = row({ mainAgent: { state: 'working', stateStartedAt: 2_050 } })
+      expect(readAll([working, idle], [], null)).toBe(idle)
+    })
+
+    it('does not keep a row that says everything is done', () => {
+      const idle = standIn()
+      const finished = row({ state: 'done', workingMode: undefined, ...leadDone() })
+      expect(readAll([finished, idle], [], null)).toBe(idle)
+    })
+  })
+
   it('reads the row through a working stand-in with no turn end: the lead is still at it', () => {
     const last = row({ workingMode: undefined })
     expect(readAll([last, standIn({ state: 'working' })], [], null)).toBe(last)

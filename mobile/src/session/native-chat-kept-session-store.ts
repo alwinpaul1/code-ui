@@ -37,6 +37,7 @@ export type NativeChatTabStatus = {
   state?: string | null
   workingMode?: string | null
   sessionBoundary?: boolean | null
+  mainAgent?: { state?: string | null } | null
   updatedAt?: number | null
   providerSession?: { id?: string | null; transcriptPath?: string | null } | null
   prompt?: string | null
@@ -138,7 +139,8 @@ export function useNativeChatTabStatusReading(
     namesItsTranscript(agent) && statusId
       ? statusTurn(status?.state, status?.workingMode, status?.sessionBoundary, {
           turnCompletedAt,
-          titleStandIn: status ? isTitleStandIn(status) : false
+          titleStandIn: status ? isTitleStandIn(status) : false,
+          leadDone: status?.mainAgent?.state === 'done'
         })
       : null
   // A /clear keeps the background tasks (Claude Code 2.1.284), so the session

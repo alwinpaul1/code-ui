@@ -319,15 +319,14 @@ Items marked "device" need a phone, "Codex" a live Codex 0.158 tab.
   (`renewRuntimeMobileAgentStatusFromPtyTitle`) is byte-equal v1.4.211..v1.4.217, so the phone's stand-in
   logic (`agent-status-stand-in.ts`) is unchanged. New on the row: `mainAgent` (#22452, #22475, #22476),
   the lead's own state, outcome and clock beside the folded `state`, and `stateObservedAt`.
-  `sessionBoundary` is unchanged. `turnCompletedAt` is now read off the lead record rather than the Stop
-  event alone, is stamped when a settled lead is held open by a waiting child too, and is still not
-  stamped for a cancelled turn. All of it is additive and passes through `mobile-terminal-records.ts`
-  untouched (a JSON compare); the phone reads none of it yet. `mainAgent` is the field that would replace
+  `sessionBoundary` is unchanged, and so is when Claude stamps `turnCompletedAt`: only on a lead Stop that running child work holds open (`resolveClaudePaneStatus` hard-codes `hasWaitingChildWork: false`, so a waiting child adds no case), still none for a cancelled turn. What changed is the cancel: it no longer retires the shell and cron gates, and Orca infers a cancel while child work runs, so a Stop with a background shell running now leaves the row `working`/`monitoring` with no stamp and `mainAgent {done, cancellation}`. The stand-in rule needed the stamp, so the task readers dropped that shell under a title stand-in's `done`. **Fixed on the phone:** a held row whose `mainAgent` is done while the row is not now stands through the stand-in (`agent-status-stand-in.ts`), and `statusTurn` reads such a `working` row as background work (`native-chat-kept-session-state.ts`); both fail on the previous code, and older hosts (no `mainAgent`) keep the stamp rule. Otherwise the fields are additive and pass through `mobile-terminal-records.ts`
+  untouched (a JSON compare). `mainAgent` is read for the cancel case above; reading it more widely would replace
   the phone's own "lead finished, work runs on" inference. The roster rows (`AgentSubagentSnapshot`)
   did not change, and **no `workflowPhase` or workflow id exists on any v1.4.217 roster row** (a search of
   `src/shared` and every changed line finds none; the only workflow change in the range is Pi's, #22533).
   Child-work records (#22521) are host-internal; the legacy subagent and background-task shapes derived
   from them are, per the commit, unchanged for today's inputs.
+- **Model options.** A live structured chat on the CLI's default model now shows the listing's `defaultEffort` (`valueSource: 'default'`) where it was unknown before (the range's change to `native-chat-session-option-snapshot.ts`, merged by hand in the re-vendor; the phone draws whatever the snapshot says).
 - **Transcript reader.** No change to `queued_command` attachments, tool rows or Codex
   `sub_agent_activity` in the range; the only reader change is a shared in-flight read cache (#23172,
   #22982).

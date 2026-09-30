@@ -66,14 +66,19 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 //   `buildPtyMobileAgentStatus`, is a `done` with the stand-in's exact shape).
 //
 // Orca 1.4.217 (checked against the v1.4.217 source, 2026-09-30) leaves the stand-in alone: the
-// title projection is byte-equal to v1.4.216's and copies no `mainAgent`. What changed is the row
-// beside it. Every Claude hook row now carries `mainAgent: {state, outcome?, stateStartedAt}`
-// (#22452), the lead's own state before child work is folded into `state`, and reads
-// `turnCompletedAt` off that lead record rather than off the Stop event alone, so a child's
-// lifecycle row built while the record still holds the stamp carries it too. A cancelled turn
-// still earns none (#22476), and a settled lead held open by a WAITING child is stamped as well
-// as one held by working children. This file reads none of that yet: it keeps the rules above,
-// which stay right for the older hosts it also serves, and `mainAgent` is the field to read next.
+// title projection is byte-equal to v1.4.216's and copies no `mainAgent`. The stamp is unchanged
+// too: Claude still stamps `turnCompletedAt` only on a lead Stop that a running subagent or shell
+// holds open (`resolveClaudePaneStatus` hard-codes `hasWaitingChildWork: false`, so a waiting child
+// never adds a case), and a child's lifecycle row carried it before as well. What changed is a
+// CANCEL (#22476, #22452): it no longer retires the shell and cron gates
+// (`updateClaudeRunningNonAgentTask` lost its `interrupted` argument, `markClaudeLeadTurnInterrupted`
+// deletes nothing), and Orca infers a cancel while child work runs. A Stop with a background
+// shell running now leaves the row `working`/`monitoring` with NO stamp, and says the lead is done
+// on the row itself: `mainAgent: {state: 'done', outcome: 'cancellation', stateStartedAt}`. Under a
+// title stand-in's `done` the rule above needed the stamp, so the task readers dropped that shell.
+// The held row's `mainAgent` closes it: a lead the row says is done while the row is not is Orca's
+// word that work outlived the turn, cancelled or not (`leadDoneWhileWorkRuns`). Older hosts publish
+// no `mainAgent` and keep the stamp rule alone.
 //
 // Every change to background work fires a hook (a launch is a tool call, an
 // agent's end is SubagentStop, a shell's end starts a turn), and a hook row
@@ -177,8 +182,14 @@ function rowStandsThrough(row: Status, standIn: Status, turnCompletedAt: number 
     COPIED_IDENTITY.some((key) => copied[key] !== undefined) &&
     row.agentType === standIn.agentType &&
     (row.providerSession?.id ?? null) === (standIn.providerSession?.id ?? null) &&
-    (standIn.state !== 'done' || turnCompletedAt !== null)
+    (standIn.state !== 'done' || turnCompletedAt !== null || leadDoneWhileWorkRuns(row))
   )
+}
+
+/** Orca 1.4.217 (#22452): the row itself says the lead is done while the row is not, so child work
+ *  holds it open. Unlike the turn stamp it survives a cancel, which earns none. */
+function leadDoneWhileWorkRuns(row: Status): boolean {
+  return row.mainAgent?.state === 'done' && row.state !== 'done'
 }
 
 /**
