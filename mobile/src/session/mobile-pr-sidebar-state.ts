@@ -1,6 +1,7 @@
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
+import { isRecoverableRemoteRuntimeConnectionError } from '../../../src/shared/remote-runtime-client-error-classification'
 import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
 import { resolveLinkedPrNumber } from './mobile-pr-sidebar-resolve'
 
@@ -35,7 +36,26 @@ export type PrSidebarState =
 const PERMANENT_FAILURE_PATTERN =
   /\b(not connected|no github|unauthenticated|not authenticated|gh auth|login|permission|forbidden|insufficient|401|403|404)\b/i
 
+// The link, not GitHub, checked first because it says the same words. The phone's transport
+// refuses a send with `Not connected: <method>` (rpc-client-request-tracker.ts and
+// mobile-relay-rpc-session.ts) or `relay session not connected` (mobile-relay-rpc-session.ts), and
+// the desktop reports its remote runtime's drop in words the shared classifier lists as
+// recoverable ("Remote Orca runtime is not connected."). Each comes back with the connection, so it
+// is `error`: `blocked` has no Retry, reads as "your GitHub account is not connected", and is not
+// what the reconnect refetch keys on (review round 2, 2026-09-30).
+const CONNECTION_FAILURE_PATTERN = /^Not connected: \S+$|^relay session not connected$/
+
+function isConnectionFailure(message: string): boolean {
+  return (
+    CONNECTION_FAILURE_PATTERN.test(message) ||
+    isRecoverableRemoteRuntimeConnectionError({ message })
+  )
+}
+
 export function classifyPrSidebarFailure(message: string): 'blocked' | 'error' {
+  if (isConnectionFailure(message)) {
+    return 'error'
+  }
   return PERMANENT_FAILURE_PATTERN.test(message) ? 'blocked' : 'error'
 }
 

@@ -173,6 +173,22 @@ describe('Diff Review PR sidebar after the host reconnects', () => {
     expect(prState.kind).toBe('ready')
   })
 
+  it('reloads a PR read the transport refused while the socket was down once the host reconnects', async () => {
+    // The transport's own words (rpc-client-request-tracker.ts). They classified as `blocked`, the
+    // GitHub-account state, which is not what the reconnect refetch keys on.
+    doubles.fetchPRForBranch
+      .mockResolvedValueOnce({ ok: false, error: 'Not connected: github.prForBranch' })
+      .mockResolvedValue({ ok: true, result: PR })
+    await openFailedSidebar()
+    expect(prState.kind).toBe('error')
+
+    await connection('reconnecting', 1)
+    await connection('connected', 2)
+
+    expect(doubles.fetchPRForBranch).toHaveBeenCalledTimes(2)
+    expect(prState.kind).toBe('ready')
+  })
+
   it('asks once per new connection, never per render, and not while the host stays down', async () => {
     doubles.fetchPRForBranch.mockResolvedValue({ ok: false, error: 'closed' })
     await openFailedSidebar()
