@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
 import { parseAgentHudBeaconPayload, type DesktopPrompt } from './agent-hud-beacon'
-import { readDesktopPrompt } from './agent-hud-beacon-desktop-prompt'
+import { readDesktopPrompt, unescapeJsonStringBody } from './agent-hud-beacon-desktop-prompt'
 import { decodeAgentHudChannelText } from './agent-hud-channel'
 import { withoutLandedDesktopPrompts } from './use-desktop-prompt-echoes'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -90,5 +90,25 @@ describe('a long desk prompt the hook had to cut', () => {
     expect(whole).toMatchObject({ cut: false, text: 'y'.repeat(2000) })
     const over = deskCopy('y'.repeat(2001))
     expect(over).toMatchObject({ cut: true, text: 'y'.repeat(2000) })
+  })
+})
+
+
+// Same review: the reader turned JSON's \b and \f into the letters b and f,
+// so the copy differed from its transcript row, which keeps the characters:
+// 'bs\b ff\f' read 'bsb fff' and never retired. (It also drops \r; a CRLF
+// copy retires all the same, and why a lone CR is still dropped is beside
+// unescapeJsonStringBody.)
+describe('control characters in a desk prompt', () => {
+  it('reads \\b and \\f as the characters JSON says they are', () => {
+    expect(unescapeJsonStringBody(JSON.stringify('x\by\fz').slice(1, -1))).toBe('x\by\fz')
+    expect(deskCopy('bs\b ff\f').text).toBe('bs\b ff\f')
+    expect(deskCopy('\b').text).toBe('\b')
+  })
+
+  it('retires a copy with a backspace, a form feed or a CRLF line end against its row', () => {
+    for (const typed of ['bs\b ff\f', 'crlf\r\nnext']) {
+      expect(withoutLandedDesktopPrompts([deskCopy(typed)], [row(typed)])).toEqual([])
+    }
   })
 })

@@ -101,7 +101,19 @@ export function unescapeJsonStringBody(body: string): string {
     } else if (next === 't') {
       out += '\t'
     } else if (next === 'r') {
+      // Dropped. A CRLF copy still retires, since the retire key folds the
+      // line end as whitespace on both sides (`landedKey`); a lone CR does
+      // not. Keeping it is left to a change that also rebuilds the stored
+      // copy mobile-native-chat-remember-echo.test.ts makes with this
+      // function, which asserts the CR is gone (isCutAtHookLength allows
+      // for it with CRLF_ALLOWANCE_BYTES, and would size a kept one exactly).
       out += ''
+    } else if (next === 'b') {
+      // The characters JSON means, not the letters: the row keeps them, and
+      // the retire key strips them on both sides (review of 2026-09-30).
+      out += '\b'
+    } else if (next === 'f') {
+      out += '\f'
     } else if (next === 'u') {
       const hex = body.slice(i + 1, i + 5)
       if (/^[0-9a-fA-F]{4}$/.test(hex)) {
