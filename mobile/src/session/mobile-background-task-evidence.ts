@@ -31,10 +31,19 @@ export type PendingAgentCall = {
   subagentType: string | null
 }
 
+/** A background shell the window shows launched, by the label its completion
+ *  row will quote (`Launch.label`: the Bash `description`, else the command,
+ *  whitespace folded). */
+export type LabelledShellLaunch = { id: string; label: string }
+
 export type WindowTaskEvidence = {
   /** Agents the lead launched (`agentId:` in an Agent result) or messaged
    *  (SendMessage `to`, which resumes one that had finished). */
   ownAgentIds: string[]
+  /** Labelled shell launches, oldest first, one per id: what a completion row
+   *  read off the screen can name (`mobile-screen-completion-memory.ts`). A
+   *  monitor quotes no label and is not here. */
+  shellLaunches: LabelledShellLaunch[]
   /** Ids the window shows ending: a notification, or a TaskStop, which no
    *  notification follows. */
   retiredTaskIds: string[]
@@ -62,6 +71,7 @@ type Pending = PendingCall & { key: string }
 export function readTaskEvidence(messages: readonly NativeChatMessage[]): WindowTaskEvidence {
   const pending: Pending[] = []
   const ownAgentIds: string[] = []
+  const shellLaunches: LabelledShellLaunch[] = []
   const retiredTaskIds: string[] = []
   let oldestAt: number | null = null
   for (const message of messages) {
@@ -87,6 +97,9 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
         if (launched) {
           ownAgentIds.push(launched)
         }
+        if (launch?.kind === 'shell' && launch.label !== null && !shellLaunches.some((known) => known.id === launch.id)) {
+          shellLaunches.push({ id: launch.id, label: launch.label })
+        }
       } else if (isTextBlock(block)) {
         text += block.text
       }
@@ -105,5 +118,5 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
   const pendingAgentCalls = pending
     .filter((call) => call.name === 'Agent' && Reflect.get(Object(call.input), 'run_in_background') !== true)
     .map((call) => ({ key: call.key, at: call.startedAt, subagentType: readString(call.input, 'subagent_type') }))
-  return { ownAgentIds, retiredTaskIds, pendingAgentCalls, oldestAt }
+  return { ownAgentIds, shellLaunches, retiredTaskIds, pendingAgentCalls, oldestAt }
 }

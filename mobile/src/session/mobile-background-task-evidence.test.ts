@@ -49,6 +49,6 @@ describe('the agents a window proves the lead launched', () => {
   })
 
   it('reads nothing from an empty window, and no oldest time', () => {
-    expect(readTaskEvidence([])).toEqual({ ownAgentIds: [], retiredTaskIds: [], pendingAgentCalls: [], oldestAt: null })
+    expect(readTaskEvidence([])).toEqual({ ownAgentIds: [], shellLaunches: [], retiredTaskIds: [], pendingAgentCalls: [], oldestAt: null })
   })
 })
