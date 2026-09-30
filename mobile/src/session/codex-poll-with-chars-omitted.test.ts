@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { codexExecRole, createCodexPollFolder } from './codex-stdin-poll'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { CODE_MODE_POLL, CODE_MODE_START } from './fixtures/codex-code-mode-exec-cells-0.153.4'
 
 // A polled `npm test` still read "Ran N commands" when the model polled with just
 // {session_id, yield_time_ms}: only `chars: ""` counted as a poll (review, 2026-09-30). Codex
@@ -110,5 +111,88 @@ describe('a Codex write_stdin that types input stays a command of its own', () =
     expect(codexExecRole('write_stdin', 'not json')).toBeNull()
     expect(codexExecRole('write_stdin', '[]')).toBeNull()
     expect(codexExecRole('write_stdin', null)).toBeNull()
+  })
+})
+
+// The code-mode cell reader matched the argument object as `{[^{}]*}`, so a
+// brace anywhere in it (an awk program, a JSON body, a nested object) made
+// the cell unreadable, and it looked for `chars:` and `session_id:` anywhere
+// in the text, inside a string included (review, 2026-09-30).
+describe('a code-mode cell with braces or nesting in its arguments', () => {
+  const cell = (tool: string, args: string): string => `text(await tools.${tool}({${args}}));`
+
+  it('reads an exec_command whose cmd or arguments hold braces as a start', () => {
+    for (const args of [
+      `cmd: "awk '{print $1}' big.log | sort"`,
+      'cmd: "echo ${HOME}"',
+      `cmd: "curl -d '{\\"a\\":1}' localhost"`,
+      'cmd: "npm test", env: {CI: "1", nested: {deep: [1, {x: 2}]}}',
+      "cmd: 'it\\'s {fine}'"
+    ]) {
+      expect(codexExecRole('exec', `${cell('exec_command', args)}\n`)).toEqual({ role: 'start' })
+    }
+  })
+
+  it('reads chars and session_id from the top level of the object only', () => {
+    // A chars inside a string or a nested object is not the call's own, so it
+    // does not make a poll typed input.
+    expect(
+      codexExecRole('exec', cell('write_stdin', 'session_id: 7, note: "type chars: \\"y\\" later"'))
+    ).toEqual({ role: 'poll', session: 7 })
+    expect(codexExecRole('exec', cell('write_stdin', 'meta: {chars: "y"}, session_id: 7'))).toEqual({
+      role: 'poll',
+      session: 7
+    })
+    // Nor is a session id inside a string or a nested object the call's own.
+    expect(
+      codexExecRole('exec', cell('write_stdin', 'note: "x session_id: 9, y", session_id: 7'))
+    ).toEqual({ role: 'poll', session: 7 })
+    expect(codexExecRole('exec', cell('write_stdin', 'meta: {session_id: 9}'))).toEqual({
+      role: 'poll',
+      session: null
+    })
+    // The call's own chars still decides: real input is no poll, '' is one.
+    expect(
+      codexExecRole('exec', cell('write_stdin', 'meta: {chars: ""}, session_id: 7, chars: "y"'))
+    ).toBeNull()
+    expect(codexExecRole('exec', cell('write_stdin', "session_id: 7, chars: ''"))).toEqual({
+      role: 'poll',
+      session: 7
+    })
+  })
+
+  it('reads nothing from a cell it cannot read whole', () => {
+    // An unterminated string, and a brace left open.
+    expect(codexExecRole('exec', `text(await tools.exec_command({cmd: "awk '{print $1}));`)).toBeNull()
+    expect(codexExecRole('exec', 'text(await tools.exec_command({cmd: "a", env: {CI: "1"}));')).toBeNull()
+    // Two calls in one cell.
+    expect(
+      codexExecRole('exec', `${cell('exec_command', 'cmd: "a"')} ${cell('exec_command', 'cmd: "b"')}`)
+    ).toBeNull()
+    expect(
+      codexExecRole('exec', `${cell('exec_command', 'cmd: "{a}"')}\n${cell('write_stdin', 'session_id: 1')}`)
+    ).toBeNull()
+    // A second argument, or the wrapper left open.
+    expect(codexExecRole('exec', 'text(await tools.exec_command({cmd: "a"}, {x: 1}));')).toBeNull()
+    expect(codexExecRole('exec', 'text(await tools.exec_command({cmd: "a"});')).toBeNull()
+    // A template literal that interpolates is code the reader does not run.
+    expect(codexExecRole('exec', cell('exec_command', 'cmd: `echo ${dir}`'))).toBeNull()
+    // A comment could hide anything.
+    expect(codexExecRole('exec', cell('exec_command', 'cmd: "a" /* } */'))).toBeNull()
+    // Keys that are not written out leave chars unknown: no poll.
+    expect(codexExecRole('exec', cell('write_stdin', 'session_id: 7, chars'))).toBeNull()
+    expect(codexExecRole('exec', cell('write_stdin', 'session_id: 7, ...opts'))).toBeNull()
+    // Empty and blank cells.
+    expect(codexExecRole('exec', '')).toBeNull()
+    expect(codexExecRole('exec', '   \n')).toBeNull()
+  })
+
+  it('still reads the cells Codex 0.153.4 wrote, and a bare awaited call', () => {
+    expect(codexExecRole('exec', CODE_MODE_START)).toEqual({ role: 'start' })
+    expect(codexExecRole('exec', CODE_MODE_POLL(1000))).toEqual({ role: 'poll', session: 68964 })
+    expect(codexExecRole('exec', 'await tools.write_stdin({session_id: 3})')).toEqual({
+      role: 'poll',
+      session: 3
+    })
   })
 })

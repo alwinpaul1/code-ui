@@ -16,7 +16,10 @@
 // - code mode (Codex 0.153.4, rollout of 2026-09-06): a custom `exec` cell
 //   whose input is source text calling `tools.exec_command({…})` or
 //   `tools.write_stdin({…})`. Only a cell that is exactly one such call is
-//   read; anything else says nothing, so it counts the way it always did.
+//   read (codex-code-mode-cell.ts); anything else says nothing, so it counts
+//   the way it always did.
+
+import { readCodeModeCall } from './codex-code-mode-cell'
 
 /** What one call is to the command count: the start of a unified-exec
  *  command, or a poll (empty or omitted `chars`) of the session `session` drives — null
@@ -43,26 +46,30 @@ function sessionId(value: unknown): number | null {
   return typeof value === 'number' && Number.isInteger(value) ? value : null
 }
 
-/** `text(await tools.<name>({…}));` and nothing else, as Codex writes a cell. */
-const CODE_MODE_CALL =
-  /^\s*(?:text\(\s*)?await\s+tools\.(exec_command|write_stdin)\(\s*\{([^{}]*)\}\s*\)\s*\)?\s*;?\s*$/
-
+/** A cell that is one `text(await tools.<name>({…}));` call, read by
+ *  codex-code-mode-cell.ts, which scans the object whole: a brace inside a
+ *  string or a nested object no longer hides the call. `chars` and
+ *  `session_id` are read from the object's top level only; a key inside a
+ *  string or a nested object is not the call's own. */
 function codeModeRole(source: string): CodexExecRole {
-  const match = CODE_MODE_CALL.exec(source)
-  if (!match) {
+  const call = readCodeModeCall(source)
+  if (!call) {
     return null
   }
-  if (match[1] === 'exec_command') {
+  if (call.tool === 'exec_command') {
     return { role: 'start' }
   }
-  const body = match[2] ?? ''
-  // No `chars` key is an empty write too; one that is there must be an empty string literal.
-  const hasChars = /(?:^|[{,\s])chars\s*:/.test(body)
-  if (hasChars && !/(?:^|[{,\s])chars\s*:\s*(?:""|'')\s*(?:,|$)/.test(body)) {
+  // A key that is not written out (a spread, a shorthand) may be `chars`.
+  if (!call.props) {
     return null
   }
-  const session = /(?:^|[{,\s])session_id\s*:\s*(\d+)\s*(?:,|$)/.exec(body)
-  return { role: 'poll', session: session ? Number(session[1]) : null }
+  // No `chars` key is an empty write too; one that is there must be an empty string literal.
+  const chars = call.props.get('chars')
+  if (chars !== undefined && chars !== '""' && chars !== "''") {
+    return null
+  }
+  const session = /^\d+$/.exec(call.props.get('session_id') ?? '')
+  return { role: 'poll', session: session ? Number(session[0]) : null }
 }
 
 export function codexExecRole(name: string, input: unknown): CodexExecRole {

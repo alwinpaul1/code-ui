@@ -8,6 +8,7 @@
 import { editFilesFromToolPair, isEditToolName } from '../../../src/shared/native-chat-edit-normalize'
 import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import { toolCallPath } from './tool-call-path-keys'
 
 export type ToolRunPair = {
   call: NativeChatToolCallBlock
@@ -18,18 +19,12 @@ export type ToolRunPair = {
  *  (`claudeEditFiles` in native-chat-edit-normalize.ts). */
 const UNNAMED_FILE = 'file'
 
-function ownPath(input: unknown): string | null {
-  const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : null
-  const path = record ? (record.file_path ?? record.path ?? record.filePath) : undefined
-  return typeof path === 'string' && path.trim().length > 0 ? path : null
-}
-
 /** The paths one edit-shaped call changed or, when it did not land (failed,
  *  still running, unanswered), the paths it set out to change: first what
  *  landed, then what its own input names, then a lone path field. Empty when
  *  nothing names a file, so two such calls are never taken for one file. */
 function editedPaths({ call, result }: ToolRunPair): string[] {
-  const own = ownPath(call.input)
+  const own = toolCallPath(call.input)
   const landed = editFilesForToolCall(call, result)
   const files =
     landed && landed.length > 0

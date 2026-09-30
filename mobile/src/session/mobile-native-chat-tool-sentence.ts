@@ -2,6 +2,7 @@ import { isToolCallBlock, isToolResultBlock, type NativeChatBlock } from '../../
 import { createCodexPollFolder } from './codex-stdin-poll'
 import { editedFileCount, soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
 import { toolCallKind, type ToolRunKind as Kind } from './mobile-native-chat-tool-kind'
+import { toolCallPath } from './tool-call-path-keys'
 
 export { toolCallKind }
 
@@ -41,9 +42,8 @@ function readFileName(block: NativeChatBlock): string | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
     return null
   }
-  const input = record(block.input)
-  const path = input ? (input.file_path ?? input.path ?? input.filePath) : undefined
-  if (typeof path !== 'string') {
+  const path = toolCallPath(block.input)
+  if (path === null) {
     return null
   }
   const name = path.split(/[/\\]/).pop()?.trim()
@@ -160,8 +160,8 @@ function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const indexByKind = new Map<Kind, number>()
   // Null for a call that counts as none: a Codex poll of a command already
   // counted, whose result is then no group's (codex-stdin-poll.ts). A poll's
-  // error is left to the run header's own "N failed" label, which a sentence
-  // that does not state it keeps drawn (toolRunSentenceShowsFailures).
+  // error is left to the run header's own "N failed" label: given the run's
+  // count, a sentence that counts fewer states none (buildSentence).
   const pending: ({ entry: Group; pair: ToolRunPair } | null)[] = []
   const foldsIntoCommand = createCodexPollFolder()
   for (const block of blocks) {
@@ -211,23 +211,36 @@ export function toolRunSentenceFailures(blocks: readonly NativeChatBlock[]): num
  *  (review of c714c9bc: counts at 230 and 69). */
 export const SENTENCE_FAILURE_VISIBLE_CHARS = 28
 
-/** Whether the run's sentence says every failure where the row surely shows
- *  it: it states at least `failedCallCount` failures, and its last
- *  "(N failed)" ends within SENTENCE_FAILURE_VISIBLE_CHARS. When not, the run
- *  header draws its own "N failed" label, or a failed run would read as a
- *  clean one. The sentence counts error results; a call known to have failed
- *  only from its own `failed` state is in `failedCallCount` and not in the
- *  sentence, so a mixed run is not taken as said (review of c714c9bc). */
+/** Whether the run's sentence, given the run's own `failedCallCount`, says
+ *  every failure where the row surely shows it: it states `failedCallCount`
+ *  failures, and its last "(N failed)" ends within
+ *  SENTENCE_FAILURE_VISIBLE_CHARS. When not, the run header draws its own
+ *  "N failed" label, or a failed run would read as a clean one. The sentence
+ *  counts the error results it can give a group. A folded Codex poll's error
+ *  is no group's, and a call known to have failed only from its own `failed`
+ *  state has no error result, so both are in `failedCallCount` and not in the
+ *  sentence (review of c714c9bc). Such a sentence states no count at all, and
+ *  the label carries the total: "(1 failed)" beside "2 failed" was two
+ *  different counts for one run (review, 2026-09-30). */
 export function toolRunSentenceShowsFailures(
   blocks: readonly NativeChatBlock[],
   failedCallCount: number
 ): boolean {
-  const { failed, lastFailureEnd } = buildSentence(blocks)
-  return failed > 0 && failed >= failedCallCount && lastFailureEnd <= SENTENCE_FAILURE_VISIBLE_CHARS
+  // Given the count, a sentence states all of the run's failures or none.
+  const { failed, lastFailureEnd } = buildSentence(blocks, failedCallCount)
+  return failed > 0 && lastFailureEnd <= SENTENCE_FAILURE_VISIBLE_CHARS
 }
 
-export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
-  return buildSentence(blocks).text
+/** The run's sentence. With the run's own `failedCallCount` (the count the
+ *  header's label draws), a sentence that counts fewer failures than that
+ *  states none, so the row never shows two different counts. Without it,
+ *  every failure the sentence can count is stated, as one call's sheet title
+ *  reads it. */
+export function toolRunSentence(
+  blocks: readonly NativeChatBlock[],
+  failedCallCount?: number
+): string {
+  return buildSentence(blocks, failedCallCount).text
 }
 
 /** One stretch of the sentence. `recipient` marks a SendMessage's addressee,
@@ -235,12 +248,19 @@ export function toolRunSentence(blocks: readonly NativeChatBlock[]): string {
  *  where it ends and the preview begins (review of a91c04d1). */
 export type ToolRunSentenceSpan = { text: string; recipient?: true }
 
-/** The sentence as spans, in order; their texts join to `toolRunSentence`. */
-export function toolRunSentenceSpans(blocks: readonly NativeChatBlock[]): ToolRunSentenceSpan[] {
-  return buildSentence(blocks).spans
+/** The sentence as spans, in order; their texts join to `toolRunSentence`
+ *  given the same `failedCallCount`. */
+export function toolRunSentenceSpans(
+  blocks: readonly NativeChatBlock[],
+  failedCallCount?: number
+): ToolRunSentenceSpan[] {
+  return buildSentence(blocks, failedCallCount).spans
 }
 
-function buildSentence(blocks: readonly NativeChatBlock[]): {
+function buildSentence(
+  blocks: readonly NativeChatBlock[],
+  failedCallCount?: number
+): {
   text: string
   spans: ToolRunSentenceSpan[]
   /** Failures the sentence states, summed over its groups. */
@@ -249,6 +269,10 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
   lastFailureEnd: number
 } {
   const groups = runGroups(blocks)
+  // A count short of the run's own would sit beside the header's label as a
+  // second, different number, so the sentence then states none.
+  const counted = groups.reduce((sum, entry) => sum + entry.failed, 0)
+  const statesFailures = failedCallCount === undefined || counted >= failedCallCount
   const spans: ToolRunSentenceSpan[] = []
   let failedTotal = 0
   let lastFailureEnd = 0
@@ -268,7 +292,8 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
     }
   }
   for (const entry of groups) {
-    const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''
+    const stated = statesFailures ? entry.failed : 0
+    const failed = stated > 0 ? ` (${stated} failed)` : ''
     const sole = entry.pairs.length === 1 ? entry.pairs[0]! : null
     if (entry.kind === 'message' && sole) {
       const detail = sendMessageDetail(sole.call)
@@ -276,13 +301,13 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
         const preview = detail.preview ? ` ${detail.preview}` : ''
         push(
           [{ text: 'messaged ' }, { text: detail.to, recipient: true }, { text: `${preview}${failed}` }],
-          entry.failed
+          stated
         )
         continue
       }
     }
     if (entry.kind === 'edit' && sole && soleCallCreatedFile(sole)) {
-      push([{ text: `created a file${failed}` }], entry.failed)
+      push([{ text: `created a file${failed}` }], stated)
       continue
     }
     const noun = NOUN[entry.kind]
@@ -294,7 +319,7 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
     // every other kind counts its calls.
     const count = entry.kind === 'edit' ? editedFileCount(entry.pairs) : entry.pairs.length
     const amount = count === 1 ? (label ?? noun.one) : noun.many.replace('#', String(count))
-    push([{ text: `${noun.verb} ${amount}${failed}` }], entry.failed)
+    push([{ text: `${noun.verb} ${amount}${failed}` }], stated)
   }
   if (spans.length === 0) {
     return { text: '', spans: [], failed: 0, lastFailureEnd: 0 }
