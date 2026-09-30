@@ -1,15 +1,27 @@
 import type { ListAndDetailEffectsModel } from './use-mobile-tasks-list-and-detail-effects'
-import { useEffect } from './mobile-tasks-dependencies'
+import { useEffect, useState } from './mobile-tasks-dependencies'
 import {
   githubAssignableUserListRead,
   githubRepoLabelListRead
 } from './mobile-task-item-detail-operations'
+import { useTaskReadAgainAfterReconnect } from './use-task-read-again-after-reconnect'
 
-export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffectsModel) {
+/**
+ * The open GitHub item's label and assignee pickers. Each list is its own read with its own stale
+ * guard, so a failed one is read again once per NEW connection of the host (`lastConnectedAt`,
+ * from MobileTasksScreen; null, the default, follows no connection) without reading the other,
+ * which loaded. Opening an item reads both, labels first, as they always were.
+ */
+export function useMobileTasksItemDetailMetadataEffects(
+  model: ListAndDetailEffectsModel,
+  lastConnectedAt: number | null = null
+) {
   const {
     actionItem,
     client,
     detailPayload,
+    itemAssignableUsersError,
+    itemLabelsError,
     setItemAssignableUsers,
     setItemAssignableUsersError,
     setItemAssignableUsersLoading,
@@ -19,6 +31,8 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     setItemLabelsLoading,
     tasksSupported
   } = model
+  const [labelReads, setLabelReads] = useState(0)
+  const [assigneeReads, setAssigneeReads] = useState(0)
   useEffect(() => {
     if (!detailPayload) {
       setItemBodyDraft('')
@@ -30,10 +44,48 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
   }, [detailPayload])
 
   useEffect(() => {
-    if (!tasksSupported || !client || actionItem?.provider !== 'github') {
+    if (
+      !tasksSupported ||
+      !client ||
+      actionItem?.provider !== 'github' ||
+      (actionItem.source.type !== 'issue' && actionItem.source.type !== 'pr')
+    ) {
       setItemAvailableLabels([])
       setItemLabelsLoading(false)
       setItemLabelsError('')
+      return
+    }
+
+    let stale = false
+    setItemAvailableLabels([])
+    setItemLabelsError('')
+    setItemLabelsLoading(true)
+    void githubRepoLabelListRead
+      .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
+      .then((response) => {
+        if (stale) {
+          return
+        }
+        setItemAvailableLabels(githubRepoLabelListRead.interpret(response))
+      })
+      .catch((err) => {
+        if (!stale) {
+          setItemLabelsError(err instanceof Error ? err.message : 'Failed to load labels')
+        }
+      })
+      .finally(() => {
+        if (!stale) {
+          setItemLabelsLoading(false)
+        }
+      })
+
+    return () => {
+      stale = true
+    }
+  }, [actionItem, client, tasksSupported, labelReads])
+
+  useEffect(() => {
+    if (!tasksSupported || !client || actionItem?.provider !== 'github') {
       setItemAssignableUsers([])
       setItemAssignableUsersLoading(false)
       setItemAssignableUsersError('')
@@ -41,34 +93,6 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     }
 
     let stale = false
-    if (actionItem.source.type === 'issue' || actionItem.source.type === 'pr') {
-      setItemAvailableLabels([])
-      setItemLabelsError('')
-      setItemLabelsLoading(true)
-      void githubRepoLabelListRead
-        .request(client, { repo: `id:${actionItem.source.repoId}` }, { timeoutMs: 30_000 })
-        .then((response) => {
-          if (stale) {
-            return
-          }
-          setItemAvailableLabels(githubRepoLabelListRead.interpret(response))
-        })
-        .catch((err) => {
-          if (!stale) {
-            setItemLabelsError(err instanceof Error ? err.message : 'Failed to load labels')
-          }
-        })
-        .finally(() => {
-          if (!stale) {
-            setItemLabelsLoading(false)
-          }
-        })
-    } else {
-      setItemAvailableLabels([])
-      setItemLabelsLoading(false)
-      setItemLabelsError('')
-    }
-
     setItemAssignableUsers([])
     setItemAssignableUsersError('')
     setItemAssignableUsersLoading(true)
@@ -96,7 +120,22 @@ export function useMobileTasksItemDetailMetadataEffects(model: ListAndDetailEffe
     return () => {
       stale = true
     }
-  }, [actionItem, client, tasksSupported])
+  }, [actionItem, client, tasksSupported, assigneeReads])
+
+  // Both errors are written by these reads alone.
+  const pickerItem = actionItem?.provider === 'github' ? actionItem.source.id : null
+  useTaskReadAgainAfterReconnect({
+    key: pickerItem === null ? null : `${pickerItem}\u0000labels`,
+    failed: itemLabelsError !== '',
+    lastConnectedAt,
+    readAgain: () => setLabelReads((current) => current + 1)
+  })
+  useTaskReadAgainAfterReconnect({
+    key: pickerItem === null ? null : `${pickerItem}\u0000assignees`,
+    failed: itemAssignableUsersError !== '',
+    lastConnectedAt,
+    readAgain: () => setAssigneeReads((current) => current + 1)
+  })
   return model
 }
 

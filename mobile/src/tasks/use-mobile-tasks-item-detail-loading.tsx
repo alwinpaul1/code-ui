@@ -5,6 +5,7 @@ import {
   useEffect
 } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
+import { useTaskReadAgainAfterReconnect } from './use-task-read-again-after-reconnect'
 import {
   githubItemDetailRead,
   gitlabItemDetailRead,
@@ -12,15 +13,26 @@ import {
   linearIssueRead
 } from './mobile-task-item-detail-operations'
 
-export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffectsModel) {
+/**
+ * The open item's detail read. `lastConnectedAt` is the host's (useLastConnectedAt, handed down by
+ * MobileTasksScreen): a failed read is read again once per NEW connection, the way the refresh icon
+ * reads it, through useTaskReadAgainAfterReconnect. It defaults to null for a mount that follows no
+ * connection, such as the RPC recordings, whose model carries no connection time.
+ */
+export function useMobileTasksItemDetailLoading(
+  model: ItemDetailMetadataEffectsModel,
+  lastConnectedAt: number | null = null
+) {
   const {
     actionItem,
     client,
+    detailError,
     detailRefreshSeq,
     setActionItem,
     setDetailError,
     setDetailLoading,
     setDetailPayload,
+    setDetailRefreshSeq,
     setItems,
     tasksSupported
   } = model
@@ -208,6 +220,14 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
       stale = true
     }
   }, [actionItem, client, detailRefreshSeq, tasksSupported])
+
+  // `detailError` is written by this read alone (the item's mutations report through `error`).
+  useTaskReadAgainAfterReconnect({
+    key: actionItem ? `${actionItem.provider}:${actionItem.source.id}` : null,
+    failed: detailError !== '',
+    lastConnectedAt,
+    readAgain: () => setDetailRefreshSeq((current) => current + 1)
+  })
   return model
 }
 

@@ -48,9 +48,13 @@ export function MobileTasksScreen() {
   const stage9 = useMobileTasksTaskPaginationActions(stage8)
   const stage10 = useMobileTasksProjectLoadingActions(stage9)
   const stage11 = useMobileTasksListAndDetailEffects(stage10)
-  const stage12 = useMobileTasksItemDetailMetadataEffects(stage11)
-  const stage13 = useMobileTasksItemDetailLoading(stage12)
-  const stage14 = useMobileTasksProjectDetailLoading(stage13)
+  // The host's connection time (useLastConnectedAt in stage 1), so a detail read that failed is
+  // read again once the host reconnects. An input rather than a model read: the RPC recordings
+  // mount these stages on their own, with no connection behind them.
+  const { lastConnectedAt } = stage1
+  const stage12 = useMobileTasksItemDetailMetadataEffects(stage11, lastConnectedAt)
+  const stage13 = useMobileTasksItemDetailLoading(stage12, lastConnectedAt)
+  const stage14 = useMobileTasksProjectDetailLoading(stage13, lastConnectedAt)
   const stage15 = useMobileTasksProjectMetadataLoading(stage14)
   const stage16 = useMobileTasksWorkspaceCreateProjection(stage15)
   const stage17 = useMobileTasksWorkspaceSourceEffects(stage16)
