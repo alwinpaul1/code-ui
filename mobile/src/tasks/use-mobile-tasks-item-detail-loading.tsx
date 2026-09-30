@@ -3,6 +3,7 @@ import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
   useEffect,
+  useRef,
   useState
 } from './mobile-tasks-dependencies'
 import { type TaskItem, createLinearTask } from './mobile-tasks-legacy-foundation'
@@ -40,6 +41,9 @@ export function useMobileTasksItemDetailLoading(
   // This read's own failure, which the error line cannot stand for: a rejection with an empty
   // message leaves that line '' over a sheet with no detail.
   const [readFailed, setReadFailed] = useState(false)
+  // The issue the Linear payload this read last set is for, so a read can tell whether the payload
+  // on screen is the same issue's.
+  const linearPayloadIssueRef = useRef<string | null>(null)
   useEffect(() => {
     setReadFailed(false)
     if (!tasksSupported || !actionItem || !client) {
@@ -50,6 +54,17 @@ export function useMobileTasksItemDetailLoading(
     }
 
     let stale = false
+    // Under `commentsFailed` the list holds only what this sheet posted over the refused read
+    // (use-mobile-tasks-linear-item-actions.tsx). A read of the same issue refused again keeps it:
+    // an empty list there hid a comment the desktop holds, and the user posted it again (fix round
+    // 1, F12). A list that is read replaces it, the posted comment included.
+    const postedOverRefusedList =
+      actionItem.provider === 'linear' &&
+      detailPayload?.provider === 'linear' &&
+      detailPayload.commentsFailed === true &&
+      linearPayloadIssueRef.current === actionItem.source.id
+        ? detailPayload.comments
+        : []
     setDetailPayload(null)
     setDetailError('')
     setDetailLoading(true)
@@ -178,7 +193,7 @@ export function useMobileTasksItemDetailLoading(
       ])
       const issue = linearIssueRead.interpret(issueReply)
       const accepted = linearIssueCommentsRead.interpret(commentsReply)
-      const comments = accepted.accepted ? (accepted.value ?? []) : []
+      const comments = accepted.accepted ? (accepted.value ?? []) : postedOverRefusedList
       if (!issue) {
         throw new Error('Details not found')
       }
@@ -194,6 +209,7 @@ export function useMobileTasksItemDetailLoading(
               : { code: commentsReply.error.code, cause: commentsReply.error.message })
           })
         }
+        linearPayloadIssueRef.current = actionItem.source.id
         setDetailPayload({
           provider: 'linear',
           description: issue.description ?? '',

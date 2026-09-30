@@ -99,6 +99,8 @@ function linearItem(issue: ReturnType<typeof linearIssue>) {
 
 const ISSUE = linearIssue('issue-1', 'ENG-1')
 const ITEM = linearItem(ISSUE)
+const OTHER_ISSUE = linearIssue('issue-2', 'ENG-2')
+const OTHER_ITEM = linearItem(OTHER_ISSUE)
 
 /** The desktop's refusal of the comment read (a skip read: the issue itself still loads). */
 const REFUSED = { ok: false, error: { code: 'internal', message: 'boom' } }
@@ -317,4 +319,66 @@ describe('a comment posted on a Linear issue whose comment list the desktop refu
       expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
     }
   )
+})
+
+// Every read of the detail starts from no payload, and a refused comment read used to write an
+// empty list. So a Retry, the refresh icon, or the re-read a new connection makes, refused again,
+// dropped the comment posted here, and the sheet was back to "Couldn't load comments" over a
+// comment the desktop holds: the same vanish, the same duplicate on a second post.
+describe('a comment posted over a refused list, when the list is refused again', () => {
+  const POSTED = { id: 'comment-9', body: 'looks good', user: { displayName: 'You' } }
+
+  it('keeps the comment just posted when Retry is refused again', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(host.requests.filter((sent) => sent === 'linear.issueComments')).toHaveLength(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({
+      provider: 'linear',
+      comments: [POSTED],
+      commentsFailed: true
+    })
+  })
+
+  it('keeps it through the read a new connection makes, refused again', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+
+    await sheet.connectedAt(2)
+    expect(host.requests.filter((sent) => sent === 'linear.issueComments')).toHaveLength(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [POSTED], commentsFailed: true })
+  })
+
+  it('does not carry it onto another issue whose list is refused', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: OTHER_ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED)
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+
+    await sheet.edit('actionItem', OTHER_ITEM)
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
+  })
+
+  it('carries nothing onto a list that was read, which holds the posted comment itself', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: ISSUE }, { ok: true, result: ISSUE })
+    script('linear.issueComments', REFUSED, REFUSED, { ok: true, result: [POSTED_ON_HOST] })
+    script('linear.addIssueComment', { ok: true, result: { ok: true, id: 'comment-9' } })
+    const sheet = await openSheet()
+    await sheet.post('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+
+    await sheet.edit('detailRefreshSeq', 2)
+    const payload = sheet.held.state.detailPayload as Record<string, unknown>
+    expect(payload.comments).toEqual([POSTED_ON_HOST])
+    expect(payload).not.toHaveProperty('commentsFailed')
+  })
 })
