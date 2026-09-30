@@ -5,6 +5,7 @@ import type { TaskProvider } from '../tasks/mobile-task-providers'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
+import { TASK_SOURCES_READ_FAILED, type HomeTaskSources } from './home-task-sources'
 
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
@@ -12,12 +13,36 @@ const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   linear: 'Linear'
 }
 
+/** The caption while the desktop's task sources are unread: nothing is claimed before they are. */
+export const TASK_SOURCES_CHECKING_LABEL = 'Checking sources…'
+
+/** The caption once a read has ended without an answer: no check is running, and none is claimed. */
+export const TASK_SOURCES_FAILED_LABEL = "Couldn't read task sources"
+
+function sourcesCaption(providers: HomeTaskSources | undefined): string {
+  if (providers === undefined) {
+    return TASK_SOURCES_CHECKING_LABEL
+  }
+  if (providers === TASK_SOURCES_READ_FAILED) {
+    return TASK_SOURCES_FAILED_LABEL
+  }
+  return providers.length > 0
+    ? providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
+    : 'No task sources connected'
+}
+
 export function MobileHomeTasksCard(props: {
   enabled: boolean
-  providers: TaskProvider[]
+  /**
+   * Undefined while unread, and TASK_SOURCES_READ_FAILED when the read failed: neither claims a
+   * provider or offers one as an icon. The card stays tappable either way, since the Tasks screen
+   * reads its own sources.
+   */
+  providers: HomeTaskSources | undefined
   onOpen: (provider?: TaskProvider) => void
 }) {
   const { colors, radius, space } = useTheme()
+  const providers = Array.isArray(props.providers) ? props.providers : []
   return (
     <PressScale
       accessibilityRole="button"
@@ -55,18 +80,14 @@ export function MobileHomeTasksCard(props: {
           Tasks
         </Txt>
         <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 2 }}>
-          {props.providers.length > 0
-            ? props.providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
-            : 'No task sources connected'}
+          {sourcesCaption(props.providers)}
         </Txt>
       </View>
       <View
         style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: space.sm }}
-        accessibilityLabel={props.providers
-          .map((provider) => TASK_PROVIDER_LABELS[provider])
-          .join(', ')}
+        accessibilityLabel={providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(', ')}
       >
-        {props.providers.map((provider) => (
+        {providers.map((provider) => (
           <Pressable
             key={provider}
             accessibilityRole="button"

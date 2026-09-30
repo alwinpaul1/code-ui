@@ -184,7 +184,7 @@ export function useMobileNativeChatController(
     dialogOptions: terminalDialogOptions, dialogKind: terminalDialogKind, dialogBeforeAnswer, rereadAfterAnswer,
     terminalPermission,
     permissionDismissed,
-    queuedMessages: visibleQueuedMessages,
+    queuedMessages: visibleQueuedMessages, queueReadable: screenQueueReadable,
     sentPrompts: screenSentPrompts,
     taskCompletions: screenTaskCompletions,
     peerNotices: screenPeerNotices, spinner: screenSpinner, sentPhotos: screenSentPhotos
@@ -533,7 +533,7 @@ export function useMobileNativeChatController(
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends,
-    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages,
+    nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
       hostImagePreviews

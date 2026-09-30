@@ -121,11 +121,13 @@ export const OPERATION_MUTATIONS = {
     after:
       '(settingsRes.value.result as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })'
   },
-  // Treats any successful linear.status reply as a connected Linear account.
+  // Treats any successful linear.status reply as a connected Linear account. Re-anchored where the
+  // in-band refusal fix moved the read: a refused round now returns before this line, so the
+  // accepted value is read directly and `linearResult.value !== null` is the old `linear !== null`.
   'home-providers-linear': {
     file: 'mobile-home-host-requests.ts',
-    before: 'linearConnected: linear?.connected === true',
-    after: 'linearConnected: linear !== null'
+    before: 'linearConnected: linearResult.value?.connected === true',
+    after: 'linearConnected: linearResult.value !== null'
   },
   // Reads the host platform from the wrong field of the host.platform result. Re-anchored where
   // step 7 moved the read: the hand-rolled `readHostPlatform` became the reply schema's own

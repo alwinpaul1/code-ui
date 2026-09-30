@@ -6,6 +6,7 @@ import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-ge
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
 import { useMobileSourceControlActionSheetRunners } from './use-mobile-source-control-action-sheet-runners'
 import { useMobileCreatePrRunner } from './use-mobile-create-pr-runner'
+import { useMobileBranchPickerRunner } from './use-mobile-branch-picker-runner'
 import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { LoadStatusOptions } from './mobile-source-control-screen-state'
@@ -223,31 +224,15 @@ export function useMobileSourceControlRunners(params: Params) {
     recordCommitFailure
   })
 
-  const openBranchPicker = useCallback(() => {
-    setShowActionSheet(false)
-    setLocalBranches(null)
-    setShowBranchPicker(true)
-    if (client) {
-      void sendGitRequest<RuntimeGitLocalBranches>('git.localBranches')
-        .then((result) => {
-          if (mountedRef.current) {
-            setLocalBranches(result)
-          }
-        })
-        .catch(() => {
-          if (mountedRef.current) {
-            setLocalBranches({ current: null, branches: [] })
-          }
-        })
-    }
-  }, [
+  // Loading, failed and empty are three states of the picker, not one blank sheet.
+  const branchPicker = useMobileBranchPickerRunner({
     client,
-    mountedRef,
     sendGitRequest,
-    setLocalBranches,
+    mountedRef,
     setShowActionSheet,
+    setLocalBranches,
     setShowBranchPicker
-  ])
+  })
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
@@ -313,7 +298,7 @@ export function useMobileSourceControlRunners(params: Params) {
     generateCommitMessage,
     cancelGenerateCommitMessage,
     createPr,
-    openBranchPicker,
+    ...branchPicker,
     openHistory,
     checkoutBranch,
     abortConflictOperation,

@@ -38,6 +38,12 @@ type Browse = (path: string) => Promise<ServerDirEntry[] | null>
  * the full unverified list, then again each time a folder without `SKILL.md`
  * is dropped, so the menu fills at once and only ever shrinks. Resolves when
  * every listing is done; a listing that fails is an empty root.
+ *
+ * Resolves true when the walk reached the home folder, false when it could not
+ * list even that (the link was down, say), so the caller does not count a walk
+ * that listed nothing as a fresh list: one started during a drop left the menu
+ * built-ins only for ten minutes over a link that had come back (review,
+ * 2026-09-30). The home listing's failure is logged with its cause.
  */
 export async function browseClaudeSkills(args: {
   /** Whatever the browse operation sends through; the hook's client qualifies. */
@@ -49,16 +55,28 @@ export async function browseClaudeSkills(args: {
   onSkills: (skills: DiscoveredSkill[]) => void
   /** False once the caller has moved on; nothing is reported after that. */
   live: () => boolean
-}): Promise<void> {
+}): Promise<boolean> {
   const { client, worktreePath, claudeConfigDir, onSkills, live } = args
+  let homeFailure: unknown = null
   const list = async (path: string) => {
-    const reply = await serverDirectoryBrowse.request(client, { path }).catch(() => null)
+    const reply = await serverDirectoryBrowse.request(client, { path }).catch((error: unknown) => {
+      if (path === '') {
+        homeFailure = error
+      }
+      return null
+    })
     return reply ? serverDirectoryBrowse.interpret(reply) : null
   }
   const browse: Browse = async (path) => (await list(path))?.entries ?? null
   const home = (await list(''))?.resolvedPath
-  if (!home || !live()) {
-    return
+  if (!home) {
+    console.warn('[skills] the home folder could not be listed; the / menu is built-ins only', {
+      cause: homeFailure instanceof Error ? homeFailure.message : String(homeFailure ?? 'no path')
+    })
+    return false
+  }
+  if (!live()) {
+    return true
   }
   const roots = [...claudeSkillRoots(home, worktreePath, claudeConfigDir), ...grokSkillRoots(home, worktreePath)]
   // Home and repo roots (each profile that is actually on disk) hold most of
@@ -70,7 +88,7 @@ export async function browseClaudeSkills(args: {
     entries: await browse(root.path)
   }))
   if (!live()) {
-    return
+    return true
   }
   const fromRoots = dedupeBrowsedSkills(
     rootListings.flatMap(({ root, entries }) => (entries ? skillsFromRootListing(root, entries) : []))
@@ -83,7 +101,7 @@ export async function browseClaudeSkills(args: {
     entries: await browse(root.path)
   }))
   if (!live()) {
-    return
+    return true
   }
   skills = dedupeBrowsedSkills([
     ...skills,
@@ -137,6 +155,7 @@ export async function browseClaudeSkills(args: {
   if (dropped || skills.length !== before) {
     onSkills(skills)
   }
+  return true
 }
 
 /** Every `<marketplace>/<plugin>/<version>/skills` under the plugin cache. */

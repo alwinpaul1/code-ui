@@ -21,6 +21,7 @@ import {
   isCodexWorking,
   matchCodexEffortRow,
   parseCodexPickerScreen,
+  sameCodexModel,
   type CodexPickerScreen
 } from './codex-picker-screen'
 import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
@@ -226,7 +227,7 @@ export async function applyCodexPickerSelection(
   if (!modelStep) {
     return { ok: false, reason: 'no-picker' }
   }
-  const modelRow = modelStep.rows.find((row) => row.name === target.model)
+  const modelRow = modelStep.rows.find((row) => sameCodexModel(row.name, target.model))
   const cursor = modelStep.cursorIndex ?? modelStep.rows.find((row) => row.isCurrent)?.index ?? null
   if (!modelRow || cursor === null) {
     await escapeCodexPicker(io)
@@ -284,7 +285,8 @@ export async function applyCodexPickerSelection(
   if (!(await io.sendKey(KEY_ENTER))) {
     return { ok: false, reason: 'send-failed' }
   }
-  // The footer names the active pair ("gpt-5.6-sol xhigh · ~/dir") once applied.
+  // The footer names the active pair once applied: "gpt-5.6-sol xhigh · ~/dir" up to 0.155, and
+  // "GPT-6-Sol medium · ~/dir" from 0.158.0, which capitalises the model, so case does not count.
   const deadline = io.now() + CLOSE_TIMEOUT_MS
   const wantedEffort = target.effort?.id ?? null
   while (io.now() < deadline) {
@@ -292,7 +294,8 @@ export async function applyCodexPickerSelection(
     if (!parseCodexPickerScreen(lines)) {
       const footer = lines.slice(-4).join('\n')
       const named = new RegExp(
-        `\\b${escapeRegExp(target.model)}\\s+${wantedEffort ? escapeRegExp(wantedEffort) : '\\S+'}\\s*·`
+        `\\b${escapeRegExp(target.model)}\\s+${wantedEffort ? escapeRegExp(wantedEffort) : '\\S+'}\\s*·`,
+        'i'
       )
       if (named.test(footer)) {
         return { ok: true }

@@ -9,11 +9,18 @@ const SCREEN_READ_MS = 2_000
 
 /** A numbered choice: `  2. Lint`, `❯ 1. Yes`, `› 1. Yes, proceed (y)`. */
 const OPTION = /^(\s*)(?:([❯›>]) )?(\d+)[.)] (\S.*?)\s*$/
+const HINT_KEY = String.raw`(?:esc|enter|tab|shift\+tab|ctrl\+\S+|⏎)`
 /** A key hint under a menu: "Esc to cancel · Tab to amend", "Enter to select
  *  · ↑/↓ to navigate · Esc to cancel", "Press enter to confirm or esc to
  *  cancel", "ctrl+g to edit in VS Code · …", "shift+tab to approve with this
- *  feedback". */
-const HINT = /^\s*(?:press\s+)?(?:esc|enter|tab|shift\+tab|ctrl\+\S+|⏎)\s+to\s\S/i
+ *  feedback". Codex 0.158.0 also draws one with no "to", "enter continue · esc
+ *  quit" under its folder trust prompt (codex-0158-screens.test.ts). That shape
+ *  counts only as a whole row of two or more "<key> <word>" pairs, so a
+ *  sentence that starts with "Enter" is still no hint. */
+const HINT = new RegExp(
+  String.raw`^\s*(?:(?:press\s+)?${HINT_KEY}\s+to\s\S|${HINT_KEY}\s+[a-z]+(?:\s+·\s+${HINT_KEY}\s+[a-z]+)+\s*$)`,
+  'i'
+)
 const RULE = /^\s*[─━═]+…?\s*$/
 /** Claude's own input row, at column 0 (COMPOSER_ROW in
  *  mobile-terminal-sent-prompts.ts): `❯` then a no-break space (2.1.270 and
@@ -66,8 +73,9 @@ export type TerminalDialogKind = 'approval' | 'menu'
  * to change" at any width, whatever is drawn under it. An independent review
  * (2026-09-27) found each of the conversation shapes, and the wrapped hint,
  * read the wrong way.
- * Verified against every capture under fixtures/ and the 2.1.276, 2026-09-05
- * and Codex 0.153.4 captures in mobile-native-chat-dialog-guard.test.ts.
+ * Verified against every capture under fixtures/ and the 2.1.276, 2026-09-05,
+ * Codex 0.153.4 and Codex 0.158.0 (folder trust prompt) captures in
+ * mobile-native-chat-dialog-guard.test.ts.
  */
 export function terminalDialogKind(
   lines: readonly string[],

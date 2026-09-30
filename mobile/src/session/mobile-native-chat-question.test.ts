@@ -137,20 +137,23 @@ describe('the question card for a reply with more than one list', () => {
     expect(q?.options).toEqual(['Yes, clear the cache'])
   })
 
-  it('shows no card when a notes list follows the choice list', () => {
-    expect(
-      parseAgentQuestion(
-        [
-          'Which fix do you want?',
-          '1. Clear the cache',
-          '2. Release the lock',
-          '',
-          'Notes:',
-          '- the cache is stale',
-          '- the lock is held'
-        ].join('\n')
-      )
-    ).toBeNull()
+  // This pinned null until 2026-09-30: the card took the reply's LAST list,
+  // so a notes list after the choices dropped the card (review, 2026-09-30).
+  it('keeps the card when a notes list follows the choice list', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which fix do you want?',
+        '1. Clear the cache',
+        '2. Release the lock',
+        '',
+        'Notes:',
+        '- the cache is stale',
+        '- the lock is held'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which fix do you want?')
+    expect(q?.options).toEqual(['Clear the cache', 'Release the lock'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
   })
 
   it('shows no card when the last list has no question directly above it', () => {
@@ -478,6 +481,364 @@ describe('the question card for choices whose text sits at the list indent', () 
     expect(formatQuestionAnswerByIndexes(q!, [1])).toBe(
       'Quarantine the test until the emulator is fixed'
     )
+  })
+})
+
+// The card read every `- ` and `1.` line as a choice, inside a code fence
+// too. A fenced YAML file became the reply's last list: under prose that asks
+// nothing it hid the real choices above it, and under its own `plugins:` key
+// it was a card whose answers were YAML items (review, 2026-09-30).
+// Representative markdown, not captures: the parser reads the hook's
+// lastAssistantMessage, and agent CLIs may not be run from this shell.
+describe('the question card for a reply that holds a code fence', () => {
+  it('keeps the choices above a fenced file whose lines look like a list', () => {
+    const q = parseAgentQuestion(
+      'Which config do you want:\n1. Minimal\n2. Full\n\nFull looks like:\n```yaml\nplugins:\n- a\n- b\n```'
+    )
+    expect(q?.question).toBe('Which config do you want')
+    expect(q?.options).toEqual(['Minimal', 'Full'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('offers no line inside a fence as an answer', () => {
+    expect(
+      parseAgentQuestion(
+        'Here is the current file:\n```yaml\nplugins:\n- a\n- b\n```\nShould I keep it?'
+      )
+    ).toBeNull()
+    expect(parseAgentQuestion('Run this:\n```\n- a\n- b\n```\nDone.')).toBeNull()
+    expect(parseAgentQuestion('Run this:\n~~~\n1. a\n2. b\n~~~\nDone.')).toBeNull()
+  })
+
+  it('shows no card for a reply that is only a fence', () => {
+    expect(parseAgentQuestion('```\n- a\n- b\n```')).toBeNull()
+    expect(parseAgentQuestion('```sh\n1. a\n```')).toBeNull()
+    expect(parseAgentQuestion('```')).toBeNull()
+  })
+
+  it('reads a fence that never closes as running to the end of the reply', () => {
+    expect(parseAgentQuestion('Which one?\n```\n1. a\n2. b')).toBeNull()
+    const q = parseAgentQuestion('Which one?\n1. A\n2. B\n\nFor example:\n```sh\n- a\n- b')
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('closes a longer fence only on a run at least as long', () => {
+    // A four-backtick fence holding a three-backtick line: all of it is code.
+    expect(parseAgentQuestion('Here is the doc:\n````md\n```\n- a\n- b\n````\nDone.')).toBeNull()
+    // A closing run longer than the opener closes it; an info string does not.
+    expect(parseAgentQuestion('Example:\n```\n```sh\n- a\n- b\n`````\nDone.')).toBeNull()
+    const q = parseAgentQuestion('Example:\n````\n```\n- a\n````\n\nWhich one?\n1. A\n2. B')
+    expect(q?.question).toBe('Which one?')
+    expect(q?.options).toEqual(['A', 'B'])
+  })
+
+  it('keeps the choices around a fence indented under one of them (Claude-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which approach?',
+        '',
+        '1. Run the script',
+        '   ```sh',
+        '   - not a choice',
+        '   2. nor this',
+        '   ```',
+        '2. Edit by hand'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which approach?')
+    expect(q?.options).toEqual(['Run the script', 'Edit by hand'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('keeps the choices around a fence indented under one of them (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which way do you want to go?',
+        '- **Pin the plugin** in `config.yaml`:',
+        '  ```yaml',
+        '  plugins:',
+        '  - a@1.2.3',
+        '  ```',
+        '- **Leave the range** and accept the update'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual([
+      '**Pin the plugin** in `config.yaml`:',
+      '**Leave the range** and accept the update'
+    ])
+    expect(q?.optionTokens).toEqual([null, null])
+  })
+
+  it('keeps a numbered list going past a fence between its choices, as past a paragraph', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n\n1. Run the script:\n\n```sh\n- ./fix.sh\n```\n\n2. Edit by hand'
+    )
+    expect(q?.options).toEqual(['Run the script:', 'Edit by hand'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('takes no fence line as the title of the list under it', () => {
+    const q = parseAgentQuestion('```sh\nnpm test\n```\n1. Alpha\n2. Beta')
+    expect(q?.question).toBe('Choose an option')
+    expect(q?.options).toEqual(['Alpha', 'Beta'])
+  })
+})
+
+// The bullet pattern took `> ` as a marker and `* * *` as a bullet holding
+// `* *`, so a quoted error became a card of its lines and a rule became a
+// choice. The parser reads the agent's Markdown reply (the hook's
+// lastAssistantMessage), where `>` is a blockquote, never a TUI pointer.
+describe('the question card for a reply that quotes or draws a rule', () => {
+  it('offers no quoted line as an answer (Claude-shaped)', () => {
+    expect(
+      parseAgentQuestion(
+        'The error says:\n> connection refused\n> retry later\n\nDo you want me to look into it further'
+      )
+    ).toBeNull()
+    expect(
+      parseAgentQuestion('The error says:\n> foo failed\n> bar failed\n\nI fixed it.')
+    ).toBeNull()
+  })
+
+  it('offers no quoted line as an answer (Codex-shaped)', () => {
+    expect(
+      parseAgentQuestion(
+        '**Error**:\n> connection refused\n> at connect (net.js:1:1)\n\nWant me to dig into it?'
+      )
+    ).toBeNull()
+  })
+
+  it('shows no card for a rule, spaced as Claude or Codex draws it', () => {
+    expect(parseAgentQuestion('Which one?\n\n* * *\n\nNo options here')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n\n- - -\n\nNo options here')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n1. ---')).toBeNull()
+  })
+
+  it('keeps a choice whose text holds marks among its words', () => {
+    const q = parseAgentQuestion('Which path?\n- *fast* path\n- **safe** path\n- -1 offset')
+    expect(q?.options).toEqual(['*fast* path', '**safe** path', '-1 offset'])
+  })
+
+  it('keeps the choices under a question after a quote', () => {
+    const q = parseAgentQuestion(
+      'The test fails with:\n\n> Error: connection refused\n\nWhich should I do?\n\n1. Retry\n2. Skip'
+    )
+    expect(q?.question).toBe('Which should I do?')
+    expect(q?.options).toEqual(['Retry', 'Skip'])
+  })
+})
+
+// The card took the reply's last list, so a list of reasons or notes after
+// the choices became "the options" with no question above them, and the card
+// vanished (review, 2026-09-30). The choices are the one list under the line
+// that asks; its title, markers and multi-select hint are that list's.
+describe('the question card for choices followed by a list of reasons or notes', () => {
+  it('keeps the choices when a reasons list follows them (Claude-shaped)', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n\n1. A\n2. B\n\nI recommend option 1 because:\n- fast\n- simple'
+    )
+    expect(q?.question).toBe('Which one?')
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.optionTokens).toEqual(['1', '2'])
+    expect(formatQuestionAnswerByIndexes(q!, [1])).toBe('2')
+  })
+
+  it('keeps the choices when a reasons list follows them (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      [
+        'Which way do you want to go?',
+        '- **Quarantine** the flaky test',
+        '- **Fix** the ordering dependency now',
+        '',
+        'I lean to the second because:',
+        '- it is a one-line change',
+        '- the flake hides a real bug'
+      ].join('\n')
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual([
+      '**Quarantine** the flaky test',
+      '**Fix** the ordering dependency now'
+    ])
+    expect(q?.optionTokens).toEqual([null, null])
+  })
+
+  it('keeps the choices between a findings list and a notes list', () => {
+    const q = parseAgentQuestion(
+      'Findings:\n- x is stale\n- y is held\n\nWhich should I fix?\na) x\nb) y\n\nNotes:\n1. both are safe\n2. neither needs a restart'
+    )
+    expect(q?.question).toBe('Which should I fix?')
+    expect(q?.options).toEqual(['x', 'y'])
+    expect(q?.optionTokens).toEqual(['a', 'b'])
+  })
+
+  it('reads a multi-select hint from the chosen list, not the notes after it', () => {
+    const notesHint = parseAgentQuestion(
+      'Which cache should I clear?\n1. a\n2. b\n\nNotes:\n- one or more of them may rebuild'
+    )
+    expect(notesHint?.options).toEqual(['a', 'b'])
+    expect(notesHint?.multiSelect).toBe(false)
+    const ownHint = parseAgentQuestion(
+      'Which caches should I clear? Select all that apply?\n1. a\n2. b\n\nNotes:\n- a is big'
+    )
+    expect(ownHint?.options).toEqual(['a', 'b'])
+    expect(ownHint?.multiSelect).toBe(true)
+  })
+
+  it('reads no multi-select hint from a code fence', () => {
+    const q = parseAgentQuestion(
+      'Which one?\n1. A\n2. B\n\nThe config takes:\n```\nids: one or more, comma-separated\n```'
+    )
+    expect(q?.options).toEqual(['A', 'B'])
+    expect(q?.multiSelect).toBe(false)
+  })
+
+  it('keeps a single choice under a line that asks with notes after it', () => {
+    const q = parseAgentQuestion('Apply the fix?\n1. Yes, clear the cache\n\nNotes:\n- it is safe')
+    expect(q?.question).toBe('Apply the fix?')
+    expect(q?.options).toEqual(['Yes, clear the cache'])
+  })
+
+  it('shows no card when no list, or more than one, sits under a line that asks', () => {
+    expect(parseAgentQuestion('Done:\n- a\n- b\n\nNotes:\n- c\n- d')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n1. A\n2. B\n\nWhich order?\n- first\n- last')).toBeNull()
+    expect(parseAgentQuestion('No lists here, only prose.')).toBeNull()
+  })
+
+  it('shows no card when a later list may be more of the choices', () => {
+    // No line of its own above it: the question may cover it too.
+    expect(parseAgentQuestion('Which one?\n1. A\n2. B\n- C\n- D')).toBeNull()
+    // Prose that introduces nothing: a description the numbering did not bridge.
+    expect(parseAgentQuestion('Which one?\n\n1. A\n2. B\n\nBoth work.\n\n4. D')).toBeNull()
+  })
+})
+
+// A plan or a list of changes followed by "Shall I proceed?" became a card
+// whose answers were the plan's steps, so a tap sent `1` to a yes/no
+// question, or typed a finding into the agent (review, 2026-09-30). A line
+// that asks after the list keeps the card only when it asks the reader to
+// choose from it; a confirmation, or anything unclear, shows no card, and
+// the user types the answer.
+describe('the question card for a list followed by a question', () => {
+  it('shows no card when a confirmation follows a plan (Claude-shaped)', () => {
+    expect(
+      parseAgentQuestion("Here's my plan:\n1. Edit the parser\n2. Add the test\n\nShall I proceed?")
+    ).toBeNull()
+  })
+
+  it('shows no card when a confirmation follows a list of changes (Codex-shaped)', () => {
+    expect(
+      parseAgentQuestion('Done. Changes:\n- edited a.ts\n- edited b.ts\n\nShall I commit?')
+    ).toBeNull()
+  })
+
+  it('shows no card for any confirmation after the list', () => {
+    const plan = 'The plan:\n1. Edit the parser\n2. Add the test\n\n'
+    for (const ask of [
+      'Should I go ahead?',
+      'Can I start?',
+      'Want me to do that?',
+      'Do you want me to pick one?',
+      'OK to proceed?',
+      'Proceed?',
+      'Sound good?',
+      'Does this look right?',
+      'Should I pick up the next task after this?'
+    ]) {
+      expect(parseAgentQuestion(plan + ask), ask).toBeNull()
+    }
+  })
+
+  it('shows no card when the question after the list is unclear', () => {
+    expect(parseAgentQuestion('The plan:\n1. A\n2. B\n\nWhat do you think?')).toBeNull()
+  })
+
+  it('shows no card when a confirmation follows the notes after the choices', () => {
+    expect(
+      parseAgentQuestion('Which one?\n1. A\n2. B\n\nNotes:\n- x is safe\n\nShall I proceed?')
+    ).toBeNull()
+  })
+
+  it('keeps the card when the question after the list asks to choose from it', () => {
+    const list =
+      'I can take this two ways:\n\n1. Patch the parser\n2. Capture a real screen first\n\n'
+    for (const ask of [
+      'Which do you want?',
+      'Which one should I do?',
+      'Pick one?',
+      'Would you prefer one of these?',
+      'Should I go with 1 or 2?',
+      'Option 1, or option 2?'
+    ]) {
+      const q = parseAgentQuestion(list + ask)
+      expect(q?.question, ask).toBe('I can take this two ways')
+      expect(q?.optionTokens, ask).toEqual(['1', '2'])
+    }
+  })
+
+  it('keeps the card when the question after a bullet list names two of its choices', () => {
+    const q = parseAgentQuestion('Two ways:\n- Rebase\n- Merge\n\nRebase or merge?')
+    expect(q?.options).toEqual(['Rebase', 'Merge'])
+    expect(q?.optionTokens).toEqual([null, null])
+    const lettered = parseAgentQuestion('Two ways:\na) Rebase\nb) Merge\n\nA or B?')
+    expect(lettered?.optionTokens).toEqual(['a', 'b'])
+  })
+
+  it('reads no question from a code fence after the list', () => {
+    const q = parseAgentQuestion('Options:\n1. A\n2. B\n\nExample:\n```\nready?\n```')
+    expect(q?.options).toEqual(['A', 'B'])
+  })
+})
+
+// A line that asks had to end in `?` or `:`, and `**Which one?**` ends in
+// `**`, so a bold question asked nothing and the card was lost (review,
+// 2026-09-30). The marks that wrap a line, or trail its `?`, are not the line.
+describe('the question card under a question drawn in bold', () => {
+  const plain = parseAgentQuestion('Findings:\n- x\n- y\n\nWhich one?\n\n1. A\n2. B')
+
+  it('offers the choices under a bold question (Claude-shaped)', () => {
+    const q = parseAgentQuestion('Findings:\n- x\n- y\n\n**Which one?**\n\n1. A\n2. B')
+    expect(q).toEqual(plain)
+    expect(q?.question).toBe('Which one?')
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('offers the choices under a bold question (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      'Summary:\n- tests pass\n- lint is clean\n\n**Which way do you want to go?**\n- Ship it\n- Hold it'
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual(['Ship it', 'Hold it'])
+  })
+
+  it('reads every spelling of the emphasis the same way', () => {
+    for (const ask of ['__Which one?__', '*Which one?*', '**Which one**?', '***Which one?***']) {
+      expect(parseAgentQuestion(`Findings:\n- x\n- y\n\n${ask}\n\n1. A\n2. B`), ask).toEqual(plain)
+    }
+  })
+
+  it('ends a findings list at a bold question run straight on from it', () => {
+    const q = parseAgentQuestion('- finding a\n- finding b\n**Which should I fix?**\n- a\n- b')
+    expect(q?.question).toBe('Which should I fix?')
+    expect(q?.options).toEqual(['a', 'b'])
+  })
+
+  it('takes one choice under a bold question, and a bold intro as a title', () => {
+    expect(parseAgentQuestion('**Apply the fix?**\n1. Yes, clear the cache')?.options).toEqual([
+      'Yes, clear the cache'
+    ])
+    expect(parseAgentQuestion('**Options:**\n1. A\n2. B')?.question).toBe('Options')
+  })
+
+  it('reads no question from a bold line that does not ask', () => {
+    expect(parseAgentQuestion('Findings:\n- x\n- y\n\n**I fixed both.**\n\n1. A\n2. B')).toBeNull()
+    expect(parseAgentQuestion('**Done**\n- one stray bullet')).toBeNull()
+  })
+
+  it('shows no card when a bold confirmation follows the list', () => {
+    expect(parseAgentQuestion('The plan:\n1. A\n2. B\n\n**Shall I proceed?**')).toBeNull()
   })
 })
 

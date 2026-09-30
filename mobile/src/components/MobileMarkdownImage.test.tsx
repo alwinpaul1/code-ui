@@ -49,6 +49,40 @@ async function render(resolveImage?: (url: string) => Promise<unknown>) {
   return renderer!
 }
 
+/** The host connection a resolver hands its figures: `connect` is a NEW connection. */
+function connectionDouble() {
+  const listeners = new Set<() => void>()
+  let connectedAt: number | null = 1
+  const announce = async () => {
+    await act(async () => {
+      for (const listener of Array.from(listeners)) {
+        listener()
+      }
+      await Promise.resolve()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+  }
+  return {
+    connection: {
+      lastConnectedAt: () => connectedAt,
+      subscribe: (listener: () => void) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }
+    },
+    announce,
+    connect: async (at: number) => {
+      connectedAt = at
+      await announce()
+    },
+    listening: () => listeners.size
+  }
+}
+
 /** The document measures its own width once; figures inline in the prose
  *  run are sized from it. */
 function layout(width: number) {
@@ -129,6 +163,57 @@ describe('a figure in a markdown document', () => {
       label: 'CKA twins',
       index: 0
     })
+  })
+
+  it('draws a figure whose read failed during a drop once the host connects again, with no tap', async () => {
+    // Review 2026-09-30: a figure opened during a reconnect stayed a link over a healthy
+    // connection until the document was closed. One read per NEW connection, never per render.
+    const xml = '<svg viewBox="0 0 800 400"></svg>'
+    const host = connectionDouble()
+    let reachable = false
+    let reads = 0
+    const resolve = Object.assign(
+      async () => {
+        reads += 1
+        return reachable ? { kind: 'svg', xml } : null
+      },
+      { connection: host.connection }
+    )
+    const r = await render(resolve)
+    layout(360)
+    expect(r.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(1)
+    // The same connection saying something else about itself is not a reason to read again.
+    await host.announce()
+    expect(reads).toBe(1)
+    reachable = true
+    await host.connect(2)
+    expect(reads).toBe(2)
+    expect(r.root.findByType('SvgXml' as never).props).toMatchObject({ xml, width: 360 })
+    expect(r.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(0)
+    // A drawn figure is not read again when the host reconnects once more.
+    await host.connect(3)
+    expect(reads).toBe(2)
+    act(() => renderer?.unmount())
+    renderer = null
+    expect(host.listening()).toBe(0)
+  })
+
+  it('stays the link when resolving the figure throws, instead of taking the document down', async () => {
+    // Review 2026-09-30: `![chart](100%.png)` threw URIError out of the figure's effect, which
+    // tore the viewer down through the nearest error boundary. Whatever a resolver does, the
+    // figure falls back to the link.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const r = await render(() => {
+        throw new URIError('URI malformed')
+      })
+      layout(360)
+      expect(r.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(1)
+      const rejected = await render(() => Promise.reject(new Error('remote connection dropped')))
+      expect(rejected.root.findAll((node) => node.props.testID === 'markdown-image-link')).toHaveLength(1)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('draws the link, not a zero-width picture, before the document is measured', async () => {

@@ -1,5 +1,9 @@
+import { markdownCodeSpans } from '../components/markdown-code-spans'
+import { maskMarkdownEscapes, unescapeMarkdownText } from '../components/markdown-inline-escapes'
 import { createMarkdownLinkFinder, type MarkdownLinkSpan } from '../components/markdown-inline-links'
+import { codeSpanContent } from '../components/markdown-inline-matcher'
 import { markdownHeadingText } from '../text/markdown-heading-text'
+import { endsWithBoundaryPipe, maskEscapedPipes, splitOnPipes } from './table-row-pipes'
 
 /**
  * Agents summarise their turn in Markdown; Android notifications take plain
@@ -9,14 +13,20 @@ import { markdownHeadingText } from '../text/markdown-heading-text'
  * Mathematical Alphanumeric letterforms: **bold** → 𝗯𝗼𝗹𝗱, *italic* → 𝘪𝘵𝘢𝘭𝘪𝘤,
  * `code` → 𝚌𝚘𝚍𝚎. Only ASCII letters and digits have such forms; anything else
  * is kept as typed. Headings read as bold, list markers become "•", links keep
- * their visible text, and blank-line runs collapse.
+ * their visible text, a backslash escape reads as the mark it escapes, and
+ * blank-line runs collapse.
  */
 export function notificationPlainText(markdown: string): string {
   const raw = markdown
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .flatMap((line) => reflowInlineTable(line))
+  const tableLines = classifyTableLines(raw)
+  // A row's escaped pipes stand aside until its cells are apart
+  // (table-row-pipes.ts); a line of prose keeps its `\|` for the inline rules.
+  const pipe = absentCharacter(markdown)
   const lines = raw
+    .map((line, index) => (tableLines[index] === 'row' ? maskEscapedPipes(line, pipe) : line))
     .map((line) =>
       line
         // A rule first: the bullet rewrite below turned `* * *` and `- - -`
@@ -30,27 +40,16 @@ export function notificationPlainText(markdown: string): string {
         .replace(/^(\s*)[*\-+]\s+/, '$1• ')
         .replace(/^\s*>\s?/, '')
     )
-    // Links before code and emphasis, as always: a link's words are styled
-    // like any others.
+    // Links first, looked for with the code spans hidden (linkWords), then
+    // code, then emphasis and strike on the text around the code spans
+    // (inlineText): a link's words are styled like any others, and the marks
+    // inside a code span are the code's.
     .map((line) =>
-      linkWords(line)
-        .replace(/`([^`]*)`/g, (_, text: string) => styleText(text, 'mono'))
-        .replace(/(\*\*\*|___)(?=\S)([\s\S]*?\S)\1/g, (_, __, text: string) =>
-          styleText(text, 'bolditalic')
-        )
-        .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, __, text: string) => styleText(text, 'bold'))
-        .replace(/(^|[^\w*])\*([^*\s](?:[^*]*?[^*\s])?)\*(?!\w)/g, (_, lead: string, text: string) =>
-          lead + styleText(text, 'italic')
-        )
-        .replace(/(^|[^\w_])_([^_\s](?:[^_]*?[^_\s])?)_(?!\w)/g, (_, lead: string, text: string) =>
-          lead + styleText(text, 'italic')
-        )
-        .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+      inlineText(linkWords(line))
         // Not `/\s+$/`: that tries again from every space of a long run,
         // 951 ms for a line holding 40,000 of them. The same characters go.
         .trimEnd()
     )
-  const tableLines = classifyTableLines(raw)
   const flattened: string[] = []
   lines.forEach((line, index) => {
     const kind = tableLines[index]
@@ -61,7 +60,7 @@ export function notificationPlainText(markdown: string): string {
       // and the content row falls below the fold.
       return
     }
-    flattened.push(kind === 'row' ? flattenTableRow(line) : line)
+    flattened.push(kind === 'row' ? flattenTableRow(line).replaceAll(pipe, '|') : line)
   })
   return flattened
     .filter(
@@ -85,9 +84,16 @@ export function notificationPlainText(markdown: string): string {
  * One pass with a stack rather than a call per label: an image's words can
  * hold another image, and a body nesting thousands of them would run out of
  * stack.
+ *
+ * Links are looked for with every code span hidden: a code span binds tighter
+ * than a link (CommonMark), so `handlers[name](args)` written as code is code.
+ * It was read as a link and drew as mono "handlersname" (review, 2026-09-30).
+ * A link whose words hold a whole code span, [`x`](u), is still a link.
+ * Escaped marks are hidden too (markdown-inline-escapes.ts), so `\[a\](b)` is
+ * no link, as in the chat.
  */
 function linkWords(line: string): string {
-  const find = createMarkdownLinkFinder(line, true)
+  const find = createMarkdownLinkFinder(withCodeHidden(maskMarkdownEscapes(line)), true)
   /** Links whose words are being read, the innermost last. */
   const inside: MarkdownLinkSpan[] = []
   let out = ''
@@ -120,6 +126,101 @@ function linkWords(line: string): string {
     next = find(copied)
   }
 }
+
+/**
+ * A line with its code spans in the code style and its emphasis and strike
+ * read around them. Each span, found as the chat finds it
+ * (markdown-code-spans.ts), stands in as one character no rule takes for a
+ * mark or a space while the rules run, so `a*b*c`, `__init__` and `~~x~~`
+ * keep their marks, and `**x `y` z**` is still bold around the code. The
+ * code rule styled a span first and the emphasis rules then ran over its
+ * text, dropping those marks (review, 2026-09-30).
+ *
+ * Backslash escapes are read as the chat reads them (markdown-inline-escapes.ts):
+ * each escaped mark stands in the same way, so `\*not\*` is no emphasis,
+ * and the text around the code drops the backslash of each escape, so it
+ * reads `*not*`. The shade kept the backslashes and read the stars as
+ * emphasis, "\𝘯𝘰𝘵\", while the chat drew `*not*` (review, 2026-09-30).
+ * A code span keeps its backslashes, as in the chat.
+ */
+function inlineText(line: string): string {
+  const masked = maskMarkdownEscapes(line)
+  const spans = markdownCodeSpans(masked, true)
+  if (spans.length === 0 && !line.includes('\\')) {
+    return emphasisText(line)
+  }
+  const code = absentCharacter(line)
+  const escaped = absentCharacter(line + code)
+  const codes: string[] = []
+  const marks: string[] = []
+  // Once, not per span: a line with a backslash and no escape is an equal
+  // copy, not the same string, and comparing costs its length.
+  const hasEscapes = masked !== line
+  let text = ''
+  let copied = 0
+  /** The line up to `end`, each escaped mark swapped for `escaped`. */
+  const copyTo = (end: number): void => {
+    for (let at = copied; at < end && hasEscapes; at += 1) {
+      if (masked.charCodeAt(at) !== line.charCodeAt(at)) {
+        text += line.slice(copied, at) + escaped
+        marks.push(line[at]!)
+        copied = at + 1
+      }
+    }
+    text += line.slice(copied, end)
+  }
+  for (const span of spans) {
+    copyTo(span.index)
+    text += code
+    codes.push(styleText(codeSpanContent(line.slice(span.index, span.end)), 'mono'))
+    copied = span.end
+  }
+  copyTo(line.length)
+  let nextMark = 0
+  let nextCode = 0
+  const styled = emphasisText(text).replaceAll(escaped, () => marks[nextMark++]!)
+  return unescapeMarkdownText(styled).replaceAll(code, () => codes[nextCode++]!)
+}
+
+/** Bold, italic and struck text as its letterforms, marks dropped. */
+function emphasisText(text: string): string {
+  return text
+    .replace(/(\*\*\*|___)(?=\S)([\s\S]*?\S)\1/g, (_, __, inner: string) =>
+      styleText(inner, 'bolditalic')
+    )
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, __, inner: string) => styleText(inner, 'bold'))
+    .replace(/(^|[^\w*])\*([^*\s](?:[^*]*?[^*\s])?)\*(?!\w)/g, (_, lead: string, inner: string) =>
+      lead + styleText(inner, 'italic')
+    )
+    .replace(/(^|[^\w_])_([^_\s](?:[^_]*?[^_\s])?)_(?!\w)/g, (_, lead: string, inner: string) =>
+      lead + styleText(inner, 'italic')
+    )
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+}
+
+/** A private-use character the text does not hold, to stand in for others. */
+function absentCharacter(text: string): string {
+  let code = 0xe001
+  while (text.includes(String.fromCharCode(code))) {
+    code += 1
+  }
+  return String.fromCharCode(code)
+}
+
+/** A line with its escapes masked (maskMarkdownEscapes), and each code span's
+ *  characters swapped for one no link rule reads, the same length, so every
+ *  index still lines up with the line. */
+function withCodeHidden(line: string): string {
+  let out = ''
+  let copied = 0
+  for (const span of markdownCodeSpans(line, true)) {
+    out += line.slice(copied, span.index) + CODE_FILLER.repeat(span.end - span.index)
+    copied = span.end
+  }
+  return copied === 0 ? line : out + line.slice(copied)
+}
+
+const CODE_FILLER = '\uE000'
 
 /**
  * A table the desktop squashed onto one line, put back on its lines.
@@ -160,7 +261,7 @@ function reflowInlineTable(line: string): string[] {
   // The header: the N cells whose closing pipe is the last thing before the
   // delimiter. Fewer segments than that, or a non-blank tail, and there is no
   // header, only prose.
-  const head = before.split('|')
+  const head = splitOnPipes(before)
   let prose = before
   if (head.length >= columns + 2 && head[head.length - 1]!.trim() === '') {
     const cells = head.slice(-(columns + 1), -1)
@@ -175,7 +276,7 @@ function reflowInlineTable(line: string): string[] {
   out.push(delimiter[0].trim())
   // Body rows: after the delimiter's closing pipe comes a blank segment, then
   // N cells, then the blank the next row's opening pipe leaves, and so on.
-  const tail = after.split('|')
+  const tail = splitOnPipes(after)
   let at = 0
   while (at < tail.length) {
     const boundary = tail[at]!
@@ -228,7 +329,7 @@ function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | un
     // both sides is a row on its own evidence, which is what keeps a truncated
     // table readable. It is also why a line of prose wrapped in pipes is
     // flattened: a mid-table excerpt is far likelier than that.
-    /^\s*\|.+\|\s*$/.test(line) ? 'row' : undefined
+    /^\s*\|.+\|\s*$/.test(line) && endsWithBoundaryPipe(line) ? 'row' : undefined
   )
   lines.forEach((line, index) => {
     if (!isTableSeparator(line)) {
@@ -259,7 +360,9 @@ function classifyTableLines(lines: readonly string[]): ('row' | 'separator' | un
  * One table row as a single readable line. A table is a layout and the shade has
  * no columns, so cells are joined by a middot. Before this, a row kept every
  * pipe and an agent answering with a table filled the notification with "||||"
- * and no readable summary (reported from the phone 2026-09-17).
+ * and no readable summary (reported from the phone 2026-09-17). Every pipe
+ * left in the line is a boundary: the escaped ones were masked before the
+ * inline rules ran (table-row-pipes.ts).
  */
 function flattenTableRow(line: string): string {
   return line

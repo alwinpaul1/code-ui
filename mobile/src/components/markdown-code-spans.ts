@@ -96,14 +96,40 @@ export function createMarkdownCodeSpanFinder(
   }
 }
 
-/** Every code span in `text`, in order. */
-export function markdownCodeSpans(text: string, escapes: boolean): MarkdownCodeSpan[] {
+/** Every code span in `text` that opens at or after `from`, in order. */
+export function markdownCodeSpans(text: string, escapes: boolean, from = 0): MarkdownCodeSpan[] {
   const find = createMarkdownCodeSpanFinder(text, escapes)
   const spans: MarkdownCodeSpan[] = []
-  let span = find(0)
+  let span = find(from)
   while (span) {
     spans.push(span)
     span = find(span.end)
   }
   return spans
+}
+
+/**
+ * `text` with every character of each code span from `from` on swapped for
+ * `standIn`, backticks too, except whitespace; the same length, so every
+ * index still lines up. A pattern scanning it cannot take a star inside a
+ * span for emphasis (markdown-inline-matcher.ts). Whitespace stays, so what
+ * a space ends, a bare address or an emphasis's edge, still ends there.
+ */
+export function maskMarkdownCodeSpans(
+  text: string,
+  escapes: boolean,
+  from: number,
+  standIn: string
+): { masked: string; spans: MarkdownCodeSpan[] } {
+  const spans = markdownCodeSpans(text, escapes, from)
+  if (spans.length === 0) {
+    return { masked: text, spans }
+  }
+  let masked = ''
+  let at = 0
+  for (const span of spans) {
+    masked += text.slice(at, span.index) + text.slice(span.index, span.end).replace(/\S/g, standIn)
+    at = span.end
+  }
+  return { masked: masked + text.slice(at), spans }
 }

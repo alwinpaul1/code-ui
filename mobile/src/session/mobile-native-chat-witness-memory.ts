@@ -25,7 +25,7 @@ export type WitnessToRemember = { id: string; text: string; anchorId: string }
  *
  * The id is the memory key. A desktop prompt keeps its own `desk-<nonce>` id so
  * repeated beacons of one prompt map to one entry; an absorbed reading is keyed
- * by a hash of its text, because the same message read twice off the screen has
+ * by absorbedMemoryId, because the same message read twice off the screen has
  * no other stable identity.
  */
 export function witnessesToRemember(
@@ -37,10 +37,29 @@ export function witnessesToRemember(
       continue
     }
     out.push({
-      id: echo.id.startsWith('desk-') ? echo.id : echoMemoryId(echo.text),
+      id: echo.id.startsWith('desk-')
+        ? echo.id
+        : absorbedMemoryId(echo.text, echo.baselineTailMessageId, echo.listedAtFirstRead === true),
       text: echo.text,
       anchorId: echo.baselineTailMessageId
     })
   }
   return out
+}
+
+/**
+ * The id a message read off the agent's queue box is remembered under, by
+ * both of its writers: its echo once the agent takes it (witnessesToRemember)
+ * and the box's own witness while it waits (queuedDeskWitnesses). Both anchor
+ * it at the row the box first listed it after, the one sighting the queue-box
+ * witness keeps per entry (use-absorbed-queue-echoes.ts), so one message has
+ * one id and two messages of the same words have two (review, 2026-09-30).
+ *
+ * A message the box already listed when the chat first read it is remembered
+ * by its words alone: it may be one the chat stored before a remount, where
+ * the box first listed it then, and the store joins a reading by its words
+ * alone to any stored reading of those words (mobile-native-chat-remember-echo.ts).
+ */
+export function absorbedMemoryId(text: string, anchorId: string, listedAtFirstRead: boolean): string {
+  return echoMemoryId(text, listedAtFirstRead ? null : anchorId)
 }

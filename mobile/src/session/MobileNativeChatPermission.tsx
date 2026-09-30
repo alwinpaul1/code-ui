@@ -7,6 +7,7 @@ import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
 import { TextInputModal } from '../components/TextInputModal'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
@@ -33,11 +34,13 @@ function showMoreLabel(totalRows: number): string {
 }
 
 /** One line naming what could not be shown and why, so a card with the raw
- *  request beneath it is a fallback and not a mystery. */
+ *  request beneath it is a fallback and not a mystery. The size can pass a
+ *  MB (a Codex approval to delete a file carries its whole content), so it is
+ *  the file preview's formatter, not always KB: a 5 MB change read "(5120
+ *  KB)" (review, 2026-09-30). */
 function truncatedNotice(preview: Extract<ProposedEditPreview, { kind: 'truncated' }>): string {
   const target = preview.path ? `The change to ${baseName(preview.path)}` : 'This change'
-  const size =
-    preview.totalBytes === null ? '' : ` (${Math.round(preview.totalBytes / 1024)} KB)`
+  const size = preview.totalBytes === null ? '' : ` (${formatPreviewByteLength(preview.totalBytes)})`
   return `${target} is too large to preview here${size}; showing the request as sent.`
 }
 

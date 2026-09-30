@@ -297,11 +297,23 @@ has reported it since its 2026-08-13 builds, so a missing one is a failed
 
 - Tabs the phone opens: `agent-hud-launch-config.ts` puts the host's own
   `agentDefaultArgs`/`agentDefaultEnv` in front and appends ours, passed as the
-  `launchConfig` of `session.tabs.createTerminal`.
+  `launchConfig` of `session.tabs.createTerminal`. A flag of ours already in the
+  saved args (the desktop sync's, or an older build's) is taken out first and
+  the current one put last, so a profile the sync already flagged launches
+  exactly as saved (no `launchConfig` at all) instead of with a second copy.
+  Until 2026-09-30 the phone appended ours after the sync's, which started
+  every phone-opened tab with two `--settings` (Claude) or two `-c notify=`
+  (Codex). A user's own `--settings` or `-c notify=`, or args that do not split
+  the way Orca splits them, still get no flag, with a `[hud-launch-args]` line.
 - Tabs the user opens on the desktop: `agent-hud-desktop-launch-args.ts` writes
   one flag per agent into Orca's `agentDefaultArgs` over `settings.update`,
-  once, on connect. Idempotent, marker-based, and the same pass strips
-  0.2.77's visible `tui.status_line` flags wherever a host still carries them.
+  once, on connect. Idempotent and signature-based
+  (`agent-hud-launch-flag-owner.ts`): a flag is ours only when it carries our
+  `CUIHUD` signature or is the exact text 0.2.77 wrote, so the user's own
+  flags are kept, an upgrade replaces ours rather than stacking a second, no
+  flag is added over the user's own `--settings` or `-c notify=`, and the same
+  pass strips 0.2.77's visible `tui.status_line` flag wherever a host still
+  carries it.
   The switch is Settings → Chat UI → "Desktop agents report model and context",
   default on; turning it off removes the flags again.
 - **A key is never deleted.** Orca reads a missing `agentDefaultArgs` key as
@@ -726,10 +738,11 @@ The tab status (`agentStatus.prompt`) carries the pane's last prompt, cut at
 200 characters, and makes no new copy when the prompt's words do not change.
 The prompt hook's copy (`up=`, with `at=`) carries the words as typed, up to
 2,000 bytes, the text row they were typed after, and a nonce of its own for
-each submission. Three cases the status alone cannot settle use it
+each submission. Four cases the status alone cannot settle use it
 (`desktop-prompt-merge.ts`, `desk-prompt-row-owners.ts`,
-`use-desktop-prompt-echoes.ts`; the cases are in
-`mobile-chat-midturn-beacon-evidence.test.ts`):
+`desk-prompt-landed.ts`, `use-desktop-prompt-echoes.ts`; the cases are in
+`mobile-chat-midturn-beacon-evidence.test.ts` and
+`mobile-chat-desk-message-earlier-turn-words.test.ts`):
 
 - A long message is drawn by its twin's whole words, so the queue box's whole
   reading of it and the echo are the same words (W1 of the review of
@@ -743,6 +756,11 @@ each submission. Three cases the status alone cannot settle use it
   owns and no harness sent (`joinedLineBetween`). No row is split into its
   messages: a prompt can be made of earlier messages' words, and that lost
   messages.
+- A user row at or before the row a hook copy names was written before the
+  copy was typed, so it never lands the copy: a mid-turn "keep going" that
+  repeats an earlier turn stays drawn, where before the earlier turn's row
+  dropped its only copy (2026-09-30). A status copy with no hook twin names
+  no row and is still landed by any row of its words.
 - A message read first after Orca's stand-in goes after the row its hook copy
   names; with the hook and no copy of it, it came before the chat listened,
   and goes by its run's start (gap C).

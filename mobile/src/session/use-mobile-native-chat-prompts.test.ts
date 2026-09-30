@@ -192,11 +192,27 @@ describe('useMobileNativeChatPrompts question card', () => {
     ])
   })
 
-  it('shows no question card for a reply whose last list asks nothing', () => {
+  // The notes reply pinned null until 2026-09-30, when the card took the
+  // reply's last list; the choices are the list under the line that asks.
+  it('offers the choices under the question when a notes list follows them', () => {
     expect(
       promptsFor({
         state: 'waiting',
         lastAssistantMessage: 'Which fix?\n1. Clear\n2. Release\n\nNotes:\n- a\n- b'
+      }).question
+    ).toEqual({
+      question: 'Which fix?',
+      options: ['Clear', 'Release'],
+      multiSelect: false,
+      optionTokens: ['1', '2']
+    })
+  })
+
+  it('shows no question card for a reply whose lists sit under no question', () => {
+    expect(
+      promptsFor({
+        state: 'waiting',
+        lastAssistantMessage: 'Findings:\n- x\n- y\n\nNotes:\n- a\n- b'
       }).question
     ).toBeNull()
     expect(promptsFor({ state: 'waiting', lastAssistantMessage: '' }).question).toBeNull()

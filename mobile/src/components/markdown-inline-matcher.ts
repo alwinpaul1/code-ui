@@ -1,4 +1,4 @@
-import { createMarkdownCodeSpanFinder } from './markdown-code-spans'
+import { createMarkdownCodeSpanFinder, maskMarkdownCodeSpans, type MarkdownCodeSpan } from './markdown-code-spans'
 import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
 import { EMAIL_AUTOLINK_SOURCE, emphasisSource } from './markdown-inline-token-rules'
@@ -66,6 +66,14 @@ const INLINE_TOKEN_SOURCE = [
 export const BOLD_TOKEN_GROUP = 2
 export const ADDRESS_TOKEN_GROUP = 4
 
+/** In the copy the caller's pattern scans, a character of a code span.
+ *  Private use, so it is no mark and no space to any pattern, and not the
+ *  stand-in for an escaped character (markdown-inline-escapes.ts). */
+const CODE_STAND_IN = '\uE0FE'
+/** How many times a matcher masks its copy again after a link that ended
+ *  inside a code span. */
+const REMASK_LIMIT = 8
+
 /** Merge a global non-link regex with links; search starts must advance between calls. */
 export function createMarkdownInlineMatcher(
   text: string,
@@ -86,6 +94,35 @@ export function createMarkdownInlineMatcher(
   const source = images ? maskMarkdownEscapes(text) : text
   const linkFinder = createMarkdownLinkFinder(source, images)
   const codeSpanFinder = createMarkdownCodeSpanFinder(source, images)
+  // The caller's pattern scans a copy with every code span masked, so a star
+  // inside backticks never opens or closes emphasis: code spans bind first
+  // (CommonMark 6.1). "**Edit `*.ts` files**" was a code span between
+  // literal stars, since the `*` in the span ended the bold (review,
+  // 2026-09-30). The spans are the ones the code-span finder takes from the
+  // start. Only a link, which reads the unmasked text, can end inside one,
+  // and a run it took is no longer there to pair, so the copy is masked again
+  // from past the link; past REMASK_LIMIT, the rest is scanned unmasked, as
+  // it was before, so a reply of such links stays linear.
+  let scanned = source
+  let masked: MarkdownCodeSpan[] = []
+  let maskedAt = 0
+  let remasks = 0
+  const maskFrom = (from: number): void => {
+    const mask = maskMarkdownCodeSpans(source, images, from, CODE_STAND_IN)
+    scanned = mask.masked
+    masked = mask.spans
+    maskedAt = 0
+  }
+  if (codeSpans && source.includes('`')) {
+    maskFrom(0)
+  }
+  /** Whether `from` lands inside a span the copy masks; `from` only grows. */
+  const landsInsideMask = (from: number): boolean => {
+    while (maskedAt < masked.length && masked[maskedAt]!.end <= from) {
+      maskedAt += 1
+    }
+    return maskedAt < masked.length && masked[maskedAt]!.index < from
+  }
   const other = (index: number, end: number, found?: RegExpExecArray): MarkdownInlineMatch => {
     const group = found ? found.findIndex((value, at) => at > 0 && value !== undefined) : -1
     return group > 0 ? { 0: text.slice(index, end), index, end, group } : { 0: text.slice(index, end), index, end }
@@ -119,9 +156,19 @@ export function createMarkdownInlineMatcher(
     lastIndex: 0,
     exec(): MarkdownInlineMatch | null {
       const from = matcher.lastIndex
+      if (landsInsideMask(from)) {
+        remasks += 1
+        if (remasks <= REMASK_LIMIT) {
+          maskFrom(from)
+        } else {
+          scanned = source
+          masked = []
+        }
+        nextOther = undefined
+      }
       if (nextOther === undefined || (nextOther !== null && nextOther.index < from)) {
         nonLinkPattern.lastIndex = from
-        const match = nonLinkPattern.exec(source)
+        const match = nonLinkPattern.exec(scanned)
         nextOther = match ? other(match.index, nonLinkPattern.lastIndex, match) : null
       }
       if (nextLink === undefined || (nextLink !== null && nextLink.index < from)) {
@@ -131,11 +178,12 @@ export function createMarkdownInlineMatcher(
         nextCode = findCodeSpan(from)
       }
       // A code span binds tighter than emphasis (CommonMark): a token that
-      // opens before one and closes INSIDE it is not a token. Look again from
-      // just past its opener, until the next candidate clears the span. One
-      // that closes after the span contains it and stands — the first cut of
-      // this dropped "**Alphabetical `/` menu.**" and left the stars literal
-      // beside the chip (device, 2026-09-20).
+      // opens before one and closes INSIDE it is not a token. The masked copy
+      // cannot give one; the unmasked text past REMASK_LIMIT can. Look again
+      // from just past its opener, until the next candidate clears the span.
+      // One that closes after the span contains it and stands — the first cut
+      // of this dropped "**Alphabetical `/` menu.**" and left the stars
+      // literal beside the chip (device, 2026-09-20).
       while (
         codeSpans &&
         nextCode &&
@@ -145,7 +193,7 @@ export function createMarkdownInlineMatcher(
         nextOther.end < nextCode.end
       ) {
         nonLinkPattern.lastIndex = nextOther.index + 1
-        const again = nonLinkPattern.exec(source)
+        const again = nonLinkPattern.exec(scanned)
         nextOther = again ? other(again.index, nonLinkPattern.lastIndex, again) : null
       }
       let match =

@@ -7,9 +7,10 @@ import { liveDictationDelta } from '../hooks/mobile-live-dictation-delta'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { chooseDictationEngine } from '../dictation/dictation-engine'
 import {
-  deliverDesktopDictation,
+  deliverSessionDesktopDictation,
   placeSpokenText
 } from '../dictation/place-dictation-transcript'
+import { useClipboardWriter } from '../platform/clipboard'
 import { triggerError } from '../platform/haptics'
 import {
   fetchDictationSetup,
@@ -45,7 +46,6 @@ export function useMobileSessionNativeChatDictation(
     dictationRouteContextRef,
     activeHandleRef,
     activeSessionTab,
-    flushPendingLiveInputBeforeExternalSend,
     canSend,
     liveInputEnabled,
     showToast,
@@ -151,25 +151,18 @@ export function useMobileSessionNativeChatDictation(
     onTranscript: onSpoken,
     onError: onSpokenError
   })
+  const clipboard = useClipboardWriter()
   const desktopDictation = useMobileDictation({
     client,
     enabled: canSend,
-    onTranscript: (text) => {
-      const routeContext = dictationRouteContextRef.current
-      dictationRouteContextRef.current = null
-      deliverDesktopDictation({
-        text,
+    onTranscript: (text) =>
+      deliverSessionDesktopDictation(scope, text, {
         showNativeChat: showNativeChatRef.current,
         setChatComposerText: nativeChatController.setChatComposerText,
-        showToast,
-        routeContext,
-        liveInputEnabled,
-        activeHandle: activeHandleRef.current,
-        flushPending: flushPendingLiveInputBeforeExternalSend,
         sendLiveTerminalInput,
-        setInput
-      })
-    },
+        // Where the words go when no field on screen can take them, to paste into the live field.
+        copyToClipboard: clipboard.writeText
+      }),
     onError: (err) => {
       dictationRouteContextRef.current = null
       reportDictationFailure(err)

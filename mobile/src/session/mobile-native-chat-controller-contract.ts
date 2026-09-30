@@ -78,6 +78,13 @@ export type MobileNativeChatController = {
    *  (isTakenSend in mobile-native-chat-pending-echo.ts). */
   takeOwnSends?: (ids: readonly string[]) => void
   nativeChatQueuedMessages?: string[]
+  /** Whether the screen read behind `nativeChatQueuedMessages` could see the
+   *  agent's queue box: false while the link is down, before a watch's first
+   *  read, on the structured lane, while an entry is selected at the desk or a
+   *  dialog covers the composer (mobile-terminal-queue-read.ts). The box is
+   *  then unknown, not empty, and the queue-box witness changes nothing on it
+   *  (use-absorbed-queue-echoes.ts). Absent reads as readable. */
+  nativeChatQueueReadable?: boolean
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */

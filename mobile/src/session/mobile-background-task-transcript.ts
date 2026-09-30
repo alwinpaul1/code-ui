@@ -1,3 +1,4 @@
+import type { NativeChatToolResultBlock } from '../../../src/shared/native-chat-types'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { BackgroundTaskKind } from './mobile-background-tasks'
 import { readWorkflowLaunch, readWorkflowUsage, type WorkflowDetail, type WorkflowUsage } from './mobile-background-task-workflows'
@@ -38,7 +39,8 @@ const AGENT_LAUNCHED = /(?:^|[\s(])agentId:\s*([A-Za-z0-9_-]+)/
 // Tolerant of both observed layouts — one tag per line, and the whole record on
 // a single line — plus the attributed opening tag and a record the transcript
 // truncated before its closing tag.
-const NOTIFICATION = /<task-notification\b[^>]*>([\S\s]*?)(?:<\/task-notification>|$)/g
+const NOTIFICATION_OPENING = /<task-notification\b[^>]*>/g
+const NOTIFICATION_CLOSING = '</task-notification>'
 const NOTIFICATION_ID = /<task-id>\s*([^<]+?)\s*<\/task-id>/
 const NOTIFICATION_STATUS = /<status>\s*([^<]+?)\s*<\/status>/
 const NOTIFICATION_SUMMARY = /<summary>\s*([\S\s]*?)\s*<\/summary>/
@@ -102,10 +104,12 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
       : null
   }
   if (call.name === 'Monitor') {
-    // A monitor is a long-running shell; its event notifications carry no
-    // status and never retire it — only the "stream ended" one does.
+    // A monitor runs a command like a shell, but Claude Code counts it apart:
+    // the Stop hook's `background_tasks` types it "monitor", and the footer
+    // pill does not count it among its "N shells". Its event notifications
+    // carry no status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
+    return id ? { id, kind: 'monitor', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
   }
   return null
 }
@@ -164,8 +168,7 @@ export function readNotifications(
     return []
   }
   const found: { id: string; value: Notification }[] = []
-  for (const match of text.matchAll(NOTIFICATION)) {
-    const body = match[1] ?? ''
+  for (const body of notificationBodies(text)) {
     const id = NOTIFICATION_ID.exec(body)?.[1]
     const status = NOTIFICATION_STATUS.exec(body)?.[1]
     if (!id || !status) {
@@ -178,6 +181,46 @@ export function readNotifications(
     })
   }
   return found
+}
+
+/** Each notification's body: from its opening tag to the LAST closing tag
+ *  before the next genuine opening tag (or the end of the text), or to that
+ *  point when it has none (a record the transcript cut). Not the first closing
+ *  tag: the model-written `<result>` can quote one, and a cut there left a
+ *  finished workflow's `<usage>` outside the body, so its card lost its totals
+ *  (review, 2026-09-30). Nor every opening tag: one inside the record's own
+ *  model-written text is a quote, and cutting there lost the same totals and
+ *  began a phantom record (second review, 2026-09-30). */
+function notificationBodies(text: string): string[] {
+  const openings = [...text.matchAll(NOTIFICATION_OPENING)]
+  const bodies: string[] = []
+  let index = 0
+  while (index < openings.length) {
+    const opening = openings[index]
+    const start = opening.index + opening[0].length
+    let next = index + 1
+    while (next < openings.length && endsInsideResult(text.slice(start, openings[next].index))) {
+      next += 1
+    }
+    const segment = text.slice(start, openings[next]?.index ?? text.length)
+    const end = segment.lastIndexOf(NOTIFICATION_CLOSING)
+    bodies.push(end === -1 ? segment : segment.slice(0, end))
+    index = next
+  }
+  return bodies
+}
+
+/** Whether a record, read up to a later opening tag, leaves that tag inside a
+ *  `<result>` still open: the model wrote that text, so the tag is a quote.
+ *  The `<summary>` needs no such care, because Claude escapes it
+ *  (`&amp;&amp;`, see mobile-background-task-agent-titles.ts). The last
+ *  `<result>` against the last `</result>`, not a count of the two: a result
+ *  that quotes a lone `<result>` would keep a count open past its own record
+ *  and swallow the next one. The price is a result that quotes a `</result>`
+ *  before the tag, which still ends there and loses its totals, as it did
+ *  before. */
+function endsInsideResult(recordSoFar: string): boolean {
+  return recordSoFar.lastIndexOf('<result>') > recordSoFar.lastIndexOf('</result>')
 }
 
 /** The sentence a background launch, a teammate's spawn or a remote launch
@@ -193,6 +236,47 @@ const AGENT_RESULT = new RegExp(
 /** A failure any tool can answer with: a tool error, or the user turning the
  *  call down. It says nothing about which call it answers. */
 export const ANY_TOOL_FAILURE = /^\s*<tool_use_error>|^\s*The user doesn't want to proceed with this tool use/
+
+const CANCELLED = /^\s*The user doesn't want to take this action right now/
+const DENIED = /^\s*Permission (?:for this |to use )[\s\S]*?(?:was|has been) denied/
+const ENDED = ['completed', 'failed', 'killed']
+
+/** An answer saying its call did not do what it was asked: a
+ *  `<tool_use_error>`, a turn-down, a cancel, a denial, or an answer Orca
+ *  marks as an error. */
+export function isFailedAnswer(answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>): boolean {
+  return (
+    answer.isError === true ||
+    ANY_TOOL_FAILURE.test(answer.output) ||
+    CANCELLED.test(answer.output) ||
+    DENIED.test(answer.output)
+  )
+}
+
+/** Whether an answer is TaskStop's own word that `id` is no longer running:
+ *  its data as JSON, stopped or outlived by a loop, or its input check on a
+ *  task that had ended (Claude Code 2.1.283). */
+export function saysStopped(output: string, id: string): boolean {
+  const answer = output.trimStart()
+  return [
+    `{"message":"Successfully stopped task: ${id} (`,
+    `{"message":"Task ${id} `,
+    ...ENDED.map((status) => `<tool_use_error>Task ${id} is not running (status: ${status})`)
+  ].some((opening) => answer.startsWith(opening))
+}
+
+/** The task a TaskStop ended, read off the answer the pairing handed it: its
+ *  `task_id`, unless that answer is a failure that is not TaskStop's word
+ *  that the task had already ended. Null for any other call and for a stop
+ *  that names no task. Only an answer ends a task, so a stop still waiting on
+ *  its permission prompt ends nothing yet: the row lags the stop by a moment
+ *  rather than guess it went through. The pairing is first in, first out, as
+ *  for every call, so a stop beside another call whose answers landed out of
+ *  call order can be handed the other's answer. */
+export function stoppedTaskId(call: PendingCall, answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>): string | null {
+  const id = call.name === 'TaskStop' ? readString(call.input, 'task_id') : null
+  return id !== null && (!isFailedAnswer(answer) || saysStopped(answer.output, id)) ? id : null
+}
 
 /** The call a result answers. First in, first out — transcript blocks carry
  *  no tool ids — except that an Agent call is taken only by a result shaped

@@ -1,23 +1,30 @@
 // A message the agent's queue box still lists is remembered where it arrived,
 // so one the agent takes while the chat is closed is drawn there when the chat
 // comes back (final review of fix/midturn-prompt-at-end, 2026-09-29). The
-// overlay cases are in mobile-chat-midturn-prompt-after-reply.test.ts.
+// overlay cases are in mobile-chat-midturn-prompt-after-reply.test.ts and
+// mobile-chat-desk-same-words-remembered.test.ts.
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import { echoMemoryId } from './mobile-native-chat-remember-echo'
-import { useQueuedDeskWitnesses } from './use-queued-desk-witnesses'
+import { useAbsorbedQueueWitness } from './use-absorbed-queue-echoes'
+import { queuedDeskWitnesses } from './use-queued-desk-witnesses'
 import type { WitnessToRemember } from './mobile-native-chat-witness-memory'
 
 const row = (id: string): NativeChatMessage => ({ id, role: 'assistant', blocks: [], timestamp: 1, source: 'transcript' })
 
+/** The box as the chat draws it, read through the queue-box witness whose
+ *  sightings it remembers the messages at, as the overlay wires the two. */
 function reader(scope = 'scope') {
   let renderer: ReactTestRenderer | null = null
   let out: WitnessToRemember[] = []
   function Probe({ entries, rows, scopeKey }: { entries: MobileChatQueueEntry[]; rows: NativeChatMessage[]; scopeKey: string }) {
-    out = useQueuedDeskWitnesses(entries, rows, scopeKey)
+    // The box as read: a row the phone's own send stands in is its caption.
+    const queued = entries.map((entry) => (typeof entry === 'string' ? entry : entry.caption))
+    const { box } = useAbsorbedQueueWitness(queued, [], rows, scopeKey, rows, [])
+    out = queuedDeskWitnesses(entries, box, rows)
     return null
   }
   return (entries: MobileChatQueueEntry[], rows: NativeChatMessage[], scopeKey = scope) => {
@@ -68,5 +75,68 @@ describe('a message the queue box lists', () => {
     const read = reader()
     read(['check the logs'], [row('a1')], 'one')
     expect(read(['check the logs'], [row('b9')], 'two').map((witness) => witness.anchorId)).toEqual(['b9'])
+  })
+
+  // Review, 2026-09-30: the sighting was kept by the words for good, so a
+  // later message of the same words was remembered at the first one's row,
+  // under the first one's id, and never stored.
+  it('gives a later message of the same words its own row and id once the first has left the box', () => {
+    const read = reader()
+    read([], [row('a1')])
+    expect(read(['keep going'], [row('a1')])).toEqual([{ id: echoMemoryId('keep going', 'a1'), text: 'keep going', anchorId: 'a1' }])
+    expect(read([], [row('a1'), row('a2')])).toEqual([])
+    expect(read(['keep going'], [row('a1'), row('a2'), row('a3')])).toEqual([
+      { id: echoMemoryId('keep going', 'a3'), text: 'keep going', anchorId: 'a3' }
+    ])
+  })
+
+  it('gives two copies of the same words listed together a row and id each', () => {
+    const read = reader()
+    read([], [row('a1')])
+    read(['keep going'], [row('a1')])
+    expect(read(['keep going', 'keep going'], [row('a1'), row('a2')]).map((witness) => witness.id)).toEqual([
+      echoMemoryId('keep going', 'a1'),
+      echoMemoryId('keep going', 'a2')
+    ])
+  })
+
+  // The limit, pinned: two copies of the same words the box first lists in
+  // one read were first seen after the same row, so they share an id and the
+  // store keeps one (mobile-native-chat-remember-echo.ts sightedApart).
+  it('gives two copies of the same words the box first lists in one read one id (a limit)', () => {
+    const read = reader()
+    read([], [row('a1')])
+    expect(read(['keep going', 'keep going'], [row('a1')]).map((witness) => witness.id)).toEqual([
+      echoMemoryId('keep going', 'a1'),
+      echoMemoryId('keep going', 'a1')
+    ])
+  })
+
+  // A read that cannot see the box remembers nothing, and forgets nothing:
+  // the box listed again keeps the row it was first seen at.
+  it('keeps its row across a read that could not see the box', () => {
+    let renderer: ReactTestRenderer | null = null
+    let out: WitnessToRemember[] = []
+    function Probe({ queued, rows, readable }: { queued: string[]; rows: NativeChatMessage[]; readable: boolean }) {
+      const { box } = useAbsorbedQueueWitness(queued, [], rows, 'scope', rows, [], readable)
+      out = queuedDeskWitnesses(queued, box, rows)
+      return null
+    }
+    const show = (queued: string[], rows: NativeChatMessage[], readable = true) => {
+      act(() => {
+        const element = createElement(Probe, { queued, rows, readable })
+        if (renderer) {
+          renderer.update(element)
+        } else {
+          renderer = create(element)
+        }
+      })
+      return out
+    }
+    show([], [row('a1')])
+    expect(show(['keep going'], [row('a1')]).map((witness) => witness.anchorId)).toEqual(['a1'])
+    expect(show([], [row('a1'), row('a2')], false)).toEqual([])
+    expect(show(['keep going'], [row('a1'), row('a2'), row('a3')]).map((witness) => witness.id)).toEqual([echoMemoryId('keep going', 'a1')])
+    act(() => renderer?.unmount())
   })
 })

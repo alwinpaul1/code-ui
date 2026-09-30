@@ -177,3 +177,12 @@ export function withoutSpans(args: string, spans: readonly { start: number; end:
   }
   return (out + args.slice(from)).trim()
 }
+
+/** `args` with every flag of ours taken out and `flag` put last, so an upgrade replaces rather than
+ *  stacks and a profile that already ends in `flag` comes back exactly as it was. Shared by the
+ *  desktop sync and the phone's own launch: the phone once appended a second copy to a profile the
+ *  sync had already flagged (agent-hud-phone-launch-over-saved-flag.test.ts). */
+export function withOurFlagLast(args: string, ours: readonly { start: number; end: number }[], flag: string): string {
+  const base = ours.length > 0 ? withoutSpans(args, ours) : args.trim()
+  return base ? `${base} ${flag}` : flag
+}

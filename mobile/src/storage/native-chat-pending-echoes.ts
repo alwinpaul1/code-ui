@@ -46,15 +46,47 @@ function isPending(value: unknown): value is MobileNativeChatPendingMessage {
  *  Why persist: a send made while the agent is busy is queued on its input
  *  line, and Claude Code records it only as a queue event, never as a
  *  transcript row. The phone's echo is the only copy, and it was plain state:
- *  leaving the project and coming back made the queued message vanish. */
+ *  leaving the project and coming back made the queued message vanish.
+ *
+ *  Null when nothing is stored, and when storage refused the read: use
+ *  readNativeChatPendingEchoRecord before writing over the stored list. */
 export async function readNativeChatPendingEchoes(
   sessionKey: string,
   now = Date.now()
 ): Promise<MobileNativeChatPendingMessage[] | null> {
+  const read = await readNativeChatPendingEchoRecord(sessionKey, now)
+  return 'refused' in read ? null : read.pending
+}
+
+/**
+ * The stored echoes, or why storage would not hand them over. A refused read
+ * is kept apart from a store with nothing in it: the whole list sits under
+ * one key, so a write after a refused read taken for an empty store replaced
+ * every echo stored before with this visit's, and a message queued while the
+ * agent was busy, whose only copy that was, was gone (2026-09-30). Nothing
+ * stored, expired, or corrupt is `pending: null`, which a write may replace.
+ */
+export async function readNativeChatPendingEchoRecord(
+  sessionKey: string,
+  now = Date.now()
+): Promise<{ pending: MobileNativeChatPendingMessage[] | null } | { refused: unknown }> {
+  let raw: string | null
   try {
     // A route can reopen while retirement is still removing its disk entry.
     await barriers.get(sessionKey)
-    const raw = await AsyncStorage.getItem(storageKey(sessionKey))
+    raw = await AsyncStorage.getItem(storageKey(sessionKey))
+  } catch (error) {
+    return { refused: error }
+  }
+  return { pending: parseStoredEchoes(sessionKey, raw, now) }
+}
+
+function parseStoredEchoes(
+  sessionKey: string,
+  raw: string | null,
+  now: number
+): MobileNativeChatPendingMessage[] | null {
+  try {
     if (!raw) {
       return null
     }

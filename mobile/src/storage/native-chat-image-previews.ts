@@ -27,9 +27,26 @@ export function persistableImagePreviews(
   return kept
 }
 
+/** Null when nothing is stored, and when storage refused the read: use
+ *  readNativeChatImagePreviewRecord before writing over the stored map. */
 export async function readNativeChatImagePreviews(
   sessionKey: string
 ): Promise<Record<string, string[]> | null> {
+  const read = await readNativeChatImagePreviewRecord(sessionKey)
+  return 'refused' in read ? null : read.previews
+}
+
+/**
+ * The stored previews, or why storage would not hand them over. A refused
+ * read is kept apart from a session with nothing stored: the whole map sits
+ * under one key, and a save that took a refused read for an empty one wrote
+ * its own map over every earlier photo of the chat (2026-09-30). Nothing
+ * stored, or a value that will not parse, is `previews: null`.
+ */
+export async function readNativeChatImagePreviewRecord(
+  sessionKey: string
+): Promise<{ previews: Record<string, string[]> | null } | { refused: unknown }> {
+  let raw: string | null
   try {
     // A chat can come back while its last write is still landing (a removal
     // included); a read that beat it brought the previous previews back. The
@@ -40,7 +57,15 @@ export async function readNativeChatImagePreviews(
     if (writing) {
       await writing
     }
-    const raw = await AsyncStorage.getItem(previewStorageKey(sessionKey))
+    raw = await AsyncStorage.getItem(previewStorageKey(sessionKey))
+  } catch (error) {
+    return { refused: error }
+  }
+  return { previews: parseStoredPreviews(raw) }
+}
+
+function parseStoredPreviews(raw: string | null): Record<string, string[]> | null {
+  try {
     if (!raw) {
       return null
     }

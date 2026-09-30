@@ -2,7 +2,7 @@
 // Metro cannot resolve Node builtins in a React Native bundle.
 import { Buffer } from 'buffer'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { readHudLaunchFlags } from './agent-hud-launch-flag-owner'
+import { readHudLaunchFlags, withOurFlagLast } from './agent-hud-launch-flag-owner'
 import { AGENT_HUD_TTY_WRITE, ENCODE_FN } from './agent-hud-tty-write'
 
 /**
@@ -800,7 +800,9 @@ export function hostTakesAgentHudFlag(hostPlatform: NodeJS.Platform | null): boo
 
 /**
  * The launch arguments for one agent: the host's own defaults kept in front,
- * ours appended. Null for an agent with no beacon channel, on a host that
+ * ours appended in place of any flag of ours already saved there (the desktop
+ * sync's, or an older build's), so a profile the sync flagged launches exactly
+ * as saved. Null for an agent with no beacon channel, on a host that
  * takes no flag (`hostTakesAgentHudFlag`), or when the host's args carry the
  * user's own `--settings` or `-c notify=`, which ours would replace
  * (`agent-hud-launch-flag-owner.ts`), so the host launches exactly as it
@@ -817,12 +819,10 @@ export function buildAgentHudLaunchArgs(args: {
     return null
   }
   const flags = readHudLaunchFlags(args.agent, args.hostDefaultArgs, args.hostPlatform)
-  const refusal = !flags.readable ? `they do not split (${flags.reason})` : flags.usersOwn && `they carry the user's own ${flags.usersOwn}, which ours would replace`
-  if (refusal) {
+  if (!flags.readable || flags.usersOwn) {
+    const refusal = !flags.readable ? `they do not split (${flags.reason})` : `they carry the user's own ${flags.usersOwn}, which ours would replace`
     console.warn(`[hud-launch-args] ${args.agent}: no beacon flag on this tab's args: ${refusal}`)
     return null
   }
-  const base = args.hostDefaultArgs.trim()
-  const flag = agentHudLaunchFlag(args.agent, args.hostPlatform)
-  return base ? `${base} ${flag}` : flag
+  return withOurFlagLast(args.hostDefaultArgs, flags.ours, agentHudLaunchFlag(args.agent, args.hostPlatform))
 }

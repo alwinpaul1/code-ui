@@ -75,7 +75,49 @@ const hash = (parts: string[] | string): string =>
 // RPC recording fixtures need no palette and their goldens hold. That moves the createTask body in
 // the hooks and statements pins (counts unchanged) and adds the one literal to `semantics`
 // (3,275 -> 3,276).
-const PROVIDER_RPC_SCREEN_HOOKS = 'ae1db153f31d18850576ccec082422b35024f4a5527fc8ca126eae13ec3af2a2'
+// 2026-09-30 (fix round 1, b8 finding 6): Linear's Change Status sheet said "No states available"
+// when the team's state-list read had failed. The list-and-detail stage's state-list effect moves
+// whole into useLinearTeamStateList (failure as `linearStatesError`, a Retry, a read again per new
+// connection), which sets the same setters in the same order, so the RPC recording goldens hold.
+// Checked by dumping every reader's output before and after and diffing: the hooks and statements
+// pins each swap that one effect for the one `useLinearTeamStateList` call at the same place (353
+// and 420 still); `semantics` 3,276 -> 3,278 (the sheet's error branch adds one `jsx:TasksButton`,
+// one `jsx:View:style` and two `jsx:Text:style` signatures and the literals "Retry loading states"
+// and "button"; the four `''` draft resets leave with the effect); the render tree 35,306 -> 35,399
+// (that branch, 93 tokens). Declarations and the StyleSheets do not move.
+// mobile-tasks-linear-states-failure.test.tsx guards the behaviour.
+// 2026-09-30 (fix round 3, finding 1): a task's detail sheet, its label and assignee pickers and a
+// board row's detail kept a failed read's error after the host reconnected. Each read now takes
+// the host's connection time from MobileTasksScreen (a second argument on three stage calls) and
+// goes through useTaskReadAgainAfterReconnect, which sits outside this family. Checked by dumping
+// every reader's output before and after and diffing: hooks 353 -> 363, the pickers' one effect
+// split into a label effect and an assignee effect with a read counter (`useState`) and a
+// `useTaskReadAgainAfterReconnect` call each (+5), one such call on the item detail (+1), and on
+// the board row a reconnect counter, its own read-failed flag, a ref naming what the last read was
+// for, and the call (+4). Statements 420 -> 431: those ten and the `pickerItem` const. `semantics`
+// 3,278 -> 3,282: two `''` and two `'github'` literals net, from the split and the pickers' error
+// tests. Declarations, the render tree and the StyleSheets do not move, nor do the RPC recording
+// goldens. mobile-tasks-detail-after-reconnect.test.tsx guards the behaviour.
+// 2026-09-30 (fix round 3, finding 2): a Linear issue whose comment read the desktop refused drew
+// "No comments." under a "No comments yet" count. The detail payload now carries `commentsFailed`,
+// the Discussion section says "Couldn't load comments" with a Retry and no count, and the
+// reconnect re-read counts the flag as a failed read. The section moved whole out of
+// mobile-tasks-item-detail-content.tsx into mobile-tasks-item-discussion.tsx, and the render
+// reader flattens it back in place. Checked by dumping every reader's output before and after and
+// diffing: hooks and statements keep their counts (363, 431) and move for the detail effect's
+// body (the warning and the flag) and the re-read's predicate; `DetailPayload` gains
+// `commentsFailed?: true` (200 declarations still); `semantics` 3,282 -> 3,292 (the error branch's
+// `jsx:TasksButton`, `jsx:View:style` and two `jsx:Text:style` signatures, the literals "Retry
+// loading comments", "button", the warning's "[tasks] the Linear comment list could not be read"
+// and "no list in the reply", and two `'linear'` comparisons); the render tree 35,399 -> 35,514,
+// additions only (that branch and the count's condition, 115 tokens). The StyleSheets do not move.
+// mobile-tasks-item-discussion.test.tsx guards the section in both themes.
+// Same round, later: the item detail and the two pickers judged a failed read by its error line,
+// which a rejection with an empty message leaves '', so that failure was never read again. Each
+// now keeps its own read-failed flag, as the board row already did: hooks 363 -> 366 and
+// statements 431 -> 434 (three `useState`), and `semantics` 3,292 -> 3,289, the three `''` the
+// error-line tests compared against leaving. Nothing else moves.
+const PROVIDER_RPC_SCREEN_HOOKS = 'b10fb182bf11303004ce3cdf56006d299ad6c28186a9ed2145b7da25fea41d6e'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -114,7 +156,10 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
 // stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
 // 2026-09-27 (theme pass 2): 418 -> 420; see the note above PROVIDER_RPC_SCREEN_HOOKS.
-const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a78d403fa6f67167f1'
+// 2026-09-30 (b8 finding 6): one statement swapped, 420 still; see the note above the hooks pin.
+// 2026-09-30 (fix round 3, finding 1): 420 -> 431 (note above the hooks pin).
+// 2026-09-30 (fix round 3, finding 2): 431 still, then 434 (notes above the hooks pin).
+const PROVIDER_RPC_STATEMENTS = '27c049ab034a8d7a290b53fe6ba421fda5b26d2106315f492f697ef426f0adf6'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -128,7 +173,9 @@ const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a
 // Later the same day, the Tasks surface onto the live theme: 194 -> 200 (note above the hooks pin).
 // 2026-09-30 (Orca #22279, the v1.4.217 re-vendor): `reconcileTeamSelection`'s `saved` becomes `unknown`,
 // upstream's own change to this declaration and the only one. 200 declarations still.
-const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205eed3195cb9c08bf1ad49a'
+// 2026-09-30 (fix round 3, finding 2): `DetailPayload`'s Linear arm gains `commentsFailed?: true`.
+// 200 declarations still.
+const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb0bd5bc6a15cbe43f900ab'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -142,17 +189,22 @@ const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205
 // 2026-09-27 (theme pass 2): that diff's `jsx:MobileSyntaxSegments:segments` host signature
 // becomes `…:segments,palette`. 3,271 lines still.
 // Later the same day: 3,271 -> 3,275 -> 3,276 (notes above the hooks pin).
-const A11Y_BACK_SEMANTICS = 'e2904f6a4dea08ba3c42d42777f2a219b556f10dbbc6ca28f113aba330111679'
+// 2026-09-30 (b8 finding 6): 3,276 -> 3,278 (note above the hooks pin).
+// 2026-09-30 (fix round 3, finding 1): 3,278 -> 3,282 (note above the hooks pin).
+// 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292, then 3,289 (notes above the hooks pin).
+const A11Y_BACK_SEMANTICS = 'f20c7b6dd3608c9b8155c8cba33ab73d25590a7eb4bd2fc5e21cdfa04648df51'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
 // 2026-09-27 (theme pass 2): 35,299 -> 35,306 (note above the hooks pin).
-const A11Y_BACK_RENDER_TREE = '6bde687376965123d7a936746b7216d0493f78b5c73cd01428debf6b2977509f'
+// 2026-09-30 (b8 finding 6): 35,306 -> 35,399 (note above the hooks pin).
+// 2026-09-30 (fix round 3, finding 2): 35,399 -> 35,514 (note above the hooks pin).
+const A11Y_BACK_RENDER_TREE = 'dd5772f028ce846ee2341b061f365be457e579bf2308dd42d4dd0eb7448af87c'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(353)
+    expect(screenHooks).toHaveLength(366)
     expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
@@ -162,7 +214,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(420)
+    expect(statements).toHaveLength(434)
     expect(hash(statements)).toBe(PROVIDER_RPC_STATEMENTS)
   })
 
@@ -174,7 +226,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_276)
+    expect(semantics.split('\n')).toHaveLength(3_289)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
@@ -192,7 +244,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_306)
+    expect(tokens).toHaveLength(35_514)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 

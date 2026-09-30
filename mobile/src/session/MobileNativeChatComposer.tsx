@@ -421,6 +421,7 @@ export function MobileNativeChatComposer({
                 onAttachImage={onAttachImage}
                 onAttachFile={onAttachFile}
                 permissionMode={permissionMode}
+                agentMode={agentMode}
                 onOpenPermission={
                   (agentMode ? onSelectAgentMode : onSelectPermissionMode)
                     ? () => setShowModeSheet(true)

@@ -22,6 +22,11 @@ vi.mock('expo-haptics', () => ({
   NotificationFeedbackType: {}
 }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
+// Diff Review reads the host's lastConnectedAt for the PR sidebar's reconnect refetch; this renders
+// without an RpcClientProvider, so the metric is the usual stand-in.
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 
 const client = { sendRequest: vi.fn() } as unknown as RpcClient
 

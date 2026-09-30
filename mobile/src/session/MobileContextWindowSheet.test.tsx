@@ -1,0 +1,248 @@
+import { createElement, type ReactNode } from 'react'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('react-native', () => ({
+  Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default },
+  StyleSheet: { create: <T,>(styles: T) => styles, flatten: (s: unknown) => s, hairlineWidth: 1 },
+  Text: 'Text',
+  View: 'View',
+  useColorScheme: () => 'light'
+}))
+// The real drawer keeps its content mounted only while it is open (and for
+// its close animation), so its children are drawn only when visible.
+vi.mock('../components/BottomDrawer', () => ({
+  BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
+    visible ? createElement('BottomDrawer', null, children) : null
+}))
+
+import type { ProviderRateLimits } from '../components/accounts-snapshot'
+import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
+import { hudLimitsFromRateLimits } from './hud-rate-limits'
+import { formatLimitReset, MobileContextWindowSheet } from './MobileContextWindowSheet'
+import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+
+let renderer: ReactTestRenderer | null = null
+
+beforeEach(() => {
+  vi.useFakeTimers()
+})
+afterEach(() => {
+  act(() => renderer?.unmount())
+  renderer = null
+  vi.useRealTimers()
+})
+
+const at = (hhmm: string): number => new Date(`2026-09-30T${hhmm}:00Z`).getTime()
+const epochSeconds = (hhmm: string): number => Math.floor(at(hhmm) / 1000)
+
+function texts(root: ReactTestInstance): string[] {
+  return root
+    .findAll((node) => String(node.type) === 'Text')
+    .map((node) => [node.props.children].flat().join(''))
+}
+
+function flat(style: unknown): Record<string, unknown> {
+  const list = Array.isArray(style) ? style.flat(Infinity) : [style]
+  return Object.assign({}, ...list.filter((entry) => Boolean(entry) && typeof entry === 'object'))
+}
+
+/** The Session row's figure, "50% · resets in …". */
+const sessionFigure = (root: ReactTestInstance): string | undefined =>
+  texts(root).find((text) => text.startsWith('50%'))
+
+function sheet(
+  scheme: 'light' | 'dark',
+  visible: boolean,
+  context: TerminalHudContextWindow | null
+) {
+  return (
+    <ThemeProvider initialPreference={scheme}>
+      <MobileContextWindowSheet visible={visible} context={context} onClose={() => {}} />
+    </ThemeProvider>
+  )
+}
+
+describe.each([
+  ['light', lightColors],
+  ['dark', darkColors]
+] as ['light' | 'dark', ThemeColors][])('the context window sheet in a %s session', (scheme, palette) => {
+  // The composer mounts the sheet with the chat and only flips `visible` when
+  // the ring is tapped, so a clock read at mount was the chat's opening time:
+  // two hours into a chat, a window resetting in one hour read "resets in 3h
+  // 0m" (review, 2026-09-30).
+  const session = (resetsAt: number): TerminalHudContextWindow => ({
+    usedPercent: 40,
+    usedLabel: null,
+    windowLabel: null,
+    limits: [{ name: 'Session', usedPercent: 50, windowMinutes: 300, resetsAt }]
+  })
+
+  it('counts a limit reset from when the sheet is opened, not from when the chat was', () => {
+    vi.setSystemTime(at('10:00'))
+    act(() => {
+      renderer = create(sheet(scheme, false, session(epochSeconds('13:00'))))
+    })
+    vi.setSystemTime(at('12:00'))
+    act(() => renderer!.update(sheet(scheme, true, session(epochSeconds('13:00')))))
+    expect(sessionFigure(renderer!.root)).toBe('50% · resets in 1h 0m')
+    // Still drawn in the theme's own secondary text colour.
+    const figure = renderer!.root.find(
+      (node) => String(node.type) === 'Text' && [node.props.children].flat().join('').startsWith('50%')
+    )
+    expect(flat(figure.props.style).color).toBe(palette.textSecondary)
+  })
+
+  it('says "resets in 1m", not "resets in 0m", for a reset half a minute away', () => {
+    vi.setSystemTime(at('12:59') + 30_000)
+    act(() => {
+      renderer = create(sheet(scheme, true, session(epochSeconds('13:00'))))
+    })
+    expect(sessionFigure(renderer!.root)).toBe('50% · resets in 1m')
+  })
+
+  it('says "resetting now" for a reset that passed while the chat sat open', () => {
+    vi.setSystemTime(at('10:00'))
+    act(() => {
+      renderer = create(sheet(scheme, false, session(epochSeconds('13:00'))))
+    })
+    vi.setSystemTime(at('14:00'))
+    act(() => renderer!.update(sheet(scheme, true, session(epochSeconds('13:00')))))
+    expect(sessionFigure(renderer!.root)).toBe('50% · resetting now')
+  })
+
+  it('reads the clock again each time the sheet is reopened', () => {
+    vi.setSystemTime(at('10:00'))
+    act(() => {
+      renderer = create(sheet(scheme, true, session(epochSeconds('13:00'))))
+    })
+    expect(sessionFigure(renderer!.root)).toBe('50% · resets in 3h 0m')
+    act(() => renderer!.update(sheet(scheme, false, session(epochSeconds('13:00')))))
+    vi.setSystemTime(at('12:30'))
+    act(() => renderer!.update(sheet(scheme, true, session(epochSeconds('13:00')))))
+    expect(sessionFigure(renderer!.root)).toBe('50% · resets in 30m')
+  })
+})
+
+// The countdown floored the seconds left into hours and minutes, so a limit
+// resetting in under a minute read "resets in 0m", as if it had already reset
+// (review, 2026-09-30). It rounds up to whole minutes now, as the Accounts
+// countdown does (formatResetCountdown in usage-window-summary.ts), in this
+// sheet's own words.
+describe('the reset countdown on a usage row', () => {
+  const NOW = at('12:00')
+  const inSeconds = (seconds: number): number => Math.floor(NOW / 1000) + seconds
+
+  it.each([
+    [1, 'resets in 1m'],
+    [30, 'resets in 1m'],
+    [59, 'resets in 1m'],
+    [60, 'resets in 1m'],
+    [61, 'resets in 2m'],
+    [3_570, 'resets in 1h 0m'],
+    [3_599, 'resets in 1h 0m'],
+    [3_600, 'resets in 1h 0m'],
+    [3_601, 'resets in 1h 1m'],
+    [86_370, 'resets in 1d 0h'],
+    [86_399, 'resets in 1d 0h'],
+    [86_400 + 3 * 3_600 + 1, 'resets in 1d 3h'],
+    [0, 'resetting now'],
+    [-45, 'resetting now']
+  ])('reads %i s left as "%s"', (seconds, expected) => {
+    expect(formatLimitReset(inSeconds(seconds), NOW)).toBe(expected)
+  })
+
+  it('never reads "resets in 0m" while any time is left', () => {
+    for (let seconds = 1; seconds <= 180; seconds += 1) {
+      expect(formatLimitReset(inSeconds(seconds), NOW)).not.toBe('resets in 0m')
+    }
+  })
+
+  it('says nothing when the agent gave no reset time', () => {
+    expect(formatLimitReset(null, NOW)).toBeNull()
+  })
+})
+
+// Weekly and Fable are both 10,080-minute windows (hudLimitsFromRateLimits),
+// and the sheet keyed each row by its window length: React logged "Encountered
+// two children with the same key" and, on the next update, could draw one
+// row's percentage under the other or drop a row (review, 2026-09-30). The
+// figures are the ones hud-rate-limits.test.ts pins.
+describe.each([
+  ['light', lightColors],
+  ['dark', darkColors]
+] as ['light' | 'dark', ThemeColors][])('the usage rows in a %s session', (scheme, palette) => {
+  const rateLimits = (weekly: number, fable: number | null): ProviderRateLimits => ({
+    provider: 'claude',
+    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_788_960_000_000, resetDescription: null },
+    weekly: {
+      usedPercent: weekly,
+      windowMinutes: 10_080,
+      resetsAt: 1_789_300_000_000,
+      resetDescription: null
+    },
+    fableWeekly:
+      fable === null
+        ? null
+        : { usedPercent: fable, windowMinutes: 10_080, resetsAt: 1_789_300_000_000, resetDescription: null },
+    updatedAt: 1_788_950_000_000,
+    error: null,
+    status: 'ok'
+  })
+  const withLimits = (limits: TerminalHudContextWindow['limits']): TerminalHudContextWindow => ({
+    usedPercent: 26,
+    usedLabel: null,
+    windowLabel: null,
+    limits
+  })
+  /** Each drawn usage row as "name percent", in order. */
+  const rows = (root: ReactTestInstance): string[] => {
+    const all = texts(root)
+    return all.flatMap((text, i) =>
+      i > 1 && /^\d+%/.test(text) ? [`${all[i - 1]} ${text.split(' ·')[0]}`] : []
+    )
+  }
+  const draw = (limits: TerminalHudContextWindow['limits']): void => {
+    const element = sheet(scheme, true, withLimits(limits))
+    act(() => {
+      if (renderer) {
+        renderer.update(element)
+      } else {
+        renderer = create(element)
+      }
+    })
+  }
+
+  it('draws the Weekly and Fable rows, each with its own percentage, without a duplicate key', () => {
+    vi.setSystemTime(1_788_950_000_000)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      draw(hudLimitsFromRateLimits(rateLimits(33, 48)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 33%', 'Fable 48%'])
+      draw(hudLimitsFromRateLimits(rateLimits(34, 50)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 34%', 'Fable 50%'])
+      draw(hudLimitsFromRateLimits(rateLimits(35, null)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 35%'])
+      const duplicateKeys = errors.mock.calls
+        .map((call) => call.map(String).join(' '))
+        .filter((line) => line.includes('same key'))
+      expect(duplicateKeys).toEqual([])
+    } finally {
+      errors.mockRestore()
+    }
+    const name = renderer!.root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === 'Weekly'
+    )
+    expect(flat(name.props.style).color).toBe(palette.text)
+  })
+
+  it('draws a one-row list, and no rows for an empty one', () => {
+    vi.setSystemTime(1_788_950_000_000)
+    draw(hudLimitsFromRateLimits(rateLimits(33, 48)).slice(0, 1))
+    expect(rows(renderer!.root)).toEqual(['Session 100%'])
+    draw([])
+    expect(rows(renderer!.root)).toEqual([])
+    expect(texts(renderer!.root)).toEqual(['Context window', '26%'])
+  })
+})

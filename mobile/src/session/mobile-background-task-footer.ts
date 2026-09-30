@@ -57,6 +57,15 @@ export type ShellCountFit = {
  *  WHICH one the phone cannot know, so the oldest are retired as `finished`:
  *  over, outcome unseen. Shells only in both directions. */
 export function fitToOnScreenShellCount(tasks: BackgroundTasks, now: number, fit: ShellCountFit): BackgroundTasks {
+  // While a monitor runs, nothing is fitted either way. Claude Code 2.1.284's
+  // pill counts monitors apart ("N shells, M monitors", or "N background
+  // tasks" for a mix, by its binary; docs/mobile-background-tasks.md), no
+  // screen of that pill has been captured, and FOOTER_SHELL_COUNT reads only
+  // its leading "N shells". A count read off a pill of unknown wording would
+  // retire or pad the wrong row, so none is used.
+  if (tasks.running.some((task) => task.kind === 'monitor')) {
+    return tasks
+  }
   if (fit.live !== null) {
     const named = tasks.running.filter((task) => task.kind === 'shell').length
     if (named > fit.live) {

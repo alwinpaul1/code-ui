@@ -7,9 +7,9 @@ import {
   Wrench
 } from 'lucide-react-native'
 import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import type { NativeChatDiffLine as DiffLine } from '../../../src/shared/native-chat-diff'
 import { isEditToolName } from '../../../src/shared/native-chat-edit-normalize'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
+import { DiffView, ResultBody, ShowMoreCalls } from './MobileNativeChatToolRunBodyParts'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 import {
@@ -37,10 +37,7 @@ import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailShe
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
-import {
-  createToolInputDisplay,
-  truncateToolDetail
-} from '../../../src/shared/native-chat-tool-summary'
+import { createToolInputDisplay } from '../../../src/shared/native-chat-tool-summary'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type {
   NativeChatBlock,
@@ -51,50 +48,12 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 
+/** Calls a run's body shows before a "Show N more tool calls" button. This
+ *  client's own: the desktop's NativeChatToolRun draws every call. */
 const MAX_VISIBLE_TOOL_PAIRS = 6
+/** Diff rows a run's first page shares out, two diffs a call: the call's own
+ *  and its result's (ToolRun's `diffLineLimit`). */
 const MAX_TOOL_RUN_DIFF_ROWS = 240
-
-export function DiffView({ lines, styles }: { lines: DiffLine[]; styles: ChatMessageStyles }) {
-  return (
-    <View style={styles.diff}>
-      {lines.map((line, i) => (
-        <Text
-          key={i}
-          style={[
-            styles.diffLine,
-            line.kind === 'add' && styles.diffAdd,
-            line.kind === 'del' && styles.diffDel,
-            line.kind === 'meta' && styles.diffMeta
-          ]}
-        >
-          {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-          {line.text}
-        </Text>
-      ))}
-    </View>
-  )
-}
-
-function ResultBody({
-  output,
-  isError,
-  diff,
-  styles
-}: {
-  output: string
-  isError?: boolean
-  diff: DiffLine[] | null
-  styles: ChatMessageStyles
-}) {
-  if (diff) {
-    return <DiffView lines={diff} styles={styles} />
-  }
-  return (
-    <View style={[styles.toolResult, isError && styles.toolResultError]}>
-      <Text style={styles.mono}>{truncateToolDetail(output)}</Text>
-    </View>
-  )
-}
 
 /** The files one edit call changed, or null when the model refuses to claim an
  *  edit — a failed call, one still running, or a turn that stopped before its
@@ -312,25 +271,46 @@ export function ToolRun({
   // threaded up through the message/view props that already carry
   // `onOpenFile` — nothing outside a run needs to know a sheet is open.
   const [detailPair, setDetailPair] = useState<ToolPair | null>(null)
-  const pairs = pairToolBlocks(blocks, MAX_VISIBLE_TOOL_PAIRS)
+  // Past the first six calls the body offers the rest behind a button; it
+  // ended at plain "… N more tool calls" text, so calls 7 onward, a failed one
+  // and its detail sheet included, could not be reached (review, 2026-09-30).
+  const [showAllPairs, setShowAllPairs] = useState(false)
+  const allPairs = pairToolBlocks(blocks)
+  const pairs = showAllPairs ? allPairs : allPairs.slice(0, MAX_VISIBLE_TOOL_PAIRS)
   // Cheap enough to run collapsed: a plan row says how far along it is
   // before anyone opens it ("1/3 · Writing the test", beside the sentence).
-  const taskLists = mobileTaskListRows(pairs, taskListPredecessors)
+  // Over every call, not only the ones shown: a plan made after the sixth
+  // call drew no plan line, and a revision there no diff.
+  const taskLists = mobileTaskListRows(allPairs, taskListPredecessors)
   let planPreview: string | null = null
-  for (let index = 0; index < pairs.length; index++) {
-    const row = taskLists[index]
+  for (const row of taskLists) {
     if (row) {
       planPreview = mobileTaskListPreview(row.list)
     }
   }
-  const diffLineLimit = Math.max(1, Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (pairs.length * 2 || 1)))
+  // Every line draws the diff budget of the run's first page: 240 rows over
+  // the calls shown before "Show N more tool calls", two diffs a call, so 20
+  // rows a diff once a run passes six calls. Worked out over the calls shown
+  // at the time, the tap cut the diffs the reader was reading, to 10 rows for
+  // 12 calls and 1 for 120 (review, 2026-09-30). The calls the tap reveals
+  // draw the same 20 but come in closed, even under the expand-all toggle
+  // (renderBody): opened together, 120 calls would draw thousands of rows at
+  // once. So a run never draws more diff rows at once than its first page,
+  // and every row past that is one the reader opened.
+  const shownByDefault = Math.min(allPairs.length, MAX_VISIBLE_TOOL_PAIRS)
+  const diffLineLimit = Math.max(
+    1,
+    Math.floor(MAX_TOOL_RUN_DIFF_ROWS / (shownByDefault * 2 || 1))
+  )
   let callCount = 0
   for (const block of blocks) {
     if (block.type === 'tool-call') {
       callCount++
     }
   }
-  callCount ||= pairs.length
+  // A run of nothing but results whose calls the window cut counts its rows,
+  // all of them: over the six shown it said "6 tool calls" for seven.
+  callCount ||= allPairs.length
   const countLabel = `${callCount} tool call${callCount === 1 ? '' : 's'}`
   // A collapsed run that contained failures says so (Orca #21151), counted
   // over every call, not the latest: in the sentence's "(N failed)", and a
@@ -362,11 +342,11 @@ export function ToolRun({
   // A run of exactly one call IS that call's row — the Claude app shows a
   // run's calls first and opens the sheet per call, but with only one call
   // there is nothing to disclose first, so its header opens the sheet
-  // directly instead of revealing a single child line to tap again. A call
-  // still claimed by "… N more tool calls" (pairs.length < callCount) keeps
-  // the old reveal-first behaviour: there is more than one call, it is just
-  // not all shown.
-  const singlePair = pairs.length === 1 && callCount === pairs.length ? pairs[0]! : null
+  // directly instead of revealing a single child line to tap again. So does
+  // a run that is one result whose call the window cut. Counted over every
+  // row, not the ones shown: a run with rows behind "Show N more tool calls"
+  // keeps the reveal-first behaviour, since it has more than one to disclose.
+  const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
   const detailSheet = (
@@ -469,7 +449,8 @@ export function ToolRun({
             key={i}
             pair={pair}
             taskList={taskLists[i] ?? null}
-            defaultExpanded={expandChildren ?? defaultExpanded}
+            // A call "Show N more" revealed opens on its own tap (diffLineLimit).
+            defaultExpanded={i < MAX_VISIBLE_TOOL_PAIRS && (expandChildren ?? defaultExpanded)}
             diffLineLimit={diffLineLimit}
             onOpenFile={onOpenFile}
             onOpenDetail={setDetailPair}
@@ -479,8 +460,14 @@ export function ToolRun({
             styles={styles}
           />
         ))}
-        {callCount > pairs.length ? (
-          <Text style={styles.toolPreview}>… {callCount - pairs.length} more tool calls</Text>
+        {/* Rows, not calls: a result whose call the window cut is a row of
+            its own, and counted by calls it hid the last call (2026-09-30). */}
+        {allPairs.length > pairs.length ? (
+          <ShowMoreCalls
+            count={allPairs.length - pairs.length}
+            onPress={() => setShowAllPairs(true)}
+            styles={styles}
+          />
         ) : null}
       </View>
     )

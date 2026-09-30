@@ -24,9 +24,11 @@ describe('buildMobileDiffLines', () => {
     expect(result.lines).toHaveLength(2_501)
     expect(result.lines[0]).toEqual({ kind: 'add', text: 'line-1', newLineNumber: 1 })
     expect(result.lines[2_499]).toEqual({ kind: 'add', text: 'line-2500', newLineNumber: 2500 })
+    // The marker row says what the cap left out (it used to say only that it cut something).
     expect(result.lines[2_500]).toEqual({
       kind: 'context',
-      text: '... diff truncated for mobile preview ...'
+      text: '... 500 added lines not shown on mobile ...',
+      note: { kind: 'truncated', hiddenAdded: 500, hiddenDeleted: 0 }
     })
   })
 
@@ -46,7 +48,8 @@ describe('buildMobileDiffLines', () => {
     })
     expect(result.lines[2_500]).toEqual({
       kind: 'context',
-      text: '... diff truncated for mobile preview ...'
+      text: '... 500 deleted and 3,000 added lines not shown on mobile ...',
+      note: { kind: 'truncated', hiddenAdded: 3_000, hiddenDeleted: 500 }
     })
   })
 })

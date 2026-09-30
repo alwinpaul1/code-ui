@@ -75,17 +75,18 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatMessage,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
+  type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { FINISHED_RUN_USAGE } from './mobile-background-task-agent-titles'
 import {
   AGENT_LAUNCH_OPENING,
   ANY_TOOL_FAILURE,
   INTERRUPTED,
+  isFailedAnswer,
   readLaunch,
   readNotifications,
   readString,
+  saysStopped,
   takeAnsweredCall,
   type Launch,
   type PendingCall
@@ -131,32 +132,6 @@ function leftAgentRunning(call: Pending, output: string, onlyAgentsWaited: boole
     !JSON_OPENING.test(output) &&
     !askedForBackground(call)
   return !cutReport
-}
-
-const CANCELLED = /^\s*The user doesn't want to take this action right now/
-const DENIED = /^\s*Permission (?:for this |to use )[\s\S]*?(?:was|has been) denied/
-const ENDED = ['completed', 'failed', 'killed']
-
-/** An answer saying its call did not do what it was asked. */
-function isFailure(block: NativeChatToolResultBlock): boolean {
-  return (
-    block.isError === true ||
-    ANY_TOOL_FAILURE.test(block.output) ||
-    CANCELLED.test(block.output) ||
-    DENIED.test(block.output)
-  )
-}
-
-/** Whether an answer is TaskStop's own word that `id` is no longer running:
- *  its data as JSON, stopped or outlived by a loop, or its input check on a
- *  task that had ended (Claude Code 2.1.283). */
-function saysStopped(output: string, id: string): boolean {
-  const answer = output.trimStart()
-  return [
-    `{"message":"Successfully stopped task: ${id} (`,
-    `{"message":"Task ${id} `,
-    ...ENDED.map((status) => `<tool_use_error>Task ${id} is not running (status: ${status})`)
-  ].some((opening) => answer.startsWith(opening))
 }
 
 /** Tools whose answers cannot open with TaskStop's words: its own, a Read's
@@ -326,7 +301,7 @@ export function backgroundWorkRunningAt(
         // TaskStop answers a task already done with a `<tool_use_error>`, and
         // that says its stop holds.
         const stopHolds = batch.stops.some((stop) => saysStopped(block.output, stop.id))
-        batch.failed ||= isFailure(block) && !stopHolds
+        batch.failed ||= isFailedAnswer(block) && !stopHolds
         batch.answers.push(block.output)
         const call = takeAnsweredCall(pending, block.output)
         if (call) {
@@ -336,7 +311,7 @@ export function backgroundWorkRunningAt(
           const running =
             toolCallKind(call.name) === 'agent'
               ? leftAgentRunning(call, block.output, onlyAgentsWaited)
-              : launch !== null || (askedForBackground(call) && !isFailure(block))
+              : launch !== null || (askedForBackground(call) && !isFailedAnswer(block))
           if (running) {
             spans.push({ from: call.at, id: launch?.id ?? null })
           } else if (mayLaunch(call)) {

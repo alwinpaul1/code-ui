@@ -42,6 +42,7 @@ import { useShellStackPop } from './use-shell-stack-pop'
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { SHELL_OPENING_LABEL, ShellPageCover, ShellWaitingFrame } from './ShellWaitingFrame'
+import { ShellHostUnavailableFrame } from './ShellHostUnavailableFrame'
 
 function failureMessage(reason: MobileWebShellFailureCause): string {
   switch (reason) {
@@ -218,7 +219,7 @@ export function MobileWebShellScreen({
   // Which mount the notice was dismissed on, not whether it was: a later refusal opens its own
   // generation under a new session id, so it is not silenced by a tap on the one before it.
   const [noticeDismissedFor, setNoticeDismissedFor] = useState<string | null>(null)
-  const { snapshot, unreadable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
+  const { snapshot, unavailable, readStorage, refreshStorage, writeStorage } = usePageHostSnapshot(
     hostId,
     route.pathname
   )
@@ -328,18 +329,6 @@ export function MobileWebShellScreen({
     isFocused: navigation.isFocused
   })
 
-  // A profile read that rejected never becomes a host, so the session would otherwise sit in
-  // `ready` behind an un-hidden view with nothing serving it and the page asking forever.
-  // `document-load-failed` because that is the outcome: the document loads and no session opens.
-  // The refetch it costs is wasted on a device-local read, and the second report is terminal, which
-  // is the failure screen with a Try again this deserves.
-  useEffect(() => {
-    if (unreadable) {
-      console.warn('[web-shell] this host could not be read from the app store')
-      reportShellFailure('document-load-failed')
-    }
-  }, [reportShellFailure, unreadable])
-
   if (state.kind === 'native-route') {
     return fallback
   }
@@ -363,6 +352,13 @@ export function MobileWebShellScreen({
   }
   if (state.kind !== 'ready') {
     return <Waiting label={state.kind === 'activating' ? SHELL_OPENING_LABEL : 'Checking host'} />
+  }
+  // A desktop whose profile cannot be read never becomes a host, so a mounted page would sit behind
+  // its cover with nothing answering it. Not a shell failure: that deleted the downloaded workspace
+  // and fetched it again over a device-local read. The hook reads again on the next connection, and
+  // the page mounts then, with no tap (review, 2026-09-30).
+  if (unavailable) {
+    return <ShellHostUnavailableFrame message={unavailable} />
   }
   return (
     <View

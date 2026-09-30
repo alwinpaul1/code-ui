@@ -3,6 +3,8 @@ import { X } from 'lucide-react-native'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
+import { MobileDiffNoteRow } from '../components/MobileDiffNoteRow'
+import { describeMobileDiffTruncation } from '../session/mobile-diff-notes'
 import { mobileDiffLineNumber, mobileDiffLinePrefix } from './mobile-diff-format'
 import type { MobileBranchDiffPreviewState } from './mobile-source-control-screen-state'
 import { sourceControlStyles } from './mobile-source-control-styles'
@@ -58,28 +60,35 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
       ) : (
         <View style={styles.diffLines}>
           {branchDiffPreview.truncated ? (
-            <Text style={styles.diffTruncatedText}>Diff truncated for mobile preview.</Text>
+            <Text style={styles.diffTruncatedText}>
+              {describeMobileDiffTruncation(branchDiffPreview.lines)}
+            </Text>
           ) : null}
-          {branchDiffPreview.lines.map((line, index) => (
-            <View
-              key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
-              style={[
-                styles.diffLine,
-                line.kind === 'add' && styles.diffLineAdd,
-                line.kind === 'delete' && styles.diffLineDelete
-              ]}
-            >
-              <Text style={styles.diffLineNumber}>{mobileDiffLineNumber(line)}</Text>
-              <Text style={styles.diffLinePrefix}>{mobileDiffLinePrefix(line.kind)}</Text>
-              <Text style={styles.diffLineText}>
-                {line.text ? (
-                  <MobileSyntaxSegments segments={line.segments} palette={syntax} />
-                ) : (
-                  ' '
-                )}
-              </Text>
-            </View>
-          ))}
+          {branchDiffPreview.lines.map((line, index) =>
+            // Folded unchanged lines, or what the mobile cap left out: not a line of the file.
+            line.note ? (
+              <MobileDiffNoteRow key={`${index}:note`} line={line} />
+            ) : (
+              <View
+                key={`${index}:${line.kind}:${line.oldLineNumber ?? ''}:${line.newLineNumber ?? ''}`}
+                style={[
+                  styles.diffLine,
+                  line.kind === 'add' && styles.diffLineAdd,
+                  line.kind === 'delete' && styles.diffLineDelete
+                ]}
+              >
+                <Text style={styles.diffLineNumber}>{mobileDiffLineNumber(line)}</Text>
+                <Text style={styles.diffLinePrefix}>{mobileDiffLinePrefix(line.kind)}</Text>
+                <Text style={styles.diffLineText}>
+                  {line.text ? (
+                    <MobileSyntaxSegments segments={line.segments} palette={syntax} />
+                  ) : (
+                    ' '
+                  )}
+                </Text>
+              </View>
+            )
+          )}
         </View>
       )}
     </BottomDrawer>

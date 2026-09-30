@@ -27,6 +27,15 @@ export type ChatTargetTab = {
  * terminal being asked about) matters only when that tab is itself
  * chat-capable, where skipping it routes to some other open chat instead.
  * `null` when there is no chat-capable tab open at all.
+ *
+ * The excluded tab is taken out of the candidates before the pick, not only
+ * skipped in the history: pickNextSessionTabAfterClose is written for a close,
+ * where `remaining` already lacks the closed tab, so with no other chat in the
+ * history its "newest remaining" fallback answered the caller itself over an
+ * open chat it had never visited (review, 2026-09-30). Only when no other chat
+ * is open does it answer the caller, if that is chat-capable: a Claude
+ * terminal asked about its own screen puts the text in its own composer
+ * (pinned in mobile-terminal-ask-about-screen-plan.test.ts).
  */
 export function resolveChatTargetTab(args: {
   tabs: readonly MobileSessionTab[]
@@ -42,7 +51,7 @@ export function resolveChatTargetTab(args: {
       canShowMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)
   )
   const targetTab = args.excludeTabId
-    ? pickNextSessionTabAfterClose(chatCapable, args.visitHistory, args.excludeTabId)
+    ? pickOtherChatTab(chatCapable, args.visitHistory, args.excludeTabId)
     : (chatCapable.at(-1) ?? null)
   if (!targetTab) {
     return null
@@ -50,4 +59,17 @@ export function resolveChatTargetTab(args: {
   const agent =
     resolveMobileNativeChat(targetTab, args.nativeChatTranscriptIsLocalReadable)?.agent ?? null
   return { targetTab, agent }
+}
+
+function pickOtherChatTab(
+  chatCapable: readonly ChatCapableTab[],
+  visitHistory: readonly string[],
+  excludeTabId: string
+): ChatCapableTab | null {
+  const others = chatCapable.filter((tab) => tab.id !== excludeTabId)
+  return (
+    pickNextSessionTabAfterClose(others, visitHistory, excludeTabId) ??
+    chatCapable.find((tab) => tab.id === excludeTabId) ??
+    null
+  )
 }

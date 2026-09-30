@@ -400,15 +400,32 @@ function stringArray(value: unknown): string[] {
     : []
 }
 
+/** The host's pins as the screen starts from: none when storage refused the
+ *  read, which one line says (the catalog puts the host's own pins back). */
 export async function loadPinnedIds(hostId: string): Promise<Set<string>> {
-  try {
-    const raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
-    if (!raw) {
-      return new Set()
-    }
-    return new Set(stringArray(JSON.parse(raw)))
-  } catch {
+  const read = await readPinnedIdsRecord(hostId)
+  if ('refused' in read) {
+    console.warn('[storage] could not read the pinned worktrees', read.refused)
     return new Set()
+  }
+  return read.ids
+}
+
+/** The stored pins, or why storage would not hand them over: a refused read
+ *  is not a host with no pins, and a write over it erased every stored pin
+ *  (pinned-worktree-toggle.ts). Nothing stored, or a value that will not
+ *  parse, is no pins. */
+export async function readPinnedIdsRecord(hostId: string): Promise<{ ids: Set<string> } | { refused: unknown }> {
+  let raw: string | null
+  try {
+    raw = await AsyncStorage.getItem(PINS_PREFIX + hostId)
+  } catch (refused) {
+    return { refused }
+  }
+  try {
+    return { ids: new Set(raw ? stringArray(JSON.parse(raw)) : []) }
+  } catch {
+    return { ids: new Set() }
   }
 }
 

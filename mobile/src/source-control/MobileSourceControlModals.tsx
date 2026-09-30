@@ -21,6 +21,8 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
     showBranchPicker,
     setShowBranchPicker,
     localBranches,
+    localBranchesFailed,
+    retryLocalBranches,
     createdPrUrl,
     setCreatedPrUrl,
     createdPrWarning,
@@ -84,6 +86,21 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
           }
         }}
         onClose={() => setShowBranchPicker(false)}
+        // The list is null while it is read and stays null when the read fails; an empty list is
+        // the host saying there are none. Three different sheets, never one blank one.
+        loadingLabel={
+          localBranches === null && !localBranchesFailed ? 'Loading branches…' : undefined
+        }
+        failure={
+          localBranchesFailed
+            ? {
+                message: "Couldn't load branches",
+                onRetry: retryLocalBranches,
+                retryLabel: 'Retry loading branches'
+              }
+            : undefined
+        }
+        emptyLabel="No local branches"
       />
 
       <ConfirmModal

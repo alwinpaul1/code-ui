@@ -7,10 +7,8 @@ import {
   useEffect
 } from './mobile-tasks-dependencies'
 import { getTaskPresetQuery, scopeGitHubTaskSearch } from './mobile-tasks-legacy-foundation'
-import {
-  linearComposerTeamListRead,
-  linearTeamStateListRead
-} from './mobile-task-item-detail-operations'
+import { linearComposerTeamListRead } from './mobile-task-item-detail-operations'
+import { useLinearTeamStateList } from './use-linear-team-state-list'
 
 export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsModel) {
   const {
@@ -216,44 +214,17 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     }
   }, [client, hostedRepos, provider, showCreateTask, taskStateHydrated, tasksSupported])
 
-  useEffect(() => {
-    if (!tasksSupported || !linearMetadataItem || !client) {
-      setLinearStates([])
-      setLinearCommentDraft('')
-      setLinearSubIssueTitle('')
-      return
-    }
-    let stale = false
-    setLinearStatesLoading(true)
-    setLinearCommentDraft('')
-    setLinearSubIssueTitle('')
-    const baseParams = {
-      teamId: linearMetadataItem.source.team.id,
-      workspaceId: linearMetadataItem.source.workspaceId
-    }
-    void linearTeamStateListRead
-      .request(client, baseParams)
-      .then((statesResponse) => {
-        if (stale) {
-          return
-        }
-        const accepted = linearTeamStateListRead.interpret(statesResponse)
-        setLinearStates(accepted.accepted ? accepted.value : [])
-      })
-      .catch(() => {
-        if (!stale) {
-          setLinearStates([])
-        }
-      })
-      .finally(() => {
-        if (!stale) {
-          setLinearStatesLoading(false)
-        }
-      })
-    return () => {
-      stale = true
-    }
-  }, [client, linearMetadataItem, tasksSupported])
+  // The item's state list, with its failure, Retry and read again on a new connection; a new item
+  // also starts its drafts over there, in the order this effect always set them.
+  const { linearStatesError, retryLinearStates } = useLinearTeamStateList({
+    client,
+    item: linearMetadataItem,
+    tasksSupported,
+    setLinearStates,
+    setLinearStatesLoading,
+    setLinearCommentDraft,
+    setLinearSubIssueTitle
+  })
 
   useEffect(() => {
     if (!actionItem) {
@@ -288,7 +259,12 @@ export function useMobileTasksListAndDetailEffects(model: ProjectLoadingActionsM
     setPrFileCommentDrafts({})
     setExpandedResolvedCommentGroups(new Set())
   }, [actionItem])
-  return Object.assign(model, { refreshGitHubProject, setTaskCopyFeedbackRootRef })
+  return Object.assign(model, {
+    refreshGitHubProject,
+    setTaskCopyFeedbackRootRef,
+    linearStatesError,
+    retryLinearStates
+  })
 }
 
 export type ListAndDetailEffectsModel = ReturnType<typeof useMobileTasksListAndDetailEffects>

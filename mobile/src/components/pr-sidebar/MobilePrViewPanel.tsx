@@ -1,13 +1,15 @@
 import type { MobilePullToRefresh } from '../../source-control/mobile-pull-to-refresh'
-import { StyleSheet, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { RotateCw } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useThemedStyles } from '../../theme/theme-context'
+import { useTheme, useThemedStyles } from '../../theme/theme-context'
 import type { Theme } from '../../theme/theme-context'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
 import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
+import { mobilePrSidebarStyles } from './mobile-pr-sidebar-styles'
 
 type Props = {
   client: RpcClient | null
@@ -40,6 +42,16 @@ export function MobilePrViewPanelBody({
   const insets = useSafeAreaInsets()
   const styles = useThemedStyles(mobilePrViewPanelStyles)
 
+  // The GitHub probe failed rather than answered: saying "unavailable for this provider" here
+  // would tell a GitHub repo it has no review panel, over one relay timeout.
+  if (branchContextLoaded && controller.prSidebarRepoProbeFailed) {
+    return (
+      <View style={styles.container}>
+        <RepoProbeFailed onRetry={controller.retryPrSidebarRepoProbe} />
+      </View>
+    )
+  }
+
   const sidebarState = !branchContextLoaded
     ? ({ kind: 'loading' } as const)
     : !isGithubRepo
@@ -62,6 +74,7 @@ export function MobilePrViewPanelBody({
         refetch={controller.refetchPRSidebar}
         client={client}
         connState={connState}
+        lastConnectedAt={controller.prSidebarLastConnectedAt}
         worktreeId={worktreeId}
         gitBranch={branch}
         gitStatus={gitStatus}
@@ -71,6 +84,25 @@ export function MobilePrViewPanelBody({
         showOpenOnWeb={false}
         pullToRefresh={pullToRefresh}
       />
+    </View>
+  )
+}
+
+function RepoProbeFailed({ onRetry }: { onRetry: () => void }) {
+  const { colors } = useTheme()
+  const styles = useThemedStyles(mobilePrSidebarStyles)
+  return (
+    <View style={styles.stateArea}>
+      <Text style={styles.stateText}>Could not check the repository.</Text>
+      <Pressable
+        style={styles.retryButton}
+        onPress={onRetry}
+        accessibilityRole="button"
+        accessibilityLabel="Retry checking the repository"
+      >
+        <RotateCw size={14} color={colors.text} strokeWidth={2.2} />
+        <Text style={styles.retryText}>Retry</Text>
+      </Pressable>
     </View>
   )
 }

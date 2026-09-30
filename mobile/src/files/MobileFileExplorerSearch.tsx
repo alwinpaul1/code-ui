@@ -55,14 +55,37 @@ function splitPath(path: string): { name: string; dir: string } {
 export function MobileFileExplorerSearchResults({
   paths,
   searching,
+  failed = false,
+  onRetry,
   onOpen
 }: {
   paths: readonly string[]
   searching: boolean
+  /** The host search ended with no answer: an empty list is not "No matches". */
+  failed?: boolean
+  /** Null where a Retry could do nothing (disconnected, with nothing that re-dials). */
+  onRetry?: (() => void) | null
   onOpen: (relativePath: string, displayName: string) => void
 }) {
   const { colors } = useTheme()
   const styles = useThemedStyles(fileExplorerStyles)
+  if (paths.length === 0 && failed && !searching) {
+    return (
+      <View style={styles.state}>
+        <Text style={styles.errorText}>Search failed</Text>
+        {onRetry ? (
+          <Pressable
+            style={styles.retryButton}
+            onPress={onRetry}
+            accessibilityRole="button"
+            accessibilityLabel="Retry search"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
   if (paths.length === 0) {
     return (
       <View style={styles.state}>

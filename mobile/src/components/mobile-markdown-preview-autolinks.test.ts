@@ -19,7 +19,8 @@ describe('the autolinks the HTML pass leaves as written', () => {
 
   it('still reads a tag that is no such autolink as a tag, a namespaced one too', () => {
     expect(normalize('<a href="https://x.dev">docs</a>')).toBe('[docs](https://x.dev)')
-    expect(normalize('<b>x</b><br/>y')).toBe('**x**\ny')
+    // A <br> is a hard break, two spaces and a newline (markdown-br-line-breaks.test.ts).
+    expect(normalize('<b>x</b><br/>y')).toBe('**x**  \ny')
     expect(normalize('a<svg:path>b')).toBe('ab')
   })
 

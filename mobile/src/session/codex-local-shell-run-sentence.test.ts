@@ -93,7 +93,8 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
     // projects to (structured-agent-session-tool-call-block.ts).
     ['apply_patch', 'edit'],
     ['Diff', 'edit'],
-    ['web_search', 'web'],
+    // A search, not a page fetch (tool-run-sentence-web-search.test.ts).
+    ['web_search', 'webSearch'],
     ['spawn_agent', 'agent'],
     // A plan reads the way Claude's TodoWrite does: the run draws its checklist.
     ['update_plan', 'other'],
@@ -106,12 +107,23 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
     expect(toolCallKind('update_plan')).toBe(toolCallKind('TodoWrite'))
   })
 
+  // An empty-chars write_stdin is a poll of the exec_command it follows, so the
+  // two are one command (codex-stdin-poll-run-sentence.test.ts); a write_stdin
+  // that types input counts as a command, never as a tool.
   it('reads a write_stdin poll beside its exec_command as commands, not tools', () => {
     expect(
       toolRunSentence([
         call('exec_command', { cmd: 'npm test' }),
         result(),
         call('write_stdin', { session_id: 3, chars: '' }),
+        result()
+      ])
+    ).toBe('Ran a command')
+    expect(
+      toolRunSentence([
+        call('exec_command', { cmd: 'npm init' }),
+        result(),
+        call('write_stdin', { session_id: 3, chars: 'y\n' }),
         result()
       ])
     ).toBe('Ran 2 commands')
@@ -145,7 +157,7 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
   it('also takes the other names the vendored vocabulary knows', () => {
     // Orca's edit set and web-search row word, which the phone's own lists missed.
     expect(toolCallKind('str_replace')).toBe('edit')
-    expect(toolCallKind('web search')).toBe('web')
+    expect(toolCallKind('web search')).toBe('webSearch')
   })
 
   it("keeps Claude's own tools where they were", () => {

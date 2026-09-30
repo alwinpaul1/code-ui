@@ -9,6 +9,7 @@ import {
   readLaunch,
   readNotifications,
   readString,
+  stoppedTaskId,
   takeAnsweredCall,
   type PendingCall
 } from './mobile-background-task-transcript'
@@ -44,8 +45,9 @@ export type WindowTaskEvidence = {
    *  read off the screen can name (`mobile-screen-completion-memory.ts`). A
    *  monitor quotes no label and is not here. */
   shellLaunches: LabelledShellLaunch[]
-  /** Ids the window shows ending: a notification, or a TaskStop, which no
-   *  notification follows. */
+  /** Ids the window shows ending: a notification, or a TaskStop whose answer
+   *  says it went through, which no notification follows. A stop turned down
+   *  or still waiting on its answer ends nothing. */
   retiredTaskIds: string[]
   pendingAgentCalls: PendingAgentCall[]
   /** The earliest time the window reaches back to; null when it holds no
@@ -82,16 +84,18 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
     message.blocks.forEach((block, index) => {
       if (isToolCallBlock(block)) {
         pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, key: `${message.id}#${index}` })
-        const stopped = block.name === 'TaskStop' ? readString(block.input, 'task_id') : null
-        if (stopped) {
-          retiredTaskIds.push(stopped)
-        }
         const target = block.name === 'SendMessage' ? readString(block.input, 'to') : null
         if (target && TARGET.test(target)) {
           ownAgentIds.push(target)
         }
       } else if (isToolResultBlock(block)) {
         const call = takeAnsweredCall(pending, block.output)
+        // A stop ends its task once its answer says it went through, as in
+        // `deriveBackgroundTasks`: the memory keeps a retired id for good.
+        const stopped = call ? stoppedTaskId(call, block) : null
+        if (stopped) {
+          retiredTaskIds.push(stopped)
+        }
         const launch = call ? readLaunch(call, block.output) : null
         const launched = launch?.kind === 'agent' ? launch.id : ASYNC_AGENT_LAUNCHED.exec(block.output)?.[1]
         if (launched) {

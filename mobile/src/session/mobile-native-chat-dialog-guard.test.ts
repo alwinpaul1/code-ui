@@ -1,7 +1,14 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
-import { terminalDialogKind, terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
+import { describe, expect, it, vi } from 'vitest'
+import type { RpcClient } from '../transport/rpc-client'
+import { applyCodexPickerSelection, type CodexPickerIo } from './codex-picker-apply'
+import {
+  readSendUnderDialogRefusal,
+  SEND_UNDER_DIALOG_REFUSAL,
+  terminalDialogKind,
+  terminalDialogOnScreen
+} from './mobile-native-chat-dialog-guard'
 
 type Screen = { name: string; lines: string[] }
 
@@ -332,5 +339,83 @@ describe('the notice words an ask and a plan review by what they are', () => {
       row === '     3. Tell Claude what to change' ? '   ❯ 3. keep the old parser' : row.replace('   ❯ 1.', '     1.')
     )
     expect(terminalDialogKind(lines, 'claude')).toBe('approval')
+  })
+})
+
+// Codex 0.158.0's folder trust prompt, the verbatim capture in codex-0158-screens.test.ts (Orca
+// v1.4.217's runtime fixtures rendered through tmux). A first launch in an unknown folder opens it,
+// with "Trust and continue" highlighted: a chat send's Enter, or the picker's "/model" and Enter,
+// would trust the folder without the user choosing it, and a digit could pick "2. Quit". Its key hint
+// has no "to" ("enter continue · esc quit"), and the row above option 1 ends in "saved.", not "?".
+const CODEX_TRUST_PROMPT_0158 = [
+  '',
+  '  Folder access',
+  '  /Users/xxxxxx/orca-lanes/sta8834/corpus/scratch',
+  '',
+  '  Trust this folder? Codex can read, edit, and run files here, subject to your permission settings. Folder settings',
+  '  can run code automatically, even without a model request. Continue only if you trust these files. Your trust',
+  '  decision will be saved.',
+  '',
+  '› 1. Trust and continue',
+  '  2. Quit',
+  '',
+  '  enter continue · esc quit'
+]
+
+describe("Codex 0.158.0's folder trust prompt takes nothing typed from the phone", () => {
+  it('is seen as a dialog', () => {
+    expect(terminalDialogOnScreen(CODEX_TRUST_PROMPT_0158, 'codex')).toBe(true)
+    expect(terminalDialogKind(CODEX_TRUST_PROMPT_0158, 'codex')).toBe('menu')
+  })
+
+  it('refuses a chat send while it is up', async () => {
+    const client = {
+      getState: () => 'connected',
+      notifyForeground: vi.fn(),
+      sendRequest: vi.fn(async () => ({
+        ok: true,
+        result: { terminal: { lines: CODEX_TRUST_PROMPT_0158, source: 'screen' } }
+      }))
+    } as unknown as RpcClient
+    expect(await readSendUnderDialogRefusal({ client, terminal: 'term', agent: 'codex' })).toBe(
+      SEND_UNDER_DIALOG_REFUSAL
+    )
+  })
+
+  it('types no "/model" into it for a model pick', async () => {
+    // A clock the waits advance, so a pick that does go ahead gives up instead of spinning.
+    let clock = 0
+    const io: CodexPickerIo = {
+      readScreen: async () => CODEX_TRUST_PROMPT_0158,
+      sendKey: vi.fn(async () => true),
+      typeCommand: vi.fn(async () => true),
+      sleep: async (ms) => {
+        clock += ms
+      },
+      now: () => clock
+    }
+    expect(await applyCodexPickerSelection(io, { model: 'gpt-6-sol' })).toEqual({ ok: false, reason: 'busy' })
+    expect(io.typeCommand).not.toHaveBeenCalled()
+    expect(io.sendKey).not.toHaveBeenCalled()
+  })
+
+  it('is not seen once it is quoted in Codex history above the input', () => {
+    const lines = [...CODEX_TRUST_PROMPT_0158, '', '• ok', ...CODEX_IDLE.slice(1)]
+    expect(terminalDialogOnScreen(lines, 'codex')).toBe(false)
+  })
+
+  it('does not turn a Claude conversation that quotes the prompt into a dialog', () => {
+    const quoted = withAboveComposer(['⏺ Codex asked:', ...CODEX_TRUST_PROMPT_0158.slice(4), ''])
+    expect(terminalDialogOnScreen(quoted, 'claude')).toBe(false)
+    // A list with an "enter … · esc …" line under it and no row of its own selected is no dialog either.
+    expect(
+      terminalDialogOnScreen(['⏺ Two ways on:', '  1. Trust and continue', '  2. Quit', '  enter continue · esc quit'], 'claude')
+    ).toBe(false)
+  })
+
+  it('still wants a question above a menu whose only row under it is prose that starts with a key', () => {
+    // "enter" as the first word of a sentence is no key hint: only "<key> <word> · <key> <word>" is.
+    const lines = ['• Pick one:', '› 1. Keep the parser', '  2. Patch the caller', '', '  enter the number you want in the chat']
+    expect(terminalDialogOnScreen(lines, 'codex')).toBe(false)
   })
 })

@@ -3,6 +3,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
   footerWindow,
+  isLegacyQueueSeparator,
   queueBlockRows,
   queueFooterIndex,
   SELECTED_HINT,
@@ -16,6 +17,16 @@ export { QUEUE_HINT, SELECTED_HINT, queueBlockLineIndices } from './mobile-termi
 export type ClaudeQueueView = {
   /** Empty while an entry is selected: the rows are ambiguous then. */
   entries: string[]
+  /**
+   * Whether this read says what the box holds, an empty box included. Not
+   * while an entry is selected, nor when the reader refused a block Claude's
+   * hint says holds messages, nor with no hint and no input row on screen (a
+   * permission prompt or a picker drawn in the composer's place). Read as an
+   * empty box, each of those took every listed message for one the agent took
+   * (review of 2026-09-30; use-absorbed-queue-echoes.ts). The hint counts only
+   * on the input row itself; one quoted anywhere else says nothing.
+   */
+  readable: boolean
   /** Claude offers its per-message selector on this build. */
   selectable: boolean
   /** One entry carries the marker right now. */
@@ -28,6 +39,7 @@ export type ClaudeQueueView = {
 
 const EMPTY_VIEW: ClaudeQueueView = {
   entries: [],
+  readable: false,
   selectable: false,
   selecting: false,
   selected: null,
@@ -44,7 +56,7 @@ export function claudeQueueViewFromScreen(
   const window = (index: number) => footerWindow(lines, index)
   const footer = queueFooterIndex(lines)
   if (footer === -1) {
-    return EMPTY_VIEW
+    return { ...EMPTY_VIEW, readable: lines.some((line) => CLAUDE_INPUT_ROW.test(line)) }
   }
   const hint = window(footer)
   const selecting = SELECTED_HINT.test(hint)
@@ -52,8 +64,10 @@ export function claudeQueueViewFromScreen(
   if (!selecting) {
     const sendNow = sendNowHintAbove(lines, footer)
     if (sendNow !== -1) {
+      const read = columnZeroQueueEntries(lines, sendNow)
       return {
-        entries: columnZeroQueueEntries(lines, sendNow).map(withoutComposerNotice),
+        entries: read?.entries.map(withoutComposerNotice) ?? [],
+        readable: boxRead(read, lines, footer),
         selectable,
         selecting: false,
         selected: null,
@@ -68,7 +82,7 @@ export function claudeQueueViewFromScreen(
     if (!seenEntry && /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
       continue
     }
-    if (/^[\s─━—-]*$/.test(line)) {
+    if (isLegacyQueueSeparator(line)) {
       if (seenEntry) {
         break
       }
@@ -96,19 +110,39 @@ export function claudeQueueViewFromScreen(
     const marked = block.map((line) => /^\s+[❯›>]\s+(.+)$/.exec(line)?.[1]?.trim()).filter(Boolean)
     return {
       entries: [],
+      readable: false,
       selectable,
       selecting: true,
       selected: marked.length === 1 ? marked[0]! : null,
       selectedOldest: /up again for history/i.test(hint)
     }
   }
+  const read = seenEntry ? queueEntries(block, /^\s+[❯›>]\s+(.+)$/) : null
   return {
-    entries: queueEntries(block, /^\s+[❯›>]\s+(.+)$/).map(withoutComposerNotice),
+    entries: read?.entries.map(withoutComposerNotice) ?? [],
+    readable: boxRead(read, lines, footer),
     selectable,
     selecting: false,
     selected: null,
     selectedOldest: false
   }
+}
+
+/** Claude's own input row at column 0: `❯` and a no-break space (2.1.270 on),
+ *  or a bare `❯` once Orca takes the draft out of it. Never on screen with a
+ *  live dialog (terminalDialogKind in mobile-native-chat-dialog-guard.ts). */
+const CLAUDE_INPUT_ROW = /^❯(?:\u00a0|\s*$)/
+
+/** Whether a read of the block over the hint at `footer` says what the box
+ *  holds: it read the block (a message, or only a peer's row), or the hint is
+ *  not on the input row and the input row is up with nothing queued. The
+ *  hint on the input row says something waits, so a read of nothing there is
+ *  a refusal, not an empty box. */
+function boxRead(read: QueueRows | null, lines: readonly string[], footer: number): boolean {
+  if (read !== null) {
+    return true
+  }
+  return !lines[footer]!.startsWith('❯') && lines.some((line) => CLAUDE_INPUT_ROW.test(line))
 }
 
 /** Index of the "… to send now" row directly above the composer,
@@ -158,14 +192,15 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
  * spinner, a blank, a tool row — or the reading is refused: a delivered
  * message in the transcript has exactly this shape, and with nothing between
  * it and the queue the two cannot be told apart. A wrong queue rewrite loses
- * the user's messages; an empty one only hides a pencil.
+ * the user's messages; an empty one only hides a pencil. Refused is null, and
+ * the view calls that read unreadable, not an empty box (boxRead).
  */
-function columnZeroQueueEntries(lines: readonly string[], sendNow: number): string[] {
+function columnZeroQueueEntries(lines: readonly string[], sendNow: number): QueueRows | null {
   // Which rows, and what closes them above: queueBlockRows, which also stops
   // at the transcript's own tool rows above the newest entry.
   const { rows, bounded } = queueBlockRows(lines, sendNow)
   if (!bounded || rows.length === 0) {
-    return []
+    return null
   }
   return queueEntries(
     rows.map((index) => lines[index]!),
@@ -181,8 +216,8 @@ const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
 
 /**
  * The messages of a queue block, one per marked row with its wrapped lines
- * joined on, less the peer messages in it; none at all when a row may be one
- * and can't be told.
+ * joined on, less the peer messages in it; null, the reading refused, when a
+ * row may be one and can't be told.
  *
  * Claude Code paints a message from another session or one of its own agents
  * that waits in its queue as the TUI's own row, "› Message from
@@ -199,7 +234,7 @@ const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
  * pencil, a wrong one draws the peer's row as the user's (re-review of
  * 2026-09-27).
  */
-function queueEntries(rows: readonly string[], marked: RegExp): string[] {
+function queueEntries(rows: readonly string[], marked: RegExp): QueueRows | null {
   const read: { text: string; peer: boolean }[] = []
   for (const line of rows) {
     const match = marked.exec(line)
@@ -210,10 +245,14 @@ function queueEntries(rows: readonly string[], marked: RegExp): string[] {
     }
   }
   if (read.some((entry) => entry.peer && !PEER_TAIL.test(entry.text.replace(/\s+/g, ' ')))) {
-    return []
+    return null
   }
-  return read.filter((entry) => !entry.peer).map((entry) => entry.text)
+  return { entries: read.filter((entry) => !entry.peer).map((entry) => entry.text) }
 }
+
+/** A queue block read: the person's messages in it, peer rows left out. Null
+ *  where the reader refuses the block. */
+type QueueRows = { entries: string[] }
 
 /** Claude's own context warning, drawn in the composer box beside the queue
  *  ("1% until auto-compact"). It is not part of anyone's message, but it sits
@@ -258,7 +297,6 @@ export const QUEUE_ROW_MATCH_FLOOR = 24
  *  ends in an ellipsis stood as a bubble AND a queue row until the agent took
  *  it, on Claude and Codex alike (review, 2026-09-30). */
 export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
-  const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
   const want = dense(sent)
   const whole = dense(drawn)
   if (whole.length === 0 || want.length === 0) {
@@ -279,6 +317,52 @@ export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   // short pending claim a longer message's row: its own bubble vanished while
   // it was still queued, and the longer one showed twice (2026-09-14 review).
   return row.length >= QUEUE_ROW_MATCH_FLOOR && want.startsWith(row)
+}
+
+/** The printing characters of a row or a send, as the agent paints it. */
+function dense(text: string): string {
+  return asPaintedPrompt(text).replace(/\s+/g, '')
+}
+
+/**
+ * Which pending send each row of the box is, by the row's index. A row that
+ * is a send's whole words is that send, before any row is paired by a prefix;
+ * then each row left goes to the longest send left that it is a shortened
+ * form of (queueRowIsPendingSend). A send is claimed by one row at most, and a
+ * null row (a photo row, paired by the caller) is skipped.
+ *
+ * Exact rows first, because a row that is one send's words is also a prefix
+ * of any longer send that starts with them. Paired by the longest send alone,
+ * "please continue with the next step" drew the row of that send with the
+ * text of "… and run tests", left the longer send's own row the screen's
+ * reading, and kept the shorter send as a bubble beside the box (2026-09-30).
+ */
+function sendsForRows<T extends { text: string }>(rows: readonly (string | null)[], sends: readonly T[]): Map<number, T> {
+  const claimed = new Map<number, T>()
+  const open = new Set(sends)
+  for (const [index, row] of rows.entries()) {
+    const send = row === null ? undefined : [...open].find((item) => dense(item.text) === dense(row))
+    if (send !== undefined) {
+      claimed.set(index, send)
+      open.delete(send)
+    }
+  }
+  for (const [index, row] of rows.entries()) {
+    if (row === null || claimed.has(index)) {
+      continue
+    }
+    let best: T | null = null
+    for (const item of open) {
+      if (queueRowIsPendingSend(item.text, row) && (best === null || item.text.length > best.text.length)) {
+        best = item
+      }
+    }
+    if (best !== null) {
+      claimed.set(index, best)
+      open.delete(best)
+    }
+  }
+  return claimed
 }
 
 /** Whether a screen READING is nothing but landed rows the parser joined.
@@ -326,24 +410,12 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
   pending: readonly T[],
   queue: readonly string[]
 ): T[] {
-  const remaining = [...queue]
-  return pending.filter((item) => {
-    // Longest match wins. With two pendings where one starts the other, taking
-    // the first match let the shorter one consume the longer one's row.
-    let best = -1
-    let bestLength = -1
-    for (const [index, row] of remaining.entries()) {
-      if (row !== null && queueRowIsPendingSend(item.text, row) && row.length > bestLength) {
-        best = index
-        bestLength = row.length
-      }
-    }
-    if (best === -1) {
-      return true
-    }
-    remaining.splice(best, 1)
-    return false
-  })
+  // A row that is a send's whole words is that send, and a row the box cut
+  // short goes to the longest send it starts: with two pendings where one
+  // starts the other, taking the first match let the shorter one consume the
+  // longer one's row (sendsForRows).
+  const claimed = new Set(sendsForRows(queue, pending).values())
+  return pending.filter((item) => !claimed.has(item))
 }
 
 /** A row that is the phone's own send shows the text the phone SENT, not the
@@ -381,25 +453,13 @@ export function projectMobileChatQueue<T extends { text: string; images?: string
     matched.add(item)
     return { text: item.text, images: item.images!, caption: text }
   })
-  // Plain rows: the longest own send a row is (queueRowIsPendingSend) takes
-  // the row's place, as typed; the same rule pendingOutsideVisibleQueue hides
-  // the pending bubble by, so the two never disagree about which row is whose.
-  const remaining = pending.filter((item) => !matched.has(item))
-  for (let index = 0; index < projected.length; index += 1) {
-    const row = projected[index]
-    if (typeof row !== 'string') {
-      continue
-    }
-    let best: T | null = null
-    for (const item of remaining) {
-      if (!matched.has(item) && queueRowIsPendingSend(item.text, row) && (best === null || item.text.length > best.text.length)) {
-        best = item
-      }
-    }
-    if (best !== null) {
-      matched.add(best)
-      projected[index] = { text: best.text, images: best.images ?? [], caption: row }
-    }
+  // Plain rows: the own send a row is (sendsForRows) takes the row's place,
+  // as typed; the same pairing pendingOutsideVisibleQueue hides the pending
+  // bubble by, so the two never disagree about which row is whose.
+  const rows = projected.map((row) => (typeof row === 'string' ? row : null))
+  for (const [index, send] of sendsForRows(rows, pending.filter((item) => !matched.has(item)))) {
+    matched.add(send)
+    projected[index] = { text: send.text, images: send.images ?? [], caption: rows[index]! }
   }
   return {
     pending: pending.filter((item) => !matched.has(item)),

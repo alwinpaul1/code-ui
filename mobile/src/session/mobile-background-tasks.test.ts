@@ -186,8 +186,10 @@ describe('a Monitor is a background task too', () => {
       ],
       NOW
     )
+    // A monitor, not a shell: the card draws it as one, and the footer's shell
+    // count leaves it out (mobile-background-task-monitor-not-a-shell.test.ts).
     expect(tasks.running).toEqual([
-      expect.objectContaining({ id: 'biifjm40h', kind: 'shell', title: 'CI run for mobile-android-v0.2.82 release', status: 'running' })
+      expect.objectContaining({ id: 'biifjm40h', kind: 'monitor', title: 'CI run for mobile-android-v0.2.82 release', status: 'running' })
     ])
   })
 
@@ -628,7 +630,7 @@ describe('background tasks bounded by the current working run', () => {
     expect(tasks.running.map((task) => task.id)).toEqual(['bnotime1'])
   })
 
-  it('treats a TaskStop call as the end of that task', () => {
+  it('treats a TaskStop that went through as the end of that task', () => {
     const transcript = [
       ...shellAt('b6ishmlqf', 'Simulate 45 s of Doze on the phone', T0),
       call('TaskStop', { task_id: 'b6ishmlqf' }, T0 + 30_000),

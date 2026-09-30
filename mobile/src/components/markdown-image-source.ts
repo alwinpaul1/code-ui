@@ -11,7 +11,20 @@ export type MarkdownImageSource =
   | { kind: 'bitmap'; uri: string }
   | { kind: 'svg'; xml: string }
 
-export type MarkdownImageResolver = (url: string) => Promise<MarkdownImageSource | null>
+/**
+ * The host connection a figure watches after a read that did not answer: a figure opened during a
+ * drop reads again once per NEW connection, the rule `shouldRefetchAfterReconnect` keeps.
+ */
+export type MarkdownImageConnection = {
+  lastConnectedAt: () => number | null
+  /** Called on every connection state change; the figure compares `lastConnectedAt` itself. */
+  subscribe: (listener: () => void) => () => void
+}
+
+export type MarkdownImageResolver = ((url: string) => Promise<MarkdownImageSource | null>) & {
+  /** Absent for a resolver with no host connection to watch. */
+  connection?: MarkdownImageConnection
+}
 
 const REMOTE = /^(https?:)?\/\//i
 const DATA = /^data:image\//i
@@ -44,9 +57,19 @@ export function resolveMarkdownImagePath(
       parts.pop()
       continue
     }
-    parts.push(decodeURIComponent(part))
+    parts.push(decodePathPart(part))
   }
   return parts.length > 0 ? parts.join('/') : null
+}
+
+/** `%20` is a space; a bare `%` (`100%.png`) is the file's own name. decodeURIComponent throws
+ *  URIError on the second, which escaped a figure's effect and took the viewer down. */
+function decodePathPart(part: string): string {
+  try {
+    return decodeURIComponent(part)
+  } catch {
+    return part
+  }
 }
 
 export function isSvgPath(path: string): boolean {

@@ -56,6 +56,19 @@ export function escapeAttr(value: string): string {
   return escapeHtml(value).replace(/\n/g, ' ')
 }
 
+/**
+ * Source text as markup that reads back exactly as written: no entity in it is resolved, so
+ * `&lt;` stays the four characters it is. For what the source says literally, which an attribute
+ * keeps so a save can write it back.
+ */
+export function escapeLiteralHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => HTML_ESCAPES[char] ?? char)
+}
+
+export function escapeLiteralAttr(value: string): string {
+  return escapeLiteralHtml(value).replace(/\n/g, ' ')
+}
+
 /** The one scheme a link or image in untrusted markdown may not carry. */
 export function isSafeUrl(value: string | null | undefined): boolean {
   return !/^javascript:/i.test(String(value ?? '').trim())

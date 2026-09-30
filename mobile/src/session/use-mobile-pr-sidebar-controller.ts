@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ConnectionState } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
   fetchPRChecks,
   fetchPRForBranch,
@@ -19,6 +18,8 @@ import {
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
 import { fetchWorktreeLinkedPR } from '../source-control/mobile-pr-link'
+import { useMobilePrRepoProbe } from './use-mobile-pr-repo-probe'
+import { useMobilePrSidebarReconnectRefetch } from './use-mobile-pr-sidebar-reconnect'
 
 type PrSidebarControllerInput = {
   client: RpcClient | null
@@ -27,6 +28,10 @@ type PrSidebarControllerInput = {
   // branch/headSha come from git.status (not the branchCompare base ref nor worktree metadata, which carries no branch).
   branch: string | null
   headSha: string | null
+  // useLastConnectedAt(hostId): a failed load is read again once per NEW connection. Required, so
+  // no surface can opt out by leaving it off: Diff Review did, and its PR sidebar sat on a failed
+  // load over a healthy connection until the user tapped Retry (review round 2, 2026-09-30).
+  lastConnectedAt: number | null
 }
 
 // Load options: the hub chip needs only phase 1 (PR + checks); phase 2 (comments/body) is heavy and waits until the PR segment opens.
@@ -44,10 +49,6 @@ export function buildMobilePrSidebarIdentity(args: {
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  // PR icon shows for any GitHub remote, regardless of an open PR — a no-PR branch shows an empty state rather than hiding the icon.
-  const [isGithubRepo, setIsGithubRepo] = useState(false)
-  // False until the probe resolves — isGithubRepo=false is meaningless mid-probe, so consumers gate "unavailable" copy on this.
-  const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
   const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   const loadSeqRef = useRef(0)
@@ -59,9 +60,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const stateRef = useRef(state)
   stateRef.current = state
   const headShaRef = useRef(headSha)
+  // What the latest load asked for, so a reconnect repeats that load and not a heavier one.
+  const lastLoadIncludedDetailsRef = useRef(true)
 
-  // Probe is branch-independent (repo eligibility is): requiring a branch would strand a detached-HEAD worktree on a forever spinner.
-  const probeReady = client !== null && connState === 'connected'
+  // PR icon shows for any GitHub remote, regardless of an open PR — a no-PR branch shows an empty state rather than hiding the icon.
+  const repoProbe = useMobilePrRepoProbe({
+    client,
+    ready: client !== null && connState === 'connected',
+    worktreeId
+  })
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
@@ -76,36 +83,6 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       fetchPRChecks: (wt, args) => fetchPRChecks(client, wt, args)
     }
   }, [client])
-
-  // Probe GitHub-repo eligibility for the icon; a worktree change resets it, a brief disconnect must not (else the chip hides mid-session).
-  useEffect(() => {
-    setIsGithubRepo(false)
-    setRepoProbeLoaded(false)
-  }, [worktreeId])
-
-  useEffect(() => {
-    let cancelled = false
-    if (!probeReady || !client) {
-      return
-    }
-    void fetchGithubRepoSlug(client, worktreeId)
-      .then((outcome) => {
-        if (!cancelled) {
-          setIsGithubRepo(outcome.ok && outcome.result !== null)
-          setRepoProbeLoaded(true)
-        }
-      })
-      .catch(() => {
-        // Why: sendGithubPrRead normalizes throws, but a stray rejection on unmount must not surface as LogBox.
-        if (!cancelled) {
-          setIsGithubRepo(false)
-          setRepoProbeLoaded(true)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [probeReady, client, worktreeId])
 
   useEffect(() => {
     if (!identity) {
@@ -132,6 +109,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!deps || !branch || !loadIdentity) {
         return
       }
+      lastLoadIncludedDetailsRef.current = includeDetails
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
       // Don't invalidate in-flight phase 2 here: it's only claimed when this load's own phase 2 starts, so a superseded phase-1 load can't orphan the details fetch.
@@ -155,6 +133,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         return
       }
       stateIdentityRef.current = loadIdentity
+      if (next.kind === 'error' || next.kind === 'blocked') {
+        // `error` is read again on the next new connection; `blocked` is left for the user.
+        console.warn('[pr-sidebar] the pull request read for this branch failed', {
+          worktreeId,
+          branch,
+          kind: next.kind,
+          message: next.message
+        })
+      }
 
       // Preserve prior details across phase 1 (loadPrSidebarData returns details:null) so soft/PR-tab refresh doesn't blank the comment tree.
       const priorDetails =
@@ -249,6 +236,14 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     })
   }, [buildDeps, identity, worktreeId])
 
+  useMobilePrSidebarReconnectRefetch({
+    identity,
+    state,
+    lastConnectedAt: input.lastConnectedAt,
+    reload: () => void load({ includeDetails: lastLoadIncludedDetailsRef.current }),
+    refillDetails: () => void ensurePrSidebarDetails()
+  })
+
   // Soft-refresh on same-branch HEAD advance; restart in-flight load so the advance isn't applied with a stale SHA.
   useEffect(() => {
     if (headShaRef.current === headSha) {
@@ -288,8 +283,14 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   return {
     prSidebarState: state,
-    prSidebarIsGithubRepo: isGithubRepo,
-    prSidebarRepoProbeLoaded: repoProbeLoaded,
+    prSidebarIsGithubRepo: repoProbe.probe === 'github',
+    // False until the probe settles — isGithubRepo=false is meaningless mid-probe, so consumers gate "unavailable" copy on this.
+    prSidebarRepoProbeLoaded: repoProbe.probe !== 'pending',
+    // The probe itself failed: not an answer, so neither "GitHub" nor "unavailable for this provider".
+    prSidebarRepoProbeFailed: repoProbe.probe === 'failed',
+    retryPrSidebarRepoProbe: repoProbe.retry,
+    // The connection these reads are keyed on, for the sidebar's own sections (the reviewer picker).
+    prSidebarLastConnectedAt: input.lastConnectedAt,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,

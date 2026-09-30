@@ -21,6 +21,7 @@
 // after it, which is the ragged column the user reported. The phone reflows.
 import { marked, type Token, type Tokens } from 'marked'
 import { quoteBlocks } from './mobile-markdown-quote-blocks'
+import { inlineBreaksAsLines, inlineBreaksAsNewlines } from './markdown-inline-breaks'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -100,7 +101,10 @@ function reflowProse(value: string): string {
       filled += `${line.replace(/[ \t]+$/, '')} `
     }
   }
-  return filled.trim()
+  // A `<br>` the HTML pass kept for a list item, a quote or a heading, or for
+  // a table row that marked read as prose, is a line break here, and two a
+  // gap inside the block (markdown-inline-breaks.ts).
+  return inlineBreaksAsLines(filled.trim())
 }
 
 /** The info string's first word: ```` ```ts title="x" ```` is a TypeScript fence,
@@ -151,7 +155,8 @@ function standaloneImage(token: Tokens.Paragraph): MobileMarkdownBlock | null {
   if (!image.href.trim()) {
     return null
   }
-  return { type: 'image', alt: image.text ?? '', url: image.href }
+  // A kept `<br>` (markBlockLineBreaks) is a line break here too, never its stand-in.
+  return { type: 'image', alt: inlineBreaksAsNewlines(image.text ?? ''), url: inlineBreaksAsNewlines(image.href) }
 }
 
 /** Nested lists are flattened to one run of items carrying their depth: the
@@ -254,7 +259,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         // resolve inline, the definition stays on screen, where its URL is at
         // least autolinked. Consecutive definitions share one paragraph rather
         // than getting a blank line each.
-        const text = token.raw.trim()
+        const text = inlineBreaksAsNewlines(token.raw.trim())
         const previous = blocks.at(-1)
         if (continuesDefinitions && previous?.type === 'paragraph') {
           previous.text = `${previous.text}\n${text}`
@@ -275,7 +280,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         const code = token as Tokens.Code
         blocks.push({
           type: 'code',
-          text: code.text,
+          // A fence the HTML pass missed (one in a quote in a list item) can
+          // hold a `<br>` it kept: a line break, as it drew one before.
+          text: inlineBreaksAsNewlines(code.text),
           language: infoLanguage(code.lang),
           closed: isFenceClosed(code.raw)
         })
@@ -297,8 +304,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         const table = token as Tokens.Table
         blocks.push({
           type: 'table',
-          headers: table.header.map((cell) => cell.text),
-          rows: table.rows.map((row) => row.map((cell) => cell.text))
+          // A `<br>` in a cell is a line break inside it (markdown-inline-breaks.ts).
+          headers: table.header.map((cell) => inlineBreaksAsNewlines(cell.text)),
+          rows: table.rows.map((row) => row.map((cell) => inlineBreaksAsNewlines(cell.text)))
         })
         break
       }
@@ -317,7 +325,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         // returns, and an unknown kind must still reach the screen rather than
         // fail the build or vanish.
         if (token.raw.trim()) {
-          blocks.push({ type: 'paragraph', text: token.raw.replace(/\n+$/, '') })
+          blocks.push({ type: 'paragraph', text: inlineBreaksAsNewlines(token.raw.replace(/\n+$/, '')) })
         }
         break
     }
@@ -429,7 +437,7 @@ function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
     // rejects an emphasis run long enough to miss the deadline. Nothing may
     // vanish from the screen because of either, so hand the source back as
     // prose, with its lines intact.
-    return source.trim() ? [{ type: 'paragraph', text: source.replace(/\n+$/, '') }] : []
+    return source.trim() ? [{ type: 'paragraph', text: inlineBreaksAsNewlines(source.replace(/\n+$/, '')) }] : []
   }
   return toBlocks(tokens)
 }

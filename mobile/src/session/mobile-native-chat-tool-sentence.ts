@@ -1,16 +1,9 @@
-import {
-  isToolCallBlock,
-  isToolResultBlock,
-  type NativeChatBlock,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
-} from '../../../src/shared/native-chat-types'
-import { isCommandToolName } from '../../../src/shared/native-chat-tool-activity'
-import {
-  nativeChatToolCategory,
-  type NativeChatToolCategory
-} from '../../../src/shared/native-chat-tool-icon'
-import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import { isToolCallBlock, isToolResultBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { createCodexPollFolder } from './codex-stdin-poll'
+import { editedFileCount, soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
+import { toolCallKind, type ToolRunKind as Kind } from './mobile-native-chat-tool-kind'
+
+export { toolCallKind }
 
 /**
  * One plain sentence for a run of tool calls, the way the Claude app puts it:
@@ -23,78 +16,21 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * call, a SendMessage, and a whole-file write. Tool names are grouped by what
  * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
  * and Codex's `shell`, `local_shell`, `exec_command`, `shell_command` and
- * `write_stdin` all read as commands.
+ * `write_stdin` all read as commands — a `write_stdin` that only polls a
+ * command already counted folding into it (codex-stdin-poll.ts).
  */
-type Kind = 'command' | 'read' | 'edit' | 'search' | 'agent' | 'web' | 'skill' | 'message' | 'other'
-
-/** What Orca's own tool vocabulary (vendored `nativeChatToolCategory`) says a
- *  name did, for a name the phone's lists below do not know. */
-const KIND_BY_CATEGORY: Record<NativeChatToolCategory, Kind> = {
-  read: 'read',
-  search: 'search',
-  listFiles: 'search',
-  unknown: 'command',
-  fileChange: 'edit',
-  webSearch: 'web',
-  mcpToolCall: 'other',
-  subAgentActivity: 'agent',
-  todoList: 'other',
-  other: 'other'
-}
-
+/** `#` in `many` is the count. */
 const NOUN: Record<Kind, { verb: string; one: string; many: string }> = {
-  command: { verb: 'ran', one: 'a command', many: 'commands' },
-  read: { verb: 'read', one: 'a file', many: 'files' },
-  edit: { verb: 'edited', one: 'a file', many: 'files' },
-  search: { verb: 'searched', one: 'once', many: 'times' },
-  agent: { verb: 'ran', one: 'an agent', many: 'agents' },
-  web: { verb: 'fetched', one: 'a page', many: 'pages' },
-  skill: { verb: 'ran', one: 'skill', many: 'skills' },
-  message: { verb: 'messaged', one: 'an agent', many: 'agents' },
-  other: { verb: 'used', one: 'a tool', many: 'tools' }
-}
-
-export function toolCallKind(name: string): Kind {
-  const key = name
-    .trim()
-    .toLowerCase()
-    .replace(/^.*[./]/, '')
-  // Orca's own list of command tools as well (vendored COMMAND_TOOL_NAMES):
-  // Codex runs commands as exec_command and shell_command, which read "Used 2
-  // tools" beside a Bash run's "Ran 2 commands" while only these were known
-  // (review, 2026-09-30). write_stdin writes to a running exec_command
-  // session (codex-rs/core/src/tools/handlers/shell_spec.rs, rust-v0.153.4).
-  if (/^(bash|shell|exec|run_command|terminal|command|powershell|write_stdin)$/.test(key) || isCommandToolName(key)) {
-    return 'command'
-  }
-  // view_image is Codex's "View a local image file from the filesystem".
-  if (/^(read|read_file|readfile|cat|view|notebookread|view_image)$/.test(key)) {
-    return 'read'
-  }
-  if (/^(edit|write|multiedit|notebookedit|apply_patch|create_file|write_file|patch)$/.test(key)) {
-    return 'edit'
-  }
-  if (/^(grep|glob|search|list|ls|find|rg|list_dir)$/.test(key)) {
-    return 'search'
-  }
-  if (/^(agent|task|subagent|spawn_agent)$/.test(key)) {
-    return 'agent'
-  }
-  if (/^(webfetch|websearch|fetch|browse|web_search|web_fetch)$/.test(key)) {
-    return 'web'
-  }
-  if (/^skill$/.test(key)) {
-    return 'skill'
-  }
-  if (/^(sendmessage|send_message)$/.test(key)) {
-    return 'message'
-  }
-  // Then every name Orca's vocabulary knows, so the phone cannot miss one of
-  // them one name at a time again: Codex's `local_shell` read "Used 2 tools"
-  // and its `Diff` file changes "Used a tool" while the vendored code already
-  // named them a shell call and a file change (review, 2026-09-30).
-  const category = nativeChatToolCategory(key)
-  return category ? KIND_BY_CATEGORY[category] : 'other'
+  command: { verb: 'ran', one: 'a command', many: '# commands' },
+  read: { verb: 'read', one: 'a file', many: '# files' },
+  edit: { verb: 'edited', one: 'a file', many: '# files' },
+  search: { verb: 'searched', one: 'once', many: '# times' },
+  agent: { verb: 'ran', one: 'an agent', many: '# agents' },
+  web: { verb: 'fetched', one: 'a page', many: '# pages' },
+  webSearch: { verb: 'searched', one: 'the web', many: 'the web # times' },
+  skill: { verb: 'ran', one: 'skill', many: '# skills' },
+  message: { verb: 'messaged', one: 'an agent', many: '# agents' },
+  other: { verb: 'used', one: 'a tool', many: '# tools' }
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -209,70 +145,52 @@ function sendMessageDetail(block: NativeChatBlock): { to: string; preview: strin
   return { to, preview }
 }
 
-/** True only when a single edit-shaped call's own result is certain the file
- *  is new — a `command: "create"` or a "File created successfully" result,
- *  the same evidence `editFilesFromToolPair` requires of the inline diff
- *  card. Never a guess from the tool name alone. */
-function soleCallCreatedFile(
-  call: NativeChatToolCallBlock,
-  result: NativeChatToolResultBlock | null
-): boolean {
-  const files = editFilesForToolCall(call, result)
-  return files !== null && files.length === 1 && files[0]!.changeKind === 'added'
-}
-
 type Group = {
   kind: Kind
-  total: number
   failed: number
-  /** The lone call's own label (file name / command description), only while
-   *  it is still the only call of this kind in the run. */
-  label: string | null
-  /** The lone call and its result, kept only long enough to ask whether it
-   *  created a file or to read a SendMessage's recipient and text — cleared the
-   *  moment a second call of the same kind arrives, since neither question
-   *  has one answer for a group. */
-  soleCall: NativeChatToolCallBlock | null
-  soleResult: NativeChatToolResultBlock | null
+  /** Every call of this kind, in run order, each with its result once one
+   *  arrives. A lone call is asked for its own label (file name, command
+   *  description), whether it created a file, or a SendMessage's recipient
+   *  and text; none of those has one answer for a group. */
+  pairs: ToolRunPair[]
 }
 
 function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const groups: Group[] = []
   const indexByKind = new Map<Kind, number>()
-  const pending: number[] = []
+  // Null for a call that counts as none: a Codex poll of a command already
+  // counted, whose result is then no group's (codex-stdin-poll.ts). A poll's
+  // error is left to the run header's own "N failed" label, which a sentence
+  // that does not state it keeps drawn (toolRunSentenceShowsFailures).
+  const pending: ({ entry: Group; pair: ToolRunPair } | null)[] = []
+  const foldsIntoCommand = createCodexPollFolder()
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
+      if (foldsIntoCommand(block.name, block.input)) {
+        pending.push(null)
+        continue
+      }
       const kind = toolCallKind(block.name)
       let index = indexByKind.get(kind)
       if (index === undefined) {
         index = groups.length
         indexByKind.set(kind, index)
-        groups.push({ kind, total: 0, failed: 0, label: null, soleCall: null, soleResult: null })
+        groups.push({ kind, failed: 0, pairs: [] })
       }
       const entry = groups[index]!
-      entry.total += 1
-      if (entry.total === 1) {
-        entry.label = soleCallLabel(block)
-        entry.soleCall = block
-      } else {
-        entry.label = null
-        entry.soleCall = null
-        entry.soleResult = null
-      }
-      pending.push(index)
+      const pair: ToolRunPair = { call: block, result: null }
+      entry.pairs.push(pair)
+      pending.push({ entry, pair })
     } else if (isToolResultBlock(block)) {
       // FIFO by ordinal, the pairing rule the fold itself uses.
-      const index = pending.shift()
-      const entry = index === undefined ? undefined : groups[index]
-      if (!entry) {
+      const slot = pending.shift()
+      if (!slot) {
         continue
       }
       if (block.isError) {
-        entry.failed += 1
+        slot.entry.failed += 1
       }
-      if (entry.total === 1 && entry.soleCall) {
-        entry.soleResult = block
-      }
+      slot.pair.result = block
     }
   }
   return groups
@@ -351,8 +269,9 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
   }
   for (const entry of groups) {
     const failed = entry.failed > 0 ? ` (${entry.failed} failed)` : ''
-    if (entry.kind === 'message' && entry.total === 1 && entry.soleCall) {
-      const detail = sendMessageDetail(entry.soleCall)
+    const sole = entry.pairs.length === 1 ? entry.pairs[0]! : null
+    if (entry.kind === 'message' && sole) {
+      const detail = sendMessageDetail(sole.call)
       if (detail) {
         const preview = detail.preview ? ` ${detail.preview}` : ''
         push(
@@ -362,12 +281,7 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
         continue
       }
     }
-    if (
-      entry.kind === 'edit' &&
-      entry.total === 1 &&
-      entry.soleCall &&
-      soleCallCreatedFile(entry.soleCall, entry.soleResult)
-    ) {
+    if (entry.kind === 'edit' && sole && soleCallCreatedFile(sole)) {
       push([{ text: `created a file${failed}` }], entry.failed)
       continue
     }
@@ -375,8 +289,11 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
     // A command reads by its own description only when it is the whole run:
     // beside other work the Claude app says "ran a command" ("Created a file,
     // ran a command", 2026-09-26), described or not.
-    const label = entry.kind === 'command' && groups.length > 1 ? null : entry.label
-    const amount = entry.total === 1 ? (label ?? noun.one) : `${entry.total} ${noun.many}`
+    const label = !sole || (entry.kind === 'command' && groups.length > 1) ? null : soleCallLabel(sole.call)
+    // Edits count the files they changed, as the chip beside the row does;
+    // every other kind counts its calls.
+    const count = entry.kind === 'edit' ? editedFileCount(entry.pairs) : entry.pairs.length
+    const amount = count === 1 ? (label ?? noun.one) : noun.many.replace('#', String(count))
     push([{ text: `${noun.verb} ${amount}${failed}` }], entry.failed)
   }
   if (spans.length === 0) {

@@ -113,6 +113,9 @@ export type Tick = {
   working?: boolean
   prompts?: DesktopPrompt[]
   queued?: string[]
+  /** Whether the screen read behind `queued` could see the agent's queue box
+   *  (the controller's `nativeChatQueueReadable`); left out, it could. */
+  queueReadable?: boolean
   screen?: string[]
   agent?: 'claude' | 'codex'
   /** The subagent messages the prompt beacon carried (the controller's
@@ -223,6 +226,7 @@ export function landingHarness(frames: Record<string, unknown>[]) {
       takeOwnSends: drafts.takeSends,
       nativeChatDesktopPrompts: tick.prompts,
       nativeChatQueuedMessages: tick.queued ?? [],
+      nativeChatQueueReadable: tick.queueReadable ?? true,
       nativeChatScreenSentPhotos: tick.screen ? sentPhotosFromScreen(tick.screen) : [],
       nativeChatAgentMessages: tick.agentMessages ?? [],
       nativeChatScreenPeerNotices: tick.peerRows === undefined ? [] : tick.peerRows,

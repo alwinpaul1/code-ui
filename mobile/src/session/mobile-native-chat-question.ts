@@ -3,6 +3,17 @@
 // have no structured signal, so we parse the text conservatively and only treat
 // it as a question when a clear option list is present.
 
+import {
+  codeFenceStarts,
+  collectOptionLists,
+  introIndex,
+  lineAsks,
+  lineIntroduces,
+  unwrapEmphasis,
+  type OptionList
+} from './mobile-native-chat-question-lists'
+import { asksAfter, asksToChoose } from './mobile-native-chat-question-asks'
+
 export type MobileChatQuestion = {
   question: string
   /** Structured prompt identity, present only for durable host prompts. */
@@ -25,188 +36,44 @@ export function mobileChatQuestionKey(question: MobileChatQuestion): string {
   return JSON.stringify(question)
 }
 
-type ParsedOption = {
-  label: string
-  token: string | null
-}
-
-// A pointer/highlight glyph some TUIs prefix onto the *currently selected* row.
-// Stripped first so "❯ 2. Foo" parses identically to "2. Foo".
-const POINTER_PREFIX = /^(\s*)(?:❯|›|»)\s+/
-
-// Ordered most-specific-first so a numbered/lettered marker wins over the
-// bullet fallback. `token` is the capture index of the leading marker (0 = none),
-// `label` the capture index of the choice text.
-const OPTION_PATTERNS: { re: RegExp; token: number; label: number }[] = [
-  // 1. Option   12) Option
-  { re: /^\s*(\d{1,2})[.)]\s+(\S.*?)\s*$/, token: 1, label: 2 },
-  // [a] Option   [1] Option
-  { re: /^\s*\[([0-9a-zA-Z])\]\s+(\S.*?)\s*$/, token: 1, label: 2 },
-  // a) Option   a. Option   (single letter, to avoid eating prose like "e.g.")
-  { re: /^\s*([a-zA-Z])[.)]\s+(\S.*?)\s*$/, token: 1, label: 2 },
-  // - Option   * Option   • Option   > Option   (no token)
-  { re: /^\s*(?:[-*•>])\s+(\S.*?)\s*$/, token: 0, label: 1 }
-]
-
-function parseOptionLine(line: string): (ParsedOption & { kind: number }) | null {
-  const stripped = line.replace(POINTER_PREFIX, '$1')
-  for (const [kind, { re, token, label }] of OPTION_PATTERNS.entries()) {
-    const m = stripped.match(re)
-    if (!m) {
-      continue
-    }
-    const text = m[label].trim()
-    if (text.length === 0) {
-      continue
-    }
-    return { label: text, token: token > 0 ? m[token] : null, kind }
-  }
-  return null
-}
-
-/** Leading whitespace, with a pointer glyph counted as the indent it stands in
- *  for: a TUI draws `❯ 1. main` over `  2. develop`, one column of items. */
-function lineIndent(line: string): number {
-  const pointer = POINTER_PREFIX.exec(line)
-  const flat = pointer ? ' '.repeat(pointer[0].length) + line.slice(pointer[0].length) : line
-  return flat.length - flat.trimStart().length
-}
-
-type OptionList = {
-  /** Line index of the first item. */
-  start: number
-  /** Line index of the last line that belongs to the list. */
-  end: number
-  items: ParsedOption[]
-}
-
-type OpenList = {
-  list: OptionList
-  kind: number
-  indent: number
-  /** The last item's marker ("2", "b"), or null for a bullet. */
-  token: string | null
-  /** A paragraph after the last item that may sit inside a loose list, and
-   *  whether a blank line has followed it; null when there is none. */
-  paragraph: { blankAfter: boolean } | null
-}
-
-// Question-like introducing line: ends in ? or :.
-const QUESTION_LINE = /[?:]\s*$/
-
-/** Whether `next` is the marker after `previous`: 1 then 2, a then b. A bullet
- *  has no marker, so nothing says a bullet list goes on past a paragraph. */
-function isNextMarker(previous: string | null, next: string | null): boolean {
-  if (previous == null || next == null) {
-    return false
-  }
-  if (/^\d+$/.test(previous) && /^\d+$/.test(next)) {
-    return Number(next) === Number(previous) + 1
-  }
-  return (
-    /^[a-z]$/i.test(previous) &&
-    /^[a-z]$/i.test(next) &&
-    next.charCodeAt(0) === previous.charCodeAt(0) + 1
-  )
-}
-
-/** Whether `option` resumes the loose list `open` after a paragraph. */
-function resumesAfterParagraph(
-  open: OpenList,
-  option: ParsedOption & { kind: number },
-  indent: number
-): boolean {
-  return (
-    open.paragraph?.blankAfter === true &&
-    option.kind === open.kind &&
-    indent === open.indent &&
-    isNextMarker(open.token, option.token)
-  )
-}
-
-/**
- * The reply's lists, in order. One list is a run of items of one marker kind
- * at one indent; blank lines do not end it, and a deeper line (a sub-bullet, a
- * wrapped description) belongs to the item above it. So does a line at the
- * list's own indent directly under the item with no blank line between (a
- * hard wrap to column 0, CommonMark's lazy continuation). A paragraph set off
- * by blank lines between two numbered or lettered items is part of a loose
- * list when the numbering goes on after it. A line that asks (`?` or `:`),
- * any other prose, or an item of another kind ends the list.
- */
-function collectOptionLists(lines: readonly string[]): OptionList[] {
-  const lists: OptionList[] = []
-  let current: OpenList | null = null
-  lines.forEach((line, index) => {
-    if (line.trim().length === 0) {
-      if (current?.paragraph) {
-        current.paragraph.blankAfter = true
-      }
-      return
-    }
-    const indent = lineIndent(line)
-    const option = parseOptionLine(line)
-    if (current?.paragraph) {
-      if (!option && !QUESTION_LINE.test(line)) {
-        current.paragraph.blankAfter = false
-        return
-      }
-      if (option && resumesAfterParagraph(current, option, indent)) {
-        current.paragraph = null
-      } else {
-        current = null
-      }
-    }
-    if (current && indent > current.indent) {
-      current.list.end = index
-      return
-    }
-    if (option && current && option.kind === current.kind) {
-      current.list.items.push(option)
-      current.list.end = index
-      current.token = option.token
-      return
-    }
-    if (!option) {
-      if (!current || QUESTION_LINE.test(line)) {
-        current = null
-      } else if (current.list.end === index - 1) {
-        current.list.end = index
-      } else {
-        current.paragraph = { blankAfter: false }
-      }
-      return
-    }
-    const list = { start: index, end: index, items: [option] }
-    current = { list, kind: option.kind, indent, token: option.token, paragraph: null }
-    lists.push(list)
-  })
-  return lists
-}
-
-/** The nearest non-blank line above `list`, or -1 when there is none or it
- *  belongs to the list before it. */
-function introIndex(
-  lines: readonly string[],
-  list: OptionList,
-  previous: OptionList | null
-): number {
-  let index = list.start - 1
-  while (index >= 0 && lines[index].trim().length === 0) {
-    index--
-  }
-  return previous && index <= previous.end ? -1 : index
-}
-
-const ASKS = /\?\s*$/
-
 const MULTI_SELECT_HINT =
   /\b(select all|choose all|choose multiple|select multiple|pick multiple|all that apply|one or more|comma[- ]separated|multiple options)\b/i
 
-// Drop a trailing ":" off a card title but keep a meaningful "?".
+// Drop the emphasis that wraps a card title and a trailing ":" off it, but
+// keep a meaningful "?".
 function cleanQuestionText(raw: string): string {
-  const trimmed = raw.trim()
+  const trimmed = unwrapEmphasis(raw)
   return trimmed.endsWith(':') ? trimmed.slice(0, -1).trim() : trimmed
+}
+
+/**
+ * Which of the reply's lists holds the choices, or -1 when that is a guess.
+ * One list is the choices. With more, the choices are the one list under a
+ * line that asks (`?`): a reply often lists findings before it asks and
+ * reasons or notes after, and taking the last list sent a finding back as
+ * the answer, or dropped the card when notes followed the choices. Two lists
+ * under lines that ask, or none, and no card is shown. Nor when a list after
+ * the choices lacks a line of its own that introduces it (ends in `:`): with
+ * no line between, or only prose the numbering did not bridge, it may be
+ * more of the choices.
+ */
+function choicesListIndex(
+  lines: readonly string[],
+  lists: readonly OptionList[],
+  intros: readonly number[]
+): number {
+  if (lists.length <= 1) {
+    return lists.length - 1
+  }
+  const asking = intros.flatMap((intro, i) => (intro >= 0 && lineAsks(lines[intro]) ? [i] : []))
+  if (asking.length !== 1) {
+    return -1
+  }
+  const [at] = asking
+  const laterIntroduced = intros
+    .slice(at + 1)
+    .every((intro) => intro >= 0 && lineIntroduces(lines[intro]))
+  return laterIntroduced ? at : -1
 }
 
 /**
@@ -215,11 +82,9 @@ function cleanQuestionText(raw: string): string {
  * question). Conservative on purpose: requires at least two option lines, or one
  * option line introduced by a question-like prompt line.
  *
- * The options are ONE list: the reply's last, under the line directly above it.
- * A reply often lists findings before it asks, and taking every bullet sent a
- * finding back as the answer. With more than one list, the last must sit under
- * a line that asks (`?`), and no earlier list may sit under one too; otherwise
- * which list answers is a guess, and no card is shown.
+ * The options are ONE list (choicesListIndex), under the line directly above
+ * it, which titles the card. A line that asks after it must ask to choose from
+ * it (asksToChoose), or the card is not shown.
  */
 export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   if (typeof text !== 'string' || text.trim().length === 0) {
@@ -227,41 +92,35 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   }
 
   const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const lists = collectOptionLists(lines)
-  const list = lists.at(-1)
-  if (!list) {
+  const fenceStarts = codeFenceStarts(lines)
+  const lists = collectOptionLists(lines, fenceStarts)
+  const intros = lists.map((list, i) => introIndex(lines, list, lists[i - 1] ?? null, fenceStarts))
+  const at = choicesListIndex(lines, lists, intros)
+  if (at < 0) {
     return null
   }
-  const previous = lists.at(-2) ?? null
+  const list = lists[at]
   const options = list.items.map((item) => item.label)
   const optionTokens = list.items.map((item) => item.token)
-
-  const questionIndex = introIndex(lines, list, previous)
-  const question = questionIndex >= 0 ? lines[questionIndex] : ''
-  const questionLooksLikePrompt = QUESTION_LINE.test(question)
-  if (previous) {
-    if (!ASKS.test(question)) {
-      return null
-    }
-    const asksEarlier = lists
-      .slice(0, -1)
-      .some((earlier, i) =>
-        ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null)] ?? '')
-      )
-    if (asksEarlier) {
-      return null
-    }
-  }
+  const question = intros[at] >= 0 ? lines[intros[at]] : ''
 
   // Conservative gate: a single bare option with no introducing prompt is more
   // likely stray prose (a lone "- item") than a real choice list.
-  if (options.length < 2 && !questionLooksLikePrompt) {
+  if (options.length < 2 && !lineIntroduces(question)) {
+    return null
+  }
+  // "Here's my plan: 1. … 2. … Shall I proceed?" asks for a yes, not a step.
+  if (asksAfter(lines, lists, at, fenceStarts).some((ask) => !asksToChoose(ask, list))) {
     return null
   }
 
-  // A hint in the findings above says nothing about this list.
-  const scope = previous ? lines.slice(previous.end + 1).join('\n') : text
-  const multiSelect = MULTI_SELECT_HINT.test(scope) && options.length > 1
+  // A hint in the findings above or the notes below says nothing about this
+  // list: read the lines from the list before it to the next list's intro.
+  const from = at > 0 ? lists[at - 1].end + 1 : 0
+  const next = lists[at + 1]
+  const to = next ? (intros[at + 1] >= 0 ? intros[at + 1] : next.start) : lines.length
+  const scope = lines.slice(from, to).filter((_, i) => fenceStarts[from + i] === -1)
+  const multiSelect = MULTI_SELECT_HINT.test(scope.join('\n')) && options.length > 1
 
   return {
     question: question.length > 0 ? cleanQuestionText(question) : 'Choose an option',

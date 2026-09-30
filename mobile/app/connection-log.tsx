@@ -3,7 +3,6 @@ import { tapTargetHitSlop } from '../src/ui/tap-target'
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import * as Clipboard from 'expo-clipboard'
 import Constants from 'expo-constants'
 import { ChevronLeft, Copy, Check } from 'lucide-react-native'
 import { spacing, typography } from '../src/theme/mobile-theme'
@@ -40,6 +39,7 @@ import {
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
 import { useNow } from '../src/hooks/use-now'
+import { useClipboardWriter } from '../src/platform/clipboard'
 import type { ConnectionLogEntry } from '../src/transport/types'
 
 // Why: getSnapshot must be referentially stable when there's no data —
@@ -61,6 +61,9 @@ export default function ConnectionLogScreen() {
   const { hosts, loaded: hostsLoaded } = loadedHosts
   const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
   const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
+  // Why a copy did not land, for the host it was pressed on; cleared by the next press.
+  const [copyFailure, setCopyFailure] = useState<{ hostId: string; cause: string } | null>(null)
+  const clipboard = useClipboardWriter()
 
   const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((h) => h.id === selectedId) ?? null
@@ -101,35 +104,55 @@ export default function ConnectionLogScreen() {
   const live = liveConnectionRow({ state, activePath, lastConnectedAt, entries, nowMs: now })
   const timeline = useMemo(() => buildConnectionTimeline(entries), [entries])
   const copied = copiedHostId === selectedId
+  const copyFailureCause = copyFailure?.hostId === selectedId ? copyFailure.cause : null
 
+  const buildReport = useCallback(
+    async (host: NonNullable<typeof selected>): Promise<string> => {
+      const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(host.id))
+      const [snapshot, phoneVpn] = await Promise.all([
+        readConnectionDiagnosticsSnapshot(clientContext, connectionLogStore, host.id),
+        readPhoneVpnStatus(host.endpoint, phoneVpnNativeModule())
+      ])
+      return buildConnectionDiagnosticsReport({
+        hostName: host.name,
+        endpoint: host.endpoint,
+        state: snapshot.state,
+        reconnectAttempts: snapshot.reconnectAttempts,
+        lastConnectedAt: snapshot.lastConnectedAt,
+        platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
+        appVersion: Constants.expoConfig?.version ?? 'unknown',
+        desktopAppVersion,
+        entries: snapshot.entries,
+        activePath: snapshot.activePath,
+        pendingPath: snapshot.pendingPath,
+        background: isBackgroundDeliveryAvailable() ? backgroundDeliveryState() : null,
+        phoneVpn
+      })
+    },
+    [liveDesktopAppVersion, clientContext]
+  )
+
+  // Never rejects: the button fires it and forgets it. It said "Copied" over a write the
+  // clipboard refused (setStringAsync's answer was ignored) and left a failed report build as an
+  // unhandled rejection with nothing on screen, so the old clipboard went into a bug report
+  // (review, 2026-09-30). The writer throws on a refusal, and any failure is shown and logged.
   const copyDiagnostics = useCallback(async () => {
     if (!selected) {
       return
     }
-    const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
-    const [snapshot, phoneVpn] = await Promise.all([
-      readConnectionDiagnosticsSnapshot(clientContext, connectionLogStore, selected.id),
-      readPhoneVpnStatus(selected.endpoint, phoneVpnNativeModule())
-    ])
-    const report = buildConnectionDiagnosticsReport({
-      hostName: selected.name,
-      endpoint: selected.endpoint,
-      state: snapshot.state,
-      reconnectAttempts: snapshot.reconnectAttempts,
-      lastConnectedAt: snapshot.lastConnectedAt,
-      platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
-      appVersion: Constants.expoConfig?.version ?? 'unknown',
-      desktopAppVersion,
-      entries: snapshot.entries,
-      activePath: snapshot.activePath,
-      pendingPath: snapshot.pendingPath,
-      background: isBackgroundDeliveryAvailable() ? backgroundDeliveryState() : null,
-      phoneVpn
-    })
-    await Clipboard.setStringAsync(report)
+    setCopyFailure(null)
+    try {
+      await clipboard.writeText(await buildReport(selected))
+    } catch (error) {
+      const cause = error instanceof Error ? error.message : String(error)
+      console.warn(`[connection-log] Copy report failed: ${cause}`)
+      setCopiedHostId(null)
+      setCopyFailure({ hostId: selected.id, cause })
+      return
+    }
     setCopiedHostId(selected.id)
     setTimeout(() => setCopiedHostId((hostId) => (hostId === selected.id ? null : hostId)), 2000)
-  }, [selected, liveDesktopAppVersion, clientContext])
+  }, [selected, clipboard, buildReport])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -181,6 +204,11 @@ export default function ConnectionLogScreen() {
               <Text style={styles.copyButtonText}>{copied ? 'Copied' : 'Copy report'}</Text>
             </Pressable>
           </View>
+          {copyFailureCause !== null ? (
+            <Text style={styles.copyFailure} accessibilityLiveRegion="polite">
+              {`Couldn't copy the report: ${copyFailureCause.replace(/\.$/, '')}.`}
+            </Text>
+          ) : null}
           {diagnosis && (
             <View style={styles.diagnosisCard}>
               <Text style={styles.diagnosisHeading}>What this suggests</Text>
@@ -313,6 +341,12 @@ function connectionLogScreenStyles({ colors }: Theme) {
       fontSize: typography.metaSize,
       fontWeight: '600',
       color: colors.text
+    },
+    copyFailure: {
+      fontSize: typography.metaSize,
+      color: colors.danger,
+      lineHeight: 18,
+      marginBottom: spacing.sm
     },
     emptyText: {
       fontSize: typography.metaSize,

@@ -41,18 +41,22 @@ export function rememberEchoInPending(
   if (current.some((item) => item.id === id)) {
     return previous
   }
-  // A reading that only extends a complete one already stored is the
-  // screen's own rows glued on; and a stored reading that this one beats
+  // A reading that only extends a complete one already stored at the same
+  // row is the screen's own rows glued on; and a stored reading that this one beats
   // (a `…` stub, or a glued variant) gives way to it.
   // …and a phone send of its own beats a witnessed reading that glues rows
   // onto it, whichever came first: this is the send-first order, and
   // acceptOwnSendInPending below is the witness-first one.
-  const reading = { id, text, witnessedAt: now }
-  if (current.some((item) => preferredStoredReading(item, reading) === 'a')) {
+  // A queue-box reading remembered by its words alone (a chat's first read of
+  // the box, or an earlier build's) may be a message stored at another row,
+  // and is one with any stored reading of its words (sightedApart).
+  const reading = { id, text, witnessedAt: now, baselineTailMessageId: anchorId }
+  const bySighting = isSightedReading(id)
+  if (current.some((item) => preferredStoredReading(item, reading, bySighting) === 'a')) {
     return previous
   }
   const kept = current.filter(
-    (item) => !(isWitnessed(item.id) && preferredStoredReading(item, reading) === 'b')
+    (item) => !(isWitnessed(item.id) && preferredStoredReading(item, reading, bySighting) === 'b')
   )
   const base = kept.length === current.length ? previous : { ...previous, [key]: kept }
   const normalizedText = normalizeReconcileText(text)
@@ -201,8 +205,14 @@ function isWitnessed(id: string): boolean {
 }
 
 /** A copy the store holds or is about to: a witness is stamped with when
- *  the phone saw it. */
-type StoredReading = { id: string; text: string; witnessedAt?: number; sentAt?: number }
+ *  the phone saw it, and anchored at the row that was last when it did. */
+type StoredReading = {
+  id: string
+  text: string
+  witnessedAt?: number
+  sentAt?: number
+  baselineTailMessageId?: string | null
+}
 
 /** Stands for a phone send compared by its words alone. */
 const SEND_ID = 'pending-send'
@@ -221,8 +231,22 @@ const SEND_ID = 'pending-send'
  * 2.1.284). The same words are still one message, whoever holds them, and so
  * is a pair with a screen reading in it, or one whose shorter copy fills the
  * tab status's field, which Orca cuts there.
+ *
+ * Except two screen readings anchored at different rows: the box first listed
+ * them with a row written between, so the longer is a message of its own,
+ * "check the build" and then "check the build again", queued after the agent
+ * took the first (2026-09-30). The rule that took it for the first with the
+ * screen's rows glued on came from the scrollback reader; the queue reader
+ * stops at the transcript's tool rows (queueBlockRows). Two readings at one
+ * row are still one message, the shorter kept, as the glued readings in
+ * mobile-native-chat-remember-echo.test.ts are. What it costs: a box that
+ * reads one message cut at a word boundary with no `…`, and whole only after
+ * a row lands, keeps both readings.
  */
-function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
+function preferredStoredReading(a: StoredReading, b: StoredReading, bySighting = true): 'a' | 'b' | null {
+  if (bySighting && sightedApart(a, b)) {
+    return null
+  }
   const verdict = preferredWitnessReading(a.text, b.text) ?? cutStatusCopyOf(a, b)
   if (verdict === null) {
     return null
@@ -231,7 +255,44 @@ function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' |
   const goesOn = storedKey(dropped.text).length > storedKey(kept.text).length && !storedKey(kept.text).endsWith('…')
   const whole = !statusCopyMayBeCut(kept.text)
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
-  return goesOn && whole && asSent ? null : verdict
+  return goesOn && ((whole && asSent) || listedAtAnotherRow(kept, dropped)) ? null : verdict
+}
+
+/**
+ * Two queue-box readings, one of them remembered with the row the box first
+ * listed it after (`absorbed-…@<row>`, absorbedMemoryId), at two different
+ * rows: two messages, whatever their words. The chat keeps one sighting per
+ * box entry (use-absorbed-queue-echoes.ts), so one message has one row, and
+ * "keep going" sent twice mid-turn is two. Keyed by the words alone, the
+ * second was never stored, and after a tab switch, a reconnect or a relaunch
+ * only one was drawn (review, 2026-09-30).
+ *
+ * Not when both are remembered by their words alone: an earlier build's, or
+ * a chat's first read of the box, where a message still queued from before a
+ * remount is listed at a later row. rememberEchoInPending asks without this
+ * rule for such a reading coming in, so it joins any stored reading of its
+ * words. What that costs: two copies of the same words the box already
+ * lists at the chat's first read are stored once, and so are two the box
+ * first lists in one read (the same row, the same id).
+ */
+function sightedApart(a: StoredReading, b: StoredReading): boolean {
+  return (isSightedReading(a.id) || isSightedReading(b.id)) && listedAtAnotherRow(a, b)
+}
+
+/** A queue-box reading remembered with its row: `absorbed-<hash>-<len>@<row>`. */
+function isSightedReading(id: string): boolean {
+  return id.startsWith('absorbed-') && id.includes('@')
+}
+
+/** Two queue-box readings (`absorbed-`) anchored at two different rows. */
+function listedAtAnotherRow(a: StoredReading, b: StoredReading): boolean {
+  return (
+    a.id.startsWith('absorbed-') &&
+    b.id.startsWith('absorbed-') &&
+    typeof a.baselineTailMessageId === 'string' &&
+    typeof b.baselineTailMessageId === 'string' &&
+    a.baselineTailMessageId !== b.baselineTailMessageId
+  )
 }
 
 /**
@@ -361,13 +422,17 @@ export function sweepWitnessedEchoes(
   return swept.length === list.length ? [...list] : swept
 }
 
-/** One id per message text, stable across mounts and relaunches, so a witness
- *  that re-finds the same message never stores it twice. */
-export function echoMemoryId(text: string): string {
+/** The id a queue-box reading is remembered under: a hash of its words, and
+ *  with `anchorId` the row the box first listed it after, so a witness that
+ *  re-finds the same message never stores it twice and two messages of the
+ *  same words are two items (absorbedMemoryId says which to use). Stores
+ *  written before the row was added hold the words alone. */
+export function echoMemoryId(text: string, anchorId?: string | null): string {
   const key = normalizeNativeChatUserText(text)
   let hash = 5381
   for (let index = 0; index < key.length; index += 1) {
     hash = ((hash << 5) + hash + key.charCodeAt(index)) | 0
   }
-  return `absorbed-${(hash >>> 0).toString(36)}-${key.length}`
+  const words = `absorbed-${(hash >>> 0).toString(36)}-${key.length}`
+  return anchorId ? `${words}@${anchorId}` : words
 }

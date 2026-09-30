@@ -145,8 +145,11 @@ const CRLF_ALLOWANCE_BYTES = 64
  * cut: a text that was cut cannot be longer. Uncapped, a person's prompt of
  * many short lines 300 bytes under the cut was swept (combined review of
  * fix/prompt-leak, 2026-09-27). A CRLF request cut after more line ends than
- * the allowance covers is not swept, and one still comes out a byte short for
- * each `\b` or `\f` escape, which the unescape turns into letters.
+ * the allowance covers is not swept. A `\b` or `\f` escape sizes exactly: the
+ * unescape reads it as the character JSON means, and JSON.stringify writes
+ * that back as the same two bytes. Only a copy stored by an older build, which
+ * turned these escapes into the letters b and f, comes out a byte short for
+ * each.
  *
  * So a text is taken as cut when, written back, it is within
  * HOOK_CUT_SLACK_BYTES + CRLF_ALLOWANCE_BYTES (72) bytes under the cut, the

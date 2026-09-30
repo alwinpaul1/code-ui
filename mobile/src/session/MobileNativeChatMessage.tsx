@@ -49,7 +49,8 @@ function Bubble({
 }: {
   user: boolean
   onToggle: () => void
-  onCopy: () => void
+  /** Absent when the prompt holds no text: a hold would copy nothing. */
+  onCopy?: () => void
   style: StyleProp<ViewStyle>
   children: ReactNode
 }) {
@@ -64,7 +65,7 @@ function Bubble({
       delayLongPress={HOLD_TO_COPY_MS}
       accessibilityRole="button"
       accessibilityLabel="Sent prompt"
-      accessibilityHint="Hold to copy"
+      accessibilityHint={onCopy ? 'Hold to copy' : undefined}
     >
       {children}
     </Pressable>
@@ -72,27 +73,31 @@ function Bubble({
 }
 
 /** Subtle controls for an agent message: copy its prose, or scroll so this
- *  message's top aligns to the top of the viewport. */
+ *  message's top aligns to the top of the viewport. No Copy without prose to
+ *  copy: under a message made only of tool calls a tap copied nothing and
+ *  said nothing, a dead button (review, 2026-09-30). */
 function AgentControls({
   onCopy,
   onScrollToTop,
   styles
 }: {
-  onCopy: () => void
+  onCopy?: () => void
   onScrollToTop?: () => void
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
   return (
     <View style={styles.controls}>
-      <Pressable
-        style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-        onPress={onCopy}
-        hitSlop={8}
-        accessibilityLabel="Copy message"
-      >
-        <Copy size={14} color={colors.textMuted} strokeWidth={2} />
-      </Pressable>
+      {onCopy ? (
+        <Pressable
+          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
+          onPress={onCopy}
+          hitSlop={8}
+          accessibilityLabel="Copy message"
+        >
+          <Copy size={14} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
+      ) : null}
       {onScrollToTop ? (
         <Pressable
           style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
@@ -238,6 +243,10 @@ function MobileNativeChatMessageImpl({
     -1
   )
 
+  // Whether there is any prose to copy, without parsing it: only a tap pays
+  // for the Markdown-to-text pass. Text that draws as nothing (an image-only
+  // Markdown line) still passes this and copies nothing when tapped.
+  const hasProse = nativeChatMessageText(message.blocks) !== ''
   const handleCopy = (): void => {
     // A prompt copies as typed, unless it is drawn as Markdown (the subagent
     // transcript's task prompts); then it copies what it draws, like a reply.
@@ -248,6 +257,8 @@ function MobileNativeChatMessageImpl({
     }
     copy(text)
   }
+  const scrollToTop =
+    onScrollToMessage && messageIndex !== undefined ? () => onScrollToMessage(messageIndex) : undefined
 
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
@@ -271,17 +282,10 @@ function MobileNativeChatMessageImpl({
       </View>
     ) : null
 
-  const controls = isAgent ? (
-    <AgentControls
-      onCopy={handleCopy}
-      onScrollToTop={
-        onScrollToMessage && messageIndex !== undefined
-          ? () => onScrollToMessage(messageIndex)
-          : undefined
-      }
-      styles={styles}
-    />
-  ) : null
+  const controls =
+    isAgent && (hasProse || scrollToTop) ? (
+      <AgentControls onCopy={hasProse ? handleCopy : undefined} onScrollToTop={scrollToTop} styles={styles} />
+    ) : null
 
   return (
     <>
@@ -289,7 +293,7 @@ function MobileNativeChatMessageImpl({
         <Bubble
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
-          onCopy={handleCopy}
+          onCopy={hasProse ? handleCopy : undefined}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           {segments.map((segment, segmentIndex) =>
