@@ -182,6 +182,17 @@ drives `native-queue-editor.ts` with Orca's `terminal.read` shape. Claude Code
 same default keys, with 2.1.282's code (the two binaries compared 2026-09-26;
 not driven live).
 
+Claude Code 2.1.285 (2026-09-30): the send-now row and the placeholder are the
+2.1.284 code, byte for byte in the binary. What broke the reading was the rule
+under the spinner: a session with a name draws the name at the rule's right end
+("──────── paper-review"), and the reader skipped only a bare rule, so it saw
+no send-now row and the chat drew a queued message as sent. `isPromptRule`
+(`mobile-terminal-queue-block.ts`) now accepts the labelled rule. Test:
+`claude-queue-named-rule-2.1.285.test.ts`; the fixture is transcribed from the
+phone's screenshot plus the binary, not a live capture (its header says which
+is which). Only the send-now layout (2.1.277 on) is changed; the older
+indented block still stops at a labelled rule.
+
 Stock, no environment changes, three queued messages: the middle one was
 recalled, edited, and the queue retyped as
 `alpha oldest / bravo EDITED WITH ZERO CONFIG / charlie newest` in its original

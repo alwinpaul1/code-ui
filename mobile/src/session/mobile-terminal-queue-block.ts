@@ -32,6 +32,20 @@ export const SPINNER_ROW = /^[^\s❯›>⏺⎿]\s+\S.*…/
  *  binary). */
 const TOOL_ROW = /^\s*[⏺●⎿]/
 
+/**
+ * The rule that closes the transcript above Claude's input box: a run of "─",
+ * or, from a renamed session, that run with the session's name at its right
+ * end ("──────── paper-review", as the phone's screenshot of Claude Code
+ * 2.1.285 shows it, 2026-09-30). The label is Claude's own `borderText` on the
+ * composer box, in 2.1.284 too; no fixture had drawn it, and the reader met it
+ * where it looked only for a bare rule and refused the whole queue, so the chat
+ * drew a queued message as sent. The run of glyphs must open the row and be
+ * long: text that only starts with a few "─" is not a rule.
+ */
+export function isPromptRule(line: string): boolean {
+  return /^[\s─━—-]*$/.test(line) || /^[─━]{8,}(?:\s+[^\s─━].{0,80})?\s*[─━]*\s*$/.test(line)
+}
+
 export function isQueueBound(line: string): boolean {
   return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
