@@ -6,7 +6,11 @@ import {
   taskStop
 } from './fixtures/claude-orchestration-2.1.281'
 import { readTaskEvidence } from './mobile-background-task-evidence'
-import { deriveBackgroundTasks, type BackgroundTask } from './mobile-background-tasks'
+import {
+  deriveBackgroundTasks,
+  type BackgroundTask,
+  type BackgroundTaskHostStatus
+} from './mobile-background-tasks'
 
 // ─── A TaskStop the desk did not carry out ──────────────────────────────────
 // The lead calls TaskStop on a running shell, and the user turns the
@@ -25,7 +29,7 @@ import { deriveBackgroundTasks, type BackgroundTask } from './mobile-background-
 // case to cover.
 
 const NOW = Date.parse('2026-09-26T00:30:00.000Z')
-const WORKING = { state: 'working', subagents: [] } as const
+const WORKING: BackgroundTaskHostStatus = { state: 'working', subagents: [] }
 
 const USER_TURNED_DOWN =
   "The user doesn't want to proceed with this tool use. The tool use was rejected (eg. if it was a file edit, the new_string was NOT written to the file). STOP what you are doing and wait for the user to tell you how to proceed."
