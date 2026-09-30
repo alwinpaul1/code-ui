@@ -5,6 +5,7 @@ import {
   isIntrawordUnderscoreToken
 } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
+import { unescapeMarkdownText } from '../markdown-inline-escapes'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
@@ -247,12 +248,27 @@ const INLINE = new RegExp(
   'g'
 )
 
-export function parseInline(text: string): InlineToken[] {
+/**
+ * A run of inline Markdown as tokens. Images, a link label that holds one,
+ * and backslash escapes are read as the chat reads them (the matcher's
+ * `images` reading): `![shot](i.png)` drew a stray "!" before a link, and a
+ * README badge, `[![CI](b.svg)](https://ci)`, a link to the badge image
+ * labelled "![CI" (review, 2026-09-30). An image is a link labelled with its
+ * alt text, or "image" when it has none. Inside a link's words (`label`), an
+ * image is its alt text alone, so a badge is one link to its target, and a
+ * link or an address is drawn as written. A text run drops an escape's
+ * backslash, as GitHub does: `\*a\*` is two stars around a word, and
+ * `\![x](y)` is a "!" and a link. Code keeps its backslashes.
+ */
+export function parseInline(text: string, label = false): InlineToken[] {
   const tokens: InlineToken[] = []
   // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
   // literally, but only between code spans: `Array<string>` is code, not a tag.
   const plain = stripHtmlTagsOutsideCode(text)
-  const matcher = createMarkdownInlineMatcher(plain, INLINE, false, true)
+  const matcher = createMarkdownInlineMatcher(plain, INLINE, true, true)
+  const textRun = (from: number, to?: number): void => {
+    tokens.push({ kind: 'text', text: unescapeMarkdownText(plain.slice(from, to)) })
+  }
   let cursor = 0
   // Every pass moves matcher.lastIndex forward, so the text's length bounds
   // the passes; the guard is a backstop, not a budget. A flat 5,000 was one,
@@ -263,7 +279,7 @@ export function parseInline(text: string): InlineToken[] {
     guard -= 1
     const m = guard < 0 ? null : matcher.exec()
     if (!m || m.index === undefined) {
-      tokens.push({ kind: 'text', text: plain.slice(cursor) })
+      textRun(cursor)
       break
     }
     const token = m[0]
@@ -276,19 +292,18 @@ export function parseInline(text: string): InlineToken[] {
       continue
     }
     if (m.index > cursor) {
-      tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
+      textRun(cursor, m.index)
     }
-    if (token.startsWith('`')) {
+    if (m.link?.image && label) {
+      tokens.push(...(m.link.label ? parseInline(m.link.label, true) : [{ kind: 'text' as const, text: 'image' }]))
+    } else if (m.link && label) {
+      tokens.push({ kind: 'text', text: token })
+    } else if (m.link) {
+      tokens.push({ kind: 'link', text: m.link.label || 'image', url: m.link.href })
+    } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
-    } else if (token.startsWith('[')) {
-      const close = token.indexOf('](')
-      tokens.push({
-        kind: 'link',
-        text: token.slice(1, close),
-        url: token.slice(close + 2, -1)
-      })
     } else {
       tokens.push({ kind: 'italic', text: token.slice(1, -1) })
     }

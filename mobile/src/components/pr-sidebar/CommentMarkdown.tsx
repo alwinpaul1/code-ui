@@ -266,14 +266,25 @@ function TableBlock({
   )
 }
 
-function Inline({ text, base, styles }: { text: string; base: number; styles: Styles }) {
+function Inline({
+  text,
+  base,
+  styles,
+  label = false
+}: {
+  text: string
+  base: number
+  styles: Styles
+  /** Inside a link's words: an image is its alt text (parseInline). */
+  label?: boolean
+}) {
   const tokens = useMemo<InlineToken[]>(() => {
     try {
-      return parseInline(text)
+      return parseInline(text, label)
     } catch {
       return [{ kind: 'text', text }]
     }
-  }, [text])
+  }, [text, label])
   return (
     <>
       {tokens.map((token, i) => {
@@ -285,14 +296,14 @@ function Inline({ text, base, styles }: { text: string; base: number; styles: St
         if (token.kind === 'bold') {
           return (
             <Text key={i} style={styles.bold}>
-              <Inline text={token.text} base={base} styles={styles} />
+              <Inline text={token.text} base={base} styles={styles} label={label} />
             </Text>
           )
         }
         if (token.kind === 'italic') {
           return (
             <Text key={i} style={styles.italic}>
-              <Inline text={token.text} base={base} styles={styles} />
+              <Inline text={token.text} base={base} styles={styles} label={label} />
             </Text>
           )
         }
@@ -306,10 +317,12 @@ function Inline({ text, base, styles }: { text: string; base: number; styles: St
         if (token.kind === 'link') {
           // The label draws through Inline too, so [`<T>`](url) reads as a
           // code chip inside the link rather than its backticks. A label ends
-          // at its first ']', so it cannot hold a link of its own.
+          // at its first ']' past any whole image, and draws an image as its
+          // alt text, so nothing in it is a link of its own: a badge opens
+          // its target, not its picture.
           return (
             <Text key={i} style={styles.link} onPress={() => openMarkdownLink(token.url)}>
-              <Inline text={token.text} base={base} styles={styles} />
+              <Inline text={token.text} base={base} styles={styles} label />
             </Text>
           )
         }
