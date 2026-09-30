@@ -1,5 +1,7 @@
 import { codeBlockMarkdown } from './html-code-block-markdown'
 import { VERBATIM_ATTRIBUTE } from './markdown-front-matter'
+import { SETEXT_ATTRIBUTE, setextLevel } from './markdown-leaf-blocks'
+import { isBlockStart } from './markdown-to-html'
 import {
   escapeTableCell,
   TABLE_BARE_ATTRIBUTE,
@@ -72,6 +74,39 @@ function quoteMarkdown(quote: Element): string {
 }
 
 /**
+ * A heading, under the underline its source wrote it with (SETEXT_ATTRIBUTE) while one can still
+ * write it: level 1 or 2 as the underline says, and words on one line that would not read as a
+ * block of their own. Otherwise with hashes, as every heading was written before 2026-09-30.
+ */
+function headingMarkdown(heading: Element, level: number): string {
+  const words = inlineChildren(heading).trim()
+  const underline = heading.getAttribute(SETEXT_ATTRIBUTE)
+  if (
+    underline !== null &&
+    setextLevel(underline) === level &&
+    words &&
+    !words.includes('\n') &&
+    !isBlockStart(words) &&
+    setextLevel(words) === null
+  ) {
+    return `${words}\n${underline}`
+  }
+  return `${'#'.repeat(level)} ${words}`
+}
+
+/**
+ * Whether the block before this one, blank ones skipped, is a list: an indented code block there
+ * would be read as the last item's paragraph, so it is fenced instead.
+ */
+function followsList(node: Element): boolean {
+  let previous = node.previousElementSibling
+  while (previous !== null && !blockMarkdown(previous).trim()) {
+    previous = previous.previousElementSibling
+  }
+  return previous !== null && /^(ul|ol)$/i.test(previous.tagName)
+}
+
+/**
  * One top-level node of the editable surface as a markdown block.
  *
  * Anything with no block of its own — a stray `div`, an element the browser inserted — serializes
@@ -86,7 +121,7 @@ export function blockMarkdown(node: Node): string {
   }
   const tag = node.tagName.toLowerCase()
   if (/^h[1-6]$/.test(tag)) {
-    return `${'#'.repeat(Number(tag.slice(1)))} ${inlineChildren(node).trim()}`
+    return headingMarkdown(node, Number(tag.slice(1)))
   }
   if (tag === 'p' || tag === 'div') {
     return holdsBlocks(node) ? containerBlocks(node).join('\n\n') : inlineChildren(node).trim()
@@ -97,7 +132,9 @@ export function blockMarkdown(node: Node): string {
   if (tag === 'pre') {
     // Raw text, not `textContent()`: a verbatim block is written back byte for byte, a no-break
     // space included.
-    return node.hasAttribute(VERBATIM_ATTRIBUTE) ? (node.textContent ?? '') : codeBlockMarkdown(node)
+    return node.hasAttribute(VERBATIM_ATTRIBUTE)
+      ? (node.textContent ?? '')
+      : codeBlockMarkdown(node, 0, 0, !followsList(node))
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)

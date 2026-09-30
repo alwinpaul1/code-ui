@@ -1,5 +1,7 @@
 import { gatherListItemContinuation } from './markdown-reflow'
 import { openingFence, outdentCodeLine } from './markdown-code-fence'
+import { readIndentedCode } from './markdown-leaf-blocks'
+import { opensTable } from './markdown-table-rows'
 import {
   leadingSpaces,
   opensFenceUnder,
@@ -84,16 +86,74 @@ function isItem(level: ListLevel): level is ParsedListItem {
   return 'contentIndent' in level
 }
 
+/** Whether an item's last content is a code block, after which a line needs no blank to start. */
+function endsInCode(owner: ParsedListItem): boolean {
+  const last = owner.blocks[owner.blocks.length - 1]
+  return last !== undefined && last.kind !== 'paragraph' && last.afterChildren === owner.children.length
+}
+
+type OwnedBlock = { depth: number; block: ItemBlock; nextIndex: number }
+
+/**
+ * The block an item owns at `next`: a fence, an indented code block four columns past its words,
+ * or another paragraph of words. A paragraph or indented code needs a blank line before it
+ * (without one the line would have been the item's words) unless it follows a code block. A line
+ * that opens a block of its own, or a table, is not one: it ends the list, as it always has.
+ */
+function readBlockOf(
+  lines: string[],
+  next: number,
+  blank: boolean,
+  owner: ParsedListItem,
+  opensBlock: (line: string) => boolean
+): { block: ItemBlock; nextIndex: number } | null {
+  const line = lines[next] ?? ''
+  const fence = openingFence(outdentCodeLine(line, owner.contentIndent))
+  if (fence !== null) {
+    const body = readItemFenceBody(lines, next + 1, fence, owner.contentIndent)
+    return {
+      block: {
+        kind: 'code',
+        fence,
+        code: body.code,
+        offset: owner.contentIndent + fence.indent - owner.indent,
+        blankBefore: blank,
+        afterChildren: owner.children.length
+      },
+      nextIndex: body.nextIndex
+    }
+  }
+  if ((!blank && !endsInCode(owner)) || opensBlock(line) || opensTable(line, lines[next + 1])) {
+    return null
+  }
+  const leaf = { blankBefore: blank, afterChildren: owner.children.length }
+  const code = readIndentedCode(lines, next, owner.contentIndent)
+  if (code !== null) {
+    const offset = owner.contentIndent + 4 - owner.indent
+    return { block: { kind: 'indented-code', text: code.code, offset, ...leaf }, nextIndex: code.nextIndex }
+  }
+  const words = gatherListItemContinuation(
+    lines,
+    next + 1,
+    line.trim(),
+    (candidate) => parseListLine(candidate) !== null,
+    (candidate) => opensBlock(candidate) || opensFenceUnder(candidate, owner.contentIndent)
+  )
+  const offset = leadingSpaces(line) - owner.indent
+  return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
+}
+
 /**
  * A block at `index`, past any blank lines, that belongs to an open item rather than ending the
  * list: the deepest item whose content column the line reaches owns it. Null when no item does,
- * or when what is there is no block an item takes (yet only a fence), which ends the list.
+ * or when what is there is no block an item takes, which ends the list.
  */
 function readOwnedBlock(
   lines: string[],
   index: number,
-  stack: ListLevel[]
-): { depth: number; block: ItemBlock; nextIndex: number } | null {
+  stack: ListLevel[],
+  opensBlock: (line: string) => boolean
+): OwnedBlock | null {
   let next = index
   while (next < lines.length && !(lines[next] ?? '').trim()) {
     next += 1
@@ -101,27 +161,14 @@ function readOwnedBlock(
   if (next >= lines.length) {
     return null
   }
-  const line = lines[next] ?? ''
-  const column = leadingSpaces(line)
+  const column = leadingSpaces(lines[next] ?? '')
   for (let depth = stack.length - 1; depth >= 1; depth -= 1) {
     const owner = stack[depth]!
     if (!isItem(owner) || column < owner.contentIndent) {
       continue
     }
-    const fence = openingFence(outdentCodeLine(line, owner.contentIndent))
-    if (fence === null) {
-      return null
-    }
-    const body = readItemFenceBody(lines, next + 1, fence, owner.contentIndent)
-    const block: ItemBlock = {
-      kind: 'code',
-      fence,
-      code: body.code,
-      offset: owner.contentIndent + fence.indent - owner.indent,
-      blankBefore: next > index,
-      afterChildren: owner.children.length
-    }
-    return { depth, block, nextIndex: body.nextIndex }
+    const read = readBlockOf(lines, next, next > index, owner, opensBlock)
+    return read === null ? null : { depth, ...read }
   }
   return null
 }
@@ -147,7 +194,7 @@ export function parseListTree(
   while (index < lines.length) {
     const item = parseListLine(lines[index] ?? '')
     if (!item) {
-      const owned = readOwnedBlock(lines, index, stack)
+      const owned = readOwnedBlock(lines, index, stack, opensBlock)
       if (owned === null) {
         break
       }

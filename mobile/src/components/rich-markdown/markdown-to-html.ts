@@ -3,6 +3,12 @@ import { renderListItems } from './markdown-list-render'
 import { isThematicBreak, parseListTree } from './markdown-list-parse'
 import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
 import { frontMatterEnd, frontMatterHtml } from './markdown-front-matter'
+import {
+  indentedCodeHtml,
+  readIndentedCode,
+  setextHeadingHtml,
+  setextLevel
+} from './markdown-leaf-blocks'
 import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { reflowLines } from './markdown-reflow'
@@ -136,14 +142,29 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
         continue
       }
     }
+    // Four columns in, where no other block took the line: code, as CommonMark reads it. A line
+    // four columns in under a paragraph is the paragraph's, and never reaches here.
+    const indented = readIndentedCode(lines, index, 0)
+    if (indented !== null) {
+      html.push(indentedCodeHtml(indented.code))
+      index = indented.nextIndex
+      continue
+    }
     const paragraph: string[] = []
-    while (
-      index < lines.length &&
-      (lines[index] ?? '').trim() &&
-      !isBlockStart(lines[index] ?? '') &&
-      !opensTable(lines[index] ?? '', lines[index + 1])
-    ) {
-      paragraph.push(lines[index] ?? '')
+    let underline: string | null = null
+    while (index < lines.length && (lines[index] ?? '').trim()) {
+      const current = lines[index] ?? ''
+      // A `=` or `-` run under a paragraph makes it a heading: `Title\n---` is a level-2 heading,
+      // not a paragraph and a rule, as CommonMark and GitHub read it.
+      if (paragraph.length > 0 && setextLevel(current) !== null) {
+        underline = current
+        index += 1
+        break
+      }
+      if (isBlockStart(current) || opensTable(current, lines[index + 1])) {
+        break
+      }
+      paragraph.push(current)
       index += 1
     }
     if (paragraph.length === 0) {
@@ -152,6 +173,10 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       // text.
       paragraph.push(lines[index] ?? '')
       index += 1
+    }
+    if (underline !== null) {
+      html.push(setextHeadingHtml(renderInline(reflowLines(paragraph).replace(/\n/g, ' ')), underline))
+      continue
     }
     html.push(`<p>${renderInline(reflowLines(paragraph)).replace(/\n/g, '<br />')}</p>`)
   }

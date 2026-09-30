@@ -26,7 +26,19 @@ export type ItemCodeBlock = {
   afterChildren: number
 }
 
-export type ItemBlock = ItemCodeBlock
+/** A paragraph inside an item after its first, or an indented code block there. */
+export type ItemLeafBlock = {
+  kind: 'paragraph' | 'indented-code'
+  /** The paragraph's words, reflowed, or the code with its columns taken off. */
+  text: string
+  /** Columns from the item's own line to where the paragraph's words or the code start. */
+  offset: number
+  /** Whether a blank line stood before it: a paragraph right after a fence need not have one. */
+  blankBefore: boolean
+  afterChildren: number
+}
+
+export type ItemBlock = ItemCodeBlock | ItemLeafBlock
 
 /** The spaces a line starts with. A tab is not read as indent here, so a tabbed fence is words. */
 export function leadingSpaces(line: string): number {

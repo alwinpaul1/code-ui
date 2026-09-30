@@ -1,26 +1,37 @@
 import { inlineMarkdown } from './html-inline-markdown'
-import { codeBlockMarkdown } from './html-code-block-markdown'
-import { CODE_BLANK_ATTRIBUTE } from './markdown-code-fence'
-import { LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
+import { codeBlockMarkdown, writesIndented } from './html-code-block-markdown'
+import { CODE_BLANK_ATTRIBUTE, CODE_INDENT_ATTRIBUTE } from './markdown-code-fence'
+import { INDENTED_CODE_ATTRIBUTE } from './markdown-leaf-blocks'
+import { ITEM_TIGHT_ATTRIBUTE, LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
 
-/** What an item holds besides its words: a nested list or a code block, each on its own lines. */
-type ItemBlockElement = { kind: 'list' | 'code'; element: Element }
+/** One piece of what an item holds, in order: a paragraph of words, a code block or a list. */
+type ItemPart =
+  | { kind: 'words'; words: string; element: Element | null }
+  | { kind: 'list'; element: Element }
+  | { kind: 'code'; element: Element }
 
 /**
- * An item's words, and the lists and code blocks it holds, in order.
+ * What an item holds, in order: its paragraphs, code blocks and nested lists.
  *
- * The words are every inline node outside those blocks, the task box's `<label>` excluded (it is
- * the checkbox's chrome, and the writer supplies the marker). An element that holds a block — the
- * task's `<div>`, a `<p>` the engine nested a list in — is walked into rather than read as words.
- * A list inside a nested item is that item's, and is never reached here.
+ * Words are every inline node outside those blocks, the task box's `<label>` excluded (it is the
+ * checkbox's chrome, and the writer supplies the marker). A `<p>` or `<div>` is a paragraph of its
+ * own, so a second paragraph is not glued onto the first; one that holds blocks — the task's
+ * `<div>`, a `<p>` the engine nested a list in — is walked into. A list inside a nested item is
+ * that item's, and is never reached here.
  */
-function itemContent(item: Element): { words: string; blocks: ItemBlockElement[] } {
-  const blocks: ItemBlockElement[] = []
-  let words = ''
+function itemParts(item: Element): ItemPart[] {
+  const parts: ItemPart[] = []
+  let run = ''
+  const flush = () => {
+    if (run.trim()) {
+      parts.push({ kind: 'words', words: run.trim(), element: null })
+    }
+    run = ''
+  }
   const walk = (container: Element) => {
     for (const child of Array.from(container.childNodes)) {
       if (!(child instanceof Element)) {
-        words += inlineMarkdown(child)
+        run += inlineMarkdown(child)
         continue
       }
       const tag = child.tagName.toLowerCase()
@@ -28,18 +39,37 @@ function itemContent(item: Element): { words: string; blocks: ItemBlockElement[]
         continue
       }
       if (tag === 'ul' || tag === 'ol' || tag === 'pre') {
-        blocks.push({ kind: tag === 'pre' ? 'code' : 'list', element: child })
+        flush()
+        parts.push({ kind: tag === 'pre' ? 'code' : 'list', element: child })
         continue
       }
-      if (child.querySelector('ul, ol, pre') !== null) {
+      const paragraph = tag === 'p' || tag === 'div'
+      if (paragraph) {
+        flush()
+      }
+      if (child.querySelector('ul, ol, pre, p, div') !== null) {
         walk(child)
-        continue
+      } else if (paragraph) {
+        run = inlineMarkdown(child)
+        parts.push({ kind: 'words', words: run.trim(), element: child })
+        run = ''
+      } else {
+        run += inlineMarkdown(child)
       }
-      words += inlineMarkdown(child)
+      if (paragraph) {
+        flush()
+      }
     }
   }
   walk(item)
-  return { words: words.trim(), blocks }
+  flush()
+  return parts.filter((part) => part.kind !== 'words' || part.words !== '')
+}
+
+/** The columns a remembered attribute names, positive, or `fallback`. */
+function remembered(element: Element | null, fallback: number): number {
+  const value = Number.parseInt(element?.getAttribute(LIST_INDENT_ATTRIBUTE) ?? '', 10)
+  return Number.isFinite(value) && value > 0 ? value : fallback
 }
 
 /**
@@ -59,41 +89,62 @@ export function holdsUnownedList(element: Element): boolean {
  * where CommonMark needs a child to be.
  */
 function childColumns(item: Element, parentMarkerColumns: number): number {
-  const remembered = Number.parseInt(item.getAttribute(LIST_INDENT_ATTRIBUTE) ?? '', 10)
-  return Number.isFinite(remembered) && remembered > 0 ? remembered : parentMarkerColumns
+  return remembered(item, parentMarkerColumns)
+}
+
+/** Whether a code block can open on its item's marker line: a fence nothing moved elsewhere. */
+function opensOnMarkerLine(part: ItemPart | undefined): part is { kind: 'code'; element: Element } {
+  return (
+    part?.kind === 'code' &&
+    !part.element.hasAttribute(CODE_INDENT_ATTRIBUTE) &&
+    !part.element.hasAttribute(INDENTED_CODE_ATTRIBUTE)
+  )
 }
 
 /**
- * One item as its lines: the marker and its words at `column`, then its code blocks and nested
- * lists in order, each from the item's line by the marker's width unless its source put it
- * elsewhere. A code block with no words before it opens on the marker line, as `- ```` does, and
- * its lines go at the marker's width.
+ * One item as its lines: the marker and its first paragraph at `column`, then its paragraphs, code
+ * blocks and nested lists in order, each from the item's line by the marker's width unless its
+ * source put it elsewhere. A later paragraph has a blank line before it (without one it would be
+ * the words before it), except straight after a code block where its source had none. A code block
+ * with no words before it opens on the marker line, as `- ```` does.
  */
 function itemMarkdown(item: Element, column: number, marker: string, markerColumns: number) {
-  const { words, blocks } = itemContent(item)
+  const parts = itemParts(item)
   const lines: string[] = []
-  let rest = blocks
-  const first = blocks[0]
-  if (words === '' && first?.kind === 'code') {
-    const [fenceLine, ...body] = codeBlockMarkdown(first.element).split('\n')
+  const first = parts[0]
+  let rest = parts.slice(1)
+  if (first?.kind === 'words') {
+    lines.push(' '.repeat(column) + marker + first.words)
+  } else if (opensOnMarkerLine(first)) {
+    const [fenceLine, ...body] = codeBlockMarkdown(first.element, 0, 0, false).split('\n')
     const content = ' '.repeat(column + markerColumns)
-    lines.push(' '.repeat(column) + marker + fenceLine, ...body.map((line) => (line ? content + line : line)))
-    rest = blocks.slice(1)
+    lines.push(' '.repeat(column) + marker + fenceLine)
+    lines.push(...body.map((line) => (line ? content + line : line)))
   } else {
-    lines.push(' '.repeat(column) + marker + words)
+    lines.push(' '.repeat(column) + marker)
+    rest = parts
   }
-  for (const block of rest) {
-    if (block.kind === 'list') {
-      const nested = listMarkdown(block.element, column, markerColumns)
+  let previous = rest === parts ? null : (first?.kind ?? null)
+  for (const part of rest) {
+    if (part.kind === 'list') {
+      const nested = listMarkdown(part.element, column, markerColumns)
       if (nested) {
         lines.push(nested)
       }
-      continue
+    } else if (part.kind === 'code') {
+      const indentable = previous !== 'list'
+      if (writesIndented(part.element, indentable) || part.element.hasAttribute(CODE_BLANK_ATTRIBUTE)) {
+        lines.push('')
+      }
+      lines.push(codeBlockMarkdown(part.element, column, markerColumns, indentable))
+    } else {
+      if (!(previous === 'code' && part.element?.hasAttribute(ITEM_TIGHT_ATTRIBUTE))) {
+        lines.push('')
+      }
+      const pad = ' '.repeat(column + remembered(part.element, markerColumns))
+      lines.push(...part.words.split('\n').map((line) => (line ? pad + line : line)))
     }
-    if (block.element.hasAttribute(CODE_BLANK_ATTRIBUTE)) {
-      lines.push('')
-    }
-    lines.push(codeBlockMarkdown(block.element, column, markerColumns))
+    previous = part.kind
   }
   return lines.join('\n')
 }
