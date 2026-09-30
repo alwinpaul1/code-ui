@@ -108,12 +108,50 @@ export function useMobileNativeChatPendingPersistence(
    *  (rememberHeldWitnesses says what becomes of it). */
   const hydratedRef = useRef<string | null>(null)
   const heldRef = useRef(new Map<string, HeldWitness[]>())
-  /** Sessions whose stored echoes have not been read, because storage refused
-   *  or the read is still out: a write reads them first, and writes nothing
-   *  while it cannot (writeOverStored). */
-  const unreadRef = useRef(new Set<string>())
+  /** Sessions whose stored echoes have not been read: the read is still out,
+   *  or storage refused it. Absent once a read came back (writeOverStored). */
+  const unreadRef = useRef(new Map<string, 'pending' | 'refused'>())
+  /** The last write asked for while a session's read was out. */
+  const deferredRef = useRef(new Map<string, MobileNativeChatPendingMessage[]>())
   /** Sessions a skipped write has been logged for, since the last read. */
   const loggedRef = useRef(new Set<string>())
+  /**
+   * The write, unless the session's stored echoes have not been read. The
+   * whole list sits under one key, so a write after a refused read, taken for
+   * an empty store, put this visit's list over every echo stored before
+   * (2026-09-30). While the read is out the write waits for it. After a
+   * refusal the store is read again first: still refused, nothing is written
+   * and one line says why; read, the stored echoes are merged into what is
+   * written and back into the chat.
+   */
+  const writeOverStored = useCallback(
+    (key: string, list: MobileNativeChatPendingMessage[]) => {
+      const unread = unreadRef.current.get(key)
+      if (unread === undefined) {
+        void writePendingAndRemember(key, list)
+        return
+      }
+      if (unread === 'pending') {
+        deferredRef.current.set(key, list)
+        return
+      }
+      void readNativeChatPendingEchoRecord(key).then((read) => {
+        if ('refused' in read) {
+          if (!loggedRef.current.has(key)) {
+            loggedRef.current.add(key)
+            console.warn(REFUSED_WRITE_LINE, read.refused)
+          }
+          return
+        }
+        unreadRef.current.delete(key)
+        loggedRef.current.delete(key)
+        const stored = read.pending ? withThisRunsPhotos(key, read.pending) : null
+        void writePendingAndRemember(key, withStoredEchoes({ [key]: list }, key, stored, true)[key] ?? list)
+        setPendingBySession((previous) => withStoredEchoes(previous, key, stored, true))
+      })
+    },
+    [setPendingBySession]
+  )
   const rememberEcho = useCallback(
     (id: string, text: string, anchorId: string | null) => {
       const key = sessionKeyRef.current
@@ -152,16 +190,29 @@ export function useMobileNativeChatPendingPersistence(
       return
     }
     let cancelled = false
-    // Unread until the read is back: a send made before then must not be
-    // written over a list this chat has not seen.
-    unreadRef.current.add(sessionKey)
+    // Unread until the read is back: a send made before then waits for it
+    // rather than going over a list this chat has not seen.
+    unreadRef.current.set(sessionKey, 'pending')
     void readNativeChatPendingEchoRecord(sessionKey).then((read) => {
       const refused = 'refused' in read
-      if (refused) {
-        console.warn(REFUSED_READ_LINE, read.refused)
-      }
       // Storage leaves `data:` photos out; this run still has them.
       const stored = !refused && read.pending ? withThisRunsPhotos(sessionKey, read.pending) : null
+      if (refused) {
+        console.warn(REFUSED_READ_LINE, read.refused)
+        unreadRef.current.set(sessionKey, 'refused')
+      } else {
+        unreadRef.current.delete(sessionKey)
+        loggedRef.current.delete(sessionKey)
+      }
+      // The write asked for meanwhile, over the stored list as the chat's own
+      // list is merged below; after a refusal it reads once more first.
+      const waiting = deferredRef.current.get(sessionKey)
+      deferredRef.current.delete(sessionKey)
+      if (waiting && refused) {
+        writeOverStored(sessionKey, waiting)
+      } else if (waiting) {
+        void writePendingAndRemember(sessionKey, withStoredEchoes({ [sessionKey]: waiting }, sessionKey, stored)[sessionKey] ?? waiting)
+      }
       const held = [...(handedOn.get(sessionKey) ?? []), ...(heldRef.current.get(sessionKey) ?? [])]
       handedOn.delete(sessionKey)
       heldRef.current.delete(sessionKey)
@@ -189,13 +240,9 @@ export function useMobileNativeChatPendingPersistence(
         }
         return
       }
-      hydratedRef.current = sessionKey
       // Read or not, the chat goes on and remembers what it sees; only the
       // writes wait for the store to be read (writeOverStored).
-      if (!refused) {
-        unreadRef.current.delete(sessionKey)
-        loggedRef.current.delete(sessionKey)
-      }
+      hydratedRef.current = sessionKey
       setPendingBySession((previous) => {
         const merged = withStoredEchoes(previous, sessionKey, stored)
         return held.length === 0 ? merged : rememberHeldWitnesses(merged, sessionKey, held, stored ?? [])
@@ -204,39 +251,7 @@ export function useMobileNativeChatPendingPersistence(
     return () => {
       cancelled = true
     }
-  }, [sessionKey, setPendingBySession])
-
-  /**
-   * The write, unless the session's stored echoes could not be read. The whole
-   * list sits under one key, so a write after a refused read, taken for an
-   * empty store, put this visit's list over every echo stored before
-   * (2026-09-30). Then the store is read again first: still refused, nothing
-   * is written and one line says why; read, the stored echoes are merged into
-   * what is written and back into the chat.
-   */
-  const writeOverStored = useCallback(
-    (key: string, list: MobileNativeChatPendingMessage[]) => {
-      if (!unreadRef.current.has(key)) {
-        void writePendingAndRemember(key, list)
-        return
-      }
-      void readNativeChatPendingEchoRecord(key).then((read) => {
-        if ('refused' in read) {
-          if (!loggedRef.current.has(key)) {
-            loggedRef.current.add(key)
-            console.warn(REFUSED_WRITE_LINE, read.refused)
-          }
-          return
-        }
-        unreadRef.current.delete(key)
-        loggedRef.current.delete(key)
-        const stored = read.pending ? withThisRunsPhotos(key, read.pending) : null
-        void writePendingAndRemember(key, withStoredEchoes({ [key]: list }, key, stored, true)[key] ?? list)
-        setPendingBySession((previous) => withStoredEchoes(previous, key, stored, true))
-      })
-    },
-    [setPendingBySession]
-  )
+  }, [sessionKey, setPendingBySession, writeOverStored])
 
   const current = sessionKey ? pendingBySession[sessionKey] : undefined
   // An emptied list is written at once: it retires bubbles the transcript has

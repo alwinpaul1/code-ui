@@ -34,8 +34,8 @@ describe('a visit whose read of the stored echoes was refused', () => {
   let pending: Pending = {}
   let setPending: Dispatch<SetStateAction<Pending>> = () => {}
   let warn: MockInstance<typeof console.warn>
-  function Harness({ sessionKey }: { sessionKey: string }): null {
-    const [state, setState] = useState<Pending>({})
+  function Harness({ sessionKey, initial = {} }: { sessionKey: string; initial?: Pending }): null {
+    const [state, setState] = useState<Pending>(initial)
     pending = state
     setPending = setState
     useMobileNativeChatPendingPersistence(sessionKey, state, setState, {
@@ -44,9 +44,9 @@ describe('a visit whose read of the stored echoes was refused', () => {
     })
     return null
   }
-  async function mount(): Promise<void> {
+  async function mount(initial?: Pending): Promise<void> {
     await act(async () => {
-      renderer = create(createElement(Harness, { sessionKey: 's1' }))
+      renderer = create(createElement(Harness, { sessionKey: 's1', initial }))
     })
   }
   const flush = async (): Promise<void> => {
@@ -157,6 +157,28 @@ describe('a visit whose read of the stored echoes was refused', () => {
     renderer = null
     await flush()
     expect(await stored()).toEqual(['q1', 'p2'])
+  })
+
+  // The failure path of the wait: a chat whose list was emptied while it was
+  // away (every echo retired) still erases the stored copy when the read
+  // comes back, rather than bringing retired bubbles back (be57035c).
+  it('still erases the stored list a slow read finds when the chat had emptied its own', async () => {
+    await writeNativeChatPendingEchoes('s1', [QUEUED])
+    let release: () => void = () => undefined
+    const read = AsyncStorage.getItem.bind(AsyncStorage)
+    const reads = vi.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
+      (key) =>
+        new Promise((resolve) => {
+          release = () => void read(key).then(resolve)
+        })
+    )
+    await mount({ s1: [] })
+    await flush()
+    reads.mockRestore()
+    release()
+    await flush()
+    expect(pending.s1).toEqual([])
+    expect(await stored()).toBeUndefined()
   })
 
   // Nothing to keep: a refused read of an empty store, or a store that holds
