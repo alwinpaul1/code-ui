@@ -792,6 +792,56 @@ describe('the question card for a list followed by a question', () => {
   })
 })
 
+// A line that asks had to end in `?` or `:`, and `**Which one?**` ends in
+// `**`, so a bold question asked nothing and the card was lost (review,
+// 2026-09-30). The marks that wrap a line, or trail its `?`, are not the line.
+describe('the question card under a question drawn in bold', () => {
+  const plain = parseAgentQuestion('Findings:\n- x\n- y\n\nWhich one?\n\n1. A\n2. B')
+
+  it('offers the choices under a bold question (Claude-shaped)', () => {
+    const q = parseAgentQuestion('Findings:\n- x\n- y\n\n**Which one?**\n\n1. A\n2. B')
+    expect(q).toEqual(plain)
+    expect(q?.question).toBe('Which one?')
+    expect(q?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('offers the choices under a bold question (Codex-shaped)', () => {
+    const q = parseAgentQuestion(
+      'Summary:\n- tests pass\n- lint is clean\n\n**Which way do you want to go?**\n- Ship it\n- Hold it'
+    )
+    expect(q?.question).toBe('Which way do you want to go?')
+    expect(q?.options).toEqual(['Ship it', 'Hold it'])
+  })
+
+  it('reads every spelling of the emphasis the same way', () => {
+    for (const ask of ['__Which one?__', '*Which one?*', '**Which one**?', '***Which one?***']) {
+      expect(parseAgentQuestion(`Findings:\n- x\n- y\n\n${ask}\n\n1. A\n2. B`), ask).toEqual(plain)
+    }
+  })
+
+  it('ends a findings list at a bold question run straight on from it', () => {
+    const q = parseAgentQuestion('- finding a\n- finding b\n**Which should I fix?**\n- a\n- b')
+    expect(q?.question).toBe('Which should I fix?')
+    expect(q?.options).toEqual(['a', 'b'])
+  })
+
+  it('takes one choice under a bold question, and a bold intro as a title', () => {
+    expect(parseAgentQuestion('**Apply the fix?**\n1. Yes, clear the cache')?.options).toEqual([
+      'Yes, clear the cache'
+    ])
+    expect(parseAgentQuestion('**Options:**\n1. A\n2. B')?.question).toBe('Options')
+  })
+
+  it('reads no question from a bold line that does not ask', () => {
+    expect(parseAgentQuestion('Findings:\n- x\n- y\n\n**I fixed both.**\n\n1. A\n2. B')).toBeNull()
+    expect(parseAgentQuestion('**Done**\n- one stray bullet')).toBeNull()
+  })
+
+  it('shows no card when a bold confirmation follows the list', () => {
+    expect(parseAgentQuestion('The plan:\n1. A\n2. B\n\n**Shall I proceed?**')).toBeNull()
+  })
+})
+
 describe('formatQuestionAnswer', () => {
   const numbered: MobileChatQuestion = {
     question: 'Pick',

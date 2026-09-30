@@ -1,10 +1,7 @@
 // What the lines around a reply's choice list ask, for the question card
 // (mobile-native-chat-question.ts).
 
-import type { OptionList } from './mobile-native-chat-question-lists'
-
-/** A line that asks: it ends in `?`. */
-export const ASKS = /\?\s*$/
+import { lineAsks, type OptionList } from './mobile-native-chat-question-lists'
 
 /** Words that ask the reader to choose. */
 const CHOOSES = /\b(?:which|pick|choose|select|prefer\w*)\b/i
@@ -85,6 +82,6 @@ export function asksAfter(
       index > lists[at].end &&
       fenceStarts[index] === -1 &&
       !later.some((list) => index >= list.start && index <= list.end) &&
-      ASKS.test(line)
+      lineAsks(line)
   )
 }

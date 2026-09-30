@@ -74,7 +74,38 @@ type OpenList = {
 }
 
 // Question-like introducing line: ends in ? or :.
-export const QUESTION_LINE = /[?:]\s*$/
+const QUESTION_LINE = /[?:]\s*$/
+/** A line that asks: it ends in `?`. */
+const ASKS = /\?\s*$/
+
+/**
+ * A line without the emphasis that wraps it: `**Which one?**`,
+ * `__Which one?__`, `*Which one?*` and `**Which one**?` are all
+ * `Which one?`. A line whose marks do not wrap it whole, `**a** or **b**?`,
+ * is kept as written.
+ */
+export function unwrapEmphasis(line: string): string {
+  const trimmed = line.trim()
+  const wrapped = /^([*_`]{1,3})(\S(?:.*\S)?)\1([?:]?)$/.exec(trimmed)
+  return wrapped && !wrapped[2].includes(wrapped[1][0]) ? wrapped[2] + wrapped[3] : trimmed
+}
+
+/** The line as its asking tests read it: unwrapped, and without marks that
+ *  trail its last `?` or `:` (`Then **which one?**`). A bold question ends in
+ *  `**`, and asked nothing, before this (review, 2026-09-30). */
+function askingText(line: string): string {
+  return unwrapEmphasis(line).replace(/([?:])[*_`]+$/, '$1')
+}
+
+/** Whether a line asks (`?`), bold or not. */
+export function lineAsks(line: string): boolean {
+  return ASKS.test(askingText(line))
+}
+
+/** Whether a line asks or introduces what follows (`?` or `:`), bold or not. */
+export function lineIntroduces(line: string): boolean {
+  return QUESTION_LINE.test(askingText(line))
+}
 
 /** Whether `next` is the marker after `previous`: 1 then 2, a then b. A bullet
  *  has no marker, so nothing says a bullet list goes on past a paragraph. */
@@ -189,7 +220,7 @@ export function collectOptionLists(
     const indent = lineIndent(line)
     const option = parseOptionLine(line)
     if (current?.paragraph) {
-      if (!option && !QUESTION_LINE.test(line)) {
+      if (!option && !lineIntroduces(line)) {
         current.paragraph.blankAfter = false
         return
       }
@@ -210,7 +241,7 @@ export function collectOptionLists(
       return
     }
     if (!option) {
-      if (!current || QUESTION_LINE.test(line)) {
+      if (!current || lineIntroduces(line)) {
         current = null
       } else if (current.list.end === index - 1) {
         current.list.end = index

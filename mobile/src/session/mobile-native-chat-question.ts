@@ -7,10 +7,12 @@ import {
   codeFenceStarts,
   collectOptionLists,
   introIndex,
-  QUESTION_LINE,
+  lineAsks,
+  lineIntroduces,
+  unwrapEmphasis,
   type OptionList
 } from './mobile-native-chat-question-lists'
-import { ASKS, asksAfter, asksToChoose } from './mobile-native-chat-question-asks'
+import { asksAfter, asksToChoose } from './mobile-native-chat-question-asks'
 
 export type MobileChatQuestion = {
   question: string
@@ -37,9 +39,10 @@ export function mobileChatQuestionKey(question: MobileChatQuestion): string {
 const MULTI_SELECT_HINT =
   /\b(select all|choose all|choose multiple|select multiple|pick multiple|all that apply|one or more|comma[- ]separated|multiple options)\b/i
 
-// Drop a trailing ":" off a card title but keep a meaningful "?".
+// Drop the emphasis that wraps a card title and a trailing ":" off it, but
+// keep a meaningful "?".
 function cleanQuestionText(raw: string): string {
-  const trimmed = raw.trim()
+  const trimmed = unwrapEmphasis(raw)
   return trimmed.endsWith(':') ? trimmed.slice(0, -1).trim() : trimmed
 }
 
@@ -62,14 +65,14 @@ function choicesListIndex(
   if (lists.length <= 1) {
     return lists.length - 1
   }
-  const asking = intros.flatMap((intro, i) => (intro >= 0 && ASKS.test(lines[intro]) ? [i] : []))
+  const asking = intros.flatMap((intro, i) => (intro >= 0 && lineAsks(lines[intro]) ? [i] : []))
   if (asking.length !== 1) {
     return -1
   }
   const [at] = asking
   const laterIntroduced = intros
     .slice(at + 1)
-    .every((intro) => intro >= 0 && QUESTION_LINE.test(lines[intro]))
+    .every((intro) => intro >= 0 && lineIntroduces(lines[intro]))
   return laterIntroduced ? at : -1
 }
 
@@ -103,7 +106,7 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
 
   // Conservative gate: a single bare option with no introducing prompt is more
   // likely stray prose (a lone "- item") than a real choice list.
-  if (options.length < 2 && !QUESTION_LINE.test(question)) {
+  if (options.length < 2 && !lineIntroduces(question)) {
     return null
   }
   // "Here's my plan: 1. … 2. … Shall I proceed?" asks for a yes, not a step.
