@@ -91,6 +91,24 @@ describe('parseMarkdownBlocks', () => {
     }
   })
 
+  // Swept 2026-09-30 from the rich editor's spaced rule: under a list item,
+  // the list rule still took `* * *` for the next bullet, reading "* *", and an
+  // indented `  - - -` too. A rule wins over a list item where a line could be
+  // either (CommonMark 4.1), so it ends the list.
+  it('ends a list at a spaced rule under its items', () => {
+    for (const rule of ['* * *', '- - -', '  * * *', '***']) {
+      expect(parseMarkdownBlocks(`- a\n${rule}\n- b`), rule).toEqual([
+        { kind: 'list', ordered: false, items: ['a'] },
+        { kind: 'hr' },
+        { kind: 'list', ordered: false, items: ['b'] }
+      ])
+    }
+    expect(parseMarkdownBlocks('1. a\n* * *')).toEqual([
+      { kind: 'list', ordered: true, items: ['a'] },
+      { kind: 'hr' }
+    ])
+  })
+
   it('keeps a bullet that holds marks, and a mixed or deep run, as it was', () => {
     expect(parseMarkdownBlocks('- - item')).toEqual([{ kind: 'list', ordered: false, items: ['- item'] }])
     expect(parseMarkdownBlocks('- * -')).toEqual([{ kind: 'list', ordered: false, items: ['* -'] }])

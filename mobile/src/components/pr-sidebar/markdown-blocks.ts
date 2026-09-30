@@ -232,7 +232,9 @@ function parseList(
       flush()
       blocks.push({ kind: 'code', ...fence })
     }
-    match = i < lines.length ? marker.exec(lines[i]!) : null
+    // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
+    // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
+    match = i < lines.length && !HR.test(lines[i]!) ? marker.exec(lines[i]!) : null
   }
   if (items.length > 0) {
     flush()

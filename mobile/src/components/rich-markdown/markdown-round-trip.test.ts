@@ -263,6 +263,58 @@ describe('the editor document, from markdown and back', () => {
   })
 })
 
+// Review, 2026-09-30: a thematic break with spaces between its marks, `* * *`, `- - -` or `_ _ _`,
+// is a rule in CommonMark, and the PR renderer and the chat draw it as one. The editor's rule test
+// took only an unbroken run, so `* * *` and `- - -` fell to the list rule and saved as a bullet
+// holding the rest of the marks, and `_ _ _` was gathered into the paragraph around it. A rule
+// saves as `---`, as `***` and `___` always have.
+describe('a thematic break, from markdown and back', () => {
+  it.each([
+    ['spaced stars', '* * *'],
+    ['spaced dashes', '- - -'],
+    ['spaced underscores', '_ _ _'],
+    ['wide spacing', '*  *  *  *'],
+    ['tabs between the marks', '-\t-\t-'],
+    ['three columns in', '   * * *'],
+    // The editor has always read an indented rule as one (isThematicBreak says why).
+    ['four columns in', '    * * *'],
+    ['an unbroken run four columns in', '    ---'],
+    ['trailing spaces', '_ _ _  '],
+    ['an unbroken run', '***']
+  ])('draws %s as a rule and saves it as ---', (_name, markdown) => {
+    const { scope, html } = surface(markdown)
+    expect(html).toBe('<hr>')
+    expect(currentMarkdown(scope)).toBe('---')
+  })
+
+  it('ends a paragraph and a list at a spaced rule, as CommonMark does', () => {
+    expect(currentMarkdown(surface('a\n_ _ _\nb').scope)).toBe('a\n\n---\n\nb')
+    expect(currentMarkdown(surface('a\n* * *\nb').scope)).toBe('a\n\n---\n\nb')
+    expect(currentMarkdown(surface('- a\n* * *\n- b').scope)).toBe('- a\n\n---\n\n- b')
+    expect(currentMarkdown(surface('- a\n- - -\n- b').scope)).toBe('- a\n\n---\n\n- b')
+    // An indented rule under an item ended it before this change too; it is not the item's words.
+    expect(currentMarkdown(surface('- a\n    ---').scope)).toBe('- a\n\n---')
+    expect(currentMarkdown(surface('- a\n    * * *').scope)).toBe('- a\n\n---')
+  })
+
+  it.each([
+    ['a dash list', '- a\n- b', '- a\n- b'],
+    ['a star list', '* a\n* b', '- a\n- b'],
+    ['a list item that starts with marks', '* * a', null],
+    ['two marks', '- -', null],
+    ['marks with words after them', '* * * x', null],
+    ['mixed marks', '* - *', null],
+    ['one mark', '*', '*'],
+    ['an empty document', '', '']
+  ])('keeps %s as what it was, not a rule', (_name, markdown, saved) => {
+    const { scope, html } = surface(markdown)
+    expect(html).not.toContain('<hr>')
+    if (saved !== null) {
+      expect(currentMarkdown(scope)).toBe(saved)
+    }
+  })
+})
+
 // Review, 2026-09-30: opening a document and saving it rewrote its links. The editor read a link's
 // words to the first `]` and its address to the first `)`, and a bare address ran on through `)`,
 // `>` and a closing full stop, so a README badge saved as `[![CI](…)]([https://x/r)](https://x/r))`
