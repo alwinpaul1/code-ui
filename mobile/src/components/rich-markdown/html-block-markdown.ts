@@ -1,5 +1,10 @@
 import { codeFenceFor } from './markdown-code-fence'
-import { escapeTableCell } from './markdown-table-rows'
+import {
+  escapeTableCell,
+  TABLE_BARE_ATTRIBUTE,
+  TABLE_SEPARATOR_ATTRIBUTE,
+  tableMarkdown
+} from './markdown-table-rows'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
 
@@ -85,13 +90,10 @@ export function blockMarkdown(node: Node): string {
     }
     const cellsFor = (row: Element) =>
       Array.from(row.children).map((cell) => escapeTableCell(inlineChildren(cell).trim()))
-    const headers = cellsFor(rows[0]!)
-    const bodyRows = rows.slice(1).map(cellsFor)
-    const separator = headers.map(() => '---').join(' | ')
-    const body = bodyRows.length
-      ? `\n${bodyRows.map((row) => `| ${row.join(' | ')} |`).join('\n')}`
-      : ''
-    return `| ${headers.join(' | ')} |\n| ${separator} |${body}`
+    return tableMarkdown(cellsFor(rows[0]!), rows.slice(1).map(cellsFor), {
+      separator: node.getAttribute(TABLE_SEPARATOR_ATTRIBUTE),
+      bare: node.getAttribute(TABLE_BARE_ATTRIBUTE) === 'true'
+    })
   }
   if (tag === 'hr') {
     return '---'

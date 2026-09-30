@@ -3,7 +3,7 @@ import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { isThematicBreak, parseListTree } from './markdown-list-parse'
 import { closesFence, openingFence } from './markdown-code-fence'
-import { isTableSeparator, splitTableRow } from './markdown-table-rows'
+import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { reflowLines } from './markdown-reflow'
 
@@ -50,12 +50,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       continue
     }
-    if (
-      line.includes('|') &&
-      index + 1 < lines.length &&
-      isTableSeparator(lines[index + 1] ?? '')
-    ) {
+    if (opensTable(line, lines[index + 1])) {
       const headers = splitTableRow(line)
+      const source = tableSourceAttributes(line, lines[index + 1] ?? '')
       index += 2
       const rows: string[][] = []
       while (
@@ -78,7 +75,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
           return `<tr>${cells.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`
         })
         .join('')
-      html.push(`<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
+      html.push(`<table${source}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
       continue
     }
     const heading = line.match(/^(#{1,6})\s+(.+)$/)
@@ -114,11 +111,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index < lines.length &&
       (lines[index] ?? '').trim() &&
       !isBlockStart(lines[index] ?? '') &&
-      !(
-        index + 1 < lines.length &&
-        (lines[index] ?? '').includes('|') &&
-        isTableSeparator(lines[index + 1] ?? '')
-      )
+      !opensTable(lines[index] ?? '', lines[index + 1])
     ) {
       paragraph.push(lines[index] ?? '')
       index += 1
