@@ -2,10 +2,13 @@ import type { AgentSessionConversationCommand } from '../../../src/shared/agent-
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { resetEffortReportGateForTests, shouldApplyReportedEffort } from './native-chat-effort-report-gate'
 import {
-  mergeStoredSessionOptionRecord,
-  readSessionOptionRecord,
-  writeSessionOptionRecord
-} from '../storage/session-option-records'
+  applyAgentModelReport,
+  clearSessionOptionScopeRecordsForTests,
+  getScopedRecord,
+  hydrateSessionOptionScope,
+  persistSessionOptionScope,
+  resetSessionOptionScopesForTests
+} from './session-option-hydration'
 import type { CatalogModel } from '../../../src/shared/agent-session-option-catalog'
 import type { CatalogOptionApply } from '../../../src/shared/agent-session-option-catalog-types'
 import type {
@@ -28,13 +31,10 @@ import {
 } from '../../../src/shared/native-chat-session-option-commands'
 import { buildNativeChatSessionOptionSnapshot } from '../../../src/shared/native-chat-session-option-snapshot'
 import {
-  applyNativeChatReportedSessionOptions,
   clearNativeChatSessionModel,
-  createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
   isFlipOnlyMidSession,
-  setTrackedSessionOption,
-  type NativeChatSessionOptionRecord
+  setTrackedSessionOption
 } from '../../../src/shared/native-chat-session-option-state'
 import { activeModels } from './mobile-chat-model-row-naming'
 import { mobileNativeChatSessionOptionCatalog } from './mobile-native-chat-session-option-catalog'
@@ -56,49 +56,14 @@ export type MobileNativeChatSessionOptionsController = {
 
 type PendingOperation = { id: string; token: number }
 
-// Why: per-tab records survive chat↔terminal flips and remounts, like desktop's
-// scope cache. Bounded so long sessions across many tabs can't grow unbounded.
-const MOBILE_SESSION_OPTION_RECORD_CAP = 32
-const recordsByScope = new Map<string, NativeChatSessionOptionRecord>()
-// Scopes whose stored record has been consulted once this process. Effort and
-// toggles are never reported back by the agent, so a record lost with the
-// process is lost for good unless it is read back from disk.
-const hydratedScopes = new Set<string>()
-
 /** Test-only: the module caches outlive a single test's hooks. */
 export function resetMobileNativeChatSessionOptionRecordsForTests(): void {
   clearMobileSessionOptionRecordsForTests()
-  hydratedScopes.clear()
-}
-
-function getScopedRecord(scopeKey: string, agent: string): NativeChatSessionOptionRecord {
-  const existing = recordsByScope.get(scopeKey)
-  const record =
-    existing && existing.agent === agent ? existing : createNativeChatSessionOptionRecord(agent)
-  if (record !== existing) {
-    // The agent under this tab changed: nothing the OLD one said about itself
-    // is evidence about this one. Leaving any of it latched left the fresh
-    // record with no model at all (2026-09-15).
-    forgetModelReportScope(scopeKey)
-  }
-  // Why: delete-then-set on every read makes the touched scope most-recent, so
-  // eviction only sheds the oldest UNTOUCHED tab. Insertion order alone would let
-  // a long-lived active tab be the oldest key and lose its tracked model.
-  recordsByScope.delete(scopeKey)
-  recordsByScope.set(scopeKey, record)
-  while (recordsByScope.size > MOBILE_SESSION_OPTION_RECORD_CAP) {
-    const oldest = recordsByScope.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    recordsByScope.delete(oldest)
-    forgetModelReportScope(oldest)
-  }
-  return record
+  resetSessionOptionScopesForTests()
 }
 
 export function clearMobileSessionOptionRecordsForTests(): void {
-  recordsByScope.clear()
+  clearSessionOptionScopeRecordsForTests()
   clearPendingModelPicksForTests()
   resetEffortReportGateForTests()
 }
@@ -194,54 +159,23 @@ export function useMobileNativeChatSessionOptions(args: {
     }
   }, [identity])
 
-  // Restore the scope's picks from disk once per process. A pick made while the
-  // read is in flight wins: the in-memory record then already exists and the
-  // stored one is stale by definition.
+  // Restore the scope's picks from disk once per process, even though the
+  // snapshot below has already made its live record: a newer pick in memory
+  // still wins over the stored one (session-option-hydration.ts).
   useEffect(() => {
-    if (!scopeKey || !agent || hydratedScopes.has(scopeKey)) {
+    if (!scopeKey || !agent) {
       return
     }
-    hydratedScopes.add(scopeKey)
-    if (recordsByScope.has(scopeKey)) {
-      return
-    }
-    let active = true
-    void readSessionOptionRecord(scopeKey)
-      .then((stored) => {
-        if (!active || !stored || stored.agent !== agent) {
-          return
-        }
-        const live = recordsByScope.get(scopeKey)
-        if (!live) {
-          recordsByScope.set(scopeKey, stored)
-          bump()
-          return
-        }
-        if (mergeStoredSessionOptionRecord(live, stored)) {
-          bump()
-        }
-      })
-      // Nobody awaits this promise: a throw here was an unhandled rejection
-      // with no line behind it, and the picks fell back to catalog defaults
-      // for the rest of the run. Not retried: the scope stays consulted.
-      .catch((error: unknown) => {
-        const why = error instanceof Error ? error.message : String(error)
-        console.warn(`[session-options] picks for ${JSON.stringify(scopeKey)} not restored: ${why}`)
-      })
-    return () => {
-      active = false
-    }
+    return hydrateSessionOptionScope(scopeKey, agent, bump)
   }, [agent, bump, scopeKey])
 
-  // Every in-place mutation bumps `version`; write the record behind it.
+  // Every in-place mutation bumps `version`; save the record behind it, once
+  // the stored one has been read, and never over a read the store refused.
   useEffect(() => {
     if (version === 0 || !scopeKey) {
       return
     }
-    const record = recordsByScope.get(scopeKey)
-    if (record) {
-      void writeSessionOptionRecord(scopeKey, record).catch(() => undefined)
-    }
+    persistSessionOptionScope(scopeKey)
   }, [scopeKey, version])
 
   // Why: a record persisted by an older build can hold a model this agent never
@@ -300,7 +234,7 @@ export function useMobileNativeChatSessionOptions(args: {
       pickedSource: getTrackedSessionOption(record, matched, 'effort')?.source ?? null
     })
     if (
-      applyNativeChatReportedSessionOptions(record, {
+      applyAgentModelReport(scopeKey, record, {
         model: matched,
         ...(applyEffort && reportedEffort ? { effort: reportedEffort } : {})
       })

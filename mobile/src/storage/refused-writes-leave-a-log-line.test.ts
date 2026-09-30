@@ -210,7 +210,21 @@ describe('a refused session option write', () => {
     failWrites = true
     await expect(writeSessionOptionRecord('scope', record)).rejects.toBe(refusal)
     expectOneLine('session options', 'save')
-    expect((await readSessionOptionRecord('scope'))?.valuesByModel.opus?.effort?.value).toBe('high')
+    const reopened = await readSessionOptionRecord('scope')
+    expect(reopened.status === 'record' ? reopened.record.valuesByModel.opus?.effort?.value : reopened).toBe('high')
+  })
+
+  // The read's refusal is not a write's, but it decides whether the hook may
+  // write at all: told apart from "nothing stored", the hook holds its writes
+  // instead of saving its live record over the picks it could not read.
+  it('hands a refused read back as refused, not as nothing stored', async () => {
+    await writeSessionOptionRecord('scope', record)
+    failReads = true
+    expect(await readSessionOptionRecord('scope')).toEqual({
+      status: 'refused',
+      error: new Error('storage unavailable')
+    })
+    expect(warn).not.toHaveBeenCalled()
   })
 })
 
