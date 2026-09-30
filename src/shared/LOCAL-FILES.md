@@ -330,6 +330,9 @@ of everything the entries above already record:
   `agent-session-wire-refusals.ts` (imports `agent-session-rewind.ts`, not vendored), and the new
   `agent_session_owner_restart_failed` code (#22364, 6ae6ed08bb) is added to the inline list by
   hand, marked `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
+  The same file's inline `AgentSessionWireRefusal` also takes `ownerVerdict?: AgentSessionOwnerVerdict`
+  (`'live' | 'unverifiable' | 'exited'`, #22364) by hand: on a durably failed create, `exited`
+  proves nothing runs. `classifyCreateRefusal` in `mobile-structured-agent-session-launch.ts` reads it.
 - `agent-session-record.ts` — the launch-args check moves to `agent-session-launch-args.ts` and
   the lease decode goes through `agent-session-legacy-handoff-lease.ts` (`isPersistedAgentSessionRecord`
   replaces `isAgentSessionRecord`; both new files are vendored whole). This copy's own

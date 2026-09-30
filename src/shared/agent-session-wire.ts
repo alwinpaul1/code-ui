@@ -262,7 +262,15 @@ export type AgentSessionWireRefusal = {
   resolution?: AgentJournalResolution
   /** On a lost compare-and-set: the revision the host actually holds. */
   currentRevision?: number
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22364, 6ae6ed08bb): upstream keeps this type in
+  // agent-session-wire-refusals.ts, which this fork does not vendor. See LOCAL-FILES.md.
+  /** On a durably failed create: `exited` proves nothing runs for the session, so a new
+   *  operation cannot collide with this one. Absent (older hosts) reads as unverifiable. */
+  ownerVerdict?: AgentSessionOwnerVerdict
 }
+
+/** What the host last proved about a session's provider process; see the SSH execution boundary. */
+export type AgentSessionOwnerVerdict = 'live' | 'unverifiable' | 'exited'
 
 export type AgentSessionMutationResult<TValue> =
   | {

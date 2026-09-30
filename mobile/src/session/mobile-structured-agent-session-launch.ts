@@ -69,9 +69,12 @@ function failedMessage(agent: AgentSessionHandleProvider): string {
 function classifyCreateRefusal(
   agent: AgentSessionHandleProvider,
   code: string,
-  message: string
+  message: string,
+  ownerVerdict?: unknown
 ): MobileStructuredAgentLaunchResult {
-  if (!isDefinitiveAgentSessionCreateRefusal(code)) {
+  // A host that proved the provider process gone (Orca 1.4.217, #22364) has settled the create as
+  // failed whatever the code: no session runs, so the terminal fallback is safe to offer.
+  if (ownerVerdict !== 'exited' && !isDefinitiveAgentSessionCreateRefusal(code)) {
     return unknownCreateResult(agent, new Error(message))
   }
   return { kind: 'failed', message: message || failedMessage(agent) }
@@ -171,7 +174,12 @@ export async function createMobileStructuredAgentSession(
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
     }
-    return classifyCreateRefusal(agent, result.refusal.code, result.refusal.message)
+    return classifyCreateRefusal(
+      agent,
+      result.refusal.code,
+      result.refusal.message,
+      result.refusal.ownerVerdict
+    )
   }
   if (
     !result.value ||
