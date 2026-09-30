@@ -38,10 +38,17 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
  *
  *  A copy first seen while the window held NO launch with its label was
  *  painted before the phone's transcript read reached the launch (a shell
- *  that ends within a poll or two). It is bound to the first such launch the
- *  window shows later; until then it retires nothing. One first seen while
- *  the window held such a launch, settled or not, is never bound to a later
- *  one: that is a remembered row meeting a relaunch.
+ *  that ends within a poll or two), or it names a launch above the loaded
+ *  window: a chat opens on 40 records (`INITIAL_LIMIT` in
+ *  use-mobile-native-chat-session.ts), so a long shell's launch can have
+ *  left it by the time its row is painted. It waits, retiring nothing, and
+ *  is bound to the first such launch the window shows within 10 s of the
+ *  poll that first showed it (phone clock against phone clock). The
+ *  transcript is pushed live, so a launch the phone has not been sent by
+ *  then is the one above the window, and the next launch under that
+ *  description is a relaunch: past the 10 s the copy retires nothing. One
+ *  first seen while the window held such a launch, settled or not, is never
+ *  bound to a later one: that is a remembered row meeting a relaunch.
  *
  *  Not covered: a row already on screen at the phone's first look, in a tab
  *  opened after a relaunch, is bound to both runs and can retire the
@@ -59,8 +66,10 @@ type RememberedCopy = {
   key: string
   completion: ScreenTaskCompletion
   /** The launches with the row's label the window held when the copy was
-   *  first seen, oldest first; null while it has held none. */
+   *  first seen, oldest first; null while it waits for one. */
   launchIds: readonly string[] | null
+  /** While it waits: the phone time of the poll that first showed it. */
+  waitingSince: number | null
 }
 
 export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = { copies: [], onScreen: new Set() }
@@ -68,18 +77,27 @@ export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = { copies: 
 /** Bounded like the finished-id memory; the oldest copies go first. */
 const MEMORY_MAX = 256
 
+/** How long a copy seen before any launch with its label may wait for one.
+ *  The screen is read once a second while the agent works and the
+ *  transcript is pushed as it is written; a launch not in by then is above
+ *  the window, and the next one under its description is a relaunch, which
+ *  Claude seldom starts within seconds of reading the row. */
+const WAITING_COPY_MAX_MS = 10_000
+
 /** Folds one screen poll into the memory. `launches` is the settled
  *  transcript window's labelled shell launches, oldest first; the caller
  *  skips a poll made over an unsettled one (a cached tail painted while the
- *  fresh read loads does not hold what was launched meanwhile). Returns the
- *  SAME memory when this poll changed nothing, so a subscriber does not
- *  re-render on every read. */
+ *  fresh read loads does not hold what was launched meanwhile). `now` is the
+ *  phone time of the poll, compared only with the phone times kept here.
+ *  Returns the SAME memory when this poll changed nothing, so a subscriber
+ *  does not re-render on every read. */
 export function rememberScreenCompletions(
   remembered: ScreenCompletionMemory,
   seen: readonly ScreenTaskCompletion[],
-  launches: readonly LabelledShellLaunch[]
+  launches: readonly LabelledShellLaunch[],
+  now: number
 ): ScreenCompletionMemory {
-  const bound = bindWaitingCopies(remembered.copies, launches)
+  const bound = bindWaitingCopies(remembered.copies, launches, now)
   let copies: RememberedCopy[] | null = bound === remembered.copies ? null : [...bound]
   const counts = countByKey(seen)
   for (const [key, { completion, count }] of counts) {
@@ -95,7 +113,7 @@ export function rememberScreenCompletions(
     // what the window holds now.
     copies ??= [...bound]
     for (let extra = 0; extra < added; extra += 1) {
-      copies.push({ key, completion, launchIds: ids.length > 0 ? ids : null })
+      copies.push({ key, completion, launchIds: ids.length > 0 ? ids : null, waitingSince: ids.length > 0 ? null : now })
     }
   }
   const onScreen = sameKeys(remembered.onScreen, counts) ? remembered.onScreen : new Set(counts.keys())
@@ -130,8 +148,9 @@ function countByKey(seen: readonly ScreenTaskCompletion[]): Map<string, { comple
 /** How many of `ids` (the window's launches with the row's label, oldest
  *  first) came after every launch the copy was bound to. Launches paged in
  *  from above the window sit before those and are not new; once the copy's
- *  own have slid out of the window, every one left is. A copy still waiting
- *  has seen none, and is bound before this is asked. */
+ *  own have slid out of the window, or it waited past its time for one,
+ *  every one left is. A copy still waiting has seen none, and would have
+ *  been bound to one before this is asked. */
 function launchedSince(copy: RememberedCopy, ids: readonly string[]): number {
   const knew = copy.launchIds
   if (knew === null) {
@@ -153,8 +172,13 @@ function launchIdsFor(label: string, launches: readonly LabelledShellLaunch[]): 
  *  label the window now shows — one launch per copy, in order, so two rows
  *  painted before either launch was read take one launch each. Only the
  *  first: were a copy bound to all of them, one whose own launch had settled
- *  would go on to retire the next. The same array when none was bound. */
-function bindWaitingCopies(copies: readonly RememberedCopy[], launches: readonly LabelledShellLaunch[]): readonly RememberedCopy[] {
+ *  would go on to retire the next. A copy that waited past
+ *  `WAITING_COPY_MAX_MS` is bound to none. The same array when none changed. */
+function bindWaitingCopies(
+  copies: readonly RememberedCopy[],
+  launches: readonly LabelledShellLaunch[],
+  now: number
+): readonly RememberedCopy[] {
   if (!copies.some((copy) => copy.launchIds === null)) {
     return copies
   }
@@ -166,6 +190,10 @@ function bindWaitingCopies(copies: readonly RememberedCopy[], launches: readonly
     if (copy.launchIds !== null) {
       return copy
     }
+    if (copy.waitingSince === null || now - copy.waitingSince > WAITING_COPY_MAX_MS) {
+      changed = true
+      return { ...copy, launchIds: [], waitingSince: null }
+    }
     const label = foldWhitespace(copy.completion.label)
     const index = taken.get(label) ?? 0
     const id = launchIdsFor(label, launches)[index]
@@ -174,7 +202,7 @@ function bindWaitingCopies(copies: readonly RememberedCopy[], launches: readonly
     }
     taken.set(label, index + 1)
     changed = true
-    return { ...copy, launchIds: [id] }
+    return { ...copy, launchIds: [id], waitingSince: null }
   })
   return changed ? next : copies
 }

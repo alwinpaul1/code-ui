@@ -164,7 +164,8 @@ describe('a remembered completion row and a later launch under the same descript
     rememberScreenCompletions(
       EMPTY_SCREEN_COMPLETION_MEMORY,
       [{ label: 'Run the gate', status: 'completed' }],
-      readTaskEvidence([...launched('bgate0001', gate, T), firstRunNotified]).shellLaunches
+      readTaskEvidence([...launched('bgate0001', gate, T), firstRunNotified]).shellLaunches,
+      T + 61_000
     )
   )
 

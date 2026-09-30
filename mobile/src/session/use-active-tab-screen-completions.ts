@@ -29,7 +29,9 @@ export function resetScreenCompletionsForTests(): void {
  *  tab switch before its first read, a dropped connection) — an unread
  *  screen is not a screen without the row — nor while the transcript window
  *  is not settled (`launches` null), since each new copy is bound to the
- *  launches the window holds (`mobile-screen-completion-memory.ts`). */
+ *  launches the window holds (`mobile-screen-completion-memory.ts`). The
+ *  clock is read here, not in the hook, as `observeSession` does in
+ *  `use-active-tab-task-report.ts`. */
 function recall(
   handle: string | null,
   sessionId: string | null,
@@ -41,7 +43,7 @@ function recall(
   }
   const key = `${handle}\u0000${sessionId}`
   const previous = memories.get(key) ?? EMPTY_SCREEN_COMPLETION_MEMORY
-  const next = seen === null || launches === null ? previous : rememberScreenCompletions(previous, seen, launches)
+  const next = seen === null || launches === null ? previous : rememberScreenCompletions(previous, seen, launches, Date.now())
   memories.delete(key)
   memories.set(key, next)
   if (memories.size > MEMORY_SESSIONS_MAX) {

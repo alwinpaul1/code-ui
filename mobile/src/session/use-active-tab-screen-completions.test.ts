@@ -265,6 +265,18 @@ describe('a short shell’s completion row, on a phone whose clock is not the de
     expect(show(H + 2_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
   })
 
+  // The window a chat opens with is 40 records, so a long shell's launch can
+  // sit above it when its row is painted. That row's launch never arrives;
+  // the next launch under its description is a relaunch, not the row's own.
+  it('keeps a relaunch running when the row it follows named a launch above the loaded window', () => {
+    const LONG_ROW: ScreenTaskCompletion = { label: 'Run the gate', status: 'failed' }
+    const tail = shellLaunch('bquick001', { command: 'npm run lint', description: 'Quick check' }, H - 30_000)
+    expect(show(H, { messages: tail, screen: [LONG_ROW] })).toEqual(['bquick001'])
+    expect(show(H + 1_000, { messages: tail, screen: [] })).toEqual(['bquick001'])
+    const relaunched = [...tail, ...gateLaunch('bgate0002', H + 20_000)]
+    expect(show(H + 21_000, { messages: relaunched, screen: [] })).toEqual(['bquick001', 'bgate0002'])
+  })
+
   it('shows it finished when the row had already scrolled away by the time the launch arrived', () => {
     expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
     expect(show(H + 2_500 - 5_000, { messages: [], screen: [] })).toEqual(['host-monitoring'])
