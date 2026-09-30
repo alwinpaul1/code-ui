@@ -129,15 +129,16 @@ export function parseCodexPickerScreen(lines: readonly string[]): CodexPickerScr
 const CODEX_BUSY_STATUS_MARKER = 'to interrupt)'
 /**
  * Whether Codex's busy row ("• Working (5s • esc to interrupt)") sits directly above the composer:
- * the last non-blank line above it, once the pending-input preview (a blank line, then "Queued
+ * the last non-blank line above it, once an open slash or @ popup (0.158 draws it above the
+ * composer, its selected row marked `›`), the pending-input preview (a blank line, then "Queued
  * follow-up inputs" or "Messages to be submitted…" blocks, headers at column 0) and one `└` status
  * detail with its wrapped rows (a Tip, the auto-review status, a retry error, parallel approval
- * reviews) are stepped over. A finished answer can quote the row anywhere higher up, and
- * 0.158 puts a timestamp between a quoted row and the composer. The row is not a fixed distance from
- * the bottom (0.155: sixth line up; 0.158.0, whose footer gained "? for shortcuts": seventh; every
- * queued message adds lines between it and the composer), which is why a tail window was wrong in
- * both directions. No composer on screen means no verdict: a pager or a `cat`ed transcript can hold
- * any text.
+ * reviews) are stepped over (codexPendingPreviewStart). A finished answer can quote the row anywhere
+ * higher up, and 0.158 puts a timestamp between a quoted row and the composer. The row is not a fixed
+ * distance from the bottom (0.155: sixth line up; 0.158.0, whose footer gained "? for shortcuts":
+ * seventh; every queued message and popup row adds lines between it and the composer), which is why
+ * a tail window was wrong in both directions. No composer on screen means no verdict: a pager or a
+ * `cat`ed transcript can hold any text.
  */
 function hasBusyStatusRowAbove(lines: readonly string[]): boolean {
   const composer = lines.findLastIndex((line) => CODEX_COMPOSER_ROW.test(line))
