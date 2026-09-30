@@ -78,8 +78,21 @@ vi.mock('lucide-react-native', () => ({
   User: 'User'
 }))
 
-vi.mock('./transport/host-store', () => ({ loadHosts: dependencies.loadHosts }))
+// The screen looks its host up in the catalog (host-lookup.ts); the fixture is a readable desktop,
+// so the catalog is the same list with each entry ready.
+vi.mock('./transport/host-store', () => ({
+  loadHostCatalog: async () =>
+    ((await dependencies.loadHosts()) as { id: string }[]).map((profile) => ({
+      ...profile,
+      credentialStatus: 'ready',
+      profile
+    }))
+}))
 
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./transport/client-context', () => {
   const client = {
     sendRequest: async (method: string, params?: unknown, options?: unknown) => {

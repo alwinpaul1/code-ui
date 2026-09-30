@@ -14,12 +14,12 @@ import {
 } from './mobile-file-preview-operations'
 import type { MobileFilePreviewSource } from './mobile-file-preview-request'
 import { DESKTOP_TEXT_READ_CAP, formatPreviewByteLength } from './mobile-file-preview-response'
+import { failureReason } from './mobile-file-read-failure-reason'
 import { isAbsoluteTabPath, resolveOutsideWorktree } from './mobile-file-tab-outside-worktree'
 import {
   refreshTerminalArtifactSourceAfterGrantFailure,
   type MobileTerminalArtifactPreviewSource
 } from './mobile-terminal-artifact-grant-refresh'
-import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 
 /**
  * Every whole-file read a save can make, and the one question it answers: did the phone get ALL of
@@ -323,38 +323,6 @@ function refusalRead(refusal: RpcFailure['error'], cap: string): WholeDesktopFil
     return { status: 'refused', reason: PREVIEW_ONLY }
   }
   return { status: 'failed', reason: failureReason(refusal.message || refusal.code) }
-}
-
-/** Plain words for the failures that have them; the desktop's own text for the rest, because it is
- *  the only clue a failure on an untested host leaves. */
-export function failureReason(message: string): string {
-  const normalized = message.toLowerCase()
-  if (normalized === 'outside_worktree') {
-    return 'the phone can reach a file outside the workspace only while a terminal here still shows its path'
-  }
-  if (isTerminalArtifactGrantError(normalized)) {
-    return 'the desktop no longer lets the phone read it; open it again from the terminal'
-  }
-  if (
-    normalized.includes('enoent') ||
-    normalized.includes('no such file') ||
-    normalized.includes('not found') ||
-    normalized.includes('does not exist')
-  ) {
-    return 'it is no longer on the desktop'
-  }
-  if (
-    normalized.includes('remote connection dropped') ||
-    normalized.includes('provider unavailable') ||
-    normalized.includes('disconnected') ||
-    normalized.includes('not connected') ||
-    normalized.includes('timed out') ||
-    normalized.includes('timeout')
-  ) {
-    return 'the desktop could not be reached'
-  }
-  const detail = message.trim().slice(0, 140)
-  return detail || 'the desktop gave no reason'
 }
 
 function base64ByteLength(base64: string): number {

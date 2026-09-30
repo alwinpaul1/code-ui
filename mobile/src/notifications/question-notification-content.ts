@@ -1,5 +1,6 @@
 import type { AskPrompt, AskQuestion } from '../../../src/shared/native-chat-ask'
 import { shouldStepNativeChatAskAnswer } from '../../../src/shared/native-chat-agent-support'
+import { clipWithEllipsis } from '../text/whole-character-cut'
 import { notificationPlainText } from './notification-plain-text'
 import { agentHeadlineLabel } from './notification-presentation'
 
@@ -49,7 +50,8 @@ const PER_QUESTION_FORMAT = 'Reply with one answer per question, separated by ;'
 const MAX_ACTIONS = 3
 
 /** Android clips a longer action title without saying so; the cut is made here,
- *  where it can carry an ellipsis. Real labels run to 40 characters. */
+ *  where it can carry an ellipsis, and never through an emoji. Real labels run
+ *  to 40 characters. */
 const ACTION_LABEL_LIMIT = 20
 
 /** Identity is the INDEX, never the label: Android returns only this string,
@@ -60,7 +62,7 @@ function pickIdentifier(index: number): string {
 
 function shortenLabel(label: string): string {
   const flat = label.replace(/\s+/g, ' ').trim()
-  return flat.length > ACTION_LABEL_LIMIT ? `${flat.slice(0, ACTION_LABEL_LIMIT - 1)}…` : flat
+  return clipWithEllipsis(flat, ACTION_LABEL_LIMIT)
 }
 
 function otherField(): QuestionReplyAction {

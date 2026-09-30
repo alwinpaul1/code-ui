@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { markdownCodeRanges } from './markdown-code-ranges'
 
@@ -115,6 +116,94 @@ describe('fence ranges, tabs and cost', () => {
   it('reads each line a bounded number of times, however many fences one item holds', () => {
     const fence = ['   ```sh', '   echo <b>hi</b>', '   ```', '']
     const source = ['1. one item', '', ...Array.from({ length: 1000 }, () => fence).flat()]
+    let reads = 0
+    const counted = new Proxy(source, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) {
+          reads += 1
+        }
+        return Reflect.get(target, key, receiver)
+      }
+    })
+    expect(markdownCodeRanges(counted).size).toBe(1000)
+    expect(reads).toBeLessThanOrEqual(4 * source.length)
+  })
+})
+
+// Review, 2026-09-30 (two reviewers): a `>` line read as paragraph text, so a
+// fence inside a quote was not protected and the HTML pass rewrote its code:
+// `<b>x</b>` became `**x**`, `<Text>` went, `&amp;` became `&`. The same
+// defect 0.9.106 fixed for a fence inside a list. Each shape below is read
+// the way marked reads it (checked against marked's lexer).
+describe('where a fenced code block inside a quote ends', () => {
+  it('finds a fence in a quote and ends it at its closer', () => {
+    expect(end(['> ```', '> <b>x</b> &amp;', '> ```'])).toBe(3)
+    expect(end(['> ```tsx', '> <Text>a</Text>', '> ```', 'after <b>y</b>'])).toBe(3)
+    expect(end(['Intro', '', '> ~~~', '> <b>x</b>', '> ~~~'], 2)).toBe(5)
+  })
+
+  it('reads `>` with or without the space after it, up to three spaces in, and nested', () => {
+    expect(end(['>```', '><b>x</b>', '>```'])).toBe(3)
+    expect(end(['>\t```', '>\t<b>x</b>', '>\t```'])).toBe(3)
+    expect(end(['   > ```', '   > <b>x</b>', '   > ```'])).toBe(3)
+    expect(end(['> > ```', '> > <b>x</b>', '> > ```'])).toBe(3)
+    expect(end(['>> ```', '>> <b>x</b>', '>> ```'])).toBe(3)
+  })
+
+  it('ends an unclosed quoted fence at the first line that leaves its quote', () => {
+    expect(end(['> ```', '> <b>x</b>', '<b>y</b>'])).toBe(2)
+    expect(end(['> ```', '> <b>x</b>', '', '> <b>y</b>'])).toBe(2)
+    expect(end(['> > ```', '> > <b>x</b>', '> <b>y</b>'])).toBe(2)
+  })
+
+  it('closes a quoted fence only inside the same quote', () => {
+    // A deeper `>` inside the fence is its code, not a closer's quote.
+    expect(end(['> ```', '> > ```', '> ```', 'after'])).toBe(3)
+    expect(end(['> ```', '```', '> <b>x</b>'])).toBe(1)
+  })
+
+  it('reads the degenerate sizes: an empty fence, an opener on the last line, a one-line quote', () => {
+    expect(end(['> ```', '> ```'])).toBe(2)
+    expect(end(['> ```'])).toBe(1)
+    expect(end(['> para', '> ```'], 1)).toBe(2)
+    expect(end(['> <b>x</b>'])).toBeNull()
+    expect(end(['>'])).toBeNull()
+  })
+
+  it('finds a quoted fence inside a list item, and a list fence inside a quote', () => {
+    expect(end(['- item', '  > ```', '  > <b>x</b>', '  > ```', 'after'], 1)).toBe(4)
+    expect(end(['> - item', '>   ```', '>   <b>x</b>', '>   ```', 'after'], 1)).toBe(4)
+  })
+
+  it('reads a lazy line after a quote as it did', () => {
+    expect(end(['> para', 'lazy', '> ```', '> <b>x</b>', '> ```'], 2)).toBe(5)
+    expect(end(['> para', '```', '<b>x</b>', '```'], 1)).toBe(4)
+  })
+
+  it('ends the list items a quote marker is not indented into', () => {
+    // marked ends the list at `> note`; four columns in, the next lines are
+    // the quote's paragraph, so their HTML is prose, not code.
+    expect(end(['1. step', '> note', '    ```sh', '    <b>x</b>', '    ```'], 2)).toBeNull()
+    expect(end(['1. step', '> note', '   ```sh', '   echo <b>hi</b>', '   ```'], 2)).toBe(5)
+  })
+
+  it('takes an indented block inside a quote for code when asked', () => {
+    const code = markdownCodeRanges(['>     <b>x</b>', '>     y', 'after'], { indentedCode: true })
+    expect(code.get(0)).toBe(2)
+    expect(markdownCodeRanges(['>     <b>x</b>']).get(0)).toBeUndefined()
+  })
+
+  it('reads a quote nested past any document inside the deadline, and a fence far down as text', () => {
+    // The parser hands such a document back as prose (RUNAWAY_NESTING), so
+    // there is no code block down there to protect.
+    const deep = `${'> '.repeat(12_000)}\`\`\``
+    const ranges = runInNewContext('find(lines)', { find: markdownCodeRanges, lines: [deep, deep] }, { timeout: 250 })
+    expect(ranges.size).toBe(0)
+  })
+
+  it('reads each line a bounded number of times, however many fences one quote holds', () => {
+    const fence = ['> ```sh', '> echo <b>hi</b>', '> ```', '>']
+    const source = ['> Steps:', '>', ...Array.from({ length: 1000 }, () => fence).flat()]
     let reads = 0
     const counted = new Proxy(source, {
       get(target, key, receiver) {

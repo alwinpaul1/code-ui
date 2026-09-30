@@ -7,10 +7,12 @@ import {
 import { useTheme } from '../theme/theme-context'
 import { SUGGESTION_POPOVER_CAP, SUGGESTION_ROW_HEIGHT } from './mobile-native-chat-suggestion-popover'
 import { Txt } from '../ui/Txt'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 
 /** A provider's argument sketch for a command (`<objective>`), shown beside the
  *  token so the row says how the command is invoked, not just what it does
- *  (Orca #19928). Capped so a provider cannot swamp the row. */
+ *  (Orca #19928). Capped so a provider cannot swamp the row, and cut whole
+ *  characters only, so an emoji at the cap is dropped rather than halved. */
 const ARGUMENT_HINT_MAX_LENGTH = 80
 
 export function suggestionArgumentHint(suggestion: ComposerSuggestion): string | null {
@@ -18,7 +20,7 @@ export function suggestionArgumentHint(suggestion: ComposerSuggestion): string |
     return null
   }
   const hint = suggestion.command.argumentHint.replace(/\s+/g, ' ').trim()
-  return hint ? hint.slice(0, ARGUMENT_HINT_MAX_LENGTH) : null
+  return hint ? cutWholeCharacters(hint, ARGUMENT_HINT_MAX_LENGTH) : null
 }
 
 

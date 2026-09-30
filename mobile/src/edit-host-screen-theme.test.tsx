@@ -25,18 +25,23 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: 'host-1' }),
   useRouter: () => ({ back: vi.fn() })
 }))
+const HOST = vi.hoisted(() => ({
+  id: 'host-1',
+  name: 'Studio Mac',
+  endpoint: 'ws://192.168.1.10:6768',
+  deviceToken: 'token',
+  publicKeyB64: 'key',
+  lastConnected: 0
+}))
 vi.mock('./transport/host-store', () => ({
-  loadHosts: async () => [
-    {
-      id: 'host-1',
-      name: 'Studio Mac',
-      endpoint: 'ws://192.168.1.10:6768',
-      deviceToken: 'token',
-      publicKeyB64: 'key',
-      lastConnected: 0
-    }
-  ],
+  loadHosts: async () => [HOST],
+  // The screen looks its host up in the catalog (host-lookup.ts).
+  loadHostCatalog: async () => [{ ...HOST, credentialStatus: 'ready', profile: HOST }],
   updateHostNameAndEndpoint: vi.fn()
+}))
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
 }))
 vi.mock('./transport/client-context', () => ({
   useForceReconnect: () => undefined,

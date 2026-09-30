@@ -1,5 +1,6 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
-import { markdownPlainText } from './markdown-plain-text'
+import { markdownInlinePlainText, markdownPlainText } from './markdown-plain-text'
 
 // What a reply's Copy puts on the clipboard (2026-09-28, the user: "Why i
 // copy text markdown things come ** ** ''' fix it").
@@ -26,6 +27,48 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('call snake_case_name and foo__bar__baz')).toBe('call snake_case_name and foo__bar__baz')
   })
 
+  // Review, 2026-09-30: Claude writes both of these often, and a bold span
+  // could not hold a star, so `***x***` and `**a *b* c**` drew and copied with
+  // a literal `*` at each end of the phrase.
+  it('copies bold-and-italic, and bold holding italic, without stray stars', () => {
+    expect(markdownPlainText('This is ***really important*** and **bold with *em* inside**')).toBe(
+      'This is really important and bold with em inside'
+    )
+    expect(markdownPlainText('***one*** and ***two***')).toBe('one and two')
+    expect(markdownPlainText('***lead* then bold**')).toBe('lead then bold')
+    expect(markdownPlainText('**a*b*c**')).toBe('abc')
+  })
+
+  it('copies the underscore forms of the same nesting without stray underscores', () => {
+    expect(markdownPlainText('___x___')).toBe('x')
+    expect(markdownPlainText('__a _b_ c__')).toBe('a b c')
+  })
+
+  it('keeps the emphasis it already read the way it read it', () => {
+    expect(markdownPlainText('**a**')).toBe('a')
+    expect(markdownPlainText('*a*')).toBe('a')
+    expect(markdownPlainText('__a__')).toBe('a')
+    expect(markdownPlainText('_a_')).toBe('a')
+    expect(markdownPlainText('**_x_**')).toBe('x')
+    expect(markdownPlainText('*__x__*')).toBe('x')
+    expect(markdownPlainText('**x**y**z**')).toBe('xyz')
+    expect(markdownPlainText('foo___x___bar')).toBe('foo___x___bar')
+  })
+
+  it('leaves stars and underscores that close nothing where they are', () => {
+    expect(markdownPlainText('an unclosed **a')).toBe('an unclosed **a')
+    expect(markdownPlainText('a *** b')).toBe('a *** b')
+    // A line of three is a rule, which draws no words.
+    expect(markdownPlainText('***')).toBe('')
+    // Blanks to fill in: a run followed by a space opens nothing.
+    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: * Date: *')
+    expect(markdownPlainText('Name: ___ Date: ___')).toBe('Name: ___ Date: ___')
+    // Today's reading, pinned so the nesting change leaves it where it was:
+    // the two stars pair as an italic " 3 ", though CommonMark opens nothing
+    // on a star with a space after it.
+    expect(markdownPlainText('2 * 3 * 4')).toBe('2  3  4')
+  })
+
   it('copies a code pill as its words, backticks and padding off', () => {
     expect(markdownPlainText('only when someone runs `cdk deploy`.')).toBe('only when someone runs cdk deploy.')
     expect(markdownPlainText('`` `user` `` becomes `user`')).toBe('`user` becomes user')
@@ -37,6 +80,28 @@ describe('markdownPlainText', () => {
     )
   })
 
+  // Review, 2026-09-30: the document was trimmed before the HTML pass saw it,
+  // which took the first line's indent too, so a reply that opens with an
+  // indented code block read as HTML prose: `<div>x</div>` drew and copied as
+  // `x`, and `&amp;` as `&`. The same block after a paragraph was code.
+  it("copies an indented code block on the reply's first line verbatim", () => {
+    expect(markdownPlainText('    <div>x</div>\n    &amp; y')).toBe('<div>x</div>\n&amp; y')
+    expect(markdownPlainText('\t<b>x</b> &amp; y')).toBe('<b>x</b> &amp; y')
+    expect(markdownPlainText('\n\n    <b>x</b>\n\nafter')).toBe('<b>x</b>\n\nafter')
+    expect(markdownPlainText('\r\n    <b>x</b>\r\n')).toBe('<b>x</b>')
+  })
+
+  it('copies a one-line indented block, and nothing for lines of only spaces', () => {
+    expect(markdownPlainText('    <b>x</b>')).toBe('<b>x</b>')
+    expect(markdownPlainText('    ')).toBe('')
+    expect(markdownPlainText('\n    \n\t\n')).toBe('')
+  })
+
+  it('still reads a first line indented less than four columns, or after a byte-order mark, as prose', () => {
+    expect(markdownPlainText('   <b>x</b> y')).toBe('x y')
+    expect(markdownPlainText('﻿# Title\n\ntext')).toBe('Title\n\ntext')
+  })
+
   it('copies a fence still streaming in without its opener', () => {
     expect(markdownPlainText('```ts\nconst a = 1')).toBe('const a = 1')
   })
@@ -46,6 +111,55 @@ describe('markdownPlainText', () => {
   })
 
   it('copies a quote as its words', () => {
+    expect(markdownPlainText('> quoted **text**')).toBe('quoted text')
+  })
+
+  // Review, 2026-09-30: the HTML pass rewrote the code of a fence inside a
+  // quote, so the Copy held "**x** &" for `<b>x</b> &amp;`.
+  it('copies the code of a fence inside a quote as written', () => {
+    expect(markdownPlainText('> ```\n> <b>x</b> &amp;\n> ```')).toBe('<b>x</b> &amp;')
+    expect(markdownPlainText('> ```tsx\n> <Text>a</Text>\n> ```')).toBe('<Text>a</Text>')
+    expect(markdownPlainText('> > ```\n> > <b>x</b>\n> > ```')).toBe('<b>x</b>')
+  })
+
+  // Review, 2026-09-30, the same day: a fence inside a quote was still the
+  // quote's TEXT, so the inline pass read its backticks as a code span across
+  // lines and its tildes as strikethrough. The Copy is built to match the
+  // screen, and both held the fence's marks, its language and a stray newline
+  // at each end. The fence is now a code block of its own
+  // (mobile-markdown-quote-fence.test.ts), and it copies as one.
+  it('copies a quoted fence as its code, with no fence marks or stray newlines', () => {
+    expect(markdownPlainText('> ```\n> x = 1\n> ```')).toBe('x = 1')
+    expect(markdownPlainText('> ~~~\n> a\n> ~~~')).toBe('a')
+  })
+
+  it('copies the prose around a quoted fence without its language tag or extra blank lines', () => {
+    expect(markdownPlainText('> intro\n>\n> ```sh\n> ls *.ts\n> ```\n>\n> outro')).toBe(
+      'intro\n\nls *.ts\n\noutro'
+    )
+    expect(markdownPlainText('> a\n>\n> > ```\n> > x\n> > ```\n>\n> c')).toBe('a\n\nx\n\nc')
+  })
+
+  it('copies an unclosed quoted fence as code to the end of the quote, backticks inside it kept', () => {
+    expect(markdownPlainText('> ```\n> unclosed `x`')).toBe('unclosed `x`')
+  })
+
+  it('keeps the emphasis marks inside a quoted tilde fence', () => {
+    expect(markdownPlainText('> ~~~\n> git commit -m "**wip**" *.ts\n> ~~~')).toBe('git commit -m "**wip**" *.ts')
+    expect(markdownPlainText('> ```\n> git commit -m "**wip**" *.ts\n> ```')).toBe('git commit -m "**wip**" *.ts')
+  })
+
+  it('copies a quoted fence as written and the prose after the quote without its tags', () => {
+    expect(markdownPlainText('> ```\n> <b>x</b>\n> ```\n\nafter <b>y</b>')).toBe('<b>x</b>\n\nafter y')
+  })
+
+  it('copies a quoted fence under a list item after the item, as code', () => {
+    expect(markdownPlainText('- item\n  > ```\n  > <b>x</b>\n  > ```')).toBe('• item\n\n<b>x</b>')
+  })
+
+  it('copies an empty quoted fence, or one that has only opened, as nothing', () => {
+    expect(markdownPlainText('> ```\n> ```')).toBe('')
+    expect(markdownPlainText('> ```')).toBe('')
     expect(markdownPlainText('> quoted **text**')).toBe('quoted text')
   })
 
@@ -129,5 +243,24 @@ describe('markdownPlainText', () => {
 
   it('reads Windows line endings like any other', () => {
     expect(markdownPlainText('**a**\r\n\r\nb')).toBe('a\n\nb')
+  })
+})
+
+// A bold span may now hold italic spans (markdown-inline-matcher.ts), which
+// is a group inside a group; one written with overlapping alternatives takes
+// exponential time on a bold that never closes. The screen and the Copy run
+// the same pattern over every paragraph of every reply, so it is held to the
+// parser's deadline. These take 15 ms or less each on a Mac.
+describe('emphasis that never closes', () => {
+  it.each([
+    ['a bold over many italics', `**${'a *b* '.repeat(15_000)}`],
+    ['a bold over many underscore italics', `__${'a _b_ '.repeat(15_000)}`],
+    ['a bold opener on every line', '**a *b\n'.repeat(15_000)],
+    ['a star after every word', `**${'x*y '.repeat(25_000)}`],
+    ['italics joined end to end', `**${'*a*'.repeat(30_000)}`],
+    ['a star run', '*'.repeat(100_000)]
+  ])('copies %s inside the deadline', (_name, text) => {
+    const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
+    expect(typeof copied).toBe('string')
   })
 })

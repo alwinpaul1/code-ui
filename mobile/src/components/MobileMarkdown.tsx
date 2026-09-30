@@ -8,7 +8,7 @@ import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import {
   MARKDOWN_BASE_SIZE,
   useMarkdownStyles,
@@ -281,7 +281,8 @@ function MobileMarkdownInner({
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
   const [contentWidth, setContentWidth] = useState(0)
-  const text = content?.trim() ?? ''
+  // Not trimmed whole: the first line's indent can make it code.
+  const text = markdownDocumentSource(content)
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
@@ -410,11 +411,13 @@ function MobileMarkdownInner({
         if (block.type === 'quote') {
           // One bar down the whole quote, text indented beside it, as the Claude
           // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
+          // A quote a fence cut in two joins its bar to the one above
+          // (mobile-markdown-quote-blocks.ts).
           const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
           const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
           const quoted = renderInline(styles, block.text, onOpenFile, pills)
           return (
-            <View key={index} style={styles.quoteBlock}>
+            <View key={index} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
               <Text
                 key={pills.keyFor('quote')}
                 selectable={selectable}

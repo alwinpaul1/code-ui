@@ -126,6 +126,65 @@ describe('detectAgentPermission', () => {
   })
 })
 
+// The card's detail line is cut at 160 UTF-16 code units (159 and an
+// ellipsis). An emoji is two, and a cut between them drew half of it, a broken
+// glyph, on the permission card before the ellipsis.
+describe('a permission card whose detail has an emoji at the 160-character cap', () => {
+  const LONE_HALF = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/
+  const ROCKET = '🚀'
+  /** `head`, padded with x's so the rocket starts on code unit `index`, then `tail`. */
+  const rocketAt = (head: string, index: number, tail: string) =>
+    `${head}${'x'.repeat(index - head.length)}${ROCKET}${tail}`
+  const detailOf = (lastAssistantMessage: string) =>
+    detectAgentPermission({ state: 'blocked', lastAssistantMessage })?.detail
+
+  it('keeps a rocket emoji whole in a Claude Code numbered ask when it straddles the cut', () => {
+    const detail = detailOf(
+      `${rocketAt('Claude wants to run `echo "', 158, ' deployed"`. Do you want to proceed?')}\n` +
+        '1. Yes\n' +
+        '2. No, and tell Claude what to do differently'
+    )
+    expect(detail).not.toMatch(LONE_HALF)
+    expect(detail).toBe(`${rocketAt('Claude wants to run `echo "', 158, '').slice(0, 158)}…`)
+  })
+
+  it('keeps a rocket emoji whole in a Codex y/n ask when it straddles the cut', () => {
+    const detail = detailOf(rocketAt('Allow Codex to run `git commit -m "', 158, ' ship"`? (y/n)'))
+    expect(detail).not.toMatch(LONE_HALF)
+    expect(detail).toBe(`${rocketAt('Allow Codex to run `git commit -m "', 158, '').slice(0, 158)}…`)
+  })
+
+  it('keeps an emoji that ends just before the cut', () => {
+    const line = rocketAt('Do you want to proceed? ', 157, ' tail')
+    expect(detailOf(line)).toBe(`${line.slice(0, 159)}…`)
+    expect(line.slice(157, 159)).toBe(ROCKET)
+  })
+
+  it('shows a detail of exactly 160 code units whole, and cuts one a unit over', () => {
+    const exact = rocketAt('Do you want to proceed? ', 158, '')
+    expect(exact).toHaveLength(160)
+    expect(detailOf(exact)).toBe(exact)
+    const over = detailOf(`${exact}!`)
+    expect(over).not.toMatch(LONE_HALF)
+    expect(over).toBe(`${exact.slice(0, 158)}…`)
+  })
+
+  it('keeps an ask whose first line is empty with no detail at all', () => {
+    const result = detectAgentPermission({ state: 'blocked', lastAssistantMessage: '\nDo you want to proceed? (y/n)' })
+    expect(result).not.toBeNull()
+    expect(result?.detail).toBeUndefined()
+  })
+
+  it('cuts a detail made only of emoji between two of them', () => {
+    const result = detectAgentPermission({
+      state: 'blocked',
+      lastAssistantMessage: `${ROCKET.repeat(100)}\nDo you want to proceed? (y/n)`
+    })
+    expect(result?.detail).not.toMatch(LONE_HALF)
+    expect(result?.detail).toBe(`${ROCKET.repeat(79)}…`)
+  })
+})
+
 describe('parseApprovalFromStatus', () => {
   it('parses an approval envelope into an Allow/Deny card', () => {
     const card = parseApprovalFromStatus(

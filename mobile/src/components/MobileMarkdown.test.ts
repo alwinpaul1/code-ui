@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
-import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 
 describe('isMobileMermaidLanguage', () => {
@@ -204,6 +204,31 @@ describe('parseMobileMarkdown', () => {
     const fenced = ['  ```md', '  text', '      ```', '  <b>still code</b>', '  ```']
     const normalized = normalizeMobileMarkdownPreviewHtml(['- step', '', ...fenced, '', '<p>After</p>'].join('\n'))
     expect(normalized).toBe(['- step', '', ...fenced, '', 'After'].join('\n'))
+  })
+
+  // Review, 2026-09-30 (two reviewers): a fence inside a quote was not
+  // protected, so `<b>x</b>` became `**x**`, `<Text>` was stripped and
+  // `&amp;` decoded, on screen and in the Copy.
+  it.each([
+    ['a quote', ['> ```', '> <b>x</b> &amp;', '> ```']],
+    ['a quote, with a language', ['> ```tsx', '> <Text>a</Text>', '> ```']],
+    ['a quote with no space after the marker', ['>```', '><b>x</b>', '>```']],
+    ['a quote inside a quote', ['> > ```html', '> > <div>a &amp; b</div>', '> > ```']],
+    ['a quote inside a list item', ['- step', '  > ```', '  > <b>x</b>', '  > ```']]
+  ])('keeps the code of a fence inside %s exactly, and strips the HTML after it', (_shape, lines) => {
+    expect(normalizeMobileMarkdownPreviewHtml([...lines, '', '<p>After</p>'].join('\n'))).toBe(
+      [...lines, '', 'After'].join('\n')
+    )
+  })
+
+  it('ends an unclosed quoted fence at the first line out of the quote', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('> ```\n> <b>x</b>\n<b>y</b>')).toBe('> ```\n> <b>x</b>\n**y**')
+    expect(normalizeMobileMarkdownPreviewHtml('> ```')).toBe('> ```')
+    expect(normalizeMobileMarkdownPreviewHtml('> ```\n> ```\n\n<b>after</b>')).toBe('> ```\n> ```\n\n**after**')
+  })
+
+  it('still strips HTML from quoted prose', () => {
+    expect(normalizeMobileMarkdownPreviewHtml('> <b>x</b> &amp; y')).toBe('> **x** & y')
   })
 
   it('does not take a triple-backtick span on one line for a fence', () => {
@@ -422,5 +447,36 @@ describe('parseMobileMarkdown', () => {
   it('accepts the `|:-:|` and single-dash separators agents emit, and escaped pipes in cells', () => {
     const blocks = parseMobileMarkdown('| Job | Result |\n|:-:|-|\n| 2621 | a \\| b |')
     expect(blocks).toEqual([{ type: 'table', headers: ['Job', 'Result'], rows: [['2621', 'a | b']] }])
+  })
+})
+
+// What MobileMarkdown draws and the reply's Copy reads, from one helper: a
+// whole trim took the first line's indent, and with it an indented code
+// block's claim to be code (review, 2026-09-30).
+describe('the document the screen and the Copy both read', () => {
+  it('is empty for nothing, and for lines of only spaces and tabs', () => {
+    expect(markdownDocumentSource(undefined)).toBe('')
+    expect(markdownDocumentSource('')).toBe('')
+    expect(markdownDocumentSource('    ')).toBe('')
+    expect(markdownDocumentSource('\n \t\r\n  \n')).toBe('')
+  })
+
+  it("keeps the first line's own indent and drops the blank lines above it", () => {
+    expect(markdownDocumentSource('a')).toBe('a')
+    expect(markdownDocumentSource('    code')).toBe('    code')
+    expect(markdownDocumentSource('\n\n\tcode\n  more  \n\n')).toBe('\tcode\n  more')
+    expect(markdownDocumentSource(' \r\n    code\r\n')).toBe('    code')
+  })
+
+  it('drops what the whole trim dropped before that indent', () => {
+    expect(markdownDocumentSource('﻿# Title')).toBe('# Title')
+    expect(markdownDocumentSource('﻿    code')).toBe('    code')
+  })
+
+  it('reads an indented first line as the code block it is', () => {
+    const source = markdownDocumentSource('\n    <div>x</div>\n    &amp; y\n')
+    expect(parseMobileMarkdown(normalizeMobileMarkdownPreviewHtml(source))).toEqual([
+      { type: 'code', text: '<div>x</div>\n&amp; y', language: undefined, closed: true }
+    ])
   })
 })

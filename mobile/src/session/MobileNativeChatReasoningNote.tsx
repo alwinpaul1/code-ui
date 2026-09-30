@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
@@ -22,11 +23,8 @@ export function reasoningOpening(text: string, limit: number = REASONING_FOLD_CH
   if (text.length <= limit) {
     return null
   }
-  let stretch = text.slice(0, limit)
   // Half an emoji draws as a replacement glyph.
-  if (/[\uD800-\uDBFF]$/.test(stretch)) {
-    stretch = stretch.slice(0, -1)
-  }
+  const stretch = cutWholeCharacters(text, limit)
   const space = stretch.search(/\s\S*$/)
   const opening = `${(space > 0 ? stretch.slice(0, space) : stretch).trimEnd()}…`
   // A code block the cut left open would draw the rest of the opening as code.

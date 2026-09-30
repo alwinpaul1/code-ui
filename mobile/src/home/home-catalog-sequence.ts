@@ -25,6 +25,13 @@ export function createHomeCatalogSequence() {
       drawnHostCount = hostCount
       return true
     },
+    /**
+     * True when a newer read or a local change already put a list on screen, so read `n` failing
+     * says nothing about what is drawn and must not replace it with the failed-read body.
+     */
+    superseded(n: number): boolean {
+      return n <= floor || n <= applied
+    },
     /** A list this screen produced itself: every read already in flight is now older. */
     localChange(hostCount: number): void {
       floor = started

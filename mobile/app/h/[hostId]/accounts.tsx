@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from 'react'
 import { View, ScrollView, ActivityIndicator, RefreshControl, Alert } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
-import { loadHosts } from '../../../src/transport/host-store'
 import { useHostClient } from '../../../src/transport/client-context'
 import { useTheme } from '../../../src/theme/theme-context'
 import { useNow } from '../../../src/hooks/use-now'
@@ -17,6 +16,7 @@ import {
   hasRenderableUsage
 } from '../../../src/components/AccountUsage'
 import { AccountsProviderCard } from '../../../src/accounts/AccountsProviderCard'
+import { useAccountsHostLookup } from '../../../src/accounts/use-accounts-host-lookup'
 import {
   getActiveCodexAccountIdForRateLimitTarget,
   getCodexResetCreditSummary
@@ -32,7 +32,8 @@ export default function AccountsScreen() {
 
   // Why: shared client per host. See docs/mobile-shared-client-per-host.md.
   const { client, state: connState } = useHostClient(hostId)
-  const [hostName, setHostName] = useState<string>('')
+  // The desktop's name and why it cannot be opened, from the catalog, read again per new connection.
+  const { hostName, hostNotice } = useAccountsHostLookup(hostId)
   const [snapshot, setSnapshot] = useState<AccountsSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -72,27 +73,6 @@ export default function AccountsScreen() {
   )
   // Why: snapshot pushes only arrive when the desktop's rate-limit poll completes.
   const now = useNow(60_000, clockEnabled)
-
-  useEffect(() => {
-    if (!hostId) {
-      return
-    }
-    let stale = false
-    void loadHosts().then((hosts) => {
-      if (stale) {
-        return
-      }
-      const host = hosts.find((h) => h.id === hostId)
-      if (!host) {
-        setError('Host not found')
-        return
-      }
-      setHostName(host.name)
-    })
-    return () => {
-      stale = true
-    }
-  }, [hostId])
 
   // Why: subscribe to streaming snapshot updates so usage bars refresh in
   // place when the desktop's rate-limit poll completes (every 5 min) or
@@ -262,7 +242,11 @@ export default function AccountsScreen() {
           />
         }
       >
-        {connState !== 'connected' && !snapshot ? (
+        {/* Before "Connecting…": a desktop that cannot be read cannot be opened either. Only while
+            it has no client, because a client means the opener has since read it. */}
+        {hostNotice && !client && !snapshot ? (
+          placeholder(hostNotice, false)
+        ) : connState !== 'connected' && !snapshot ? (
           placeholder(`Connecting to ${hostName || 'host'}…`)
         ) : error && !snapshot ? (
           placeholder(error, false)

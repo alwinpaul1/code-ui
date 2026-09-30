@@ -1,6 +1,7 @@
 // Pure: no React Native or Expo imports, so vitest runs it unmocked. The
 // device half (the Android picker and the writes) is mobile-file-save-device.ts.
 import { pickedDocumentName } from './android-picked-document-name'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { formatPreviewByteLength } from './mobile-file-preview-response'
 import { PickerGateAbandonedError, withPickerGate } from './mobile-picker-gate'
@@ -347,5 +348,5 @@ export function saveMimeTypeFor(fileName: string): string {
 
 function errorText(error: unknown): string {
   const text = error instanceof Error ? error.message : String(error)
-  return text.trim().slice(0, 140) || 'no reason given'
+  return cutWholeCharacters(text.trim(), 140) || 'no reason given'
 }

@@ -52,10 +52,15 @@ vi.mock('expo-router', () => ({ useRouter: () => ({ back: vi.fn(), push: vi.fn()
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
+const HOST = vi.hoisted(() => ({
+  id: 'host-1',
+  name: 'Studio Mac',
+  endpoint: 'ws://192.168.1.20:6768'
+}))
+// The checks count and walk the catalog; the shell rows still read loadHosts().
 vi.mock('../transport/host-store', () => ({
-  loadHosts: async () => [
-    { id: 'host-1', name: 'Studio Mac', endpoint: 'ws://192.168.1.20:6768' }
-  ]
+  loadHosts: async () => [HOST],
+  loadHostCatalog: async () => [{ ...HOST, credentialStatus: 'ready', profile: HOST }]
 }))
 vi.mock('../transport/mobile-network-type', () => ({
   readMobileLocalAddress: async () => '192.168.1.40',

@@ -38,17 +38,20 @@ export function renderMarkdownCodeBlock({
           if (isMobileMermaidLanguage(block.language) && block.closed) {
             const occurrence = mermaidSourceOccurrences.get(block.text) ?? 0
             mermaidSourceOccurrences.set(block.text, occurrence + 1)
-            return (
-              <MermaidDiagram
-                key={`${block.text}:${occurrence}`}
-                source={block.text}
-                base={MERMAID_BASE}
-              />
+            const key = `${block.text}:${occurrence}`
+            return inQuote(
+              block,
+              styles,
+              key,
+              <MermaidDiagram key={key} source={block.text} base={MERMAID_BASE} />
             )
           }
           const code = mobileMarkdownCodeLines(block.text, block.language)
           const gutterWidth = gutterWidthForLines(code.lines.length)
-          return (
+          return inQuote(
+            block,
+            styles,
+            index,
             <View key={index} style={styles.codeBlock}>
               <MarkdownCodeHeader
                 language={block.language}
@@ -79,6 +82,26 @@ export function renderMarkdownCodeBlock({
             </View>
           )
 
+}
+
+/** A fence that came out of a quote, drawn inside the quote's bar, the bar
+ *  joining the one above when the quote carries on from there
+ *  (mobile-markdown-quote-blocks.ts). The bar takes the block's key, so a
+ *  finished diagram keeps the key it would have had outside a quote. */
+function inQuote(
+  block: Extract<MobileMarkdownBlock, { type: 'code' }>,
+  styles: MarkdownStyles,
+  key: string | number,
+  drawn: ReactNode
+): ReactNode {
+  if (!block.quoted) {
+    return drawn
+  }
+  return (
+    <View key={key} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
+      {drawn}
+    </View>
+  )
 }
 
 /** A fence's lines in the theme's code colours. A component of its own so it

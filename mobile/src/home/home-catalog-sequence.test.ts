@@ -36,6 +36,20 @@ describe('home catalog answer ordering', () => {
     expect(seq.drawingHosts()).toBe(true)
   })
 
+  it('lets a read fail as current only while nothing newer has drawn a list', () => {
+    const seq = createHomeCatalogSequence()
+    const lone = seq.start()
+    expect(seq.superseded(lone)).toBe(false)
+    const older = seq.start()
+    const newer = seq.start()
+    seq.accept(newer, 1)
+    expect(seq.superseded(older)).toBe(true)
+    const beforeRemoval = seq.start()
+    seq.localChange(0)
+    expect(seq.superseded(beforeRemoval)).toBe(true)
+    expect(seq.superseded(seq.start())).toBe(false)
+  })
+
   it('handles the degenerate sizes: one host and none', () => {
     const seq = createHomeCatalogSequence()
     seq.localChange(1)

@@ -16,6 +16,7 @@ import { consumeAgentHudBeacons, getAgentHudBeacon, hydrateAgentHudBeacons, rese
 import { agentMessagesOfBeacon, beaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { agentMessagePlacements, resetAgentMessageAnchorsForTests } from './mobile-native-chat-agent-message-rows'
 import { SUBAGENT_REQUEST_PROMPT } from './fixtures/claude-agent-message-read-image-2.1.283'
+import { promptHookBody } from './agent-hud-prompt-hook.test-support'
 
 vi.mock('expo-clipboard', () => ({
   hasImageAsync: vi.fn(async () => false),
@@ -243,7 +244,7 @@ describe('a subagent message the beacon carried, found long after it arrived', (
 
   it('is not drawn at the tail when the phone read it off the terminal hours before the chat opened', async () => {
     vi.setSystemTime(at('13:20:50.000'))
-    const text = encodeURIComponent(JSON.stringify(SUBAGENT_REQUEST_PROMPT).slice(1, -1))
+    const text = promptHookBody(SUBAGENT_REQUEST_PROMPT)
     consumeAgentHudBeacons('terminal-paper-review', `\u001b]7777;CUIHUD1 agent=claude hk=1 sid=${SESSION} up=48297:${text} at=${previousAnswer.id}\u0007`)
     const agentMessages = agentMessagesOfBeacon(getAgentHudBeacon('terminal-paper-review'), 'terminal-paper-review')
     expect(agentMessages.map((message) => message.id)).toEqual(['agent-message:48297'])
