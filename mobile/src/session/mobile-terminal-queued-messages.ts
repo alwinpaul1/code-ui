@@ -3,6 +3,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
   footerWindow,
+  isLegacyQueueSeparator,
   queueBlockRows,
   queueFooterIndex,
   SELECTED_HINT,
@@ -68,7 +69,7 @@ export function claudeQueueViewFromScreen(
     if (!seenEntry && /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
       continue
     }
-    if (/^[\s─━—-]*$/.test(line)) {
+    if (isLegacyQueueSeparator(line)) {
       if (seenEntry) {
         break
       }
@@ -258,7 +259,6 @@ export const QUEUE_ROW_MATCH_FLOOR = 24
  *  ends in an ellipsis stood as a bubble AND a queue row until the agent took
  *  it, on Claude and Codex alike (review, 2026-09-30). */
 export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
-  const dense = (text: string) => asPaintedPrompt(text).replace(/\s+/g, '')
   const want = dense(sent)
   const whole = dense(drawn)
   if (whole.length === 0 || want.length === 0) {
@@ -279,6 +279,52 @@ export function queueRowIsPendingSend(sent: string, drawn: string): boolean {
   // short pending claim a longer message's row: its own bubble vanished while
   // it was still queued, and the longer one showed twice (2026-09-14 review).
   return row.length >= QUEUE_ROW_MATCH_FLOOR && want.startsWith(row)
+}
+
+/** The printing characters of a row or a send, as the agent paints it. */
+function dense(text: string): string {
+  return asPaintedPrompt(text).replace(/\s+/g, '')
+}
+
+/**
+ * Which pending send each row of the box is, by the row's index. A row that
+ * is a send's whole words is that send, before any row is paired by a prefix;
+ * then each row left goes to the longest send left that it is a shortened
+ * form of (queueRowIsPendingSend). A send is claimed by one row at most, and a
+ * null row (a photo row, paired by the caller) is skipped.
+ *
+ * Exact rows first, because a row that is one send's words is also a prefix
+ * of any longer send that starts with them. Paired by the longest send alone,
+ * "please continue with the next step" drew the row of that send with the
+ * text of "… and run tests", left the longer send's own row the screen's
+ * reading, and kept the shorter send as a bubble beside the box (2026-09-30).
+ */
+function sendsForRows<T extends { text: string }>(rows: readonly (string | null)[], sends: readonly T[]): Map<number, T> {
+  const claimed = new Map<number, T>()
+  const open = new Set(sends)
+  for (const [index, row] of rows.entries()) {
+    const send = row === null ? undefined : [...open].find((item) => dense(item.text) === dense(row))
+    if (send !== undefined) {
+      claimed.set(index, send)
+      open.delete(send)
+    }
+  }
+  for (const [index, row] of rows.entries()) {
+    if (row === null || claimed.has(index)) {
+      continue
+    }
+    let best: T | null = null
+    for (const item of open) {
+      if (queueRowIsPendingSend(item.text, row) && (best === null || item.text.length > best.text.length)) {
+        best = item
+      }
+    }
+    if (best !== null) {
+      claimed.set(index, best)
+      open.delete(best)
+    }
+  }
+  return claimed
 }
 
 /** Whether a screen READING is nothing but landed rows the parser joined.
@@ -326,24 +372,12 @@ export function pendingOutsideVisibleQueue<T extends { text: string }>(
   pending: readonly T[],
   queue: readonly string[]
 ): T[] {
-  const remaining = [...queue]
-  return pending.filter((item) => {
-    // Longest match wins. With two pendings where one starts the other, taking
-    // the first match let the shorter one consume the longer one's row.
-    let best = -1
-    let bestLength = -1
-    for (const [index, row] of remaining.entries()) {
-      if (row !== null && queueRowIsPendingSend(item.text, row) && row.length > bestLength) {
-        best = index
-        bestLength = row.length
-      }
-    }
-    if (best === -1) {
-      return true
-    }
-    remaining.splice(best, 1)
-    return false
-  })
+  // A row that is a send's whole words is that send, and a row the box cut
+  // short goes to the longest send it starts: with two pendings where one
+  // starts the other, taking the first match let the shorter one consume the
+  // longer one's row (sendsForRows).
+  const claimed = new Set(sendsForRows(queue, pending).values())
+  return pending.filter((item) => !claimed.has(item))
 }
 
 /** A row that is the phone's own send shows the text the phone SENT, not the
@@ -381,25 +415,13 @@ export function projectMobileChatQueue<T extends { text: string; images?: string
     matched.add(item)
     return { text: item.text, images: item.images!, caption: text }
   })
-  // Plain rows: the longest own send a row is (queueRowIsPendingSend) takes
-  // the row's place, as typed; the same rule pendingOutsideVisibleQueue hides
-  // the pending bubble by, so the two never disagree about which row is whose.
-  const remaining = pending.filter((item) => !matched.has(item))
-  for (let index = 0; index < projected.length; index += 1) {
-    const row = projected[index]
-    if (typeof row !== 'string') {
-      continue
-    }
-    let best: T | null = null
-    for (const item of remaining) {
-      if (!matched.has(item) && queueRowIsPendingSend(item.text, row) && (best === null || item.text.length > best.text.length)) {
-        best = item
-      }
-    }
-    if (best !== null) {
-      matched.add(best)
-      projected[index] = { text: best.text, images: best.images ?? [], caption: row }
-    }
+  // Plain rows: the own send a row is (sendsForRows) takes the row's place,
+  // as typed; the same pairing pendingOutsideVisibleQueue hides the pending
+  // bubble by, so the two never disagree about which row is whose.
+  const rows = projected.map((row) => (typeof row === 'string' ? row : null))
+  for (const [index, send] of sendsForRows(rows, pending.filter((item) => !matched.has(item)))) {
+    matched.add(send)
+    projected[index] = { text: send.text, images: send.images ?? [], caption: rows[index]! }
   }
   return {
     pending: pending.filter((item) => !matched.has(item)),

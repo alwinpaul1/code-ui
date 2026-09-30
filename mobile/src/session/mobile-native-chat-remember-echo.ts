@@ -41,13 +41,13 @@ export function rememberEchoInPending(
   if (current.some((item) => item.id === id)) {
     return previous
   }
-  // A reading that only extends a complete one already stored is the
-  // screen's own rows glued on; and a stored reading that this one beats
+  // A reading that only extends a complete one already stored at the same
+  // row is the screen's own rows glued on; and a stored reading that this one beats
   // (a `…` stub, or a glued variant) gives way to it.
   // …and a phone send of its own beats a witnessed reading that glues rows
   // onto it, whichever came first: this is the send-first order, and
   // acceptOwnSendInPending below is the witness-first one.
-  const reading = { id, text, witnessedAt: now }
+  const reading = { id, text, witnessedAt: now, baselineTailMessageId: anchorId }
   if (current.some((item) => preferredStoredReading(item, reading) === 'a')) {
     return previous
   }
@@ -201,8 +201,14 @@ function isWitnessed(id: string): boolean {
 }
 
 /** A copy the store holds or is about to: a witness is stamped with when
- *  the phone saw it. */
-type StoredReading = { id: string; text: string; witnessedAt?: number; sentAt?: number }
+ *  the phone saw it, and anchored at the row that was last when it did. */
+type StoredReading = {
+  id: string
+  text: string
+  witnessedAt?: number
+  sentAt?: number
+  baselineTailMessageId?: string | null
+}
 
 /** Stands for a phone send compared by its words alone. */
 const SEND_ID = 'pending-send'
@@ -221,6 +227,17 @@ const SEND_ID = 'pending-send'
  * 2.1.284). The same words are still one message, whoever holds them, and so
  * is a pair with a screen reading in it, or one whose shorter copy fills the
  * tab status's field, which Orca cuts there.
+ *
+ * Except two screen readings anchored at different rows: the box first listed
+ * them with a row written between, so the longer is a message of its own,
+ * "check the build" and then "check the build again", queued after the agent
+ * took the first (2026-09-30). The rule that took it for the first with the
+ * screen's rows glued on came from the scrollback reader; the queue reader
+ * stops at the transcript's tool rows (queueBlockRows). Two readings at one
+ * row are still one message, the shorter kept, as the glued readings in
+ * mobile-native-chat-remember-echo.test.ts are. What it costs: a box that
+ * reads one message cut at a word boundary with no `…`, and whole only after
+ * a row lands, keeps both readings.
  */
 function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' | null {
   const verdict = preferredWitnessReading(a.text, b.text) ?? cutStatusCopyOf(a, b)
@@ -231,7 +248,18 @@ function preferredStoredReading(a: StoredReading, b: StoredReading): 'a' | 'b' |
   const goesOn = storedKey(dropped.text).length > storedKey(kept.text).length && !storedKey(kept.text).endsWith('…')
   const whole = !statusCopyMayBeCut(kept.text)
   const asSent = !dropped.id.startsWith('absorbed-') && !kept.id.startsWith('absorbed-')
-  return goesOn && whole && asSent ? null : verdict
+  return goesOn && ((whole && asSent) || listedAtAnotherRow(kept, dropped)) ? null : verdict
+}
+
+/** Two queue-box readings (`absorbed-`) anchored at two different rows. */
+function listedAtAnotherRow(a: StoredReading, b: StoredReading): boolean {
+  return (
+    a.id.startsWith('absorbed-') &&
+    b.id.startsWith('absorbed-') &&
+    typeof a.baselineTailMessageId === 'string' &&
+    typeof b.baselineTailMessageId === 'string' &&
+    a.baselineTailMessageId !== b.baselineTailMessageId
+  )
 }
 
 /**

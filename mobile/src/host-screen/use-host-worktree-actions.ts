@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../session/floating-workspace'
-import { savePinnedIds } from '../storage/preferences'
+import { savePinToggle } from '../storage/pinned-worktree-toggle'
 import type { useForgetHostClient } from '../transport/client-context'
 import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { isPageHostRemovalUnavailable } from '../transport/page-host-removal-refusal'
@@ -86,8 +86,10 @@ export function useHostWorktreeActions(args: {
         } else {
           next.delete(worktreeId)
         }
+        // Over the stored pins, not in place of them: the pins shown may have
+        // started from a read storage refused (pinned-worktree-toggle.ts).
         if (hostId) {
-          void savePinnedIds(hostId, next)
+          void savePinToggle(hostId, next, worktreeId, pinned)
         }
         return next
       })
