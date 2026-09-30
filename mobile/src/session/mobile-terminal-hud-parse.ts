@@ -4,6 +4,12 @@ import {
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
+import {
+  CODEX_STATUS_BOX_ROW,
+  claudeRowsUnderInputBox,
+  codexFooterFigureRows,
+  isClaudeConversationRow
+} from './mobile-terminal-hud-context-rows'
 
 // The footer's mode reader lives beside this parser; its callers import both from here.
 export { readTerminalPermissionMode, type TerminalPermissionMode }
@@ -108,22 +114,27 @@ const CODEX_STATUS_CONTEXT =
 // status-line item, painted permanently when launched with tui.status_line).
 const CODEX_FOOTER_CONTEXT = /(?:^|\s)(?:(\d{1,3})%\s+context\s+left|Context\s+(\d{1,3})%\s+left)(?:\s|$|\s·)/
 
+/** Read only where Codex paints the figure itself: the footer figure off its footer rows, and the
+ *  `/status` box off a row whose frame is intact. A whole-screen scan read an answer's "It says 62%
+ *  context left" as a 38% ring (mobile-terminal-hud-context-rows.ts). */
 export function parseCodexStatusContext(lines: readonly string[]): TerminalHudContextWindow | null {
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index] ?? ''
-    const boxed = CODEX_STATUS_CONTEXT.exec(line)
-    if (boxed) {
-      const left = Number(boxed[1])
-      if (Number.isFinite(left) && left >= 0 && left <= 100) {
-        return { usedPercent: 100 - left, usedLabel: boxed[2] ?? null, windowLabel: boxed[3] ?? null }
-      }
-    }
+  for (const line of codexFooterFigureRows(lines, isCodexFooterRow)) {
     const footer = CODEX_FOOTER_CONTEXT.exec(line)
     if (footer) {
       const left = Number(footer[1] ?? footer[2])
       if (Number.isFinite(left) && left >= 0 && left <= 100) {
         // No token figures on this painting: percent only, labels honestly null.
         return { usedPercent: 100 - left, usedLabel: null, windowLabel: null }
+      }
+    }
+  }
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index] ?? ''
+    const boxed = CODEX_STATUS_BOX_ROW.test(line) ? CODEX_STATUS_CONTEXT.exec(line) : null
+    if (boxed) {
+      const left = Number(boxed[1])
+      if (Number.isFinite(left) && left >= 0 && left <= 100) {
+        return { usedPercent: 100 - left, usedLabel: boxed[2] ?? null, windowLabel: boxed[3] ?? null }
       }
     }
   }
@@ -302,12 +313,14 @@ const CODEX_EFFORT_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh'
 const CODEX_FOOTER =
   /^\s*(\S+?)(?:\s+(minimal|low|medium|high|xhigh|max|ultra|default))?\s+·\s+(?:[~/]|Context\s+\d{1,3}%\s+left)/i
 
+function isCodexFooterRow(line: string): boolean {
+  const match = CODEX_FOOTER.exec(line)
+  return match !== null && looksLikeProviderModelId(match[1]!)
+}
+
 /** Whether the Codex input footer ("<model> <effort> · <cwd>") is on screen. */
 export function hasCodexFooter(lines: readonly string[]): boolean {
-  return lines.slice(-4).some((line) => {
-    const match = CODEX_FOOTER.exec(line)
-    return match !== null && looksLikeProviderModelId(match[1]!)
-  })
+  return lines.slice(-4).some(isCodexFooterRow)
 }
 
 function looksLikeProviderModelId(token: string): boolean {
@@ -402,10 +415,19 @@ export function parseTerminalHudObservation(
   // Codex's Plan hint is not Claude Code's: taken for it, a Codex footer with
   // no known agent lost its model, effort and Plan pill, and its "100% context
   // left" read as 100% used (review, 2026-09-30).
+  // Only a row under the input box may state a figure in a status-line shape; above it, and on any
+  // answer row, an answer's "about 45% context" set the ring (review, 2026-09-30), so there only
+  // Claude Code's own warning is read, and never off the conversation.
   const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line.replace(CODEX_PLAN_HINT, '')))
   if (hinted || hasClaudeModeFooter(lines)) {
+    const underBox = claudeRowsUnderInputBox(lines)
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
-      const context = parseTerminalHudContextWindow(lines[index] ?? '', { ownWarningOnly: !hinted })
+      const line = lines[index] ?? ''
+      const under = underBox !== -1 && index >= underBox
+      if (!under && isClaudeConversationRow(line, underBox !== -1)) {
+        continue
+      }
+      const context = parseTerminalHudContextWindow(line, { ownWarningOnly: !hinted || !under })
       if (context) {
         return claudeFooterObservation(lines, context)
       }
