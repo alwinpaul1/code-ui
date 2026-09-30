@@ -63,13 +63,37 @@ export function previewErrorFromRefusal(error: RpcFailure['error']): MobileFileP
   return previewError(error.message || error.code)
 }
 
+const BINARY_PREVIEW_UNAVAILABLE = 'Binary preview unavailable'
+const FILE_TOO_LARGE = 'File too large for mobile preview'
+const FILE_NOT_FOUND = 'File not found'
+
+/** The copy `previewError` gives the refusals that are the FILE's own answer, and nothing else. */
+const FILE_OWN_ERRORS: ReadonlySet<string> = new Set([
+  BINARY_PREVIEW_UNAVAILABLE,
+  FILE_TOO_LARGE,
+  FILE_NOT_FOUND
+])
+
+/**
+ * Whether an error is the file's own answer: it is not there, too large for the phone, or binary.
+ * A caller that keeps a read (the markdown figure resolver) keeps these and nothing else that
+ * failed. A positive list on purpose: a refusal about the link or the runtime, a stale grant, and
+ * the generic 'Unable to load preview: ...' for a cause this build has not seen are all outside it,
+ * so a new wording costs one more read, where the rule this replaced (four recoverable phrases)
+ * kept "Remote Orca runtime is not connected." as the file's answer (review 2026-09-30, round 3).
+ * `reconnect` still drives the preview screen and is untouched by this.
+ */
+export function isFileOwnPreviewError(result: MobileFilePreviewResult): boolean {
+  return result.status === 'error' && !result.reconnect && FILE_OWN_ERRORS.has(result.message)
+}
+
 export function previewError(message: string): MobileFilePreviewResult {
   const normalized = message.toLowerCase()
   if (normalized === 'binary_file' || normalized.includes('binary_file')) {
-    return { status: 'error', message: 'Binary preview unavailable', reconnect: false }
+    return { status: 'error', message: BINARY_PREVIEW_UNAVAILABLE, reconnect: false }
   }
   if (normalized === 'file_too_large' || normalized.includes('file_too_large')) {
-    return { status: 'error', message: 'File too large for mobile preview', reconnect: false }
+    return { status: 'error', message: FILE_TOO_LARGE, reconnect: false }
   }
   if (isTerminalArtifactGrantError(normalized)) {
     return { status: 'error', message: 'Reload preview before saving', reconnect: false }
@@ -88,7 +112,7 @@ export function previewError(message: string): MobileFilePreviewResult {
     normalized.includes('not found') ||
     normalized.includes('does not exist')
   ) {
-    return { status: 'error', message: 'File not found', reconnect: false }
+    return { status: 'error', message: FILE_NOT_FOUND, reconnect: false }
   }
   // Why: the raw text is the only clue when a new read path fails on a host
   // this build was not tested against; keep it visible instead of a blank label.
