@@ -4,6 +4,7 @@ import type { PickerOption } from '../components/PickerModal'
 import { useTheme } from '../theme/theme-context'
 import {
   TERMINAL_AUTO_RESTORE_FIT_UNREADABLE,
+  type TerminalAutoRestoreFitRowAction,
   type TerminalAutoRestoreFitValue
 } from './terminal-auto-restore-fit-state'
 import type { terminalSettingsScreenStyles } from './terminal-settings-screen-styles'
@@ -48,13 +49,19 @@ export function restoreValueFromMs(ms: number | null): RestoreValue {
   return closest ? closest.value : 'indefinite'
 }
 
-/** '…' before the first read, "Couldn't read" when it failed: neither is the default. */
-function autoRestoreSummary(value: TerminalAutoRestoreFitValue | undefined): string {
+/**
+ * '…' before a read answers (the first one, or a retry), "Couldn't read" when it failed: neither is
+ * the default. A failed read the row can retry says so, or the tap that fixes it is invisible.
+ */
+function autoRestoreSummary(
+  value: TerminalAutoRestoreFitValue | undefined,
+  action: TerminalAutoRestoreFitRowAction
+): string {
   if (value === undefined) {
     return '…'
   }
   if (value === TERMINAL_AUTO_RESTORE_FIT_UNREADABLE) {
-    return "Couldn't read"
+    return action === 'retry' ? "Couldn't read. Tap to retry." : "Couldn't read"
   }
   if (value === null) {
     return AUTO_RESTORE_FIT_OPTIONS[0]!.label
@@ -64,13 +71,14 @@ function autoRestoreSummary(value: TerminalAutoRestoreFitValue | undefined): str
 }
 
 export function TerminalAutoRestoreFitRow({
-  disabled,
+  action,
   hostName,
   value,
   onPress,
   styles
 }: {
-  disabled: boolean
+  /** From terminalAutoRestoreFitRowAction; `null` disables the row. */
+  action: TerminalAutoRestoreFitRowAction
   hostName: string
   value: TerminalAutoRestoreFitValue | undefined
   onPress: () => void
@@ -81,12 +89,12 @@ export function TerminalAutoRestoreFitRow({
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={action === null}
     >
       <Smartphone size={16} color={colors.textSecondary} />
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{hostName}</Text>
-        <Text style={styles.rowSublabel}>{autoRestoreSummary(value)}</Text>
+        <Text style={styles.rowSublabel}>{autoRestoreSummary(value, action)}</Text>
       </View>
       <ChevronRight size={16} color={colors.textMuted} />
     </Pressable>

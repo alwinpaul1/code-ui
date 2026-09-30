@@ -20,7 +20,9 @@ import {
   claimTerminalAutoRestoreFitRead,
   isKnownTerminalAutoRestoreFit,
   readTerminalAutoRestoreFitReply,
+  releaseTerminalAutoRestoreFitRead,
   setTerminalAutoRestoreFitMsForHost,
+  terminalAutoRestoreFitRowAction,
   type TerminalAutoRestoreFitByHost,
   type TerminalAutoRestoreFitReadLedger,
   type TerminalAutoRestoreFitValue
@@ -70,8 +72,8 @@ export default function TerminalSettingsScreen() {
   const { hosts, loaded: hostsLoaded } = loadedHosts
   const hostIds = useMemo(() => hosts.map((h) => h.id), [hosts])
   const { clients: hostClients } = useFocusedSettingsHostClients(hostIds)
-  const hostClientsById = useMemo(
-    () => new Map(hostClients.map((entry) => [entry.hostId, entry.client])),
+  const hostEntriesById = useMemo(
+    () => new Map(hostClients.map((entry) => [entry.hostId, entry])),
     [hostClients]
   )
 
@@ -141,8 +143,10 @@ export default function TerminalSettingsScreen() {
 
   // Why: `hostClients` changes on every connection-state tick of every desktop. Each desktop is
   // read once per connection (claimTerminalAutoRestoreFitRead), and only while connected: a
-  // failed read says "Couldn't read" and waits for the next connection instead of spinning, or
-  // being drawn as the default. The answer is { ms } inside the reply envelope, not on it.
+  // failed read says "Couldn't read" and waits for the next connection, or a tap on its row
+  // (retryHostRead), instead of spinning, or being drawn as the default. The answer is { ms }
+  // inside the reply envelope, not on it.
+  const [retryTaps, setRetryTaps] = useState(0)
   useEffect(() => {
     for (const { hostId, client, state } of hostClients) {
       if (
@@ -157,10 +161,19 @@ export default function TerminalSettingsScreen() {
         () => settle(TERMINAL_AUTO_RESTORE_FIT_UNREADABLE)
       )
     }
-  }, [beginHostRead, hostClients])
+  }, [beginHostRead, hostClients, retryTaps])
+
+  // The connection is fine and the read failed anyway: the tap frees this desktop's claim, and the
+  // effect above reads it once more on the same connection. Two taps before a redraw still claim
+  // once; after one the row reads '…' and is disabled until the answer lands.
+  const retryHostRead = useCallback((hostId: string) => {
+    releaseTerminalAutoRestoreFitRead(readLedgerRef.current, hostId)
+    setHostMs((prev) => setTerminalAutoRestoreFitMsForHost(prev, hostId, undefined))
+    setRetryTaps((taps) => taps + 1)
+  }, [])
 
   async function selectValue(hostId: string, value: RestoreValue) {
-    const client = hostClientsById.get(hostId) ?? null
+    const client = hostEntriesById.get(hostId)?.client ?? null
     const opt = AUTO_RESTORE_FIT_OPTIONS.find((o) => o.value === value)
     if (!client || !opt) {
       return
@@ -180,7 +193,7 @@ export default function TerminalSettingsScreen() {
           await client.sendRequest('terminal.getAutoRestoreFit')
         )
       } catch {
-        // Still unknown: the row says "Couldn't read", never the optimistic pick.
+        // Still unknown: the row says "Couldn't read" and offers a retry, never the optimistic pick.
       }
     }
     settle(confirmed)
@@ -247,20 +260,24 @@ export default function TerminalSettingsScreen() {
           </View>
         ) : (
           <View style={[styles.section, styles.sectionTopGap]}>
-            {hosts.map((host, idx) => (
-              <View key={host.id}>
-                {idx > 0 && <View style={styles.separator} />}
-                <TerminalAutoRestoreFitRow
-                  disabled={
-                    !hostClientsById.has(host.id) || !isKnownTerminalAutoRestoreFit(hostMs[host.id])
-                  }
-                  hostName={host.name}
-                  value={hostMs[host.id]}
-                  onPress={() => setPickerHostId(host.id)}
-                  styles={styles}
-                />
-              </View>
-            ))}
+            {hosts.map((host, idx) => {
+              const value = hostMs[host.id]
+              const action = terminalAutoRestoreFitRowAction(value, hostEntriesById.get(host.id))
+              return (
+                <View key={host.id}>
+                  {idx > 0 && <View style={styles.separator} />}
+                  <TerminalAutoRestoreFitRow
+                    action={action}
+                    hostName={host.name}
+                    value={value}
+                    onPress={() =>
+                      action === 'retry' ? retryHostRead(host.id) : setPickerHostId(host.id)
+                    }
+                    styles={styles}
+                  />
+                </View>
+              )
+            })}
           </View>
         )}
 

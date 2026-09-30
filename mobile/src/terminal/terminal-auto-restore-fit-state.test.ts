@@ -4,7 +4,9 @@ import {
   claimTerminalAutoRestoreFitRead,
   isKnownTerminalAutoRestoreFit,
   readTerminalAutoRestoreFitReply,
+  releaseTerminalAutoRestoreFitRead,
   setTerminalAutoRestoreFitMsForHost,
+  terminalAutoRestoreFitRowAction,
   type TerminalAutoRestoreFitByHost,
   type TerminalAutoRestoreFitReadLedger
 } from './terminal-auto-restore-fit-state'
@@ -80,5 +82,51 @@ describe('terminal auto restore fit state', () => {
     expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', null)).toBe(true)
     expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', null)).toBe(false)
     expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', 1000)).toBe(true)
+  })
+
+  it('reads a released desktop once more on the same connection, and only that desktop', () => {
+    const ledger: TerminalAutoRestoreFitReadLedger = new Map()
+    claimTerminalAutoRestoreFitRead(ledger, 'hostA', 1000)
+    claimTerminalAutoRestoreFitRead(ledger, 'hostB', 1000)
+
+    releaseTerminalAutoRestoreFitRead(ledger, 'hostA')
+    // A second release before the read (two taps, one redraw) still buys one read.
+    releaseTerminalAutoRestoreFitRead(ledger, 'hostA')
+    expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', 1000)).toBe(true)
+    expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', 1000)).toBe(false)
+    expect(claimTerminalAutoRestoreFitRead(ledger, 'hostB', 1000)).toBe(false)
+  })
+
+  it('releases nothing for a desktop it never read', () => {
+    const ledger: TerminalAutoRestoreFitReadLedger = new Map()
+
+    releaseTerminalAutoRestoreFitRead(ledger, 'hostA')
+    expect(ledger.size).toBe(0)
+    expect(claimTerminalAutoRestoreFitRead(ledger, 'hostA', null)).toBe(true)
+  })
+
+  it('opens the picker on an answered value and retries a failed read only over a live connection', () => {
+    const up = { state: 'connected' }
+    const down = { state: 'reconnecting' }
+
+    expect(terminalAutoRestoreFitRowAction(60_000, up)).toBe('open')
+    expect(terminalAutoRestoreFitRowAction(null, up)).toBe('open')
+    expect(terminalAutoRestoreFitRowAction(null, down)).toBe('open')
+    expect(terminalAutoRestoreFitRowAction(UNREADABLE, up)).toBe('retry')
+    // Nothing to read from, or a read already running: the row is disabled.
+    expect(terminalAutoRestoreFitRowAction(UNREADABLE, down)).toBeNull()
+    expect(terminalAutoRestoreFitRowAction(undefined, up)).toBeNull()
+    expect(terminalAutoRestoreFitRowAction(60_000, undefined)).toBeNull()
+    expect(terminalAutoRestoreFitRowAction(UNREADABLE, undefined)).toBeNull()
+  })
+
+  it('puts a desktop back to "not read yet" for a retry without touching the others', () => {
+    const current: TerminalAutoRestoreFitByHost = { hostA: UNREADABLE, hostB: 60_000 }
+
+    expect(setTerminalAutoRestoreFitMsForHost(current, 'hostA', undefined)).toEqual({
+      hostA: undefined,
+      hostB: 60_000
+    })
+    expect(setTerminalAutoRestoreFitMsForHost({}, 'hostA', undefined)).toEqual({})
   })
 })
