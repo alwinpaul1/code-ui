@@ -74,6 +74,8 @@ describe.each([
   // 0m" (review, 2026-09-30).
   const session = (resetsAt: number): TerminalHudContextWindow => ({
     usedPercent: 40,
+    usedLabel: null,
+    windowLabel: null,
     limits: [{ name: 'Session', usedPercent: 50, windowMinutes: 300, resetsAt }]
   })
 
@@ -126,18 +128,25 @@ describe.each([
 ] as ['light' | 'dark', ThemeColors][])('the usage rows in a %s session', (scheme, palette) => {
   const rateLimits = (weekly: number, fable: number | null): ProviderRateLimits => ({
     provider: 'claude',
-    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_788_960_000_000 },
-    weekly: { usedPercent: weekly, windowMinutes: 10_080, resetsAt: 1_789_300_000_000 },
+    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_788_960_000_000, resetDescription: null },
+    weekly: {
+      usedPercent: weekly,
+      windowMinutes: 10_080,
+      resetsAt: 1_789_300_000_000,
+      resetDescription: null
+    },
     fableWeekly:
       fable === null
         ? null
-        : { usedPercent: fable, windowMinutes: 10_080, resetsAt: 1_789_300_000_000 },
+        : { usedPercent: fable, windowMinutes: 10_080, resetsAt: 1_789_300_000_000, resetDescription: null },
     updatedAt: 1_788_950_000_000,
     error: null,
     status: 'ok'
   })
   const withLimits = (limits: TerminalHudContextWindow['limits']): TerminalHudContextWindow => ({
     usedPercent: 26,
+    usedLabel: null,
+    windowLabel: null,
     limits
   })
   /** Each drawn usage row as "name percent", in order. */

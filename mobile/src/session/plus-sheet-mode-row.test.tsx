@@ -98,19 +98,19 @@ async function modeRow(scheme: 'light' | 'dark', props: Partial<ComposerProps>):
     )
   })
   const plus = renderer!.root.find(
-    (node) => node.type === 'Pressable' && node.props.accessibilityLabel === 'Add to chat'
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Add to chat'
   )
   await act(async () => (plus.props.onPress as () => void)())
-  const drawer = renderer!.root.find((node) => node.type === 'BottomDrawer')
+  const drawer = renderer!.root.find((node) => String(node.type) === 'BottomDrawer')
   const rows = drawer.findAll(
-    (node) => node.type === 'Pressable' && node.findAll((child) => child.type === 'ChevronRight').length > 0
+    (node) => String(node.type) === 'Pressable' && node.findAll((child) => String(child.type) === 'ChevronRight').length > 0
   )
   expect(rows).toHaveLength(1)
   return rows[0]!
 }
 
 function titleAndCaption(row: ReactTestInstance): [ReactTestInstance, ReactTestInstance] {
-  const [title, caption] = row.findAll((node) => node.type === 'Text')
+  const [title, caption] = row.findAll((node) => String(node.type) === 'Text')
   return [title!, caption!]
 }
 

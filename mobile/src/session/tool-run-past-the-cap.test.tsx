@@ -79,7 +79,9 @@ afterEach(() => {
 function render(blocks: NativeChatBlock[], scheme: 'light' | 'dark'): ReactTestInstance {
   act(() => {
     renderer = create(
-      createElement(ThemeProvider, { initialPreference: scheme }, createElement(Harness, { blocks }))
+      <ThemeProvider initialPreference={scheme}>
+        <Harness blocks={blocks} />
+      </ThemeProvider>
     )
   })
   return renderer!.root
