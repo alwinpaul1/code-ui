@@ -26,13 +26,13 @@ export function inlineMarkdown(node: Node | null | undefined): string {
     return '\n'
   }
   if (tag === 'strong' || tag === 'b') {
-    return `**${inlineChildren(node)}**`
+    return markedMarkdown(node, '**')
   }
   if (tag === 'em' || tag === 'i') {
-    return `*${inlineChildren(node)}*`
+    return markedMarkdown(node, '*')
   }
   if (tag === 's' || tag === 'del' || tag === 'strike') {
-    return `~~${inlineChildren(node)}~~`
+    return markedMarkdown(node, '~~')
   }
   if (tag === 'code' && node.parentElement && node.parentElement.tagName.toLowerCase() !== 'pre') {
     return `\`${textContent(node)}\``
@@ -49,6 +49,25 @@ export function inlineMarkdown(node: Node | null | undefined): string {
     return ''
   }
   return inlineChildren(node)
+}
+
+/**
+ * Bold, italic or strike as its marks around its words, with the whitespace at its edges outside
+ * the marks, and nothing at all for a mark with no words.
+ *
+ * A selection the user marks often takes a space in, and `**word **` or `* word*` is no emphasis
+ * in CommonMark: the desktop, the chat and the phone's own reload showed the stars (review,
+ * 2026-09-30). A mark the engine left empty saved as `****`, which alone on a line is a rule.
+ */
+function markedMarkdown(node: Element, marks: string): string {
+  const inner = inlineChildren(node)
+  const words = inner.trim()
+  if (!words) {
+    return inner
+  }
+  const lead = inner.slice(0, inner.length - inner.trimStart().length)
+  const trail = inner.slice(inner.trimEnd().length)
+  return `${lead}${marks}${words}${marks}${trail}`
 }
 
 /**
