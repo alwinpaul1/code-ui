@@ -7,7 +7,7 @@ import {
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern
 } from './markdown-inline-matcher'
-import { isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { afterRefusedUnderscoreOpener, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import type { MarkdownStyles } from './mobile-markdown-styles'
@@ -36,7 +36,7 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
   while ((match = pattern.exec())) {
     const token = match[0]
     if (token.startsWith('_') && isIntrawordUnderscoreToken(label, match.index, token)) {
-      pattern.lastIndex = match.index + 1
+      pattern.lastIndex = afterRefusedUnderscoreOpener(label, match.index)
       continue
     }
     if (match.index > pendingStart) {

@@ -1,7 +1,7 @@
 import { createMarkdownCodeSpanFinder } from './markdown-code-spans'
 import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
-import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
+import { EMAIL_AUTOLINK_SOURCE, emphasisSource } from './markdown-inline-token-rules'
 
 export type MarkdownInlineMatch = {
   0: string
@@ -26,11 +26,13 @@ export type MarkdownInlineMatch = {
  *  is bold around `*x*`, and `**a *b* c**` bold around `*b*`. The renderer
  *  reads a bold token's inside again, so the italic draws by itself. A bold
  *  span that could hold no star drew `***x***` as `*`, bold x, `*`, and put
- *  the stars on the clipboard too (review, 2026-09-30). An inner italic must
- *  start on a character that is not a space, so `Name: *** Date: ***` and
- *  `___ Date: ___`, blanks to fill in, stay as they were. Every alternative
- *  inside the group starts on a different character, so the pattern stays
- *  linear.
+ *  the stars on the clipboard too (review, 2026-09-30).
+ *
+ *  Every emphasis, and every span inside one, starts and ends on a character
+ *  that is not a space (emphasisSource in markdown-inline-token-rules.ts has
+ *  the grammar and why it stays linear). So prose maths, `x ** 2 + y ** 2`
+ *  and `2 * 3 * 4`, and blanks to fill in, `Name: *** Date: ***` and
+ *  `___ Date: ___`, are text.
  *
  *  An italic span may hold whole bold spans the same way, on one line:
  *  `*a **b** c*` is italic around `**b**`, and `***x** y*` italic around
@@ -54,8 +56,8 @@ export function markdownInlineTokenPattern(): RegExp {
 
 const INLINE_TOKEN_SOURCE = [
   /(~~[^~]+~~)/.source,
-  /(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__)/.source,
-  /(\*(?:[^*\n]|\*\*[^*\s][^*\n]*\*\*)+\*|_(?:[^_\n]|__[^_\s][^_\n]*__)+_)/.source,
+  `(${emphasisSource('\\*', 2, true)}|${emphasisSource('_', 2, true)})`,
+  `(${emphasisSource('\\*', 1, false)}|${emphasisSource('_', 1, false)})`,
   `(${/<https?:\/\/[^\s<>]+>|<mailto:[^\s<>]+>/.source}|<${EMAIL_AUTOLINK_SOURCE}>|${/https?:\/\/[^\s<>]+/.source})`
 ].join('|')
 

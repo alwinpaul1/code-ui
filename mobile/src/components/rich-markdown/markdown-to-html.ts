@@ -1,7 +1,7 @@
 import { escapeAttr, escapeHtml } from './markdown-escaping'
 import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
-import { parseListTree } from './markdown-list-parse'
+import { isThematicBreak, parseListTree } from './markdown-list-parse'
 import { closesFence, openingFence } from './markdown-code-fence'
 import { isTableSeparator, splitTableRow } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
@@ -9,7 +9,7 @@ import { reflowLines } from './markdown-reflow'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
-  return /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+|\s*(-{3,}|\*{3,}|_{3,})\s*$)/.test(line)
+  return isThematicBreak(line) || /^(```|#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
 }
 
 /**
@@ -45,7 +45,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       )
       continue
     }
-    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) {
+    if (isThematicBreak(line)) {
       html.push('<hr />')
       index += 1
       continue

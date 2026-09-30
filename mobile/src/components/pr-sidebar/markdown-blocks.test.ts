@@ -91,6 +91,24 @@ describe('parseMarkdownBlocks', () => {
     }
   })
 
+  // Swept 2026-09-30 from the rich editor's spaced rule: under a list item,
+  // the list rule still took `* * *` for the next bullet, reading "* *", and an
+  // indented `  - - -` too. A rule wins over a list item where a line could be
+  // either (CommonMark 4.1), so it ends the list.
+  it('ends a list at a spaced rule under its items', () => {
+    for (const rule of ['* * *', '- - -', '  * * *', '***']) {
+      expect(parseMarkdownBlocks(`- a\n${rule}\n- b`), rule).toEqual([
+        { kind: 'list', ordered: false, items: ['a'] },
+        { kind: 'hr' },
+        { kind: 'list', ordered: false, items: ['b'] }
+      ])
+    }
+    expect(parseMarkdownBlocks('1. a\n* * *')).toEqual([
+      { kind: 'list', ordered: true, items: ['a'] },
+      { kind: 'hr' }
+    ])
+  })
+
   it('keeps a bullet that holds marks, and a mixed or deep run, as it was', () => {
     expect(parseMarkdownBlocks('- - item')).toEqual([{ kind: 'list', ordered: false, items: ['- item'] }])
     expect(parseMarkdownBlocks('- * -')).toEqual([{ kind: 'list', ordered: false, items: ['* -'] }])
@@ -248,8 +266,8 @@ describe('parseInline', () => {
   // Review, 2026-09-30: `_var and `code` and other_` matched the italic rule,
   // was refused as intraword, and was then pushed whole as text with the scan
   // resumed past its end, so the span between two identifiers drew with its
-  // backticks or stars. The chat renderer resumes one character after a
-  // refused opener; so does this now.
+  // backticks or stars. The chat renderer resumes past a refused opener's
+  // underscore run (afterRefusedUnderscoreOpener); so does this now.
   it('draws the code span or bold between two snake_case identifiers', () => {
     expect(parseInline('use my_var and `code` and other_var')).toEqual([
       { kind: 'text', text: 'use my_var and ' },
@@ -273,7 +291,7 @@ describe('parseInline', () => {
     expect(parseInline('a_b_c')).toEqual([{ kind: 'text', text: 'a_b_c' }])
   })
 
-  // A refused opener is scanned again from its next character, so the scan
+  // After a refused opener the scan goes on past its underscore run, so it
   // must stay linear where refusals pile up.
   it.each([
     ['an identifier with thousands of parts', `x${'_a'.repeat(40_000)}`],

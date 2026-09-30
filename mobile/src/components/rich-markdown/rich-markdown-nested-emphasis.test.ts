@@ -68,6 +68,29 @@ describe('emphasis nested inside emphasis in the editor', () => {
     expect(renderInline('***')).toBe('***')
     expect(renderInline('**_x_**')).toBe('<strong><em>x</em></strong>')
     expect(renderInline('*__x__*')).toBe('<em><strong>x</strong></em>')
-    expect(renderInline('Name: *** Date: ***')).toBe('Name: *<strong> Date: </strong>*')
+    // A run with a space after it opens nothing, and one with a space before
+    // it closes nothing. This drew a star, bold " Date: ", a star, until
+    // every emphasis had to start and end on a word (review, 2026-09-30).
+    expect(renderInline('Name: *** Date: ***')).toBe('Name: *** Date: ***')
+  })
+
+  it('draws a lone star, a lone pair and a spaced pair as text', () => {
+    for (const text of ['* and *', '*', '**', '* *', '** **', '_ and _', '_', '__', '_ _', '__ __', '']) {
+      expect(renderInline(text)).toBe(text)
+    }
+    for (const text of ['**a **', '** a**', '*a *', '* a*', '__a __', '_a _']) {
+      expect(renderInline(text)).toBe(text)
+    }
+    expect(renderInline('*a*')).toBe('<em>a</em>')
+  })
+
+  it.each([
+    ['a spaced power after every word', 'x ** 2 '.repeat(20_000)],
+    ['spaced bold pairs', '** '.repeat(50_000)],
+    ['a bold opener before a long run of spaces', `**a${' '.repeat(100_000)}`],
+    ['italics that each end on a space inside a bold', `**x ${'*a '.repeat(30_000)}`]
+  ])('draws %s that never pairs inside the deadline', (_name, text) => {
+    const html = runInNewContext('render(text)', { render: renderInline, text }, { timeout: 250 })
+    expect(typeof html).toBe('string')
   })
 })

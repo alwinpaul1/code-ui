@@ -225,7 +225,11 @@ describe('the bundled rich Markdown editor document', () => {
     // reflow (it lived in the script strings before #21969 made them modules), and
     // `components/markdown-inline-token-rules.ts`, the intraword-underscore rule the chat renderer
     // already used, so `snake_case_name` stays text in the editor too.
-    expect(inputs).toHaveLength(25)
+    // CODE UI 2026-09-30: 29. The editor reads links, addresses and emphasis with the chat's matcher
+    // (markdown-inline-render.ts), which brings `components/markdown-inline-matcher.ts` and the
+    // three it imports: `markdown-inline-links.ts`, `markdown-code-spans.ts` and
+    // `markdown-inline-escapes.ts`. None of them imports a package.
+    expect(inputs).toHaveLength(29)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

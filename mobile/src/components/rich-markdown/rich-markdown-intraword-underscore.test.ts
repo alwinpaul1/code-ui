@@ -57,8 +57,9 @@ describe('an underscore inside a word survives open-and-save', () => {
 // `_var and `code` and other_` matched the italic rule, was refused as
 // intraword, and was then written out whole as text with the scan resumed
 // past its end, so the code span and bold inside it never drew and their
-// marks became text in the document. The chat renderer resumes one character
-// after a refused opener; the editor now does the same.
+// marks became text in the document. The chat renderer resumes past a refused
+// opener's underscore run (afterRefusedUnderscoreOpener); the editor now does
+// the same.
 describe('a span between two snake_case identifiers', () => {
   it('draws the code span or bold between them', () => {
     expect(renderInline('use my_var and `code` and other_var')).toBe(
@@ -88,7 +89,7 @@ describe('a span between two snake_case identifiers', () => {
     expect(renderInline('a_b_c')).toBe('a_b_c')
   })
 
-  // A refused opener is scanned again from its next character, so the scan
+  // After a refused opener the scan goes on past its underscore run, so it
   // must stay linear where refusals pile up.
   it.each([
     ['an identifier with thousands of parts', `x${'_a'.repeat(40_000)}`],

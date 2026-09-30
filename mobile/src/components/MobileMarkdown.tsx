@@ -22,7 +22,7 @@ import {
   normalizeFilePath
 } from './markdown-file-path-detection'
 import { routeMarkdownHref } from './markdown-href-routing'
-import { autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
+import { afterRefusedUnderscoreOpener, autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { markdownInlinePlainText } from './markdown-plain-text'
@@ -159,8 +159,9 @@ function renderInline(
     // CommonMark; leaving them unflushed keeps surrounding file paths whole
     // for detection in the eventual text run.
     if (token.startsWith('_') && isIntrawordUnderscoreToken(text, match.index, token)) {
-      // Resume after the opener so real tokens inside the rejected span are still scanned.
-      pattern.lastIndex = match.index + 1
+      // Resume after the opener's underscore run so real tokens inside the rejected span are still
+      // scanned; one character on, each underscore of a run cost a scan of the rest of the text.
+      pattern.lastIndex = afterRefusedUnderscoreOpener(text, match.index)
       continue
     }
     if (match.index > pendingStart) {

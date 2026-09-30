@@ -76,13 +76,15 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('a *** b')).toBe('a *** b')
     // A line of three is a rule, which draws no words.
     expect(markdownPlainText('***')).toBe('')
-    // Blanks to fill in: a run followed by a space opens nothing.
-    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: * Date: *')
+    // Blanks to fill in: a run followed by a space opens nothing, and one
+    // after a space closes nothing. The stars copied as "Name: * Date: *",
+    // a star, bold " Date: ", a star, until every emphasis had to start and
+    // end on a word (MobileMarkdown.spaced-operators.test.tsx, 2026-09-30).
+    expect(markdownPlainText('Name: *** Date: ***')).toBe('Name: *** Date: ***')
     expect(markdownPlainText('Name: ___ Date: ___')).toBe('Name: ___ Date: ___')
-    // Today's reading, pinned so the nesting change leaves it where it was:
-    // the two stars pair as an italic " 3 ", though CommonMark opens nothing
-    // on a star with a space after it.
-    expect(markdownPlainText('2 * 3 * 4')).toBe('2  3  4')
+    // A star with a space on each side is text, as CommonMark reads it; it
+    // copied as "2  3  4" before the same change.
+    expect(markdownPlainText('2 * 3 * 4')).toBe('2 * 3 * 4')
   })
 
   it('copies a code pill as its words, backticks and padding off', () => {
@@ -452,7 +454,14 @@ describe('emphasis that never closes', () => {
     ['italic openers before every bold', '* **a** '.repeat(20_000)],
     ['an angle bracket before every letter', '<a'.repeat(50_000)],
     ['an at sign after every letter in angle brackets', `<${'a@'.repeat(50_000)}`],
-    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`]
+    ['an email that never closes', `<${'a.'.repeat(50_000)}@b`],
+    // Review, 2026-09-30: every underscore here sits inside a word, so each
+    // opener is refused and the scan went on from the next underscore, where
+    // an italic holding bold spans ran to the end of the text first: 6.7 s
+    // for this one, quadratic in its length.
+    ['dunder names end to end', 'a__b__'.repeat(20_000)],
+    ['dunder names end to end in an italic', `_x ${'a__b__'.repeat(20_000)}`],
+    ['long underscore runs inside words', `x${'_'.repeat(20_000)}y`.repeat(3)]
   ])('copies %s inside the deadline', (_name, text) => {
     const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
     expect(typeof copied).toBe('string')

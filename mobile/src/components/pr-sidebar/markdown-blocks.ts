@@ -1,5 +1,9 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
-import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
+import {
+  afterRefusedUnderscoreOpener,
+  emphasisSource,
+  isIntrawordUnderscoreToken
+} from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
@@ -228,7 +232,9 @@ function parseList(
       flush()
       blocks.push({ kind: 'code', ...fence })
     }
-    match = i < lines.length ? marker.exec(lines[i]!) : null
+    // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
+    // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
+    match = i < lines.length && !HR.test(lines[i]!) ? marker.exec(lines[i]!) : null
   }
   if (items.length > 0) {
     flush()
@@ -300,9 +306,21 @@ function parseAlignRow(line: string): CellAlign[] {
 // markdownInlineTokenPattern does (markdown-inline-matcher.ts has the why):
 // `***x***` is bold around `*x*`, and CommentMarkdown draws a bold token's
 // inside through parseInline again. `\*\*[^*]+\*\*` drew it as a star, bold x,
-// a star (review, 2026-09-30).
-const INLINE =
-  /(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*)|(__(?:[^_]|_[^_\s][^_\n]*_)+__)|(\*[^*]+\*)|(_[^_]+_)/g
+// a star (review, 2026-09-30). An italic holds no span, and may run over
+// lines, as it did. Every one starts and ends on a character that is not a
+// space (emphasisSource), so `x ** 2 + y ** 2` and `2 * 3 * 4` are text: they
+// drew " 2 + y " bold and " 3 " italic (same review).
+const INLINE = new RegExp(
+  [
+    emphasisSource('\\*', 2, true),
+    emphasisSource('_', 2, true),
+    emphasisSource('\\*', 1, true, false),
+    emphasisSource('_', 1, true, false)
+  ]
+    .map((source) => `(${source})`)
+    .join('|'),
+  'g'
+)
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
@@ -325,11 +343,11 @@ export function parseInline(text: string): InlineToken[] {
     }
     const token = m[0]
     // An underscore inside a word (snake_case, src/__init__.py) is text, as CommonMark reads it.
-    // Only its opener is refused: the scan goes on from the next character, as the chat's does,
-    // so a span inside it still draws. Taking the whole match as text swallowed the code span in
-    // "my_var and `code` and other_var" (review, 2026-09-30).
+    // Only its opener is refused: the scan goes on past the opener's underscore run, as the chat's
+    // does, so a span inside it still draws. Taking the whole match as text swallowed the code span
+    // in "my_var and `code` and other_var" (review, 2026-09-30).
     if (isIntrawordUnderscoreToken(plain, m.index, token)) {
-      matcher.lastIndex = m.index + 1
+      matcher.lastIndex = afterRefusedUnderscoreOpener(plain, m.index)
       continue
     }
     if (m.index > cursor) {
