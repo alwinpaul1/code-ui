@@ -7,6 +7,7 @@ import {
 import { markdownHeadingText } from '../../text/markdown-heading-text'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
+import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -47,9 +48,6 @@ const QUOTE = /^>\s?(.*)$/
 const HR = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/
-// A top-level <details>…</details> or <blockquote>…</blockquote> region.
-const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
-const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
 // It moved to markdown-html-tags.ts beside the code-aware stripping.
 export { stripHtmlTags } from './markdown-html-tags'
@@ -58,38 +56,24 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Fences out first, with HTML comments and <br> handled around them
   // (markdown-fences.ts): nothing below reads a fence's lines.
   const body = lexCommentBody(content)
-  return parseSegment(body.text, body)
+  return parseSegment(readHtmlBlocks(body.text), body)
 }
 
-// Splits a segment at top-level <details>/<blockquote> regions (preserving order),
-// emitting structured blocks for them and line-parsing the text in between. Recurses
-// for nested details bodies. Non-greedy match keeps it total on unbalanced input.
-// A fence is one placeholder line here, so a tag inside one splits nothing.
-function parseSegment(text: string, body: LexedCommentBody): MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = []
-  let rest = text
-  let m = HTML_BLOCK.exec(rest)
-  while (m) {
-    const before = rest.slice(0, m.index)
-    if (before.trim().length > 0) {
-      blocks.push(...parseLines(before, body))
+// The <details>/<blockquote> regions of a segment, a nested one inside the
+// one that holds it, as structured blocks, and the text between them
+// line-parsed, in order (markdown-html-blocks.ts finds them).
+function parseSegment(pieces: HtmlBlockPiece[], body: LexedCommentBody): MarkdownBlock[] {
+  return pieces.flatMap((piece): MarkdownBlock[] => {
+    if (piece.kind === 'text') {
+      return piece.text.trim().length > 0 ? parseLines(piece.text, body) : []
     }
-    if (m[1].toLowerCase() === 'details') {
-      const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTagsOutsideCode(body.restore(sm[1])).trim() : 'Details'
-      const inside = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(inside, body) })
-    } else {
+    if (piece.kind === 'quote') {
       // A quote block holds text, so a fence in it reads as it was written.
-      blocks.push({ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(m[2])).trim() })
+      return [{ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(piece.text)).trim() }]
     }
-    rest = rest.slice(m.index + m[0].length)
-    m = HTML_BLOCK.exec(rest)
-  }
-  if (rest.trim().length > 0) {
-    blocks.push(...parseLines(rest, body))
-  }
-  return blocks
+    const summary = piece.summary === null ? '' : stripHtmlTagsOutsideCode(body.restore(piece.summary)).trim()
+    return [{ kind: 'details', summary: summary || 'Details', body: parseSegment(piece.body, body) }]
+  })
 }
 
 function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
