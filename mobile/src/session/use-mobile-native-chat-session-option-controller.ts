@@ -108,6 +108,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   // Why a ref: the Codex hook needs the model the sheet shows, which is only
   // known once the options hook below has built its snapshot.
   const currentModelRef = useRef<string | null>(null)
+  // The Codex and Claude discoveries ask again when the host connects, so a
+  // read that failed while the relay was dialling does not stay failed.
+  const lastConnectedAt = useLastConnectedAt(hostId)
   const codex = useCodexNativeChatOptions({
     agent: activeChatStructured ? null : agent,
     client,
@@ -117,7 +120,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     deviceTokenRef,
     currentModelId: () => currentModelRef.current,
     refreshHud,
-    onFailure
+    onFailure,
+    lastConnectedAt
   })
   const discoveredOmpModels = useMobileOmpModelDiscovery({
     client,
@@ -125,7 +129,6 @@ export function useMobileNativeChatSessionOptionController(args: {
     worktreeId,
     enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
   })
-  const lastConnectedAt = useLastConnectedAt(hostId)
   const discoveredClaudeModels = useClaudeModelDiscovery({
     client,
     hostId,

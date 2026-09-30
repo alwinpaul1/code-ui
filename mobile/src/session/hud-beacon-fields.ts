@@ -35,12 +35,16 @@ export function applyAgentHudBeaconFields(
   if (!beacon) {
     return screen
   }
+  // No screen read: the mode is unknown, not Manual. The beacon carries no
+  // footer state, and a 'default' here drew Manual on the pill over a footer
+  // nobody had read (review, 2026-09-30).
   const base: TerminalHudObservation = screen ?? {
     modelLabel: '',
     modelId: null,
     effort: null,
     context: null,
-    permissionMode: 'default'
+    permissionMode: null,
+    permissionModeSeen: null
   }
   const used = beacon.usedTokens
   const window = beacon.windowTokens

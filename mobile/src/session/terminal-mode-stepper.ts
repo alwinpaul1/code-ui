@@ -1,3 +1,5 @@
+import type { TerminalPermissionMode } from './claude-terminal-mode-footer'
+
 /**
  * Steps an agent through its Shift+Tab mode cycle until the footer shows the
  * wanted mode.
@@ -33,6 +35,17 @@ export type TerminalModeStep<Mode extends string> = {
    *  the run could match the NEW tab's footer and report a change it never
    *  made (2026-09-14 review). */
   stillOurs?: () => boolean
+}
+
+/** Claude Code's footer mode as the stepper compares it. 'default' and
+ *  'manual' are two names for one mode. A footer nobody read stays null: the
+ *  stepper must be told "could not see", never "already Manual" — the pill's
+ *  `permissionMode` collapses that to 'default', so a blank mid-repaint frame
+ *  made the stepper report success having pressed nothing (2026-09-14). */
+export function shownPermissionMode(
+  mode: TerminalPermissionMode | null | undefined
+): TerminalPermissionMode | null {
+  return mode == null ? null : mode === 'default' ? 'manual' : mode
 }
 
 /** True once the footer shows `wanted`; false after `maxPresses` without it. */

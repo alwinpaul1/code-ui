@@ -32,7 +32,16 @@ export type ClaudeSpinner = {
   thinking: string | null
 }
 
-const SPINNER_LINE = /^\s*[✳✻✽✶✢·*⏺]\s+([A-Z][a-zA-Z]+)…(?:\s*\(([^)]*)\)?)?/
+/** The spinner row's glyph and verb, up to the ellipsis, for every reader of
+ *  it (this file and `parseTerminalActivity`). The verb is one word: a capital,
+ *  then letters of any script, hyphens and apostrophes. Plain ASCII letters
+ *  dropped Claude Code's own "Flambéing" (2.1.282), and its 2.1.285 list has
+ *  "Dilly-dallying", "Sock-hopping" and "Beboppin'". A user's own spinnerVerbs
+ *  are read when they have that shape; one that starts lowercase or has a
+ *  space in it is not, and neither is "Compacting conversation…". Use with
+ *  the `u` flag. */
+export const SPINNER_VERB_SOURCE = String.raw`^\s*[✳✻✽✶✢·*⏺]\s+(\p{Lu}[\p{L}'’\-]+)…`
+const SPINNER_LINE = new RegExp(String.raw`${SPINNER_VERB_SOURCE}(?:\s*\(([^)]*)\)?)?`, 'u')
 const ELAPSED = /^(?:\d+h\s*)?(?:\d+m\s*)?\d+s$|^\d+h\s*\d+m$|^\d+m$/
 const THINKING = /^(?:thinking|still thinking|thinking more|thinking some more|deep in thought|almost done thinking|thought for \d+s)$/
 

@@ -61,14 +61,23 @@ export function useCodexNativeChatOptions(args: {
   /** Re-read the terminal footer after an apply so the pill follows it. */
   refreshHud: () => Promise<unknown>
   onFailure: (message: string) => void
+  /** Moves each time the host connects (`useLastConnectedAt`); see the
+   *  discovery effect for why it is a dep. */
+  lastConnectedAt: number | null
 }): CodexNativeChatOptions {
-  const { agent, client, hostId, worktreeId, handleRef, deviceTokenRef } = args
+  const { agent, client, hostId, worktreeId, handleRef, deviceTokenRef, lastConnectedAt } = args
   const { currentModelId, refreshHud, onFailure } = args
   const isCodex = agent === 'codex'
   const [discovered, setDiscovered] = useState<DiscoveredCodexModel[] | null>(() =>
     isCodex ? peekDiscoveredCodexModels(hostId, worktreeId) : null
   )
 
+  // `lastConnectedAt` is a dep so a discovery that failed while the relay was
+  // still dialling is asked once more when the host connects, and only then:
+  // a failure changes no dep, and a success is cached, so the next connection
+  // answers from memory without a request (the Claude twin,
+  // use-claude-model-discovery.ts, does the same). Without it the sheet had no
+  // effort control until the tab was reopened (review, 2026-09-30).
   useEffect(() => {
     if (!isCodex || !client) {
       setDiscovered(null)
@@ -91,7 +100,7 @@ export function useCodexNativeChatOptions(args: {
     return () => {
       active = false
     }
-  }, [client, hostId, isCodex, worktreeId])
+  }, [client, hostId, isCodex, lastConnectedAt, worktreeId])
 
   // Membership comes from Codex's own picker (see codex-visible-models.ts);
   // the host probe only contributes display names and per-model effort levels.

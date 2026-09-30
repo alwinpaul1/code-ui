@@ -21,6 +21,10 @@ vi.mock('./codex-visible-models', () => ({
 vi.mock('./codex-picker-apply', () => ({
   createCodexPickerIo: () => ({ ...fakes, now: () => Date.now() })
 }))
+// One connection throughout; codex-model-reader-after-reconnect.test.ts covers a new one.
+vi.mock('../transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => 1
+}))
 const client = {} as RpcClient
 const handleRef = { current: 'term' }
 const deviceTokenRef = { current: 'device' }

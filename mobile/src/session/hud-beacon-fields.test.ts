@@ -118,7 +118,10 @@ describe("the HUD believes the agent about itself where the screen says nothing"
   it('fills the whole HUD on a Claude tab that has no readable screen at all', () => {
     const merged = applyAgentHudBeaconFields(null, CLAUDE)
     expect(merged?.modelLabel).toBe('Fable 5.1')
-    expect(merged?.permissionMode).toBe('default')
+    // No screen was read, so no mode is stated: the pill does not say Manual
+    // over a footer nobody saw (claude-footer-without-status-line.test.ts).
+    expect(merged?.permissionMode).toBeNull()
+    expect(merged?.permissionModeSeen).toBeNull()
   })
 
   it('carries the rate-limit windows the agent stated, in seconds', () => {

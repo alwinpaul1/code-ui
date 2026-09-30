@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { createCodexPickerIo } from './codex-picker-apply'
 import { isCodexIdle, isCodexWorking, parseCodexPickerScreen } from './codex-picker-screen'
 import { withCodexTerminalLock } from './codex-terminal-lock'
@@ -36,6 +37,13 @@ export function useCodexStatusPoll(args: {
   const { hostId, worktreeId, hasDraft = false, beforeWrite } = args
   const previousWorking = useRef(working)
   const polledOnOpen = useRef<string | null>(null)
+  // The connection the last run started on. A model read whose tries all fell
+  // while the host was unreachable is started again, once, when a NEW
+  // connection comes up: before this it waited for a turn to end, and the
+  // sheet said "Reading models from the agent" over a healthy link
+  // (review, 2026-09-30). One run per connection, never one per render.
+  const lastConnectedAt = useLastConnectedAt(hostId)
+  const ranOn = useRef<number | null>(null)
 
   useEffect(() => {
     const wasWorking = previousWorking.current
@@ -43,14 +51,22 @@ export function useCodexStatusPoll(args: {
     if (!client || !enabled || !handleKey || hasDraft) {
       return
     }
+    const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
     const turnEnded = wasWorking && !working
     const firstOpen = polledOnOpen.current !== handleKey && !working
-    if (!turnEnded && !firstOpen) {
+    // Never while a turn runs: the reader types `/model`. The turn's end
+    // brings its own run.
+    const reconnected =
+      !working &&
+      lastConnectedAt !== null &&
+      ranOn.current !== lastConnectedAt &&
+      !hasScrapedCodexVisibleModels(visibleKey)
+    if (!turnEnded && !firstOpen && !reconnected) {
       return
     }
     polledOnOpen.current = handleKey
+    ranOn.current = lastConnectedAt
     let active = true
-    const visibleKey = codexVisibleModelsKey(hostId, worktreeId)
     let attempts = 0
     let timer: ReturnType<typeof setTimeout>
     const poll = (): void => {
@@ -100,7 +116,7 @@ export function useCodexStatusPoll(args: {
           }
           // Learn which models this session can pick by reading Codex's own picker
           // (the host probe lists hidden ones and misses some). Retried on every
-          // idle open / turn end until it succeeds once.
+          // idle open, turn end and new connection until it succeeds once.
           if (!hasScrapedCodexVisibleModels(visibleKey)) {
             const models = await scrapeCodexVisibleModels(io, visibleKey, lines)
             if (!active || !models) {
@@ -132,8 +148,8 @@ export function useCodexStatusPoll(args: {
           }
         })
     }
-    // A fresh idle chat needs no post-turn settling delay.
-    timer = setTimeout(poll, firstOpen ? 0 : SETTLE_AFTER_TURN_MS)
+    // A fresh idle chat, or a new connection, needs no post-turn settling delay.
+    timer = setTimeout(poll, turnEnded && !firstOpen ? SETTLE_AFTER_TURN_MS : 0)
     return () => {
       active = false
       clearTimeout(timer)
@@ -147,6 +163,7 @@ export function useCodexStatusPoll(args: {
     handleKey,
     handleRef,
     hostId,
+    lastConnectedAt,
     refreshHud,
     working,
     worktreeId

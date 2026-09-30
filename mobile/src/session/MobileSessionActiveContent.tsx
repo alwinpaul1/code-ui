@@ -1,6 +1,6 @@
 import { useTerminalEngine } from '../terminal/use-terminal-engine'
 import { useMemo, useRef } from 'react'
-import { stepTerminalMode } from './terminal-mode-stepper'
+import { shownPermissionMode, stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
@@ -159,18 +159,15 @@ export function MobileSessionActiveContent({
   }
   const selectPermissionMode = async (target: TerminalPermissionMode) => {
     const startedOn = liveHandleRef.current
-    // 'default' and 'manual' are two names for one mode. Read the mode the
-    // footer STATED: `permissionMode` collapses "no footer on screen" to
-    // 'default', which reads as Manual, so a blank mid-repaint frame made the
-    // stepper report success having pressed nothing (2026-09-14).
-    const asShown = (mode: TerminalPermissionMode | null | undefined) =>
-      mode == null ? null : mode === 'default' ? 'manual' : mode
+    // Read the mode the footer STATED, as the stepper compares it
+    // (`shownPermissionMode`): 'default' and 'manual' are one mode, and a
+    // footer nobody read stays unread rather than "already Manual".
     const reached = await stepTerminalMode<TerminalPermissionMode>({
       read: async () =>
-        asShown((await nativeChatController.refreshNativeChatHud())?.permissionModeSeen),
+        shownPermissionMode((await nativeChatController.refreshNativeChatHud())?.permissionModeSeen),
       press: pressShiftTab,
       wait,
-      wanted: asShown(target) as TerminalPermissionMode,
+      wanted: shownPermissionMode(target) as TerminalPermissionMode,
       maxPresses: 6,
       stillOurs: () => liveHandleRef.current === startedOn
     })
