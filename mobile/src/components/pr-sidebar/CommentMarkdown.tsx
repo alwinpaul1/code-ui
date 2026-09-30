@@ -142,7 +142,7 @@ function BlockView({
           {block.items.map((item, i) => (
             <View key={i} style={styles.listItem}>
               <Text style={[styles.bullet, { fontSize: base }]}>
-                {block.ordered ? `${i + 1}.` : '•'}
+                {block.ordered ? `${(block.start ?? 1) + i}.` : '•'}
               </Text>
               <Text
                 style={[

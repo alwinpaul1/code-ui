@@ -1,6 +1,7 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
+import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
@@ -23,7 +24,9 @@ export type MarkdownBlock =
   // `lang` carries the fence info string (e.g. 'mermaid'); empty when unspecified.
   | { kind: 'code'; text: string; lang: string }
   | { kind: 'quote'; text: string }
-  | { kind: 'list'; ordered: boolean; items: string[] }
+  // `start` is the number an ordered list's first item draws, when it is not 1:
+  // the list went on after a fence under one of its items, or opened at 3.
+  | { kind: 'list'; ordered: boolean; items: string[]; start?: number }
   | { kind: 'hr' }
   | { kind: 'paragraph'; text: string }
   // GitHub comments use <details><summary>…</summary>…</details> for collapsibles.
@@ -33,9 +36,6 @@ export type MarkdownBlock =
 
 // Its closing run of '#' comes off in markdownHeadingText.
 const HEADING = /^(#{1,6})\s+(.*)$/
-const FENCE = /^```/
-// Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
-const FENCE_OPEN = /^```\s*([^\s`]*)/
 const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
@@ -48,42 +48,45 @@ const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 export { stripHtmlTags } from './markdown-html-tags'
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
-  // Drop HTML comments and normalize <br> before block parsing.
-  const cleaned = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n')
-  return parseSegment(cleaned)
+  // Fences out first, with HTML comments and <br> handled around them
+  // (markdown-fences.ts): nothing below reads a fence's lines.
+  const body = lexCommentBody(content)
+  return parseSegment(body.text, body)
 }
 
 // Splits a segment at top-level <details>/<blockquote> regions (preserving order),
 // emitting structured blocks for them and line-parsing the text in between. Recurses
 // for nested details bodies. Non-greedy match keeps it total on unbalanced input.
-function parseSegment(text: string): MarkdownBlock[] {
+// A fence is one placeholder line here, so a tag inside one splits nothing.
+function parseSegment(text: string, body: LexedCommentBody): MarkdownBlock[] {
   const blocks: MarkdownBlock[] = []
   let rest = text
   let m = HTML_BLOCK.exec(rest)
   while (m) {
     const before = rest.slice(0, m.index)
     if (before.trim().length > 0) {
-      blocks.push(...parseLines(before))
+      blocks.push(...parseLines(before, body))
     }
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTagsOutsideCode(sm[1]).trim() : 'Details'
-      const body = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
+      const summary = sm ? stripHtmlTagsOutsideCode(body.restore(sm[1])).trim() : 'Details'
+      const inside = m[2].replace(SUMMARY, '')
+      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(inside, body) })
     } else {
-      blocks.push({ kind: 'quote', text: stripHtmlTagsOutsideCode(m[2]).trim() })
+      // A quote block holds text, so a fence in it reads as it was written.
+      blocks.push({ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(m[2])).trim() })
     }
     rest = rest.slice(m.index + m[0].length)
     m = HTML_BLOCK.exec(rest)
   }
   if (rest.trim().length > 0) {
-    blocks.push(...parseLines(rest))
+    blocks.push(...parseLines(rest, body))
   }
   return blocks
 }
 
-function parseLines(content: string): MarkdownBlock[] {
-  const lines = content.replace(/\r\n/g, '\n').split('\n')
+function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
+  const lines = content.split('\n')
   const blocks: MarkdownBlock[] = []
   let paragraph: string[] = []
   let i = 0
@@ -98,17 +101,12 @@ function parseLines(content: string): MarkdownBlock[] {
   while (i < lines.length) {
     const line = lines[i]
 
-    if (FENCE.test(line)) {
+    // A fence behind a list marker is that item's; the list below takes it.
+    const fence = body.fenceOn(line)
+    if (fence && !fence.marker) {
       flushParagraph()
-      const lang = (FENCE_OPEN.exec(line)?.[1] ?? '').toLowerCase()
-      const code: string[] = []
+      blocks.push({ kind: 'code', ...fence.code })
       i += 1
-      while (i < lines.length && !FENCE.test(lines[i])) {
-        code.push(lines[i])
-        i += 1
-      }
-      i += 1 // consume closing fence (or EOF)
-      blocks.push({ kind: 'code', text: code.join('\n'), lang })
       continue
     }
 
@@ -166,33 +164,7 @@ function parseLines(content: string): MarkdownBlock[] {
     const ordered = ORDERED.test(line)
     if (ordered || UNORDERED.test(line)) {
       flushParagraph()
-      const items: string[] = []
-      let match = ordered ? ORDERED.exec(line) : UNORDERED.exec(line)
-      while (match) {
-        // A wrapped item continues on the lines under it: indented, non-blank,
-        // and not a marker of its own. Without this the list ended at the first
-        // continuation line, that line became a paragraph at the left margin,
-        // and the next item opened a fresh list — so every item was numbered 1.
-        // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
-        const parts = [match[1].trim()]
-        i += 1
-        while (i < lines.length) {
-          const next = lines[i]
-          if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
-            break
-          }
-          parts.push(next.trim())
-          i += 1
-        }
-        // Joined with a space: a single newline inside a paragraph is not a line
-        // break in markdown, it reflows.
-        items.push(parts.join(' '))
-        if (i >= lines.length) {
-          break
-        }
-        match = ordered ? ORDERED.exec(lines[i]) : UNORDERED.exec(lines[i])
-      }
-      blocks.push({ kind: 'list', ordered, items })
+      i = parseList(lines, i, ordered, body, blocks)
       continue
     }
 
@@ -201,6 +173,64 @@ function parseLines(content: string): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
+}
+
+// The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
+function parseList(
+  lines: string[],
+  i: number,
+  ordered: boolean,
+  body: LexedCommentBody,
+  blocks: MarkdownBlock[]
+): number {
+  const marker = ordered ? ORDERED : UNORDERED
+  let items: string[] = []
+  // CommonMark numbers an ordered list from its first item's number, of at
+  // most nine digits; a longer one parseInt rounds, so that list counts from 1.
+  const number = ordered ? /\d+/.exec(lines[i]!)![0] : '1'
+  let start = number.length <= 9 ? Number(number) : 1
+  const flush = (): void => {
+    blocks.push(ordered && start !== 1 ? { kind: 'list', ordered, items, start } : { kind: 'list', ordered, items })
+    start += items.length
+    items = []
+  }
+  let match = marker.exec(lines[i]!)
+  while (match) {
+    // A fence can open on the item's own line; the item then holds only it.
+    let fence = body.fenceOn(match[1])?.code ?? null
+    // A wrapped item continues on the lines under it: indented, non-blank,
+    // and not a marker of its own. Without this the list ended at the first
+    // continuation line, that line became a paragraph at the left margin,
+    // and the next item opened a fresh list — so every item was numbered 1.
+    // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
+    const parts = fence ? [] : [match[1].trim()]
+    i += 1
+    while (!fence && i < lines.length) {
+      const next = lines[i]!
+      if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
+        break
+      }
+      fence = body.fenceOn(next)?.code ?? null
+      if (!fence) {
+        parts.push(next.trim())
+      }
+      i += 1
+    }
+    // Joined with a space: a single newline inside a paragraph is not a line
+    // break in markdown, it reflows.
+    items.push(parts.join(' '))
+    if (fence) {
+      // A fence under an item ends the item: the list so far, then the code,
+      // and the list goes on, still counting, at the next marker of its kind.
+      flush()
+      blocks.push({ kind: 'code', ...fence })
+    }
+    match = i < lines.length ? marker.exec(lines[i]!) : null
+  }
+  if (items.length > 0) {
+    flush()
+  }
+  return i
 }
 
 // Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a

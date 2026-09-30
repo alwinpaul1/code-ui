@@ -17,43 +17,58 @@ export function stripHtmlTags(text: string): string {
 }
 
 /**
- * Every code span in `text`, as [start, end) in order, by the rule the inline
- * matcher reads them with (findCodeSpan in markdown-inline-matcher.ts): a run
- * of N backticks opens a span that closes at the next run of exactly N, and a
- * run with no such partner is text. If that rule changes, this must follow.
+ * The code spans in `text`, read by the rule the inline matcher uses
+ * (findCodeSpan in markdown-inline-matcher.ts): a run of N backticks opens a
+ * span that closes at the next run of exactly N, and a run with no such
+ * partner is text. If that rule changes, this must follow.
  *
- * Linear: each run's next partner is found once, walking back from the end.
- * The matcher looks for the next span from the first run every time it is
- * asked, which costs 861 ms for 20,000 spans; this pass must not add another.
+ * The reader returns the first span that opens at or after `from`, as
+ * [start, end). Asked with a `from` that never goes back, the whole text
+ * costs one pass: each run's next partner is found once, walking back from
+ * the end. The matcher looks for each span from the first run again, which
+ * costs 861 ms for 20,000 spans; this must not add another such pass.
+ *
+ * A `from` past text the caller took out (an HTML comment) reads the rest as
+ * if that text were gone: a span's partner always lies after its opener, so
+ * a run before `from` is never anyone's partner.
  */
-export function codeSpanRanges(text: string): [number, number][] {
-  const runs: [number, number][] = []
+export function codeSpanReader(text: string): (from: number) => [number, number] | null {
+  const starts: number[] = []
+  const lengths: number[] = []
   for (let at = text.indexOf('`'); at !== -1; ) {
     let length = 1
     while (text[at + length] === '`') {
       length += 1
     }
-    runs.push([at, length])
+    starts.push(at)
+    lengths.push(length)
     at = text.indexOf('`', at + length)
   }
   const partners: number[] = []
   const nextOfLength = new Map<number, number>()
-  for (let run = runs.length - 1; run >= 0; run -= 1) {
-    const length = runs[run]![1]
-    partners[run] = nextOfLength.get(length) ?? -1
-    nextOfLength.set(length, run)
+  for (let run = starts.length - 1; run >= 0; run -= 1) {
+    partners[run] = nextOfLength.get(lengths[run]!) ?? -1
+    nextOfLength.set(lengths[run]!, run)
   }
-  const ranges: [number, number][] = []
   let run = 0
-  while (run < runs.length) {
-    const partner = partners[run]!
-    if (partner === -1) {
+  return (from) => {
+    while (run < starts.length && (starts[run]! < from || partners[run] === -1)) {
       run += 1
-      continue
     }
-    const [closeStart, closeLength] = runs[partner]!
-    ranges.push([runs[run]![0], closeStart + closeLength])
-    run = partner + 1
+    if (run === starts.length) {
+      return null
+    }
+    const partner = partners[run]!
+    return [starts[run]!, starts[partner]! + lengths[partner]!]
+  }
+}
+
+/** Every code span in `text`, as [start, end) in order (codeSpanReader). */
+export function codeSpanRanges(text: string): [number, number][] {
+  const next = codeSpanReader(text)
+  const ranges: [number, number][] = []
+  for (let span = next(0); span; span = next(span[1])) {
+    ranges.push(span)
   }
   return ranges
 }
