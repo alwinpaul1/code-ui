@@ -133,7 +133,10 @@ export function createPersistedMap<T>(args: {
 
   function flush(): void {
     if (hydrated || !readAsked) {
-      writeNow()
+      // A write that waited for the read may already have carried this one.
+      if (dirty) {
+        writeNow()
+      }
       return
     }
     void readStored().then((read) => {

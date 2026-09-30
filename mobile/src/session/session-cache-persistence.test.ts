@@ -149,6 +149,8 @@ describe('a persisted cache whose stored copy could not be read', () => {
     await hydrating
     await vi.advanceTimersByTimeAsync(700)
     expect(storedKeys()).toEqual(['old-a', 'old-b', 'new'])
+    // The write that waited and the hydrate that waited carry one change.
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1)
   })
 
   it('shares one read between two hydrate calls, and answers neither before it lands', async () => {
