@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock, type MockInstance } from 'vitest'
 import { deliverDesktopDictation } from './place-dictation-transcript'
 
 // Desktop dictation with live terminal input on: the words go straight to the PTY. When that
@@ -10,11 +10,13 @@ import { deliverDesktopDictation } from './place-dictation-transcript'
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
+type SetInput = (update: (current: string) => string) => void
+
 type Harness = {
   box: { value: string }
   toasts: string[]
   sends: [string, string][]
-  setInput: ReturnType<typeof vi.fn>
+  setInput: Mock<SetInput>
 }
 
 function deliver(overrides: {
@@ -28,9 +30,9 @@ function deliver(overrides: {
     box: { value: overrides.box ?? '' },
     toasts: [],
     sends: [],
-    setInput: vi.fn()
+    setInput: vi.fn<SetInput>()
   }
-  harness.setInput.mockImplementation((update: (current: string) => string) => {
+  harness.setInput.mockImplementation((update) => {
     harness.box.value = update(harness.box.value)
   })
   deliverDesktopDictation({
