@@ -50,7 +50,11 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [error, setError] = useState<string | null>(null)
   const [reloadNonce, setReloadNonce] = useState(0)
   const [expanded, setExpanded] = useState<string | null>(null)
-  const [filesById, setFilesById] = useState<Record<string, MobileGitChangedFile[] | 'loading'>>({})
+  // 'error': the read failed or was refused. Never `[]`, which is a commit with no file changes.
+  const [filesById, setFilesById] = useState<
+    Record<string, MobileGitChangedFile[] | 'loading' | 'error'>
+  >({})
+  const [filesAttempt, setFilesAttempt] = useState(0)
 
   // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
@@ -118,28 +122,44 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     }
     const commitId = expanded
     let stale = false
-    setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
+    // A failed read shows the spinner again while it is read anew (on Retry, or on the next
+    // connection: this effect keys on connState).
+    setFilesById((prev) =>
+      prev[commitId] && prev[commitId] !== 'error' ? prev : { ...prev, [commitId]: 'loading' }
+    )
+    // Keep an already-loaded list across a failed refresh; a first load that fails is 'error'
+    // ("Couldn't load files" with Retry), never `[]`, which would claim the commit changed nothing.
+    const fail = (why: string): void => {
+      if (stale) {
+        return
+      }
+      console.warn(`[git-history] files of commit ${commitId} not loaded: ${why || 'no reason given'}`)
+      setFilesById((prev) =>
+        Array.isArray(prev[commitId]) ? prev : { ...prev, [commitId]: 'error' }
+      )
+    }
     void gitCommitCompareRead
       .request(client, { worktree: `id:${worktreeId}`, commitId })
       .then((reply) => {
         const compared = gitCommitCompareRead.interpret(reply)
-        const entries = compared.accepted ? compared.value.entries : []
+        if (!compared.accepted) {
+          fail(reply.ok ? 'the reply carried no result' : `refused: ${reply.error.message}`)
+          return
+        }
         if (!stale) {
-          setFilesById((prev) => ({ ...prev, [commitId]: entries }))
+          setFilesById((prev) => ({ ...prev, [commitId]: compared.value.entries }))
         }
       })
-      .catch(() => {
-        // Keep an already-loaded list; a first load that fails resolves to "No file changes".
-        if (!stale) {
-          setFilesById((prev) =>
-            prev[commitId] === 'loading' ? { ...prev, [commitId]: [] } : prev
-          )
-        }
-      })
+      .catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)))
     return () => {
       stale = true
     }
-  }, [client, connState, expanded, worktreeId])
+  }, [client, connState, expanded, filesAttempt, worktreeId])
+
+  const retryFiles = useCallback((commitId: string) => {
+    setFilesById((prev) => ({ ...prev, [commitId]: 'loading' }))
+    setFilesAttempt((count) => count + 1)
+  }, [])
 
   const connected = client !== null && connState === 'connected'
 
@@ -176,6 +196,18 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
                 ) : (
                   <Text style={styles.empty}>Waiting for desktop...</Text>
                 )
+              ) : files === 'error' ? (
+                <View style={styles.filesError}>
+                  <Text style={styles.empty}>Couldn't load files</Text>
+                  <Pressable
+                    style={styles.filesRetryButton}
+                    onPress={() => retryFiles(item.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Retry loading the files of this commit"
+                  >
+                    <Text style={styles.filesRetryText}>Retry</Text>
+                  </Pressable>
+                </View>
               ) : files.length === 0 ? (
                 <Text style={styles.empty}>No file changes</Text>
               ) : (
@@ -198,7 +230,7 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     },
     // colors and styles come from the theme now, not a static import: without them the rows keep
     // the scheme they were made under after an appearance change.
-    [colors, connected, expanded, filesById, styles, toggleCommit]
+    [colors, connected, expanded, filesById, retryFiles, styles, toggleCommit]
   )
 
   const view = resolveMobileHistoryScreenView({ connected, rows, error })
@@ -291,6 +323,14 @@ function gitHistoryListStyles({ colors }: Theme) {
     fileStat: { fontSize: typography.metaSize, fontFamily: typography.monoFamily },
     add: { color: colors.diffAddText },
     del: { color: colors.diffDelText },
-    empty: { color: colors.textMuted, fontSize: typography.metaSize }
+    empty: { color: colors.textMuted, fontSize: typography.metaSize },
+    filesError: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+    filesRetryButton: {
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      borderRadius: radii.button,
+      backgroundColor: colors.bgRaised
+    },
+    filesRetryText: { color: colors.text, fontSize: typography.metaSize, fontWeight: '600' }
   })
 }
