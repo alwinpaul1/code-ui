@@ -28,9 +28,10 @@ type PrSidebarControllerInput = {
   // branch/headSha come from git.status (not the branchCompare base ref nor worktree metadata, which carries no branch).
   branch: string | null
   headSha: string | null
-  // useLastConnectedAt(hostId): a failed load is read again once per NEW connection. A caller
-  // that leaves it out gets no reconnect refetch (the Retry button only).
-  lastConnectedAt?: number | null
+  // useLastConnectedAt(hostId): a failed load is read again once per NEW connection. Required, so
+  // no surface can opt out by leaving it off: Diff Review did, and its PR sidebar sat on a failed
+  // load over a healthy connection until the user tapped Retry (review round 2, 2026-09-30).
+  lastConnectedAt: number | null
 }
 
 // Load options: the hub chip needs only phase 1 (PR + checks); phase 2 (comments/body) is heavy and waits until the PR segment opens.
@@ -132,6 +133,15 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         return
       }
       stateIdentityRef.current = loadIdentity
+      if (next.kind === 'error' || next.kind === 'blocked') {
+        // `error` is read again on the next new connection; `blocked` is left for the user.
+        console.warn('[pr-sidebar] the pull request read for this branch failed', {
+          worktreeId,
+          branch,
+          kind: next.kind,
+          message: next.message
+        })
+      }
 
       // Preserve prior details across phase 1 (loadPrSidebarData returns details:null) so soft/PR-tab refresh doesn't blank the comment tree.
       const priorDetails =
