@@ -5,6 +5,7 @@ import {
   type NativeChatToolCallBlock,
   type NativeChatToolResultBlock
 } from '../../../src/shared/native-chat-types'
+import { isCommandToolName } from '../../../src/shared/native-chat-tool-activity'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 
 /**
@@ -17,7 +18,7 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
  * to the Claude app's own wording for a single described command, a Skill
  * call, a SendMessage, and a whole-file write. Tool names are grouped by what
  * they did to the reader, not by the agent's vocabulary, so Claude's `Bash`
- * and Codex's `shell` both read as commands.
+ * and Codex's `shell`, `exec_command` and `shell_command` all read as commands.
  */
 type Kind = 'command' | 'read' | 'edit' | 'search' | 'agent' | 'web' | 'skill' | 'message' | 'other'
 
@@ -38,7 +39,11 @@ export function toolCallKind(name: string): Kind {
     .trim()
     .toLowerCase()
     .replace(/^.*[./]/, '')
-  if (/^(bash|shell|exec|run_command|terminal|command|powershell)$/.test(key)) {
+  // Orca's own list of command tools as well (vendored COMMAND_TOOL_NAMES):
+  // Codex runs commands as exec_command and shell_command, which read "Used 2
+  // tools" beside a Bash run's "Ran 2 commands" while only these were known
+  // (review, 2026-09-30).
+  if (/^(bash|shell|exec|run_command|terminal|command|powershell)$/.test(key) || isCommandToolName(key)) {
     return 'command'
   }
   if (/^(read|read_file|readfile|cat|view|notebookread)$/.test(key)) {
