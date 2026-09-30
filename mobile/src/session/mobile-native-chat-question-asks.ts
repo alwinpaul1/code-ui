@@ -68,7 +68,9 @@ export function asksToChoose(line: string, list: OptionList): boolean {
 
 /**
  * The lines that ask after the list at `at`: prose from its end to the end of
- * the reply, outside every later list and every code fence.
+ * the reply, outside every later list and every code fence. The later lists'
+ * lines are marked once: checking each line against every list cost 376 ms
+ * for a reply of 5,000 notes lists, on the render path (2026-09-30).
  */
 export function asksAfter(
   lines: readonly string[],
@@ -76,12 +78,15 @@ export function asksAfter(
   at: number,
   fenceStarts: readonly number[]
 ): string[] {
-  const later = lists.slice(at + 1)
-  return lines.filter(
-    (line, index) =>
-      index > lists[at].end &&
-      fenceStarts[index] === -1 &&
-      !later.some((list) => index >= list.start && index <= list.end) &&
-      lineAsks(line)
-  )
+  const inLaterList = new Uint8Array(lines.length)
+  for (const list of lists.slice(at + 1)) {
+    inLaterList.fill(1, list.start, list.end + 1)
+  }
+  const asks: string[] = []
+  for (let index = lists[at].end + 1; index < lines.length; index += 1) {
+    if (fenceStarts[index] === -1 && inLaterList[index] === 0 && lineAsks(lines[index])) {
+      asks.push(lines[index])
+    }
+  }
+  return asks
 }
