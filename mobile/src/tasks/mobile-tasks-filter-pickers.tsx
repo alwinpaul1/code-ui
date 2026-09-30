@@ -8,7 +8,7 @@ import {
   ActivityIndicator
 } from './mobile-tasks-dependencies'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
-import { TasksRow } from './mobile-tasks-pressables'
+import { TasksButton, TasksRow } from './mobile-tasks-pressables'
 import {
   GITLAB_VIEW_OPTIONS,
   GITLAB_FILTER_OPTIONS,
@@ -265,9 +265,11 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
   const {
     colors,
     linearStates,
+    linearStatesError,
     linearStatesLoading,
     linearStatusPickerItem,
     mutatingStatus,
+    retryLinearStates,
     setLinearStatus,
     setLinearStatusPickerItem,
     styles,
@@ -290,6 +292,20 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
           <View style={styles.detailLoadingInline}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
             <Text style={styles.detailMuted}>Loading states...</Text>
+          </View>
+        ) : linearStatesError ? (
+          // A failed read is not a team with no states (review, 2026-09-30). The list is read
+          // again on its own when the host reconnects; Retry is for a read that failed anyway.
+          <View style={styles.detailLoadingInline}>
+            <Text style={[styles.detailError, styles.repoPickerTextWrap]}>{linearStatesError}</Text>
+            <TasksButton
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading states"
+              style={styles.sourceErrorRetry}
+              onPress={retryLinearStates}
+            >
+              <Text style={styles.sourceErrorRetryText}>Retry</Text>
+            </TasksButton>
           </View>
         ) : linearStates.length === 0 ? (
           <Text style={styles.emptyInlineText}>No states available</Text>
