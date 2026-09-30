@@ -1,12 +1,18 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import {
+  claudeRosterToSnapshots,
+  upsertWorkingClaudeSubagent,
+  type ClaudeSubagentRoster
+} from '../../../src/shared/claude-subagent-roster'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 import {
   WORKFLOW_LAUNCHED_AT,
+  WORKFLOW_TASK_ID,
   workflowFinishedMessage,
   workflowLaunchMessages
 } from './fixtures/claude-workflow-2.1.284'
@@ -46,20 +52,22 @@ vi.mock('lucide-react-native', () => ({
   X: 'X'
 }))
 
-// One workflow drawn as one card, the way the Claude app draws it (reference
-// frames of 2026-09-30). The records are Claude Code 2.1.284's.
+// One workflow drawn as one card, after the Claude app's (reference frames of
+// 2026-09-30), holding only what the phone knows. Transcript records are Claude
+// Code 2.1.284's; the lanes are built through the vendored roster the way Orca
+// builds a workflow lane in production: an agent_type and nothing else.
 const NOW = WORKFLOW_LAUNCHED_AT + 61 * 60_000 + 44_000
+const LANE_STARTED = WORKFLOW_LAUNCHED_AT + 5_000
+/** The Stop hook's beacon naming the workflow as the one thing running. */
+const REPORT = { finishedTaskIds: [], runningTaskIds: [WORKFLOW_TASK_ID], runningTaskIdsAt: WORKFLOW_LAUNCHED_AT + 60_000, launchedTaskIds: [] }
 
-function lane(id: string, description: string | undefined): AgentSubagentSnapshot {
-  return { id, agentType: 'workflow-subagent', ...(description === undefined ? {} : { description }), state: 'working', startedAt: WORKFLOW_LAUNCHED_AT }
+function lanes(count: number): AgentSubagentSnapshot[] {
+  const roster: ClaudeSubagentRoster = new Map()
+  for (let index = 0; index < count; index += 1) {
+    upsertWorkingClaudeSubagent(roster, `a${index.toString(16).padStart(16, '0')}`, { agentType: 'workflow-subagent' }, LANE_STARTED + index)
+  }
+  return claudeRosterToSnapshots(roster) ?? []
 }
-
-const SWEEP_LANES = [
-  lane('a1', 'review:markdown'),
-  lane('a2', 'review:chat-ui'),
-  lane('a3', 'fix:r1:b3-terminal-screen-and-parsers'),
-  lane('a4', undefined)
-]
 
 type Rendered = { texts: string[]; colors: string[]; backgrounds: string[] }
 
@@ -113,25 +121,20 @@ describe('a running workflow in the background tasks sheet', () => {
     await act(async () => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
-          <MobileBackgroundTasksSheetBody messages={messages} agent="claude" agentStatus={{ state: 'working', subagents }} />
+          <MobileBackgroundTasksSheetBody
+            messages={messages}
+            agent="claude"
+            agentStatus={{ state: 'working', subagents }}
+            backgroundTaskReport={REPORT}
+          />
         </ThemeProvider>
       )
     })
     return readTree(renderer!)
   }
 
-  async function press(accessibilityLabel: string): Promise<void> {
-    const target = renderer!.root.findAll((node) => String(node.type) === 'Pressable').find((node) => node.props.accessibilityLabel === accessibilityLabel)
-    if (!target) {
-      throw new Error(`no pressable labelled "${accessibilityLabel}"`)
-    }
-    await act(async () => {
-      target.props.onPress()
-    })
-  }
-
   it('is one card: its name, "Workflow", the time since launch and the description', async () => {
-    const { texts } = await render('light', workflowLaunchMessages(), SWEEP_LANES)
+    const { texts } = await render('light', workflowLaunchMessages(), lanes(3))
     expect(texts).toContain('pre-release-review-sweep')
     expect(texts).toContain('Workflow')
     expect(texts).toContain('1h 1m')
@@ -143,84 +146,64 @@ describe('a running workflow in the background tasks sheet', () => {
     expect(texts.filter((text) => text === 'Agent')).toHaveLength(0)
   })
 
-  it('lists one section per meta phase, with the running agents of each under it', async () => {
-    const { texts } = await render('light', workflowLaunchMessages(), SWEEP_LANES)
-    expect(texts).toContain('Phases')
-    for (const title of ['Review', 'Triage', 'Fix', 'Integrate', 'Re-review']) {
-      expect(texts).toContain(title)
-    }
-    expect(texts).toContain('review:markdown')
-    expect(texts).toContain('review:chat-ui')
-    expect(texts).toContain('fix:r1:b3-terminal-screen-and-parsers')
-    expect(texts).toContain('2 running')
-    expect(texts).toContain('1 running')
-  })
-
-  it('says only what it knows: no done/total, no zero counts, no tokens, no per-agent time', async () => {
-    const { texts } = await render('light', workflowLaunchMessages(), SWEEP_LANES)
-    expect(texts.some((text) => /^\d+\/\d+$/.test(text))).toBe(false)
-    expect(texts.some((text) => /token/i.test(text))).toBe(false)
-    expect(texts.some((text) => text.startsWith('0 '))).toBe(false)
-    // The header counts the agents it can see running, and the unplaced one too.
-    expect(texts).toContain('4 agents running')
-  })
-
-  it('draws one square per running agent in the info colour, in both themes', async () => {
+  it('names the phases from the meta as plain titles: no counts, no squares, no agent rows, no chevrons', async () => {
     for (const [scheme, palette] of [
       ['light', lightColors],
       ['dark', darkColors]
     ] as const) {
-      const { backgrounds, colors } = await render(scheme, workflowLaunchMessages(), SWEEP_LANES)
-      // The status dot, then the three squares (two Review agents, one Fix).
-      expect(backgrounds.filter((color) => color === palette.info)).toHaveLength(4)
-      // Ink comes from the theme: no other scheme's text colour leaks in.
+      const { texts, backgrounds } = await render(scheme, workflowLaunchMessages(), lanes(3))
+      expect(texts).toContain('Phases')
+      for (const title of ['Review', 'Triage', 'Fix', 'Integrate', 'Re-review']) {
+        expect(texts).toContain(title)
+      }
+      expect(texts.some((text) => /^\d+\/\d+$/.test(text))).toBe(false)
+      expect(texts.some((text) => text.endsWith(' running') && !/agents? running$/.test(text))).toBe(false)
+      expect(texts.some((text) => /token/i.test(text))).toBe(false)
+      expect(texts).not.toContain('Unnamed agent')
+      // Only the status dot is the info colour; there is a square for no agent.
+      expect(backgrounds.filter((color) => color === palette.info)).toHaveLength(1)
+      const labels = renderer!.root.findAll((node) => String(node.type) === 'Pressable').map((node) => String(node.props.accessibilityLabel ?? ''))
+      expect(labels.some((label) => /collapse|expand/.test(label) && !label.startsWith('Running') && !label.startsWith('Finished'))).toBe(false)
       const other = scheme === 'light' ? darkColors : lightColors
-      expect(colors).not.toContain(other.text)
       expect(backgrounds).not.toContain(other.bgRaised)
       act(() => renderer?.unmount())
       renderer = null
     }
   })
 
-  it('folds a phase away when its chevron is tapped, and back', async () => {
-    await render('light', workflowLaunchMessages(), SWEEP_LANES)
-    await press('Review, collapse')
-    expect(readTree(renderer!).texts).not.toContain('review:markdown')
-    expect(readTree(renderer!).texts).toContain('fix:r1:b3-terminal-screen-and-parsers')
-    await press('Review, expand')
-    expect(readTree(renderer!).texts).toContain('review:markdown')
+  it('counts the lanes running: "3 agents running", "1 agent running"', async () => {
+    expect((await render('light', workflowLaunchMessages(), lanes(3))).texts).toContain('3 agents running')
+    act(() => renderer?.unmount())
+    expect((await render('light', workflowLaunchMessages(), lanes(1))).texts).toContain('1 agent running')
   })
 
-  it('a phase with nothing running is a bare title: no count, no chevron to open nothing', async () => {
-    await render('light', workflowLaunchMessages(), SWEEP_LANES)
-    const labels = renderer!.root.findAll((node) => String(node.type) === 'Pressable').map((node) => String(node.props.accessibilityLabel ?? ''))
-    expect(labels).not.toContain('Triage, expand')
-    expect(labels).not.toContain('Triage, collapse')
-    expect(labels).toContain('Review, collapse')
+  it('at the roster cap says "32+ agents running"', async () => {
+    expect((await render('light', workflowLaunchMessages(), lanes(40))).texts).toContain('32+ agents running')
   })
 
-  it('no agents yet: header and phases only', async () => {
+  it('with no lanes on the roster (a lead Stop just cleared it) says nothing of agents, never "0 agents"', async () => {
     const { texts } = await render('light', workflowLaunchMessages(), [])
     expect(texts).toContain('pre-release-review-sweep')
     expect(texts).toContain('Phases')
-    expect(texts.some((text) => /agents? running/.test(text))).toBe(false)
+    expect(texts.some((text) => /agents?( running)?$/.test(text))).toBe(false)
+    expect(texts.some((text) => text.startsWith('0 '))).toBe(false)
   })
 
-  it('one agent reads "1 agent running", not "1 agents"', async () => {
-    const { texts } = await render('light', workflowLaunchMessages(), [lane('a1', 'triage:round-1')])
-    expect(texts).toContain('1 agent running')
-    expect(texts).toContain('triage:round-1')
-  })
-
-  it('an unreadable script still draws the workflow, without a Phases section', async () => {
-    const { texts } = await render('light', workflowLaunchMessages('export const meta = compute()'), [lane('a1', 'review:markdown')])
+  it('an unreadable script still draws the workflow named by its Script file, without a Phases section', async () => {
+    const { texts } = await render('light', workflowLaunchMessages('export const meta = compute()'), lanes(2))
+    expect(texts).toContain('pre-release-review-sweep')
     expect(texts).toContain('Workflow')
     expect(texts).not.toContain('Phases')
-    expect(texts).toContain('review:markdown')
-    expect(texts).toContain('Parallel Sonnet reviewers find proven bugs across Code UI; Opus triages, fixes in worktrees, integrates; Sonnet re-reviews')
+    expect(texts).toContain('2 agents running')
   })
 
-  it('a finished workflow sits under Finished with the totals Claude reported, and no phase table', async () => {
+  it('two phases that share a title are both drawn', async () => {
+    const script = "export const meta = { name: 'twice', phases: [{ title: 'Review' }, { title: 'Review' }] }"
+    const { texts } = await render('light', workflowLaunchMessages(script))
+    expect(texts.filter((text) => text === 'Review')).toHaveLength(2)
+  })
+
+  it('a finished workflow sits under Finished with the totals Claude reported and its phase titles, in both themes', async () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { texts } = await render(scheme, [...workflowLaunchMessages(), workflowFinishedMessage()])
       expect(texts).toContain('Finished 1')
@@ -229,28 +212,56 @@ describe('a running workflow in the background tasks sheet', () => {
       expect(texts).toContain('4.9M tokens')
       expect(texts).toContain('1h 24m')
       expect(texts).toContain('Completed')
-      expect(texts).not.toContain('Phases')
+      expect(texts).toContain('Phases')
+      expect(texts).toContain('Re-review')
+      expect(texts.some((text) => /failed$|skipped$/.test(text))).toBe(false)
       act(() => renderer?.unmount())
       renderer = null
     }
   })
 
-  it('two workflows at once are two cards, and the shared lanes stay ordinary agent rows', async () => {
-    const second = workflowLaunchMessages(
-      "export const meta = { name: 'docs-pass', description: 'Rewrite the docs', phases: [{ title: 'Draft' }, { title: 'Review' }] }"
-    ).map((message, index) => ({
+  it('a finished workflow with failed agents says so, in the danger tone', async () => {
+    const notification = workflowFinishedMessage()
+    const block = notification.blocks[0]
+    const text = block?.type === 'text' ? block.text : ''
+    const failed = { ...notification, blocks: [{ type: 'text' as const, text: text.replace('<agents_error>0</agents_error>', '<agents_error>3</agents_error>').replace('<agents_skipped>0</agents_skipped>', '<agents_skipped>2</agents_skipped>') }] }
+    for (const [scheme, palette] of [
+      ['light', lightColors],
+      ['dark', darkColors]
+    ] as const) {
+      const { texts, colors } = await render(scheme, [...workflowLaunchMessages(), failed])
+      expect(texts).toContain('3 failed')
+      expect(texts).toContain('2 skipped')
+      expect(colors).toContain(palette.danger)
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
+  it('two workflows at once are two cards and the lane stays an ordinary agent row', async () => {
+    const second = workflowLaunchMessages("export const meta = { name: 'docs-pass', description: 'Rewrite the docs', phases: [{ title: 'Draft' }] }").map((message, index) => ({
       ...message,
       id: `second-${index}`,
       blocks: message.blocks.map((block) =>
-        block.type === 'tool-result' ? { ...block, output: block.output.replace('whnsp6sli', 'wdocs0001') } : block
+        block.type === 'tool-result' ? { ...block, output: block.output.replace(WORKFLOW_TASK_ID, 'wdocs0001') } : block
       )
     }))
-    const { texts } = await render('light', [...workflowLaunchMessages(), ...second], [lane('a1', 'draft:intro'), lane('a2', 'review:markdown')])
+    await act(async () => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <MobileBackgroundTasksSheetBody
+            messages={[...workflowLaunchMessages(), ...second]}
+            agent="claude"
+            agentStatus={{ state: 'working', subagents: lanes(1) }}
+            backgroundTaskReport={{ ...REPORT, runningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] }}
+          />
+        </ThemeProvider>
+      )
+    })
+    const { texts } = readTree(renderer!)
     expect(texts).toContain('pre-release-review-sweep')
     expect(texts).toContain('docs-pass')
-    expect(texts).toContain('draft:intro')
-    // `review:` belongs to both, so nothing says whose: it is a plain agent row.
-    expect(texts).toContain('review:markdown')
+    expect(texts.some((text) => text.endsWith(' running'))).toBe(false)
     expect(texts.filter((text) => text === 'Agent')).toHaveLength(1)
   })
 })

@@ -1,10 +1,9 @@
-import { useState } from 'react'
 import { Pressable, View } from 'react-native'
-import { ChevronDown, ChevronRight, CircleStop } from 'lucide-react-native'
+import { CircleStop } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask } from './mobile-background-tasks'
-import type { WorkflowAgent, WorkflowDetail, WorkflowPhase } from './mobile-background-task-workflows'
+import type { WorkflowDetail } from './mobile-background-task-workflows'
 import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
@@ -14,16 +13,17 @@ import {
 } from './mobile-background-task-labels'
 
 /**
- * One Workflow as the Claude app draws it (reference frames 2026-09-30): a
- * status dot and the workflow's name, "Workflow" and the time, the agent
- * count, the description, then a section per phase with a square for each
- * agent and the agent's label.
+ * One Workflow, drawn after the Claude app's card (reference frames
+ * 2026-09-30): a status dot and the workflow's name, "Workflow" and the time,
+ * the agent figures, the description, then the phases.
  *
- * Only what the phone can know is drawn. A running workflow says how many
- * agents are running now, never how many ran: the host's roster drops an agent
- * when it finishes, and carries no phase, tokens or time for one. So there is
- * no done/total, no token figure and no Time column while it runs; the totals
- * appear once the workflow's own completion notification states them.
+ * Only what the phone can know is drawn (docs/mobile-background-tasks.md, "A
+ * Workflow is one task"). The runner starts its agents inline, so the roster's
+ * lane rows carry no label, no phase, no tokens and vanish when an agent ends:
+ * the phases are the meta's titles alone, with no counts, squares or agent
+ * rows, and a running card says how many lanes are running only when it can
+ * show they are this workflow's. The totals (agents, tokens, failures, time)
+ * come from the workflow's own completion notification.
  */
 export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onStop?: (taskId: string) => void }) {
   const { colors, radius, space } = useTheme()
@@ -34,8 +34,6 @@ export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onS
   const running = task.status === 'running'
   const dot = running ? colors.info : task.status === 'failed' ? colors.danger : colors.textMuted
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs ?? detail.usage?.durationMs ?? null)
-  const runningAgents = countRunningAgents(detail)
-  const usage = detail.usage
   return (
     <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.bgRaised }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -70,32 +68,25 @@ export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onS
           </Txt>
         ) : null}
       </Facts>
-      {running ? (
-        runningAgents > 0 ? (
-          <Facts>
-            <Txt variant="caption" tone="secondary">
-              {formatAgentCount(runningAgents, true)}
-            </Txt>
-          </Facts>
-        ) : null
-      ) : usage && (usage.agents !== null || usage.tokens !== null) ? (
-        <Facts>
-          {usage.agents !== null ? (
-            <Txt variant="caption" tone="secondary">
-              {formatAgentCount(usage.agents)}
-            </Txt>
-          ) : null}
-          {usage.tokens !== null ? (
-            <Txt variant="caption" tone="secondary">{`${formatTokenCount(usage.tokens)} tokens`}</Txt>
-          ) : null}
-        </Facts>
-      ) : null}
+      <AgentFigures detail={detail} running={running} />
       {detail.description ? (
         <Txt variant="caption" tone="secondary">
           {detail.description}
         </Txt>
       ) : null}
-      {running ? <Phases detail={detail} /> : null}
+      {detail.phases !== null && detail.phases.length > 0 ? (
+        <View style={{ gap: space.xs, paddingTop: space.sm }}>
+          <Txt variant="label" weight="semibold">
+            Phases
+          </Txt>
+          {detail.phases.map((phase, index) => (
+            // Keyed by place: a meta may repeat a title.
+            <Txt key={index} variant="body" tone="secondary">
+              {phase.title}
+            </Txt>
+          ))}
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -105,106 +96,42 @@ function Facts({ children }: { children: React.ReactNode }) {
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>{children}</View>
 }
 
-function countRunningAgents(detail: WorkflowDetail): number {
-  return (detail.phases ?? []).reduce((sum, phase) => sum + phase.agents.length, detail.otherAgents.length)
-}
-
-function Phases({ detail }: { detail: WorkflowDetail }) {
-  const { space } = useTheme()
-  if (detail.phases === null && detail.otherAgents.length === 0) {
+/** Running: the lanes counted now, or nothing. Finished: the totals the
+ *  notification stated, each only when it stated it. */
+function AgentFigures({ detail, running }: { detail: WorkflowDetail; running: boolean }) {
+  const { lanes, usage } = detail
+  if (running) {
+    return lanes ? (
+      <Facts>
+        <Txt variant="caption" tone="secondary">
+          {`${lanes.count}${lanes.atLeast ? '+' : ''} agent${lanes.count === 1 && !lanes.atLeast ? '' : 's'} running`}
+        </Txt>
+      </Facts>
+    ) : null
+  }
+  if (!usage) {
     return null
   }
-  return (
-    <View style={{ gap: space.sm, paddingTop: space.sm }}>
-      {detail.phases !== null && detail.phases.length > 0 ? (
-        <>
-          <Txt variant="label" weight="semibold">
-            Phases
-          </Txt>
-          {detail.phases.map((phase) => (
-            <PhaseSection key={phase.title} phase={phase} />
-          ))}
-        </>
-      ) : null}
-      {detail.otherAgents.length > 0 ? (
-        <>
-          {detail.phases !== null && detail.phases.length > 0 ? (
-            <Txt variant="label" tone="muted">
-              Other agents
-            </Txt>
-          ) : (
-            <Txt variant="label" weight="semibold">
-              Agents
-            </Txt>
-          )}
-          <AgentRows agents={detail.otherAgents} />
-        </>
-      ) : null}
-    </View>
-  )
-}
-
-function PhaseSection({ phase }: { phase: WorkflowPhase }) {
-  const { colors, space } = useTheme()
-  const [open, setOpen] = useState(true)
-  const busy = phase.agents.length > 0
-  const title = (
-    <Txt variant="body" tone={busy ? 'primary' : 'muted'} style={{ flex: 1 }}>
-      {phase.title}
-    </Txt>
-  )
-  return (
-    <View style={{ gap: space.xs }}>
-      {busy ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${phase.title}, ${open ? 'collapse' : 'expand'}`}
-          onPress={() => setOpen((was) => !was)}
-          hitSlop={10}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 28 }}
-        >
-          {title}
-          <Txt variant="caption" tone="muted">{`${phase.agents.length} running`}</Txt>
-          {open ? (
-            <ChevronDown size={16} color={colors.textMuted} />
-          ) : (
-            <ChevronRight size={16} color={colors.textMuted} />
-          )}
-        </Pressable>
-      ) : (
-        <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 28 }}>{title}</View>
-      )}
-      {busy ? <Squares count={phase.agents.length} /> : null}
-      {busy && open ? <AgentRows agents={phase.agents} /> : null}
-    </View>
-  )
-}
-
-/** One square per running agent. Finished agents have no row on the roster,
- *  so there is no grey square for them: the row is the running ones only. */
-function Squares({ count }: { count: number }) {
-  const { colors } = useTheme()
-  return (
-    <View
-      accessibilityLabel={formatAgentCount(count, true)}
-      style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}
-    >
-      {Array.from({ length: count }, (_, index) => (
-        <View key={index} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: colors.info }} />
-      ))}
-    </View>
-  )
-}
-
-function AgentRows({ agents }: { agents: WorkflowAgent[] }) {
-  const { space } = useTheme()
-  return (
-    <View style={{ gap: space.xs }}>
-      {agents.map((agent) => (
-        <Txt key={agent.id} variant="caption" tone="secondary" numberOfLines={1} ellipsizeMode="tail">
-          {agent.label ?? 'Unnamed agent'}
+  const parts: { text: string; danger?: boolean }[] = []
+  if (usage.agents !== null) {
+    parts.push({ text: formatAgentCount(usage.agents) })
+  }
+  if (usage.tokens !== null) {
+    parts.push({ text: `${formatTokenCount(usage.tokens)} tokens` })
+  }
+  if (usage.failed) {
+    parts.push({ text: `${usage.failed} failed`, danger: true })
+  }
+  if (usage.skipped) {
+    parts.push({ text: `${usage.skipped} skipped` })
+  }
+  return parts.length === 0 ? null : (
+    <Facts>
+      {parts.map((part) => (
+        <Txt key={part.text} variant="caption" tone={part.danger ? 'danger' : 'secondary'}>
+          {part.text}
         </Txt>
       ))}
-    </View>
+    </Facts>
   )
 }

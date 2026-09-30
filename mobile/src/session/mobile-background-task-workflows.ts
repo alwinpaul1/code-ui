@@ -1,4 +1,4 @@
-import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
 import { parseWorkflowMeta } from './mobile-workflow-meta'
 import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 
@@ -17,8 +17,10 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 /** What the roster calls a lane a workflow started. */
 export const WORKFLOW_AGENT_TYPE = 'workflow-subagent'
 
-export type WorkflowAgent = { id: string; label: string | null }
-export type WorkflowPhase = { title: string; detail: string | null; agents: WorkflowAgent[] }
+export type WorkflowPhase = { title: string; detail: string | null }
+/** How many workflow lanes the roster shows running. `atLeast` when the roster
+ *  was full, so lanes may be missing from it. */
+export type WorkflowLanes = { count: number; atLeast: boolean }
 /** The totals Claude states in a finished workflow's notification. A field
  *  the notification did not carry is null, never zero. */
 export type WorkflowUsage = {
@@ -32,11 +34,11 @@ export type WorkflowUsage = {
 
 export type WorkflowDetail = {
   description: string | null
-  /** From the script's meta; null when it could not be read. */
+  /** From the script's meta, titles and details only: nothing says which agent
+   *  is in which phase. Null when the meta could not be read. */
   phases: WorkflowPhase[] | null
-  /** Running agents no phase claims (an unnamed one, a label that names no
-   *  phase), or all of them when there is no meta. */
-  otherAgents: WorkflowAgent[]
+  /** Lanes running now, set only where they can be put on this workflow. */
+  lanes: WorkflowLanes | null
   /** Set once the workflow has finished and said so; null before. */
   usage: WorkflowUsage | null
 }
@@ -76,8 +78,8 @@ export function readWorkflowLaunch(input: unknown, output: string): { id: string
       // The launch result repeats the description, so an unreadable script
       // still leaves the sentence.
       description: meta?.description ?? SUMMARY_LINE.exec(output)?.[1]?.trim() ?? null,
-      phases: meta?.phases?.map((phase) => ({ ...phase, agents: [] })) ?? null,
-      otherAgents: [],
+      phases: meta?.phases ?? null,
+      lanes: null,
       usage: null
     }
   }
@@ -120,58 +122,50 @@ export function readWorkflowUsage(notificationBody: string): WorkflowUsage | nul
   return Object.values(usage).every((value) => value === null) ? null : usage
 }
 
-/** Move the roster's workflow lanes into the running workflow that owns them.
- *  A lane is folded only when exactly one running workflow can own it: the
- *  only one there is, or the only one whose meta has a phase the label starts
- *  with (`review:markdown` for a phase titled Review). The row carries no
- *  workflow id, so with several running and no such match nothing says whose
- *  it is, and it stays the agent row it was. */
+/** Count the roster's workflow lanes on the one running workflow they can be
+ *  put on, and take them off the running list.
+ *
+ *  A lane row names no workflow, no phase and (in production, Claude Code
+ *  2.1.284) no label, so a lane is put on a card only when nothing says it could
+ *  be another workflow's:
+ *   - exactly one workflow is running in the loaded window;
+ *   - the agent's own beacon has named what is running, and every id on it is a
+ *     launch the window showed (a workflow launched above the window is running
+ *     and would be on that list, not in the window);
+ *   - the lane started after this workflow was launched;
+ *   - the host does not say the pane is done.
+ *  Otherwise nothing changes: the lanes stay the agent rows they were. */
 export function foldWorkflowAgents(
   tasks: BackgroundTasks,
   subagents: readonly AgentSubagentSnapshot[] | undefined,
-  hostDone: boolean
+  evidence: { hostDone: boolean; beaconRunning: readonly string[] | null; launchedIds: ReadonlySet<string> }
 ): BackgroundTasks {
   const workflows = tasks.running.filter((task) => task.kind === 'workflow' && task.workflow)
-  const lanes = hostDone ? [] : (subagents ?? []).filter((row) => row.state !== 'idle' && row.agentType?.trim() === WORKFLOW_AGENT_TYPE)
-  if (workflows.length === 0 || lanes.length === 0) {
+  const [workflow] = workflows
+  const launchedAt = workflow?.startedAt ?? null
+  if (
+    workflows.length !== 1 ||
+    workflow === undefined ||
+    launchedAt === null ||
+    evidence.hostDone ||
+    evidence.beaconRunning === null ||
+    !evidence.beaconRunning.every((id) => evidence.launchedIds.has(id))
+  ) {
     return tasks
   }
-  const folded = new Set<string>()
-  const details = new Map<string, WorkflowDetail>(
-    workflows.map((task) => [task.id, cloneDetail(task.workflow!)] as const)
+  const rows = subagents ?? []
+  const lanes = rows.filter(
+    (row) => row.state !== 'idle' && row.agentType?.trim() === WORKFLOW_AGENT_TYPE && row.startedAt >= launchedAt
   )
-  for (const lane of lanes) {
-    const agent = { id: lane.id, label: lane.description?.trim() || null }
-    const owners = workflows.length === 1 ? workflows : workflows.filter((task) => phaseFor(details.get(task.id)!, agent.label) !== null)
-    const owner = owners.length === 1 ? owners[0] : undefined
-    if (owner === undefined) {
-      continue
-    }
-    const detail = details.get(owner.id)!
-    const phase = phaseFor(detail, agent.label)
-    ;(phase?.agents ?? detail.otherAgents).push(agent)
-    folded.add(lane.id)
+  if (lanes.length === 0) {
+    return tasks
   }
+  const folded = new Set(lanes.map((lane) => lane.id))
+  const counted: WorkflowLanes = { count: lanes.length, atLeast: rows.length >= AGENT_STATUS_MAX_SUBAGENTS }
   return {
     running: tasks.running
       .filter((task) => !(task.kind === 'agent' && folded.has(task.id)))
-      .map((task): BackgroundTask => (details.has(task.id) ? { ...task, workflow: details.get(task.id)! } : task)),
+      .map((task): BackgroundTask => (task === workflow ? { ...task, workflow: { ...task.workflow!, lanes: counted } } : task)),
     finished: tasks.finished
   }
-}
-
-function cloneDetail(detail: WorkflowDetail): WorkflowDetail {
-  return {
-    ...detail,
-    phases: detail.phases?.map((phase) => ({ ...phase, agents: [] })) ?? null,
-    otherAgents: []
-  }
-}
-
-function phaseFor(detail: WorkflowDetail, label: string | null): WorkflowPhase | null {
-  if (label === null || detail.phases === null) {
-    return null
-  }
-  const lower = label.toLowerCase()
-  return detail.phases.find((phase) => lower.startsWith(`${phase.title.toLowerCase()}:`)) ?? null
 }

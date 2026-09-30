@@ -301,7 +301,11 @@ export function deriveBackgroundTasks(
     ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
   })
   const fitted = fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
-  return foldWorkflowAgents(fitted, hostStatus?.subagents, hostStatus?.state === 'done')
+  return foldWorkflowAgents(fitted, hostStatus?.subagents, {
+    hostDone: hostStatus?.state === 'done',
+    beaconRunning: options.runningTaskIds ?? null,
+    launchedIds: new Set(launches.keys())
+  })
 }
 
 type SplitContext = {

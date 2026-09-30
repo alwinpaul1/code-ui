@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import { readClaudeBackgroundAgentTasks } from '../../../src/shared/claude-background-task-inventory'
+import {
+  claudeRosterToSnapshots,
+  foldClaudeBackgroundTasksIntoRoster,
+  stopClaudeSubagent,
+  upsertWorkingClaudeSubagent,
+  type ClaudeSubagentRoster
+} from '../../../src/shared/claude-subagent-roster'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { countRunningBackgroundTasks, deriveBackgroundTasks } from './mobile-background-tasks'
+import {
+  countRunningBackgroundTasks,
+  deriveBackgroundTasks,
+  type BackgroundTaskDeriveOptions
+} from './mobile-background-tasks'
 import {
   WORKFLOW_LAUNCHED_AT,
   WORKFLOW_LAUNCH_RESULT,
@@ -11,27 +23,48 @@ import {
   workflowLaunchMessages
 } from './fixtures/claude-workflow-2.1.284'
 
-// A Workflow is one background task, not a swarm of agents. Every record here
-// is a Claude Code 2.1.284 record (fixtures/claude-workflow-2.1.284.ts); the
-// roster rows are the shape Orca's hooks give a workflow lane: agentType
-// `workflow-subagent`, the label as `description` once Claude's inventory has
-// named it, no phase and no workflow id on the row.
+// A Workflow is one task, not a swarm of agents. Every transcript record here
+// is a Claude Code 2.1.284 record (fixtures/claude-workflow-2.1.284.ts). The
+// roster rows are built the way Orca builds them for a workflow lane in
+// production, through the vendored roster (src/shared/claude-subagent-roster):
+// SubagentStart carries only agent_id and agent_type, the runner runs its
+// agents inline and never lists them in the Stop payload's `background_tasks`,
+// so a lane never has a description or a phase, and every lead Stop clears
+// the roster (the inventory holds no agent-typed task) until the lane's next
+// tool event puts it back.
 const NOW = WORKFLOW_LAUNCHED_AT + 61 * 60_000 + 44_000
 /** The script's real head followed by enough body to pass the wire's cap. */
 const WORKFLOW_SCRIPT_FULL_LENGTH_PAD = WORKFLOW_SCRIPT + 'await agent("review")\n'.repeat(400)
+const LANE_STARTED = WORKFLOW_LAUNCHED_AT + 5_000
 
-function lane(id: string, description: string | undefined, state: AgentSubagentSnapshot['state'] = 'working'): AgentSubagentSnapshot {
-  return {
-    id,
-    agentType: 'workflow-subagent',
-    ...(description === undefined ? {} : { description }),
-    state,
-    startedAt: WORKFLOW_LAUNCHED_AT + 5_000
+/** What the Stop hook's beacon says is running: the workflow, nothing else. */
+const BEACON_NAMES_ONLY_THE_WORKFLOW = { runningTaskIds: [WORKFLOW_TASK_ID] }
+
+function startLanes(roster: ClaudeSubagentRoster, count: number, from = 0): void {
+  for (let index = from; index < from + count; index += 1) {
+    upsertWorkingClaudeSubagent(roster, `a${index.toString(16).padStart(16, '0')}`, { agentType: 'workflow-subagent' }, LANE_STARTED + index)
   }
 }
 
-function derive(messages: NativeChatMessage[], subagents?: AgentSubagentSnapshot[]) {
-  return deriveBackgroundTasks(messages, NOW, subagents ? { state: 'working', subagents } : null)
+/** A lead Stop while the workflow runs: its inventory names the workflow (not
+ *  an agent-typed task), so the roster is cleared. */
+function leadStop(roster: ClaudeSubagentRoster): void {
+  const { tasks } = readClaudeBackgroundAgentTasks({
+    background_tasks: [{ type: 'local_workflow', id: WORKFLOW_TASK_ID, status: 'running' }]
+  })
+  foldClaudeBackgroundTasksIntoRoster(roster, tasks, NOW)
+}
+
+function derive(
+  messages: NativeChatMessage[],
+  subagents?: AgentSubagentSnapshot[],
+  options: BackgroundTaskDeriveOptions = BEACON_NAMES_ONLY_THE_WORKFLOW
+) {
+  return deriveBackgroundTasks(messages, NOW, subagents ? { state: 'working', subagents } : null, options)
+}
+
+function lanesOf(roster: ClaudeSubagentRoster) {
+  return derive(workflowLaunchMessages(), claudeRosterToSnapshots(roster)).running[0]?.workflow?.lanes ?? null
 }
 
 describe('a Workflow launch in the lead transcript', () => {
@@ -79,7 +112,7 @@ describe('a Workflow launch in the lead transcript', () => {
       ...answer!,
       blocks: [{ type: 'tool-result', output: 'Workflow launched in background. Task ID: wxyz12345\nRun ID: wf_1' }]
     }
-    const { running } = derive([call!, bare])
+    const { running } = derive([call!, bare], undefined, {})
     expect(running[0]).toMatchObject({ id: 'wxyz12345', title: 'Workflow' })
     expect(running[0]?.workflow?.description).toBeNull()
   })
@@ -170,85 +203,156 @@ describe('a Workflow launch in the lead transcript', () => {
   })
 })
 
-describe("a workflow's own agents", () => {
-  it('sit inside the workflow, not beside it as raw "workflow-subagent" rows, and are not counted again', () => {
-    const roster = [lane('a1', 'review:markdown'), lane('a2', 'review:chat-ui'), lane('a3', 'fix:r1:b1-pr-rich-markdown')]
-    const { running } = derive(workflowLaunchMessages(), roster)
+describe("a workflow's lanes", () => {
+  it('are counted on the card, not listed beside it as raw "workflow-subagent" rows, and not counted again', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 3)
+    const snapshots = claudeRosterToSnapshots(roster)
+    expect(snapshots?.every((row) => row.description === undefined)).toBe(true)
+    const { running } = derive(workflowLaunchMessages(), snapshots)
     expect(running.map((task) => task.kind)).toEqual(['workflow'])
-    expect(countRunningBackgroundTasks(workflowLaunchMessages(), { state: 'working', subagents: roster }, {}, NOW)).toBe(1)
-    const phases = running[0]?.workflow?.phases ?? []
-    expect(phases.find((phase) => phase.title === 'Review')?.agents.map((agent) => agent.label)).toEqual(['review:markdown', 'review:chat-ui'])
-    expect(phases.find((phase) => phase.title === 'Fix')?.agents.map((agent) => agent.label)).toEqual(['fix:r1:b1-pr-rich-markdown'])
-    expect(phases.find((phase) => phase.title === 'Triage')?.agents).toEqual([])
+    expect(running[0]?.workflow?.lanes).toEqual({ count: 3, atLeast: false })
+    expect(countRunningBackgroundTasks(workflowLaunchMessages(), { state: 'working', subagents: snapshots }, BEACON_NAMES_ONLY_THE_WORKFLOW, NOW)).toBe(1)
   })
 
-  it('are listed even when the lead transcript never launched them (only a lead-started agent is otherwise counted)', () => {
+  it('carry no phase and no label, so the card names phases only from the meta and holds no agent rows', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 2)
+    const detail = derive(workflowLaunchMessages(), claudeRosterToSnapshots(roster)).running[0]?.workflow
+    expect(detail?.phases).toEqual([
+      { title: 'Review', detail: 'Sonnet reviewers, one per app area, prove each finding with a scratch test' },
+      { title: 'Triage', detail: 'Opus orchestrator dedups, plans non-overlapping fix batches' },
+      { title: 'Fix', detail: 'Opus fixers, one worktree per batch, failing-first tests' },
+      { title: 'Integrate', detail: 'Opus integrator merges fix branches and runs the full gate' },
+      { title: 'Re-review', detail: 'Sonnet reviewers check the integrated branch for regressions and leftovers' }
+    ])
+    expect(Object.keys(detail ?? {}).sort()).toEqual(['description', 'lanes', 'phases', 'usage'])
+  })
+
+  it('are counted even when the lead transcript never launched them', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 1)
     const { running } = deriveBackgroundTasks(
       workflowLaunchMessages(),
       NOW,
-      { state: 'working', subagents: [lane('a1', 'review:markdown')] },
-      { agentProvenance: { ownAgentIds: [], preexistingAgentIds: [] } }
+      { state: 'working', subagents: claudeRosterToSnapshots(roster) },
+      { ...BEACON_NAMES_ONLY_THE_WORKFLOW, agentProvenance: { ownAgentIds: [], preexistingAgentIds: [] } }
     )
     expect(running.map((task) => task.kind)).toEqual(['workflow'])
-    expect(running[0]?.workflow?.phases?.[0]?.agents).toHaveLength(1)
+    expect(running[0]?.workflow?.lanes).toEqual({ count: 1, atLeast: false })
   })
 
-  it('one agent: one row in its phase; none: no agent rows and no invented count', () => {
-    const one = derive(workflowLaunchMessages(), [lane('a1', 'triage:round-1')])
-    expect(one.running[0]?.workflow?.phases?.find((phase) => phase.title === 'Triage')?.agents).toEqual([{ id: 'a1', label: 'triage:round-1' }])
-    const none = derive(workflowLaunchMessages(), [])
-    expect(none.running[0]?.workflow?.phases?.every((phase) => phase.agents.length === 0)).toBe(true)
-    expect(none.running[0]?.workflow?.otherAgents).toEqual([])
+  it('give no count when there are none: no zero, and a roster a lead Stop just cleared reads as none', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    expect(lanesOf(roster)).toBeNull()
+    startLanes(roster, 4)
+    expect(lanesOf(roster)).toEqual({ count: 4, atLeast: false })
+    // A lead Stop clears the roster mid-workflow; Orca then has no rows at all.
+    leadStop(roster)
+    expect(claudeRosterToSnapshots(roster)).toBeUndefined()
+    expect(lanesOf(roster)).toBeNull()
+    // The lanes' next tool events put them back, with new starts.
+    startLanes(roster, 2, 10)
+    expect(lanesOf(roster)).toEqual({ count: 2, atLeast: false })
   })
 
-  it('an agent whose label names no phase is kept, unplaced, and so is every agent when the meta would not parse', () => {
-    const stray = derive(workflowLaunchMessages(), [lane('a1', 'lint the docs'), lane('a2', undefined)])
-    expect(stray.running[0]?.workflow?.otherAgents).toEqual([
-      { id: 'a1', label: 'lint the docs' },
-      { id: 'a2', label: null }
-    ])
-    const noMeta = derive(workflowLaunchMessages('export const meta = compute()'), [lane('a1', 'review:markdown')])
-    expect(noMeta.running[0]?.workflow?.otherAgents).toEqual([{ id: 'a1', label: 'review:markdown' }])
+  it('a lane that finished is off the roster and is not counted', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 2)
+    stopClaudeSubagent(roster, `a${(0).toString(16).padStart(16, '0')}`)
+    expect(lanesOf(roster)).toEqual({ count: 1, atLeast: false })
   })
 
-  it('an idle lane is not running work and is left out', () => {
-    const { running } = derive(workflowLaunchMessages(), [lane('a1', 'review:markdown', 'idle')])
-    expect(running[0]?.workflow?.phases?.[0]?.agents).toEqual([])
+  it('at the roster cap the count is a floor: "32+", never a number that may be short', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 40)
+    expect(roster.size).toBe(32)
+    expect(lanesOf(roster)).toEqual({ count: 32, atLeast: true })
+  })
+
+  it('at the cap with another agent among the rows, the lanes are a floor too', () => {
+    const roster: ClaudeSubagentRoster = new Map()
+    upsertWorkingClaudeSubagent(roster, 'a0000000000000fff', { agentType: 'general-purpose' }, LANE_STARTED)
+    startLanes(roster, 40)
+    expect(roster.size).toBe(32)
+    expect(lanesOf(roster)).toEqual({ count: 31, atLeast: true })
+  })
+
+  it('an idle row is not running work', () => {
+    const idle: AgentSubagentSnapshot = { id: 'a1', agentType: 'workflow-subagent', state: 'idle', startedAt: LANE_STARTED }
+    expect(derive(workflowLaunchMessages(), [idle]).running[0]?.workflow?.lanes).toBeNull()
   })
 
   it('with no workflow in the loaded window they stay ordinary agent rows', () => {
-    const { running } = derive([], [lane('a1', 'review:markdown')])
-    expect(running.map((task) => [task.kind, task.title])).toEqual([['agent', 'review:markdown']])
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 1)
+    const { running } = derive([], claudeRosterToSnapshots(roster))
+    expect(running.map((task) => [task.kind, task.title])).toEqual([['agent', 'workflow-subagent']])
   })
 
   it('an agent that is not a workflow lane stays an agent row beside the workflow', () => {
-    const other: AgentSubagentSnapshot = { id: 'a9', agentType: 'general-purpose', description: 'Explore', state: 'working', startedAt: WORKFLOW_LAUNCHED_AT }
-    const { running } = derive(workflowLaunchMessages(), [lane('a1', 'review:markdown'), other])
+    const roster: ClaudeSubagentRoster = new Map()
+    startLanes(roster, 2)
+    upsertWorkingClaudeSubagent(roster, 'a9', { agentType: 'general-purpose', description: 'Explore' }, LANE_STARTED)
+    const { running } = derive(workflowLaunchMessages(), claudeRosterToSnapshots(roster))
     expect(running.map((task) => task.kind).sort()).toEqual(['agent', 'workflow'])
+    expect(running.find((task) => task.kind === 'workflow')?.workflow?.lanes).toEqual({ count: 2, atLeast: false })
   })
+})
 
-  it('two workflows at once: a lane is placed only where exactly one workflow has its phase, else left as an agent row', () => {
-    const second = workflowLaunchMessages(
-      "export const meta = { name: 'docs-pass', description: 'Rewrite docs', phases: [{ title: 'Draft' }, { title: 'Review' }] }"
-    ).map((message, index) => ({
+// A lane row names no workflow, so a lane is put on a card only when nothing
+// says it could be another workflow's. Where that cannot be shown the lanes are
+// left as they were (an ordinary agent row): refusing beats a wrong card.
+describe('a lane that could belong to another workflow', () => {
+  function oneLane(startedAt = LANE_STARTED): AgentSubagentSnapshot[] {
+    return [{ id: 'a7f3c19d20be4a611', agentType: 'workflow-subagent', state: 'working', startedAt }]
+  }
+  const kinds = (result: ReturnType<typeof derive>) => result.running.map((task) => task.kind).sort()
+
+  it('is not folded when a second workflow is running', () => {
+    const second = workflowLaunchMessages("export const meta = { name: 'docs-pass', phases: [{ title: 'Draft' }] }").map((message, index) => ({
       ...message,
       id: `second-${index}`,
       blocks: message.blocks.map((block) =>
         block.type === 'tool-result' ? { ...block, output: block.output.replace(WORKFLOW_TASK_ID, 'wdocs0001') } : block
       )
     }))
-    const roster = [lane('a1', 'draft:intro'), lane('a2', 'review:markdown'), lane('a3', 'fix:r1:b1'), lane('a4', 'mystery')]
-    const { running } = derive([...workflowLaunchMessages(), ...second], roster)
-    const workflows = running.filter((task) => task.kind === 'workflow')
-    expect(workflows.map((task) => task.title)).toEqual(['pre-release-review-sweep', 'docs-pass'])
-    const bySweep = workflows[0]?.workflow
-    const byDocs = workflows[1]?.workflow
-    // `draft:` is only the second's phase, `fix:` only the first's.
-    expect(byDocs?.phases?.find((phase) => phase.title === 'Draft')?.agents.map((agent) => agent.id)).toEqual(['a1'])
-    expect(bySweep?.phases?.find((phase) => phase.title === 'Fix')?.agents.map((agent) => agent.id)).toEqual(['a3'])
-    // `review:` is in both and `mystery` in neither: nothing says whose, so they stay agent rows.
-    expect(running.filter((task) => task.kind === 'agent').map((task) => task.id).sort()).toEqual(['a2', 'a4'])
-    expect(bySweep?.phases?.find((phase) => phase.title === 'Review')?.agents).toEqual([])
-    expect(byDocs?.phases?.find((phase) => phase.title === 'Review')?.agents).toEqual([])
+    const result = derive([...workflowLaunchMessages(), ...second], oneLane(), { runningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] })
+    expect(kinds(result)).toEqual(['agent', 'workflow', 'workflow'])
+    expect(result.running.filter((task) => task.kind === 'workflow').every((task) => task.workflow?.lanes === null)).toBe(true)
+  })
+
+  it('is not folded when the agent has not said what is running (no beacon list yet)', () => {
+    const result = derive(workflowLaunchMessages(), oneLane(), {})
+    expect(kinds(result)).toEqual(['agent', 'workflow'])
+    expect(result.running.find((task) => task.kind === 'workflow')?.workflow?.lanes).toBeNull()
+  })
+
+  it('is not folded when the beacon names a running task the loaded window never showed (a workflow launched above it)', () => {
+    const result = derive(workflowLaunchMessages(), oneLane(), { runningTaskIds: [WORKFLOW_TASK_ID, 'wabove0001'] })
+    expect(kinds(result)).toEqual(['agent', 'workflow'])
+  })
+
+  it('is not folded when it started before this workflow was launched', () => {
+    const result = derive(workflowLaunchMessages(), oneLane(WORKFLOW_LAUNCHED_AT - 60_000))
+    expect(kinds(result)).toEqual(['agent', 'workflow'])
+    expect(result.running.find((task) => task.kind === 'workflow')?.workflow?.lanes).toBeNull()
+  })
+
+  it('is not folded into a workflow that has finished', () => {
+    const result = derive([...workflowLaunchMessages(), workflowFinishedMessage()], oneLane(), { runningTaskIds: [] })
+    expect(result.finished[0]?.workflow?.lanes).toBeNull()
+    expect(kinds(result)).toEqual(['agent'])
+  })
+
+  it('is not folded when the host says the pane is done', () => {
+    const result = deriveBackgroundTasks(workflowLaunchMessages(), NOW, { state: 'done', subagents: oneLane() }, BEACON_NAMES_ONLY_THE_WORKFLOW)
+    expect(result.finished[0]?.workflow?.lanes).toBeNull()
+  })
+
+  it('is folded when exactly one workflow runs, the beacon names nothing the window did not show, and the lane started after the launch', () => {
+    const result = derive(workflowLaunchMessages(), oneLane())
+    expect(kinds(result)).toEqual(['workflow'])
+    expect(result.running[0]?.workflow?.lanes).toEqual({ count: 1, atLeast: false })
   })
 })
