@@ -20,6 +20,8 @@ export function deriveReportedBackgroundTasks(
     runningTaskIds: report?.runningTaskIds ?? null,
     runningTaskIdsAt: report?.runningTaskIdsAt ?? null,
     launchedTaskIds: report?.launchedTaskIds ?? [],
+    stopRunningTaskIds: report?.stopRunningTaskIds ?? null,
+    stopRunningTaskIdsAt: report?.stopRunningTaskIdsAt ?? null,
     onScreenShellCount: report?.onScreenShellCount ?? null,
     heldOnScreenShellCount: report?.heldOnScreenShellCount ?? null,
     leadOnlyShellCount: report?.leadOnlyShellCount ?? null,

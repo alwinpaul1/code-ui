@@ -64,6 +64,10 @@ export type ActiveTabBackgroundTaskReport = {
   runningTaskIds: readonly string[] | null
   /** When that answer arrived (phone clock, epoch ms); null when it has not. */
   runningTaskIdsAt: number | null
+  /** The last Stop hook's `run=` alone, which the status line's `live=` never
+   *  replaces: the only list that can name a workflow or a monitor. */
+  stopRunningTaskIds?: readonly string[] | null
+  stopRunningTaskIdsAt?: number | null
   /** Every shell the beacon saw launched in the transcript tail. */
   launchedTaskIds: readonly string[]
   /** How many shells the agent's own footer says are running, read off the
@@ -102,7 +106,23 @@ export function useActiveTabBackgroundTaskReport(args: {
   const runningTaskIdsAt = beacon?.runningTaskIdsAt ?? null
   const launchedTaskIds = beacon?.launchedTaskIds ?? NONE
   return useMemo(
-    () => ({ finishedTaskIds, runningTaskIds, runningTaskIdsAt, launchedTaskIds }),
-    [finishedTaskIds, runningTaskIds, runningTaskIdsAt, launchedTaskIds]
+    () => backgroundTaskReportFromBeacon(beacon, finishedTaskIds),
+    [finishedTaskIds, runningTaskIds, runningTaskIdsAt, launchedTaskIds, beacon?.stopRunningTaskIds, beacon?.stopRunningTaskIdsAt]
   )
+}
+
+/** The report the reader takes from a tab's beacon, and the ids it has shown
+ *  finished. Pure, so a test can hold the beacon store and this together. */
+export function backgroundTaskReportFromBeacon(
+  beacon: AgentHudBeacon | null,
+  finishedTaskIds: readonly string[]
+): ActiveTabBackgroundTaskReport {
+  return {
+    finishedTaskIds,
+    runningTaskIds: beacon?.runningTaskIds ?? null,
+    runningTaskIdsAt: beacon?.runningTaskIdsAt ?? null,
+    launchedTaskIds: beacon?.launchedTaskIds ?? NONE,
+    stopRunningTaskIds: beacon?.stopRunningTaskIds ?? null,
+    stopRunningTaskIdsAt: beacon?.stopRunningTaskIdsAt ?? null
+  }
 }

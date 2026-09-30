@@ -1,5 +1,6 @@
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { BackgroundTaskKind } from './mobile-background-tasks'
+import { readWorkflowLaunch, readWorkflowUsage, type WorkflowDetail, type WorkflowUsage } from './mobile-background-task-workflows'
 
 // The transcript-reading half of the background-task reader: the exact
 // sentences Claude Code writes when it launches a shell, a subagent or a
@@ -55,11 +56,23 @@ export type Launch = {
    *  folded, because the screen re-wraps it. Null for a kind whose summary
    *  says something else (agents, monitors). */
   label: string | null
+  /** A workflow's meta and phases, from its call and launch result. */
+  workflow?: WorkflowDetail
+  /** Judged by the last Stop's `run=` alone: a status line's `live=` is built
+   *  from Bash launch sentences and never names a workflow or a monitor. */
+  stopListOnly?: true
 }
 /** `at` orders the finished list (the notification's place in the window);
  *  `timestamp` is when Claude wrote it, null when the ending came from
  *  somewhere with no time (a beacon id, a screen row). */
-export type Notification = { status: string; summary: string | null; at: number; timestamp: number | null }
+export type Notification = {
+  status: string
+  summary: string | null
+  at: number
+  timestamp: number | null
+  /** The `<usage>` totals a finished workflow's notification states. */
+  usage?: WorkflowUsage
+}
 
 
 /** Long enough to read a real description, short enough for one phone row. */
@@ -82,11 +95,17 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
     const id = AGENT_LAUNCHED.exec(output)?.[1]
     return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt, label: null } : null
   }
+  if (call.name === 'Workflow') {
+    const launched = readWorkflowLaunch(call.input, output)
+    return launched
+      ? { id: launched.id, kind: 'workflow', title: launched.title, startedAt: call.startedAt, label: null, workflow: launched.detail, stopListOnly: true }
+      : null
+  }
   if (call.name === 'Monitor') {
     // A monitor is a long-running shell; its event notifications carry no
     // status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null } : null
+    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
   }
   return null
 }
@@ -152,9 +171,10 @@ export function readNotifications(
     if (!id || !status) {
       continue
     }
+    const usage = readWorkflowUsage(body)
     found.push({
       id,
-      value: { status, summary: NOTIFICATION_SUMMARY.exec(body)?.[1] ?? null, at: position, timestamp }
+      value: { status, summary: NOTIFICATION_SUMMARY.exec(body)?.[1] ?? null, at: position, timestamp, ...(usage ? { usage } : {}) }
     })
   }
   return found

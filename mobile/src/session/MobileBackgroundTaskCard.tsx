@@ -3,6 +3,7 @@ import { Activity, ChevronRight, CircleStop, Diamond, ListTree, Terminal } from 
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
+import { MobileWorkflowCard } from './MobileWorkflowCard'
 import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
@@ -27,6 +28,9 @@ export function MobileBackgroundTaskCard({
   onOpen?: () => void
 }) {
   const { colors, radius, space } = useTheme()
+  if (task.workflow) {
+    return <MobileWorkflowCard task={task} onStop={onStop} />
+  }
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'
   const frame = (pressed: boolean) => ({

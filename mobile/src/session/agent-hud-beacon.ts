@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { resetAgentHudChannels, takeAgentHudChannelFor } from './agent-hud-channel'
 import { readDesktopPrompt } from './agent-hud-beacon-desktop-prompt'
-import { restamp, unchangedBeacon } from './agent-hud-beacon-identity'
+import { keepStopList, restamp, stopList, unchangedBeacon } from './agent-hud-beacon-identity'
 import { resetBeaconWatches } from './agent-hud-beacon-liveness'
 import {
   readWarmStartBeacons,
@@ -128,6 +128,13 @@ export type AgentHudBeacon = {
    *  so its list cannot name a shell launched after it — the reader uses this
    *  to keep an old answer from retiring a new launch. */
   runningTaskIdsAt: number | null
+  /** The last Stop hook's `run=` alone, kept apart from `runningTaskIds`, which
+   *  the status line's `live=` (every repaint, built from Bash launch sentences
+   *  only) replaces. A workflow or a monitor is named by no `live=`, so only
+   *  this list can say one has ended. Null until a Stop has spoken. */
+  stopRunningTaskIds?: string[] | null
+  /** When that Stop's beacon arrived (phone clock, epoch ms). */
+  stopRunningTaskIdsAt?: number | null
   /** Every shell the transcript tail shows launched, from the status-line
    *  beacon on every refresh — fresh mid-turn, where `run=` is not. */
   launchedTaskIds: string[]
@@ -229,6 +236,7 @@ export function parseAgentHudBeaconPayload(
     // could not know about a shell started later in a long turn.
     runningTaskIds: liveOrRun(values),
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
+    ...(values.has('run') ? stopList(values.get('run'), receivedAt) : {}),
     promptHook: values.get('hk') === '1',
     desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at'), values.get('ts')),
     desktopPrompts: [],
@@ -306,6 +314,7 @@ function publish(handle: string, payload: string): void {
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
         // Restamped only when the list moved: see `unchangedBeacon`.
         runningTaskIdsAt: restamp(beacon, previous),
+        ...keepStopList(beacon, previous),
         doneTaskIds: beacon.doneTaskIds.length > 0 ? beacon.doneTaskIds : previous.doneTaskIds,
         launchedTaskIds:
           beacon.launchedTaskIds.length > 0 ? beacon.launchedTaskIds : previous.launchedTaskIds,
