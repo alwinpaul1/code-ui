@@ -1,6 +1,6 @@
 import {
   persistableImagePreviews,
-  readNativeChatImagePreviews,
+  readNativeChatImagePreviewRecord,
   writeNativeChatImagePreviews
 } from '../storage/native-chat-image-previews'
 import { createPersistedMap } from './session-cache-persistence'
@@ -28,6 +28,11 @@ const RECENT_SESSIONS = 12
 const lastKnown = new Map<string, Record<string, string[]>>()
 /** A session's save still in flight, which the next one waits for. */
 const saving = new Map<string, Promise<void>>()
+/** Previews a save could not write because storage would not read the
+ *  session to merge them in: the next save that can read carries them. */
+const unsaved = new Map<string, Record<string, string[]>>()
+/** Sessions a skipped save has been logged for, until a save lands. */
+const refusalLogged = new Set<string>()
 const recent =createPersistedMap<Record<string, string[]>>({
   storageKey: 'codeui:chat-image-previews-recent',
   maxEntries: RECENT_SESSIONS
@@ -88,28 +93,58 @@ export function saveNativeChatImagePreviews(
   return run
 }
 
+/**
+ * A save the run has not read the session for. A read storage refused is not
+ * an empty session: written over, the stored map lost every earlier photo of
+ * the chat, drawn as "Image on Desktop" from then on (2026-09-30). One more
+ * read covers a store that refused once; one that still refuses gets no
+ * write, the previews wait in `unsaved` for the next save, and one line says
+ * why.
+ */
 async function saveInOrder(sessionKey: string, previews: Record<string, string[]>): Promise<void> {
   if (lastKnown.has(sessionKey)) {
     remember(sessionKey, previews)
     return writeNativeChatImagePreviews(sessionKey, previews)
   }
-  const stored = await readNativeChatImagePreviews(sessionKey)
+  let read = await readNativeChatImagePreviewRecord(sessionKey)
+  if ('refused' in read) {
+    read = await readNativeChatImagePreviewRecord(sessionKey)
+  }
+  if ('refused' in read) {
+    unsaved.set(sessionKey, { ...unsaved.get(sessionKey), ...previews })
+    if (!refusalLogged.has(sessionKey)) {
+      refusalLogged.add(sessionKey)
+      console.warn(
+        '[storage] could not save the chat photo previews: the stored ones could not be read, and writing over them would drop them',
+        read.refused
+      )
+    }
+    return
+  }
+  refusalLogged.delete(sessionKey)
+  const waiting = unsaved.get(sessionKey)
+  unsaved.delete(sessionKey)
   // The chat's own read may have come back meanwhile: it is storage too.
-  const merged = stored ? { ...stored, ...lastKnown.get(sessionKey), ...previews } : previews
+  const merged = { ...read.previews, ...lastKnown.get(sessionKey), ...waiting, ...previews }
   remember(sessionKey, merged)
   return writeNativeChatImagePreviews(sessionKey, merged)
 }
 
 /** Reads a session's previews from storage, and remembers them unless this
- *  run wrote the session meanwhile. A failed read is remembered as nothing. */
+ *  run wrote the session meanwhile. A failed read is remembered as nothing,
+ *  so the next save still reads before it writes; a refused one says so. */
 export async function loadNativeChatImagePreviews(
   sessionKey: string
 ): Promise<Record<string, string[]> | null> {
-  const stored = await readNativeChatImagePreviews(sessionKey)
-  if (stored && !lastKnown.has(sessionKey)) {
-    remember(sessionKey, stored)
+  const read = await readNativeChatImagePreviewRecord(sessionKey)
+  if ('refused' in read) {
+    console.warn('[storage] could not read the chat photo previews', read.refused)
+    return null
   }
-  return stored
+  if (read.previews && !lastKnown.has(sessionKey)) {
+    remember(sessionKey, read.previews)
+  }
+  return read.previews
 }
 
 /** The previous run's recent sessions, before any chat opens. A missing or
@@ -121,5 +156,7 @@ export function hydrateNativeChatImagePreviewCache(): Promise<void> {
 export function resetNativeChatImagePreviewCacheForTests(): void {
   lastKnown.clear()
   saving.clear()
+  unsaved.clear()
+  refusalLogged.clear()
   recent.reset()
 }
