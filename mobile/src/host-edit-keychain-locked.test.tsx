@@ -65,6 +65,10 @@ vi.mock('expo-router', () => ({
   useLocalSearchParams: () => ({ hostId: 'host-1' }),
   useRouter: () => ({ back: vi.fn() })
 }))
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./transport/client-context', () => ({
   useForceReconnect: () => undefined,
   usePrimeHosts: () => () => undefined

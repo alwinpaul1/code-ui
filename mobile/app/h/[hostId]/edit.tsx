@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { tapTargetHitSlop } from '../../../src/ui/tap-target'
 import {
   View,
@@ -17,10 +17,11 @@ import { ChevronLeft } from 'lucide-react-native'
 import { radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { useTheme, useThemedStyles, type Theme } from '../../../src/theme/theme-context'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
-import { lookUpPairedHost } from '../../../src/transport/host-lookup'
+import { usePairedHostLookup } from '../../../src/transport/use-paired-host-lookup'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
 import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
+import { useLastConnectedAt } from '../../../src/transport/client-context-connection-metrics'
 import type { HostProfile } from '../../../src/transport/types'
 
 export default function EditHostScreen() {
@@ -31,6 +32,7 @@ export default function EditHostScreen() {
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
   const primeHosts = usePrimeHosts()
   const forceReconnectHost = useForceReconnect()
+  const lastConnectedAt = useLastConnectedAt(hostId)
 
   const [host, setHost] = useState<HostProfile | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -42,14 +44,10 @@ export default function EditHostScreen() {
   // still read stale state and re-enter handleSave; the ref closes that race.
   const savingRef = useRef(false)
 
-  const load = useCallback(async () => {
-    if (!hostId) {
-      setLoadError('Missing host.')
-      return
-    }
-    // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired, and
-    // saying it was removed sent people to re-pair a desktop that only needed a moment.
-    const lookup = await lookUpPairedHost(hostId)
+  // The catalog, not loadHosts(): a desktop whose credential cannot be read is still paired, and
+  // saying it was removed sent people to re-pair a desktop that only needed a moment. A failed read
+  // is read again once per new connection; a loaded one never is, so a reconnect keeps the edits.
+  usePairedHostLookup(hostId, lastConnectedAt, (lookup) => {
     if (lookup.kind !== 'ready') {
       setLoadError(lookup.message)
       setHost(null)
@@ -60,11 +58,8 @@ export default function EditHostScreen() {
     setName(found.name)
     setAddress(displayHostEndpoint(found.endpoint))
     setLoadError(null)
-  }, [hostId])
-
-  useEffect(() => {
-    void load()
-  }, [load])
+  })
+  const shownLoadError = hostId ? loadError : 'Missing host.'
 
   const endpointEdit = useMemo(
     () => (host ? resolveHostEndpointEdit(host.endpoint, address) : null),
@@ -175,9 +170,9 @@ export default function EditHostScreen() {
         </Pressable>
       </View>
 
-      {loadError ? (
+      {shownLoadError ? (
         <View style={styles.errorState}>
-          <Text style={styles.errorText}>{loadError}</Text>
+          <Text style={styles.errorText}>{shownLoadError}</Text>
           <Pressable style={styles.secondaryButton} onPress={() => router.back()}>
             <Text style={styles.secondaryButtonText}>Go back</Text>
           </Pressable>

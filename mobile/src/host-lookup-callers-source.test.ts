@@ -42,7 +42,7 @@ function sourceFiles(): string[] {
 
 describe('a screen opened for one desktop says what the catalog knows about it', () => {
   it.each([
-    ['../app/h/[hostId]/edit.tsx', /\blookUpPairedHost\(hostId\)/],
+    ['../app/h/[hostId]/edit.tsx', /\busePairedHostLookup\(hostId,/],
     ['../app/h/[hostId]/accounts.tsx', /\buseAccountsHostLookup\(hostId\)/],
     ['./accounts/use-accounts-host-lookup.ts', /\busePairedHostLookup\(hostId,/],
     ['./transport/use-paired-host-lookup.ts', /\blookUpPairedHost\(hostId\)/],
@@ -52,6 +52,18 @@ describe('a screen opened for one desktop says what the catalog knows about it',
     expect(src).toMatch(lookup)
     expect(src).not.toMatch(FINDS_HOST_BY_ID)
     expect(src).not.toMatch(/'Host not found'|removed from this phone/)
+  })
+
+  it('every module that looks one desktop up reads a failed lookup again on a new connection', () => {
+    // Found by shape: Accounts and Edit host each looked their desktop up once per host id, so a
+    // failed read stayed on screen over a desktop that had since connected (review, 2026-09-30).
+    // CLAUDE.md "Nothing stays stale once the relay connects" puts the re-read beside the lookup.
+    const callers = sourceFiles().filter((file) =>
+      /(?<!function\s)\blookUpPairedHost\(/.test(code(file))
+    )
+    expect(callers.length).toBeGreaterThan(0)
+    const stale = callers.filter((file) => !/\bshouldRefetchAfterReconnect\(/.test(code(file)))
+    expect(stale).toEqual([])
   })
 
   it('Troubleshooting counts and walks the catalog and never reads loadHosts()', () => {

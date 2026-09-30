@@ -39,6 +39,10 @@ vi.mock('./transport/host-store', () => ({
   loadHostCatalog: async () => [{ ...HOST, credentialStatus: 'ready', profile: HOST }],
   updateHostNameAndEndpoint: vi.fn()
 }))
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./transport/client-context', () => ({
   useForceReconnect: () => undefined,
   usePrimeHosts: () => () => undefined
