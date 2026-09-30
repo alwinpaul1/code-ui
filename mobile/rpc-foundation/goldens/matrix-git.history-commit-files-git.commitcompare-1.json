@@ -3,7 +3,7 @@
   "family": "git.history-commit-files",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "b88ae100cb651c203debf31704e4deaaea3dac56",
+  "baseline": "c4047420dc81f25bb18913c61df99a117cf57779",
   "lockfileSha256": "dcfa93a88eaf3a0f2cf44a1a22bbc7a0e71d9fabebf6954856a3f0c03394689b",
   "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
   "adapterSha256": "48ccada93f208a24160483e98ee94a771ab6d63222f29ac4bbd6979157f98333",
@@ -204,17 +204,6 @@
           "isRpcDeliveryUnknown": true
         }
       }
-    },
-    "50a8663c6ca2": {
-      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "No file changes"],
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "FlatList": 1
-      },
-      "labels": [],
-      "text": []
     },
     "5d7a655deafc": {
       "name": "git.history#1",
@@ -552,6 +541,17 @@
         "$rpc": "undefined"
       }
     },
+    "f5d4ee78630f": {
+      "commitRow": ["first", "aaaaaaa", " · ", "dev", " · ", "1h", "Couldn't load files", "Retry"],
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "FlatList": 1
+      },
+      "labels": [],
+      "text": []
+    },
     "f74a46ce4082": {
       "name": "git.commitCompare#1",
       "ordinal": 3,
@@ -639,7 +639,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -652,7 +652,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -665,7 +665,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -678,7 +678,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -691,7 +691,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -704,7 +704,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -717,7 +717,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -730,7 +730,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -743,7 +743,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       },
@@ -756,7 +756,7 @@
             "mount": "eb79a9b3682a",
             "expand": "eb79a9b3682a"
           },
-          "state": "50a8663c6ca2",
+          "state": "f5d4ee78630f",
           "effects": []
         }
       }
