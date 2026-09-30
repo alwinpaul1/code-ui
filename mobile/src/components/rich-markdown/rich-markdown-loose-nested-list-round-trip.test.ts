@@ -63,3 +63,24 @@ describe('a nested list after a blank line', () => {
     expect(reading(savedUntouched('- a\n\n  - b\nlazy'))).toBe(reading('- a\n\n  - b\nlazy'))
   })
 })
+
+// Sweep, 2026-09-30: the same misreading one step further in. A marker four columns past an item's
+// words after a blank line is the item's indented code, as CommonMark reads it, but it ended the
+// list and was read at the margin as an item of its own: '- a\n\n      - b' saved as '- a\n\n- b',
+// the code turned into a bullet.
+describe('code four columns past an item’s words after a blank line', () => {
+  it.each([
+    ['that looks like a bullet', '- a\n\n      - b'],
+    ['that looks like a numbered item, before the next item', '- a\n\n      1. b\n- c'],
+    ['that looks like a rule', '- a\n\n      ---'],
+    ['in a nested item', '- a\n  - b\n\n        - c']
+  ])('keeps the code %s', (_name, markdown) => {
+    expect(savedUntouched(markdown)).toBe(markdown)
+    expect(reading(savedUntouched(markdown))).toBe(reading(markdown))
+  })
+
+  it('draws it as the item’s code', () => {
+    const { editor } = openedSurface('- a\n\n      - b')
+    expect(editor.querySelector('li > pre')?.textContent).toBe('- b')
+  })
+})

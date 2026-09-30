@@ -122,7 +122,9 @@ type OwnedBlock = { depth: number; block: ItemBlock; nextIndex: number }
  * The block an item owns at `next`: a fence, a quote, a table, an indented code block four columns
  * past its words, or another paragraph of words. A paragraph or indented code needs a blank line
  * before it (without one the line would have been the item's words) unless it follows a code
- * block, a quote or a table. A line that opens a block of its own, or a table the item cannot
+ * block, a quote or a table. Indented code is code whatever its words look like: a marker or a
+ * rule four columns past the item's words ended the list until 2026-09-30, so '- a\n\n      - b'
+ * saved as '- a\n\n- b'. Any other line that opens a block of its own, or a table the item cannot
  * hold, is not one: it ends the list, as it always has.
  */
 function readBlockOf(
@@ -159,13 +161,16 @@ function readBlockOf(
     const offset = leadingSpaces(line) - owner.indent
     return { block: { kind: 'table', lines: table.lines, offset, ...leaf }, nextIndex: table.nextIndex }
   }
-  if ((!blank && !endsInBlock(owner)) || opensBlock(line) || opensTable(line, lines[next + 1])) {
+  if (!blank && !endsInBlock(owner)) {
     return null
   }
   const code = readIndentedCode(lines, next, owner.contentIndent)
   if (code !== null) {
     const offset = owner.contentIndent + 4 - owner.indent
     return { block: { kind: 'indented-code', text: code.code, offset, ...leaf }, nextIndex: code.nextIndex }
+  }
+  if (opensBlock(line) || opensTable(line, lines[next + 1])) {
+    return null
   }
   const words = gatherListItemContinuation(
     lines,
