@@ -331,3 +331,104 @@ describe("Claude Code's own low-context warning over the footers it paints", () 
     expect(parseTerminalHudObservation([''])).toBeNull()
   })
 })
+
+// A Codex screen reaches parseTerminalHudObservation only when the tab's agent
+// is not known as codex (a hand-started Codex): the live hook sends a known
+// Codex tab straight to parseCodexHudObservation. In Plan mode Codex paints
+// "Plan mode (shift+tab to cycle)" at its footer's right edge, and that hint
+// was taken for Claude Code's, so the Claude branch read Codex's "N% context
+// left" as N% USED and dropped the model, the effort and the Plan pill
+// (review, 2026-09-30).
+describe('a Codex footer in Plan mode, read without knowing the agent', () => {
+  const PLAN_HINT = 'Plan mode (shift+tab to cycle)'
+  // codex-cli 0.153.4, live capture 2026-09-09 (the "N% context left" test
+  // above), its footer row carrying the Plan hint the way the Plan row read
+  // earlier in this file paints it: right-aligned after the path.
+  const PLAN_0_153_4 = [
+    '› Reply with the single word ready.   tab to queue message',
+    '                                                                        100% context left',
+    '› Reply with the single word ready.',
+    `  gpt-5.6-terra xhigh · ~/Desktop/Project/Code UI                 ${PLAN_HINT}`
+  ]
+  // The row the review ran, the figure on the footer row itself.
+  const PLAN_ONE_ROW = `  gpt-5.6-sol xhigh · ~/Project   100% context left   ${PLAN_HINT}`
+  // The `context-remaining` item Codex paints when launched with
+  // tui.status_line, in the shape CODEX_FOOTER reads it after the middot.
+  const PLAN_STATUS_LINE = `  gpt-5.3-codex medium · Context 73% left · ~/Project        ${PLAN_HINT}`
+
+  it('keeps the model, the effort, the Plan pill and an empty ring on a fresh session', () => {
+    expect(parseTerminalHudObservation(PLAN_0_153_4)).toMatchObject({
+      modelLabel: 'gpt-5.6-terra',
+      modelId: 'gpt-5.6-terra',
+      effort: 'xhigh',
+      agentMode: 'plan',
+      context: { usedPercent: 0, usedLabel: null, windowLabel: null }
+    })
+    expect(parseTerminalHudObservation(['• ok', '› Ask Codex to do anything', PLAN_ONE_ROW])).toMatchObject({
+      modelId: 'gpt-5.6-sol',
+      effort: 'xhigh',
+      agentMode: 'plan',
+      context: { usedPercent: 0 }
+    })
+    // The footer row alone, the smallest screen that carries it.
+    expect(parseTerminalHudObservation([PLAN_ONE_ROW])).toMatchObject({
+      modelId: 'gpt-5.6-sol',
+      agentMode: 'plan',
+      context: { usedPercent: 0 }
+    })
+  })
+
+  it('shows the context used, not the context left, from the status-line item', () => {
+    expect(parseTerminalHudObservation(['› Ask Codex to do anything', PLAN_STATUS_LINE])).toMatchObject({
+      modelId: 'gpt-5.3-codex',
+      effort: 'medium',
+      agentMode: 'plan',
+      context: { usedPercent: 27, usedLabel: null, windowLabel: null }
+    })
+  })
+
+  it.each([
+    ['codex-cli 0.153.4', PLAN_0_153_4],
+    ['the footer row alone', [PLAN_ONE_ROW]],
+    ['the status-line item', ['› Ask Codex to do anything', PLAN_STATUS_LINE]]
+  ])('reads %s the same in Plan mode as in Default, bar the Plan pill', (_shape, plan) => {
+    const inDefault = plan.map((row) => row.replace(PLAN_HINT, '').trimEnd())
+    expect(parseTerminalHudObservation(inDefault)?.agentMode).toBe('default')
+    expect(parseTerminalHudObservation(plan)).toEqual({
+      ...parseTerminalHudObservation(inDefault),
+      agentMode: 'plan'
+    })
+  })
+
+  it("still reads Claude Code's own plan-mode footer and its warning as Claude", () => {
+    // The plan row is inferred from the captured mode rows
+    // (claude-terminal-mode-footer.ts); the warning is worded from the 2.1.266
+    // binary, as in the block above.
+    const observation = parseTerminalHudObservation([
+      'Context low (8% remaining) · Run /compact to compact & continue',
+      '  ⏸ plan mode on (shift+tab to cycle)'
+    ])
+    expect(observation).toMatchObject({
+      modelLabel: '',
+      modelId: null,
+      context: { usedPercent: 92 },
+      permissionModeSeen: 'plan'
+    })
+    expect(observation).not.toHaveProperty('agentMode')
+  })
+
+  it('keeps a Claude screen whose reply quotes a Codex Plan footer as Claude', () => {
+    // 2.1.270's composer and footer, tmux 2026-09-13 (mobile-terminal-sent-prompts.test.ts).
+    const rule = '─'.repeat(100)
+    const observation = parseTerminalHudObservation([
+      `⏺ Codex paints "gpt-5.6-sol xhigh · ~/Project   ${PLAN_HINT}" in Plan mode.`,
+      'Context low (8% remaining) · Run /compact to compact & continue',
+      rule,
+      '❯ ',
+      rule,
+      '  ⏸ manual mode on · ← for agents'
+    ])
+    expect(observation).toMatchObject({ modelId: null, context: { usedPercent: 92 }, permissionModeSeen: 'manual' })
+    expect(observation).not.toHaveProperty('agentMode')
+  })
+})

@@ -3,7 +3,11 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useAgentHudBeacon, type AgentHudBeacon } from './agent-hud-beacon'
 import type { BeaconPhase } from './agent-hud-beacon-liveness'
-import { applyAgentStatusHudFields, hudFieldsFromAgentStatus } from './hud-agent-status-fields'
+import {
+  applyAgentStatusHudFields,
+  hudFieldsFromAgentStatus,
+  NO_SCREEN_HUD_OBSERVATION
+} from './hud-agent-status-fields'
 import { agentHudBeaconMatches, applyAgentHudBeaconFields } from './hud-beacon-fields'
 import { attachHudRateLimits, hudRateLimitsForAgent } from './hud-rate-limits'
 import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
@@ -117,13 +121,13 @@ export function useMobileNativeChatHud(args: {
   // the badge's last pair and context for this tab, terminal and session, so
   // an empty read does not blank them.
   const held = useStickyLiveHud(screen.observation, args.tabId, handle, args.sessionId)
+  // With no screen this tick, the hold starts from the same no-screen
+  // observation as the merges: it states no mode, so none can leak from it.
   const heldScreen: TerminalHudObservation | null =
     held.model === null && held.context === null
       ? screen.observation
       : {
-          modelLabel: '',
-          effort: null,
-          permissionMode: 'default',
+          ...NO_SCREEN_HUD_OBSERVATION,
           ...screen.observation,
           modelId: held.model,
           ...(held.model !== null ? { modelLabel: held.label ?? '', effort: held.effort } : {}),
