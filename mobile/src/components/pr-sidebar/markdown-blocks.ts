@@ -259,6 +259,19 @@ const INLINE = new RegExp(
 )
 
 /**
+ * What a link or an image opens: its destination without a title, with its
+ * entities decoded as CommonMark decodes them there, numeric references too,
+ * as a text run's are. A bot-written `?a=1&amp;b=2` opened with the entity in
+ * its query (review, 2026-09-30). The title comes off first, so a decoded
+ * quote is never read as one. A scheme spelled with entities,
+ * `&#106;avascript:`, is the scheme it spells by the time the tap checks it
+ * (isAllowedMarkdownLinkUrl), and is refused as `javascript:` is.
+ */
+function linkAddress(href: string): string {
+  return decodeMarkdownHtmlEntities(markdownLinkDestination(href), true)
+}
+
+/**
  * A run of inline Markdown as tokens. Images, a link label that holds one,
  * and backslash escapes are read as the chat reads them (the matcher's
  * `images` reading): `![shot](i.png)` drew a stray "!" before a link, and a
@@ -269,8 +282,9 @@ const INLINE = new RegExp(
  * link or an address is drawn as written. A text run drops an escape's
  * backslash, as GitHub does: `\*a\*` is two stars around a word, and
  * `\![x](y)` is a "!" and a link. It draws the characters HTML entities stand
- * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts).
- * Code keeps its backslashes and entities as written.
+ * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts),
+ * and a link's address opens with its entities decoded (linkAddress). Code
+ * keeps its backslashes and entities as written.
  */
 export function parseInline(text: string, label = false): InlineToken[] {
   const tokens: InlineToken[] = []
@@ -311,7 +325,7 @@ export function parseInline(text: string, label = false): InlineToken[] {
     } else if (m.link && label) {
       tokens.push({ kind: 'text', text: token })
     } else if (m.link) {
-      tokens.push({ kind: 'link', text: m.link.label || 'image', url: markdownLinkDestination(m.link.href) })
+      tokens.push({ kind: 'link', text: m.link.label || 'image', url: linkAddress(m.link.href) })
     } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
