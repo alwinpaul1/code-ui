@@ -1,9 +1,12 @@
 // Codex's unified exec starts a long command with `exec_command` and, while it
-// runs, polls its session with `write_stdin` calls whose `chars` is empty
-// ("Writes characters to an existing unified exec session",
-// codex-rs/core/src/tools/handlers/shell_spec.rs at rust-v0.153.4). A poll is
-// the command it drives, not a new one: counted as one, a single `npm test`
-// polled four times read "Ran 5 commands" (review, 2026-09-30).
+// runs, polls its session with `write_stdin` calls whose `chars` is empty or
+// omitted: Codex reads the call into `WriteStdinArgs`, whose `chars` carries
+// `#[serde(default)]` (codex-rs/core/src/tools/handlers/unified_exec/
+// write_stdin.rs at rust-v0.153.4, the same on main), so an omitted `chars` is
+// an empty write. A `chars` that is not a string is no poll: serde rejects the
+// call. A poll is the command it drives, not a new one: counted as one, a
+// single `npm test` polled four times read "Ran 5 commands", and a poll sent
+// as just {session_id, yield_time_ms} still did (review, 2026-09-30).
 //
 // Two shapes reach the phone, both through Orca's Codex decoder
 // (src/main/native-chat/transcript-line-decoders-codex.ts), which hands a call
@@ -16,7 +19,7 @@
 //   read; anything else says nothing, so it counts the way it always did.
 
 /** What one call is to the command count: the start of a unified-exec
- *  command, or a poll (empty `chars`) of the session `session` drives — null
+ *  command, or a poll (empty or omitted `chars`) of the session `session` drives — null
  *  when the session id cannot be read. Null for every other call, a
  *  write_stdin that types real input included: that input is an action of
  *  its own. */
@@ -53,7 +56,9 @@ function codeModeRole(source: string): CodexExecRole {
     return { role: 'start' }
   }
   const body = match[2] ?? ''
-  if (!/(?:^|[{,\s])chars\s*:\s*(?:""|'')\s*(?:,|$)/.test(body)) {
+  // No `chars` key is an empty write too; one that is there must be an empty string literal.
+  const hasChars = /(?:^|[{,\s])chars\s*:/.test(body)
+  if (hasChars && !/(?:^|[{,\s])chars\s*:\s*(?:""|'')\s*(?:,|$)/.test(body)) {
     return null
   }
   const session = /(?:^|[{,\s])session_id\s*:\s*(\d+)\s*(?:,|$)/.exec(body)
@@ -70,7 +75,9 @@ export function codexExecRole(name: string, input: unknown): CodexExecRole {
   }
   if (key === 'write_stdin') {
     const parsed = args(input)
-    return parsed?.chars === '' ? { role: 'poll', session: sessionId(parsed.session_id) } : null
+    return parsed && (parsed.chars === '' || !('chars' in parsed))
+      ? { role: 'poll', session: sessionId(parsed.session_id) }
+      : null
   }
   if (key === 'exec' && typeof input === 'string') {
     return codeModeRole(input)
