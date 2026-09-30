@@ -9,6 +9,9 @@ export type MarkdownInlineMatch = {
    *  a whole image and an address balanced parentheses
    *  (markdown-inline-links.ts), so neither is read back off the token. */
   link?: { image: boolean; label: string; href: string }
+  /** For a token of the caller's pattern: the first capture group that
+   *  matched it, which says what it is where its text cannot. */
+  group?: number
 }
 
 /** The inline tokens a chat reply draws besides links and code spans:
@@ -27,13 +30,26 @@ export type MarkdownInlineMatch = {
  *  inside the group starts on a different character, so the pattern stays
  *  linear.
  *
+ *  An italic span may hold whole bold spans the same way, on one line:
+ *  `*a **b** c*` is italic around `**b**`, and `***x** y*` italic around
+ *  `**x**`. An italic that could hold no star drew b not bold, and drew
+ *  `***x** y*` as `*`, bold x, ` y*` (review, 2026-09-30). The same rules:
+ *  an inner bold starts on a character that is not a space, and a bold is
+ *  still tried first where one opens, so `***x***` stays bold around italic.
+ *  So a token's first characters no longer say what it is: `***x** y*` is
+ *  an italic. Each kind is a capture group of its own, and the matcher says
+ *  which one matched (`group`, BOLD_TOKEN_GROUP).
+ *
  *  An address in angle brackets, `<https://x.dev/a>`, is an autolink with
  *  the brackets as its bounds, as in CommonMark. A bare address ends at
  *  either bracket: it ran on through `>`, so `<https://x.dev/a>` drew its
  *  brackets and opened `https://x.dev/a>` (review, 2026-09-30). */
 export function markdownInlineTokenPattern(): RegExp {
-  return /(~~[^~]+~~|\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__|\*[^*\n]+\*|_[^_\n]+_|<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+)/g
+  return /(~~[^~]+~~)|(\*\*(?:[^*]|\*[^*\s][^*\n]*\*)+\*\*|__(?:[^_]|_[^_\s][^_\n]*_)+__)|(\*(?:[^*\n]|\*\*[^*\s][^*\n]*\*\*)+\*|_(?:[^_\n]|__[^_\s][^_\n]*__)+_)|(<https?:\/\/[^\s<>]+>|https?:\/\/[^\s<>]+)/g
 }
+
+/** The capture group of markdownInlineTokenPattern() a bold token matched. */
+export const BOLD_TOKEN_GROUP = 2
 
 /** Merge a global non-link regex with links; search starts must advance between calls. */
 export function createMarkdownInlineMatcher(
@@ -56,7 +72,10 @@ export function createMarkdownInlineMatcher(
   // cut from the text itself (markdown-inline-escapes.ts).
   const source = images ? maskMarkdownEscapes(text) : text
   const linkFinder = createMarkdownLinkFinder(source, images)
-  const other = (index: number, end: number): MarkdownInlineMatch => ({ 0: text.slice(index, end), index, end })
+  const other = (index: number, end: number, found?: RegExpExecArray): MarkdownInlineMatch => {
+    const group = found ? found.findIndex((value, at) => at > 0 && value !== undefined) : -1
+    return group > 0 ? { 0: text.slice(index, end), index, end, group } : { 0: text.slice(index, end), index, end }
+  }
 
   function findLink(from: number): MarkdownInlineMatch | null {
     const span = linkFinder(from)
@@ -122,7 +141,7 @@ export function createMarkdownInlineMatcher(
       if (nextOther === undefined || (nextOther !== null && nextOther.index < from)) {
         nonLinkPattern.lastIndex = from
         const match = nonLinkPattern.exec(source)
-        nextOther = match ? other(match.index, nonLinkPattern.lastIndex) : null
+        nextOther = match ? other(match.index, nonLinkPattern.lastIndex, match) : null
       }
       if (nextLink === undefined || (nextLink !== null && nextLink.index < from)) {
         nextLink = findLink(from)
@@ -146,7 +165,7 @@ export function createMarkdownInlineMatcher(
       ) {
         nonLinkPattern.lastIndex = nextOther.index + 1
         const again = nonLinkPattern.exec(source)
-        nextOther = again ? other(again.index, nonLinkPattern.lastIndex) : null
+        nextOther = again ? other(again.index, nonLinkPattern.lastIndex, again) : null
       }
       let match =
         nextLink && (!nextOther || nextLink.index < nextOther.index) ? nextLink : nextOther

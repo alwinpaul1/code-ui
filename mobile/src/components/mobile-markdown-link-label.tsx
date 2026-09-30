@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Text } from 'react-native'
 import {
+  BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern
@@ -55,12 +56,9 @@ export function renderLinkLabel(styles: MarkdownStyles, label: string, keyPrefix
     } else {
       // Bold sets the body text colour, and a nested Text's decoration replaces
       // its parent's on Android; the link's colour and underline go back on top.
-      const style = token.startsWith('~~')
-        ? [styles.strike, STRUCK_LINK]
-        : token.startsWith('**') || token.startsWith('__')
-          ? [styles.bold, styles.link]
-          : styles.italic
-      const inner = token.startsWith('~~') || token.startsWith('**') || token.startsWith('__') ? token.slice(2, -2) : token.slice(1, -1)
+      const bold = match.group === BOLD_TOKEN_GROUP
+      const style = token.startsWith('~~') ? [styles.strike, STRUCK_LINK] : bold ? [styles.bold, styles.link] : styles.italic
+      const inner = token.startsWith('~~') || bold ? token.slice(2, -2) : token.slice(1, -1)
       parts.push(
         <Text key={key} style={style}>
           {renderLinkLabel(styles, inner, `${key}s`)}

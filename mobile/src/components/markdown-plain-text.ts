@@ -1,4 +1,5 @@
 import {
+  BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern
@@ -96,7 +97,7 @@ export function markdownInlinePlainText(text: string, label = false): string {
       out += url + trailing
     } else if (token.startsWith('`')) {
       out += codeSpanContent(token)
-    } else if (token.startsWith('~~') || token.startsWith('**') || token.startsWith('__')) {
+    } else if (token.startsWith('~~') || match.group === BOLD_TOKEN_GROUP) {
       out += markdownInlinePlainText(token.slice(2, -2), label)
     } else {
       out += markdownInlinePlainText(token.slice(1, -1), label)

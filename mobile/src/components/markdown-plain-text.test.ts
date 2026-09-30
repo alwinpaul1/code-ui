@@ -44,6 +44,22 @@ describe('markdownPlainText', () => {
     expect(markdownPlainText('__a _b_ c__')).toBe('a b c')
   })
 
+  // Review, 2026-09-30, the mirror image: an italic could hold no star, so
+  // `***x** y*` copied as "*x y*" (the screen is pinned in
+  // MobileMarkdown.nested-emphasis.test.tsx).
+  it('copies an italic holding bold without stray stars or underscores', () => {
+    expect(markdownPlainText('***x** y*')).toBe('x y')
+    expect(markdownPlainText('*a **b** c*')).toBe('a b c')
+    expect(markdownPlainText('*x **y** z **w** v*')).toBe('x y z w v')
+    expect(markdownPlainText('___x__ y_')).toBe('x y')
+    expect(markdownPlainText('_a __b__ c_')).toBe('a b c')
+    expect(markdownPlainText('*one **b** two* and ***x** y*')).toBe('one b two and x y')
+  })
+
+  it('keeps an underscore italic holding bold literal inside a word', () => {
+    expect(markdownPlainText('snake_a __b__ c_case')).toBe('snake_a b c_case')
+  })
+
   it('keeps the emphasis it already read the way it read it', () => {
     expect(markdownPlainText('**a**')).toBe('a')
     expect(markdownPlainText('*a*')).toBe('a')
@@ -357,7 +373,13 @@ describe('emphasis that never closes', () => {
     ['a bold opener on every line', '**a *b\n'.repeat(15_000)],
     ['a star after every word', `**${'x*y '.repeat(25_000)}`],
     ['italics joined end to end', `**${'*a*'.repeat(30_000)}`],
-    ['a star run', '*'.repeat(100_000)]
+    ['a star run', '*'.repeat(100_000)],
+    ['an italic over many bolds', `*${'a **b** '.repeat(15_000)}`],
+    ['an underscore italic over many bolds', `_${'a __b__ '.repeat(15_000)}`],
+    ['an italic opener on every line', '*a **b\n'.repeat(15_000)],
+    ['a bold opener after every word in an italic', `*${'**x '.repeat(25_000)}`],
+    ['bolds joined end to end in an italic', `*${'**a**'.repeat(30_000)}`],
+    ['italic openers before every bold', '* **a** '.repeat(20_000)]
   ])('copies %s inside the deadline', (_name, text) => {
     const copied = runInNewContext('copy(text)', { copy: markdownInlinePlainText, text }, { timeout: 250 })
     expect(typeof copied).toBe('string')

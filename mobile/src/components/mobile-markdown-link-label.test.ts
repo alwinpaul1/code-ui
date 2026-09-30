@@ -62,6 +62,12 @@ describe('the words of a link', () => {
     expect(flat(link!)).toBe('Bold docs old')
   })
 
+  it('draws a label\'s italic holding bold without its stars', () => {
+    const tree = render('see [***x** y*](https://x.dev) here')
+    const [link] = links(tree)
+    expect(flat(link!)).toBe('x y')
+  })
+
   it('keeps a struck label underlined as a link', () => {
     const [link] = links(render('[~~old~~ docs](https://x.dev)'))
     const struck = link!.find((node) => node !== link && node.type === ('Text' as never))

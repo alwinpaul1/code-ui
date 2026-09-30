@@ -1,4 +1,5 @@
 import {
+  BOLD_TOKEN_GROUP,
   codeSpanContent,
   createMarkdownInlineMatcher,
   markdownInlineTokenPattern,
@@ -238,7 +239,7 @@ function renderInline(
           {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
         </Text>
       )
-    } else if (token.startsWith('**') || token.startsWith('__')) {
+    } else if (match.group === BOLD_TOKEN_GROUP) {
       parts.push(
         <Text key={key} style={styles.bold}>
           {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
