@@ -21,6 +21,7 @@
 // after it, which is the ragged column the user reported. The phone reflows.
 import { marked, type Token, type Tokens } from 'marked'
 import { quoteBlocks } from './mobile-markdown-quote-blocks'
+import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -100,7 +101,9 @@ function reflowProse(value: string): string {
       filled += `${line.replace(/[ \t]+$/, '')} `
     }
   }
-  return filled.trim()
+  // A `<br>` the HTML pass kept for a table row that marked read as prose
+  // is a line break here too (markdown-inline-breaks.ts).
+  return inlineBreaksAsNewlines(filled.trim())
 }
 
 /** The info string's first word: ```` ```ts title="x" ```` is a TypeScript fence,
@@ -254,7 +257,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         // resolve inline, the definition stays on screen, where its URL is at
         // least autolinked. Consecutive definitions share one paragraph rather
         // than getting a blank line each.
-        const text = token.raw.trim()
+        const text = inlineBreaksAsNewlines(token.raw.trim())
         const previous = blocks.at(-1)
         if (continuesDefinitions && previous?.type === 'paragraph') {
           previous.text = `${previous.text}\n${text}`
@@ -297,8 +300,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         const table = token as Tokens.Table
         blocks.push({
           type: 'table',
-          headers: table.header.map((cell) => cell.text),
-          rows: table.rows.map((row) => row.map((cell) => cell.text))
+          // A `<br>` in a cell is a line break inside it (markdown-inline-breaks.ts).
+          headers: table.header.map((cell) => inlineBreaksAsNewlines(cell.text)),
+          rows: table.rows.map((row) => row.map((cell) => inlineBreaksAsNewlines(cell.text)))
         })
         break
       }
@@ -317,7 +321,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         // returns, and an unknown kind must still reach the screen rather than
         // fail the build or vanish.
         if (token.raw.trim()) {
-          blocks.push({ type: 'paragraph', text: token.raw.replace(/\n+$/, '') })
+          blocks.push({ type: 'paragraph', text: inlineBreaksAsNewlines(token.raw.replace(/\n+$/, '')) })
         }
         break
     }
@@ -429,7 +433,7 @@ function readMobileMarkdown(content: string): MobileMarkdownBlock[] {
     // rejects an emphasis run long enough to miss the deadline. Nothing may
     // vanish from the screen because of either, so hand the source back as
     // prose, with its lines intact.
-    return source.trim() ? [{ type: 'paragraph', text: source.replace(/\n+$/, '') }] : []
+    return source.trim() ? [{ type: 'paragraph', text: inlineBreaksAsNewlines(source.replace(/\n+$/, '')) }] : []
   }
   return toBlocks(tokens)
 }

@@ -7,6 +7,8 @@ import {
 } from './mobile-markdown-preview-tag-stripper'
 import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
 import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
+import { decodeMarkdownHtmlEntities } from './markdown-html-entities'
+import { keepBreaksInLine, markOneLineBlockBreaks } from './markdown-inline-breaks'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -65,16 +67,9 @@ function restoreEscapedMarkup(value: string): string {
   return value.replaceAll(ESCAPED_LT_TOKEN, '<').replaceAll(ESCAPED_AMP_TOKEN, '&')
 }
 
+// The table is shared with a PR comment's text runs (markdown-html-entities.ts).
 function decodeHtmlEntities(value: string, preserveEscapedEntities = false): string {
-  const next = preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value
-
-  return next
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
-    .replace(/&amp;/gi, '&')
+  return decodeMarkdownHtmlEntities(preserveEscapedEntities ? protectEscapedHtmlEntities(value) : value)
 }
 
 function stripTags(value: string): string {
@@ -211,9 +206,14 @@ function normalizeAnchorTags(value: string): string {
   return output + value.slice(copyCursor)
 }
 
+// Why: a `<br>` is a hard break, two spaces and a newline, which stripTags
+// keeps and the parser draws as a line break. A bare newline, what it was
+// before, reflows into a space, so 'Name: Ada<br>Role: Admin' drew and copied
+// on one line (review, 2026-09-30). Two in a row, or one before a newline,
+// leave a blank line, a paragraph break, as they did.
 function normalizeInlineHtml(value: string): string {
   const imagesNormalized = value
-    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '  \n')
     .replace(imageTagPattern, (tag) => attrValue(tag, 'alt') || 'image')
 
   let next = normalizeAnchorTags(imagesNormalized)
@@ -264,7 +264,10 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     content.replace(/\r\n?/g, '\n'),
     true
   )
-  let next = protectEscapedMarkup(protectedText)
+  // A `<br>` on a table row or a heading line stands aside until marked has
+  // read the line (markdown-inline-breaks.ts); normalizeInlineHtml below
+  // takes the rest.
+  let next = markOneLineBlockBreaks(protectEscapedMarkup(protectedText))
 
   // Why: repository Markdown often uses small HTML islands for centered README
   // headers and badges. Preview mode should read like Markdown, while Source
@@ -273,7 +276,7 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     next,
     ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
     (name, inner) => {
-      const text = stripTags(normalizeInlineHtml(inner))
+      const text = stripTags(normalizeInlineHtml(keepBreaksInLine(inner)))
       return text ? `\n${'#'.repeat(Number(name.slice(1)))} ${text}\n` : '\n'
     }
   )

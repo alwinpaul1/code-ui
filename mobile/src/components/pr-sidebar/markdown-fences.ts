@@ -1,5 +1,6 @@
 import { markdownCodeRanges } from '../markdown-code-ranges'
 import { codeSpanReader } from './markdown-html-tags'
+import { MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
 
 /**
  * The fenced code blocks of a PR comment body, taken out before anything
@@ -32,8 +33,10 @@ import { codeSpanReader } from './markdown-html-tags'
 export type FencedCode = { text: string; lang: string }
 
 export type LexedCommentBody = {
-  /** The body with its comments out, `<br>` as a line break, and each fence
-   *  as one placeholder line, behind the list marker it opened after. */
+  /** The body with its comments out, `<br>` as MARKDOWN_INLINE_BREAK (a
+   *  line break everywhere but a table row, markdown-inline-breaks.ts), and
+   *  each fence as one placeholder line, behind the list marker it opened
+   *  after. */
   text: string
   /** The fence a line stands for, and the list marker before it if any. */
   fenceOn: (line: string) => { marker: boolean; code: FencedCode } | null
@@ -90,7 +93,7 @@ function outdent(line: string, columns: number): string {
 }
 
 /** A line of text outside any fence and comment: its closed comments out and
- *  `<br>` as a line break, neither where a code span on the line holds it.
+ *  `<br>` as MARKDOWN_INLINE_BREAK, neither where a code span on the line holds it.
  *  `opens` says a comment opened on it and closes on a later line. */
 function scanLine(line: string, offset: number, lastClose: number): { text: string; opens: boolean } {
   if (!line.includes('<')) {
@@ -113,14 +116,14 @@ function scanLine(line: string, offset: number, lastClose: number): { text: stri
     }
     const span = nextSpan(at)
     if (span && (open === -1 || span[0] < open)) {
-      text += line.slice(at, span[0]).replace(BREAK, '\n') + line.slice(span[0], span[1])
+      text += line.slice(at, span[0]).replace(BREAK, MARKDOWN_INLINE_BREAK) + line.slice(span[0], span[1])
       at = span[1]
       continue
     }
     if (open === -1) {
-      return { text: text + line.slice(at).replace(BREAK, '\n'), opens: false }
+      return { text: text + line.slice(at).replace(BREAK, MARKDOWN_INLINE_BREAK), opens: false }
     }
-    text += line.slice(at, open).replace(BREAK, '\n')
+    text += line.slice(at, open).replace(BREAK, MARKDOWN_INLINE_BREAK)
     const close = line.indexOf('-->', open + 4)
     if (close === -1) {
       return { text, opens: true }

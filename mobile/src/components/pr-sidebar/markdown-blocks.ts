@@ -5,8 +5,13 @@ import {
   isIntrawordUnderscoreToken
 } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
+import { decodeMarkdownHtmlEntities, markdownTextRunWithEntities } from '../markdown-html-entities'
+import { markdownLinkDestination } from '../markdown-link-destination'
 import { lexCommentBody, type LexedCommentBody } from './markdown-fences'
 import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
+import { readHtmlBlocks, type HtmlBlockPiece } from './markdown-html-blocks'
+import { HR, ORDERED, parseList, UNORDERED } from './markdown-list-blocks'
+import { expandBreaksOffTableRows, inlineBreaksAsNewlines, MARKDOWN_INLINE_BREAK } from '../markdown-inline-breaks'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -23,6 +28,11 @@ export type InlineToken =
 
 export type CellAlign = 'left' | 'center' | 'right'
 
+/** Where a list item sits: 0 at the list's margin, one more per level of
+ *  nesting; the kind of the list it is in, which may not be the outermost
+ *  one's; its number in that list; and its box, where it is a task. */
+export type ListItemShape = { depth: number; ordered: boolean; number?: number; checked?: boolean }
+
 export type MarkdownBlock =
   | { kind: 'heading'; level: number; text: string }
   // `lang` carries the fence info string (e.g. 'mermaid'); empty when unspecified.
@@ -30,7 +40,9 @@ export type MarkdownBlock =
   | { kind: 'quote'; text: string }
   // `start` is the number an ordered list's first item draws, when it is not 1:
   // the list went on after a fence under one of its items, or opened at 3.
-  | { kind: 'list'; ordered: boolean; items: string[]; start?: number }
+  // `shapes`, one per item, only where an item is nested or a task
+  // (markdown-list-blocks.ts); each item then draws its own number.
+  | { kind: 'list'; ordered: boolean; items: string[]; start?: number; shapes?: ListItemShape[] }
   | { kind: 'hr' }
   | { kind: 'paragraph'; text: string }
   // GitHub comments use <details><summary>…</summary>…</details> for collapsibles.
@@ -41,15 +53,6 @@ export type MarkdownBlock =
 // Its closing run of '#' comes off in markdownHeadingText.
 const HEADING = /^(#{1,6})\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
-// One mark three or more times, spaces between allowed, at most three columns
-// in (CommonMark 4.1), as THEMATIC_BREAK in markdown-code-ranges.ts reads it.
-// `---+` alone let the list rule take `* * *` for a bullet reading "* *".
-const HR = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
-const UNORDERED = /^\s*[-*+]\s+(.*)$/
-const ORDERED = /^\s*\d+[.)]\s+(.*)$/
-// A top-level <details>…</details> or <blockquote>…</blockquote> region.
-const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
-const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
 // It moved to markdown-html-tags.ts beside the code-aware stripping.
 export { stripHtmlTags } from './markdown-html-tags'
@@ -58,38 +61,58 @@ export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Fences out first, with HTML comments and <br> handled around them
   // (markdown-fences.ts): nothing below reads a fence's lines.
   const body = lexCommentBody(content)
-  return parseSegment(body.text, body)
+  // A `<br>` is a line break, except on a table row, where it is one inside
+  // its cell once the cells are split (markdown-inline-breaks.ts). It was a
+  // line break everywhere, which cut a row in two.
+  const text = expandBreaksOffTableRows(body.text)
+  const blocks = parseSegment(readHtmlBlocks(text), body)
+  return text.includes(MARKDOWN_INLINE_BREAK) ? blocks.map(withLineBreaks) : blocks
 }
 
-// Splits a segment at top-level <details>/<blockquote> regions (preserving order),
-// emitting structured blocks for them and line-parsing the text in between. Recurses
-// for nested details bodies. Non-greedy match keeps it total on unbalanced input.
-// A fence is one placeholder line here, so a tag inside one splits nothing.
-function parseSegment(text: string, body: LexedCommentBody): MarkdownBlock[] {
-  const blocks: MarkdownBlock[] = []
-  let rest = text
-  let m = HTML_BLOCK.exec(rest)
-  while (m) {
-    const before = rest.slice(0, m.index)
-    if (before.trim().length > 0) {
-      blocks.push(...parseLines(before, body))
+/** A block with every `<br>` a table row kept as a line break: in its cells,
+ *  and wherever else such a row was read, so none is drawn as a stand-in. */
+function withLineBreaks(block: MarkdownBlock): MarkdownBlock {
+  const breaks = inlineBreaksAsNewlines
+  switch (block.kind) {
+    case 'heading':
+    case 'quote':
+    case 'paragraph':
+      return { ...block, text: breaks(block.text) }
+    case 'list':
+      return { ...block, items: block.items.map(breaks) }
+    case 'table':
+      return { ...block, headers: block.headers.map(breaks), rows: block.rows.map((row) => row.map(breaks)) }
+    case 'details':
+      return { ...block, summary: breaks(block.summary), body: block.body.map(withLineBreaks) }
+    case 'code':
+    case 'hr':
+      return block
+    default: {
+      const unhandled: never = block
+      return unhandled
     }
-    if (m[1].toLowerCase() === 'details') {
-      const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTagsOutsideCode(body.restore(sm[1])).trim() : 'Details'
-      const inside = m[2].replace(SUMMARY, '')
-      blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(inside, body) })
-    } else {
+  }
+}
+
+// The <details>/<blockquote> regions of a segment, a nested one inside the
+// one that holds it, as structured blocks, and the text between them
+// line-parsed, in order (markdown-html-blocks.ts finds them).
+function parseSegment(pieces: HtmlBlockPiece[], body: LexedCommentBody): MarkdownBlock[] {
+  return pieces.flatMap((piece): MarkdownBlock[] => {
+    if (piece.kind === 'text') {
+      return piece.text.trim().length > 0 ? parseLines(piece.text, body) : []
+    }
+    if (piece.kind === 'quote') {
       // A quote block holds text, so a fence in it reads as it was written.
-      blocks.push({ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(m[2])).trim() })
+      return [{ kind: 'quote', text: stripHtmlTagsOutsideCode(body.restore(piece.text)).trim() }]
     }
-    rest = rest.slice(m.index + m[0].length)
-    m = HTML_BLOCK.exec(rest)
-  }
-  if (rest.trim().length > 0) {
-    blocks.push(...parseLines(rest, body))
-  }
-  return blocks
+    // Drawn as it is, so its entities are decoded here, after its tags are off.
+    const summary =
+      piece.summary === null
+        ? ''
+        : decodeMarkdownHtmlEntities(stripHtmlTagsOutsideCode(body.restore(piece.summary)), true).trim()
+    return [{ kind: 'details', summary: summary || 'Details', body: parseSegment(piece.body, body) }]
+  })
 }
 
 function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
@@ -168,10 +191,9 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
       continue
     }
 
-    const ordered = ORDERED.test(line)
-    if (ordered || UNORDERED.test(line)) {
+    if (ORDERED.test(line) || UNORDERED.test(line)) {
       flushParagraph()
-      i = parseList(lines, i, ordered, body, blocks)
+      i = parseList(lines, i, body, blocks)
       continue
     }
 
@@ -180,66 +202,6 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
   }
   flushParagraph()
   return blocks
-}
-
-// The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
-function parseList(
-  lines: string[],
-  i: number,
-  ordered: boolean,
-  body: LexedCommentBody,
-  blocks: MarkdownBlock[]
-): number {
-  const marker = ordered ? ORDERED : UNORDERED
-  let items: string[] = []
-  // CommonMark numbers an ordered list from its first item's number, of at
-  // most nine digits; a longer one parseInt rounds, so that list counts from 1.
-  const number = ordered ? /\d+/.exec(lines[i]!)![0] : '1'
-  let start = number.length <= 9 ? Number(number) : 1
-  const flush = (): void => {
-    blocks.push(ordered && start !== 1 ? { kind: 'list', ordered, items, start } : { kind: 'list', ordered, items })
-    start += items.length
-    items = []
-  }
-  let match = marker.exec(lines[i]!)
-  while (match) {
-    // A fence can open on the item's own line; the item then holds only it.
-    let fence = body.fenceOn(match[1])?.code ?? null
-    // A wrapped item continues on the lines under it: indented, non-blank,
-    // and not a marker of its own. Without this the list ended at the first
-    // continuation line, that line became a paragraph at the left margin,
-    // and the next item opened a fresh list — so every item was numbered 1.
-    // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
-    const parts = fence ? [] : [match[1].trim()]
-    i += 1
-    while (!fence && i < lines.length) {
-      const next = lines[i]!
-      if (!next.trim() || !/^\s/.test(next) || ORDERED.test(next) || UNORDERED.test(next)) {
-        break
-      }
-      fence = body.fenceOn(next)?.code ?? null
-      if (!fence) {
-        parts.push(next.trim())
-      }
-      i += 1
-    }
-    // Joined with a space: a single newline inside a paragraph is not a line
-    // break in markdown, it reflows.
-    items.push(parts.join(' '))
-    if (fence) {
-      // A fence under an item ends the item: the list so far, then the code,
-      // and the list goes on, still counting, at the next marker of its kind.
-      flush()
-      blocks.push({ kind: 'code', ...fence })
-    }
-    // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
-    // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
-    match = i < lines.length && !HR.test(lines[i]!) ? marker.exec(lines[i]!) : null
-  }
-  if (items.length > 0) {
-    flush()
-  }
-  return i
 }
 
 // Splits a `| a | b |` table row into trimmed cells the way GitHub does: every `\|` is a
@@ -322,12 +284,29 @@ const INLINE = new RegExp(
   'g'
 )
 
-export function parseInline(text: string): InlineToken[] {
+/**
+ * A run of inline Markdown as tokens. Images, a link label that holds one,
+ * and backslash escapes are read as the chat reads them (the matcher's
+ * `images` reading): `![shot](i.png)` drew a stray "!" before a link, and a
+ * README badge, `[![CI](b.svg)](https://ci)`, a link to the badge image
+ * labelled "![CI" (review, 2026-09-30). An image is a link labelled with its
+ * alt text, or "image" when it has none. Inside a link's words (`label`), an
+ * image is its alt text alone, so a badge is one link to its target, and a
+ * link or an address is drawn as written. A text run drops an escape's
+ * backslash, as GitHub does: `\*a\*` is two stars around a word, and
+ * `\![x](y)` is a "!" and a link. It draws the characters HTML entities stand
+ * for, `Vec&lt;T&gt;` as `Vec<T>`, in the same pass (markdown-html-entities.ts).
+ * Code keeps its backslashes and entities as written.
+ */
+export function parseInline(text: string, label = false): InlineToken[] {
   const tokens: InlineToken[] = []
   // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
   // literally, but only between code spans: `Array<string>` is code, not a tag.
   const plain = stripHtmlTagsOutsideCode(text)
-  const matcher = createMarkdownInlineMatcher(plain, INLINE, false, true)
+  const matcher = createMarkdownInlineMatcher(plain, INLINE, true, true)
+  const textRun = (from: number, to?: number): void => {
+    tokens.push({ kind: 'text', text: markdownTextRunWithEntities(plain.slice(from, to)) })
+  }
   let cursor = 0
   // Every pass moves matcher.lastIndex forward, so the text's length bounds
   // the passes; the guard is a backstop, not a budget. A flat 5,000 was one,
@@ -338,7 +317,7 @@ export function parseInline(text: string): InlineToken[] {
     guard -= 1
     const m = guard < 0 ? null : matcher.exec()
     if (!m || m.index === undefined) {
-      tokens.push({ kind: 'text', text: plain.slice(cursor) })
+      textRun(cursor)
       break
     }
     const token = m[0]
@@ -351,19 +330,18 @@ export function parseInline(text: string): InlineToken[] {
       continue
     }
     if (m.index > cursor) {
-      tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
+      textRun(cursor, m.index)
     }
-    if (token.startsWith('`')) {
+    if (m.link?.image && label) {
+      tokens.push(...(m.link.label ? parseInline(m.link.label, true) : [{ kind: 'text' as const, text: 'image' }]))
+    } else if (m.link && label) {
+      tokens.push({ kind: 'text', text: token })
+    } else if (m.link) {
+      tokens.push({ kind: 'link', text: m.link.label || 'image', url: markdownLinkDestination(m.link.href) })
+    } else if (token.startsWith('`')) {
       tokens.push({ kind: 'code', text: codeSpanContent(token) })
     } else if (token.startsWith('**') || token.startsWith('__')) {
       tokens.push({ kind: 'bold', text: token.slice(2, -2) })
-    } else if (token.startsWith('[')) {
-      const close = token.indexOf('](')
-      tokens.push({
-        kind: 'link',
-        text: token.slice(1, close),
-        url: token.slice(close + 2, -1)
-      })
     } else {
       tokens.push({ kind: 'italic', text: token.slice(1, -1) })
     }

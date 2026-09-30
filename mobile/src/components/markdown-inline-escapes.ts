@@ -19,8 +19,12 @@
  *   Code and a link's address are never text runs, so they keep theirs.
  */
 
+/** A backslash and the ASCII punctuation it escapes, as a RegExp source, the
+ *  character its first capture; the PR reader's entity pass reads escapes in
+ *  the same pass (markdown-html-entities.ts). */
+export const MARKDOWN_ESCAPE_SOURCE = '\\\\([!-/:-@[-`{-~])'
 /** ASCII punctuation: what a backslash escapes. */
-const ESCAPED = /\\([!-/:-@[-`{-~])/g
+const ESCAPED = new RegExp(MARKDOWN_ESCAPE_SOURCE, 'g')
 /** A run of backslashes, and the character after it if there is one. */
 const BACKSLASH_RUN = /\\+([\s\S]?)/g
 /** In the masked text, the character an escape made literal. Private use,
