@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { marked } from 'marked'
+import { marked, type Tokens } from 'marked'
 import { describe, expect, it } from 'vitest'
 import { editedSurface, savedUntouched } from './rich-markdown-round-trip.test-support'
 
@@ -9,16 +9,23 @@ import { editedSurface, savedUntouched } from './rich-markdown-round-trip.test-s
 // split the ordered list in two. A child is now written where its source put it, and a list the
 // source never had (the engine's) at its parent's marker width: `1. ` is 3, `10. ` is 4, `- ` is 2.
 
+/** Whether a CommonMark reader's list item holds a list of its own. */
+function holdsList(item: Tokens.ListItem): boolean {
+  return item.tokens.some((inner) => inner.type === 'list')
+}
+
 /** What a CommonMark reader (marked, as the desktop and the chat use) makes of the top level. */
 function topLevel(markdown: string): string[] {
   return marked
     .lexer(markdown)
     .filter((token) => token.type !== 'space')
-    .map((token) =>
-      token.type === 'list'
-        ? `list of ${token.items.length}, nested: ${token.items.some((item) => item.tokens.some((inner) => inner.type === 'list'))}`
-        : token.type
-    )
+    .map((token) => {
+      if (token.type !== 'list') {
+        return token.type
+      }
+      const { items } = token as Tokens.List
+      return `list of ${items.length}, nested: ${items.some(holdsList)}`
+    })
 }
 
 describe('a list nested under an item, from markdown and back', () => {
