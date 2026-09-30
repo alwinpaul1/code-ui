@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
-import type { TaskProvider } from '../tasks/mobile-task-providers'
+import { TASK_SOURCES_READ_FAILED, type HomeTaskSources } from './home-task-sources'
 
 // AccountUsage draws with react-native; only its decoder is reached here, and not by these reads.
 vi.mock('../components/AccountUsage', () => ({ decodeAccountsSnapshot: (value: unknown) => value }))
@@ -10,7 +10,9 @@ import { fetchMobileHomeTaskProviders } from './mobile-home-host-requests'
 /**
  * Home's Tasks card, from the three reads that say which task sources a desktop has. A refused
  * read wrote ['github'], so the card claimed GitHub, with its icon, until the next new connection
- * for a user whose visible providers were GitLab and Linear only (review, 2026-09-30).
+ * for a user whose visible providers were GitLab and Linear only (review, 2026-09-30). The fix
+ * left a failed read as "not read yet", which the card drew as "Checking sources…" with nothing
+ * checking; a failed read is now marked as one (review round 3).
  */
 
 type Replies = Record<string, () => Promise<unknown>>
@@ -28,10 +30,12 @@ function clientAnswering(replies: Replies): RpcClient {
 }
 
 /** The setter the Home hook hands over, applied to a store this test can read. */
-function providersStore(initial: Record<string, TaskProvider[]>) {
+function providersStore(initial: Record<string, HomeTaskSources>) {
   let value = initial
   const set = vi.fn(
-    (updater: (previous: Record<string, TaskProvider[]>) => Record<string, TaskProvider[]>) => {
+    (
+      updater: (previous: Record<string, HomeTaskSources>) => Record<string, HomeTaskSources>
+    ) => {
       value = updater(value)
     }
   )
@@ -60,7 +64,7 @@ afterEach(() => {
 })
 
 describe('the task sources Home reads for a desktop', () => {
-  it('stays unread, never GitHub, when the read is refused', async () => {
+  it('says the read failed, never GitHub, when the read is dropped', async () => {
     const store = providersStore({})
     const refused = clientAnswering({
       'settings.get': async () => {
@@ -69,7 +73,7 @@ describe('the task sources Home reads for a desktop', () => {
     })
     fetchMobileHomeTaskProviders(refused, 'mac', store.set, () => false)
     await settle()
-    expect(store.read()).toEqual({})
+    expect(store.read()).toEqual({ mac: TASK_SOURCES_READ_FAILED })
   })
 
   it('keeps the sources it read last when a later read is refused', async () => {
@@ -115,7 +119,7 @@ function refusedReply(code: string, message: string) {
 }
 
 describe('the task sources Home reads when the desktop answers with a refusal', () => {
-  it('stays unread, never GitHub, when the desktop refuses all three reads', async () => {
+  it('says the read failed, never GitHub, when the desktop refuses all three reads', async () => {
     const store = providersStore({})
     const refusedAll = clientAnswering({
       'settings.get': refusedReply('internal_error', 'boom'),
@@ -124,11 +128,10 @@ describe('the task sources Home reads when the desktop answers with a refusal', 
     })
     fetchMobileHomeTaskProviders(refusedAll, 'mac', store.set, () => false)
     await settle()
-    expect(store.read()).toEqual({})
-    expect(store.set).not.toHaveBeenCalled()
+    expect(store.read()).toEqual({ mac: TASK_SOURCES_READ_FAILED })
   })
 
-  it('stays unread when only the settings read is refused', async () => {
+  it('says the read failed when only the settings read is refused', async () => {
     const store = providersStore({})
     const settingsRefused = clientAnswering({
       ...GITLAB_AND_LINEAR,
@@ -136,7 +139,7 @@ describe('the task sources Home reads when the desktop answers with a refusal', 
     })
     fetchMobileHomeTaskProviders(settingsRefused, 'mac', store.set, () => false)
     await settle()
-    expect(store.read()).toEqual({})
+    expect(store.read()).toEqual({ mac: TASK_SOURCES_READ_FAILED })
   })
 
   it('keeps GitLab and Linear when only the Linear status read is refused', async () => {
@@ -150,7 +153,7 @@ describe('the task sources Home reads when the desktop answers with a refusal', 
     expect(store.read()).toEqual({ mac: ['gitlab', 'linear'] })
   })
 
-  it('does not drop GitLab when the tooling check alone is refused beside two good reads', async () => {
+  it('does not drop GitLab, and says the read failed, when the tooling check alone is refused beside two good reads', async () => {
     const store = providersStore({})
     const preflightRefused = clientAnswering({
       ...GITLAB_AND_LINEAR,
@@ -158,7 +161,7 @@ describe('the task sources Home reads when the desktop answers with a refusal', 
     })
     fetchMobileHomeTaskProviders(preflightRefused, 'mac', store.set, () => false)
     await settle()
-    expect(store.read()).toEqual({})
+    expect(store.read()).toEqual({ mac: TASK_SOURCES_READ_FAILED })
   })
 
   it('keeps the sources it read last when a later round is refused in-band', async () => {
@@ -189,5 +192,58 @@ describe('the task sources Home reads when the desktop answers with a refusal', 
     expect(line).toContain('linear.status')
     expect(line).toContain('internal_error')
     expect(line).not.toContain('settings.get')
+  })
+})
+
+/**
+ * A read that ended without an answer, kept apart from one that has not answered yet. Both were
+ * "no entry", so the card said "Checking sources…" for as long as the desktop stayed connected
+ * after a read had already failed (review round 3, 2026-09-30).
+ */
+describe('the task sources Home records when a read fails', () => {
+  it('says the read failed when a desktop has no tooling check to answer with', async () => {
+    const store = providersStore({})
+    const noSuchMethod = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'preflight.check': refusedReply('method_not_found', 'Unknown method: preflight.check')
+    })
+    fetchMobileHomeTaskProviders(noSuchMethod, 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ mac: TASK_SOURCES_READ_FAILED })
+  })
+
+  it('names the sources once a later read answers after a failed one', async () => {
+    const store = providersStore({ mac: TASK_SOURCES_READ_FAILED })
+    fetchMobileHomeTaskProviders(clientAnswering(GITLAB_AND_LINEAR), 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ mac: ['gitlab', 'linear'] })
+  })
+
+  it('keeps an empty list it read, rather than calling it failed, when a later read fails', async () => {
+    const store = providersStore({ mac: [] })
+    fetchMobileHomeTaskProviders(clientAnswering({}), 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ mac: [] })
+  })
+
+  it('marks only the desktop whose read failed', async () => {
+    const store = providersStore({ studio: ['github'] })
+    fetchMobileHomeTaskProviders(clientAnswering({}), 'mac', store.set, () => false)
+    await settle()
+    expect(store.read()).toEqual({ studio: ['github'], mac: TASK_SOURCES_READ_FAILED })
+  })
+
+  it('marks nothing once the screen that asked has gone', async () => {
+    const store = providersStore({})
+    fetchMobileHomeTaskProviders(clientAnswering({}), 'mac', store.set, () => true)
+    await settle()
+    expect(store.set).not.toHaveBeenCalled()
+    const refusedLate = clientAnswering({
+      ...GITLAB_AND_LINEAR,
+      'linear.status': refusedReply('internal_error', 'boom')
+    })
+    fetchMobileHomeTaskProviders(refusedLate, 'mac', store.set, () => true)
+    await settle()
+    expect(store.set).not.toHaveBeenCalled()
   })
 })

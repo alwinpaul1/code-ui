@@ -4,11 +4,11 @@ import type { HomeStatsRow } from '../stats/home-stats-total'
 import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,
-  normalizeVisibleTaskProviders,
-  type TaskProvider
+  normalizeVisibleTaskProviders
 } from '../tasks/mobile-task-providers'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
+import { TASK_SOURCES_READ_FAILED, type HomeTaskSources } from './home-task-sources'
 import { homeHostAccountsRead, homeHostStatsRead } from './mobile-home-host-operations'
 
 type HomeTaskSettings = {
@@ -24,7 +24,7 @@ export type HomeAccountsSetter = (
 ) => void
 
 export type HomeTaskProvidersSetter = (
-  updater: (previous: Record<string, TaskProvider[]>) => Record<string, TaskProvider[]>
+  updater: (previous: Record<string, HomeTaskSources>) => Record<string, HomeTaskSources>
 ) => void
 
 /** Which read the desktop refused, and the reason it gave, for the one line a refusal leaves. */
@@ -109,6 +109,19 @@ export function fetchMobileHomeTaskProviders(
   setProviders: HomeTaskProvidersSetter,
   disposed: () => boolean
 ): void {
+  // A read that ended without an answer says so, unless an earlier read found the sources: those
+  // stay, since a failed read is no evidence they changed. The next focus or new connection reads
+  // again either way.
+  const markFailed = (): void => {
+    if (disposed()) {
+      return
+    }
+    setProviders((previous) =>
+      Array.isArray(previous[hostId])
+        ? previous
+        : { ...previous, [hostId]: TASK_SOURCES_READ_FAILED }
+    )
+  }
   Promise.all([
     settingsRead.requestSingleFlight(client, hostId),
     taskPreflightRead.requestSingleFlight(client, hostId),
@@ -124,8 +137,9 @@ export function fetchMobileHomeTaskProviders(
       if (!settingsResult.accepted || !preflightResult.accepted || !linearResult.accepted) {
         // An { ok:false } answer says nothing about which sources the desktop has. Reading it as
         // "none" let GitHub, which needs no setup, stand in for the answer, and a refused Linear
-        // or tooling check dropped a source the desktop does have. So the whole round counts as
-        // unread, exactly like a dropped link below (review round 2, 2026-09-30).
+        // or tooling check dropped a source the desktop does have (review round 2, 2026-09-30).
+        // So the whole round is a failed read, exactly like a dropped link below: never "not
+        // read yet", which the card draws as a check still running (review round 3).
         const refused = [
           [settingsRead.operation.method, settingsResult.accepted, settingsResponse] as const,
           [taskPreflightRead.operation.method, preflightResult.accepted, preflightResponse] as const,
@@ -133,10 +147,11 @@ export function fetchMobileHomeTaskProviders(
         ]
           .filter(([, accepted]) => !accepted)
           .map(([method, , reply]) => refusedHomeRead(method, reply))
-        console.warn('[home] the desktop refused a task source read, so its sources stay unread', {
+        console.warn('[home] the desktop refused a task source read, so its sources are unknown', {
           hostId,
           refused
         })
+        markFailed()
         return
       }
       const settings =
@@ -152,11 +167,13 @@ export function fetchMobileHomeTaskProviders(
       setProviders((previous) => ({ ...previous, [hostId]: providers }))
     })
     .catch((error: unknown) => {
-      // Left unread, or at what the last read found: the card says it is checking rather than
-      // claiming GitHub, and the next new connection reads again (review, 2026-09-30).
+      // Marked failed, or left at what the last read found: the card says the read failed rather
+      // than claiming GitHub or a check still running, and the next focus or new connection reads
+      // again (review rounds 1 and 3, 2026-09-30).
       console.warn('[home] the task sources for this desktop could not be read', {
         hostId,
         cause: failureCause(error)
       })
+      markFailed()
     })
 }

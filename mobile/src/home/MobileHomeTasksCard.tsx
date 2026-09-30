@@ -5,6 +5,7 @@ import type { TaskProvider } from '../tasks/mobile-task-providers'
 import { useTheme } from '../theme/theme-context'
 import { PressScale } from '../ui/PressScale'
 import { Txt } from '../ui/Txt'
+import { TASK_SOURCES_READ_FAILED, type HomeTaskSources } from './home-task-sources'
 
 const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   github: 'GitHub',
@@ -15,9 +16,15 @@ const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
 /** The caption while the desktop's task sources are unread: nothing is claimed before they are. */
 export const TASK_SOURCES_CHECKING_LABEL = 'Checking sources…'
 
-function sourcesCaption(providers: TaskProvider[] | undefined): string {
+/** The caption once a read has ended without an answer: no check is running, and none is claimed. */
+export const TASK_SOURCES_FAILED_LABEL = "Couldn't read task sources"
+
+function sourcesCaption(providers: HomeTaskSources | undefined): string {
   if (providers === undefined) {
     return TASK_SOURCES_CHECKING_LABEL
+  }
+  if (providers === TASK_SOURCES_READ_FAILED) {
+    return TASK_SOURCES_FAILED_LABEL
   }
   return providers.length > 0
     ? providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
@@ -26,12 +33,16 @@ function sourcesCaption(providers: TaskProvider[] | undefined): string {
 
 export function MobileHomeTasksCard(props: {
   enabled: boolean
-  /** Undefined while unread, so no provider is claimed (or offered as an icon) before it is read. */
-  providers: TaskProvider[] | undefined
+  /**
+   * Undefined while unread, and TASK_SOURCES_READ_FAILED when the read failed: neither claims a
+   * provider or offers one as an icon. The card stays tappable either way, since the Tasks screen
+   * reads its own sources.
+   */
+  providers: HomeTaskSources | undefined
   onOpen: (provider?: TaskProvider) => void
 }) {
   const { colors, radius, space } = useTheme()
-  const providers = props.providers ?? []
+  const providers = Array.isArray(props.providers) ? props.providers : []
   return (
     <PressScale
       accessibilityRole="button"
