@@ -627,3 +627,98 @@ binary). `parseClaudeRunningShellCount` reads only "N shells", so a mixed
 pill gives the phone no footer count to pad from. No real screen of that
 pill has been captured, so the parser is left alone.
 
+
+## A Workflow is one task (2026-09-30)
+
+Verified against Claude Code **2.1.284** (three real lead-transcript records,
+`mobile/src/session/fixtures/claude-workflow-2.1.284.ts`) and the vendored Orca
+source in `src/shared/`. Nothing here was read off a live host: the roster
+half is read from Orca's code and the one screenshot of the phone's sheet.
+
+The Claude app draws a running workflow as one card (name, "Workflow" and the
+time, agent and token totals, the description, then a section per phase with a
+square and a label for each agent). Code UI drew one raw "workflow-subagent"
+Agent row and never the workflow itself. This is what the phone actually
+receives, and so what the card can be made of.
+
+### What arrives, and where
+
+| Source | What it carries for a workflow |
+| --- | --- |
+| Lead transcript, assistant `tool_use` named `Workflow` | `input.script` (its first statement is `export const meta = { name, description, phases: [{ title, detail, model }] }`, a pure literal) and `input.args`. Orca's reader keeps `input` whole (`NativeChatToolCallBlock.input`). |
+| Its `tool_result` | Plain text: `Workflow launched in background. Task ID: <id>`, then `Summary:` (the meta description again), `Transcript dir:`, `Script file:`, `Run ID: wf_…`. The record's own `toolUseResult` JSON also has `taskType: local_workflow` and `workflowName`, but Orca's reader does not surface it, so the phone has no name unless it parses the script. |
+| Completion `<task-notification>` (a user-role row) | `<task-id>` (the same id as the launch), `<tool-use-id>`, `<status>`, `<summary>` (`Dynamic workflow "<description>" completed`), `<result>` (the return value, 81 KB and cut), and a `<usage>` block: `agent_count`, `agents_done`, `agents_error`, `subagent_tokens`, `tool_uses`, `duration_ms`. Read: 37 agents, 4,853,603 tokens, 5,057,662 ms for the sweep the reference frames show. |
+| Host roster `agentStatus.subagents` | One row per LIVE lane: `id`, `agentType` (`workflow-subagent`), `model`, `description`, `state`, `startedAt`. See below. |
+| Per-agent `agent-<id>.meta.json` (on the desktop's disk) | `agentType`, `description` (the label), `workflowPhase`, `model`. **The only place a phase is written per agent, and the phone cannot read it** (below). |
+
+### Why the sheet showed one "workflow-subagent" row
+
+1. Orca folds only agent-typed entries of the Stop hook's `background_tasks`
+   into the roster (`isAgentChildWorkKind` is `kind === 'agent'`; a
+   `local_workflow` entry is classified `workflow` and dropped:
+   `claude-background-task-kind.ts`, `claude-subagent-roster.ts`). So the
+   workflow itself is never on the roster, and no roster row says which
+   workflow a lane belongs to.
+2. A lane row is created at SubagentStart with `agentType` only. Its
+   `description` (the label) arrives only when a lead Stop's inventory lists it
+   (`upsertWorkingClaudeSubagent`, `foldClaudeBackgroundTasksIntoRoster`), so
+   until then the title fell back to the agent type: "workflow-subagent".
+3. The phone counts a roster row only when the lead's own transcript launched
+   it (`createRosterOwnership`). A workflow's lanes are launched by the
+   workflow runner, never by an `Agent` call, so the transcript names none;
+   only rows the phone saw on its first roster read ("preexisting") got the
+   benefit of the doubt. That is an inference from the code, not a capture:
+   it fits one row showing while 13+ ran.
+4. The roster drops a lane at SubagentStop, so a finished agent is not on it.
+
+### Can "View transcript" read a workflow agent, and does it carry tokens
+
+Not shown on the card, because neither is established.
+
+- The launch result says where they live: `Transcript dir:
+  <session>/subagents/workflows/<runId>`, so an agent's file is not at the
+  `<session>/subagents/agent-<id>.jsonl` the existing path
+  (`subagentTranscriptPath`) computes. The host falls back to a recursive walk
+  by the session key `agent-<id>` when the path is absent, which may find it;
+  no workflow agent's file was read, so this is untested.
+- Orca's `NativeChatMessage` has no usage field (nothing in
+  `native-chat-types.ts`), so a transcript read through the reader carries no
+  token counts even if the raw JSONL does.
+
+### What the card shows, and what it refuses to
+
+Built from the records above (`mobile-workflow-meta.ts`,
+`mobile-background-task-workflows.ts`, `MobileWorkflowCard.tsx`).
+
+- **Name, description, phases**: `parseWorkflowMeta` reads the meta literal
+  without evaluating it (objects, arrays, quoted strings, comments, trailing
+  commas; a call, a computed value, an interpolation or a literal cut short
+  refuses the whole meta). With no meta the title is "Workflow", the
+  description comes from the launch result's `Summary:` line, and there is no
+  Phases section.
+- **Time**: the launch's timestamp to now while running (the app's own
+  `1h 1m` format, not the Claude app's `61m 44s`); the notification's
+  `duration_ms` once finished.
+- **Agents**: the roster's live `workflow-subagent` rows, folded into the one
+  running workflow, or into the one running workflow whose meta has a phase
+  the label starts with (`review:markdown` for a phase titled Review). With
+  two workflows running and no such match, nothing says whose a lane is, so it
+  stays an ordinary Agent row. Folded lanes are not listed again and are not
+  counted in "N running tasks". A lane on the roster with no workflow in the
+  loaded window is untouched.
+- **Finished**: a workflow's notification moves it to Finished, with
+  "N agents" and "N tokens" from `<usage>` when present.
+
+Not shown, and what would provide it:
+
+| Figure | Why missing | What would provide it |
+| --- | --- | --- |
+| Per-phase done/total and the grey finished squares | A finished agent has no roster row; the phone never sees it. | A host that keeps finished lanes on the roster, or the run's `journal.jsonl` (in the transcript dir, one line per finished agent), read through a host RPC. |
+| Total agents and total tokens while running | Only the completion notification states them. | The same journal, or a `local_workflow` entry kept on the roster with its counters. |
+| Per-agent tokens and time | Not on the roster; the roster's `startedAt` is first observation. | The journal, or the agent's own transcript with usage surfaced by Orca's reader. |
+| An agent's phase from the data | Only in `agent-<id>.meta.json` (`workflowPhase`). The phone opens no terminal and writes nothing to the host, and `files.read` is jailed to the worktree. | Orca putting `workflowPhase` on the roster row. Until then the phase is the label's `<phase>:` prefix, the convention the script's own `label:` follows; a label that does not start with a phase title is listed as "Other agents". |
+| Running workflow retiring early | The reader judges a workflow like a shell: the Stop hook's `run=` list outranks the transcript. That list is built from every `status: running` entry, so it should name a workflow, but no capture confirms it. | A live capture of `run=` during a workflow. |
+
+The structured (SDK) lane's `kind: workflow` rows are not folded: the wire
+gives them a name and a description only, so they still draw as a plain
+Workflow row.
