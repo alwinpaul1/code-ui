@@ -53,6 +53,18 @@ describe('a fenced code block inside a list item', () => {
     expect(saved()).toBe('- a\n\n ```\n x\n ```')
   })
 
+  it('keeps a code line that starts with a tab inside its item’s fence', () => {
+    // A tab is four columns, past the item's two, so the line is the fence's: reading only spaces
+    // as indent ended the item there, and the rest of the document became an unclosed fence. The
+    // two columns of the tab past the item's are the code's, as CommonMark and marked read them.
+    const markdown = '- a\n  ```make\n  all:\n\tgo build\n  ```\n- b'
+    const { editor, saved } = openedSurface(markdown)
+    expect(editor.querySelectorAll('ul > li')).toHaveLength(2)
+    expect(editor.querySelector('li pre code')?.textContent).toBe('all:\n  go build')
+    const html = (source: string) => marked.parse(source, { async: false })
+    expect(html(saved())).toBe(html(markdown))
+  })
+
   it('ends an unclosed fence with its item, and closes it on save', () => {
     expect(savedUntouched('- a\n  ```\n  x\n- b')).toBe('- a\n  ```\n  x\n  ```\n- b')
   })

@@ -63,10 +63,25 @@ export function closesFence(line: string, fence: string): boolean {
   return match !== null && match[1]![0] === fence[0] && match[1]!.length >= fence.length
 }
 
-/** A code line with up to `columns` of the fence's own indent taken off, as CommonMark does. */
+/**
+ * A code line with up to `columns` of its container's indent taken off, as CommonMark does: a tab
+ * reaches the next multiple of four, and the part of one past `columns` stays as spaces.
+ */
 export function outdentCodeLine(line: string, columns: number): string {
+  let column = 0
   let cut = 0
-  while (cut < columns && line[cut] === ' ') {
+  while (column < columns && cut < line.length) {
+    if (line[cut] === ' ') {
+      column += 1
+    } else if (line[cut] === '\t') {
+      const reach = column + 4 - (column % 4)
+      if (reach > columns) {
+        return ' '.repeat(reach - columns) + line.slice(cut + 1)
+      }
+      column = reach
+    } else {
+      break
+    }
     cut += 1
   }
   return line.slice(cut)

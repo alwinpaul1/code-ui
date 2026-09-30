@@ -49,10 +49,26 @@ export function leadingSpaces(line: string): number {
   return count
 }
 
+/** The columns a line's leading whitespace reaches, a tab going on to the next multiple of four. */
+function leadingColumns(line: string): number {
+  let columns = 0
+  for (const char of line) {
+    if (char === ' ') {
+      columns += 1
+    } else if (char === '\t') {
+      columns += 4 - (columns % 4)
+    } else {
+      break
+    }
+  }
+  return columns
+}
+
 /**
  * The code of a fence opened under an item whose words start at `contentColumn`, from `index`:
  * up to its closing fence, or to the first non-blank line left of the content column, where the
- * item ends and its fence with it (a save closes it), or to the end of the document.
+ * item ends and its fence with it (a save closes it), or to the end of the document. A code line
+ * that starts with a tab, as a Makefile recipe must, reaches the column the tab does.
  */
 export function readItemFenceBody(
   lines: readonly string[],
@@ -65,7 +81,7 @@ export function readItemFenceBody(
   let next = index
   while (next < lines.length) {
     const line = lines[next] ?? ''
-    if (line.trim() && leadingSpaces(line) < contentColumn) {
+    if (line.trim() && leadingColumns(line) < contentColumn) {
       break
     }
     next += 1
