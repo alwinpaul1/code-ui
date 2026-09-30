@@ -28,3 +28,19 @@ export function structuredQuestionResponseFields(target: {
     ? { itemId, expectedRevision, answers }
     : { itemId, expectedRevision, optionId }
 }
+
+/**
+ * What the phone says when a host refuses a call carrying `answers` at the schema. A host older than
+ * Orca 1.4.217 has a strict `respondToQuestion` that knows only `optionId`, so it answers with raw
+ * zod text ("Invalid input: expected string, received undefined") that names nothing. The only
+ * reason the phone sends `answers` is that the packed id would not fit, so the cause is the length.
+ */
+export const ANSWER_TOO_LONG_FOR_HOST =
+  "This answer is too long for this desktop's Orca. Update Orca to 1.4.217 or shorten the answer."
+
+export function explainLongAnswerFailure(failure: {
+  code: string | null
+  message: string
+}): string {
+  return failure.code === 'invalid_argument' ? ANSWER_TOO_LONG_FOR_HOST : failure.message
+}

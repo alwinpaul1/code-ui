@@ -19,7 +19,7 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
   | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  | { status: 'failed'; message: string }
+  | { status: 'failed'; message: string; code?: string }
   /** `hostReportedOperationUnknown` separates a host answer about the id from doubt
    *  about the effect. Whether that id can still be retried is the method's own
    *  question: a plan that recovers an unknown ledger row replays or reruns it, one
@@ -37,7 +37,12 @@ export type StructuredAgentSessionMutate = <TValue>(
   fields: Record<string, unknown>,
   /** Where a host refusal is said; the chat's banner when absent. A pick from the
    *  open option drawer brings its own, because that banner draws under it. */
-  options?: { onError?: (message: string) => void }
+  options?: {
+    onError?: (message: string) => void
+    /** Rewords a failure before it is said, for a call whose failure has a cause the host's own
+     *  text does not name. `code` is the RPC error code of a pre-handler refusal, else null. */
+    explainFailure?: (failure: { code: string | null; message: string }) => string
+  }
 ) => Promise<StructuredAgentSessionMutationResult<TValue>>
 
 class AgentSessionRpcResponseError extends Error {
@@ -174,7 +179,7 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
       : { status: 'refused', code: result.refusal.code, message: result.refusal.message }
   } catch (error) {
     if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
-      return { status: 'failed', message: error.message }
+      return { status: 'failed', message: error.message, code: error.code }
     }
     if (
       isRpcDeliveryUnknown(error) ||
