@@ -707,15 +707,32 @@ and `MobileWorkflowCard.tsx`.
   rows, or nothing when it has none (never "0 agents", and a roster a lead Stop
   just cleared reads as none). At the 32-row roster cap
   (`AGENT_STATUS_MAX_SUBAGENTS`) the count is a floor: "32+".
+- **What ends a running workflow (or a monitor).** The beacon has two lists.
+  The status line's `live=` is sent on every repaint (every 5 s on the phone's
+  flag) and is built from Bash launch sentences only, so it never names a
+  workflow or a monitor; the Stop hook's `run=` (every `status: running` entry of
+  `background_tasks`) can. A shell is judged by the freshest of the two, as
+  before. A workflow or a monitor is judged by the last Stop's `run=` alone,
+  kept apart from `live=` (`stopRunningTaskIds`, `stopRunningTaskIdsAt` on the
+  beacon, replaced on every Stop). Before this, a `live=` repaint about 5 s after
+  the launching turn ended retired the workflow as "Completed" and flickered it
+  back at every later Stop (reviewed with the real Stop and status-line scripts,
+  2026-09-30). It still ends on its own notification, a `done=`, a pane `done`,
+  or a later Stop whose `run=` lacks it; a launch after the last Stop spoke is
+  not judged by it. No Stop yet: nothing retires it.
 - **Attribution rule.** A lane names no workflow, so lanes are counted on a card
   only when nothing says they could be another workflow's: exactly one workflow
-  running in the loaded window; the agent's own beacon (`runningTaskIds`, the
-  Stop hook's `run=`) has answered and every id on it is a launch the window
-  showed (a workflow launched above the window is running and would be on that
-  list, unlaunched here); the lane started after this workflow's launch; the
-  host does not say the pane is done. Otherwise the lanes are left as they were,
-  ordinary agent rows, not attributed and not folded. Counted lanes are taken off
-  the running list and not counted twice in "N running tasks".
+  running in the loaded window; a Stop has spoken (`stopRunningTaskIds`) and
+  every id on its `run=` is a launch the window showed (a workflow launched
+  above the window is running and would be on that list, unlaunched here); the
+  window reaches back to before that Stop (so a launch since then is in it, not
+  above it); the lane started after this workflow's launch; the host does not
+  say the pane is done. `live=` plays no part: it is rebuilt every repaint and
+  cannot vouch for what ran before it. Otherwise the lanes are left as they
+  were, ordinary agent rows, not attributed and not folded. Counted lanes are
+  taken off the running list and not counted twice in "N running tasks". A lane
+  a finished workflow left on a stale roster started before the next launch, so
+  it is not counted on it.
 - **Finished**: the notification moves it to Finished. The `<usage>` block is
   read from after `</result>` (the result is model-written and can quote one),
   and gives "N agents", "N tokens", "N failed" (`agents_error`, danger tone) and
@@ -732,9 +749,7 @@ and `MobileWorkflowCard.tsx`.
 
 Known limits: a stopped or killed workflow shows "Completed" like a stopped
 shell does (the notification's status is not read for it beyond `failed`). The
-reader judges a workflow like a shell, so the beacon's `run=` list outranks the
-transcript; it is built from every `status: running` entry, so it should name a
-workflow, but no capture confirms it. The structured (SDK) lane's `kind:
+last Stop's `run=` names a workflow only if the hook's payload lists it as `status: running` (the real hook script names one entry of any type but a teammate); the entry's `type` string for a workflow is taken from the launch result's `taskType: local_workflow`, not captured from a Stop payload. The structured (SDK) lane's `kind:
 workflow` rows are not folded: the wire gives them a name and a description only.
 A workflow-lane row is also never allowed to vouch for a foreground `Agent` call
 (`callStarted`): it came up beside the call and, with no `subagent_type` on the
