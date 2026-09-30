@@ -196,6 +196,13 @@ are captured live (2026-09-30, `orca terminal read --screen`, a session named
 "1152": 119 x "─", " 1152 ", one "─"; the fixture header says which is which). Only the send-now layout (2.1.277 on) is changed; the older
 indented block still stops at a labelled rule.
 
+Claude Code 2.1.286 (installed 2026-09-30): the on-screen strings these readers
+match (the queue placeholder, "esc to interrupt", the footer mode labels, the
+permission prompt wording, the background-task and shell labels) appear in the
+2.1.286 binary exactly as in 2.1.285. Checked by comparing the two binaries'
+strings, not by a live capture, so a layout change with no new wording would not
+show here.
+
 Because Orca's composer detector accepts only a bare rule above `❯`, the
 `draft` it publishes is empty under a named or fast-mode rule. The queue still
 shows, but the pencil and delete are refused before any key is sent
