@@ -738,10 +738,11 @@ The tab status (`agentStatus.prompt`) carries the pane's last prompt, cut at
 200 characters, and makes no new copy when the prompt's words do not change.
 The prompt hook's copy (`up=`, with `at=`) carries the words as typed, up to
 2,000 bytes, the text row they were typed after, and a nonce of its own for
-each submission. Three cases the status alone cannot settle use it
+each submission. Four cases the status alone cannot settle use it
 (`desktop-prompt-merge.ts`, `desk-prompt-row-owners.ts`,
-`use-desktop-prompt-echoes.ts`; the cases are in
-`mobile-chat-midturn-beacon-evidence.test.ts`):
+`desk-prompt-landed.ts`, `use-desktop-prompt-echoes.ts`; the cases are in
+`mobile-chat-midturn-beacon-evidence.test.ts` and
+`mobile-chat-desk-message-earlier-turn-words.test.ts`):
 
 - A long message is drawn by its twin's whole words, so the queue box's whole
   reading of it and the echo are the same words (W1 of the review of
@@ -755,6 +756,11 @@ each submission. Three cases the status alone cannot settle use it
   owns and no harness sent (`joinedLineBetween`). No row is split into its
   messages: a prompt can be made of earlier messages' words, and that lost
   messages.
+- A user row at or before the row a hook copy names was written before the
+  copy was typed, so it never lands the copy: a mid-turn "keep going" that
+  repeats an earlier turn stays drawn, where before the earlier turn's row
+  dropped its only copy (2026-09-30). A status copy with no hook twin names
+  no row and is still landed by any row of its words.
 - A message read first after Orca's stand-in goes after the row its hook copy
   names; with the hook and no copy of it, it came before the chat listened,
   and goes by its run's start (gap C).
