@@ -21,12 +21,16 @@ export function normalizeBrowserUrl(value: string): string | null {
     }
     // `example.com:8080` and `mymac:3000` parse with the "scheme" `example.com:`, so a dev server
     // typed without one was refused while the same host with no port opened (review, 2026-09-30).
-    return isSchemelessHostWithPort(trimmed) ? withHttps(trimmed) : null
+    return isSchemelessHostWithPort(trimmed) ? withSchemeForHostPort(trimmed) : null
   } catch {
     // A value with a scheme that does not parse (`http://example.com:99999`, `http://a b`,
     // `https:`) is refused. Putting `https://` in front of it again opened a host named "http"
     // (review, 2026-09-30).
-    return SCHEME_PREFIX.test(trimmed) ? null : withHttps(trimmed)
+    if (SCHEME_PREFIX.test(trimmed)) {
+      return null
+    }
+    // `8.8.8.8:53` and `my_host:3000` throw instead: no scheme can start with a digit or hold `_`.
+    return isSchemelessHostWithPort(trimmed) ? withSchemeForHostPort(trimmed) : withHttps(trimmed)
   }
 }
 
@@ -40,6 +44,30 @@ function withHttps(value: string): string | null {
   } catch {
     return null
   }
+}
+
+/** A host as the URL parser writes an IPv4 address: four decimal parts, whatever form was typed. */
+const IPV4_HOSTNAME = /^\d{1,3}(?:\.\d{1,3}){3}$/
+
+/**
+ * A host:port typed with no scheme opens over plain http when its host is an IPv4 address or a
+ * single label (no dot), and over https otherwise: the rule Chrome's typed-navigation
+ * HTTPS-Upgrades use, which never upgrade an IP-address literal or a non-unique host name. A
+ * dev server by machine name (`mymac:3000`), by LAN address or by Tailscale address
+ * (100.64.0.0/10) serves plain http, and https:// against it failed the TLS handshake in the
+ * browser pane (review, 2026-09-30). A dotted name (`example.com:8080`) keeps https.
+ */
+function withSchemeForHostPort(value: string): string | null {
+  let plain: URL
+  try {
+    plain = new URL(`http://${value}`)
+  } catch {
+    // https:// parses the host and port the same way, and would refuse them too.
+    return null
+  }
+  return IPV4_HOSTNAME.test(plain.hostname) || !plain.hostname.includes('.')
+    ? plain.toString()
+    : withHttps(value)
 }
 
 /** Schemes whose body can be all digits, which a host:port reading would open as a web page. */
@@ -81,14 +109,12 @@ export function isBlankBrowserUrl(value: string | null | undefined): boolean {
   return !trimmed || trimmed === 'about:blank' || trimmed.startsWith('data:text/html')
 }
 
-/** A LAN address with a port is a dev server, and those serve plain http, as localhost does. */
-const PRIVATE_IPV4_WITH_PORT =
-  /^(?:10(?:\.\d{1,3}){3}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|192\.168(?:\.\d{1,3}){2}):\d+(?:[/?#].*)?$/
-
+/** localhost, 127.x, a bracketed IPv6 address and a `.local` name: plain http, with a port or
+ *  without. A LAN address (10/8, 172.16/12, 192.168/16) with a port was matched here too; every
+ *  IPv4 address with a port now opens over http by the host:port rule (withSchemeForHostPort). */
 function hasHttpLikeLocalHost(value: string): boolean {
   return (
     /^(localhost|127(?:\.\d{1,3}){3}|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i.test(value) ||
-    /^[\w.-]+\.local(?::\d+)?(?:[/?#].*)?$/i.test(value) ||
-    PRIVATE_IPV4_WITH_PORT.test(value)
+    /^[\w.-]+\.local(?::\d+)?(?:[/?#].*)?$/i.test(value)
   )
 }
