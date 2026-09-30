@@ -58,9 +58,10 @@ const SECOND_AT = WRITTEN_BEFORE_SECOND
 /** The second taken mid-turn: a result lands, then the words after it. */
 const SECOND_TAKEN = WHOLE_TURN.slice(0, BEFORE_SECOND.length + 2)
 /** An earlier turn typed with the agent idle, of the same words, and its
- *  reply: the chat then stores nothing from the box while a message of those
- *  words waits (use-queued-desk-witnesses.ts landedRowOf), so each echo is
- *  its message's only copy. */
+ *  reply: a row of those words above where either message arrived, so it is
+ *  neither's own (rows-from-anchor.ts). Until 2026-09-30 it also kept the
+ *  chat from storing either from the box while it waited, so each echo was
+ *  its message's only copy; now the box stores each under its echo's id. */
 const PAST = [user('5a1c2e3d-4b5f-4a6e-8c7d-9e0f1a2b3c4d', WORDS, '05:20:00.000'), text('6b2d3f4e-5c6a-4b7f-9d8e-0f1a2b3c4d5e', '05:20:30.000')]
 
 describe('two desk messages of the same words, each taken mid-turn', () => {

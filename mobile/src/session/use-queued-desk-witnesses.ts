@@ -6,6 +6,7 @@ import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { absorbedMemoryId, witnessesToRemember, type WitnessToRemember } from './mobile-native-chat-witness-memory'
 import type { BoxSighting } from './use-absorbed-queue-echoes'
+import { rowsFromAnchor } from './rows-from-anchor'
 
 /**
  * The messages the agent's queue box lists that are not the phone's own
@@ -34,6 +35,11 @@ import type { BoxSighting } from './use-absorbed-queue-echoes'
  * (mobile-native-chat-witness-dedupe.ts). A message already in the box when
  * the chat opened is placed where the chat first saw it, which can be below
  * rows written after it was sent.
+ *
+ * One whose own row has landed is not stored (landedFromSighting): a user row
+ * of its words at or after the row it arrived after, the rule its echo is
+ * retired by (rowsFromAnchor). A row of those words from an earlier turn is
+ * another message.
  */
 export function queuedDeskWitnesses(
   entries: readonly MobileChatQueueEntry[],
@@ -41,12 +47,13 @@ export function queuedDeskWitnesses(
   rawMessages: readonly NativeChatMessage[]
 ): WitnessToRemember[] {
   const out: WitnessToRemember[] = []
+  const landed = landedFromSighting(rawMessages)
   for (const slot of box) {
     if (typeof entries[slot.row] !== 'string' || slot.sighting === null || slot.text.split('\n').some((line) => /^[⏺●⎿]/.test(line.trim()))) {
       continue
     }
     const key = normalizeNativeChatUserText(asPaintedPrompt(slot.text))
-    if (key.length === 0 || landedRowOf(key, rawMessages)) {
+    if (key.length === 0 || landed(key, slot.sighting)) {
       continue
     }
     out.push({ id: absorbedMemoryId(slot.text, slot.sighting, slot.firstRead), text: slot.text, anchorId: slot.sighting })
@@ -55,22 +62,31 @@ export function queuedDeskWitnesses(
 }
 
 /**
- * Whether the transcript already holds a user row of these words. A box read
- * that still lists a message whose row has landed is one taken just before
- * the read (the chat opened as Claude dequeued it at a turn's end); stored
- * then, it counted that row as an older one of its words, waited for a
- * second, and was drawn under its own row for good (round 2 of the review of
- * fix/midturn-gaps). The same words queued again after an older prompt of
- * them are not stored either, and are drawn as before this was added.
+ * Whether the transcript holds a user row of these words from the row the box
+ * first listed the message after on (rowsFromAnchor). A box read that still
+ * lists a message whose row has landed is one taken just before the read
+ * (the chat opened as Claude dequeued it at a turn's end, and its row was the
+ * last row then); stored, it counted that row as an older one of its words,
+ * waited for a second, and was drawn under its own row for good (round 2 of
+ * the review of fix/midturn-gaps). A row of the same words BEFORE that one is
+ * an earlier message: counted too, a mid-turn "keep going" after an earlier
+ * turn of those words was never stored, and was lost if the chat closed
+ * before the agent's next row (review, 2026-09-30). The rows are read on the
+ * first ask, so an empty box does not walk them.
  */
-function landedRowOf(key: string, rawMessages: readonly NativeChatMessage[]): boolean {
-  return rawMessages.some(
-    (message) =>
-      message.role === 'user' &&
-      normalizeNativeChatUserText(
-        asPaintedPrompt(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' '))
-      ) === key
-  )
+function landedFromSighting(rawMessages: readonly NativeChatMessage[]): (key: string, sighting: string) => boolean {
+  let rows: NativeChatMessage[] | null = null
+  let keys: string[] | null = null
+  let since: ((anchorId: string | null) => boolean[]) | null = null
+  return (key, sighting) => {
+    rows ??= rawMessages.filter((message) => message.role === 'user')
+    keys ??= rows.map((message) =>
+      normalizeNativeChatUserText(asPaintedPrompt(message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join(' ')))
+    )
+    since ??= rowsFromAnchor(rawMessages, rows)
+    const after = since(sighting)
+    return keys.some((landedKey, index) => after[index] && landedKey === key)
+  }
 }
 
 /**

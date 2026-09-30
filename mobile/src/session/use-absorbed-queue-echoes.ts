@@ -8,6 +8,7 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
 import { useStableEchoes } from './use-stable-echoes'
 import { preferredWitnessReading, readingGluesToolRowsOnto } from './mobile-native-chat-witness-dedupe'
 import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
+import { rowsFromAnchor } from './rows-from-anchor'
 import {
   normalizeNativeChatUserText,
   stripImagePromptMarker
@@ -319,36 +320,6 @@ export function useAbsorbedQueueWitness(
   return {
     echoes: useStableEchoes(echoes),
     box: boxReadable ? slots.map(({ row, text, sighting, firstRead }) => ({ row, text, sighting, firstRead })) : []
-  }
-}
-
-/**
- * For the row a held echo is drawn after (the last row when the box first
- * listed it), which landed user rows can be the message's own: that row and
- * the ones after it. A row before it was written before the message was sent.
- *
- * The anchor row itself counts. A box read can be behind the transcript: the
- * chat opened as Claude dequeued a message at a turn's end, its first read
- * still listed the message, and the row Claude dequeued it as was already
- * the last row (mobile-chat-midturn-queue-box.test.ts). What that costs: the
- * same words sent twice with no row written between, the second taken
- * mid-turn, read as one message. The words cannot tell those apart.
- *
- * An anchor the record no longer holds was paged out above the loaded
- * window, so every row held is after it; a landed row the record does not
- * hold counts, as every row did before this rule. The record is indexed on
- * the first call, so a render with nothing held does not walk it.
- */
-function rowsFromAnchor(
-  rawMessages: readonly NativeChatMessage[],
-  rows: readonly NativeChatMessage[]
-): (anchorId: string | null) => boolean[] {
-  let position: Map<string, number> | null = null
-  return (anchorId) => {
-    position ??= new Map(rawMessages.map((message, index) => [message.id, index]))
-    const at = position
-    const anchor = anchorId === null ? undefined : at.get(anchorId)
-    return rows.map((row) => anchor === undefined || (at.get(row.id) ?? Infinity) >= anchor)
   }
 }
 
