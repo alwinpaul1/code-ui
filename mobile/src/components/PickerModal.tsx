@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { View, Pressable } from 'react-native'
+import { ActivityIndicator, View, Pressable } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Surface } from '../ui/Surface'
@@ -24,6 +24,15 @@ type Props<T extends string = string> = {
   onClose: () => void
   onAfterClose?: () => void
   zIndex?: number
+  // Optional notices drawn IN PLACE of the rows. A caller that sets none renders exactly as before
+  // (an empty options list is an empty sheet). A picker whose options come from a read uses them
+  // so a slow read, a failed read and a real "none" never share one blank sheet.
+  /** The options are still being read. */
+  loadingLabel?: string
+  /** Reading the options failed. `retryLabel` is the Retry button's accessibility label. */
+  failure?: { message: string; onRetry: () => void; retryLabel?: string }
+  /** The read answered, with no options. */
+  emptyLabel?: string
 }
 
 type PickerModalContentProps<T extends string = string> = Pick<
@@ -40,9 +49,23 @@ export function PickerModal<T extends string = string>({
   onLongSelect,
   onClose,
   onAfterClose,
-  zIndex
+  zIndex,
+  loadingLabel,
+  failure,
+  emptyLabel
 }: Props<T>) {
   const { space } = useTheme()
+  const notice = failure ? (
+    <PickerModalNotice
+      message={failure.message}
+      onRetry={failure.onRetry}
+      retryLabel={failure.retryLabel}
+    />
+  ) : loadingLabel ? (
+    <PickerModalNotice message={loadingLabel} busy />
+  ) : options.length === 0 && emptyLabel ? (
+    <PickerModalNotice message={emptyLabel} />
+  ) : null
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
       <View style={{ paddingHorizontal: space.xs, paddingBottom: space.sm }}>
@@ -51,14 +74,57 @@ export function PickerModal<T extends string = string>({
         </Txt>
       </View>
 
-      <PickerModalContent
-        options={options}
-        selected={selected}
-        onSelect={onSelect}
-        onLongSelect={onLongSelect}
-        onClose={onClose}
-      />
+      {notice ?? (
+        <PickerModalContent
+          options={options}
+          selected={selected}
+          onSelect={onSelect}
+          onLongSelect={onLongSelect}
+          onClose={onClose}
+        />
+      )}
     </BottomDrawer>
+  )
+}
+
+function PickerModalNotice({
+  message,
+  busy = false,
+  onRetry,
+  retryLabel = 'Retry'
+}: {
+  message: string
+  busy?: boolean
+  onRetry?: () => void
+  retryLabel?: string
+}) {
+  const { colors, radius, space } = useTheme()
+  return (
+    <Surface rounded="lg" style={{ padding: space.md + 2, gap: space.md, alignItems: 'flex-start' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
+        <Txt variant="body" tone="muted">
+          {message}
+        </Txt>
+      </View>
+      {onRetry ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={retryLabel}
+          onPress={onRetry}
+          style={{
+            paddingVertical: space.sm,
+            paddingHorizontal: space.md,
+            borderRadius: radius.md,
+            backgroundColor: colors.bgRaised
+          }}
+        >
+          <Txt variant="body" weight="medium">
+            Retry
+          </Txt>
+        </Pressable>
+      ) : null}
+    </Surface>
   )
 }
 
