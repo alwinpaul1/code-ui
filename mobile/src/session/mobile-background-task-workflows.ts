@@ -15,7 +15,7 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 // that are running now, and nothing about the ones that finished.
 
 /** What the roster calls a lane a workflow started. */
-const WORKFLOW_AGENT_TYPE = 'workflow-subagent'
+export const WORKFLOW_AGENT_TYPE = 'workflow-subagent'
 
 export type WorkflowAgent = { id: string; label: string | null }
 export type WorkflowPhase = { title: string; detail: string | null; agents: WorkflowAgent[] }

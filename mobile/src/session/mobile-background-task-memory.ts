@@ -1,6 +1,7 @@
 import type { AgentStatusEntry, AgentStatusState } from '../../../src/shared/agent-status-types'
 import type { PendingAgentCall, WindowTaskEvidence } from './mobile-background-task-evidence'
 import type { HeldShellCount } from './mobile-background-task-footer'
+import { WORKFLOW_AGENT_TYPE } from './mobile-background-task-workflows'
 import { isTeammateLifecycleId, type RosterRow } from './mobile-background-task-roster'
 import { rememberFinishedTaskIds } from './mobile-finished-task-id-memory'
 import { isOrcaStandIn } from './agent-status-stand-in'
@@ -231,9 +232,12 @@ function withDoubtStarts(
 }
 
 /** A foreground Agent call started this row: the row came up within 30 s of
- *  the call, and names the same agent type when both say one. */
+ *  the call, and names the same agent type when both say one. Never a workflow
+ *  lane: the runner starts those itself, and the call names no `subagent_type`,
+ *  so a lane that came up first would take the vouch from the real agent. */
 function callStarted(call: PendingAgentCall, row: RosterRow): boolean {
   return (
+    row.agentType?.trim() !== WORKFLOW_AGENT_TYPE &&
     call.at !== null &&
     row.startedAt >= call.at - CALL_TO_ROW_SKEW_MS &&
     row.startedAt <= call.at + CALL_TO_ROW_MAX_MS &&
