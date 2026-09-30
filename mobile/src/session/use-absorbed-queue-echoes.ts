@@ -79,7 +79,13 @@ export function useAbsorbedQueueEchoes(
   // Prompts already drawn by another path — the phone's own pending echoes
   // and the hook's desktop prompts. The scrollback shows those too, and read
   // blind it drew each of them a second time (2026-09-13).
-  ownPrompts: readonly string[] = []
+  ownPrompts: readonly string[] = [],
+  // Whether the read behind `queued` could see the box at all
+  // (mobile-terminal-queue-read.ts). One that could not is unknown, not
+  // empty: the box is taken to hold what it held, so nothing is held or
+  // revived on it, and a message the agent took meanwhile is held at the next
+  // read that sees the box, where it arrived.
+  boxReadable = true
 ): MobileNativeChatPendingMessage[] {
   /** By `seq`, not by words: two messages of the same words are two echoes. */
   const held = useRef(new Map<number, HeldEcho>())
@@ -107,7 +113,7 @@ export function useAbsorbedQueueEchoes(
   // Keyed on collapsed whitespace: the queue box and the scrollback wrap the
   // same message differently, and keying on the raw text showed it twice
   // (2026-09-13).
-  const live = queued.map(promptKey).filter((text) => text.length > 0)
+  const live = (boxReadable ? queued : []).map(promptKey).filter((text) => text.length > 0)
   const own = ownPrompts.map(promptKey)
   const anchorId = rawMessages.at(-1)?.id ?? null
   for (const key of live) {
@@ -129,8 +135,11 @@ export function useAbsorbedQueueEchoes(
     new Set([...own, ...landed, ...live, ...listed.current, ...[...held.current.values()].map((entry) => entry.key)])
   // The box as read now, each entry matched to the one it was in the last
   // read (matchBoxSlots). An entry that matched none arrived; one of the last
-  // read that nothing matched left the box, and the agent has it.
-  const { slots, left, arrived } = matchBoxSlots(previous.current, queued, anchorId)
+  // read that nothing matched left the box, and the agent has it. A read that
+  // could not see the box is none of those: the last read stands.
+  const { slots, left, arrived } = boxReadable
+    ? matchBoxSlots(previous.current, queued, anchorId)
+    : { slots: [...previous.current], left: [], arrived: [] }
   const hold = (slot: BoxSlot): void => {
     // No transcript yet means no row to anchor on, and a null anchor pins
     // the echo to the bottom for good.
@@ -181,13 +190,20 @@ export function useAbsorbedQueueEchoes(
   }
   // An entry back in the box with no row written since an echo of its words
   // was held is that message listed again: a read that listed nothing for a
-  // moment let it go (a relay drop hands the chat an empty box, and the
-  // reader lists nothing while an entry is selected at the desk). The echo
-  // goes and the entry keeps its sighting. With a row between, it is a
-  // message sent after the agent took the first, and the first stays drawn
-  // while it waits (2026-09-30). What that costs: a box that lists nothing
-  // while rows land, then lists the same message again, draws it twice once
-  // the agent takes it. The words cannot tell those apart.
+  // moment let it go. The echo goes and the entry keeps its sighting. With a
+  // row between, it is a message sent after the agent took the first, and
+  // the first stays drawn while it waits (2026-09-30).
+  // The reads that list nothing without seeing the box never get here: the
+  // link down or not yet read again (the controller hands the chat an empty
+  // box then), an entry selected at the desk, a dialog in the composer's
+  // place, a block the reader refuses (`boxReadable`, mobile-terminal-queue-read.ts).
+  // Taken as an empty box, one of those drew a message still queued beside
+  // its own queue entry once a streaming row had landed, and twice once the
+  // agent took it (review, 2026-09-30). What still costs that: a read that
+  // DOES see an empty box while rows land, then lists the same words again.
+  // A genuine second message of those words is that same sequence of reads,
+  // so it is drawn twice once the agent takes it. Accepted: the words cannot
+  // tell the two apart.
   for (const index of arrived) {
     const slot = slots[index]!
     // Not a reading with a tool's rows glued under a message: the reader ran

@@ -8,8 +8,7 @@ import {
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
-import { codexQueuedMessagesFromScreen } from './codex-terminal-queued-messages'
-import { queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { queueBoxReadFromScreen } from './mobile-terminal-queue-read'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
 import { sentPromptsFromScreen } from './mobile-terminal-sent-prompts'
 import { sentPhotosFromScreen, type ScreenSentPhotos } from './mobile-terminal-sent-photos'
@@ -46,6 +45,11 @@ export function useMobileTerminalHudObservation(args: {
 }): {
   permissionDismissed: boolean
   queuedMessages: string[]
+  /** Whether the read behind `queuedMessages` could see the agent's queue
+   *  box (mobile-terminal-queue-read.ts). False until the first read since
+   *  the chat began watching this terminal, and while it is not watching: an
+   *  unread box is not an empty one (use-absorbed-queue-echoes.ts). */
+  queueReadable: boolean
   /** Prompts the agent has already accepted, read off its scrollback. */
   sentPrompts: string[]
   /** Photos Claude painted above an accepted prompt, which the transcript
@@ -88,6 +92,7 @@ export function useMobileTerminalHudObservation(args: {
   const queueScopeRef = useRef<string | null>(null)
   const [permissionDismissed, setPermissionDismissed] = useState(false)
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
+  const [queueReadable, setQueueReadable] = useState(false)
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [sentPhotos, setSentPhotos] = useState<ScreenSentPhotos[]>([])
   // Tagged with the terminal it was read from, so a new terminal's rows are
@@ -108,6 +113,7 @@ export function useMobileTerminalHudObservation(args: {
   useEffect(() => {
     setPermissionDismissed(false)
     setQueuedMessages((current) => (current.length ? [] : current))
+    setQueueReadable(false)
     setTaskCompletions(null)
     setObservation(null)
     setSpinner(null)
@@ -168,16 +174,13 @@ export function useMobileTerminalHudObservation(args: {
             : agent === 'claude' || agent === 'openclaude'
               ? claudePermissionFromScreen(lines)
               : null
-        const queued =
-          agent === 'codex'
-            ? codexQueuedMessagesFromScreen(lines)
-            : agent === 'claude' || agent === 'openclaude'
-              ? queuedMessagesFromScreen(lines, terminal.terminal?.draft)
-              : []
+        const box = queueBoxReadFromScreen(lines, agent, terminal.terminal?.draft)
+        const queued = box.entries
         queueScopeRef.current = handleKey
         setQueuedMessages((current) =>
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued
         )
+        setQueueReadable(box.readable)
         // Only Claude paints its accepted prompts this way; Codex does not.
         // The reader takes the `❯` row and nothing under it — see
         // mobile-terminal-single-row-prompts.test.ts for why.
@@ -285,6 +288,7 @@ export function useMobileTerminalHudObservation(args: {
     rereadAfterAnswer,
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
+    queueReadable: enabled && queueScopeRef.current === handleKey && queueReadable,
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     sentPhotos: enabled && queueScopeRef.current === handleKey ? sentPhotos : [],
     taskCompletions: enabled && taskCompletions?.handleKey === handleKey ? taskCompletions.rows : null,

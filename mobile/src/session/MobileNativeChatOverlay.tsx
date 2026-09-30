@@ -275,7 +275,9 @@ export function MobileNativeChatOverlay({
     // the new conversation and stuck to the top of it (2026-09-13).
     controller.nativeChatStreamScopeKey,
     session.messages,
-    ownPrompts
+    ownPrompts,
+    // A read that could not see the box is unknown, not an empty box.
+    controller.nativeChatQueueReadable !== false
   )
   // The pending copies drawn: a witness that gave way to a copy placed by the
   // desk's clock is not, and its old place must not break the tool fold

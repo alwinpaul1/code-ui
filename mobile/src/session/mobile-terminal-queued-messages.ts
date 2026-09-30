@@ -17,6 +17,16 @@ export { QUEUE_HINT, SELECTED_HINT, queueBlockLineIndices } from './mobile-termi
 export type ClaudeQueueView = {
   /** Empty while an entry is selected: the rows are ambiguous then. */
   entries: string[]
+  /**
+   * Whether this read says what the box holds, an empty box included. Not
+   * while an entry is selected, nor when the reader refused a block Claude's
+   * hint says holds messages, nor with no hint and no input row on screen (a
+   * permission prompt or a picker drawn in the composer's place). Read as an
+   * empty box, each of those took every listed message for one the agent took
+   * (review of 2026-09-30; use-absorbed-queue-echoes.ts). The hint counts only
+   * on the input row itself; one quoted anywhere else says nothing.
+   */
+  readable: boolean
   /** Claude offers its per-message selector on this build. */
   selectable: boolean
   /** One entry carries the marker right now. */
@@ -29,6 +39,7 @@ export type ClaudeQueueView = {
 
 const EMPTY_VIEW: ClaudeQueueView = {
   entries: [],
+  readable: false,
   selectable: false,
   selecting: false,
   selected: null,
@@ -45,7 +56,7 @@ export function claudeQueueViewFromScreen(
   const window = (index: number) => footerWindow(lines, index)
   const footer = queueFooterIndex(lines)
   if (footer === -1) {
-    return EMPTY_VIEW
+    return { ...EMPTY_VIEW, readable: lines.some((line) => CLAUDE_INPUT_ROW.test(line)) }
   }
   const hint = window(footer)
   const selecting = SELECTED_HINT.test(hint)
@@ -53,8 +64,10 @@ export function claudeQueueViewFromScreen(
   if (!selecting) {
     const sendNow = sendNowHintAbove(lines, footer)
     if (sendNow !== -1) {
+      const read = columnZeroQueueEntries(lines, sendNow)
       return {
-        entries: columnZeroQueueEntries(lines, sendNow).map(withoutComposerNotice),
+        entries: read?.entries.map(withoutComposerNotice) ?? [],
+        readable: boxRead(read, lines, footer),
         selectable,
         selecting: false,
         selected: null,
@@ -97,19 +110,39 @@ export function claudeQueueViewFromScreen(
     const marked = block.map((line) => /^\s+[❯›>]\s+(.+)$/.exec(line)?.[1]?.trim()).filter(Boolean)
     return {
       entries: [],
+      readable: false,
       selectable,
       selecting: true,
       selected: marked.length === 1 ? marked[0]! : null,
       selectedOldest: /up again for history/i.test(hint)
     }
   }
+  const read = seenEntry ? queueEntries(block, /^\s+[❯›>]\s+(.+)$/) : null
   return {
-    entries: queueEntries(block, /^\s+[❯›>]\s+(.+)$/).map(withoutComposerNotice),
+    entries: read?.entries.map(withoutComposerNotice) ?? [],
+    readable: boxRead(read, lines, footer),
     selectable,
     selecting: false,
     selected: null,
     selectedOldest: false
   }
+}
+
+/** Claude's own input row at column 0: `❯` and a no-break space (2.1.270 on),
+ *  or a bare `❯` once Orca takes the draft out of it. Never on screen with a
+ *  live dialog (terminalDialogKind in mobile-native-chat-dialog-guard.ts). */
+const CLAUDE_INPUT_ROW = /^❯(?:\u00a0|\s*$)/
+
+/** Whether a read of the block over the hint at `footer` says what the box
+ *  holds: it read the block (a message, or only a peer's row), or the hint is
+ *  not on the input row and the input row is up with nothing queued. The
+ *  hint on the input row says something waits, so a read of nothing there is
+ *  a refusal, not an empty box. */
+function boxRead(read: QueueRows | null, lines: readonly string[], footer: number): boolean {
+  if (read !== null) {
+    return true
+  }
+  return !lines[footer]!.startsWith('❯') && lines.some((line) => CLAUDE_INPUT_ROW.test(line))
 }
 
 /** Index of the "… to send now" row directly above the composer,
@@ -159,14 +192,15 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
  * spinner, a blank, a tool row — or the reading is refused: a delivered
  * message in the transcript has exactly this shape, and with nothing between
  * it and the queue the two cannot be told apart. A wrong queue rewrite loses
- * the user's messages; an empty one only hides a pencil.
+ * the user's messages; an empty one only hides a pencil. Refused is null, and
+ * the view calls that read unreadable, not an empty box (boxRead).
  */
-function columnZeroQueueEntries(lines: readonly string[], sendNow: number): string[] {
+function columnZeroQueueEntries(lines: readonly string[], sendNow: number): QueueRows | null {
   // Which rows, and what closes them above: queueBlockRows, which also stops
   // at the transcript's own tool rows above the newest entry.
   const { rows, bounded } = queueBlockRows(lines, sendNow)
   if (!bounded || rows.length === 0) {
-    return []
+    return null
   }
   return queueEntries(
     rows.map((index) => lines[index]!),
@@ -182,8 +216,8 @@ const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
 
 /**
  * The messages of a queue block, one per marked row with its wrapped lines
- * joined on, less the peer messages in it; none at all when a row may be one
- * and can't be told.
+ * joined on, less the peer messages in it; null, the reading refused, when a
+ * row may be one and can't be told.
  *
  * Claude Code paints a message from another session or one of its own agents
  * that waits in its queue as the TUI's own row, "› Message from
@@ -200,7 +234,7 @@ const PEER_TAIL = /\(ctrl\+o to expand\)\s*$/
  * pencil, a wrong one draws the peer's row as the user's (re-review of
  * 2026-09-27).
  */
-function queueEntries(rows: readonly string[], marked: RegExp): string[] {
+function queueEntries(rows: readonly string[], marked: RegExp): QueueRows | null {
   const read: { text: string; peer: boolean }[] = []
   for (const line of rows) {
     const match = marked.exec(line)
@@ -211,10 +245,14 @@ function queueEntries(rows: readonly string[], marked: RegExp): string[] {
     }
   }
   if (read.some((entry) => entry.peer && !PEER_TAIL.test(entry.text.replace(/\s+/g, ' ')))) {
-    return []
+    return null
   }
-  return read.filter((entry) => !entry.peer).map((entry) => entry.text)
+  return { entries: read.filter((entry) => !entry.peer).map((entry) => entry.text) }
 }
+
+/** A queue block read: the person's messages in it, peer rows left out. Null
+ *  where the reader refuses the block. */
+type QueueRows = { entries: string[] }
 
 /** Claude's own context warning, drawn in the composer box beside the queue
  *  ("1% until auto-compact"). It is not part of anyone's message, but it sits

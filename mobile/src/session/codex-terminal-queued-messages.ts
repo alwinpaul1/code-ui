@@ -6,6 +6,19 @@ export function codexQueuedMessagesFromScreen(lines: readonly string[]): string[
   return scanCodexPendingInputPreview(lines).groups.flat()
 }
 
+/**
+ * The preview as codexQueuedMessagesFromScreen reads it, and whether the read
+ * can say the queue is empty: it found an entry, or a `›` row is on screen.
+ * Codex draws the preview only over its composer, so with no `›` row at all
+ * nothing on screen says what is queued. A `›` row is not always the composer
+ * (a sent prompt, a popup's or an approval's selected row), so a dialog over
+ * the composer is told by mobile-terminal-queue-read.ts, not here.
+ */
+export function codexQueueReadFromScreen(lines: readonly string[]): { entries: string[]; readable: boolean } {
+  const entries = codexQueuedMessagesFromScreen(lines)
+  return { entries, readable: entries.length > 0 || lines.some((line) => CODEX_COMPOSER_ROW.test(line)) }
+}
+
 /** The rows of Codex's pending-input preview, by index, from the same scan the
  *  queue reader uses: every section header (wrapped rows too), entry, entry
  *  continuation, "…" overflow and edit hint. `steerHeaders` holds the first
