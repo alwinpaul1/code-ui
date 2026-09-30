@@ -1,3 +1,4 @@
+import { markdownCodeSpans } from '../components/markdown-code-spans'
 import { createMarkdownLinkFinder, type MarkdownLinkSpan } from '../components/markdown-inline-links'
 import { markdownHeadingText } from '../text/markdown-heading-text'
 
@@ -30,8 +31,9 @@ export function notificationPlainText(markdown: string): string {
         .replace(/^(\s*)[*\-+]\s+/, '$1• ')
         .replace(/^\s*>\s?/, '')
     )
-    // Links before code and emphasis, as always: a link's words are styled
-    // like any others.
+    // Links first, looked for with the code spans hidden (linkWords), then
+    // code and emphasis: a link's words are styled like any others, and the
+    // brackets inside a code span are the code's.
     .map((line) =>
       linkWords(line)
         .replace(/`([^`]*)`/g, (_, text: string) => styleText(text, 'mono'))
@@ -85,9 +87,14 @@ export function notificationPlainText(markdown: string): string {
  * One pass with a stack rather than a call per label: an image's words can
  * hold another image, and a body nesting thousands of them would run out of
  * stack.
+ *
+ * Links are looked for with every code span hidden: a code span binds tighter
+ * than a link (CommonMark), so `handlers[name](args)` written as code is code.
+ * It was read as a link and drew as mono "handlersname" (review, 2026-09-30).
+ * A link whose words hold a whole code span, [`x`](u), is still a link.
  */
 function linkWords(line: string): string {
-  const find = createMarkdownLinkFinder(line, true)
+  const find = createMarkdownLinkFinder(withCodeHidden(line), true)
   /** Links whose words are being read, the innermost last. */
   const inside: MarkdownLinkSpan[] = []
   let out = ''
@@ -120,6 +127,20 @@ function linkWords(line: string): string {
     next = find(copied)
   }
 }
+
+/** The line with each code span's characters swapped for one no link rule
+ *  reads, the same length, so every index still lines up with the line. */
+function withCodeHidden(line: string): string {
+  let out = ''
+  let copied = 0
+  for (const span of markdownCodeSpans(line, false)) {
+    out += line.slice(copied, span.index) + CODE_FILLER.repeat(span.end - span.index)
+    copied = span.end
+  }
+  return copied === 0 ? line : out + line.slice(copied)
+}
+
+const CODE_FILLER = '\uE000'
 
 /**
  * A table the desktop squashed onto one line, put back on its lines.
