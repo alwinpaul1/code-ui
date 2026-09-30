@@ -139,10 +139,50 @@ describe("Claude Code's permission mode, from its footer only", () => {
     expect(readTerminalPermissionMode(readCapture('claude-screen-ask-single-select-2.1.282.txt', 'ask'))).toBeNull()
   })
 
-  it('reads plan mode, which has no captured footer on record, only from the bottom rows', () => {
-    expect(readTerminalPermissionMode(['❯ ', '  ⏸ plan mode on (shift+tab to cycle)'])).toBe('plan')
+  // Plan mode's footer has never been captured. These rows are the shape every
+  // captured mode row shares (2.1.270-2.1.282, in claude-terminal-mode-footer.ts)
+  // with plan's phrase in it: inferred, not seen. Replace them with a real
+  // capture when one is taken.
+  it.each([
+    ['with the whole hint', '  ⏸ plan mode on (shift+tab to cycle)'],
+    ['with the hint cut short at a narrow width', '  ⏸ plan mode on (shift+tab to  ·'],
+    ['with a "·" item after it', '  ⏸ plan mode on · ← for agents']
+  ])('reads plan mode off a footer-shaped row %s', (_shape, footer) => {
+    expect(readTerminalPermissionMode(['❯ ', footer])).toBe('plan')
+    expect(readTerminalPermissionMode([...STATUS_2_1_277, footer])).toBe('plan')
+    expect(parseTerminalPermissionMode(['❯ ', footer])).toBe('plan')
+  })
+
+  it('states no plan mode when a line of conversation in the bottom rows names it', () => {
+    // The review's repro: every row is inside the bottom six, and the only
+    // mention is a sentence, not a footer (2026-09-30).
+    expect(
+      readTerminalPermissionMode(['ok', 'plan mode on is set here', '╭──╮', '│ > │', '╰──╯'])
+    ).toBeNull()
+    // A reply right above the composer, with the footer not painted yet.
+    const screen = ['⏺ Turned plan mode on for the next step.', '', ...COMPOSER_2_1_281]
+    expect(screen.length).toBeLessThanOrEqual(6)
+    expect(readTerminalPermissionMode(screen)).toBeNull()
+    expect(parseTerminalPermissionMode(screen)).toBe('default')
     // Eight rows up, above the whole status area: conversation, not a footer.
-    expect(readTerminalPermissionMode(['⏺ Turned plan mode on for the next step.', ...STATUS_2_1_277])).toBeNull()
+    expect(
+      readTerminalPermissionMode(['⏺ Turned plan mode on for the next step.', ...STATUS_2_1_277])
+    ).toBeNull()
+  })
+
+  it("reads the plan footer, not the conversation's mode, when that line sits right above it", () => {
+    expect(readTerminalPermissionMode([TALK, '  ⏸ plan mode on (shift+tab to cycle)'])).toBe('plan')
+    expect(
+      readTerminalPermissionMode([
+        '⏺ Turned plan mode on for the next step.',
+        '  ⏸ manual mode on · ← for agents'
+      ])
+    ).toBe('manual')
+  })
+
+  it('reads plan mode on a one-row screen only when that row is the footer', () => {
+    expect(readTerminalPermissionMode(['plan mode on is set here'])).toBeNull()
+    expect(readTerminalPermissionMode(['  ⏸ plan mode on (shift+tab to cycle)'])).toBe('plan')
   })
 
   it('states no mode for an empty screen or a single blank row', () => {
@@ -182,6 +222,28 @@ describe('Codex screens, which have no Claude mode footer', () => {
 
   it('states no Claude permission mode when a Codex reply names one', () => {
     expect(parseCodexHudObservation([`• ${TALK}`, ...CODEX_PLAN])).toMatchObject({
+      permissionModeSeen: null,
+      agentMode: 'plan'
+    })
+  })
+
+  it('states no Claude plan mode when a Codex conversation row near the bottom says plan mode on', () => {
+    // Codex paints a reply after "•" and its wrapped rows under two spaces.
+    const reply = [
+      '• I left plan mode on for the next step.',
+      '  plan mode on is set here, as you asked.'
+    ]
+    const screen = [...reply, ...CODEX_0_153_4]
+    expect(screen.length).toBeLessThanOrEqual(6)
+    expect(readTerminalPermissionMode(screen)).toBeNull()
+    expect(parseCodexHudObservation(screen)).toMatchObject({
+      modelId: 'gpt-5.6-terra',
+      permissionMode: 'default',
+      permissionModeSeen: null,
+      agentMode: 'default'
+    })
+    expect(parseCodexHudObservation([...reply, ...CODEX_PLAN])).toMatchObject({
+      permissionMode: 'default',
       permissionModeSeen: null,
       agentMode: 'plan'
     })
