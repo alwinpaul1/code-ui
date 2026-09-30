@@ -179,7 +179,9 @@ async function settle(): Promise<void> {
 async function openHome(): Promise<void> {
   await act(async () => {
     renderer = create(
-      createElement(ThemeProvider, { initialPreference: 'light', children: createElement(Screen) })
+      <ThemeProvider initialPreference="light">
+        <Screen />
+      </ThemeProvider>
     )
   })
   await settle()
