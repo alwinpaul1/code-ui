@@ -36,3 +36,38 @@ describe('a link-shaped call inside a code span in the shade', () => {
     expect(notificationPlainText('a `b [c](d)')).toBe('a `b c')
   })
 })
+
+// Same review, swept: the code rule styled a span, then the bold, italic and
+// strike rules ran over the styled text, whose marks were still in it. A
+// code span's marks are its own, as the chat draws them; emphasis that holds
+// a whole code span still styles the words around it.
+describe('the marks inside a code span in the shade', () => {
+  const bold = (text: string) => styleText(text, 'bold')
+  const italic = (text: string) => styleText(text, 'italic')
+
+  it('keeps the stars of a code span that holds them', () => {
+    expect(notificationPlainText('use `a*b*c` here')).toBe(`use ${mono('a*b*c')} here`)
+  })
+
+  it('keeps the underscores of a dunder name in a code span', () => {
+    expect(notificationPlainText('edit `__init__` now')).toBe(`edit ${mono('__init__')} now`)
+  })
+
+  it('keeps the tildes of a code span that holds them', () => {
+    expect(notificationPlainText('the `~~x~~` mark')).toBe(`the ${mono('~~x~~')} mark`)
+  })
+
+  it('reads a two-backtick span holding a backtick as the chat does', () => {
+    expect(notificationPlainText('``a`b`` done')).toBe(`${mono('a`b')} done`)
+    // A run with no partner of its length is text.
+    expect(notificationPlainText('type `` to open')).toBe('type `` to open')
+  })
+
+  it('still styles emphasis and strike that hold a whole code span', () => {
+    expect(notificationPlainText('**Alphabetical `/` menu.**')).toBe(
+      `${bold('Alphabetical ')}${mono('/')}${bold(' menu.')}`
+    )
+    expect(notificationPlainText('*see `x`*')).toBe(`${italic('see ')}${mono('x')}`)
+    expect(notificationPlainText('~~drop `a~b`~~')).toBe(`drop ${mono('a~b')}`)
+  })
+})

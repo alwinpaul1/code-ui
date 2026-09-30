@@ -1,5 +1,6 @@
 import { markdownCodeSpans } from '../components/markdown-code-spans'
 import { createMarkdownLinkFinder, type MarkdownLinkSpan } from '../components/markdown-inline-links'
+import { codeSpanContent } from '../components/markdown-inline-matcher'
 import { markdownHeadingText } from '../text/markdown-heading-text'
 
 /**
@@ -32,22 +33,11 @@ export function notificationPlainText(markdown: string): string {
         .replace(/^\s*>\s?/, '')
     )
     // Links first, looked for with the code spans hidden (linkWords), then
-    // code and emphasis: a link's words are styled like any others, and the
-    // brackets inside a code span are the code's.
+    // code, then emphasis and strike on the text around the code spans
+    // (inlineText): a link's words are styled like any others, and the marks
+    // inside a code span are the code's.
     .map((line) =>
-      linkWords(line)
-        .replace(/`([^`]*)`/g, (_, text: string) => styleText(text, 'mono'))
-        .replace(/(\*\*\*|___)(?=\S)([\s\S]*?\S)\1/g, (_, __, text: string) =>
-          styleText(text, 'bolditalic')
-        )
-        .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, __, text: string) => styleText(text, 'bold'))
-        .replace(/(^|[^\w*])\*([^*\s](?:[^*]*?[^*\s])?)\*(?!\w)/g, (_, lead: string, text: string) =>
-          lead + styleText(text, 'italic')
-        )
-        .replace(/(^|[^\w_])_([^_\s](?:[^_]*?[^_\s])?)_(?!\w)/g, (_, lead: string, text: string) =>
-          lead + styleText(text, 'italic')
-        )
-        .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+      inlineText(linkWords(line))
         // Not `/\s+$/`: that tries again from every space of a long run,
         // 951 ms for a line holding 40,000 of them. The same characters go.
         .trimEnd()
@@ -126,6 +116,58 @@ function linkWords(line: string): string {
     inside.push(next)
     next = find(copied)
   }
+}
+
+/**
+ * A line with its code spans in the code style and its emphasis and strike
+ * read around them. Each span, found as the chat finds it
+ * (markdown-code-spans.ts), stands in as one character no rule takes for a
+ * mark or a space while the rules run, so `a*b*c`, `__init__` and `~~x~~`
+ * keep their marks, and `**x `y` z**` is still bold around the code. The
+ * code rule styled a span first and the emphasis rules then ran over its
+ * text, dropping those marks (review, 2026-09-30).
+ */
+function inlineText(line: string): string {
+  const spans = markdownCodeSpans(line, false)
+  if (spans.length === 0) {
+    return emphasisText(line)
+  }
+  const standIn = absentCharacter(line)
+  const codes: string[] = []
+  let masked = ''
+  let copied = 0
+  for (const span of spans) {
+    masked += line.slice(copied, span.index) + standIn
+    codes.push(styleText(codeSpanContent(line.slice(span.index, span.end)), 'mono'))
+    copied = span.end
+  }
+  let next = 0
+  return emphasisText(masked + line.slice(copied)).replaceAll(standIn, () => codes[next++]!)
+}
+
+/** Bold, italic and struck text as its letterforms, marks dropped. */
+function emphasisText(text: string): string {
+  return text
+    .replace(/(\*\*\*|___)(?=\S)([\s\S]*?\S)\1/g, (_, __, inner: string) =>
+      styleText(inner, 'bolditalic')
+    )
+    .replace(/(\*\*|__)(?=\S)([\s\S]*?\S)\1/g, (_, __, inner: string) => styleText(inner, 'bold'))
+    .replace(/(^|[^\w*])\*([^*\s](?:[^*]*?[^*\s])?)\*(?!\w)/g, (_, lead: string, inner: string) =>
+      lead + styleText(inner, 'italic')
+    )
+    .replace(/(^|[^\w_])_([^_\s](?:[^_]*?[^_\s])?)_(?!\w)/g, (_, lead: string, inner: string) =>
+      lead + styleText(inner, 'italic')
+    )
+    .replace(/~~(?=\S)([\s\S]*?\S)~~/g, '$1')
+}
+
+/** A private-use character the text does not hold, to stand in for others. */
+function absentCharacter(text: string): string {
+  let code = 0xe001
+  while (text.includes(String.fromCharCode(code))) {
+    code += 1
+  }
+  return String.fromCharCode(code)
 }
 
 /** The line with each code span's characters swapped for one no link rule
