@@ -11,6 +11,7 @@ import {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   supportsTerminalAgentQuickCommand
 } from '../terminal/quick-commands'
+import { cutWholeCharacters } from '../text/whole-character-cut'
 
 // A single mutable draft covering both quick-command actions. Both the command
 // text and the agent/prompt are kept while editing so toggling Action back and
@@ -94,14 +95,19 @@ export function draftToQuickCommand(draft: QuickCommandDraft): TerminalQuickComm
   const id =
     draft.id ??
     `quick-command-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
-  const label = draft.label.trim().slice(0, MAX_QUICK_COMMAND_LABEL_LENGTH)
+  // Why whole characters: the caps count UTF-16 code units, and a plain slice
+  // that ended inside an emoji saved half of it, which was then drawn in the
+  // list, sent to the desktop and, for a terminal command, typed into the
+  // shell. A cut ends before the character instead; it is never longer than
+  // the cap, so the desktop's own normalizer leaves it as it is.
+  const label = cutWholeCharacters(draft.label.trim(), MAX_QUICK_COMMAND_LABEL_LENGTH)
   if (draft.action === 'agent-prompt' && draft.agent) {
     return {
       id,
       label,
       action: 'agent-prompt',
       agent: draft.agent,
-      prompt: draft.prompt.trimEnd().slice(0, MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH),
+      prompt: cutWholeCharacters(draft.prompt.trimEnd(), MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH),
       scope: draft.scope
     }
   }
@@ -109,7 +115,7 @@ export function draftToQuickCommand(draft: QuickCommandDraft): TerminalQuickComm
     id,
     label,
     action: 'terminal-command',
-    command: draft.command.trimEnd().slice(0, MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
+    command: cutWholeCharacters(draft.command.trimEnd(), MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH),
     appendEnter: draft.appendEnter,
     scope: draft.scope
   }
