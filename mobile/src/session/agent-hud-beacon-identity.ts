@@ -30,6 +30,8 @@ export function unchangedBeacon(a: AgentHudBeacon, b: AgentHudBeacon): boolean {
     a.promptHook === b.promptHook &&
     a.runningTaskIdsAt === b.runningTaskIdsAt &&
     sameIds(a.runningTaskIds, b.runningTaskIds) &&
+    (a.stopRunningTaskIdsAt ?? null) === (b.stopRunningTaskIdsAt ?? null) &&
+    sameIds(a.stopRunningTaskIds ?? null, b.stopRunningTaskIds ?? null) &&
     sameIds(a.doneTaskIds, b.doneTaskIds) &&
     sameIds(a.launchedTaskIds, b.launchedTaskIds) &&
     a.desktopPrompts === b.desktopPrompts &&
@@ -46,4 +48,21 @@ export function restamp(next: AgentHudBeacon, previous: AgentHudBeacon): number 
     return previous.runningTaskIdsAt ?? null
   }
   return next.runningTaskIds !== null ? next.runningTaskIdsAt : (previous.runningTaskIdsAt ?? null)
+}
+
+/** The Stop hook's own list from one beacon: ids, and when it arrived. */
+export function stopList(run: string | undefined, receivedAt: number): Pick<AgentHudBeacon, 'stopRunningTaskIds' | 'stopRunningTaskIdsAt'> {
+  return {
+    stopRunningTaskIds: (run ?? '').split(',').filter((id) => /^[A-Za-z0-9_-]+$/.test(id)),
+    stopRunningTaskIdsAt: receivedAt
+  }
+}
+
+/** A beacon without `run=` keeps the last Stop's list and time; one with it
+ *  replaces both, every time: a repeat of the same ids is still a new answer,
+ *  and a launch after the old time is not judged by it. */
+export function keepStopList(next: AgentHudBeacon, previous: AgentHudBeacon): Pick<AgentHudBeacon, 'stopRunningTaskIds' | 'stopRunningTaskIdsAt'> {
+  return next.stopRunningTaskIds != null
+    ? { stopRunningTaskIds: next.stopRunningTaskIds, stopRunningTaskIdsAt: next.stopRunningTaskIdsAt ?? null }
+    : { stopRunningTaskIds: previous.stopRunningTaskIds ?? null, stopRunningTaskIdsAt: previous.stopRunningTaskIdsAt ?? null }
 }

@@ -38,7 +38,7 @@ const WORKFLOW_SCRIPT_FULL_LENGTH_PAD = WORKFLOW_SCRIPT + 'await agent("review")
 const LANE_STARTED = WORKFLOW_LAUNCHED_AT + 5_000
 
 /** What the Stop hook's beacon says is running: the workflow, nothing else. */
-const BEACON_NAMES_ONLY_THE_WORKFLOW = { runningTaskIds: [WORKFLOW_TASK_ID] }
+const BEACON_NAMES_ONLY_THE_WORKFLOW = { stopRunningTaskIds: [WORKFLOW_TASK_ID], stopRunningTaskIdsAt: WORKFLOW_LAUNCHED_AT + 60_000 }
 
 function startLanes(roster: ClaudeSubagentRoster, count: number, from = 0): void {
   for (let index = from; index < from + count; index += 1) {
@@ -317,7 +317,7 @@ describe('a lane that could belong to another workflow', () => {
         block.type === 'tool-result' ? { ...block, output: block.output.replace(WORKFLOW_TASK_ID, 'wdocs0001') } : block
       )
     }))
-    const result = derive([...workflowLaunchMessages(), ...second], oneLane(), { runningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] })
+    const result = derive([...workflowLaunchMessages(), ...second], oneLane(), { ...BEACON_NAMES_ONLY_THE_WORKFLOW, stopRunningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] })
     expect(kinds(result)).toEqual(['agent', 'workflow', 'workflow'])
     expect(result.running.filter((task) => task.kind === 'workflow').every((task) => task.workflow?.lanes === null)).toBe(true)
   })
@@ -329,7 +329,7 @@ describe('a lane that could belong to another workflow', () => {
   })
 
   it('is not folded when the beacon names a running task the loaded window never showed (a workflow launched above it)', () => {
-    const result = derive(workflowLaunchMessages(), oneLane(), { runningTaskIds: [WORKFLOW_TASK_ID, 'wabove0001'] })
+    const result = derive(workflowLaunchMessages(), oneLane(), { ...BEACON_NAMES_ONLY_THE_WORKFLOW, stopRunningTaskIds: [WORKFLOW_TASK_ID, 'wabove0001'] })
     expect(kinds(result)).toEqual(['agent', 'workflow'])
   })
 
@@ -340,7 +340,7 @@ describe('a lane that could belong to another workflow', () => {
   })
 
   it('is not folded into a workflow that has finished', () => {
-    const result = derive([...workflowLaunchMessages(), workflowFinishedMessage()], oneLane(), { runningTaskIds: [] })
+    const result = derive([...workflowLaunchMessages(), workflowFinishedMessage()], oneLane(), { ...BEACON_NAMES_ONLY_THE_WORKFLOW, stopRunningTaskIds: [] })
     expect(result.finished[0]?.workflow?.lanes).toBeNull()
     expect(kinds(result)).toEqual(['agent'])
   })

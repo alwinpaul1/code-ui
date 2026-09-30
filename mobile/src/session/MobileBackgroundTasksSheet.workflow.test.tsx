@@ -59,7 +59,14 @@ vi.mock('lucide-react-native', () => ({
 const NOW = WORKFLOW_LAUNCHED_AT + 61 * 60_000 + 44_000
 const LANE_STARTED = WORKFLOW_LAUNCHED_AT + 5_000
 /** The Stop hook's beacon naming the workflow as the one thing running. */
-const REPORT = { finishedTaskIds: [], runningTaskIds: [WORKFLOW_TASK_ID], runningTaskIdsAt: WORKFLOW_LAUNCHED_AT + 60_000, launchedTaskIds: [] }
+const REPORT = {
+  finishedTaskIds: [],
+  runningTaskIds: null,
+  runningTaskIdsAt: null,
+  launchedTaskIds: [],
+  stopRunningTaskIds: [WORKFLOW_TASK_ID],
+  stopRunningTaskIdsAt: WORKFLOW_LAUNCHED_AT + 60_000
+}
 
 function lanes(count: number): AgentSubagentSnapshot[] {
   const roster: ClaudeSubagentRoster = new Map()
@@ -253,7 +260,7 @@ describe('a running workflow in the background tasks sheet', () => {
             messages={[...workflowLaunchMessages(), ...second]}
             agent="claude"
             agentStatus={{ state: 'working', subagents: lanes(1) }}
-            backgroundTaskReport={{ ...REPORT, runningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] }}
+            backgroundTaskReport={{ ...REPORT, stopRunningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] }}
           />
         </ThemeProvider>
       )
@@ -263,5 +270,29 @@ describe('a running workflow in the background tasks sheet', () => {
     expect(texts).toContain('docs-pass')
     expect(texts.some((text) => text.endsWith(' running'))).toBe(false)
     expect(texts.filter((text) => text === 'Agent')).toHaveLength(1)
+  })
+
+  // A finished card can carry four captions (agents, tokens, failed, skipped)
+  // and the row above them "Workflow · Completed · 1h 24m"; at a large font
+  // scale on a 360dp phone they must wrap, not run past the card.
+  it('lets its caption rows wrap, so four captions at a large font scale stay inside the card', async () => {
+    const notification = workflowFinishedMessage()
+    const block = notification.blocks[0]
+    const text = block?.type === 'text' ? block.text : ''
+    const failed = { ...notification, blocks: [{ type: 'text' as const, text: text.replace('<agents_error>0</agents_error>', '<agents_error>3</agents_error>').replace('<agents_skipped>0</agents_skipped>', '<agents_skipped>2</agents_skipped>') }] }
+    await render('light', [...workflowLaunchMessages(), failed])
+    const captionRows = renderer!.root.findAll((node) => {
+      if (String(node.type) !== 'View') {
+        return false
+      }
+      const style = Array.isArray(node.props.style) ? node.props.style : [node.props.style]
+      return style.some((entry: unknown) => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'flexDirection') === 'row') &&
+        node.findAll((inner) => String(inner.type) === 'Text' && typeof inner.props.children === 'string' && /agents$|tokens$|failed$|skipped$|^Workflow$|^Completed$/.test(inner.props.children)).length > 0
+    })
+    expect(captionRows.length).toBeGreaterThanOrEqual(2)
+    for (const row of captionRows) {
+      const style = Array.isArray(row.props.style) ? row.props.style : [row.props.style]
+      expect(style.some((entry: unknown) => typeof entry === 'object' && entry !== null && Reflect.get(entry, 'flexWrap') === 'wrap')).toBe(true)
+    }
   })
 })

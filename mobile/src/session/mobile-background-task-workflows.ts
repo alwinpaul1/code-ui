@@ -1,6 +1,8 @@
 import { AGENT_STATUS_MAX_SUBAGENTS, type AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
 import { parseWorkflowMeta } from './mobile-workflow-meta'
 import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
+import type { Launch } from './mobile-background-task-transcript'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 // ─── A Workflow is one task, and its agents belong inside it ─────────────────
 //
@@ -122,6 +124,32 @@ export function readWorkflowUsage(notificationBody: string): WorkflowUsage | nul
   return Object.values(usage).every((value) => value === null) ? null : usage
 }
 
+/** The list a launch is judged against, and when it was given. A shell is
+ *  judged by the agent's freshest list (`live=`, else `run=`). A workflow or a
+ *  monitor by the last Stop's `run=` alone: `live=` never names them, so an
+ *  empty repaint after the Stop would end them (reviewed 2026-09-30, with the
+ *  real Stop and status-line scripts). */
+export function verdictFor(
+  launch: Launch,
+  shellList: ReadonlySet<string> | null,
+  context: { stopRunning: readonly string[] | null; stopRunningAt: number | null; reportedRunningAt: number | null }
+): { ids: ReadonlySet<string> | null; at: number | null } {
+  return launch.stopListOnly
+    ? { ids: context.stopRunning === null ? null : new Set(context.stopRunning), at: context.stopRunningAt }
+    : { ids: shellList, at: context.reportedRunningAt }
+}
+
+/** The earliest message time in the loaded window; null when none is timed. */
+export function oldestTimestamp(messages: readonly NativeChatMessage[]): number | null {
+  let oldest: number | null = null
+  for (const message of messages) {
+    if (message.timestamp !== null && (oldest === null || message.timestamp < oldest)) {
+      oldest = message.timestamp
+    }
+  }
+  return oldest
+}
+
 /** Count the roster's workflow lanes on the one running workflow they can be
  *  put on, and take them off the running list.
  *
@@ -138,7 +166,13 @@ export function readWorkflowUsage(notificationBody: string): WorkflowUsage | nul
 export function foldWorkflowAgents(
   tasks: BackgroundTasks,
   subagents: readonly AgentSubagentSnapshot[] | undefined,
-  evidence: { hostDone: boolean; beaconRunning: readonly string[] | null; launchedIds: ReadonlySet<string> }
+  evidence: {
+    hostDone: boolean
+    beaconRunning: readonly string[] | null
+    beaconAt: number | null
+    windowOldestAt: number | null
+    launchedIds: ReadonlySet<string>
+  }
 ): BackgroundTasks {
   const workflows = tasks.running.filter((task) => task.kind === 'workflow' && task.workflow)
   const [workflow] = workflows
@@ -149,6 +183,10 @@ export function foldWorkflowAgents(
     launchedAt === null ||
     evidence.hostDone ||
     evidence.beaconRunning === null ||
+    evidence.beaconAt === null ||
+    // Everything launched after the Stop spoke must be in the window.
+    evidence.windowOldestAt === null ||
+    evidence.windowOldestAt > evidence.beaconAt ||
     !evidence.beaconRunning.every((id) => evidence.launchedIds.has(id))
   ) {
     return tasks

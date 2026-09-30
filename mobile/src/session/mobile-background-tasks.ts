@@ -46,7 +46,8 @@ import {
 } from './mobile-background-task-transcript'
 import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 import { applyAgentResumes, createResumeTracker, trackCall, trackMessage, trackResult } from './mobile-background-task-resumes'
-import { foldWorkflowAgents, type WorkflowDetail } from './mobile-background-task-workflows'
+import { captionOf, elapsedSince, isFailureStatus } from './mobile-background-task-captions'
+import { foldWorkflowAgents, oldestTimestamp, verdictFor, type WorkflowDetail } from './mobile-background-task-workflows'
 import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
@@ -101,6 +102,11 @@ export type BackgroundTaskDeriveOptions = {
    *  after it: a launch newer than this time is not judged by it. Null or
    *  absent means the time is unknown and the list judges every launch. */
   runningTaskIdsAt?: number | null
+  /** The last Stop hook's `run=` alone, and when it arrived: the only list that
+   *  can name a workflow or a monitor, which `live=` never does. Judges those
+   *  two; null or absent judges neither (`mobile-background-task-workflows.ts`). */
+  stopRunningTaskIds?: readonly string[] | null
+  stopRunningTaskIdsAt?: number | null
   /** Shells the beacon saw launched in the transcript tail (`bg=`). One the
    *  loaded window never showed, with no notification and not in `done=`, is
    *  running — this is the transcript itself, read further back than the
@@ -186,9 +192,6 @@ export type BackgroundTasks = {
  *  agent has not named; its beacons arrive within seconds of a live pane. */
 const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
 
-/** Beyond this a summary is a paragraph, not a caption; drop it rather than
- *  truncate a sentence into something that reads as a different claim. */
-const SUMMARY_MAX = 160
 
 /** Split the transcript's background work into what is still running and what
  *  has reported back. Pure: `now` is the only clock, so tests set it. The one
@@ -295,6 +298,8 @@ export function deriveBackgroundTasks(
     reportedRunning: options.runningTaskIds ?? null,
     reportedLaunched: options.launchedTaskIds ?? [],
     reportedRunningAt: options.runningTaskIdsAt ?? null,
+    stopRunning: options.stopRunningTaskIds ?? null,
+    stopRunningAt: options.stopRunningTaskIdsAt ?? null,
     subagentRuns: options.subagentRuns ?? null,
     stateStart,
     runBoundary: options.runBoundaryAt === undefined ? stateStart : working ? options.runBoundaryAt : null,
@@ -303,7 +308,9 @@ export function deriveBackgroundTasks(
   const fitted = fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
   return foldWorkflowAgents(fitted, hostStatus?.subagents, {
     hostDone: hostStatus?.state === 'done',
-    beaconRunning: options.runningTaskIds ?? null,
+    beaconRunning: options.stopRunningTaskIds ?? null,
+    beaconAt: options.stopRunningTaskIdsAt ?? null,
+    windowOldestAt: oldestTimestamp(messages),
     launchedIds: new Set(launches.keys())
   })
 }
@@ -318,6 +325,9 @@ type SplitContext = {
   reportedRunning: readonly string[] | null
   reportedLaunched: readonly string[]
   reportedRunningAt: number | null
+  /** The last Stop's `run=` and its time: what judges a workflow or a monitor. */
+  stopRunning: readonly string[] | null
+  stopRunningAt: number | null
   subagentRuns: SubagentRunClock | null
   /** When the pane's current `working` state began; null when it is not
    *  working. What the desk's `monitoring` placeholder is aged by. */
@@ -381,6 +391,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       continue
     }
     const judgesShell = launch.kind !== 'agent'
+    const verdict = verdictFor(launch, agentSaysRunning, context)
     const launchedBeforeRun =
       judgesShell && runBoundary !== null && launch.startedAt !== null && launch.startedAt < runBoundary
     // Why the time check: on 2026-09-12 two shells launched mid-turn never
@@ -388,14 +399,13 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
     // answer, which could not list shells that did not exist yet, and "not
     // on the list" was read as "finished". An answer given before a launch
     // says nothing about it.
-    const answeredBeforeLaunch =
-      context.reportedRunningAt !== null && launch.startedAt !== null && launch.startedAt > context.reportedRunningAt
+    const answeredBeforeLaunch = verdict.at !== null && launch.startedAt !== null && launch.startedAt > verdict.at
     const hostSaysFinished =
       rosterSaysRunning === false ||
       paneDone ||
       launchedBeforeRun ||
       // The agent's own answer, when it has given one that postdates the launch.
-      (judgesShell && agentSaysRunning !== null && !answeredBeforeLaunch && !agentSaysRunning.has(launch.id))
+      (judgesShell && verdict.ids !== null && !answeredBeforeLaunch && !verdict.ids.has(launch.id))
     if (hostSaysFinished) {
       finished.push({ at: afterTranscript, task: { ...launch, status: 'completed', elapsedMs: null } })
       continue
@@ -494,26 +504,6 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)
   return { running, finished: finished.map((entry) => entry.task) }
-}
-
-/** A notification means the task stopped. Only an explicitly bad status is
- *  shown as a failure — an unrecognised one is reported as merely finished
- *  rather than guessed into an alarm. */
-function isFailureStatus(status: string): boolean {
-  const normalized = status.trim().toLowerCase()
-  return normalized === 'failed' || normalized === 'error' || normalized === 'failure'
-}
-
-function elapsedSince(startedAt: number | null, now: number): number | null {
-  return startedAt === null ? null : Math.max(0, now - startedAt)
-}
-
-function captionOf(summary: string | null): string | undefined {
-  if (!summary) {
-    return undefined
-  }
-  const single = summary.replaceAll(/\s+/g, ' ').trim()
-  return single.length > 0 && single.length <= SUMMARY_MAX ? single : undefined
 }
 
 /** How many background tasks are still in flight. The chat view reads this

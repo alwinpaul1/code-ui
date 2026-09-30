@@ -58,6 +58,9 @@ export type Launch = {
   label: string | null
   /** A workflow's meta and phases, from its call and launch result. */
   workflow?: WorkflowDetail
+  /** Judged by the last Stop's `run=` alone: a status line's `live=` is built
+   *  from Bash launch sentences and never names a workflow or a monitor. */
+  stopListOnly?: true
 }
 /** `at` orders the finished list (the notification's place in the window);
  *  `timestamp` is when Claude wrote it, null when the ending came from
@@ -95,14 +98,14 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
   if (call.name === 'Workflow') {
     const launched = readWorkflowLaunch(call.input, output)
     return launched
-      ? { id: launched.id, kind: 'workflow', title: launched.title, startedAt: call.startedAt, label: null, workflow: launched.detail }
+      ? { id: launched.id, kind: 'workflow', title: launched.title, startedAt: call.startedAt, label: null, workflow: launched.detail, stopListOnly: true }
       : null
   }
   if (call.name === 'Monitor') {
     // A monitor is a long-running shell; its event notifications carry no
     // status and never retire it — only the "stream ended" one does.
     const id = MONITOR_STARTED.exec(output)?.[1]
-    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null } : null
+    return id ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: null, stopListOnly: true } : null
   }
   return null
 }
