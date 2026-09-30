@@ -1,8 +1,9 @@
 import { renderInline } from './markdown-inline-render'
 import { listKind, type ParsedListItem } from './markdown-list-parse'
-import { fencedCodeHtml } from './markdown-code-fence'
+import { CODE_BLANK_ATTRIBUTE, fencedCodeHtml } from './markdown-code-fence'
 import { indentedCodeHtml } from './markdown-leaf-blocks'
 import type { ItemBlock } from './markdown-list-blocks'
+import { quoteHtml } from './markdown-quote'
 import type { RichMarkdownEditorScope } from './document-scope'
 
 /** The attribute that keeps how many columns in from its parent's line an item was written. */
@@ -42,28 +43,42 @@ export const ITEM_TIGHT_ATTRIBUTE = 'data-md-tight'
 /** One of an item's blocks as markup, with where the source put it where the writer would not. */
 function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
   const width = listMarkerColumns(item.ordered, item.orderedNumber)
-  if (block.kind === 'code') {
-    return fencedCodeHtml(block.fence, block.code, {
-      columns: block.offset === null || block.offset === width ? null : block.offset,
-      blankBefore: block.blankBefore
-    })
+  switch (block.kind) {
+    case 'code':
+      return fencedCodeHtml(block.fence, block.code, {
+        columns: block.offset === null || block.offset === width ? null : block.offset,
+        blankBefore: block.blankBefore
+      })
+    case 'indented-code':
+      return indentedCodeHtml(block.text, block.offset === width + 4 ? null : block.offset)
+    case 'quote': {
+      // Where a fence keeps its blank line (CODE_BLANK_ATTRIBUTE), so does a quote.
+      const indent =
+        block.offset === null || block.offset === width
+          ? ''
+          : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`
+      const blank = block.blankBefore ? ` ${CODE_BLANK_ATTRIBUTE}="true"` : ''
+      return quoteHtml(block.lines, `${indent}${blank}`)
+    }
+    case 'paragraph': {
+      const indent = block.offset === width ? '' : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`
+      const tight = block.blankBefore ? '' : ` ${ITEM_TIGHT_ATTRIBUTE}="true"`
+      return `<p${indent}${tight}>${renderInline(block.text)}</p>`
+    }
+    default: {
+      const unhandled: never = block
+      return unhandled
+    }
   }
-  if (block.kind === 'indented-code') {
-    return indentedCodeHtml(block.text, block.offset === width + 4 ? null : block.offset)
-  }
-  const indent = block.offset === width ? '' : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`
-  const tight = block.blankBefore ? '' : ` ${ITEM_TIGHT_ATTRIBUTE}="true"`
-  return `<p${indent}${tight}>${renderInline(block.text)}</p>`
 }
 
 /**
- * What an item holds, in order: its words (none when a fence opens on its marker line), then its
- * blocks and its nested lists as its source interleaved them.
+ * What an item holds, in order: its words (none when a fence or a quote opens on its marker line),
+ * then its blocks and its nested lists as its source interleaved them.
  */
 function itemBodyHtml(scope: RichMarkdownEditorScope, item: ParsedListItem): string {
   const parts: string[] = []
-  const first = item.blocks[0]
-  if (first?.kind !== 'code' || first.offset !== null) {
+  if (item.blocks[0]?.offset !== null) {
     parts.push(`<p>${renderInline(item.text)}</p>`)
   }
   let drawnChildren = 0

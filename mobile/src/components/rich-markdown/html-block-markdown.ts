@@ -207,7 +207,7 @@ export function blockMarkdown(node: Node): string {
       : codeBlockMarkdown(node, 0, 0, !followsList(node))
   }
   if (tag === 'ul' || tag === 'ol') {
-    return listMarkdown(node, 0)
+    return listMarkdown(node, 0, null, blockMarkdown)
   }
   if (tag === 'table') {
     const rows = Array.from(node.querySelectorAll('tr'))
