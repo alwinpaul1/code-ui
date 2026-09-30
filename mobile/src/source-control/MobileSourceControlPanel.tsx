@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { connectionRetryAction } from '../transport/connection-retry-action'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
 import { MobileSourceControlHeader } from './MobileSourceControlHeader'
@@ -137,12 +138,15 @@ export function MobileSourceControlPanel({
   }, [statusBranch, statusHead])
   const prBranch = statusBranch ?? lastPrBranchRef.current
   const prHeadSha = statusHead ?? lastPrHeadRef.current
+  // A PR read that failed with the connection is read again once the host reconnects.
+  const lastConnectedAt = useLastConnectedAt(hostId)
   const prController = useMobilePrSidebarController({
     client,
     connState,
     worktreeId,
     branch: prBranch,
-    headSha: prHeadSha
+    headSha: prHeadSha,
+    lastConnectedAt
   })
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const prSidebarKind = prController.prSidebarState.kind

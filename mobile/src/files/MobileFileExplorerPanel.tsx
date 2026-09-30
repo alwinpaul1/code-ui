@@ -36,16 +36,8 @@ import {
   MobileFileExplorerSearchBar,
   MobileFileExplorerSearchResults
 } from './MobileFileExplorerSearch'
-import { useMobileNativeChatFileSearch } from '../session/use-mobile-native-chat-file-search'
-import {
-  collectCachedFilePaths,
-  filterFilePathsLocally,
-  mergeFileSearchResults
-} from './file-search-local'
 import { navigateToMobileFilePreview } from './mobile-file-preview-navigation'
-
-// Why: the host's `files.searchPaths` schema rejects anything above 32.
-const SEARCH_RESULT_LIMIT = 32
+import { useMobileFileExplorerSearch } from './use-mobile-file-explorer-search'
 
 export function MobileFileExplorerPanel(props: {
   hostId: string
@@ -64,6 +56,8 @@ export function MobileFileExplorerPanel(props: {
   const scope = `${hostId}:${worktreeId}`
   scopeRef.current = scope
   const directoryLoadRevisionsRef = useRef<DirectoryLoadRevisions>(createDirectoryLoadRevisions())
+  // Folders to read again on the next `connected` (the effect below drains it once per connection):
+  // one opened while the host was down, one whose read failed, and one whose Retry was tapped.
   const pendingDirectoryRetriesRef = useRef<Set<string>>(new Set())
   const directoryCacheRef = useRef<DirectoryCache>({})
   const [directoryCache, setDirectoryCache] = useState<DirectoryCache>({})
@@ -73,29 +67,22 @@ export function MobileFileExplorerPanel(props: {
   const [legacyListTruncated, setLegacyListTruncated] = useState(false)
   const worktreeLabel = getWorktreeLabel(name, worktreeId)
   // Search rides the same host path search the composer's `@` menu uses.
-  const [searchQuery, setSearchQuery] = useState('')
-  const trimmedSearch = searchQuery.trim()
   const {
-    nativeChatFilePaths: searchResults,
-    nativeChatFileSearchPending: searchPending,
-    loadNativeChatFiles: runSearch
-  } = useMobileNativeChatFileSearch({ client, worktreeId, limit: SEARCH_RESULT_LIMIT })
-  useEffect(() => {
-    if (trimmedSearch) {
-      runSearch(trimmedSearch)
-    }
-  }, [runSearch, trimmedSearch])
-  // Why: names already listed on the phone match instantly with no round trip;
-  // the host search only adds files in folders that were never expanded.
-  const cachedFilePaths = useMemo(() => collectCachedFilePaths(directoryCache), [directoryCache])
-  const localMatches = useMemo(
-    () => (trimmedSearch ? filterFilePathsLocally(cachedFilePaths, trimmedSearch) : []),
-    [cachedFilePaths, trimmedSearch]
-  )
-  const mergedSearchResults = useMemo(
-    () => mergeFileSearchResults(localMatches, searchResults),
-    [localMatches, searchResults]
-  )
+    searchQuery,
+    setSearchQuery,
+    trimmedSearch,
+    mergedSearchResults,
+    searchPending,
+    searchFailed,
+    searchRetry
+  } = useMobileFileExplorerSearch({
+    hostId,
+    worktreeId,
+    client,
+    connState,
+    forceReconnect,
+    directoryCache
+  })
 
   const loadDirectory = useCallback(
     async (relativePath: string) => {
@@ -113,6 +100,7 @@ export function MobileFileExplorerPanel(props: {
           // Why: transient reconnects should not blank an already browsable tree.
           setError(hasLoadedRoot ? null : message)
         } else {
+          pendingDirectoryRetriesRef.current.add(relativePath)
           setDirectoryCache((prev) => ({
             ...prev,
             [relativePath]: {
@@ -191,6 +179,7 @@ export function MobileFileExplorerPanel(props: {
           return
         }
         const entries = directory.value
+        pendingDirectoryRetriesRef.current.delete(relativePath)
         if (rootLoad) {
           setLegacyListTruncated(false)
         }
@@ -210,6 +199,8 @@ export function MobileFileExplorerPanel(props: {
           // only a cold load surfaces the full-screen error.
           setError(hadLoadedRoot ? null : message)
         } else {
+          // A read that failed with the connection (or at all) is read again on the next one.
+          pendingDirectoryRetriesRef.current.add(relativePath)
           setDirectoryCache((prev) => ({
             ...prev,
             [relativePath]: {
@@ -375,6 +366,8 @@ export function MobileFileExplorerPanel(props: {
     <MobileFileExplorerSearchResults
       paths={mergedSearchResults}
       searching={searchPending && mergedSearchResults.length === 0}
+      failed={searchFailed}
+      onRetry={searchRetry}
       onOpen={previewFile}
     />
   ) : loading ? (

@@ -9,6 +9,7 @@ import { spacing, typography } from '../theme/mobile-theme'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import type { Theme } from '../theme/theme-context'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'
+import { MobileDiffNoteRow } from './MobileDiffNoteRow'
 
 type Props = {
   line: MobileHighlightedDiffLine<MobileDiffLine>
@@ -41,6 +42,11 @@ export function MobileDiffReviewLine({
   const styles = useThemedStyles(diffReviewLineStyles)
   const lineNumber = mobileDiffLineNumber(line)
   const canComment = canCommentOnLine(line)
+
+  // Folded unchanged lines, or what the mobile cap left out: not a line of the file.
+  if (line.note) {
+    return <MobileDiffNoteRow line={line} />
+  }
 
   return (
     <View

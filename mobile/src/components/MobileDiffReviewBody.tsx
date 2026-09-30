@@ -4,6 +4,7 @@ import type { RefObject } from 'react'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { MobileDiffReviewLine } from './MobileDiffReviewLine'
+import { describeMobileDiffTruncation } from '../session/mobile-diff-notes'
 import type {
   ReviewDiffLine,
   ReviewDiffState,
@@ -92,7 +93,7 @@ export function MobileDiffReviewBody({
       }}
       ListFooterComponent={
         diffState.truncated ? (
-          <Text style={styles.truncatedText}>Diff truncated for mobile preview.</Text>
+          <Text style={styles.truncatedText}>{describeMobileDiffTruncation(diffState.lines)}</Text>
         ) : null
       }
     />
