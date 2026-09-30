@@ -3,6 +3,9 @@ import type {
   AgentJournalApprovalSubject
 } from '../../../src/shared/agent-session-journal-types'
 import { clipWithEllipsis } from '../text/whole-character-cut'
+import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
+import { parseAgentQuestion } from './mobile-native-chat-question'
+import { codeFenceStarts, collectOptionLists } from './mobile-native-chat-question-lists'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
@@ -117,22 +120,54 @@ function looksLikePermissionAsk(text: string): boolean {
   return PERMISSION_PATTERNS.some((re) => re.test(text))
 }
 
-// A numbered-choice prompt like "1. Yes  2. No" / "2) No, and tell Claude…".
-// Captures the option number and its label so we can send the literal digit.
-const NUMBERED_OPTION_RE = /(?:^|\n)\s*(\d+)[.)]\s*([^\n]+)/g
+// How an option of an approval menu begins, once the emphasis in front of it
+// is gone: a way to say yes, or a way to say no. Claude Code's plan review
+// says no with "Tell Claude what to change" (claude-plan-permission.ts).
+const AFFIRMS = /^(?:yes|allow|approve|always|proceed)(?![\p{L}\p{N}])/iu
+const REFUSES = /^(?:no|deny|reject|cancel|skip|don['’]t|do\s+not)(?![\p{L}\p{N}])/iu
 
-type NumberedOption = { num: string; text: string }
+function approvalAnswer(label: string): 'yes' | 'no' | null {
+  const plain = label.replace(/^[*_`]+/, '')
+  if (AFFIRMS.test(plain)) {
+    return 'yes'
+  }
+  return REFUSES.test(plain) || isClaudePlanFeedbackOptionLabel(plain) ? 'no' : null
+}
 
-function parseNumberedOptions(text: string): NumberedOption[] {
-  const out: NumberedOption[] = []
-  for (const match of text.matchAll(NUMBERED_OPTION_RE)) {
-    const num = match[1]
-    const body = match[2]?.trim()
-    if (num && body) {
-      out.push({ num, text: body })
+/** Every label answers the ask: "Yes", "No, and tell Claude…", "Allow". */
+function readsAsApproval(labels: readonly string[]): boolean {
+  return labels.every((label) => approvalAnswer(label) !== null)
+}
+
+/**
+ * The reply's approval menu: a numbered list, outside code fences, of two or
+ * more options that all answer the ask, with a way to say yes AND a way to
+ * say no. Steps that all begin "Skip…", "Cancel…" are still steps. With more
+ * than one, the last: the menu is what the reply ends on, and a list of
+ * findings or notes around it is not choices. Null when there is none: a
+ * numbered list that is not a menu sent a step, or a choice of database, as
+ * the answer to "Do you want to go ahead?" (2026-09-30).
+ */
+function approvalMenu(text: string): MobileChatPermission['options'] | null {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const lists = collectOptionLists(lines, codeFenceStarts(lines))
+  for (let at = lists.length - 1; at >= 0; at--) {
+    const { items } = lists[at]
+    const options = items.flatMap(({ label, token }) =>
+      token != null && /^\d+$/.test(token) ? [{ label, send: token }] : []
+    )
+    const answers = options.map(({ label }) => approvalAnswer(label))
+    if (
+      options.length >= 2 &&
+      options.length === items.length &&
+      answers.includes('yes') &&
+      answers.includes('no') &&
+      !answers.includes(null)
+    ) {
+      return options
     }
   }
-  return out
+  return null
 }
 
 // Whether a label reads as "allow for every future call" rather than just once.
@@ -145,25 +180,15 @@ function shortLabel(text: string, max = 40): string {
   return clipWithEllipsis(text.replace(/\s+/g, ' ').trim(), max)
 }
 
-function buildNumberedPermission(
-  options: NumberedOption[],
-  detail: string | undefined
-): MobileChatPermission {
-  return {
-    title: 'Permission requested',
-    detail,
-    options: options.map((opt) => ({ label: opt.text.trim(), send: opt.num }))
-  }
-}
-
 function firstLine(text: string): string {
   return text.split('\n')[0]?.trim() ?? ''
 }
 
 /**
  * Heuristically detect an agent permission ask from its paused-state context.
- * Returns a renderable prompt, or null when the agent is working or the text
- * doesn't read like an approval request.
+ * Returns a renderable prompt, or null when the agent is working, the text
+ * doesn't read like an approval request, or it asks the reader to choose
+ * (the question card's, which a permission card would hide).
  */
 export function detectAgentPermission(input: PermissionInput): MobileChatPermission | null {
   // Only answer a genuinely paused agent. A working agent is mid-turn.
@@ -184,9 +209,16 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
 
   // Prefer an explicit numbered menu ("1. Yes  2. No, and tell…") — its labels
   // and send-digits come straight from the agent, so no guessing.
-  const numbered = parseNumberedOptions(text)
-  if (numbered.length >= 2) {
-    return buildNumberedPermission(numbered, detail)
+  const menu = approvalMenu(text)
+  if (menu) {
+    return { title: 'Permission requested', detail, options: menu }
+  }
+  // "Which database do you want to use? 1. Postgres 2. SQLite" asks for a
+  // choice, not a yes: leave it to the question card. A list of Yes and No
+  // bullets, or one lone "1. Yes", still asks for a yes.
+  const question = parseAgentQuestion(text)
+  if (question && !readsAsApproval(question.options)) {
+    return null
   }
 
   // Otherwise fall back to a y/n prompt. We surface "Allow always" only when the
