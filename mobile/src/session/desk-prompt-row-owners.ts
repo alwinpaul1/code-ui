@@ -47,7 +47,9 @@ export type HookSubmission = { nonce: string; position: number; arrival: number 
 /** Where a copy was typed and when the phone first had it, as far as known. */
 export type CopyPlace = { nonce: string | null; position: number | undefined; arrival: number | undefined }
 
-function hookAnchorOf(prompt: Pick<DesktopPrompt, 'nonce' | 'anchorId' | 'seenAt' | 'hookTwin'>): { anchorId: string; arrival: number | undefined } | null {
+/** The row the prompt hook says a copy was typed after, and when the hook's
+ *  copy reached the phone: its own, or for a status copy, its hook twin's. */
+export function hookAnchorOf(prompt: Pick<DesktopPrompt, 'nonce' | 'anchorId' | 'seenAt' | 'hookTwin'>): { anchorId: string; arrival: number | undefined } | null {
   if (prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX)) {
     const twin = prompt.hookTwin
     return twin?.anchorId ? { anchorId: twin.anchorId, arrival: twin.seenAt } : null
