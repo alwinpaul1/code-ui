@@ -94,11 +94,12 @@ export function fetchMobileHomeTaskProviders(
       )
       setProviders((previous) => ({ ...previous, [hostId]: providers }))
     })
-    .catch(() => {
-      if (!disposed()) {
-        setProviders((previous) =>
-          previous[hostId] ? previous : { ...previous, [hostId]: ['github'] }
-        )
-      }
+    .catch((error: unknown) => {
+      // Left unread, or at what the last read found: the card says it is checking rather than
+      // claiming GitHub, and the next new connection reads again (review, 2026-09-30).
+      console.warn('[home] the task sources for this desktop could not be read', {
+        hostId,
+        cause: error instanceof Error ? error.message : String(error)
+      })
     })
 }

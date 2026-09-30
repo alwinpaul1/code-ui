@@ -12,12 +12,26 @@ const TASK_PROVIDER_LABELS: Record<TaskProvider, string> = {
   linear: 'Linear'
 }
 
+/** The caption while the desktop's task sources are unread: nothing is claimed before they are. */
+export const TASK_SOURCES_CHECKING_LABEL = 'Checking sources…'
+
+function sourcesCaption(providers: TaskProvider[] | undefined): string {
+  if (providers === undefined) {
+    return TASK_SOURCES_CHECKING_LABEL
+  }
+  return providers.length > 0
+    ? providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
+    : 'No task sources connected'
+}
+
 export function MobileHomeTasksCard(props: {
   enabled: boolean
-  providers: TaskProvider[]
+  /** Undefined while unread, so no provider is claimed (or offered as an icon) before it is read. */
+  providers: TaskProvider[] | undefined
   onOpen: (provider?: TaskProvider) => void
 }) {
   const { colors, radius, space } = useTheme()
+  const providers = props.providers ?? []
   return (
     <PressScale
       accessibilityRole="button"
@@ -55,18 +69,14 @@ export function MobileHomeTasksCard(props: {
           Tasks
         </Txt>
         <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ marginTop: 2 }}>
-          {props.providers.length > 0
-            ? props.providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(' · ')
-            : 'No task sources connected'}
+          {sourcesCaption(props.providers)}
         </Txt>
       </View>
       <View
         style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginLeft: space.sm }}
-        accessibilityLabel={props.providers
-          .map((provider) => TASK_PROVIDER_LABELS[provider])
-          .join(', ')}
+        accessibilityLabel={providers.map((provider) => TASK_PROVIDER_LABELS[provider]).join(', ')}
       >
-        {props.providers.map((provider) => (
+        {providers.map((provider) => (
           <Pressable
             key={provider}
             accessibilityRole="button"

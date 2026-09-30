@@ -160,8 +160,10 @@ export function useMobileHomeData() {
     [sortedHosts, connections.hostStates]
   )
   const primaryHost = connectedHosts[0] ?? null
-  const primaryTaskProviders = primaryHost
-    ? (taskProvidersByHost[primaryHost.id] ?? ['github'])
+  // Undefined until the desktop's provider read answers: the card says it is checking rather than
+  // claim GitHub for a user whose sources are GitLab and Linear (review, 2026-09-30).
+  const primaryTaskProviders: TaskProvider[] | undefined = primaryHost
+    ? taskProvidersByHost[primaryHost.id]
     : []
   const hostConnections = useMemo(
     () => projectHomeHostConnections(connections.allClients),
