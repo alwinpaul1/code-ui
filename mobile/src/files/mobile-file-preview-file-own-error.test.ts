@@ -120,7 +120,7 @@ describe('a missing file whose own path says "not found"', () => {
     ['Notes (not found).md']
   ])('is still "File not found" for %s', (path) => {
     const error = previewErrorFromRefusal({ code: 'runtime_error', message: `ENOENT: no such file or directory, open '${path}'` })
-    expect(error.message).toBe('File not found')
+    expect(error).toMatchObject({ message: 'File not found' })
     expect(isFileOwnPreviewError(error)).toBe(true)
   })
 
