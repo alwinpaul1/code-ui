@@ -583,6 +583,50 @@ describe('the question card for a reply that holds a code fence', () => {
   })
 })
 
+// The bullet pattern took `> ` as a marker and `* * *` as a bullet holding
+// `* *`, so a quoted error became a card of its lines and a rule became a
+// choice. The parser reads the agent's Markdown reply (the hook's
+// lastAssistantMessage), where `>` is a blockquote, never a TUI pointer.
+describe('the question card for a reply that quotes or draws a rule', () => {
+  it('offers no quoted line as an answer (Claude-shaped)', () => {
+    expect(
+      parseAgentQuestion(
+        'The error says:\n> connection refused\n> retry later\n\nDo you want me to look into it further'
+      )
+    ).toBeNull()
+    expect(
+      parseAgentQuestion('The error says:\n> foo failed\n> bar failed\n\nI fixed it.')
+    ).toBeNull()
+  })
+
+  it('offers no quoted line as an answer (Codex-shaped)', () => {
+    expect(
+      parseAgentQuestion(
+        '**Error**:\n> connection refused\n> at connect (net.js:1:1)\n\nWant me to dig into it?'
+      )
+    ).toBeNull()
+  })
+
+  it('shows no card for a rule, spaced as Claude or Codex draws it', () => {
+    expect(parseAgentQuestion('Which one?\n\n* * *\n\nNo options here')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n\n- - -\n\nNo options here')).toBeNull()
+    expect(parseAgentQuestion('Which one?\n1. ---')).toBeNull()
+  })
+
+  it('keeps a choice whose text holds marks among its words', () => {
+    const q = parseAgentQuestion('Which path?\n- *fast* path\n- **safe** path\n- -1 offset')
+    expect(q?.options).toEqual(['*fast* path', '**safe** path', '-1 offset'])
+  })
+
+  it('keeps the choices under a question after a quote', () => {
+    const q = parseAgentQuestion(
+      'The test fails with:\n\n> Error: connection refused\n\nWhich should I do?\n\n1. Retry\n2. Skip'
+    )
+    expect(q?.question).toBe('Which should I do?')
+    expect(q?.options).toEqual(['Retry', 'Skip'])
+  })
+})
+
 describe('formatQuestionAnswer', () => {
   const numbered: MobileChatQuestion = {
     question: 'Pick',

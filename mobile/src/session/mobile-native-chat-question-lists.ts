@@ -21,9 +21,14 @@ const OPTION_PATTERNS: { re: RegExp; token: number; label: number }[] = [
   { re: /^\s*\[([0-9a-zA-Z])\]\s+(\S.*?)\s*$/, token: 1, label: 2 },
   // a) Option   a. Option   (single letter, to avoid eating prose like "e.g.")
   { re: /^\s*([a-zA-Z])[.)]\s+(\S.*?)\s*$/, token: 1, label: 2 },
-  // - Option   * Option   • Option   > Option   (no token)
-  { re: /^\s*(?:[-*•>])\s+(\S.*?)\s*$/, token: 0, label: 1 }
+  // - Option   * Option   • Option   (no token). Not `> `: the reply is
+  // Markdown, where that is a blockquote, and a quoted error is not a choice.
+  { re: /^\s*(?:[-*•])\s+(\S.*?)\s*$/, token: 0, label: 1 }
 ]
+
+/** An item's text that is only rule marks: `* * *` reads as a bullet
+ *  holding `* *`, and `1. ---` as an item holding a rule. */
+const RULE_TEXT = /^[-*_\s]+$/
 
 function parseOptionLine(line: string): (ParsedOption & { kind: number }) | null {
   const stripped = line.replace(POINTER_PREFIX, '$1')
@@ -33,7 +38,7 @@ function parseOptionLine(line: string): (ParsedOption & { kind: number }) | null
       continue
     }
     const text = m[label].trim()
-    if (text.length === 0) {
+    if (text.length === 0 || RULE_TEXT.test(text)) {
       continue
     }
     return { label: text, token: token > 0 ? m[token] : null, kind }
