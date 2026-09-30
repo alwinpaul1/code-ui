@@ -209,6 +209,13 @@ export function isCodexWorking(lines: readonly string[]): boolean {
   return isCodexTurnRunning(lines)
 }
 
+/** Whether two Codex model names are the same model. Case does not count: Codex 0.158.0 prints the
+ *  footer's model as "GPT-6-Sol" where 0.155.1 printed the slug "gpt-6-sol" (codex-0158-screens.test.ts
+ *  holds both captures), and the account lists the slug. */
+export function sameCodexModel(a: string, b: string): boolean {
+  return a.trim().toLowerCase() === b.trim().toLowerCase()
+}
+
 /** Match a picker effort label ("Extra high") to a discovered level id ("xhigh"). */
 export function matchCodexEffortRow(
   rows: readonly CodexPickerRow[],
