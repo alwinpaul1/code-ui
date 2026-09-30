@@ -74,6 +74,31 @@ function readItem(line: string): Item | null {
     : { ordered, indent, content, number, text: rest }
 }
 
+// The list line past the blank lines at `i` that nests under an open item,
+// a loose sublist ('- a\n\n  - b'): indented to the deepest open item's words
+// it reaches, and less than four columns past them, where CommonMark reads
+// code. Null where there is none, and the list ends at the blank line as it
+// always has: '- a\n\n- b' is still two lists. Until 2026-09-30 every blank
+// line ended the list, so a bot's loose sublist drew as a list of its own at
+// the margin and cut a numbered list in three.
+function nestedAfterBlank(lines: string[], i: number, levels: Level[]): number | null {
+  let j = i
+  while (j < lines.length && lines[j]!.trim() === '') {
+    j += 1
+  }
+  const next = j > i && j < lines.length && !HR.test(lines[j]!) ? readItem(lines[j]!) : null
+  if (!next) {
+    return null
+  }
+  for (let depth = levels.length - 1; depth >= 0; depth -= 1) {
+    const content = levels[depth]!.content
+    if (next.indent >= content) {
+      return next.indent < content + 4 ? j : null
+    }
+  }
+  return null
+}
+
 // The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
 export function parseList(lines: string[], i: number, body: LexedCommentBody, blocks: MarkdownBlock[]): number {
   const levels: Level[] = []
@@ -149,6 +174,7 @@ export function parseList(lines: string[], i: number, body: LexedCommentBody, bl
       flush()
       blocks.push({ kind: 'code', ...fence })
     }
+    i = nestedAfterBlank(lines, i, levels) ?? i
     // A rule ends the list, though `* * *` and `- - -` fit a marker: a rule wins
     // where a line could be either (CommonMark 4.1). It read as a bullet "* *".
     item = i < lines.length && !HR.test(lines[i]!) ? readItem(lines[i]!) : null
