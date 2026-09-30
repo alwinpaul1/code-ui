@@ -9,9 +9,10 @@ import {
   setextHeadingHtml,
   setextLevel
 } from './markdown-leaf-blocks'
-import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
+import { opensTable, readTableRows, tableHtml } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { paragraphParts, reflowLines } from './markdown-reflow'
+import { quoteHtml, quoteLineContent } from './markdown-quote'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
@@ -20,31 +21,6 @@ export function isBlockStart(line: string): boolean {
     openingFence(line) !== null ||
     /^(#{1,6}\s+|>\s?|\s*(?:[-*+]|\d+[.)])\s+)/.test(line)
   )
-}
-
-/**
- * A quote's lines, markers off, as its paragraphs. A blank quote line is a paragraph break, which
- * a save writes back as a bare `>` (html-block-markdown.ts); it was two breaks inside one
- * paragraph until 2026-09-30, and saved as `> ` with a trailing space. Inside a paragraph every
- * source line is still drawn on its own line, as quotes always have been, with its hard-break
- * spaces or backslash left in its text.
- */
-function quoteHtml(lines: readonly string[]): string {
-  const paragraphs: string[][] = [[]]
-  for (const line of lines) {
-    if (line.trim()) {
-      paragraphs[paragraphs.length - 1]!.push(line)
-    } else if (paragraphs[paragraphs.length - 1]!.length > 0) {
-      paragraphs.push([])
-    }
-  }
-  const blocks = paragraphs
-    .filter((paragraph) => paragraph.length > 0)
-    .map(
-      (paragraph) =>
-        `<p>${renderInline(paragraph.join('\n').trim()).replace(/\n/g, '<br />')}</p>`
-    )
-  return `<blockquote>${blocks.join('') || '<p></p>'}</blockquote>`
 }
 
 /**
@@ -80,7 +56,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       if (index < lines.length) {
         index += 1
       }
-      html.push(fencedCodeHtml(fence, code.join('\n')))
+      html.push(fencedCodeHtml(fence, code))
       continue
     }
     if (isThematicBreak(line)) {
@@ -89,31 +65,9 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       continue
     }
     if (opensTable(line, lines[index + 1])) {
-      const headers = splitTableRow(line)
-      const source = tableSourceAttributes(line, lines[index + 1] ?? '')
-      index += 2
-      const rows: string[][] = []
-      while (
-        index < lines.length &&
-        (lines[index] ?? '').includes('|') &&
-        (lines[index] ?? '').trim()
-      ) {
-        rows.push(splitTableRow(lines[index] ?? ''))
-        index += 1
-      }
-      const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
-      // A row keeps a cell past the header's count: it is still the file's text, and cutting rows
-      // to the header deleted it on the next save (every build before 2026-09-23). The header keeps
-      // its own width, so a ragged row stays ragged, which GFM allows, rather than the whole table
-      // gaining an empty column on the desktop. A short row still pads to the header.
-      const body = rows
-        .map((row) => {
-          const width = Math.max(headers.length, row.length)
-          const cells = Array.from({ length: width }, (_, cellIndex) => row[cellIndex] ?? '')
-          return `<tr>${cells.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`
-        })
-        .join('')
-      html.push(`<table${source}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`)
+      const table = readTableRows(lines, index + 2, 0)
+      html.push(tableHtml(line, lines[index + 1] ?? '', table.rows))
+      index = table.nextIndex
       continue
     }
     const heading = line.match(/^(#{1,6})\s+(.+)$/)
@@ -123,10 +77,10 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       index += 1
       continue
     }
-    if (/^>\s?/.test(line)) {
+    if (quoteLineContent(line) !== null) {
       const quote: string[] = []
-      while (index < lines.length && /^>\s?/.test(lines[index] ?? '')) {
-        quote.push((lines[index] ?? '').replace(/^>\s?/, ''))
+      while (index < lines.length && quoteLineContent(lines[index] ?? '') !== null) {
+        quote.push(quoteLineContent(lines[index] ?? '')!)
         index += 1
       }
       html.push(quoteHtml(quote))

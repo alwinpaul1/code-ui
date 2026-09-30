@@ -83,19 +83,25 @@ export function paragraphParts(
  *
  * `opensItem` and `opensBlock` are the list's and the block reader's own grammars, handed in so
  * this module reads neither and imports neither: the block reader imports the list parser.
+ * `opensBlock` is given the line under the one it tests too, since a table opens on two.
  */
 export function gatherListItemContinuation(
   lines: readonly string[],
   startIndex: number,
   text: string,
   opensItem: (line: string) => boolean,
-  opensBlock: (line: string) => boolean
+  opensBlock: (line: string, under: string | undefined) => boolean
 ): { text: string; nextIndex: number } {
   const tail = [text]
   let index = startIndex
   while (index < lines.length) {
     const next = lines[index] ?? ''
-    if (!next.trim() || !/^\s/.test(next) || opensItem(next) || opensBlock(next)) {
+    if (
+      !next.trim() ||
+      !/^\s/.test(next) ||
+      opensItem(next) ||
+      opensBlock(next, lines[index + 1])
+    ) {
       break
     }
     tail.push(next.trim())

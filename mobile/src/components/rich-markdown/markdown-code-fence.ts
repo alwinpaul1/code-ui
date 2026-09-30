@@ -23,8 +23,15 @@ export const CODE_FENCE_ATTRIBUTE = 'data-md-fence'
  * line of the list item that holds it.
  */
 export const CODE_INDENT_ATTRIBUTE = 'data-md-indent'
-/** The attribute that keeps the blank line a list item's fence was written after. */
+/** The attribute that keeps the blank line a list item's fence, quote or table was written after. */
 export const CODE_BLANK_ATTRIBUTE = 'data-md-blank'
+/**
+ * The attribute that keeps how many lines a fence's code had, where every one is blank and there
+ * are not exactly one: an empty fence ('```\n```') has none, and its markup cannot say so, since an
+ * empty `<code>` is also what one blank line draws as. It saved with a blank line added until
+ * 2026-09-30.
+ */
+export const CODE_LINES_ATTRIBUTE = 'data-md-lines'
 
 export type OpeningFence = {
   /** The run itself: three or more backticks, or three or more tildes. */
@@ -94,15 +101,17 @@ export function outdentCodeLine(line: string, columns: number): string {
 export type FencePlacement = { columns: number | null; blankBefore: boolean }
 
 /**
- * A fenced block as markup, with how it was written kept on the `<pre>` where the writer would
- * write it differently: the whole info string, the run, the indent. An ordinary fence carries none
- * of them, so its markup is what it always was.
+ * A fenced block's code lines as markup, with how it was written kept on the `<pre>` where the
+ * writer would write it differently: the whole info string, the run, the indent, the count of its
+ * lines when all are blank. An ordinary fence carries none of them, so its markup is what it always
+ * was.
  */
 export function fencedCodeHtml(
   fence: OpeningFence,
-  code: string,
+  codeLines: readonly string[],
   placement: FencePlacement = { columns: fence.indent > 0 ? fence.indent : null, blankBefore: false }
 ): string {
+  const code = codeLines.join('\n')
   const attrs = [`data-language="${escapeAttr(fence.language)}"`]
   if (fence.info !== fence.language || escapeAttr(fence.info) !== escapeLiteralAttr(fence.info)) {
     attrs.push(`${CODE_INFO_ATTRIBUTE}="${escapeLiteralAttr(fence.info)}"`)
@@ -115,6 +124,9 @@ export function fencedCodeHtml(
   }
   if (placement.blankBefore) {
     attrs.push(`${CODE_BLANK_ATTRIBUTE}="true"`)
+  }
+  if (codeLines.length !== 1 && codeLines.every((line) => line === '')) {
+    attrs.push(`${CODE_LINES_ATTRIBUTE}="${codeLines.length}"`)
   }
   return `<pre ${attrs.join(' ')}><code>${escapeLiteralHtml(code)}</code></pre>`
 }

@@ -3,9 +3,12 @@ import { openingFence, outdentCodeLine } from './markdown-code-fence'
 import { readIndentedCode } from './markdown-leaf-blocks'
 import { opensTable } from './markdown-table-rows'
 import {
+  endsItemWords,
   leadingSpaces,
-  opensFenceUnder,
+  markerLineBlock,
   readItemFenceBody,
+  readItemQuote,
+  readItemTable,
   type ItemBlock
 } from './markdown-list-blocks'
 
@@ -86,8 +89,11 @@ function isItem(level: ListLevel): level is ParsedListItem {
   return 'contentIndent' in level
 }
 
-/** Whether an item's last content is a code block, after which a line needs no blank to start. */
-function endsInCode(owner: ParsedListItem): boolean {
+/**
+ * Whether an item's last content is a block of its own (code, a quote, a table), after which a
+ * line needs no blank to start: it cannot be more of that block's words.
+ */
+function endsInBlock(owner: ParsedListItem): boolean {
   const last = owner.blocks[owner.blocks.length - 1]
   return last !== undefined && last.kind !== 'paragraph' && last.afterChildren === owner.children.length
 }
@@ -95,10 +101,11 @@ function endsInCode(owner: ParsedListItem): boolean {
 type OwnedBlock = { depth: number; block: ItemBlock; nextIndex: number }
 
 /**
- * The block an item owns at `next`: a fence, an indented code block four columns past its words,
- * or another paragraph of words. A paragraph or indented code needs a blank line before it
- * (without one the line would have been the item's words) unless it follows a code block. A line
- * that opens a block of its own, or a table, is not one: it ends the list, as it always has.
+ * The block an item owns at `next`: a fence, a quote, a table, an indented code block four columns
+ * past its words, or another paragraph of words. A paragraph or indented code needs a blank line
+ * before it (without one the line would have been the item's words) unless it follows a code
+ * block, a quote or a table. A line that opens a block of its own, or a table the item cannot
+ * hold, is not one: it ends the list, as it always has.
  */
 function readBlockOf(
   lines: string[],
@@ -123,10 +130,20 @@ function readBlockOf(
       nextIndex: body.nextIndex
     }
   }
-  if ((!blank && !endsInCode(owner)) || opensBlock(line) || opensTable(line, lines[next + 1])) {
+  const leaf = { blankBefore: blank, afterChildren: owner.children.length }
+  const quote = readItemQuote(lines, next, owner.contentIndent)
+  if (quote !== null) {
+    const offset = leadingSpaces(line) - owner.indent
+    return { block: { kind: 'quote', lines: quote.lines, offset, ...leaf }, nextIndex: quote.nextIndex }
+  }
+  const table = readItemTable(lines, next, owner.contentIndent)
+  if (table !== null) {
+    const offset = leadingSpaces(line) - owner.indent
+    return { block: { kind: 'table', lines: table.lines, offset, ...leaf }, nextIndex: table.nextIndex }
+  }
+  if ((!blank && !endsInBlock(owner)) || opensBlock(line) || opensTable(line, lines[next + 1])) {
     return null
   }
-  const leaf = { blankBefore: blank, afterChildren: owner.children.length }
   const code = readIndentedCode(lines, next, owner.contentIndent)
   if (code !== null) {
     const offset = owner.contentIndent + 4 - owner.indent
@@ -137,7 +154,7 @@ function readBlockOf(
     next + 1,
     line.trim(),
     (candidate) => parseListLine(candidate) !== null,
-    (candidate) => opensBlock(candidate) || opensFenceUnder(candidate, owner.contentIndent)
+    (candidate, under) => opensBlock(candidate) || endsItemWords(candidate, under, owner.contentIndent)
   )
   const offset = leadingSpaces(line) - owner.indent
   return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
@@ -181,7 +198,7 @@ function readOwnedBlock(
  *
  * `opensBlock` is the block reader's test for a line that starts a block of its own, which ends a
  * wrapped item's continuation (markdown-reflow.ts). Passed in because the block reader imports this.
- * A fence ends it too, where the item can hold it (markdown-list-blocks.ts).
+ * A fence, a quote or a table ends it too, where the item can hold it (markdown-list-blocks.ts).
  */
 export function parseListTree(
   lines: string[],
@@ -209,21 +226,14 @@ export function parseListTree(
     stack[stack.length - 1]!.children.push(item)
     stack.push(item)
     index += 1
-    // An item whose words are a fence holds the code block from its marker line on. Not a task:
-    // its box is its words, and a fence after it is text.
-    const fence = item.task === null ? openingFence(item.text) : null
-    if (fence !== null) {
-      const body = readItemFenceBody(lines, index, fence, item.contentIndent)
+    // An item whose words are a fence, a quote or a table holds that block from its marker line on.
+    // Not a task: its box is its words, and a block after it is text.
+    const opened =
+      item.task === null ? markerLineBlock(lines, index, item.text, item.contentIndent) : null
+    if (opened !== null) {
       item.text = ''
-      item.blocks.push({
-        kind: 'code',
-        fence,
-        code: body.code,
-        offset: null,
-        blankBefore: false,
-        afterChildren: 0
-      })
-      index = body.nextIndex
+      item.blocks.push(opened.block)
+      index = opened.nextIndex
       continue
     }
     const continued = gatherListItemContinuation(
@@ -231,7 +241,7 @@ export function parseListTree(
       index,
       item.text,
       (line) => parseListLine(line) !== null,
-      (line) => opensBlock(line) || opensFenceUnder(line, item.contentIndent)
+      (line, under) => opensBlock(line) || endsItemWords(line, under, item.contentIndent)
     )
     item.text = continued.text
     index = continued.nextIndex

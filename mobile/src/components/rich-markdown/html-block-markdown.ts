@@ -1,4 +1,5 @@
 import { codeBlockMarkdown } from './html-code-block-markdown'
+import { openingFence } from './markdown-code-fence'
 import { VERBATIM_ATTRIBUTE } from './markdown-front-matter'
 import { SETEXT_ATTRIBUTE, setextLevel } from './markdown-leaf-blocks'
 import { isBlockStart } from './markdown-to-html'
@@ -11,6 +12,7 @@ import {
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
 import { paragraphMarkdown } from './html-paragraph-markdown'
+import { QUOTE_TIGHT_ATTRIBUTE, quoteLineContent } from './markdown-quote'
 
 /** An element that is a block of its own wherever the engine puts it. */
 function isBlockElement(node: Node): node is Element {
@@ -19,6 +21,9 @@ function isBlockElement(node: Node): node is Element {
     /^(p|div|h[1-6]|pre|ul|ol|blockquote|table|hr)$/i.test(node.tagName)
   )
 }
+
+/** One block of a container as written, and the element it was written from (none for bare text). */
+type ContainerPart = { text: string; element: Element | null }
 
 /**
  * An element that holds blocks, as the blocks it really holds: a run of text, a list, a paragraph,
@@ -31,30 +36,30 @@ function isBlockElement(node: Node): node is Element {
  * or `<div>` inside it, and reading the quote inline glued the two paragraphs' words together
  * (review, 2026-09-30), so every block element counts, not only a list.
  */
-function containerBlocks(element: Element): string[] {
-  const blocks: string[] = []
+function containerParts(element: Element): ContainerPart[] {
+  const parts: ContainerPart[] = []
   let inline = ''
   const flushInline = () => {
     if (inline.trim()) {
-      blocks.push(inline.trim())
+      parts.push({ text: inline.trim(), element: null })
     }
     inline = ''
   }
   for (const child of Array.from(element.childNodes)) {
     if (isBlockElement(child)) {
       flushInline()
-      blocks.push(blockMarkdown(child))
+      parts.push({ text: blockMarkdown(child), element: child })
       continue
     }
     if (child instanceof Element && holdsUnownedList(child)) {
       flushInline()
-      blocks.push(...containerBlocks(child))
+      parts.push(...containerParts(child))
       continue
     }
     inline += inlineMarkdown(child)
   }
   flushInline()
-  return blocks.filter((block) => block.trim().length > 0)
+  return parts.filter((part) => part.text.trim().length > 0)
 }
 
 /** Whether a paragraph holds blocks rather than only words: a list the engine nested, a `<p>`. */
@@ -62,16 +67,72 @@ function holdsBlocks(element: Element): boolean {
   return holdsUnownedList(element) || Array.from(element.childNodes).some(isBlockElement)
 }
 
-/** A quote as its blocks, each line marked, and a bare `>` between blocks rather than `> `. */
+/** What a block of a quote is, as far as the blank line before or after it matters. */
+type QuotePartKind = 'words' | 'fenced' | 'indented' | 'quote' | 'other'
+
+function quotePartKind(part: ContainerPart): QuotePartKind {
+  const tag = part.element?.tagName.toLowerCase() ?? 'p'
+  if (tag === 'p' || tag === 'div') {
+    return part.element !== null && holdsBlocks(part.element) ? 'other' : 'words'
+  }
+  if (tag === 'pre') {
+    return openingFence(part.text.split('\n')[0] ?? '') === null ? 'indented' : 'fenced'
+  }
+  return tag === 'blockquote' ? 'quote' : 'other'
+}
+
+/**
+ * Whether two blocks of a quote written with no blank quote line between them are read back as the
+ * same two (markdown-quote.ts): a fence opens and closes itself, and a nested quote is its marked
+ * lines. Two paragraphs, two indented code blocks, two quotes, or code four columns in under words,
+ * would be read as one, and words that open a fence or a quote would not be words.
+ */
+function readsApartWithNoBlank(before: QuotePartKind, after: QuotePartKind, text: string): boolean {
+  const first = text.split('\n')[0] ?? ''
+  if (before === 'other' || after === 'other') {
+    return false
+  }
+  if (after === 'words' && (openingFence(first) !== null || quoteLineContent(first) !== null)) {
+    return false
+  }
+  if (before === 'fenced' || after === 'fenced') {
+    return true
+  }
+  if (before === 'quote' || after === 'quote') {
+    return before !== after
+  }
+  return before === 'indented' && after === 'words'
+}
+
+/**
+ * A quote as its blocks, each line marked, and a bare `>` between blocks rather than `> ` — except
+ * where the source had none (QUOTE_TIGHT_ATTRIBUTE) and the two blocks read back apart without one.
+ * A code line of spaces keeps them; any other line that is only spaces is a bare `>`.
+ */
 function quoteMarkdown(quote: Element): string {
-  const inner = containerBlocks(quote).join('\n\n')
-  if (!inner) {
+  const parts = containerParts(quote)
+  if (parts.length === 0) {
     return '>'
   }
-  return inner
-    .split('\n')
-    .map((line) => (line.trim() ? `> ${line}` : '>'))
-    .join('\n')
+  const lines: string[] = []
+  parts.forEach((part, index) => {
+    const kind = quotePartKind(part)
+    const before = parts[index - 1]
+    if (
+      before !== undefined &&
+      !(
+        part.element?.hasAttribute(QUOTE_TIGHT_ATTRIBUTE) &&
+        readsApartWithNoBlank(quotePartKind(before), kind, part.text)
+      )
+    ) {
+      lines.push('>')
+    }
+    const code = kind === 'fenced' || kind === 'indented'
+    for (const line of part.text.split('\n')) {
+      lines.push((code ? line : line.trim()) ? `> ${line}` : '>')
+    }
+  })
+  return lines.join('\n')
 }
 
 /**
@@ -126,7 +187,9 @@ export function blockMarkdown(node: Node): string {
   }
   if (tag === 'p' || tag === 'div') {
     if (holdsBlocks(node)) {
-      return containerBlocks(node).join('\n\n')
+      return containerParts(node)
+        .map((part) => part.text)
+        .join('\n\n')
     }
     // A quote draws every source line as a break (markdown-to-html.ts), so its breaks are lines.
     return node.closest('blockquote') === null
@@ -144,7 +207,7 @@ export function blockMarkdown(node: Node): string {
       : codeBlockMarkdown(node, 0, 0, !followsList(node))
   }
   if (tag === 'ul' || tag === 'ol') {
-    return listMarkdown(node, 0)
+    return listMarkdown(node, 0, null, blockMarkdown)
   }
   if (tag === 'table') {
     const rows = Array.from(node.querySelectorAll('tr'))
