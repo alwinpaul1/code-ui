@@ -853,4 +853,33 @@ describe('the running row lays out like the settled one', () => {
       expect(order.indexOf('ChevronRight')).toBe(order.indexOf('tool-run-active-label') + 1)
     }
   )
+
+  // The running header always drew ChevronRight and added ChevronDown beside
+  // it when open, so an open running run showed two disclosure marks. The
+  // settled header swaps one for the other.
+  it.each(['light', 'dark'] as const)(
+    'draws one chevron on the running header, down when open and right when closed, in %s',
+    (scheme) => {
+      act(() => {
+        renderer = create(
+          createElement(
+            ThemeProvider,
+            { initialPreference: scheme },
+            createElement(Harness, { blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true, defaultExpanded: true })
+          )
+        )
+      })
+      const toggle = () =>
+        renderer!.root.findByProps({ testID: 'tool-run-active-header' }).findByType('Pressable' as never)
+      const chevrons = () =>
+        toggle()
+          .children.filter((child): child is ReactTestInstance => typeof child !== 'string')
+          .filter((child) => String(child.type).startsWith('Chevron'))
+      expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronDown'])
+      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      act(() => toggle().props.onPress())
+      expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronRight'])
+      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+    }
+  )
 })

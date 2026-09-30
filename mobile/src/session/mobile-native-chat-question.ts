@@ -48,9 +48,9 @@ const OPTION_PATTERNS: { re: RegExp; token: number; label: number }[] = [
   { re: /^\s*(?:[-*•>])\s+(\S.*?)\s*$/, token: 0, label: 1 }
 ]
 
-function parseOptionLine(line: string): ParsedOption | null {
+function parseOptionLine(line: string): (ParsedOption & { kind: number }) | null {
   const stripped = line.replace(POINTER_PREFIX, '$1')
-  for (const { re, token, label } of OPTION_PATTERNS) {
+  for (const [kind, { re, token, label }] of OPTION_PATTERNS.entries()) {
     const m = stripped.match(re)
     if (!m) {
       continue
@@ -59,10 +59,72 @@ function parseOptionLine(line: string): ParsedOption | null {
     if (text.length === 0) {
       continue
     }
-    return { label: text, token: token > 0 ? m[token] : null }
+    return { label: text, token: token > 0 ? m[token] : null, kind }
   }
   return null
 }
+
+/** Leading whitespace, with a pointer glyph counted as the indent it stands in
+ *  for: a TUI draws `❯ 1. main` over `  2. develop`, one column of items. */
+function lineIndent(line: string): number {
+  const pointer = POINTER_PREFIX.exec(line)
+  const flat = pointer ? ' '.repeat(pointer[0].length) + line.slice(pointer[0].length) : line
+  return flat.length - flat.trimStart().length
+}
+
+type OptionList = {
+  /** Line index of the first item. */
+  start: number
+  /** Line index of the last line that belongs to the list. */
+  end: number
+  items: ParsedOption[]
+}
+
+/**
+ * The reply's lists, in order. One list is a run of items of one marker kind
+ * at one indent; blank lines do not end it, and a deeper line (a sub-bullet, a
+ * wrapped description) belongs to the item above it. Prose at the list's own
+ * indent, or an item of another kind, ends it.
+ */
+function collectOptionLists(lines: readonly string[]): OptionList[] {
+  const lists: OptionList[] = []
+  let current: { list: OptionList; kind: number; indent: number } | null = null
+  lines.forEach((line, index) => {
+    if (line.trim().length === 0) {
+      return
+    }
+    const indent = lineIndent(line)
+    if (current && indent > current.indent) {
+      current.list.end = index
+      return
+    }
+    const option = parseOptionLine(line)
+    if (option && current && option.kind === current.kind) {
+      current.list.items.push(option)
+      current.list.end = index
+      return
+    }
+    if (!option) {
+      current = null
+      return
+    }
+    current = { list: { start: index, end: index, items: [option] }, kind: option.kind, indent }
+    lists.push(current.list)
+  })
+  return lists
+}
+
+/** The nearest non-blank line above `list`, or -1 when there is none or it
+ *  belongs to the list before it. */
+function introIndex(lines: readonly string[], list: OptionList, previous: OptionList | null): number {
+  let index = list.start - 1
+  while (index >= 0 && lines[index].trim().length === 0) {
+    index--
+  }
+  return previous && index <= previous.end ? -1 : index
+}
+
+const ASKS = /\?\s*$/
 
 const MULTI_SELECT_HINT =
   /\b(select all|choose all|choose multiple|select multiple|pick multiple|all that apply|one or more|comma[- ]separated|multiple options)\b/i
@@ -81,6 +143,12 @@ function cleanQuestionText(raw: string): string {
  * when no clear option list is present (so ordinary prose is never treated as a
  * question). Conservative on purpose: requires at least two option lines, or one
  * option line introduced by a question-like prompt line.
+ *
+ * The options are ONE list: the reply's last, under the line directly above it.
+ * A reply often lists findings before it asks, and taking every bullet sent a
+ * finding back as the answer. With more than one list, the last must sit under
+ * a line that asks (`?`), and no earlier list may sit under one too; otherwise
+ * which list answers is a guess, and no card is shown.
  */
 export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   if (typeof text !== 'string' || text.trim().length === 0) {
@@ -88,34 +156,28 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
   }
 
   const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const parsed: { index: number; option: ParsedOption }[] = []
-
-  lines.forEach((line, index) => {
-    const option = parseOptionLine(line)
-    if (option) {
-      parsed.push({ index, option })
-    }
-  })
-
-  if (parsed.length === 0) {
+  const lists = collectOptionLists(lines)
+  const list = lists.at(-1)
+  if (!list) {
     return null
   }
+  const previous = lists.at(-2) ?? null
+  const options = list.items.map((item) => item.label)
+  const optionTokens = list.items.map((item) => item.token)
 
-  const firstOptionIndex = parsed[0].index
-  const options = parsed.map((p) => p.option.label)
-  const optionTokens = parsed.map((p) => p.option.token)
-
-  // Find the introducing question: nearest non-empty, non-option line above the
-  // first option.
-  let question = ''
-  let questionLooksLikePrompt = false
-  for (let i = firstOptionIndex - 1; i >= 0; i--) {
-    if (lines[i].trim().length === 0 || parseOptionLine(lines[i])) {
-      continue
+  const questionIndex = introIndex(lines, list, previous)
+  const question = questionIndex >= 0 ? lines[questionIndex] : ''
+  const questionLooksLikePrompt = QUESTION_LINE.test(question)
+  if (previous) {
+    if (!ASKS.test(question)) {
+      return null
     }
-    question = lines[i]
-    questionLooksLikePrompt = QUESTION_LINE.test(lines[i])
-    break
+    const asksEarlier = lists
+      .slice(0, -1)
+      .some((earlier, i) => ASKS.test(lines[introIndex(lines, earlier, lists[i - 1] ?? null)] ?? ''))
+    if (asksEarlier) {
+      return null
+    }
   }
 
   // Conservative gate: a single bare option with no introducing prompt is more
@@ -124,7 +186,9 @@ export function parseAgentQuestion(text: string): MobileChatQuestion | null {
     return null
   }
 
-  const multiSelect = MULTI_SELECT_HINT.test(text) && options.length > 1
+  // A hint in the findings above says nothing about this list.
+  const scope = previous ? lines.slice(previous.end + 1).join('\n') : text
+  const multiSelect = MULTI_SELECT_HINT.test(scope) && options.length > 1
 
   return {
     question: question.length > 0 ? cleanQuestionText(question) : 'Choose an option',

@@ -356,3 +356,166 @@ describe('the order of the / menu', () => {
     ])
   })
 })
+
+// A plugin skill is dispatched as `/<plugin>:<skill>`, a different command
+// from the personal skill or built-in that shares its bare name. The menu
+// deduped and filtered on the bare name, so `/code-review:code-review`,
+// `/anthropic-skills:unslop` and a plugin's own `review` never appeared.
+describe('a plugin skill that shares its bare name with another / entry', () => {
+  type SessionCommands = Parameters<typeof mobileNativeChatSlashSuggestions>[0]['sessionCommands']
+  const tokens = (
+    agent: string,
+    scannedSkills: DiscoveredSkill[],
+    query: string,
+    sessionCommands?: SessionCommands
+  ) =>
+    mobileNativeChatSlashSuggestions({
+      agent,
+      scannedSkills,
+      sessionCommands,
+      conversationCommands: undefined,
+      query
+    }).map(composerSuggestionInsertText)
+
+  it('is offered beside the personal skill of the same name', () => {
+    expect(
+      tokens(
+        'claude',
+        [
+          skill({ name: 'deploy', sourceKind: 'home' }),
+          skill({ name: 'deploy', sourceKind: 'plugin', sourceLabel: 'Claude plugin code-review' })
+        ],
+        'deploy'
+      )
+      // The menu's own order: tokens that start with the query, then the ones
+      // that contain it.
+    ).toEqual(['/deploy', '/code-review:deploy'])
+  })
+
+  it('is offered when the personal skill is listed after it', () => {
+    expect(
+      tokens(
+        'claude',
+        [
+          skill({ name: 'unslop', sourceKind: 'plugin', sourceLabel: 'Claude plugin anthropic-skills' }),
+          skill({ name: 'unslop', sourceKind: 'home' })
+        ],
+        'unslop'
+      )
+    ).toEqual(['/unslop', '/anthropic-skills:unslop'])
+  })
+
+  it('is offered when a built-in command has its bare name', () => {
+    const rows = tokens(
+      'claude',
+      [
+        skill({ name: 'review', sourceKind: 'plugin', sourceLabel: 'Claude plugin pr-tools' }),
+        skill({ name: 'code-review', sourceKind: 'plugin', sourceLabel: 'Claude plugin code-review' })
+      ],
+      'review'
+    )
+    expect(rows).toContain('/review')
+    expect(rows).toContain('/pr-tools:review')
+    expect(rows).toContain('/code-review')
+    expect(rows).toContain('/code-review:code-review')
+  })
+
+  it('is offered from a session report beside the built-in it shares a name with', () => {
+    expect(
+      tokens(
+        'claude',
+        [skill({ name: 'review', sourceKind: 'plugin', sourceLabel: 'Claude plugin pr-tools' })],
+        'review',
+        [
+          { name: 'review', kind: 'command' },
+          { name: 'pr-tools:review', kind: 'skill' }
+        ]
+      )
+    ).toEqual(['/review', '/pr-tools:review'])
+  })
+
+  it('is offered while the plugin prefix of its token is being typed', () => {
+    const scanned = [
+      skill({ name: 'deploy', sourceKind: 'home' }),
+      skill({ name: 'deploy', sourceKind: 'plugin', sourceLabel: 'Claude plugin code-review' })
+    ]
+    expect(tokens('claude', scanned, 'code-review:')).toEqual(['/code-review:deploy'])
+    expect(tokens('claude', scanned, 'code-review:dep')).toEqual(['/code-review:deploy'])
+    // The plugin's name alone lists its skills after the built-in it names.
+    expect(tokens('claude', scanned, 'code-review')).toEqual(['/code-review', '/code-review:deploy'])
+  })
+
+  it('still hides a personal skill that a built-in command already names', () => {
+    const rows = mobileNativeChatSlashSuggestions({
+      agent: 'claude',
+      scannedSkills: [skill({ name: 'review', sourceKind: 'home' })],
+      sessionCommands: undefined,
+      conversationCommands: undefined,
+      query: 'review'
+    })
+    expect(rows.filter((row) => row.kind === 'skill')).toEqual([])
+    expect(rows.map(composerSuggestionInsertText).filter((token) => token === '/review')).toHaveLength(1)
+  })
+
+  it('still lists one row for the same skill scanned from two roots', () => {
+    expect(
+      tokens(
+        'claude',
+        [
+          skill({ name: 'deploy', rootPath: '/home/.claude/skills' }),
+          skill({ name: 'deploy', rootPath: '/home/.claude-work/skills' }),
+          skill({
+            name: 'deploy',
+            sourceKind: 'plugin',
+            sourceLabel: 'Claude plugin ops',
+            rootPath: '/cache/market/ops/1.0.0/skills'
+          }),
+          skill({
+            name: 'deploy',
+            sourceKind: 'plugin',
+            sourceLabel: 'Claude plugin ops',
+            rootPath: '/cache/market/ops/1.1.0/skills'
+          })
+        ],
+        'deploy'
+      )
+    ).toEqual(['/deploy', '/ops:deploy'])
+  })
+
+  it('offers one row for a lone plugin skill and none with no skills at all', () => {
+    expect(
+      tokens(
+        'claude',
+        [skill({ name: 'deploy', sourceKind: 'plugin', sourceLabel: 'Claude plugin ops' })],
+        'deploy'
+      )
+    ).toEqual(['/ops:deploy'])
+    expect(tokens('claude', [], 'deploy')).toEqual([])
+  })
+
+  it('leaves the Codex $ menu as it was', () => {
+    // `$` agents keep a skill beside the command of the same name, and the
+    // same skill found in two roots is still one row.
+    expect(
+      tokens(
+        'codex',
+        [
+          skill({ name: 'review', providers: ['codex'] }),
+          skill({ name: 'deploy', providers: ['codex'] }),
+          skill({ name: 'deploy', providers: ['codex'], rootPath: '/repo/.codex/skills' })
+        ],
+        'review'
+      )
+    ).toEqual(['$review', '/review'])
+    expect(
+      tokens(
+        'codex',
+        [
+          skill({ name: 'deploy', providers: ['codex'] }),
+          skill({ name: 'deploy', providers: ['codex'], rootPath: '/repo/.codex/skills' })
+        ],
+        'deploy'
+      )
+    ).toEqual(['$deploy'])
+  })
+})

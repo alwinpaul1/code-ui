@@ -167,3 +167,42 @@ describe('useMobileNativeChatPrompts ask state gate', () => {
     expect(promptsFor({ state: 'done' }, answered).ask).toBeNull()
   })
 })
+
+describe('useMobileNativeChatPrompts question card', () => {
+  const reply = [
+    'Findings so far:',
+    '- the cache is stale',
+    '- the lock is held',
+    '',
+    'Which fix do you want?',
+    '1. Clear the cache',
+    '2. Release the lock'
+  ].join('\n')
+
+  it('offers a waiting agent the choice list under its question, not the findings above it', () => {
+    expect(promptsFor({ state: 'waiting', lastAssistantMessage: reply }).question).toEqual({
+      question: 'Which fix do you want?',
+      options: ['Clear the cache', 'Release the lock'],
+      multiSelect: false,
+      optionTokens: ['1', '2']
+    })
+    expect(promptsFor({ state: 'blocked', lastAssistantMessage: reply }).question?.options).toEqual([
+      'Clear the cache',
+      'Release the lock'
+    ])
+  })
+
+  it('shows no question card for a reply whose last list asks nothing', () => {
+    expect(
+      promptsFor({
+        state: 'waiting',
+        lastAssistantMessage: 'Which fix?\n1. Clear\n2. Release\n\nNotes:\n- a\n- b'
+      }).question
+    ).toBeNull()
+    expect(promptsFor({ state: 'waiting', lastAssistantMessage: '' }).question).toBeNull()
+  })
+
+  it('shows no question card while the agent is working', () => {
+    expect(promptsFor({ state: 'working', lastAssistantMessage: reply }).question).toBeNull()
+  })
+})
