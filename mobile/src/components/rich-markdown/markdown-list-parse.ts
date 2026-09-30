@@ -20,6 +20,8 @@ export type ParsedListItem = {
   contentIndent: number
   ordered: boolean
   orderedNumber: number | null
+  /** What follows an ordered item's number, `.` or `)`; null for a bullet. */
+  delimiter: '.' | ')' | null
   /** Whether the item's checkbox is ticked, or null when it is not a task at all. */
   task: boolean | null
   text: string
@@ -58,6 +60,7 @@ export function parseListLine(line: string): ParsedListItem | null {
     contentIndent: indent + marker.length + (gap >= 5 ? 1 : gap),
     ordered,
     orderedNumber: ordered ? Number.parseInt(marker, 10) : null,
+    delimiter: ordered ? (marker.endsWith(')') ? ')' : '.') : null,
     task: task ? task[1]!.toLowerCase() === 'x' : null,
     text: task ? task[2]! : rawText,
     children: [],
@@ -66,10 +69,14 @@ export function parseListLine(line: string): ParsedListItem | null {
   }
 }
 
-/** Which of the three list shapes an item belongs to; a run of one kind becomes one list. */
-export function listKind(item: ParsedListItem): 'task' | 'ol' | 'ul' {
+/**
+ * Which of the four list shapes an item belongs to; a run of one kind becomes one list. A numbered
+ * task list is a kind of its own: it was a task list like any other until 2026-09-30, drawn and
+ * saved bulleted, so '1. [ ] a' saved as '- [ ] a'.
+ */
+export function listKind(item: ParsedListItem): 'task' | 'ordered-task' | 'ol' | 'ul' {
   if (item.task !== null) {
-    return 'task'
+    return item.ordered ? 'ordered-task' : 'task'
   }
   return item.ordered ? 'ol' : 'ul'
 }
