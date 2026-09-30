@@ -27,21 +27,48 @@ export type HomeTaskProvidersSetter = (
   updater: (previous: Record<string, TaskProvider[]>) => Record<string, TaskProvider[]>
 ) => void
 
+/** Which read the desktop refused, and the reason it gave, for the one line a refusal leaves. */
+function refusedHomeRead(method: string, reply: RpcResponse) {
+  return reply.ok
+    ? { method, code: 'not-accepted' }
+    : { method, code: reply.error.code, message: reply.error.message }
+}
+
+function failureCause(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+// The counts and accounts cards are decorative: a failed read keeps what the card showed. It still
+// leaves one line naming the read and why, so a card stuck on old figures says where to look.
 export function fetchMobileHomeStats(
   client: RpcClient,
   hostId: string,
   setStats: HomeStatsSetter,
   disposed: () => boolean
 ): void {
+  const method = homeHostStatsRead.operation.method
   homeHostStatsRead
     .requestSingleFlight(client, hostId)
     .then((reply) => {
       const summary = homeHostStatsRead.interpret(reply)
-      if (!disposed() && summary.accepted) {
+      if (!summary.accepted) {
+        console.warn('[home] the desktop refused its counts read', {
+          hostId,
+          refused: refusedHomeRead(method, reply)
+        })
+        return
+      }
+      if (!disposed()) {
         setStats((previous) => ({ ...previous, [hostId]: summary.value }))
       }
     })
-    .catch(() => {})
+    .catch((error: unknown) => {
+      console.warn('[home] the counts read for this desktop failed', {
+        hostId,
+        method,
+        cause: failureCause(error)
+      })
+    })
 }
 
 export function fetchMobileHomeAccounts(
@@ -50,23 +77,30 @@ export function fetchMobileHomeAccounts(
   setSnapshots: HomeAccountsSetter,
   disposed: () => boolean
 ): void {
+  const method = homeHostAccountsRead.operation.method
   homeHostAccountsRead
     .requestSingleFlight(client, hostId)
     .then((reply) => {
       const accounts = homeHostAccountsRead.interpret(reply)
-      if (!disposed() && accounts.accepted) {
+      if (!accounts.accepted) {
+        console.warn('[home] the desktop refused its accounts read', {
+          hostId,
+          refused: refusedHomeRead(method, reply)
+        })
+        return
+      }
+      if (!disposed()) {
         const snapshot = decodeAccountsSnapshot(accounts.value)
         setSnapshots((previous) => ({ ...previous, [hostId]: snapshot }))
       }
     })
-    .catch(() => {})
-}
-
-/** Which read the desktop refused, and the reason it gave, for the one line a refusal leaves. */
-function refusedTaskSourceRead(method: string, reply: RpcResponse) {
-  return reply.ok
-    ? { method, code: 'not-accepted' }
-    : { method, code: reply.error.code, message: reply.error.message }
+    .catch((error: unknown) => {
+      console.warn('[home] the accounts read for this desktop failed', {
+        hostId,
+        method,
+        cause: failureCause(error)
+      })
+    })
 }
 
 export function fetchMobileHomeTaskProviders(
@@ -98,7 +132,7 @@ export function fetchMobileHomeTaskProviders(
           [taskLinearStatusRead.operation.method, linearResult.accepted, linearResponse] as const
         ]
           .filter(([, accepted]) => !accepted)
-          .map(([method, , reply]) => refusedTaskSourceRead(method, reply))
+          .map(([method, , reply]) => refusedHomeRead(method, reply))
         console.warn('[home] the desktop refused a task source read, so its sources stay unread', {
           hostId,
           refused
@@ -122,7 +156,7 @@ export function fetchMobileHomeTaskProviders(
       // claiming GitHub, and the next new connection reads again (review, 2026-09-30).
       console.warn('[home] the task sources for this desktop could not be read', {
         hostId,
-        cause: error instanceof Error ? error.message : String(error)
+        cause: failureCause(error)
       })
     })
 }
