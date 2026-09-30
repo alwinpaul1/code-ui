@@ -52,6 +52,14 @@ describe('a Codex local_shell run reads as commands', () => {
     expect(isShellActivityToolCall({ name: 'local_shell', input: LS })).toBe(true)
   })
 
+  it('reads a local_shell argv holding braces as one command', () => {
+    // The code-mode cell reader choked on braces (codex-stdin-poll-run-sentence
+    // .test.ts); an argv never goes through it.
+    const awk = { command: ['bash', '-lc', "awk '{print $1}' big.log | sort"] }
+    expect(toolRunSentence([call('local_shell', awk), result()])).toBe('Ran a command')
+    expect(toolRunSentence([call('local_shell', JSON.stringify(awk)), result()])).toBe('Ran a command')
+  })
+
   it('labels one local_shell call by its own description when it carries one', () => {
     expect(
       toolRunSentence([call('local_shell', { ...LS, description: 'List the files' }), result()])

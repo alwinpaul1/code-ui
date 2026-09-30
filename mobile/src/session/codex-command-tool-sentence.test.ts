@@ -22,6 +22,23 @@ describe('a command run reads as commands on Claude and Codex alike', () => {
     expect(toolRunSentence([call('Bash'), result(), call('Bash'), result()])).toBe('Ran 2 commands')
   })
 
+  // The control for a Codex code-mode command with braces in its cmd
+  // (codex-stdin-poll-run-sentence.test.ts): Claude's Bash never went through
+  // the cell reader, and a brace in its command changes nothing.
+  it('reads a Claude Bash command holding braces as "Ran a command"', () => {
+    expect(
+      toolRunSentence([call('Bash', { command: "awk '{print $1}' big.log | sort" }), result()])
+    ).toBe('Ran a command')
+    expect(
+      toolRunSentence([
+        call('Bash', { command: 'echo ${HOME}' }),
+        result(),
+        call('Bash', { command: `curl -d '{"a":1}' localhost` }),
+        result()
+      ])
+    ).toBe('Ran 2 commands')
+  })
+
   it.each(['exec_command', 'shell_command'])('reads a Codex %s run as commands, not tools', (name) => {
     expect(toolRunSentence([call(name, { cmd: 'ls' }), result(), call(name, { cmd: 'pwd' }), result()])).toBe(
       'Ran 2 commands'
