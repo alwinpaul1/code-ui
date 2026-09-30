@@ -155,7 +155,7 @@ function settleRead(scopeKey: string, agent: string, read: ScopeRead, outcome: S
   }
 }
 
-/** Fold the stored record in, if it is this agent's and the tab still is. */
+/** Fold the stored record in, if it is the tab's agent's. */
 function foldStoredRecord(
   scopeKey: string,
   agent: string,
@@ -163,9 +163,11 @@ function foldStoredRecord(
   stored: NativeChatSessionOptionRecord
 ): boolean {
   const live = recordsByScope.get(scopeKey)
-  // A record another agent left under this tab says nothing about this one,
-  // and a tab whose agent changed while the read was out is not this one.
-  if (stored.agent !== agent || (live && live.agent !== agent)) {
+  // A record another agent left under this tab says nothing about this one.
+  // The tab's agent is its live record's, which can have changed while the
+  // read was out; checked against the agent the read began under, the new
+  // one's own picks were skipped and then saved over.
+  if (stored.agent !== (live?.agent ?? agent)) {
     return false
   }
   const record = live ?? getScopedRecord(scopeKey, agent)

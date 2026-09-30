@@ -244,6 +244,22 @@ describe('a Claude or Codex tab reopened after the process died', () => {
     })
   })
 
+  // The read belongs to the tab, not to the agent it started under: a tab
+  // that names its agent while the read is out still gets that agent's picks.
+  it('restores the picks of the agent the tab settles on while the stored record is being read', async () => {
+    await store(claudeHigh)
+    holdReads()
+    await mount({ agent: 'codex', reportedModel: 'gpt-5.5' })
+    await update({ agent: 'claude', reportedModel: 'claude-opus-5' })
+    reads.release?.()
+    await settle()
+    expect(effort()).toBe('high')
+    expect(await stored()).toMatchObject({
+      agent: 'claude',
+      valuesByModel: { opus: { effort: { value: 'high', source: 'dispatched' } } }
+    })
+  })
+
   it('ignores a stored record another agent left under the tab', async () => {
     await store({ agent: 'codex', valuesByModel: { opus: { effort: { value: 'high', source: 'dispatched' } } } })
     await mount()
