@@ -78,7 +78,9 @@ export function MobilePermissionRulesPanel({
   const styles = useThemedStyles(rulesStyles)
   const { colors } = useTheme()
   const parsed = state.status === 'ready' ? parsePermissionSettings(state.content) : null
-  // The write carries the rules as they were at the tap; no add or remove until it lands.
+  // The write carries the rules as they were at the tap; no add or remove until it lands, and no
+  // switch of destination either: a switch replaces the state the write answers for, so its answer
+  // would be dropped. A switch at any other time keeps an unsaved draft (useProjectConfigFile).
   const saving = state.status === 'ready' && state.saving
 
   function commit(settings: Record<string, unknown>) {
@@ -107,10 +109,15 @@ export function MobilePermissionRulesPanel({
           return (
             <Pressable
               key={option.value}
-              style={[styles.destination, selected && styles.destinationActive]}
-              onPress={() => setDestination(option.value)}
+              style={[styles.destination, selected && styles.destinationActive, saving && styles.disabled]}
+              onPress={() => {
+                if (!saving) {
+                  setDestination(option.value)
+                }
+              }}
+              disabled={saving}
               accessibilityRole="button"
-              accessibilityState={{ selected }}
+              accessibilityState={{ selected, disabled: saving }}
             >
               <Txt variant="caption" weight={selected ? 'semibold' : 'regular'}>
                 {option.label}

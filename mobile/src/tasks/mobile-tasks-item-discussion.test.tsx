@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -72,6 +72,12 @@ import { ThemeProvider, useTheme, useThemedStyles } from '../theme/theme-context
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { mobileTasksStyles } from './mobile-tasks-legacy-styles'
 import { renderMobileTasksItemDetailContent } from './mobile-tasks-item-detail-content'
+import {
+  detailCommentGroupId,
+  detailCommentGroupRoot,
+  groupDetailComments
+} from './mobile-tasks-item-comments'
+import type { DetailCommentGroup } from './mobile-tasks-view-state-types'
 
 const LINEAR_ITEM = {
   key: 'linear:ENG-1',
@@ -126,12 +132,21 @@ function Sheet(props: { payload: Record<string, unknown>; refresh: (next: unknow
     detailLoading: false,
     detailError: '',
     detailPayload: props.payload,
-    detailCommentGroups: [],
+    // The groups the screen memoizes from the payload's comments (use-mobile-tasks-item-state.tsx),
+    // drawn as one line each naming the group and its body, so a test can see which were drawn.
+    detailCommentGroups: groupDetailComments(
+      (props.payload.comments ?? []) as Parameters<typeof groupDetailComments>[0]
+    ),
     linearCommentDraft: '',
     linearSubIssueTitle: '',
     mutatingStatus: false,
     renderCommentComposer: () => null,
-    renderDetailCommentGroup: () => null,
+    renderDetailCommentGroup: (group: DetailCommentGroup) =>
+      createElement(
+        'Text',
+        { key: detailCommentGroupId(group) },
+        `${detailCommentGroupId(group)}: ${detailCommentGroupRoot(group).body}`
+      ),
     setDetailRefreshSeq: props.refresh
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the members above are the ones this render path reads.
@@ -183,6 +198,46 @@ describe.each([
     expect(refresh).toHaveBeenCalledTimes(1)
     const step = refresh.mock.calls[0]![0] as (current: number) => number
     expect(step(4)).toBe(5)
+  })
+
+  // Posting on an issue whose list the desktop refused worked on the desktop and cleared the
+  // draft, but the section kept drawing only "Couldn't load comments", so the comment never
+  // appeared: it seemed to vanish, and posting it again made a duplicate (review, 2026-09-30).
+  it('shows the comment just posted while the earlier ones could not be read', async () => {
+    const refresh = vi.fn()
+    const posted = {
+      id: 'comment-9',
+      body: 'the comment I just posted',
+      createdAt: '2026-09-30T12:00:00Z',
+      user: { displayName: 'You' }
+    }
+    const root = await renderSheet(
+      scheme,
+      { ...LINEAR_PAYLOAD, comments: [posted], commentsFailed: true },
+      refresh
+    )
+
+    // Drawn through the list's own groups and group renderer, under a line that says the rest
+    // could not be read.
+    const comment = texts(root, 'comment:comment-9: the comment I just posted')
+    expect(comment).toHaveLength(1)
+    const note = texts(root, "Couldn't load the earlier comments")
+    expect(note).toHaveLength(1)
+    expect(flat(note[0]!.props.style).color).toBe(palette.danger)
+    const drawn = root.findAll((node) => String(node.type) === 'Text').map(textOf)
+    expect(drawn.indexOf("Couldn't load the earlier comments")).toBeLessThan(
+      drawn.indexOf('comment:comment-9: the comment I just posted')
+    )
+    // Not the no-list line, and no count: one comment on screen is not the issue's total.
+    expect(texts(root, "Couldn't load comments")).toHaveLength(0)
+    expect(texts(root, '1 comment')).toHaveLength(0)
+    expect(texts(root, 'No comments.')).toHaveLength(0)
+
+    const retry = root.find((node) => node.props.accessibilityLabel === 'Retry loading comments')
+    expect(flat(retry.props.style).borderColor).toBe(palette.border)
+    expect(flat(texts(retry, 'Retry')[0]!.props.style).color).toBe(palette.text)
+    act(() => retry.props.onPress())
+    expect(refresh).toHaveBeenCalledTimes(1)
   })
 
   it('still says "No comments." for an issue whose list came back empty', async () => {

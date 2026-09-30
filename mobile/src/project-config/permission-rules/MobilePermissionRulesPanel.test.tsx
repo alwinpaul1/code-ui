@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import type { RpcClient } from '../../transport/rpc-client'
 
 vi.mock('react-native', () => ({
@@ -87,6 +87,13 @@ function addRuleRows(renderer: ReactTestRenderer) {
   return renderer.root
     .findAllByType('Pressable' as never)
     .filter((node) => node.findAllByType('Text' as never).some((t) => t.props.children === 'Add rule'))
+}
+
+/** The Project or Local destination pill. */
+function destinationPill(renderer: ReactTestRenderer, label: string) {
+  return renderer.root
+    .findAllByType('Pressable' as never)
+    .find((node) => node.findAllByType('Text' as never).some((t) => t.props.children === label))!
 }
 
 const ONE_ALLOW_RULE = JSON.stringify({ permissions: { allow: ['Bash(npm run *)'] } })
@@ -315,26 +322,170 @@ describe('MobilePermissionRulesPanel', () => {
       }
     )
 
-    it('does not mark the other destination saved when its tab is switched to mid-save', async () => {
-      const { renderer, release } = await savingPanel('light')
-      const localToggle = renderer.root
-        .findAllByType('Pressable' as never)
-        .find((node) => node.findAllByType('Text' as never).some((t) => t.props.children === 'Local'))!
-      await act(async () => {
-        localToggle.props.onPress()
-        await Promise.resolve()
-        await Promise.resolve()
-      })
-      expect(allText(renderer)).toContain('WebFetch')
+    // A switch mid-save replaced the state the write answers for, so its answer was dropped and
+    // the file it wrote was shown unsaved, or not shown at all (review, 2026-09-30). The pills now
+    // wait for it, the way add and remove do.
+    it.each(['light', 'dark'] as const)(
+      'will not switch destination until it lands, and the pills look disabled (%s)',
+      async (scheme) => {
+        const { renderer, send, release } = await savingPanel(scheme)
+        for (const label of ['Project', 'Local']) {
+          const pill = destinationPill(renderer, label)
+          expect(pill.props.disabled).toBe(true)
+          expect(pill.props.accessibilityState).toEqual({ selected: label === 'Project', disabled: true })
+          expect(Object.assign({}, ...[pill.props.style].flat().filter(Boolean)).opacity).toBe(0.5)
+        }
+        // A tap that reaches the pill anyway reads nothing and changes nothing.
+        await act(async () => {
+          destinationPill(renderer, 'Local').props.onPress()
+          await Promise.resolve()
+          await Promise.resolve()
+        })
+        expect(send).not.toHaveBeenCalledWith('files.read', {
+          worktree: 'id:w1',
+          relativePath: '.claude/settings.local.json'
+        })
+        expect(allText(renderer)).toContain('Read')
+        expect(allText(renderer)).not.toContain('WebFetch')
 
+        await act(async () => {
+          release({ ok: true, result: {} })
+          await Promise.resolve()
+        })
+        // Landed on the file it wrote: saved, and the pills are live again.
+        expect(saveButton(renderer).props.accessibilityState).toEqual({ disabled: true })
+        expect(allText(renderer)).not.toContain('Bash(npm run *)')
+        const local = destinationPill(renderer, 'Local')
+        expect(local.props.disabled).toBe(false)
+        expect(local.props.accessibilityState).toEqual({ selected: false, disabled: false })
+        expect(Object.assign({}, ...[local.props.style].flat().filter(Boolean)).opacity).toBeUndefined()
+        act(() => renderer.unmount())
+      }
+    )
+  })
+
+  // 2026-09-30 review: add or remove a rule, tap the other destination before Save, and the draft
+  // was thrown away with no prompt. Switching back read the file again, so a removed rule was
+  // listed again (or an added one gone) and Save was disabled, with nothing showing an edit was lost.
+  describe('switching destination with an unsaved edit', () => {
+    const READ_ONLY = JSON.stringify({ permissions: { allow: ['Read'] } })
+    const LOCAL = JSON.stringify({ permissions: { deny: ['WebFetch'] } })
+
+    /** Each path's reads answered in turn; every write accepted. */
+    function sequentialClient(reads: Record<string, string[]>) {
+      const sendRequest = vi.fn(async (method: string, params: Record<string, unknown>) => {
+        if (method === 'files.read') {
+          const content = reads[params.relativePath as string]?.shift()
+          if (content === undefined) {
+            return { ok: false, error: { code: 'runtime_error', message: 'ENOENT: no such file or directory' } }
+          }
+          return { ok: true, result: { content, truncated: false, byteLength: content.length } }
+        }
+        return { ok: true, result: {} }
+      })
+      return { client: { getState: () => 'connected', sendRequest } as unknown as RpcClient, sendRequest }
+    }
+
+    async function tap(node: ReactTestInstance) {
       await act(async () => {
-        release({ ok: true, result: {} })
+        node.props.onPress()
+        await Promise.resolve()
         await Promise.resolve()
       })
-      // The local file was only read: nothing to save, and nothing claimed saved over it.
+    }
+
+    const removeButton = (renderer: ReactTestRenderer, rule: string) =>
+      renderer.root.find(
+        (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === `Remove ${rule}`
+      )
+
+    /** The footer's Save (the add-rule dialog has a Save of its own). */
+    const footerSave = (renderer: ReactTestRenderer) =>
+      renderer.root
+        .find((node) => node.props?.block === true && /^Sav(e|ing…)$/.test(String(node.props.label)))
+        .findAll((node) => node.props?.accessibilityRole === 'button')[0]!
+
+    const readsOf = (sendRequest: ReturnType<typeof vi.fn>, path: string) =>
+      sendRequest.mock.calls.filter(
+        ([method, params]) =>
+          method === 'files.read' && (params as { relativePath: string }).relativePath === path
+      ).length
+
+    it('keeps a removed rule removed across a switch to Local and back, with Save live', async () => {
+      // The file is served again unchanged, so a switch back that reads it lists the rule again.
+      const { client, sendRequest } = sequentialClient({
+        '.claude/settings.json': [READ_ONLY, READ_ONLY],
+        '.claude/settings.local.json': [LOCAL]
+      })
+      const renderer = await render(client)
+      await tap(removeButton(renderer, 'Read'))
+      expect(allText(renderer)).not.toContain('Read')
+
+      await tap(destinationPill(renderer, 'Local'))
       expect(allText(renderer)).toContain('WebFetch')
-      expect(saveButton(renderer).props.accessibilityLabel).toBe('Save')
-      expect(saveButton(renderer).props.accessibilityState).toEqual({ disabled: true })
+      await tap(destinationPill(renderer, 'Project'))
+
+      expect(allText(renderer)).not.toContain('Read')
+      expect(footerSave(renderer).props.accessibilityState).toEqual({ disabled: false })
+      expect(readsOf(sendRequest, '.claude/settings.json')).toBe(1)
+      act(() => renderer.unmount())
+    })
+
+    it('keeps an added rule across a switch to Local and back, with Save live', async () => {
+      const { client } = sequentialClient({
+        '.claude/settings.json': [READ_ONLY, READ_ONLY],
+        '.claude/settings.local.json': [LOCAL]
+      })
+      const renderer = await render(client)
+      await tap(addRuleRows(renderer)[0]!)
+      await act(async () => {
+        renderer.root.find((node) => node.props?.title === 'Add an allow rule').props.onSubmit('Edit')
+      })
+      expect(allText(renderer)).toContain('Edit')
+
+      await tap(destinationPill(renderer, 'Local'))
+      await tap(destinationPill(renderer, 'Project'))
+
+      expect(allText(renderer)).toContain('Edit')
+      expect(allText(renderer)).toContain('Read')
+      expect(footerSave(renderer).props.accessibilityState).toEqual({ disabled: false })
+      act(() => renderer.unmount())
+    })
+
+    it('still reads a destination with nothing unsaved again, so a change made at the desk shows', async () => {
+      const { client } = sequentialClient({
+        '.claude/settings.json': [READ_ONLY, JSON.stringify({ permissions: { allow: ['Read', 'Write'] } })],
+        '.claude/settings.local.json': [LOCAL]
+      })
+      const renderer = await render(client)
+      expect(allText(renderer)).not.toContain('Write')
+
+      await tap(destinationPill(renderer, 'Local'))
+      await tap(destinationPill(renderer, 'Project'))
+
+      expect(allText(renderer)).toContain('Write')
+      expect(footerSave(renderer).props.accessibilityState).toEqual({ disabled: true })
+      act(() => renderer.unmount())
+    })
+
+    it('saves the kept draft to .claude/settings.json once back on Project', async () => {
+      const { client, sendRequest } = sequentialClient({
+        '.claude/settings.json': [READ_ONLY, READ_ONLY],
+        '.claude/settings.local.json': [LOCAL]
+      })
+      const renderer = await render(client)
+      await tap(removeButton(renderer, 'Read'))
+      await tap(destinationPill(renderer, 'Local'))
+      await tap(destinationPill(renderer, 'Project'))
+
+      await tap(footerSave(renderer))
+      expect(sendRequest).toHaveBeenCalledWith('files.write', {
+        worktree: 'id:w1',
+        relativePath: '.claude/settings.json',
+        content: JSON.stringify({ permissions: { allow: [] } }, null, 2) + '\n'
+      })
+      expect(sendRequest.mock.calls.filter(([method]) => method === 'files.write')).toHaveLength(1)
+      expect(footerSave(renderer).props.accessibilityState).toEqual({ disabled: true })
       act(() => renderer.unmount())
     })
   })

@@ -23,6 +23,11 @@ import { classifyProjectConfigFileError, describeProjectConfigFileError } from '
  * exactly as the user left it, with the refusal shown alongside it. (On a
  * host whose mobile gate refuses `files.write` — Orca 1.4.205 — the screens
  * never offer Save at all; see project-config-file-operations.ts.)
+ *
+ * Nor does switching files. Permission Rules shows one of two files through
+ * one hook; a switch holds an unsaved draft for the file it leaves, and a
+ * switch back restores it instead of reading the file again. A file with
+ * nothing unsaved is read again, so a change made at the desk shows.
  */
 export type ProjectConfigFileState =
   | { status: 'loading' }
@@ -39,6 +44,8 @@ export type ProjectConfigFileState =
       creating: false
       createError: string | null
     }
+
+type ReadyProjectConfigFileState = Extract<ProjectConfigFileState, { status: 'ready' }>
 
 export function useProjectConfigFile(args: {
   client: RpcClient | null
@@ -98,7 +105,39 @@ export function useProjectConfigFile(args: {
     }
   }, [client, worktreeId, relativePath])
 
+  // The committed state, for the effect below to read when the file changes without re-running on
+  // every edit; the file that state is for; and the unsaved drafts of files not on screen, by path.
+  const stateRef = useRef(state)
   useEffect(() => {
+    stateRef.current = state
+  }, [state])
+  const shownPathRef = useRef(relativePath)
+  const heldDraftsRef = useRef(new Map<string, ReadyProjectConfigFileState>())
+
+  useEffect(() => {
+    const leftPath = shownPathRef.current
+    shownPathRef.current = relativePath
+    if (leftPath !== relativePath) {
+      // A switch to another file holds an unsaved draft for the one it leaves, and a switch back
+      // takes it out again rather than reading the file over it (review, 2026-09-30: an unsaved
+      // add or remove on Permission Rules was lost to a tap on the other destination). A write
+      // still on the wire answers for a state this replaced, so `superseded` drops its answer: the
+      // draft is held as not saving, and Save offers it again.
+      const left = stateRef.current
+      if (left.status === 'ready' && left.isDirty) {
+        heldDraftsRef.current.set(leftPath, { ...left, saving: false })
+      }
+      const held = heldDraftsRef.current.get(relativePath)
+      if (held) {
+        // Taken out, not copied: the draft lives in the state again, so a save of it leaves
+        // nothing held, and the next switch away holds it only if it is still unsaved. The bump
+        // drops the answer of a read of the file just left that is still on the wire.
+        heldDraftsRef.current.delete(relativePath)
+        readSeqRef.current += 1
+        setState(held)
+        return
+      }
+    }
     void load()
   }, [load])
 
