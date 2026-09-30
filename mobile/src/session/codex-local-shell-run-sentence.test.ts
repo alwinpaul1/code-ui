@@ -93,7 +93,8 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
     // projects to (structured-agent-session-tool-call-block.ts).
     ['apply_patch', 'edit'],
     ['Diff', 'edit'],
-    ['web_search', 'web'],
+    // A search, not a page fetch (tool-run-sentence-web-search.test.ts).
+    ['web_search', 'webSearch'],
     ['spawn_agent', 'agent'],
     // A plan reads the way Claude's TodoWrite does: the run draws its checklist.
     ['update_plan', 'other'],
@@ -156,7 +157,7 @@ describe('every Codex tool name the vendored code knows reads as what it did', (
   it('also takes the other names the vendored vocabulary knows', () => {
     // Orca's edit set and web-search row word, which the phone's own lists missed.
     expect(toolCallKind('str_replace')).toBe('edit')
-    expect(toolCallKind('web search')).toBe('web')
+    expect(toolCallKind('web search')).toBe('webSearch')
   })
 
   it("keeps Claude's own tools where they were", () => {

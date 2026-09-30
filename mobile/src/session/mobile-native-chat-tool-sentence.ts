@@ -19,16 +19,18 @@ export { toolCallKind }
  * `write_stdin` all read as commands — a `write_stdin` that only polls a
  * command already counted folding into it (codex-stdin-poll.ts).
  */
+/** `#` in `many` is the count. */
 const NOUN: Record<Kind, { verb: string; one: string; many: string }> = {
-  command: { verb: 'ran', one: 'a command', many: 'commands' },
-  read: { verb: 'read', one: 'a file', many: 'files' },
-  edit: { verb: 'edited', one: 'a file', many: 'files' },
-  search: { verb: 'searched', one: 'once', many: 'times' },
-  agent: { verb: 'ran', one: 'an agent', many: 'agents' },
-  web: { verb: 'fetched', one: 'a page', many: 'pages' },
-  skill: { verb: 'ran', one: 'skill', many: 'skills' },
-  message: { verb: 'messaged', one: 'an agent', many: 'agents' },
-  other: { verb: 'used', one: 'a tool', many: 'tools' }
+  command: { verb: 'ran', one: 'a command', many: '# commands' },
+  read: { verb: 'read', one: 'a file', many: '# files' },
+  edit: { verb: 'edited', one: 'a file', many: '# files' },
+  search: { verb: 'searched', one: 'once', many: '# times' },
+  agent: { verb: 'ran', one: 'an agent', many: '# agents' },
+  web: { verb: 'fetched', one: 'a page', many: '# pages' },
+  webSearch: { verb: 'searched', one: 'the web', many: 'the web # times' },
+  skill: { verb: 'ran', one: 'skill', many: '# skills' },
+  message: { verb: 'messaged', one: 'an agent', many: '# agents' },
+  other: { verb: 'used', one: 'a tool', many: '# tools' }
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -291,7 +293,7 @@ function buildSentence(blocks: readonly NativeChatBlock[]): {
     // Edits count the files they changed, as the chip beside the row does;
     // every other kind counts its calls.
     const count = entry.kind === 'edit' ? editedFileCount(entry.pairs) : entry.pairs.length
-    const amount = count === 1 ? (label ?? noun.one) : `${count} ${noun.many}`
+    const amount = count === 1 ? (label ?? noun.one) : noun.many.replace('#', String(count))
     push([{ text: `${noun.verb} ${amount}${failed}` }], entry.failed)
   }
   if (spans.length === 0) {

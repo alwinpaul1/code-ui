@@ -13,12 +13,15 @@ export type ToolRunKind =
   | 'search'
   | 'agent'
   | 'web'
+  | 'webSearch'
   | 'skill'
   | 'message'
   | 'other'
 
 /** What Orca's own tool vocabulary (vendored `nativeChatToolCategory`) says a
- *  name did, for a name the phone's lists below do not know. */
+ *  name did, for a name the phone's lists below do not know. Its `webSearch`
+ *  glyph covers WebFetch too, so a name it files there is read by its word
+ *  (`webKind`). */
 const KIND_BY_CATEGORY: Record<NativeChatToolCategory, ToolRunKind> = {
   read: 'read',
   search: 'search',
@@ -58,7 +61,12 @@ export function toolCallKind(name: string): ToolRunKind {
   if (/^(agent|task|subagent|spawn_agent)$/.test(key)) {
     return 'agent'
   }
-  if (/^(webfetch|websearch|fetch|browse|web_search|web_fetch)$/.test(key)) {
+  // A search fetched no page: one noun for both read a lone WebSearch as
+  // "Fetched a page" (review, 2026-09-30).
+  if (/^(websearch|web_search|web search)$/.test(key)) {
+    return 'webSearch'
+  }
+  if (/^(webfetch|fetch|browse|web_fetch)$/.test(key)) {
     return 'web'
   }
   if (/^skill$/.test(key)) {
@@ -72,5 +80,12 @@ export function toolCallKind(name: string): ToolRunKind {
   // and its `Diff` file changes "Used a tool" while the vendored code already
   // named them a shell call and a file change (review, 2026-09-30).
   const category = nativeChatToolCategory(key)
+  if (category === 'webSearch') {
+    return webKind(key)
+  }
   return category ? KIND_BY_CATEGORY[category] : 'other'
+}
+
+function webKind(key: string): ToolRunKind {
+  return /search/.test(key) ? 'webSearch' : 'web'
 }
