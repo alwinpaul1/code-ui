@@ -26,7 +26,11 @@ export function formatLimitWindowName(minutes: number | null): string {
   return hours <= 1 ? 'Hourly' : `${hours}-hour`
 }
 
-/** "resets in 3h 20m", or nothing when the agent did not say. */
+/** "resets in 3h 20m", or nothing when the agent did not say. The time left
+ *  rounds up to whole minutes, as the Accounts countdown does
+ *  (`formatResetCountdown`), so 30 s left reads "resets in 1m" and 59 m 30 s
+ *  "resets in 1h 0m": flooring read any last minute as "resets in 0m", as if
+ *  the limit had already reset (review, 2026-09-30). */
 export function formatLimitReset(resetsAt: number | null, now: number): string | null {
   if (resetsAt === null) {
     return null
@@ -35,11 +39,11 @@ export function formatLimitReset(resetsAt: number | null, now: number): string |
   if (seconds <= 0) {
     return 'resetting now'
   }
-  const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor((seconds % 3600) / 60)
+  const totalMinutes = Math.ceil(seconds / 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
   if (hours >= 24) {
-    const days = Math.floor(hours / 24)
-    return `resets in ${days}d ${hours % 24}h`
+    return `resets in ${Math.floor(hours / 24)}d ${hours % 24}h`
   }
   return hours > 0 ? `resets in ${hours}h ${minutes}m` : `resets in ${minutes}m`
 }

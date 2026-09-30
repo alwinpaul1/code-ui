@@ -20,7 +20,7 @@ import type { ProviderRateLimits } from '../components/accounts-snapshot'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { hudLimitsFromRateLimits } from './hud-rate-limits'
-import { MobileContextWindowSheet } from './MobileContextWindowSheet'
+import { formatLimitReset, MobileContextWindowSheet } from './MobileContextWindowSheet'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
 let renderer: ReactTestRenderer | null = null
@@ -94,6 +94,14 @@ describe.each([
     expect(flat(figure.props.style).color).toBe(palette.textSecondary)
   })
 
+  it('says "resets in 1m", not "resets in 0m", for a reset half a minute away', () => {
+    vi.setSystemTime(at('12:59') + 30_000)
+    act(() => {
+      renderer = create(sheet(scheme, true, session(epochSeconds('13:00'))))
+    })
+    expect(sessionFigure(renderer!.root)).toBe('50% · resets in 1m')
+  })
+
   it('says "resetting now" for a reset that passed while the chat sat open', () => {
     vi.setSystemTime(at('10:00'))
     act(() => {
@@ -114,6 +122,45 @@ describe.each([
     vi.setSystemTime(at('12:30'))
     act(() => renderer!.update(sheet(scheme, true, session(epochSeconds('13:00')))))
     expect(sessionFigure(renderer!.root)).toBe('50% · resets in 30m')
+  })
+})
+
+// The countdown floored the seconds left into hours and minutes, so a limit
+// resetting in under a minute read "resets in 0m", as if it had already reset
+// (review, 2026-09-30). It rounds up to whole minutes now, as the Accounts
+// countdown does (formatResetCountdown in usage-window-summary.ts), in this
+// sheet's own words.
+describe('the reset countdown on a usage row', () => {
+  const NOW = at('12:00')
+  const inSeconds = (seconds: number): number => Math.floor(NOW / 1000) + seconds
+
+  it.each([
+    [1, 'resets in 1m'],
+    [30, 'resets in 1m'],
+    [59, 'resets in 1m'],
+    [60, 'resets in 1m'],
+    [61, 'resets in 2m'],
+    [3_570, 'resets in 1h 0m'],
+    [3_599, 'resets in 1h 0m'],
+    [3_600, 'resets in 1h 0m'],
+    [3_601, 'resets in 1h 1m'],
+    [86_370, 'resets in 1d 0h'],
+    [86_399, 'resets in 1d 0h'],
+    [86_400 + 3 * 3_600 + 1, 'resets in 1d 3h'],
+    [0, 'resetting now'],
+    [-45, 'resetting now']
+  ])('reads %i s left as "%s"', (seconds, expected) => {
+    expect(formatLimitReset(inSeconds(seconds), NOW)).toBe(expected)
+  })
+
+  it('never reads "resets in 0m" while any time is left', () => {
+    for (let seconds = 1; seconds <= 180; seconds += 1) {
+      expect(formatLimitReset(inSeconds(seconds), NOW)).not.toBe('resets in 0m')
+    }
+  })
+
+  it('says nothing when the agent gave no reset time', () => {
+    expect(formatLimitReset(null, NOW)).toBeNull()
   })
 })
 
