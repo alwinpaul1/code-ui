@@ -249,6 +249,21 @@ describe('parseInline', () => {
   it('leaves unbalanced markers as literal text', () => {
     expect(parseInline('a * b')).toEqual([{ kind: 'text', text: 'a * b' }])
   })
+
+  // The loop stopped after 5,000 tokens and nothing after it kept the rest,
+  // so a long generated comment lost its end: 9,999 of 12,007 characters drew
+  // (review sweep, 2026-09-30).
+  it('keeps the end of a paragraph that holds thousands of spans', () => {
+    const text = '**b** '.repeat(6000) + 'THE END'
+    const tokens = parseInline(text)
+    expect(tokens.filter((token) => token.kind === 'bold')).toHaveLength(6000)
+    expect(tokens.map((token) => token.text).join('')).toBe('b '.repeat(6000) + 'THE END')
+  })
+
+  it('reads an empty string and a one-character string', () => {
+    expect(parseInline('')).toEqual([])
+    expect(parseInline('*')).toEqual([{ kind: 'text', text: '*' }])
+  })
 })
 
 // Same defect as the chat renderer's, swept the same day (2026-09-19): a

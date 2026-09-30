@@ -288,10 +288,14 @@ export function parseInline(text: string): InlineToken[] {
   const plain = stripHtmlTags(text)
   const matcher = createMarkdownInlineMatcher(plain, INLINE, false, true)
   let cursor = 0
-  let guard = 0
-  while (cursor < plain.length && guard < 5000) {
-    guard += 1
-    const m = matcher.exec()
+  // Every pass moves matcher.lastIndex forward, so the text's length bounds
+  // the passes; the guard is a backstop, not a budget. A flat 5,000 was one,
+  // and nothing after the loop kept the rest, so a long generated comment
+  // lost its end (review sweep, 2026-09-30).
+  let guard = plain.length + 1
+  while (cursor < plain.length) {
+    guard -= 1
+    const m = guard < 0 ? null : matcher.exec()
     if (!m || m.index === undefined) {
       tokens.push({ kind: 'text', text: plain.slice(cursor) })
       break
