@@ -37,7 +37,10 @@ export type MarkdownBlock =
 // Its closing run of '#' comes off in markdownHeadingText.
 const HEADING = /^(#{1,6})\s+(.*)$/
 const QUOTE = /^>\s?(.*)$/
-const HR = /^(?:---+|\*\*\*+|___+)\s*$/
+// One mark three or more times, spaces between allowed, at most three columns
+// in (CommonMark 4.1), as THEMATIC_BREAK in markdown-code-ranges.ts reads it.
+// `---+` alone let the list rule take `* * *` for a bullet reading "* *".
+const HR = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
 const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 // A top-level <details>…</details> or <blockquote>…</blockquote> region.

@@ -77,6 +77,26 @@ describe('parseMarkdownBlocks', () => {
     expect(open).toEqual([{ kind: 'code', text: 'unterminated', lang: '' }])
   })
 
+  // Swept 2026-09-30 with the notification reader, which drew `* * *` as
+  // "• * *": here the list rule took `* * *` and `- - -` for a bullet reading
+  // "* *", and `_ _ _` and an indented ` ---` stayed text. CommonMark 4.1: one
+  // character three or more times, spaces between allowed, at most three in.
+  it('draws a spaced or indented rule as a rule, not a bullet', () => {
+    for (const rule of ['* * *', '- - -', '_ _ _', ' ---', '   ***', '-\t-\t-', '___']) {
+      expect(parseMarkdownBlocks(`a\n\n${rule}\n\nb`), rule).toEqual([
+        { kind: 'paragraph', text: 'a' },
+        { kind: 'hr' },
+        { kind: 'paragraph', text: 'b' }
+      ])
+    }
+  })
+
+  it('keeps a bullet that holds marks, and a mixed or deep run, as it was', () => {
+    expect(parseMarkdownBlocks('- - item')).toEqual([{ kind: 'list', ordered: false, items: ['- item'] }])
+    expect(parseMarkdownBlocks('- * -')).toEqual([{ kind: 'list', ordered: false, items: ['* -'] }])
+    expect(parseMarkdownBlocks('    ---').some((block) => block.kind === 'hr')).toBe(false)
+  })
+
   // A closing run of '#' set apart by a space is markup (CommonMark 4.2);
   // one touching the last word is the word's. Swept 2026-09-30 with the
   // release-notes heading, which had the opposite half wrong.
