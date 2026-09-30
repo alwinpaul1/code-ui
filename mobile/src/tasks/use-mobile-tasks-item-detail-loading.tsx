@@ -27,6 +27,7 @@ export function useMobileTasksItemDetailLoading(
     actionItem,
     client,
     detailError,
+    detailPayload,
     detailRefreshSeq,
     setActionItem,
     setDetailError,
@@ -178,6 +179,17 @@ export function useMobileTasksItemDetailLoading(
         throw new Error('Details not found')
       }
       if (!stale) {
+        // A refused comment read still shows the issue, but as a list it could not read, not as
+        // "No comments." (review, 2026-09-30). The flag is set only then, so a read list keeps the
+        // payload it always had.
+        if (!accepted.accepted) {
+          console.warn('[tasks] the Linear comment list could not be read', {
+            issueId: actionItem.source.id,
+            ...(commentsReply.ok
+              ? { cause: 'no list in the reply' }
+              : { code: commentsReply.error.code, cause: commentsReply.error.message })
+          })
+        }
         setDetailPayload({
           provider: 'linear',
           description: issue.description ?? '',
@@ -185,7 +197,8 @@ export function useMobileTasksItemDetailLoading(
           labels: issue.labels ?? [],
           assignee: issue.assignee?.displayName,
           project: issue.project,
-          children: issue.subIssues ?? []
+          children: issue.subIssues ?? [],
+          ...(accepted.accepted ? {} : { commentsFailed: true as const })
         })
         setActionItem((current) => {
           if (current?.provider !== 'linear' || current.source.id !== issue.id) {
@@ -221,10 +234,13 @@ export function useMobileTasksItemDetailLoading(
     }
   }, [actionItem, client, detailRefreshSeq, tasksSupported])
 
-  // `detailError` is written by this read alone (the item's mutations report through `error`).
+  // `detailError` is written by this read alone (the item's mutations report through `error`). A
+  // Linear comment list the desktop refused is read again with the rest of the detail.
   useTaskReadAgainAfterReconnect({
     key: actionItem ? `${actionItem.provider}:${actionItem.source.id}` : null,
-    failed: detailError !== '',
+    failed:
+      detailError !== '' ||
+      (detailPayload?.provider === 'linear' && detailPayload.commentsFailed === true),
     lastConnectedAt,
     readAgain: () => setDetailRefreshSeq((current) => current + 1)
   })

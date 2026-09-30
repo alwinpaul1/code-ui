@@ -397,6 +397,87 @@ describe('an item detail sheet whose read failed, once the host reconnects', () 
   })
 })
 
+describe('a Linear issue whose comment list the desktop refused', () => {
+  const REFUSED = { ok: false, error: { code: 'internal', message: 'boom' } }
+  const COMMENT = { id: 'c-1', author: 'ada', body: 'first', createdAt: '2026-09-30T00:00:00Z' }
+
+  it('says the comment read failed instead of handing the sheet an empty list', async () => {
+    script('linear.getIssue', { ok: true, result: LINEAR_ISSUE })
+    script('linear.issueComments', REFUSED)
+    const sheet = await mountItemDetail(LINEAR_ITEM, 1)
+    expect(sheet.held.state.detailError).toBe('')
+    expect(sheet.held.state.detailPayload).toMatchObject({
+      provider: 'linear',
+      comments: [],
+      commentsFailed: true
+    })
+    // The one line it leaves names the read and the host's reason.
+    expect(console.warn).toHaveBeenCalledWith(
+      '[tasks] the Linear comment list could not be read',
+      expect.objectContaining({ issueId: 'issue-1', code: 'internal', cause: 'boom' })
+    )
+  })
+
+  it('keeps an issue with no comments at none, with no failure on it', async () => {
+    script('linear.getIssue', { ok: true, result: LINEAR_ISSUE }, { ok: true, result: LINEAR_ISSUE })
+    script('linear.issueComments', { ok: true, result: [] }, { ok: true, result: null })
+    const sheet = await mountItemDetail(LINEAR_ITEM, 1)
+    expect(sheet.held.state.detailPayload).toEqual(
+      expect.objectContaining({ provider: 'linear', comments: [] })
+    )
+    expect(sheet.held.state.detailPayload).not.toHaveProperty('commentsFailed')
+    // A host that answers null means "no comments" (task-item-detail-reply-schema.ts), not a failure.
+    await sheet.edit('detailRefreshSeq', 1)
+    await settle()
+    expect(reads('linear.issueComments')).toBe(2)
+    expect(sheet.held.state.detailPayload).toEqual(
+      expect.objectContaining({ provider: 'linear', comments: [] })
+    )
+    expect(sheet.held.state.detailPayload).not.toHaveProperty('commentsFailed')
+    expect(console.warn).not.toHaveBeenCalled()
+  })
+
+  it('fails the whole sheet when the comment request itself is rejected, as it did before', async () => {
+    // The issue and its comments are one Promise.all, so a rejected leg rejects the group (the
+    // `order` mutant and the linear-detail-barrier goldens pin that). The sheet then says so, and
+    // reads it all again on the next connection.
+    script('linear.getIssue', { ok: true, result: LINEAR_ISSUE }, { ok: true, result: LINEAR_ISSUE })
+    script('linear.issueComments', { throw: 'relay down' }, { ok: true, result: [COMMENT] })
+    const sheet = await mountItemDetail(LINEAR_ITEM, 1)
+    expect(sheet.held.state.detailError).toBe('relay down')
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await sheet.connectedAt(2)
+    expect(reads('linear.issueComments')).toBe(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [COMMENT] })
+  })
+
+  it('reads the comments again once the host reconnects, and once only', async () => {
+    script('linear.getIssue', { ok: true, result: LINEAR_ISSUE }, { ok: true, result: LINEAR_ISSUE })
+    script('linear.issueComments', REFUSED, { ok: true, result: [COMMENT] })
+    const sheet = await mountItemDetail(LINEAR_ITEM, 1)
+    await sheet.connectedAt(1)
+    expect(reads('linear.issueComments')).toBe(1)
+
+    await sheet.connectedAt(2)
+    await sheet.connectedAt(3)
+    expect(reads('linear.issueComments')).toBe(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [COMMENT] })
+    expect(sheet.held.state.detailPayload).not.toHaveProperty('commentsFailed')
+  })
+
+  it('reads the comments again on Retry, which asks for the detail again', async () => {
+    script('linear.getIssue', { ok: true, result: LINEAR_ISSUE }, { ok: true, result: LINEAR_ISSUE })
+    script('linear.issueComments', REFUSED, { ok: true, result: [COMMENT] })
+    const sheet = await mountItemDetail(LINEAR_ITEM, 1)
+    // Retry bumps the detail's refresh sequence, the way the refresh icon does.
+    await sheet.edit('detailRefreshSeq', 1)
+    await settle()
+    expect(reads('linear.issueComments')).toBe(2)
+    expect(sheet.held.state.detailPayload).toMatchObject({ comments: [COMMENT] })
+  })
+})
+
 describe("a board row's detail whose read failed, once the host reconnects", () => {
   const DETAILS = { ok: true, result: { ok: true, details: { body: 'row body' } } }
 

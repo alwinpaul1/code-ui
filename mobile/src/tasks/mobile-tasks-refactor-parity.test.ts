@@ -98,7 +98,21 @@ const hash = (parts: string[] | string): string =>
 // 3,278 -> 3,282: two `''` and two `'github'` literals net, from the split and the pickers' error
 // tests. Declarations, the render tree and the StyleSheets do not move, nor do the RPC recording
 // goldens. mobile-tasks-detail-after-reconnect.test.tsx guards the behaviour.
-const PROVIDER_RPC_SCREEN_HOOKS = 'b42cfe75e0e40b80abf527f1a4d404fc6e7f2f24fded37bf7223b63df25bfd4e'
+// 2026-09-30 (fix round 3, finding 2): a Linear issue whose comment read the desktop refused drew
+// "No comments." under a "No comments yet" count. The detail payload now carries `commentsFailed`,
+// the Discussion section says "Couldn't load comments" with a Retry and no count, and the
+// reconnect re-read counts the flag as a failed read. The section moved whole out of
+// mobile-tasks-item-detail-content.tsx into mobile-tasks-item-discussion.tsx, and the render
+// reader flattens it back in place. Checked by dumping every reader's output before and after and
+// diffing: hooks and statements keep their counts (363, 431) and move for the detail effect's
+// body (the warning and the flag) and the re-read's predicate; `DetailPayload` gains
+// `commentsFailed?: true` (200 declarations still); `semantics` 3,282 -> 3,292 (the error branch's
+// `jsx:TasksButton`, `jsx:View:style` and two `jsx:Text:style` signatures, the literals "Retry
+// loading comments", "button", the warning's "[tasks] the Linear comment list could not be read"
+// and "no list in the reply", and two `'linear'` comparisons); the render tree 35,399 -> 35,514,
+// additions only (that branch and the count's condition, 115 tokens). The StyleSheets do not move.
+// mobile-tasks-item-discussion.test.tsx guards the section in both themes.
+const PROVIDER_RPC_SCREEN_HOOKS = 'c82438aaded832f51ac684d135ad513fca4cac132b3ffeb2b2348b2fb4b34fc8'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -139,7 +153,8 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // 2026-09-27 (theme pass 2): 418 -> 420; see the note above PROVIDER_RPC_SCREEN_HOOKS.
 // 2026-09-30 (b8 finding 6): one statement swapped, 420 still; see the note above the hooks pin.
 // 2026-09-30 (fix round 3, finding 1): 420 -> 431 (note above the hooks pin).
-const PROVIDER_RPC_STATEMENTS = 'ac47a9add15ddabd28eb9dc81bcd273c5879ec2c72368986a8636e571657bde2'
+// 2026-09-30 (fix round 3, finding 2): 431 still (note above the hooks pin).
+const PROVIDER_RPC_STATEMENTS = 'dc23416b8e52df9bb82505c819022d485a2082378488c5bddae0bc48b06168a5'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -153,7 +168,9 @@ const PROVIDER_RPC_STATEMENTS = 'ac47a9add15ddabd28eb9dc81bcd273c5879ec2c7236898
 // Later the same day, the Tasks surface onto the live theme: 194 -> 200 (note above the hooks pin).
 // 2026-09-30 (Orca #22279, the v1.4.217 re-vendor): `reconcileTeamSelection`'s `saved` becomes `unknown`,
 // upstream's own change to this declaration and the only one. 200 declarations still.
-const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205eed3195cb9c08bf1ad49a'
+// 2026-09-30 (fix round 3, finding 2): `DetailPayload`'s Linear arm gains `commentsFailed?: true`.
+// 200 declarations still.
+const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb0bd5bc6a15cbe43f900ab'
 // 2026-09-19: the two Platform.select monospace stacks in the tasks styles
 // became typography.monoFamily (the bundled code face — 'monospace' is not
 // monospace on a Samsung), and their Platform imports went with them: 6 lines.
@@ -169,13 +186,15 @@ const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205
 // Later the same day: 3,271 -> 3,275 -> 3,276 (notes above the hooks pin).
 // 2026-09-30 (b8 finding 6): 3,276 -> 3,278 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 1): 3,278 -> 3,282 (note above the hooks pin).
-const A11Y_BACK_SEMANTICS = '36ed9a88a1e0ce0f591963cbeec1d4efc66f6d30e650b4458e37c19370707c26'
+// 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292 (note above the hooks pin).
+const A11Y_BACK_SEMANTICS = '080f71200ef8070dbfa1831dd1d025981eb6ce797ea380b823d69e7d278cd507'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
 // 2026-09-27 (theme pass 2): 35,299 -> 35,306 (note above the hooks pin).
 // 2026-09-30 (b8 finding 6): 35,306 -> 35,399 (note above the hooks pin).
-const A11Y_BACK_RENDER_TREE = 'dfd3314b632d2cf878136d8cbd49081554b1f2099d6c96007abfde1a4cbf11c7'
+// 2026-09-30 (fix round 3, finding 2): 35,399 -> 35,514 (note above the hooks pin).
+const A11Y_BACK_RENDER_TREE = 'dd5772f028ce846ee2341b061f365be457e579bf2308dd42d4dd0eb7448af87c'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -202,7 +221,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_282)
+    expect(semantics.split('\n')).toHaveLength(3_292)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
@@ -220,7 +239,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_399)
+    expect(tokens).toHaveLength(35_514)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 
