@@ -88,15 +88,17 @@ export function useMobilePrBranchContext(input: {
           }))
         }
       })
-      // Why: a rejected repo probe should only hide the PR entry, not block
-      // branch context that can still power the panel's loading/error state.
-      .catch(() => {
+      // Why: a failed repo probe is not an answer. Marking it loaded-and-not-GitHub closed a docked
+      // PR panel on a GitHub repo over one relay timeout (the session reads that pair to close it);
+      // repoLoaded stays false, and the next connection probes again (this effect keys on `ready`).
+      // Branch context still loads, so the panel's own loading/error state keeps working.
+      .catch((error: unknown) => {
         if (!cancelled) {
-          setContext((prev) => ({
-            ...prev,
-            isGithubRepo: false,
-            repoLoaded: true
-          }))
+          console.warn(
+            `[pr-branch-context] could not check whether ${worktreeId} has a GitHub remote: ${
+              error instanceof Error ? error.message || 'no reason given' : String(error)
+            }`
+          )
         }
       })
 
@@ -143,17 +145,29 @@ export async function loadMobilePrBranchContext(
 ): Promise<MobilePrBranchContext> {
   const [branch, repo] = await Promise.all([
     loadMobilePrBranchIdentity(client, worktreeId),
-    loadMobilePrRepoContext(client, worktreeId)
+    // A failed probe leaves the repo unknown (repoLoaded false), never "not GitHub".
+    loadMobilePrRepoContext(client, worktreeId).catch(() => null)
   ])
-  return { ...branch, ...repo, repoLoaded: true, loaded: true }
+  return repo
+    ? { ...branch, ...repo, repoLoaded: true, loaded: true }
+    : { ...branch, isGithubRepo: false, repoLoaded: false, loaded: true }
 }
 
+/**
+ * Whether the repo has a GitHub remote. Only the host's own answer resolves: a probe that failed
+ * (a relay timeout, a refusal, a reply that would not parse) REJECTS with its cause, because
+ * `github.repoSlug` settles every one of those into `{ ok: false }`, and reading that as
+ * `isGithubRepo: false` claimed a GitHub repo had no review panel.
+ */
 export async function loadMobilePrRepoContext(
   client: RpcClient,
   worktreeId: string
 ): Promise<Pick<MobilePrBranchContext, 'isGithubRepo'>> {
   const slugOutcome = await fetchGithubRepoSlug(client, worktreeId)
-  return { isGithubRepo: slugOutcome.ok && slugOutcome.result !== null }
+  if (!slugOutcome.ok) {
+    throw new Error(slugOutcome.error)
+  }
+  return { isGithubRepo: slugOutcome.result !== null }
 }
 
 export async function loadMobilePrBranchIdentity(
