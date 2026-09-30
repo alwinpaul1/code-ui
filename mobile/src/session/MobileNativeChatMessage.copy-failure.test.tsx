@@ -222,7 +222,8 @@ describe('copying a message the clipboard takes', () => {
   it('writes nothing and claims nothing for a prompt with no text', async () => {
     vi.mocked(Clipboard.setStringAsync).mockResolvedValue(true)
     const tree = render({ ...prompt, blocks: [] })
-    await hold(tree)
+    // No hold is offered at all (MobileNativeChatMessage.copy-control.test.tsx).
+    expect(tree.root.findByProps({ accessibilityLabel: 'Sent prompt' }).props.onLongPress).toBeUndefined()
     expect(Clipboard.setStringAsync).not.toHaveBeenCalled()
     expect(triggerSuccess).not.toHaveBeenCalled()
     expect(triggerError).not.toHaveBeenCalled()

@@ -119,10 +119,15 @@ export async function typeMobileNativeChatCommandWithOutcome(args: {
   deadline?: number
 }): Promise<MobileNativeChatSendOutcome> {
   let writeIndex = 0
+  // typeAgentTuiCommand writes the clear, then one key per CODE POINT
+  // (`...command`), then Enter. `.length` counts UTF-16 units, so an emoji in
+  // the command put the Enter past it and no write carried the launch draft
+  // (review, 2026-09-30).
+  const submitIndex = Array.from(args.command).length + 1
   return typeAgentTuiCommand({
     command: args.command,
     write: (key) => {
-      const isSubmit = writeIndex === args.command.length + 1
+      const isSubmit = writeIndex === submitIndex
       writeIndex += 1
       return sendMobileNativeChatMessageWithOutcome({
         client: args.client,

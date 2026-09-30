@@ -4,7 +4,34 @@ import { BottomDrawer } from '../components/BottomDrawer'
 import { Txt } from '../ui/Txt'
 import { useTheme } from '../theme/theme-context'
 import type { LucideIcon } from 'lucide-react-native'
-import { permissionModeLabel, type TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import {
+  CODEX_AGENT_MODES,
+  permissionModeLabel,
+  type TerminalAgentMode,
+  type TerminalPermissionMode
+} from './mobile-terminal-hud-parse'
+
+/** The mode row's title, caption and label. A Codex tab (agentMode set) names
+ *  its own Plan/Default mode: Codex has no permission mode, and its footer
+ *  parse fills one with 'default', which read "Permission: Manual" over a
+ *  session in Plan mode (review, 2026-09-30). With no mode read the caption
+ *  says so, never a mode name: this said 'Auto', a real and riskier mode,
+ *  whenever the mode was null (review, 2026-09-30). The row still opens the
+ *  sheet to pick one. */
+function modeRowText(
+  agentMode: TerminalAgentMode | null,
+  permissionMode: TerminalPermissionMode | null
+): { title: string; caption: string; label: string } {
+  if (agentMode) {
+    const caption = CODEX_AGENT_MODES.find((mode) => mode.id === agentMode)?.label ?? 'Not known yet'
+    return { title: 'Mode', caption, label: 'Mode' }
+  }
+  return {
+    title: 'Permission',
+    caption: permissionMode ? permissionModeLabel(permissionMode) : 'Not known yet',
+    label: 'Permission mode'
+  }
+}
 
 /** The Claude-app "Add context" sheet: one horizontal row of source cards
  *  (camera, photos, files) with no descriptions, over a permission row.
@@ -18,6 +45,7 @@ export function MobileNativeChatAttachSheet({
   onAttachImage,
   onAttachFile,
   permissionMode,
+  agentMode = null,
   onOpenPermission
 }: {
   visible: boolean
@@ -26,9 +54,12 @@ export function MobileNativeChatAttachSheet({
   onAttachImage?: () => void
   onAttachFile?: () => void
   permissionMode?: TerminalPermissionMode | null
+  /** Set only on a Codex tab. */
+  agentMode?: TerminalAgentMode | null
   onOpenPermission?: () => void
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
+  const modeRow = modeRowText(agentMode, permissionMode ?? null)
   const cards: { key: string; label: string; icon: LucideIcon; onPress?: () => void }[] = [
     { key: 'camera', label: 'Camera', icon: Camera, onPress: onCaptureImage },
     { key: 'photos', label: 'Photos', icon: ImageIcon, onPress: onAttachImage },
@@ -82,7 +113,7 @@ export function MobileNativeChatAttachSheet({
       {onOpenPermission ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Permission mode"
+          accessibilityLabel={modeRow.label}
           onPress={run(onOpenPermission)}
           style={({ pressed }) => ({
             flexDirection: 'row',
@@ -109,13 +140,10 @@ export function MobileNativeChatAttachSheet({
           </View>
           <View style={{ flex: 1 }}>
             <Txt variant="label" weight="semibold">
-              Permission
+              {modeRow.title}
             </Txt>
-            {/* No footer read: say so, never a mode name. This said 'Auto', a
-                real and riskier mode, whenever the mode was null (review,
-                2026-09-30). The row still opens the sheet to pick one. */}
             <Txt variant="caption" tone="secondary">
-              {permissionMode ? permissionModeLabel(permissionMode) : 'Not known yet'}
+              {modeRow.caption}
             </Txt>
           </View>
           <ChevronRight size={20} color={colors.textMuted} strokeWidth={2} />

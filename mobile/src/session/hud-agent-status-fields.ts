@@ -50,18 +50,29 @@ export const NO_SCREEN_HUD_OBSERVATION: Readonly<TerminalHudObservation> = Objec
   permissionModeSeen: null
 })
 
-/** "649.5k", "1.0M": the label the sheet prints beside the ring. Shared with
- *  the beacon merge so one formatter serves every source. */
+/** "12.3k", "649k", "1.0M", "12M": the label the sheet prints beside the
+ *  ring. Shared with the beacon merge so one formatter serves every source.
+ *  It rounds first and names the unit of what it rounded to: choosing the
+ *  unit first drew 999,600 tokens as "1000k", 99,960 as "100.0k" and
+ *  9,960,000 as "10.0M" (review, 2026-09-30). Rounded in whole tenths, so no
+ *  binary fraction decides a half (9.95.toFixed(1) is "9.9"). */
 export function shortTokenLabel(tokens: number): string {
-  if (tokens >= 1_000_000) {
-    const m = tokens / 1_000_000
-    return `${m >= 10 ? Math.round(m) : m.toFixed(1)}M`
+  if (!(tokens >= 1000)) {
+    return String(tokens)
   }
-  if (tokens >= 1000) {
-    const k = tokens / 1000
-    return `${k >= 100 ? Math.round(k) : k.toFixed(1)}k`
+  const tenthsK = Math.round(tokens / 100)
+  if (tenthsK < 1000) {
+    return `${(tenthsK / 10).toFixed(1)}k`
   }
-  return String(tokens)
+  const wholeK = Math.round(tokens / 1000)
+  if (wholeK < 1000) {
+    return `${wholeK}k`
+  }
+  const tenthsM = Math.round(tokens / 100_000)
+  if (tenthsM < 100) {
+    return `${(tenthsM / 10).toFixed(1)}M`
+  }
+  return `${Math.round(tokens / 1_000_000)}M`
 }
 
 /**

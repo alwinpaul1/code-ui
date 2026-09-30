@@ -3,7 +3,7 @@ import { Keyboard, Pressable, type ViewStyle } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { MobileNativeChatAttachSheet } from './MobileNativeChatAttachSheet'
-import type { TerminalPermissionMode } from './mobile-terminal-hud-parse'
+import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 
 /** The composer's + and the Add context sheet it opens.
  *
@@ -20,6 +20,7 @@ export function MobileNativeChatAttachButton({
   onAttachImage,
   onAttachFile,
   permissionMode,
+  agentMode = null,
   onOpenPermission
 }: {
   iconButtonStyle: ViewStyle
@@ -28,7 +29,11 @@ export function MobileNativeChatAttachButton({
   onAttachImage: () => void
   onAttachFile?: () => void
   permissionMode: TerminalPermissionMode | null
-  /** Opens the permission-mode sheet from the attach sheet's permission row. */
+  /** Codex's Plan/Default mode, set only on a Codex tab; the attach sheet's
+   *  row then names it instead of a permission mode Codex does not have. */
+  agentMode?: TerminalAgentMode | null
+  /** Opens the permission-mode sheet (the agent-mode sheet on Codex) from the
+   *  attach sheet's permission row. */
   onOpenPermission?: () => void
 }): React.JSX.Element {
   const { colors } = useTheme()
@@ -77,6 +82,7 @@ export function MobileNativeChatAttachButton({
           onAttachImage={onAttachImage}
           onAttachFile={onAttachFile}
           permissionMode={permissionMode}
+          agentMode={agentMode}
           onOpenPermission={onOpenPermission}
         />
       ) : null}
