@@ -105,11 +105,16 @@ function ContextWindowSheetBody({ context }: { context: TerminalHudContextWindow
           {limits.map((window, index) => {
             const used = Math.max(0, Math.min(100, window.usedPercent))
             const reset = formatLimitReset(window.resetsAt, now)
+            const name = window.name ?? formatLimitWindowName(window.windowMinutes)
+            // Not the window length alone: Weekly and Fable are both 10,080
+            // minutes, and two rows with one key can be swapped or dropped on
+            // the next update (review, 2026-09-30). The rows keep a fixed
+            // order (hudLimitsFromRateLimits), so the position is stable.
             return (
-              <View key={`${window.windowMinutes ?? index}`} style={{ gap: space.xs }}>
+              <View key={`${index}:${name}`} style={{ gap: space.xs }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
                   <Txt variant="caption" style={{ flex: 1 }}>
-                    {window.name ?? formatLimitWindowName(window.windowMinutes)}
+                    {name}
                   </Txt>
                   <Txt variant="caption" tone="secondary">
                     {Math.round(used)}%{reset ? ` · ${reset}` : ''}

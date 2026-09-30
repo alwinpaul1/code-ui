@@ -16,8 +16,10 @@ vi.mock('../components/BottomDrawer', () => ({
     visible ? createElement('BottomDrawer', null, children) : null
 }))
 
+import type { ProviderRateLimits } from '../components/accounts-snapshot'
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
+import { hudLimitsFromRateLimits } from './hud-rate-limits'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
@@ -110,5 +112,81 @@ describe.each([
     vi.setSystemTime(at('12:30'))
     act(() => renderer!.update(sheet(scheme, true, session(epochSeconds('13:00')))))
     expect(sessionFigure(renderer!.root)).toBe('50% · resets in 30m')
+  })
+})
+
+// Weekly and Fable are both 10,080-minute windows (hudLimitsFromRateLimits),
+// and the sheet keyed each row by its window length: React logged "Encountered
+// two children with the same key" and, on the next update, could draw one
+// row's percentage under the other or drop a row (review, 2026-09-30). The
+// figures are the ones hud-rate-limits.test.ts pins.
+describe.each([
+  ['light', lightColors],
+  ['dark', darkColors]
+] as ['light' | 'dark', ThemeColors][])('the usage rows in a %s session', (scheme, palette) => {
+  const rateLimits = (weekly: number, fable: number | null): ProviderRateLimits => ({
+    provider: 'claude',
+    session: { usedPercent: 100, windowMinutes: 300, resetsAt: 1_788_960_000_000 },
+    weekly: { usedPercent: weekly, windowMinutes: 10_080, resetsAt: 1_789_300_000_000 },
+    fableWeekly:
+      fable === null
+        ? null
+        : { usedPercent: fable, windowMinutes: 10_080, resetsAt: 1_789_300_000_000 },
+    updatedAt: 1_788_950_000_000,
+    error: null,
+    status: 'ok'
+  })
+  const withLimits = (limits: TerminalHudContextWindow['limits']): TerminalHudContextWindow => ({
+    usedPercent: 26,
+    limits
+  })
+  /** Each drawn usage row as "name percent", in order. */
+  const rows = (root: ReactTestInstance): string[] => {
+    const all = texts(root)
+    return all.flatMap((text, i) =>
+      i > 1 && /^\d+%/.test(text) ? [`${all[i - 1]} ${text.split(' ·')[0]}`] : []
+    )
+  }
+  const draw = (limits: TerminalHudContextWindow['limits']): void => {
+    const element = sheet(scheme, true, withLimits(limits))
+    act(() => {
+      if (renderer) {
+        renderer.update(element)
+      } else {
+        renderer = create(element)
+      }
+    })
+  }
+
+  it('draws the Weekly and Fable rows, each with its own percentage, without a duplicate key', () => {
+    vi.setSystemTime(1_788_950_000_000)
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      draw(hudLimitsFromRateLimits(rateLimits(33, 48)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 33%', 'Fable 48%'])
+      draw(hudLimitsFromRateLimits(rateLimits(34, 50)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 34%', 'Fable 50%'])
+      draw(hudLimitsFromRateLimits(rateLimits(35, null)))
+      expect(rows(renderer!.root)).toEqual(['Session 100%', 'Weekly 35%'])
+      const duplicateKeys = errors.mock.calls
+        .map((call) => call.map(String).join(' '))
+        .filter((line) => line.includes('same key'))
+      expect(duplicateKeys).toEqual([])
+    } finally {
+      errors.mockRestore()
+    }
+    const name = renderer!.root.find(
+      (node) => String(node.type) === 'Text' && node.props.children === 'Weekly'
+    )
+    expect(flat(name.props.style).color).toBe(palette.text)
+  })
+
+  it('draws a one-row list, and no rows for an empty one', () => {
+    vi.setSystemTime(1_788_950_000_000)
+    draw(hudLimitsFromRateLimits(rateLimits(33, 48)).slice(0, 1))
+    expect(rows(renderer!.root)).toEqual(['Session 100%'])
+    draw([])
+    expect(rows(renderer!.root)).toEqual([])
+    expect(texts(renderer!.root)).toEqual(['Context window', '26%'])
   })
 })
