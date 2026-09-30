@@ -99,9 +99,25 @@ function nestedAfterBlank(lines: string[], i: number, levels: Level[]): number |
   return null
 }
 
+// An ATX heading's opening: one to six `#`, then a space, a tab or the end.
+const ATX_HEADING = /^#{1,6}(?:[ \t]|$)/
+
+// Whether an item's line, its own or an indented one under it, is words a
+// lazy line can continue (CommonMark 5.2: a lazy line continues a paragraph).
+// An empty item, a heading and a rule are not: marked and CommonMark both
+// draw the line after the list there. Without this check '- \nlazy' drew one
+// bullet reading " lazy" and '- # H\nlazy' one reading "# H lazy" (review,
+// 2026-10-01). After a task's box the line is words whatever it holds:
+// '- [ ] ***' is a task reading "***".
+function endsInWords(line: string, boxed: boolean): boolean {
+  const text = line.trim()
+  return text !== '' && (boxed || (!ATX_HEADING.test(text) && !HR.test(text)))
+}
+
 // The list opening at `lines[i]`, pushed onto `blocks`; returns the index after it.
-// `lazy` says whether the line at an index, at the margin, is still the words
-// above it (markdown-blocks.ts reads that, as it reads every other block).
+// `lazy` says whether the line at an index, at the margin, opens no block of
+// its own (markdown-blocks.ts reads that, as it reads every other block); it
+// is asked only where the item's last line is words (endsInWords).
 export function parseList(
   lines: string[],
   i: number,
@@ -153,15 +169,18 @@ export function parseList(
     // continuation line, that line became a paragraph at the left margin,
     // and the next item opened a fresh list — so every item was numbered 1.
     // GitHub comment bodies are hard-wrapped by every editor that soft-wraps.
-    // A line at the margin continues it too where it opens no block (`lazy`),
-    // as CommonMark reads it and the chat draws it: '- a\nlazy' is one item.
+    // A line at the margin continues it too where it opens no block (`lazy`)
+    // and the item's last line is words (endsInWords), as CommonMark reads it
+    // and the chat draws it: '- a\nlazy' is one item, '- # H\nlazy' is not.
     const parts = fence ? [] : [item.text.trim()]
+    let words = endsInWords(item.text, item.checked !== undefined)
     i += 1
     while (!fence && i < lines.length) {
       const next = lines[i]!
+      const indented = /^\s/.test(next)
       if (
         !next.trim() ||
-        (!/^\s/.test(next) && !lazy(i)) ||
+        (!indented && !(words && lazy(i))) ||
         ORDERED.test(next) ||
         UNORDERED.test(next)
       ) {
@@ -170,6 +189,7 @@ export function parseList(
       fence = body.fenceOn(next)?.code ?? null
       if (!fence) {
         parts.push(next.trim())
+        words = !indented || endsInWords(next, false)
       }
       i += 1
     }

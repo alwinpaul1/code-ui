@@ -195,7 +195,11 @@ function parseLines(content: string, body: LexedCommentBody): MarkdownBlock[] {
 // a `#`, a `>`, a tag, a fence, a rule, a table's header or an underline,
 // the lines marked (which the desktop reads with) ends an item at. Every line
 // at the margin ended the item until 2026-09-30, and the wrapped words drew as
-// a paragraph after the list.
+// a paragraph after the list. This reads the line alone: the list asks it only
+// under an item that ends in words (endsInWords in markdown-list-blocks.ts),
+// not an empty one, a heading or a rule. The quote asks it after its words
+// (quoteTail), and there a heading or a rule counts as words, as marked reads
+// a quote: '> # h\nbody' keeps body in the quote.
 const LAZY_OPENER =
   /^\s*(?:[-*+]|\d+[.)])(?:\s|$)|^ {0,3}(?:#|>|<[A-Za-z/!?]|`{3}|~{3})|^ {0,3}(?:=+|-+)[ \t]*$/
 
