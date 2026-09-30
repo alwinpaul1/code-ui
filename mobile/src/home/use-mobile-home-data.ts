@@ -50,38 +50,57 @@ export function useMobileHomeData() {
   })
   const allClientsRef = useRef(connections.allClients)
 
+  // Whether the stored snapshot has been read: nothing is saved before it has, and nothing after a
+  // refused read. A snapshot built from live data alone and saved over the stored one erased every
+  // other desktop's cached cards, both after a refused read and when one desktop's live data beat
+  // the read (review, 2026-09-30). It is a render cache, so a launch that cannot read it only
+  // loses its cache for this launch; the stored one stays for the next.
+  const [snapshotRead, setSnapshotRead] = useState<'pending' | 'read' | 'refused'>('pending')
+
   useEffect(() => {
     if (hydratedRef.current) {
       return
     }
     hydratedRef.current = true
     let cancelled = false
-    void loadHomeSnapshot().then((snapshot) => {
-      if (cancelled || !snapshot) {
-        return
-      }
-      setWorktreeInfo((previous) =>
-        Object.keys(previous).length > 0 ? previous : snapshot.worktreeInfo
-      )
-      setAccountsByHost((previous) =>
-        Object.keys(previous).length > 0 ? previous : snapshot.accountsByHost
-      )
-      for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
-        if (info.lastActiveWorktree) {
-          setCachedWorktrees(hostId, [info.lastActiveWorktree])
+    loadHomeSnapshot().then(
+      (snapshot) => {
+        if (cancelled) {
+          return
+        }
+        if (snapshot) {
+          // Per desktop: live data that landed first wins for its desktop, and the stored cards
+          // stay for every other one.
+          setWorktreeInfo((previous) => ({ ...snapshot.worktreeInfo, ...previous }))
+          setAccountsByHost((previous) => ({ ...snapshot.accountsByHost, ...previous }))
+          for (const [hostId, info] of Object.entries(snapshot.worktreeInfo)) {
+            if (info.lastActiveWorktree) {
+              setCachedWorktrees(hostId, [info.lastActiveWorktree])
+            }
+          }
+        }
+        setSnapshotRead('read')
+      },
+      (error: unknown) => {
+        console.warn('[home] the cached home snapshot could not be read; not saving over it', error)
+        if (!cancelled) {
+          setSnapshotRead('refused')
         }
       }
-    })
+    )
     return () => {
       cancelled = true
     }
   }, [])
 
   useEffect(() => {
+    if (snapshotRead !== 'read') {
+      return
+    }
     if (Object.keys(worktreeInfo).length > 0 || Object.keys(accountsByHost).length > 0) {
       saveHomeSnapshot({ worktreeInfo, accountsByHost, savedAt: Date.now() })
     }
-  }, [worktreeInfo, accountsByHost])
+  }, [snapshotRead, worktreeInfo, accountsByHost])
 
   useEffect(() => {
     allClientsRef.current = connections.allClients

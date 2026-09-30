@@ -20,15 +20,21 @@ export type HomeSnapshot = {
 let memoryCache: HomeSnapshot | null = null
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 
+/**
+ * The stored snapshot, or null when nothing readable is stored. REJECTS when the store refuses the
+ * read: that is not "nothing stored", and a caller that saved over it would erase every other
+ * desktop's cached cards (review, 2026-09-30). An unparseable value is null, and the next save
+ * replaces it.
+ */
 export async function loadHomeSnapshot(): Promise<HomeSnapshot | null> {
   if (memoryCache) {
     return memoryCache
   }
+  const raw = await AsyncStorage.getItem(STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
   try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY)
-    if (!raw) {
-      return null
-    }
     const parsed = JSON.parse(raw) as HomeSnapshot
     if (
       typeof parsed !== 'object' ||
