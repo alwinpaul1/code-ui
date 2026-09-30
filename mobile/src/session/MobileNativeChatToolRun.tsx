@@ -357,6 +357,8 @@ export function ToolRun({
   // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
   // shares that word and ran none.
   const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
+  // One disclosure mark on either header: down when open, right when closed.
+  const Chevron = open ? ChevronDown : ChevronRight
   // A run of exactly one call IS that call's row — the Claude app shows a
   // run's calls first and opens the sheet per call, but with only one call
   // there is nothing to disclose first, so its header opens the sheet
@@ -392,8 +394,7 @@ export function ToolRun({
               numberOfLines={1}
               testID="tool-run-active-label"
             />
-            <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-            {open ? <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} /> : null}
+            <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
           </Pressable>
           {trailing}
         </View>
@@ -451,11 +452,7 @@ export function ToolRun({
             </Text>
           ) : null}
           {diffStat ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
-          {open ? (
-            <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
-          ) : (
-            <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-          )}
+          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
         {trailing}
       </View>
