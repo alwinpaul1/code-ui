@@ -49,6 +49,10 @@ vi.mock('./transport/host-store', () => ({
   updateHostNameAndEndpoint: dependencies.updateHostNameAndEndpoint
 }))
 
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./transport/client-context', () => ({
   useForceReconnect: () => dependencies.forceReconnectHost,
   usePrimeHosts: () => dependencies.primeHosts

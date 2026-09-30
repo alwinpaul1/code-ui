@@ -89,6 +89,10 @@ vi.mock('./transport/host-store', () => ({
     }))
 }))
 
+// The connection counter the screen re-reads a failed host lookup on; it never moves here.
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => null
+}))
 vi.mock('./transport/client-context', () => {
   const client = {
     sendRequest: async (method: string, params?: unknown, options?: unknown) => {
