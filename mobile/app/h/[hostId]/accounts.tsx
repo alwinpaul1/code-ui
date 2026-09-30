@@ -16,6 +16,7 @@ import {
   getInactiveProviderUsage,
   hasRenderableUsage
 } from '../../../src/components/AccountUsage'
+import { hasAnyRenderableUsage } from '../../../src/components/account-usage-state'
 import { AccountsProviderCard } from '../../../src/accounts/AccountsProviderCard'
 import { useAccountsHostLookup } from '../../../src/accounts/use-accounts-host-lookup'
 import {
@@ -24,6 +25,10 @@ import {
 } from '../../../src/components/codex-reset-credit'
 import { CodexResetCreditAction } from '../../../src/components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../../../src/components/use-codex-reset-credit-action'
+
+/** Not a failure, so no Retry: the pull to refresh it names is the screen's own. */
+const ACCOUNTS_EMPTY_COPY =
+  'No Claude or Codex usage reported by this desktop yet. Pull down to check again.'
 
 export default function AccountsScreen() {
   const router = useRouter()
@@ -224,10 +229,15 @@ export default function AccountsScreen() {
     )
   }
 
-  const placeholder = (text: string, spinner = true, onRetry?: () => void) => (
+  const placeholder = (
+    text: string,
+    spinner = true,
+    onRetry?: () => void,
+    tone: 'secondary' | 'danger' = spinner ? 'secondary' : 'danger'
+  ) => (
     <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
       {spinner ? <ActivityIndicator color={colors.textSecondary} /> : null}
-      <Txt variant="body" tone={spinner ? 'secondary' : 'danger'} align="center">
+      <Txt variant="body" tone={tone} align="center">
         {text}
       </Txt>
       {onRetry ? (
@@ -269,6 +279,10 @@ export default function AccountsScreen() {
           placeholder(error, false, () => void refresh())
         ) : !snapshot ? (
           placeholder('Loading accounts…')
+        ) : !hasAnyRenderableUsage(snapshot) ? (
+          // A valid snapshot with nothing in it: a desktop signed out of both, or one before its
+          // first rate-limit poll. Blank, it read as a frozen screen (review, 2026-09-30).
+          placeholder(ACCOUNTS_EMPTY_COPY, false, undefined, 'secondary')
         ) : (
           <>
             {renderProvider('claude')}

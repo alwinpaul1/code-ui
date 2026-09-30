@@ -46,7 +46,8 @@ describe('a screen opened for one desktop says what the catalog knows about it',
     ['../app/h/[hostId]/accounts.tsx', /\buseAccountsHostLookup\(hostId\)/],
     ['./accounts/use-accounts-host-lookup.ts', /\busePairedHostLookup\(hostId,/],
     ['./transport/use-paired-host-lookup.ts', /\blookUpPairedHost\(hostId\)/],
-    ['./host-screen/use-host-screen-identity.ts', /\blookUpPairedHost\(hostId\)/]
+    ['./host-screen/use-host-screen-identity.ts', /\blookUpPairedHost\(hostId\)/],
+    ['./mobile-web-shell/use-page-host-snapshot.ts', /\blookUpPairedHost\(hostId\)/]
   ])('%s looks its desktop up through lookUpPairedHost, not in a loaded list', (path, lookup) => {
     const src = code(path)
     expect(src).toMatch(lookup)
@@ -64,6 +65,12 @@ describe('a screen opened for one desktop says what the catalog knows about it',
     expect(callers.length).toBeGreaterThan(0)
     const stale = callers.filter((file) => !/\bshouldRefetchAfterReconnect\(/.test(code(file)))
     expect(stale).toEqual([])
+  })
+
+  it('the web shell builds its host from the catalog and never reads loadHosts()', () => {
+    // A locked Keychain dropped the host from loadHosts(), so the page never got `init` over a
+    // desktop Home listed and the client had connected to (review, 2026-09-30).
+    expect(code('./mobile-web-shell/use-page-host-snapshot.ts')).not.toMatch(/\bloadHosts\(/)
   })
 
   it('Troubleshooting counts and walks the catalog and never reads loadHosts()', () => {

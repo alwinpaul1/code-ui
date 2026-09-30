@@ -7,8 +7,9 @@ import type { MobileSessionTab } from './mobile-session-route-types'
  * second implementation), excluding the terminal itself the way that plan
  * excludes the file tab it is called from. Excluding a tab that turns out
  * not to be chat-capable is a no-op; excluding one that IS (this terminal is
- * itself showing native chat) routes to whatever other chat tab was visited
- * most recently instead of trivially "landing on itself".
+ * itself showing native chat) routes to another open chat tab (the one visited
+ * most recently, else the newest) instead of trivially "landing on itself",
+ * and lands on itself only when no other chat tab is open.
  *
  * `null` when there is no chat-capable tab open anywhere — the terminal is a
  * plain shell with nothing else open that could read the screen text. The

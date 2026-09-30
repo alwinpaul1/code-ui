@@ -13,7 +13,8 @@ export function MobileHomeListFooter(props: {
   accountsHosts: { host: HostProfile; snapshot: AccountsSnapshot }[]
   connectedHosts: HostProfile[]
   primaryHost: HostProfile | null
-  primaryTaskProviders: TaskProvider[]
+  /** Undefined while the primary desktop's task sources are unread. */
+  primaryTaskProviders: TaskProvider[] | undefined
   resumeCard: HomeResumeCard | null
   onCreateWorkspace: (hostId: string) => void
   onOpenAccounts: (hostId: string) => void

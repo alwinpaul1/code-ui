@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
 const dependencies = vi.hoisted(() => harness.createScreenDependencies())
 const SNAPSHOT = harness.SCREEN_SNAPSHOT
+const UNREADABLE_HOST_MESSAGE = "This paired desktop can't be read right now."
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
@@ -152,8 +153,9 @@ vi.mock('./use-page-host-snapshot', () => ({
     // One object for the life of the file, as the real hook's `useState` gives. A fresh literal per
     // render changes the identity the host effect is keyed on, so the bridge host was being torn
     // down and rebuilt on every render of this screen — and every pending request settled with it.
-    snapshot: SNAPSHOT,
-    unreadable: dependencies.snapshotUnreadable,
+    // The real hook never holds both: no host is built for a desktop it cannot read.
+    snapshot: dependencies.snapshotUnreadable ? null : SNAPSHOT,
+    unavailable: dependencies.snapshotUnreadable ? UNREADABLE_HOST_MESSAGE : null,
     readStorage: () => ({ storage: {}, storageOversize: [] }),
     refreshStorage: () => {
       dependencies.storageRefreshes += 1
@@ -351,14 +353,20 @@ describe('the hybrid shell screen', () => {
     expect(dependencies.reportDocumentStarted).toHaveBeenCalledTimes(1)
   })
 
-  it('fails the session when this host could not be read from the app store', async () => {
-    // Without this the session stays `ready` with the view un-hidden, no host behind it, and the
-    // page re-posting `ready` on its backoff for as long as the screen is open.
+  it('says why this desktop cannot be read in place of the page, and never fails the session', async () => {
+    // Review 2026-09-30: a locked Keychain left the page behind its cover with no host to answer its
+    // `ready`, and the old failure report deleted the downloaded workspace and fetched it again
+    // over a device-local read. The hook re-reads on the next connection, so the screen waits.
     dependencies.snapshotUnreadable = true
-    const warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    await renderScreen(readyState('session-one'))
-    expect(dependencies.reportShellFailure.mock.calls).toEqual([['document-load-failed']])
-    warned.mockRestore()
+    const tree = await renderScreen(readyState('session-one'))
+    expect(textOf(tree)).toContain(UNREADABLE_HOST_MESSAGE)
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(0)
+    expect(dependencies.reportShellFailure).not.toHaveBeenCalled()
+    // Read again after the desktop connected: the page mounts on its own, with no tap.
+    dependencies.snapshotUnreadable = false
+    await updateScreen(tree, readyState('session-one'))
+    expect(textOf(tree)).not.toContain(UNREADABLE_HOST_MESSAGE)
+    expect(byName(tree, 'ShellViewProbe')).toHaveLength(1)
   })
 
   it('re-reads the app store on every ask, so the next init is not the first one again', async () => {

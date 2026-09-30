@@ -75,7 +75,18 @@ const hash = (parts: string[] | string): string =>
 // RPC recording fixtures need no palette and their goldens hold. That moves the createTask body in
 // the hooks and statements pins (counts unchanged) and adds the one literal to `semantics`
 // (3,275 -> 3,276).
-const PROVIDER_RPC_SCREEN_HOOKS = 'ae1db153f31d18850576ccec082422b35024f4a5527fc8ca126eae13ec3af2a2'
+// 2026-09-30 (fix round 1, b8 finding 6): Linear's Change Status sheet said "No states available"
+// when the team's state-list read had failed. The list-and-detail stage's state-list effect moves
+// whole into useLinearTeamStateList (failure as `linearStatesError`, a Retry, a read again per new
+// connection), which sets the same setters in the same order, so the RPC recording goldens hold.
+// Checked by dumping every reader's output before and after and diffing: the hooks and statements
+// pins each swap that one effect for the one `useLinearTeamStateList` call at the same place (353
+// and 420 still); `semantics` 3,276 -> 3,278 (the sheet's error branch adds one `jsx:TasksButton`,
+// one `jsx:View:style` and two `jsx:Text:style` signatures and the literals "Retry loading states"
+// and "button"; the four `''` draft resets leave with the effect); the render tree 35,306 -> 35,399
+// (that branch, 93 tokens). Declarations and the StyleSheets do not move.
+// mobile-tasks-linear-states-failure.test.tsx guards the behaviour.
+const PROVIDER_RPC_SCREEN_HOOKS = '3a32e31e2a0a173dd2fb86a1d3ccfffc7a72372d9c9e993234d9db1d4699543e'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -114,7 +125,8 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // hook hash lands on upstream's own value for this commit (0f66df21); statements and semantics
 // stay this fork's, since the tree carries the press-feedback and tap-target hunks above.
 // 2026-09-27 (theme pass 2): 418 -> 420; see the note above PROVIDER_RPC_SCREEN_HOOKS.
-const PROVIDER_RPC_STATEMENTS = '2c8072d7079a93e647eedc1250fa07bf05b358a19a6848a78d403fa6f67167f1'
+// 2026-09-30 (b8 finding 6): one statement swapped, 420 still; see the note above the hooks pin.
+const PROVIDER_RPC_STATEMENTS = '1e1bac2d4ba3486a8e09e1136847998354df421d1c62defeed5d1d6d71d43341'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -142,12 +154,14 @@ const PRESS_FEEDBACK_DECLARATIONS = '3b2f670df4b5b27c31cf4734132b071741cb3df1205
 // 2026-09-27 (theme pass 2): that diff's `jsx:MobileSyntaxSegments:segments` host signature
 // becomes `…:segments,palette`. 3,271 lines still.
 // Later the same day: 3,271 -> 3,275 -> 3,276 (notes above the hooks pin).
-const A11Y_BACK_SEMANTICS = 'e2904f6a4dea08ba3c42d42777f2a219b556f10dbbc6ca28f113aba330111679'
+// 2026-09-30 (b8 finding 6): 3,276 -> 3,278 (note above the hooks pin).
+const A11Y_BACK_SEMANTICS = '940a21a13a5d281fefb4e9597ad5d8c1079cf5c119d11c4f09eae369c151b9c7'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
 // 2026-09-27 (theme pass 2): 35,299 -> 35,306 (note above the hooks pin).
-const A11Y_BACK_RENDER_TREE = '6bde687376965123d7a936746b7216d0493f78b5c73cd01428debf6b2977509f'
+// 2026-09-30 (b8 finding 6): 35,306 -> 35,399 (note above the hooks pin).
+const A11Y_BACK_RENDER_TREE = 'dfd3314b632d2cf878136d8cbd49081554b1f2099d6c96007abfde1a4cbf11c7'
 
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
@@ -174,7 +188,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_276)
+    expect(semantics.split('\n')).toHaveLength(3_278)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
@@ -192,7 +206,7 @@ describe('Mobile Tasks refactor parity', () => {
   // pixels and a tap on Refresh opened the create drawer.
   it('preserves render expressions and event handlers in tree order', () => {
     const tokens = readFlattenedMobileTasksRenderTokens()
-    expect(tokens).toHaveLength(35_306)
+    expect(tokens).toHaveLength(35_399)
     expect(hash(tokens)).toBe(A11Y_BACK_RENDER_TREE)
   })
 

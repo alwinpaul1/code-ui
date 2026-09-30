@@ -24,12 +24,33 @@ export function summarizeProjectMemoryFile(
     case 'error':
       return { kind: 'unavailable', message: state.message }
     case 'ready':
-      return { kind: 'present', byteLength: state.content.length, empty: state.content.trim().length === 0 }
+      // UTF-8 bytes, the unit the host's too-large byteLength is in: `content.length` counts
+      // UTF-16 code units, so an em dash or an umlaut read smaller than the file is.
+      return {
+        kind: 'present',
+        byteLength: new TextEncoder().encode(state.content).byteLength,
+        empty: state.content.trim().length === 0
+      }
     default: {
       const _exhaustive: never = state
       return _exhaustive
     }
   }
+}
+
+const KIB = 1024
+const MIB = 1024 * 1024
+
+/**
+ * Bytes below 1 KB ("1 byte", "23 bytes"), whole KB below 1 MB, and MB to one place above. A size
+ * whose KB rounds up to 1024 is shown in MB, so the row never reads "1024 KB".
+ */
+function formatMemoryFileSize(byteLength: number): string {
+  if (byteLength < KIB) {
+    return byteLength === 1 ? '1 byte' : `${byteLength} bytes`
+  }
+  const kib = Math.round(byteLength / KIB)
+  return kib < KIB ? `${kib} KB` : `${(byteLength / MIB).toFixed(1)} MB`
 }
 
 /** One human line for the chooser row, keyed off the summary above. */
@@ -42,7 +63,7 @@ export function describeProjectMemorySummary(summary: ProjectMemorySummary): str
     case 'unavailable':
       return summary.message
     case 'present':
-      return summary.empty ? 'Empty file' : `${summary.byteLength} bytes`
+      return summary.empty ? 'Empty file' : formatMemoryFileSize(summary.byteLength)
     default: {
       const _exhaustive: never = summary
       return _exhaustive

@@ -18,6 +18,16 @@ describe('where a document’s image lives', () => {
     expect(resolveMarkdownImagePath('README.md', '/img/a.png')).toBe('img/a.png')
   })
 
+  it('keeps a figure named with a bare percent sign as written, rather than throwing', () => {
+    // Review 2026-09-30: decodeURIComponent('100%.png') throws URIError: URI malformed, out of
+    // the figure's effect, which took the document viewer down instead of drawing the link.
+    expect(resolveMarkdownImagePath('docs/README.md', '100%.png')).toBe('docs/100%.png')
+    expect(resolveMarkdownImagePath('docs/README.md', '50%off.png')).toBe('docs/50%off.png')
+    expect(resolveMarkdownImagePath('README.md', '%')).toBe('%')
+    // An encoded name still decodes, part by part, beside one that does not.
+    expect(resolveMarkdownImagePath('README.md', 'my%20figs/100%.png')).toBe('my figs/100%.png')
+  })
+
   it('refuses a path that leaves the worktree, and a URL that is not a file', () => {
     expect(resolveMarkdownImagePath('docs/a.md', '../../etc/passwd')).toBeNull()
     expect(resolveMarkdownImagePath('a.md', '..')).toBeNull()

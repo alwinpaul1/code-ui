@@ -26,6 +26,20 @@ describe('planning where "Ask about this screen" should land', () => {
     expect(plan?.agent).toBe('claude')
   })
 
+  it('lands on another open chat rather than itself, even one this session never visited', () => {
+    // Review 2026-09-30: with no other chat in the visit history, the fallback picked the newest
+    // chat-capable tab, and this terminal, being newest, was it.
+    const tabs = [terminalTab('codex-chat', 'codex'), terminalTab('this-terminal', 'claude')]
+    const plan = planTerminalAskAboutScreen({
+      tabs,
+      visitHistory: ['this-terminal'],
+      terminalTabId: 'this-terminal',
+      nativeChatTranscriptIsLocalReadable: false
+    })
+    expect(plan?.targetTab.id).toBe('codex-chat')
+    expect(plan?.agent).toBe('codex')
+  })
+
   it('is absent — null — on a plain shell with no other chat-capable tab open', () => {
     const tabs = [terminalTab('plain-shell', null)]
     const plan = planTerminalAskAboutScreen({

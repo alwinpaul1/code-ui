@@ -135,6 +135,21 @@ const SNAPSHOT = {
   }
 }
 
+/** What a desktop signed out of both, or before its first rate-limit poll, answers. */
+const EMPTY_SNAPSHOT = {
+  claude: { accounts: [], activeAccountId: null },
+  codex: { accounts: [], activeAccountId: null },
+  rateLimits: {
+    claude: null,
+    codex: null,
+    inactiveClaudeAccounts: [],
+    inactiveCodexAccounts: []
+  }
+}
+
+const ACCOUNTS_EMPTY_COPY =
+  'No Claude or Codex usage reported by this desktop yet. Pull down to check again.'
+
 // The shape RpcClientStreamRegistry.emitError hands a listener when the host answers the
 // subscribe with an error reply.
 const SUBSCRIBE_ERROR = { type: 'error', message: 'Unknown method accounts.subscribe' }
@@ -257,5 +272,29 @@ describe('Accounts when accounts.subscribe fails', () => {
 
     expect(fakes.requests).not.toContain('accounts.list')
     expect(lines(tree).some(({ text }) => text.includes('dev@example.com'))).toBe(true)
+  })
+})
+
+describe('Accounts over a desktop that has reported nothing', () => {
+  it.each(['light', 'dark'] as const)(
+    'says the desktop has reported nothing yet, in the %s secondary colour, instead of a blank screen',
+    async (scheme) => {
+      // Review 2026-09-30: a valid snapshot with no accounts and no usage windows (a signed-out
+      // desktop, or one before its first poll) drew only the header, which reads as frozen.
+      const tree = await openAccounts(scheme)
+      await emitToSubscription({ type: 'ready', snapshot: EMPTY_SNAPSHOT })
+
+      const line = lines(tree).find(({ text }) => text === ACCOUNTS_EMPTY_COPY)
+      expect(line?.color).toBe(colorsForScheme(scheme).textSecondary)
+      expect(tree.root.findAll((node) => String(node.type) === 'ActivityIndicator')).toHaveLength(0)
+      // Not a failure: nothing to retry, and the pull to refresh the copy names is already there.
+      expect(retryButton(tree)).toBeUndefined()
+    }
+  )
+
+  it('draws no empty note once one provider has something to show', async () => {
+    const tree = await openAccounts()
+    await emitToSubscription({ type: 'ready', snapshot: SNAPSHOT })
+    expect(lines(tree).map(({ text }) => text)).not.toContain(ACCOUNTS_EMPTY_COPY)
   })
 })
