@@ -3,6 +3,7 @@ import { asPaintedPrompt } from './mobile-terminal-prompt-paint'
 import { splitOrcaPastedImagePaths } from '../../../src/shared/native-chat-pasted-image-paths'
 import {
   footerWindow,
+  isLegacyQueueSeparator,
   queueBlockRows,
   queueFooterIndex,
   SELECTED_HINT,
@@ -68,7 +69,7 @@ export function claudeQueueViewFromScreen(
     if (!seenEntry && /^\s{8,}Ctrl\+Y to paste deleted text\s*$/.test(line)) {
       continue
     }
-    if (/^[\s─━—-]*$/.test(line)) {
+    if (isLegacyQueueSeparator(line)) {
       if (seenEntry) {
         break
       }

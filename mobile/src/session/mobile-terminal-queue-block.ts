@@ -32,6 +32,19 @@ export const SPINNER_ROW = /^[^\s❯›>⏺⎿]\s+\S.*…/
  *  binary). */
 const TOOL_ROW = /^\s*[⏺●⎿]/
 
+/**
+ * A row the legacy queue box (Claude Code 2.1.263 to about 2.1.276) draws
+ * between its entries and the composer, not a line of an entry: blank, or a
+ * rule of dashes or box characters. Not one at the entries' four-column
+ * continuation indent, where a queued message's own line of dashes (a
+ * Markdown "---") is drawn: taken for the separator, it was dropped from the
+ * message, or, between two entries, ended the scan and lost the older one
+ * (2026-09-30). The box's own rules are at column zero in every capture.
+ */
+export function isLegacyQueueSeparator(line: string): boolean {
+  return /^[\s─━—-]*$/.test(line) && !/^ {4,}\S/.test(line)
+}
+
 export function isQueueBound(line: string): boolean {
   return /^\s*$/.test(line) || SPINNER_ROW.test(line) || TOOL_ROW.test(line)
 }
@@ -181,7 +194,7 @@ export function queueBlockLineIndices(screen: readonly string[], draft?: unknown
   let seenEntry = false
   for (let index = footer - 1; footer !== -1 && index >= Math.max(0, footer - 60); index -= 1) {
     const line = lines[index]!
-    if (/^[\s─━—-]*$/.test(line)) {
+    if (isLegacyQueueSeparator(line)) {
       if (seenEntry) {
         break
       }
