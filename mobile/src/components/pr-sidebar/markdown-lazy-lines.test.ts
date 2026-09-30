@@ -90,6 +90,106 @@ describe('a wrapped line at the margin under a PR comment’s list item', () => 
   })
 })
 
+// Review, 2026-10-01: the lazy line above joined any item, words or none. '- \nlazy' drew one bullet
+// reading " lazy", and '- # H\nlazy' and '- ***\nlazy' drew the line inside the heading's or the
+// rule's text. A lazy line continues a paragraph, so marked (the desktop's reader) and CommonMark
+// both draw it after the list when the item's last line is no words, a heading or a rule, as this
+// reader did before the lazy line was read at all. The expected blocks are the ones it drew then.
+describe('a line at the margin under a PR comment’s list item that ends in no words', () => {
+  const list = (items: string[]) => ({ kind: 'list', ordered: false, items })
+  const lazy = { kind: 'paragraph', text: 'lazy' }
+
+  it.each([
+    ['an empty item', '- \nlazy', [list(['']), lazy]],
+    ['an empty numbered item', '1. \nlazy', [{ kind: 'list', ordered: true, items: [''] }, lazy]],
+    [
+      'an empty task',
+      '- [ ] \nlazy',
+      [{ ...list(['']), shapes: [{ ...bullet(0), checked: false }] }, lazy]
+    ],
+    [
+      'an empty nested item',
+      '- a\n  - \nlazy',
+      [{ ...list(['a', '']), shapes: [bullet(0), bullet(1)] }, lazy]
+    ]
+  ])('keeps it out of %s', (_name, markdown, blocks) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual(blocks)
+  })
+
+  it('still keeps it in the words of an item after an empty one', () => {
+    expect(parseMarkdownBlocks('- \n- b\nlazy')).toEqual([list(['', 'b lazy'])])
+  })
+
+  it.each([
+    ['a heading', '- # H\nlazy', '# H'],
+    ['a heading with nothing after its mark', '- #\nlazy', '#'],
+    ['a heading after a tab', '- #\tH\nlazy', '#\tH'],
+    ['a sixth-level heading', '- ###### H\nlazy', '###### H'],
+    ['a rule of stars', '- ***\nlazy', '***'],
+    ['a rule of spaced stars', '- * * *\nlazy', '* * *'],
+    ['a rule of underscores', '- ___\nlazy', '___']
+  ])('draws it after the list, not inside %s the item holds', (_name, markdown, item) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([list([item]), lazy])
+  })
+
+  it.each([
+    ['a heading', '- a\n  # h\nlazy', 'a # h'],
+    ['a rule', '- a\n  ***\nlazy', 'a ***'],
+    ['a dashed rule', '- a\n  ---\nlazy', 'a ---']
+  ])('draws it after the list where the item’s indented last line is %s', (_name, markdown, item) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([list([item]), lazy])
+  })
+
+  it('draws it after the list where a nested item is a heading', () => {
+    expect(parseMarkdownBlocks('- a\n  - # h\nlazy')).toEqual([
+      { ...list(['a', '# h']), shapes: [bullet(0), bullet(1)] },
+      lazy
+    ])
+  })
+
+  it.each([
+    ['words', '- a\nlazy', 'a lazy'],
+    ['words and a line of them at the margin', '- a\nlazy\nmore', 'a lazy more'],
+    ['dashes that are words, not a rule', '- ---x\nlazy', '---x lazy'],
+    ['a hash with words straight after it', '- \\# H\nlazy', '\\# H lazy'],
+    ['words indented under a heading', '- # H\n  more\nlazy', '# H more lazy']
+  ])('still keeps it in an item ending in %s', (_name, markdown, item) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([list([item])])
+  })
+
+  it('still keeps it in a task whose words look like a rule or a heading', () => {
+    expect(parseMarkdownBlocks('- [ ] ***\nlazy\n- [x] # h\nlazy')).toEqual([
+      {
+        ...list(['*** lazy', '# h lazy']),
+        shapes: [
+          { ...bullet(0), checked: false },
+          { ...bullet(0), checked: true }
+        ]
+      }
+    ])
+  })
+
+  it.each([
+    ['a heading and its indented words', '- # H\n  more', [list(['# H more'])]],
+    ['an empty item at the end', '- ', [list([''])]],
+    ['an empty item before a last newline', '- \n', [list([''])]]
+  ])('reads %s as it did', (_name, markdown, blocks) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual(blocks)
+  })
+})
+
+// The quote's lazy lines follow marked, which keeps these in the quote: '> # h\nbody' is a quote of
+// a heading and a paragraph there. They are pinned so the list's rule above is not copied here.
+describe('a line at the margin under a PR comment’s quote that ends in no words', () => {
+  it.each([
+    ['a heading', '> # h\nbody', '# h\nbody'],
+    ['a rule', '> ---\nbody', '---\nbody'],
+    ['a table', '> | a |\n> | - |\nbody', '| a |\n| - |\nbody']
+  ])('keeps it in the quote after %s, as marked does', (_name, markdown, text) => {
+    expect(parseMarkdownBlocks(markdown)).toEqual([{ kind: 'quote', text }])
+  })
+})
+
 // Sweep, 2026-09-30: the quote reader had the same defect as the list's. '> first line\nsecond
 // line' drew as a quote of the first line and a paragraph of the second; the chat, and CommonMark,
 // read one quote.
