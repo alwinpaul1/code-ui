@@ -7,10 +7,31 @@ import { observeSubagentRuns, type LastRosterRead, type SubagentRunClock } from 
  * mounts on demand, and a clock that died with it would call every run
  * "unknown" again each time the sheet opened. The chat header's running-task
  * count observes the same status while the chat is open, so the clock keeps
- * counting between openings. Bounded by the panes seen this launch.
+ * counting between openings. Bounded by the panes seen this launch: past the
+ * cap, the pane observed least recently goes (keep).
  */
-const clocks = new Map<string, { runs: SubagentRunClock; lastRead: LastRosterRead }>()
-const CLOCK_CAP = 64
+type PaneClock = { runs: SubagentRunClock; lastRead: LastRosterRead }
+const clocks = new Map<string, PaneClock>()
+export const CLOCK_CAP = 64
+
+/**
+ * Store the pane's clock as the one observed most recently. Delete, then set:
+ * `set` on a key the Map holds keeps its first place in the order, so past the
+ * cap the pane seen FIRST went, which is usually the long-lived one the user
+ * works in, and its next status read every running subagent as already
+ * working when the phone began watching (review, 2026-09-30). getScopedRecord
+ * in use-mobile-native-chat-session-options.ts keeps the same rule.
+ */
+function keep(key: string, clock: PaneClock): void {
+  clocks.delete(key)
+  if (clocks.size >= CLOCK_CAP) {
+    const oldest = clocks.keys().next()
+    if (!oldest.done) {
+      clocks.delete(oldest.value)
+    }
+  }
+  clocks.set(key, clock)
+}
 
 type RosterStatus = Pick<AgentStatusEntry, 'subagents'> &
   Partial<Pick<AgentStatusEntry, 'paneKey' | 'prompt' | 'stateHistory' | 'sessionBoundary'>>
@@ -49,8 +70,9 @@ export function advanceSubagentRunClock(
   }
   const pane = clocks.get(key)
   if (isStandIn(status)) {
-    if (pane && !pane.lastRead.unseen) {
-      clocks.set(key, { ...pane, lastRead: { ...pane.lastRead, unseen: true } })
+    // Still an observation of the pane: it is the one in use.
+    if (pane) {
+      keep(key, pane.lastRead.unseen ? pane : { ...pane, lastRead: { ...pane.lastRead, unseen: true } })
     }
     return pane?.runs
   }
@@ -61,13 +83,7 @@ export function advanceSubagentRunClock(
       hostStarts.set(row.id, row.startedAt)
     }
   }
-  if (!pane && clocks.size >= CLOCK_CAP) {
-    const oldest = clocks.keys().next()
-    if (!oldest.done) {
-      clocks.delete(oldest.value)
-    }
-  }
-  clocks.set(key, { runs: next, lastRead: { hostStarts, unseen: false } })
+  keep(key, { runs: next, lastRead: { hostStarts, unseen: false } })
   return next
 }
 
