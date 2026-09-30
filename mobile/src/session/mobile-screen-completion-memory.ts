@@ -1,3 +1,5 @@
+import type { LabelledShellLaunch } from './mobile-background-task-evidence'
+import { foldWhitespace } from './mobile-background-task-transcript'
 import type { ScreenTaskCompletion } from './mobile-background-tasks'
 
 /** Completion rows read off the screen, remembered across polls.
@@ -13,25 +15,86 @@ import type { ScreenTaskCompletion } from './mobile-background-tasks'
  *  rest — because counting every poll's sighting would count one row every
  *  second.
  *
- *  Why a time per copy: a row stays remembered for the whole session, long
- *  after its shell ended, and Claude often relaunches a command under the
- *  same description. The reader lets a row retire only a launch that had
- *  started by the time the row was first seen (`deriveBackgroundTasks`), so
- *  each copy keeps the phone time of the poll that first showed it. */
-export type ScreenCompletionMemory = ReadonlyMap<string, { completion: ScreenTaskCompletion; seenAt: readonly number[] }>
+ *  Why each copy is bound to launches: a row stays remembered for the whole
+ *  session, long after its shell ended, and Claude often relaunches a command
+ *  under the same description. A copy may retire only a shell launch with its
+ *  label that the settled transcript window held when the copy was first
+ *  seen (`deriveBackgroundTasks`), so a remembered row never retires a
+ *  relaunch that came after it. Ids, not times: a launch is stamped by the
+ *  desk's clock and a poll by the phone's, and on 2026-09-30 a phone 5 s
+ *  behind the desk left a 1.5 s shell running because its row looked older
+ *  than its launch. Ids stay the same while the window slides.
+ *
+ *  A copy first seen while the window held NO launch with its label was
+ *  painted before the phone's transcript read reached the launch (a shell
+ *  that ends within a poll or two). It is bound to the first such launch the
+ *  window shows later; until then it retires nothing. One first seen while
+ *  the window held such a launch, settled or not, is never bound to a later
+ *  one: that is a remembered row meeting a relaunch.
+ *
+ *  Not covered: a row already on screen at the phone's first look, in a tab
+ *  opened after a relaunch, is bound to both runs and can retire the
+ *  relaunch once the first run is settled. Which run such a row announced
+ *  cannot be told from the row. */
+export type ScreenCompletionMemory = {
+  /** Every copy, in the order first seen. The same array until a copy is
+   *  added or bound, so the rows handed on stay the same object. */
+  copies: readonly RememberedCopy[]
+}
 
-export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = new Map()
+type RememberedCopy = {
+  key: string
+  completion: ScreenTaskCompletion
+  /** The launches with the row's label the window held when the copy was
+   *  first seen, oldest first; null while it has held none. */
+  launchIds: readonly string[] | null
+}
 
-/** Bounded like the finished-id memory; the oldest rows go first. */
+export const EMPTY_SCREEN_COMPLETION_MEMORY: ScreenCompletionMemory = { copies: [] }
+
+/** Bounded like the finished-id memory; the oldest copies go first. */
 const MEMORY_MAX = 256
 
-/** Returns the SAME map when this poll showed nothing new, so a subscriber
- *  does not re-render on every read. `now` is the phone time of this poll. */
+/** Folds one screen poll into the memory. `launches` is the settled
+ *  transcript window's labelled shell launches, oldest first; the caller
+ *  skips a poll made over an unsettled one (a cached tail painted while the
+ *  fresh read loads does not hold what was launched meanwhile). Returns the
+ *  SAME memory when this poll changed nothing, so a subscriber does not
+ *  re-render on every read. */
 export function rememberScreenCompletions(
   remembered: ScreenCompletionMemory,
   seen: readonly ScreenTaskCompletion[],
-  now: number
+  launches: readonly LabelledShellLaunch[]
 ): ScreenCompletionMemory {
+  const bound = bindWaitingCopies(remembered.copies, launches)
+  let copies: RememberedCopy[] | null = bound === remembered.copies ? null : [...bound]
+  for (const [key, { completion, count }] of countByKey(seen)) {
+    const known = bound.filter((copy) => copy.key === key).length
+    if (known >= count) {
+      continue
+    }
+    // The copies this poll shows over the most any earlier poll showed were
+    // first seen now: they may retire only what the window holds now.
+    const ids = launchIdsFor(completion.label, launches)
+    copies ??= [...bound]
+    for (let extra = known; extra < count; extra += 1) {
+      copies.push({ key, completion, launchIds: ids.length > 0 ? ids : null })
+    }
+  }
+  if (copies === null) {
+    return remembered
+  }
+  return { copies: copies.length > MEMORY_MAX ? copies.slice(copies.length - MEMORY_MAX) : copies }
+}
+
+/** The remembered rows as the reader takes them: one entry per copy, in the
+ *  order first seen, each with the launches it may retire. A copy still
+ *  waiting for its launch may retire none. */
+export function screenCompletionsFromMemory(memory: ScreenCompletionMemory): ScreenTaskCompletion[] {
+  return memory.copies.map(({ completion, launchIds }) => ({ ...completion, launchIds: launchIds ?? [] }))
+}
+
+function countByKey(seen: readonly ScreenTaskCompletion[]): Map<string, { completion: ScreenTaskCompletion; count: number }> {
   const counts = new Map<string, { completion: ScreenTaskCompletion; count: number }>()
   for (const completion of seen) {
     const key = `${completion.status}\u0000${completion.label}`
@@ -42,42 +105,40 @@ export function rememberScreenCompletions(
       counts.set(key, { completion: { label: completion.label, status: completion.status }, count: 1 })
     }
   }
-  let next: Map<string, { completion: ScreenTaskCompletion; seenAt: readonly number[] }> | null = null
-  for (const [key, entry] of counts) {
-    const known = remembered.get(key)
-    const knownTimes = known?.seenAt ?? []
-    if (knownTimes.length >= entry.count) {
-      continue
-    }
-    next ??= new Map(remembered)
-    // The copies this poll adds over the most any earlier poll showed were
-    // first seen now; the ones already known keep their own time.
-    const added = Array.from({ length: entry.count - knownTimes.length }, () => now)
-    next.set(key, { completion: known?.completion ?? entry.completion, seenAt: [...knownTimes, ...added] })
-  }
-  if (next === null) {
-    return remembered
-  }
-  while (next.size > MEMORY_MAX) {
-    const oldest = next.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    next.delete(oldest)
-  }
-  return next
+  return counts
 }
 
-/** The remembered rows as the reader takes them: one entry per copy, each
- *  stamped with when it was first seen, earliest first — the reader hands
- *  each row the oldest launch it can have announced, so the rows seen first
- *  choose first. */
-export function screenCompletionsFromMemory(memory: ScreenCompletionMemory): ScreenTaskCompletion[] {
-  const out: ScreenTaskCompletion[] = []
-  for (const { completion, seenAt } of memory.values()) {
-    for (const at of seenAt) {
-      out.push({ ...completion, seenAt: at })
-    }
+function launchIdsFor(label: string, launches: readonly LabelledShellLaunch[]): string[] {
+  const folded = foldWhitespace(label)
+  return launches.filter((launch) => launch.label === folded).map((launch) => launch.id)
+}
+
+/** Binds each copy still waiting for its launch to the first launch with its
+ *  label the window now shows — one launch per copy, in order, so two rows
+ *  painted before either launch was read take one launch each. Only the
+ *  first: were a copy bound to all of them, one whose own launch had settled
+ *  would go on to retire the next. The same array when none was bound. */
+function bindWaitingCopies(copies: readonly RememberedCopy[], launches: readonly LabelledShellLaunch[]): readonly RememberedCopy[] {
+  if (!copies.some((copy) => copy.launchIds === null)) {
+    return copies
   }
-  return out.sort((left, right) => (left.seenAt ?? 0) - (right.seenAt ?? 0))
+  // Per label, not per row text: a `completed` and a `failed` row with one
+  // label name launches from the same list.
+  const taken = new Map<string, number>()
+  let changed = false
+  const next = copies.map((copy) => {
+    if (copy.launchIds !== null) {
+      return copy
+    }
+    const label = foldWhitespace(copy.completion.label)
+    const index = taken.get(label) ?? 0
+    const id = launchIdsFor(label, launches)[index]
+    if (id === undefined) {
+      return copy
+    }
+    taken.set(label, index + 1)
+    changed = true
+    return { ...copy, launchIds: [id] }
+  })
+  return changed ? next : copies
 }

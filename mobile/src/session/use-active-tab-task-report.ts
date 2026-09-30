@@ -73,8 +73,13 @@ export function useActiveTabTaskReport(input: {
   screenTaskCompletions: readonly ScreenTaskCompletion[]
 }): ActiveTabBackgroundTaskReport {
   const { report, sessionId, agentStatus, onScreenShellCount } = input
-  const screenCompletions = useActiveTabScreenCompletions(input.handle, sessionId, input.screenTaskCompletions)
   const window = useMemo(() => readTaskEvidence(input.messages), [input.messages])
+  const screenCompletions = useActiveTabScreenCompletions(
+    input.handle,
+    sessionId,
+    input.screenTaskCompletions,
+    input.transcriptSettled ? window.shellLaunches : null
+  )
   const { evidence, now } = observeSession(sessionId, { window, settled: input.transcriptSettled, agentStatus, onScreenShellCount })
   // Claude's transcript records every launch the lead makes (OpenClaude
   // writes the same one); a Codex one records none the phone reads, so its

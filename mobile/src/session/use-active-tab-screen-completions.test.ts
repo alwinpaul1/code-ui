@@ -21,6 +21,7 @@ const EMPTY_REPORT: ActiveTabBackgroundTaskReport = {
   launchedTaskIds: []
 }
 const GATE_ROW: ScreenTaskCompletion = { label: 'Run the gate', status: 'completed' }
+const QUICK_ROW: ScreenTaskCompletion = { label: 'Quick check', status: 'completed' }
 
 let nextId = 0
 function message(role: 'assistant' | 'user', timestamp: number, block: NativeChatMessage['blocks'][number]): NativeChatMessage {
@@ -31,11 +32,15 @@ function message(role: 'assistant' | 'user', timestamp: number, block: NativeCha
 // Launch result and notification verbatim in shape from Claude Code 2.1.277
 // (2026-09-20), as in mobile-background-tasks-screen-completions.test.ts.
 function gateLaunch(id: string, at: number): NativeChatMessage[] {
+  return shellLaunch(id, { command: 'npx vitest run', description: 'Run the gate' }, at)
+}
+
+function shellLaunch(id: string, input: { command: string; description: string }, at: number): NativeChatMessage[] {
   return [
     message('assistant', at, {
       type: 'tool-call',
       name: 'Bash',
-      input: { command: 'npx vitest run', description: 'Run the gate', run_in_background: true }
+      input: { ...input, run_in_background: true }
     }),
     message('user', at + 500, {
       type: 'tool-result',
@@ -133,5 +138,58 @@ describe('a completion row the screen showed once, and a relaunch under its desc
     // Its completion lands mid-turn: no transcript notification, only a
     // second row painted under the first.
     expect(show(T + 200_000, { messages: relaunched, screen: [GATE_ROW, GATE_ROW] })).toEqual(['host-monitoring'])
+  })
+})
+
+// A shell that ends within a poll or two. The transcript stamps its launch
+// with the desk's clock (message.timestamp); the phone reads the screen on
+// its own clock (Date.now()). The two need not agree, and the row can be on
+// screen before the phone's transcript read holds the launch at all.
+describe('a short shell’s completion row, on a phone whose clock is not the desk’s', () => {
+  let renderer: ReactTestRenderer | null = null
+  beforeEach(() => {
+    resetTaskEvidenceForTests()
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    vi.useRealTimers()
+  })
+
+  function show(at: number, shown: Frame): string[] {
+    vi.setSystemTime(at)
+    const frame = { ...shown, now: at }
+    act(() => {
+      if (renderer) {
+        renderer.update(createElement(Probe, { frame }))
+      } else {
+        renderer = create(createElement(Probe, { frame }))
+      }
+    })
+    return latest
+  }
+
+  // Launched at desk time H, finished 1.5 s later.
+  const H = T + 600_000
+  const quick = shellLaunch('bquick001', { command: 'npm run lint', description: 'Quick check' }, H)
+
+  it('shows the short shell finished when the phone clock is 5 s behind the desk', () => {
+    expect(show(H + 1_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  it('shows the short shell finished when the phone clock is 5 s ahead of the desk', () => {
+    expect(show(H + 1_500 + 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  it('shows the short shell finished when its row was on screen before the transcript read held its launch', () => {
+    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+    expect(show(H + 2_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+  })
+
+  it('shows it finished when the row had already scrolled away by the time the launch arrived', () => {
+    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+    expect(show(H + 2_500 - 5_000, { messages: [], screen: [] })).toEqual(['host-monitoring'])
+    expect(show(H + 3_500 - 5_000, { messages: quick, screen: [] })).toEqual(['host-monitoring'])
   })
 })

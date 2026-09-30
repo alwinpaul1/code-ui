@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { readTaskEvidence } from './mobile-background-task-evidence'
 import { countRunningBackgroundTasks, deriveBackgroundTasks } from './mobile-background-tasks'
 import {
   EMPTY_SCREEN_COMPLETION_MEMORY,
@@ -158,9 +159,13 @@ describe('a remembered completion row and a later launch under the same descript
     ]
   }
   // The row as the phone remembers it: seen on the poll right after the first
-  // run finished, then scrolled away.
+  // run finished, then scrolled away. Bound to what that poll's window held.
   const rowSeenAfterFirstRun = screenCompletionsFromMemory(
-    rememberScreenCompletions(EMPTY_SCREEN_COMPLETION_MEMORY, [{ label: 'Run the gate', status: 'completed' }], T + 61_000)
+    rememberScreenCompletions(
+      EMPTY_SCREEN_COMPLETION_MEMORY,
+      [{ label: 'Run the gate', status: 'completed' }],
+      readTaskEvidence([...launched('bgate0001', gate, T), firstRunNotified]).shellLaunches
+    )
   )
 
   it('keeps the relaunch running instead of showing it finished as soon as it starts', () => {
@@ -198,6 +203,20 @@ describe('a remembered completion row and a later launch under the same descript
     const tasks = deriveBackgroundTasks([], T + 150_000, pane, { screenCompletions: rowSeenAfterFirstRun })
     expect(tasks.finished).toEqual([])
     expect(tasks.running.map((task) => task.id)).toEqual(['host-monitoring'])
+  })
+
+  it('retires nothing for a row still waiting for the launch it announced', () => {
+    const waiting = [{ label: 'Run the gate', status: 'completed', launchIds: [] }]
+    const tasks = deriveBackgroundTasks(launched('bgate0002', gate, T + 120_000), T + 150_000, pane, { screenCompletions: waiting })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bgate0002'])
+  })
+
+  it('retires the launch a row is bound to even when that one is the newer of two', () => {
+    const relaunched = [...launched('bgate0001', gate, T), ...launched('bgate0002', gate, T + 120_000)]
+    const tasks = deriveBackgroundTasks(relaunched, T + 150_000, pane, {
+      screenCompletions: [{ label: 'Run the gate', status: 'completed', launchIds: ['bgate0002'] }]
+    })
+    expect(tasks.running.map((task) => task.id)).toEqual(['bgate0001'])
   })
 
   it('judges a launch with no recorded start time, which cannot be shown to be later', () => {

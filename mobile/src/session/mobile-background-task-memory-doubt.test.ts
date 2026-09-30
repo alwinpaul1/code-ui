@@ -10,7 +10,7 @@ import { EMPTY_SESSION_TASK_EVIDENCE, rememberTaskEvidence, type SessionTaskEvid
 const at = (clock: string) => Date.parse(`2026-09-29T${clock}Z`)
 const DOUBTED = 'a441049d174b06e5e'
 const TEAMMATE = 'areviewer-1f2e3d4c'
-const WINDOW: WindowTaskEvidence = { ownAgentIds: [], retiredTaskIds: [], pendingAgentCalls: [], oldestAt: at('09:59:00.000') }
+const WINDOW: WindowTaskEvidence = { ownAgentIds: [], shellLaunches: [], retiredTaskIds: [], pendingAgentCalls: [], oldestAt: at('09:59:00.000') }
 const row = (id: string, startedAt: string): AgentSubagentSnapshot => ({ id, state: 'working', startedAt: at(startedAt), agentType: 'general-purpose' })
 
 const hookRow = (rows: AgentSubagentSnapshot[]): AgentStatusEntry =>
