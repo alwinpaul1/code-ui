@@ -5,11 +5,7 @@ import { openedSurface, savedUntouched } from './rich-markdown-round-trip.test-s
 
 /** marked's reading of a document, whitespace aside: the editor joins a wrapped line with a space. */
 const reading = (source: string) =>
-  marked
-    .parse(source, { async: false })
-    .replace(/\s+/g, ' ')
-    .replace(/> </g, '><')
-    .trim()
+  marked.parse(source, { async: false }).replace(/\s+/g, ' ').replace(/> </g, '><').trim()
 
 // Review, 2026-09-30: a hard-wrapped item or quote whose next line was not indented, which is how
 // git-wrapped READMEs and docs are written, saved with a blank line inserted there. The wrapped
@@ -18,7 +14,11 @@ const reading = (source: string) =>
 describe('a wrapped line at the margin under an item or a quote', () => {
   it.each([
     ['a bullet', '- first line\nsecond line', '- first line second line'],
-    ['a numbered item before the next', '1. first line\nsecond line\n2. b', '1. first line second line\n2. b'],
+    [
+      'a numbered item before the next',
+      '1. first line\nsecond line\n2. b',
+      '1. first line second line\n2. b'
+    ],
     ['after an indented wrapped line', '- a\n  lazy\nb', '- a lazy b'],
     ['a nested item', '- a\n  - b\nc', '- a\n  - b c'],
     ['a task', '- [ ] a\nlazy', '- [ ] a lazy'],

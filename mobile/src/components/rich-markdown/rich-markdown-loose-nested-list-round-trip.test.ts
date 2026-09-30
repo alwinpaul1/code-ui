@@ -5,11 +5,7 @@ import { openedSurface, savedUntouched } from './rich-markdown-round-trip.test-s
 
 /** marked's reading of a document, whitespace aside. */
 const reading = (source: string) =>
-  marked
-    .parse(source, { async: false })
-    .replace(/\s+/g, ' ')
-    .replace(/> </g, '><')
-    .trim()
+  marked.parse(source, { async: false }).replace(/\s+/g, ' ').replace(/> </g, '><').trim()
 
 // Review, 2026-09-30: a nested list written after a blank line, a loose sublist, which agents and
 // READMEs write all the time, ended the list at the blank. '- a\n\n  - b' saved as '- a\n\n- b', so
