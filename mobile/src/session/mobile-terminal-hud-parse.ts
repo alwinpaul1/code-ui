@@ -3,6 +3,7 @@ import {
   readTerminalPermissionMode,
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
+import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
 
 // The footer's mode reader lives beside this parser; its callers import both from here.
 export { readTerminalPermissionMode, type TerminalPermissionMode }
@@ -125,8 +126,9 @@ export function parseCodexStatusContext(lines: readonly string[]): TerminalHudCo
 }
 
 // Claude Code's spinner glyphs rotate through these; the verb follows, then an
-// ellipsis. Read from the bottom, where the live line sits.
-const ACTIVITY_LINE = /^\s*[✳✻✽✶✢·*⏺]\s+([A-Z][a-zA-Z]+)…/
+// ellipsis. Read from the bottom, where the live line sits. The same verb the
+// chat's status line reads (mobile-terminal-spinner-line.ts).
+const ACTIVITY_LINE = new RegExp(SPINNER_VERB_SOURCE, 'u')
 
 export function parseTerminalActivity(lines: readonly string[]): string | null {
   for (let index = lines.length - 1; index >= Math.max(0, lines.length - 12); index -= 1) {
