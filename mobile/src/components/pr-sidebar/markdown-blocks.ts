@@ -1,6 +1,7 @@
 import { codeSpanContent, createMarkdownInlineMatcher } from '../markdown-inline-matcher'
 import { isIntrawordUnderscoreToken } from '../markdown-inline-token-rules'
 import { markdownHeadingText } from '../../text/markdown-heading-text'
+import { stripHtmlTagsOutsideCode } from './markdown-html-tags'
 
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
@@ -43,19 +44,8 @@ const ORDERED = /^\s*\d+[.)]\s+(.*)$/
 const HTML_BLOCK = /<(details|blockquote)\b[^>]*>([\s\S]*?)<\/\1>/i
 const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 
-// Removes residual HTML tags from rendered text so stray <b>/<kbd>/<sub> etc. don't
-// show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
-// "a < b" in prose is left alone.
-export function stripHtmlTags(text: string): string {
-  const end = text.lastIndexOf('>') + 1
-  if (end === 0) {
-    return text
-  }
-  // No tag can close in this suffix; keep it literal without retrying every opener.
-  return (
-    text.slice(0, end).replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '') + text.slice(end)
-  )
-}
+// It moved to markdown-html-tags.ts beside the code-aware stripping.
+export { stripHtmlTags } from './markdown-html-tags'
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Drop HTML comments and normalize <br> before block parsing.
@@ -77,11 +67,11 @@ function parseSegment(text: string): MarkdownBlock[] {
     }
     if (m[1].toLowerCase() === 'details') {
       const sm = SUMMARY.exec(m[2])
-      const summary = sm ? stripHtmlTags(sm[1]).trim() : 'Details'
+      const summary = sm ? stripHtmlTagsOutsideCode(sm[1]).trim() : 'Details'
       const body = m[2].replace(SUMMARY, '')
       blocks.push({ kind: 'details', summary: summary || 'Details', body: parseSegment(body) })
     } else {
-      blocks.push({ kind: 'quote', text: stripHtmlTags(m[2]).trim() })
+      blocks.push({ kind: 'quote', text: stripHtmlTagsOutsideCode(m[2]).trim() })
     }
     rest = rest.slice(m.index + m[0].length)
     m = HTML_BLOCK.exec(rest)
@@ -284,8 +274,8 @@ const INLINE =
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
   // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
-  // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
-  const plain = stripHtmlTags(text)
+  // literally, but only between code spans: `Array<string>` is code, not a tag.
+  const plain = stripHtmlTagsOutsideCode(text)
   const matcher = createMarkdownInlineMatcher(plain, INLINE, false, true)
   let cursor = 0
   // Every pass moves matcher.lastIndex forward, so the text's length bounds
