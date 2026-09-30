@@ -234,8 +234,9 @@ describe('the bundled rich Markdown editor document', () => {
     // `markdown-front-matter.ts`, which keeps a document's YAML front matter as written. 32 with
     // `markdown-list-blocks.ts`, which reads a code block inside a list item. 33 with
     // `markdown-leaf-blocks.ts`, setext headings and indented code blocks. 34 with
-    // `markdown-entity-source.ts`, which writes an entity back as the source wrote it.
-    expect(inputs).toHaveLength(34)
+    // `markdown-entity-source.ts`, which writes an entity back as the source wrote it. 35 with
+    // `html-paragraph-markdown.ts`, which writes a paragraph's `<br>` as a hard break.
+    expect(inputs).toHaveLength(35)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

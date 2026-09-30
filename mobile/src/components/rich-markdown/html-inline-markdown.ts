@@ -9,10 +9,26 @@ export function textContent(node: Node): string {
 /**
  * How the nodes under an element are written where something above them decides: a text node
  * under a run the renderer drew from entities is written from its source
- * (markdown-entity-source.ts).
+ * (markdown-entity-source.ts), and a `<br>` as its container writes one — a paragraph's as a hard
+ * break (html-paragraph-markdown.ts), a table cell's as a space, anything else's as the bare
+ * newline it has always been.
  */
 export type InlineContext = {
   text?: (node: Node) => string
+  lineBreak?: (br: Element) => string
+}
+
+/**
+ * The mark a paragraph's `<br>` is written as until the paragraph knows what follows it: NUL,
+ * which no text node holds, since the HTML parser drops it.
+ */
+export function breakMark(): string {
+  return String.fromCharCode(0)
+}
+
+/** Whether a character is space at a mark's edge: whitespace, or a break still to be written. */
+function isEdgeSpace(char: string): boolean {
+  return char === breakMark() || /\s/.test(char)
 }
 
 /** A run the renderer drew from entities, written back from its source where it still can be. */
@@ -39,7 +55,7 @@ export function inlineMarkdown(node: Node | null | undefined, context: InlineCon
   }
   const tag = node.tagName.toLowerCase()
   if (tag === 'br') {
-    return '\n'
+    return context.lineBreak?.(node) ?? '\n'
   }
   if (tag === 'strong' || tag === 'b') {
     return markedMarkdown(node, '**', context)
@@ -80,13 +96,18 @@ export function inlineMarkdown(node: Node | null | undefined, context: InlineCon
  */
 function markedMarkdown(node: Element, marks: string, context: InlineContext): string {
   const inner = inlineChildren(node, context)
-  const words = inner.trim()
-  if (!words) {
+  let start = 0
+  while (start < inner.length && isEdgeSpace(inner[start]!)) {
+    start += 1
+  }
+  let end = inner.length
+  while (end > start && isEdgeSpace(inner[end - 1]!)) {
+    end -= 1
+  }
+  if (start === end) {
     return inner
   }
-  const lead = inner.slice(0, inner.length - inner.trimStart().length)
-  const trail = inner.slice(inner.trimEnd().length)
-  return `${lead}${marks}${words}${marks}${trail}`
+  return `${inner.slice(0, start)}${marks}${inner.slice(start, end)}${marks}${inner.slice(end)}`
 }
 
 /**

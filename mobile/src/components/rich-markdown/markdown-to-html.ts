@@ -11,7 +11,7 @@ import {
 } from './markdown-leaf-blocks'
 import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
-import { reflowLines } from './markdown-reflow'
+import { paragraphParts, reflowLines } from './markdown-reflow'
 
 /** Whether a line opens a block of its own, which is what ends the paragraph being gathered. */
 export function isBlockStart(line: string): boolean {
@@ -178,7 +178,8 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       html.push(setextHeadingHtml(renderInline(reflowLines(paragraph).replace(/\n/g, ' ')), underline))
       continue
     }
-    html.push(`<p>${renderInline(reflowLines(paragraph)).replace(/\n/g, '<br />')}</p>`)
+    const drawn = paragraphParts(paragraph, renderInline)
+    html.push(`<p${drawn.attributes}>${drawn.html}</p>`)
   }
   return html.join('\n') || '<p class="is-empty"><br /></p>'
 }

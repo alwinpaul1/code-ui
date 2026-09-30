@@ -10,6 +10,7 @@ import {
 } from './markdown-table-rows'
 import { inlineChildren, inlineMarkdown, textContent } from './html-inline-markdown'
 import { holdsUnownedList, listMarkdown } from './html-list-markdown'
+import { paragraphMarkdown } from './html-paragraph-markdown'
 
 /** An element that is a block of its own wherever the engine puts it. */
 function isBlockElement(node: Node): node is Element {
@@ -124,7 +125,13 @@ export function blockMarkdown(node: Node): string {
     return headingMarkdown(node, Number(tag.slice(1)))
   }
   if (tag === 'p' || tag === 'div') {
-    return holdsBlocks(node) ? containerBlocks(node).join('\n\n') : inlineChildren(node).trim()
+    if (holdsBlocks(node)) {
+      return containerBlocks(node).join('\n\n')
+    }
+    // A quote draws every source line as a break (markdown-to-html.ts), so its breaks are lines.
+    return node.closest('blockquote') === null
+      ? paragraphMarkdown(node)
+      : inlineChildren(node).trim()
   }
   if (tag === 'blockquote') {
     return quoteMarkdown(node)
@@ -144,8 +151,11 @@ export function blockMarkdown(node: Node): string {
     if (rows.length === 0) {
       return ''
     }
+    // A cell's break is a space: a newline would end the row, and the table with it.
     const cellsFor = (row: Element) =>
-      Array.from(row.children).map((cell) => escapeTableCell(inlineChildren(cell).trim()))
+      Array.from(row.children).map((cell) =>
+        escapeTableCell(inlineChildren(cell, { lineBreak: () => ' ' }).trim())
+      )
     return tableMarkdown(cellsFor(rows[0]!), rows.slice(1).map(cellsFor), {
       separator: node.getAttribute(TABLE_SEPARATOR_ATTRIBUTE),
       bare: node.getAttribute(TABLE_BARE_ATTRIBUTE) === 'true'
