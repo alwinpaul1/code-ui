@@ -48,7 +48,8 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 390, height: 844, scale: 3, fontScale: 1 })
   }
 })
-vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
+// A pasteboard that takes the text; the refusals are in MobileNativeChatMessage.copy-failure.test.tsx.
+vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn(async () => true) }))
 vi.mock('lucide-react-native', () => ({
   ArrowUp: 'ArrowUp',
   ChevronDown: 'ChevronDown',

@@ -1,14 +1,14 @@
-import { memo, useEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
-import * as Clipboard from 'expo-clipboard'
 import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { triggerSuccess } from '../platform/haptics'
+import { copyFailedNotice } from '../components/use-copy-to-clipboard'
 import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
+import { useMobileNativeChatMessageCopy } from './use-mobile-native-chat-message-copy'
 import { renderProseGroup } from './mobile-native-chat-prose-group-view'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
@@ -171,20 +171,11 @@ function MobileNativeChatMessageImpl({
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isAgent = !isUser
-  // Briefly tint the bubble to confirm a copy landed.
-  const [copied, setCopied] = useState(false)
+  // Briefly tint the bubble once a copy landed; say so when it did not.
+  const { copied, error: copyError, copy } = useMobileNativeChatMessageCopy()
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
-  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  useEffect(
-    () => () => {
-      if (copyTimer.current) {
-        clearTimeout(copyTimer.current)
-      }
-    },
-    []
-  )
 
   if (isReasoning) {
     return <MobileNativeChatReasoningNote message={message} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
@@ -255,14 +246,7 @@ function MobileNativeChatMessageImpl({
     if (!text) {
       return
     }
-    void Clipboard.setStringAsync(text)
-    // The hold has no button to press back, so the phone says it landed.
-    triggerSuccess()
-    setCopied(true)
-    if (copyTimer.current) {
-      clearTimeout(copyTimer.current)
-    }
-    copyTimer.current = setTimeout(() => setCopied(false), 700)
+    copy(text)
   }
 
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
@@ -379,6 +363,12 @@ function MobileNativeChatMessageImpl({
             sentPromptControls
           )}
         </Bubble>
+        {/* Under the bubble, in the page's ink rather than the bubble's. */}
+        {copyError ? (
+          <Txt variant="caption" tone="danger" style={{ marginTop: 4 }} accessibilityLiveRegion="polite">
+            {copyFailedNotice(copyError)}
+          </Txt>
+        ) : null}
       </View>
       {turnStatus ? (
         <MobileNativeChatTurnStatus
