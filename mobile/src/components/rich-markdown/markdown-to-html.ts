@@ -2,6 +2,7 @@ import { renderInline } from './markdown-inline-render'
 import { renderListItems } from './markdown-list-render'
 import { isThematicBreak, parseListTree } from './markdown-list-parse'
 import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
+import { frontMatterEnd, frontMatterHtml } from './markdown-front-matter'
 import { opensTable, splitTableRow, tableSourceAttributes } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 import { reflowLines } from './markdown-reflow'
@@ -34,6 +35,11 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
   const lines = markdown.replace(/\r\n?/g, '\n').split('\n')
   const html: string[] = []
   let index = 0
+  const frontMatter = frontMatterEnd(lines)
+  if (frontMatter !== null) {
+    html.push(frontMatterHtml(lines.slice(0, frontMatter)))
+    index = frontMatter
+  }
   while (index < lines.length) {
     const line = lines[index] ?? ''
     if (!line.trim()) {

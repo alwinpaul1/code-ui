@@ -1,4 +1,5 @@
 import { codeBlockMarkdown } from './html-code-block-markdown'
+import { VERBATIM_ATTRIBUTE } from './markdown-front-matter'
 import {
   escapeTableCell,
   TABLE_BARE_ATTRIBUTE,
@@ -75,7 +76,9 @@ export function blockMarkdown(node: Node): string {
       .join('\n')
   }
   if (tag === 'pre') {
-    return codeBlockMarkdown(node)
+    // Raw text, not `textContent()`: a verbatim block is written back byte for byte, a no-break
+    // space included.
+    return node.hasAttribute(VERBATIM_ATTRIBUTE) ? (node.textContent ?? '') : codeBlockMarkdown(node)
   }
   if (tag === 'ul' || tag === 'ol') {
     return listMarkdown(node, 0)
