@@ -1,14 +1,25 @@
 import { gatherListItemContinuation } from './markdown-reflow'
+import { openingFence, outdentCodeLine } from './markdown-code-fence'
+import {
+  leadingSpaces,
+  opensFenceUnder,
+  readItemFenceBody,
+  type ItemBlock
+} from './markdown-list-blocks'
 
 /** One list line, with its marker read and its nesting resolved against the lines around it. */
 export type ParsedListItem = {
   indent: number
+  /** The column the item's words start at, which its later lines and blocks are measured from. */
+  contentIndent: number
   ordered: boolean
   orderedNumber: number | null
   /** Whether the item's checkbox is ticked, or null when it is not a task at all. */
   task: boolean | null
   text: string
   children: ParsedListItem[]
+  /** The blocks after the item's words (markdown-list-blocks.ts), in order. */
+  blocks: ItemBlock[]
 }
 
 /** A tab indents as far as four spaces, so mixed indentation still nests the way it looks. */
@@ -36,21 +47,26 @@ export function parseListLine(line: string): ParsedListItem | null {
   if (isThematicBreak(line)) {
     return null
   }
-  const match = line.match(/^(\s*)((?:[-*+])|(?:\d+[.)]))\s+(.+)$/)
+  const match = line.match(/^(\s*)((?:[-*+])|(?:\d+[.)]))(\s+)(.+)$/)
   if (!match) {
     return null
   }
   const marker = match[2] ?? ''
-  const rawText = match[3] ?? ''
+  const rawText = match[4] ?? ''
   const task = rawText.match(/^\[([ xX])\]\s+(.+)$/)
   const ordered = /^\d/.test(marker)
+  const indent = indentationWidth(match[1] ?? '')
+  // Five columns or more after the marker are one column and an indented code block (CommonMark).
+  const gap = indentationWidth(match[3] ?? '')
   return {
-    indent: indentationWidth(match[1] ?? ''),
+    indent,
+    contentIndent: indent + marker.length + (gap >= 5 ? 1 : gap),
     ordered,
     orderedNumber: ordered ? Number.parseInt(marker, 10) : null,
     task: task ? task[1]!.toLowerCase() === 'x' : null,
     text: task ? task[2]! : rawText,
-    children: []
+    children: [],
+    blocks: []
   }
 }
 
@@ -62,6 +78,54 @@ export function listKind(item: ParsedListItem): 'task' | 'ol' | 'ul' {
   return item.ordered ? 'ol' : 'ul'
 }
 
+type ListLevel = { indent: number; children: ParsedListItem[] }
+
+function isItem(level: ListLevel): level is ParsedListItem {
+  return 'contentIndent' in level
+}
+
+/**
+ * A block at `index`, past any blank lines, that belongs to an open item rather than ending the
+ * list: the deepest item whose content column the line reaches owns it. Null when no item does,
+ * or when what is there is no block an item takes (yet only a fence), which ends the list.
+ */
+function readOwnedBlock(
+  lines: string[],
+  index: number,
+  stack: ListLevel[]
+): { depth: number; block: ItemBlock; nextIndex: number } | null {
+  let next = index
+  while (next < lines.length && !(lines[next] ?? '').trim()) {
+    next += 1
+  }
+  if (next >= lines.length) {
+    return null
+  }
+  const line = lines[next] ?? ''
+  const column = leadingSpaces(line)
+  for (let depth = stack.length - 1; depth >= 1; depth -= 1) {
+    const owner = stack[depth]!
+    if (!isItem(owner) || column < owner.contentIndent) {
+      continue
+    }
+    const fence = openingFence(outdentCodeLine(line, owner.contentIndent))
+    if (fence === null) {
+      return null
+    }
+    const body = readItemFenceBody(lines, next + 1, fence, owner.contentIndent)
+    const block: ItemBlock = {
+      kind: 'code',
+      fence,
+      code: body.code,
+      offset: owner.contentIndent + fence.indent - owner.indent,
+      blankBefore: next > index,
+      afterChildren: owner.children.length
+    }
+    return { depth, block, nextIndex: body.nextIndex }
+  }
+  return null
+}
+
 /**
  * The run of list lines starting at an index, as a tree, and where the run ended.
  *
@@ -70,20 +134,27 @@ export function listKind(item: ParsedListItem): 'task' | 'ol' | 'ul' {
  *
  * `opensBlock` is the block reader's test for a line that starts a block of its own, which ends a
  * wrapped item's continuation (markdown-reflow.ts). Passed in because the block reader imports this.
+ * A fence ends it too, where the item can hold it (markdown-list-blocks.ts).
  */
 export function parseListTree(
   lines: string[],
   startIndex: number,
   opensBlock: (line: string) => boolean
 ): { items: ParsedListItem[]; nextIndex: number } {
-  type ListLevel = { indent: number; children: ParsedListItem[] }
   const root: ListLevel = { indent: -1, children: [] }
   const stack: ListLevel[] = [root]
   let index = startIndex
   while (index < lines.length) {
     const item = parseListLine(lines[index] ?? '')
     if (!item) {
-      break
+      const owned = readOwnedBlock(lines, index, stack)
+      if (owned === null) {
+        break
+      }
+      stack.length = owned.depth + 1
+      ;(stack[owned.depth] as ParsedListItem).blocks.push(owned.block)
+      index = owned.nextIndex
+      continue
     }
     while (stack.length > 1 && item.indent <= stack[stack.length - 1]!.indent) {
       stack.pop()
@@ -91,12 +162,29 @@ export function parseListTree(
     stack[stack.length - 1]!.children.push(item)
     stack.push(item)
     index += 1
+    // An item whose words are a fence holds the code block from its marker line on. Not a task:
+    // its box is its words, and a fence after it is text.
+    const fence = item.task === null ? openingFence(item.text) : null
+    if (fence !== null) {
+      const body = readItemFenceBody(lines, index, fence, item.contentIndent)
+      item.text = ''
+      item.blocks.push({
+        kind: 'code',
+        fence,
+        code: body.code,
+        offset: null,
+        blankBefore: false,
+        afterChildren: 0
+      })
+      index = body.nextIndex
+      continue
+    }
     const continued = gatherListItemContinuation(
       lines,
       index,
       item.text,
       (line) => parseListLine(line) !== null,
-      opensBlock
+      (line) => opensBlock(line) || opensFenceUnder(line, item.contentIndent)
     )
     item.text = continued.text
     index = continued.nextIndex

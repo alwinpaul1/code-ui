@@ -1,5 +1,7 @@
 import { renderInline } from './markdown-inline-render'
 import { listKind, type ParsedListItem } from './markdown-list-parse'
+import { fencedCodeHtml } from './markdown-code-fence'
+import type { ItemBlock } from './markdown-list-blocks'
 import type { RichMarkdownEditorScope } from './document-scope'
 
 /** The attribute that keeps how many columns in from its parent's line an item was written. */
@@ -28,6 +30,38 @@ function indentAttribute(item: ParsedListItem, parent: ParsedListItem | null): s
   return offset === listMarkerColumns(parent.ordered, parent.orderedNumber)
     ? ''
     : ` ${LIST_INDENT_ATTRIBUTE}="${offset}"`
+}
+
+/** One of an item's blocks as markup, with where the source put it where the writer would not. */
+function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
+  const width = listMarkerColumns(item.ordered, item.orderedNumber)
+  return fencedCodeHtml(block.fence, block.code, {
+    columns: block.offset === null || block.offset === width ? null : block.offset,
+    blankBefore: block.blankBefore
+  })
+}
+
+/**
+ * What an item holds, in order: its words (none when a fence opens on its marker line), then its
+ * blocks and its nested lists as its source interleaved them.
+ */
+function itemBodyHtml(scope: RichMarkdownEditorScope, item: ParsedListItem): string {
+  const parts: string[] = []
+  if (item.blocks[0]?.offset !== null) {
+    parts.push(`<p>${renderInline(item.text)}</p>`)
+  }
+  let drawnChildren = 0
+  for (const block of item.blocks) {
+    if (block.afterChildren > drawnChildren) {
+      parts.push(renderListItems(scope, item.children.slice(drawnChildren, block.afterChildren), item))
+      drawnChildren = block.afterChildren
+    }
+    parts.push(itemBlockHtml(block, item))
+  }
+  if (drawnChildren < item.children.length) {
+    parts.push(renderListItems(scope, item.children.slice(drawnChildren), item))
+  }
+  return parts.join('')
 }
 
 /**
@@ -59,21 +93,21 @@ export function renderListItems(
           : ''
     const rendered = group
       .map((item) => {
-        const children = item.children.length ? renderListItems(scope, item.children, item) : ''
+        const body = itemBodyHtml(scope, item)
         const indent = indentAttribute(item, parent)
         if (kind === 'task') {
           const checked = item.task === true
           return (
             `<li data-checked="${String(checked)}"${indent}><label contenteditable="false">` +
             `<input type="checkbox" ${checked ? 'checked ' : ''}${scope.editable ? '' : 'disabled '}/>` +
-            `</label><div><p>${renderInline(item.text)}</p>${children}</div></li>`
+            `</label><div>${body}</div></li>`
           )
         }
         const orderedAttrs =
           kind === 'ol' && item.orderedNumber !== null
             ? ` value="${item.orderedNumber}" data-list-number="${item.orderedNumber}"`
             : ''
-        return `<li${orderedAttrs}${indent}><p>${renderInline(item.text)}</p>${children}</li>`
+        return `<li${orderedAttrs}${indent}>${body}</li>`
       })
       .join('')
     html.push(`<${tag}${attrs}>${rendered}</${tag}>`)

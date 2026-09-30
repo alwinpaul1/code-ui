@@ -231,8 +231,9 @@ describe('the bundled rich Markdown editor document', () => {
     // `markdown-inline-escapes.ts`. None of them imports a package.
     // CODE UI 2026-09-30, the round-trip batch: 30. `html-code-block-markdown.ts` writes a fence
     // back the way its source wrote it (tildes, the whole info string, its indent). 31 with
-    // `markdown-front-matter.ts`, which keeps a document's YAML front matter as written.
-    expect(inputs).toHaveLength(31)
+    // `markdown-front-matter.ts`, which keeps a document's YAML front matter as written. 32 with
+    // `markdown-list-blocks.ts`, which reads a code block inside a list item.
+    expect(inputs).toHaveLength(32)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

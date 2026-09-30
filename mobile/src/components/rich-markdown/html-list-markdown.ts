@@ -1,33 +1,53 @@
-import { inlineChildren } from './html-inline-markdown'
+import { inlineMarkdown } from './html-inline-markdown'
+import { codeBlockMarkdown } from './html-code-block-markdown'
+import { CODE_BLANK_ATTRIBUTE } from './markdown-code-fence'
 import { LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
 
-/**
- * An item's own text: its label and any nested list taken off first.
- *
- * On a copy, because both belong to the live document — the label carries the checkbox the user
- * ticks, and the nested lists are serialized separately at their own indentation.
- */
-export function listItemText(item: Element): string {
-  const clone = item.cloneNode(true)
-  // `cloneNode` is typed as returning a `Node`; an element's deep copy is an element.
-  if (!(clone instanceof Element)) {
-    return ''
-  }
-  clone.querySelectorAll('label').forEach((label) => label.remove())
-  clone.querySelectorAll('ul, ol').forEach((list) => list.remove())
-  return inlineChildren(clone).trim()
-}
+/** What an item holds besides its words: a nested list or a code block, each on its own lines. */
+type ItemBlockElement = { kind: 'list' | 'code'; element: Element }
 
-/** The lists directly inside an item, rather than every list anywhere beneath it. */
-export function directNestedLists(item: Element): Element[] {
-  return Array.from(item.querySelectorAll('ul, ol')).filter((list) => list.closest('li') === item)
+/**
+ * An item's words, and the lists and code blocks it holds, in order.
+ *
+ * The words are every inline node outside those blocks, the task box's `<label>` excluded (it is
+ * the checkbox's chrome, and the writer supplies the marker). An element that holds a block — the
+ * task's `<div>`, a `<p>` the engine nested a list in — is walked into rather than read as words.
+ * A list inside a nested item is that item's, and is never reached here.
+ */
+function itemContent(item: Element): { words: string; blocks: ItemBlockElement[] } {
+  const blocks: ItemBlockElement[] = []
+  let words = ''
+  const walk = (container: Element) => {
+    for (const child of Array.from(container.childNodes)) {
+      if (!(child instanceof Element)) {
+        words += inlineMarkdown(child)
+        continue
+      }
+      const tag = child.tagName.toLowerCase()
+      if (tag === 'label') {
+        continue
+      }
+      if (tag === 'ul' || tag === 'ol' || tag === 'pre') {
+        blocks.push({ kind: tag === 'pre' ? 'code' : 'list', element: child })
+        continue
+      }
+      if (child.querySelector('ul, ol, pre') !== null) {
+        walk(child)
+        continue
+      }
+      words += inlineMarkdown(child)
+    }
+  }
+  walk(item)
+  return { words: words.trim(), blocks }
 }
 
 /**
  * Whether an element carries a list that no list item owns, and so is a block of its own.
  *
- * The mirror of `directNestedLists`: a list under an `li` is that item's, serialized at its own
- * indentation, and any other list is a block wherever the engine put it — including inside a `<p>`.
+ * The mirror of an item's own lists (`itemContent`): a list under an `li` is that item's, serialized
+ * at its own indentation, and any other list is a block wherever the engine put it — including
+ * inside a `<p>`.
  */
 export function holdsUnownedList(element: Element): boolean {
   return Array.from(element.querySelectorAll('ul, ol')).some((list) => list.closest('li') === null)
@@ -41,6 +61,41 @@ export function holdsUnownedList(element: Element): boolean {
 function childColumns(item: Element, parentMarkerColumns: number): number {
   const remembered = Number.parseInt(item.getAttribute(LIST_INDENT_ATTRIBUTE) ?? '', 10)
   return Number.isFinite(remembered) && remembered > 0 ? remembered : parentMarkerColumns
+}
+
+/**
+ * One item as its lines: the marker and its words at `column`, then its code blocks and nested
+ * lists in order, each from the item's line by the marker's width unless its source put it
+ * elsewhere. A code block with no words before it opens on the marker line, as `- ```` does, and
+ * its lines go at the marker's width.
+ */
+function itemMarkdown(item: Element, column: number, marker: string, markerColumns: number) {
+  const { words, blocks } = itemContent(item)
+  const lines: string[] = []
+  let rest = blocks
+  const first = blocks[0]
+  if (words === '' && first?.kind === 'code') {
+    const [fenceLine, ...body] = codeBlockMarkdown(first.element).split('\n')
+    const content = ' '.repeat(column + markerColumns)
+    lines.push(' '.repeat(column) + marker + fenceLine, ...body.map((line) => (line ? content + line : line)))
+    rest = blocks.slice(1)
+  } else {
+    lines.push(' '.repeat(column) + marker + words)
+  }
+  for (const block of rest) {
+    if (block.kind === 'list') {
+      const nested = listMarkdown(block.element, column, markerColumns)
+      if (nested) {
+        lines.push(nested)
+      }
+      continue
+    }
+    if (block.element.hasAttribute(CODE_BLANK_ATTRIBUTE)) {
+      lines.push('')
+    }
+    lines.push(codeBlockMarkdown(block.element, column, markerColumns))
+  }
+  return lines.join('\n')
 }
 
 /**
@@ -81,12 +136,7 @@ export function listMarkdown(
       }
       const itemColumn =
         parentMarkerColumns === null ? column : column + childColumns(item, parentMarkerColumns)
-      const line = ' '.repeat(itemColumn) + marker + listItemText(item)
-      const nested = directNestedLists(item)
-        .map((list) => listMarkdown(list, itemColumn, markerColumns))
-        .filter(Boolean)
-        .join('\n')
-      return nested ? `${line}\n${nested}` : line
+      return itemMarkdown(item, itemColumn, marker, markerColumns)
     })
     .filter(Boolean)
     .join('\n')

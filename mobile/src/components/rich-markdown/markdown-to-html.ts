@@ -17,14 +17,6 @@ export function isBlockStart(line: string): boolean {
 }
 
 /**
- * What ends a wrapped list item's words: a block start, but not a fence, which the list reader
- * does not take into an item and whose indented lines are the item's words as they always were.
- */
-function endsListItemWords(line: string): boolean {
-  return isBlockStart(line) && openingFence(line) === null
-}
-
-/**
  * A quote's lines, markers off, as its paragraphs. A blank quote line is a paragraph break, which
  * a save writes back as a bare `>` (html-block-markdown.ts); it was two breaks inside one
  * paragraph until 2026-09-30, and saved as `> ` with a trailing space. Inside a paragraph every
@@ -135,7 +127,7 @@ export function markdownToHtml(scope: RichMarkdownEditorScope, markdown: string)
       continue
     }
     if (/^\s*(?:[-*+]|\d+[.)])\s+/.test(line)) {
-      const list = parseListTree(lines, index, endsListItemWords)
+      const list = parseListTree(lines, index, isBlockStart)
       // Why: a marker with nothing after it parses as no item, so the run is empty and the index
       // has not moved. Falling through rather than continuing makes the line the text it is.
       if (list.nextIndex > index) {

@@ -17,14 +17,17 @@ export function rememberedColumns(element: Element, attribute: string, fallback:
  * that (markdown-code-fence.ts): its whole info string, tildes or a longer run, and its indent,
  * which every line of the block but a blank one is written at.
  *
- * `indent` is the columns the block's container puts it at, which the block's own remembered
- * indent is added to: a top-level fence three columns in, or a fence under a list item.
+ * `containerColumn` is where its container's line starts: the margin, or a list item's line. The
+ * block goes its remembered columns in from there, or `defaultColumns`, which for a list item is
+ * its marker's width.
  */
-export function codeBlockMarkdown(pre: Element, indent = 0): string {
+export function codeBlockMarkdown(pre: Element, containerColumn = 0, defaultColumns = 0): string {
   const info = pre.getAttribute(CODE_INFO_ATTRIBUTE) ?? pre.getAttribute('data-language') ?? ''
   const code = textContent(pre.querySelector('code') ?? pre).replace(/\n+$/g, '')
   const fence = writtenFence(code, pre.getAttribute(CODE_FENCE_ATTRIBUTE), info)
-  const columns = ' '.repeat(indent + rememberedColumns(pre, CODE_INDENT_ATTRIBUTE, 0))
+  const columns = ' '.repeat(
+    containerColumn + rememberedColumns(pre, CODE_INDENT_ATTRIBUTE, defaultColumns)
+  )
   return [`${fence}${info}`, ...code.split('\n'), fence]
     .map((line) => (line ? columns + line : line))
     .join('\n')

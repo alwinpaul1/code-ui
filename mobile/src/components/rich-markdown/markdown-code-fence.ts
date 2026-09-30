@@ -18,8 +18,13 @@ import { escapeAttr, escapeHtml, escapeLiteralAttr } from './markdown-escaping'
 export const CODE_INFO_ATTRIBUTE = 'data-md-info'
 /** The attribute that keeps a fence the writer would not choose: tildes, or a longer run. */
 export const CODE_FENCE_ATTRIBUTE = 'data-md-fence'
-/** The attribute that keeps how many columns in a fence was written. */
+/**
+ * The attribute that keeps how many columns in a fence was written: from the margin, or from the
+ * line of the list item that holds it.
+ */
 export const CODE_INDENT_ATTRIBUTE = 'data-md-indent'
+/** The attribute that keeps the blank line a list item's fence was written after. */
+export const CODE_BLANK_ATTRIBUTE = 'data-md-blank'
 
 export type OpeningFence = {
   /** The run itself: three or more backticks, or three or more tildes. */
@@ -68,11 +73,21 @@ export function outdentCodeLine(line: string, columns: number): string {
 }
 
 /**
+ * Where a fence sits that the writer would not put it by itself: `columns` in from its container
+ * (the margin, or a list item's line), and a blank line before it inside a list item.
+ */
+export type FencePlacement = { columns: number | null; blankBefore: boolean }
+
+/**
  * A fenced block as markup, with how it was written kept on the `<pre>` where the writer would
  * write it differently: the whole info string, the run, the indent. An ordinary fence carries none
  * of them, so its markup is what it always was.
  */
-export function fencedCodeHtml(fence: OpeningFence, code: string): string {
+export function fencedCodeHtml(
+  fence: OpeningFence,
+  code: string,
+  placement: FencePlacement = { columns: fence.indent > 0 ? fence.indent : null, blankBefore: false }
+): string {
   const attrs = [`data-language="${escapeAttr(fence.language)}"`]
   if (fence.info !== fence.language || escapeAttr(fence.info) !== escapeLiteralAttr(fence.info)) {
     attrs.push(`${CODE_INFO_ATTRIBUTE}="${escapeLiteralAttr(fence.info)}"`)
@@ -80,8 +95,11 @@ export function fencedCodeHtml(fence: OpeningFence, code: string): string {
   if (fence.fence !== codeFenceFor(code)) {
     attrs.push(`${CODE_FENCE_ATTRIBUTE}="${fence.fence}"`)
   }
-  if (fence.indent > 0) {
-    attrs.push(`${CODE_INDENT_ATTRIBUTE}="${fence.indent}"`)
+  if (placement.columns !== null) {
+    attrs.push(`${CODE_INDENT_ATTRIBUTE}="${placement.columns}"`)
+  }
+  if (placement.blankBefore) {
+    attrs.push(`${CODE_BLANK_ATTRIBUTE}="true"`)
   }
   return `<pre ${attrs.join(' ')}><code>${escapeHtml(code)}</code></pre>`
 }
