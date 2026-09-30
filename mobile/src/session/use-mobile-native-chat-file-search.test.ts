@@ -15,11 +15,15 @@ function rpcSuccess(files: string[]): Awaited<ReturnType<RpcClient['sendRequest'
   }
 }
 
-/** The hook reaches only the two members each case supplies, so the rest of the client is a fake. */
-type FileSearchClientParts = { sendRequest: unknown; getGeneration?: () => number }
+/** The hook reaches only the members each case supplies, so the rest of the client is a fake. */
+type FileSearchClientParts = {
+  sendRequest: unknown
+  getGeneration?: () => number
+  getLastConnectedAt?: () => number | null
+}
 
 function fakeClient(parts: FileSearchClientParts): RpcClient {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook calls `sendRequest` and `getGeneration` and nothing else on the client; every other member is unreachable from it.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The hook calls `sendRequest`, `getGeneration` and `getLastConnectedAt` and nothing else on the client; every other member is unreachable from it.
   return parts as RpcClient
 }
 
@@ -190,5 +194,150 @@ describe('useMobileNativeChatFileSearch', () => {
       await Promise.resolve()
     })
     expect(state?.nativeChatFilePaths).toEqual(['docs/readme.md'])
+  })
+
+  // The `@` picker served a query from a cache that never expired, so a file
+  // the agent wrote after the first search never appeared in it: search 'n'
+  // (the host has src/app.ts), the agent writes src/new.ts, and a minute later
+  // 'n' still offered only src/app.ts.
+  describe('a file the agent created after the first search', () => {
+    const searchMissing = {
+      id: 'missing',
+      ok: false as const,
+      error: { code: 'method_not_found', message: 'Unknown method' },
+      _meta: { runtimeId: 'runtime-1' }
+    }
+    const searches = (sendRequest: ReturnType<typeof vi.fn>, method = 'files.searchPaths'): number =>
+      sendRequest.mock.calls.filter(([called]) => called === method).length
+    const search = async (query: string): Promise<void> => {
+      act(() => state?.loadNativeChatFiles(query))
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+    }
+
+    it('is offered once the cached list is older than 10 s, which shows at once meanwhile', async () => {
+      let files = ['src/app.ts']
+      const sendRequest = vi.fn(async () => rpcSuccess(files))
+      await mount(fakeClient({ sendRequest }))
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+
+      files = ['src/app.ts', 'src/new.ts']
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      act(() => state?.loadNativeChatFiles('n'))
+      // The cached list at once, not an empty "still looking" menu.
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+      expect(state?.nativeChatFileSearchPending).toBe(false)
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts', 'src/new.ts'])
+      expect(searches(sendRequest)).toBe(2)
+    })
+
+    it('does not ask the host again for a search repeated within 10 s', async () => {
+      const sendRequest = vi.fn(async (_method: string, params: { query: string }) =>
+        rpcSuccess(params.query === 'n' ? ['src/app.ts'] : ['src/app.ts', 'src/nav.ts'])
+      )
+      await mount(fakeClient({ sendRequest }))
+      await search('n')
+      await search('na')
+      await act(async () => vi.advanceTimersByTimeAsync(9_000))
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+      expect(searches(sendRequest)).toBe(2)
+    })
+
+    it('is offered for a search that first found nothing, without waiting out the 10 s', async () => {
+      let files: string[] = []
+      const sendRequest = vi.fn(async () => rpcSuccess(files))
+      await mount(fakeClient({ sendRequest }))
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual([])
+
+      files = ['src/new.ts']
+      await act(async () => vi.advanceTimersByTimeAsync(1_000))
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual(['src/new.ts'])
+      expect(searches(sendRequest)).toBe(2)
+    })
+
+    it('keeps the cached list when asking the host again fails', async () => {
+      const sendRequest = vi.fn().mockResolvedValueOnce(rpcSuccess(['src/app.ts']))
+      await mount(fakeClient({ sendRequest }))
+      await search('n')
+
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      sendRequest.mockRejectedValueOnce(new Error('socket closed'))
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+      expect(state?.nativeChatFileSearchPending).toBe(false)
+
+      // A refusal that is not method_not_found keeps it too.
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      sendRequest.mockResolvedValueOnce({
+        id: 'files',
+        ok: false as const,
+        error: { code: 'internal_error', message: 'boom' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+      await search('n')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+      expect(searches(sendRequest)).toBe(3)
+    })
+
+    it('is looked up afresh after the host reconnects, even within 10 s', async () => {
+      let connectedAt = 1_000
+      let files = ['src/app.ts']
+      const sendRequest = vi.fn(async () => rpcSuccess(files))
+      await mount(fakeClient({ sendRequest, getLastConnectedAt: () => connectedAt }))
+      await search('n')
+
+      files = ['src/app.ts', 'src/new.ts']
+      connectedAt = 2_000
+      act(() => state?.loadNativeChatFiles('n'))
+      // The old connection's answer is not shown as current.
+      expect(state?.nativeChatFilePaths).toEqual([])
+      expect(state?.nativeChatFileSearchPending).toBe(true)
+      await act(async () => vi.advanceTimersByTimeAsync(120))
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts', 'src/new.ts'])
+      expect(searches(sendRequest)).toBe(2)
+    })
+
+    it('is offered by an older host once its whole-workspace list is older than 10 s', async () => {
+      let files = ['src/app.ts', 'docs/readme.md']
+      const sendRequest = vi.fn(async (method: string) =>
+        method === 'files.searchPaths' ? searchMissing : rpcSuccess(files)
+      )
+      await mount(fakeClient({ sendRequest }))
+      await search('ap')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+
+      // Within 10 s a new query is answered from the list already held.
+      await search('read')
+      expect(searches(sendRequest, 'files.list')).toBe(1)
+
+      files = ['src/app.ts', 'src/apple.ts', 'docs/readme.md']
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      await search('app')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts', 'src/apple.ts'])
+      expect(searches(sendRequest, 'files.list')).toBe(2)
+    })
+
+    it('keeps an older host’s list when reading it again fails', async () => {
+      const sendRequest = vi.fn(async (method: string) =>
+        method === 'files.searchPaths' ? searchMissing : rpcSuccess(['src/app.ts'])
+      )
+      await mount(fakeClient({ sendRequest }))
+      await search('ap')
+
+      await act(async () => vi.advanceTimersByTimeAsync(60_000))
+      sendRequest.mockImplementation(async (method: string) => {
+        if (method === 'files.searchPaths') {
+          return searchMissing
+        }
+        throw new Error('socket closed')
+      })
+      await search('app')
+      expect(state?.nativeChatFilePaths).toEqual(['src/app.ts'])
+      expect(searches(sendRequest, 'files.list')).toBe(2)
+    })
   })
 })
