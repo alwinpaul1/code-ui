@@ -8,7 +8,7 @@ import {
 import { protectMarkdownCode, restoreMarkdownCode } from './mobile-markdown-preview-code'
 import { EMAIL_AUTOLINK_SOURCE } from './markdown-inline-token-rules'
 import { decodeMarkdownHtmlEntities } from './markdown-html-entities'
-import { keepBreaksInLine, markOneLineBlockBreaks } from './markdown-inline-breaks'
+import { keepBreaksInLine, markBlockLineBreaks } from './markdown-inline-breaks'
 
 // Why: README HTML snippets can document escaped entities; repeated cleanup
 // passes must not turn `&amp;lt;` into a real tag and strip it.
@@ -209,8 +209,10 @@ function normalizeAnchorTags(value: string): string {
 // Why: a `<br>` is a hard break, two spaces and a newline, which stripTags
 // keeps and the parser draws as a line break. A bare newline, what it was
 // before, reflows into a space, so 'Name: Ada<br>Role: Admin' drew and copied
-// on one line (review, 2026-09-30). Two in a row, or one before a newline,
-// leave a blank line, a paragraph break, as they did.
+// on one line (review, 2026-09-30). In a paragraph, two in a row, or one
+// before a newline, leave a blank line, a paragraph break, as they did. On a
+// list item's or a quote's lines a `<br>` never gets here: a blank line there
+// ended the list (markBlockLineBreaks keeps it for the block instead).
 function normalizeInlineHtml(value: string): string {
   const imagesNormalized = value
     .replace(/<br\s*\/?>/gi, '  \n')
@@ -264,10 +266,10 @@ export function normalizeMobileMarkdownPreviewHtml(content: string): string {
     content.replace(/\r\n?/g, '\n'),
     true
   )
-  // A `<br>` on a table row or a heading line stands aside until marked has
-  // read the line (markdown-inline-breaks.ts); normalizeInlineHtml below
-  // takes the rest.
-  let next = markOneLineBlockBreaks(protectEscapedMarkup(protectedText))
+  // A `<br>` on a table row, a heading, or a list item's or a quote's line
+  // stands aside until marked has read the block (markdown-inline-breaks.ts);
+  // normalizeInlineHtml below takes the rest.
+  let next = markBlockLineBreaks(protectEscapedMarkup(protectedText))
 
   // Why: repository Markdown often uses small HTML islands for centered README
   // headers and badges. Preview mode should read like Markdown, while Source

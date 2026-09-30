@@ -1,5 +1,6 @@
 import type { Token, Tokens } from 'marked'
 import type { MobileMarkdownBlock } from './mobile-markdown-parser'
+import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
 
 /**
  * A quote, as a run of blocks rather than a single one.
@@ -80,7 +81,9 @@ function quoteParts(
         }
       }
     } else {
-      addProse(child.raw.replace(/\n+$/, ''))
+      // Its source, with each `<br>` the HTML pass kept on the quote's lines
+      // (markBlockLineBreaks) a newline, as one was before the pass kept it.
+      addProse(inlineBreaksAsNewlines(child.raw).replace(/\n+$/, ''))
     }
   }
   flush()

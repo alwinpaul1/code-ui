@@ -21,7 +21,7 @@
 // after it, which is the ragged column the user reported. The phone reflows.
 import { marked, type Token, type Tokens } from 'marked'
 import { quoteBlocks } from './mobile-markdown-quote-blocks'
-import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
+import { inlineBreaksAsLines, inlineBreaksAsNewlines } from './markdown-inline-breaks'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -101,9 +101,10 @@ function reflowProse(value: string): string {
       filled += `${line.replace(/[ \t]+$/, '')} `
     }
   }
-  // A `<br>` the HTML pass kept for a table row that marked read as prose
-  // is a line break here too (markdown-inline-breaks.ts).
-  return inlineBreaksAsNewlines(filled.trim())
+  // A `<br>` the HTML pass kept for a list item, a quote or a heading, or for
+  // a table row that marked read as prose, is a line break here, and two a
+  // gap inside the block (markdown-inline-breaks.ts).
+  return inlineBreaksAsLines(filled.trim())
 }
 
 /** The info string's first word: ```` ```ts title="x" ```` is a TypeScript fence,
@@ -154,7 +155,8 @@ function standaloneImage(token: Tokens.Paragraph): MobileMarkdownBlock | null {
   if (!image.href.trim()) {
     return null
   }
-  return { type: 'image', alt: image.text ?? '', url: image.href }
+  // A kept `<br>` (markBlockLineBreaks) is a line break here too, never its stand-in.
+  return { type: 'image', alt: inlineBreaksAsNewlines(image.text ?? ''), url: inlineBreaksAsNewlines(image.href) }
 }
 
 /** Nested lists are flattened to one run of items carrying their depth: the
@@ -278,7 +280,9 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         const code = token as Tokens.Code
         blocks.push({
           type: 'code',
-          text: code.text,
+          // A fence the HTML pass missed (one in a quote in a list item) can
+          // hold a `<br>` it kept: a line break, as it drew one before.
+          text: inlineBreaksAsNewlines(code.text),
           language: infoLanguage(code.lang),
           closed: isFenceClosed(code.raw)
         })
