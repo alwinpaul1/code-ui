@@ -30,8 +30,29 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ back: vi.fn(), push: vi.fn() })
 }))
 vi.mock('./transport/host-store', () => ({ loadHostCatalog: async () => [] }))
+// The rows are drawn only over settings the desktop answered (2026-09-30: with none, the screen
+// drew an off switch and "None selected" it had never read), so one connected desktop answers.
+// Held once: the real hook memoizes its list, and a fresh client per render reads per render.
+const desktop = vi.hoisted(() => ({
+  clients: [
+    {
+      hostId: 'host-1',
+      state: 'connected',
+      client: {
+        sendRequest: async () => ({
+          id: 'r',
+          ok: true,
+          result: { enabled: false, selectedModelId: '', dictationMode: 'toggle', models: [] }
+        })
+      }
+    }
+  ]
+}))
 vi.mock('./transport/settings-host-client-connections', () => ({
-  useFocusedSettingsHostClients: () => ({ clients: [], focused: true })
+  useFocusedSettingsHostClients: () => ({ clients: desktop.clients, focused: true })
+}))
+vi.mock('./transport/client-context-connection-metrics', () => ({
+  useLastConnectedAt: () => 1000
 }))
 
 import VoiceSettingsScreen from '../app/voice-settings'
@@ -66,6 +87,10 @@ describe('draws the Voice settings screen light in a light session', () => {
           {createElement(VoiceSettingsScreen)}
         </ThemeProvider>
       )
+      // The desktop's answer, through the setup poller.
+      for (let i = 0; i < 6; i += 1) {
+        await Promise.resolve()
+      }
     })
 
     const root = renderer!.root

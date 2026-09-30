@@ -24,30 +24,36 @@ export type ScreencastEvent = {
 type HandleScreencastEventArgs = {
   busyRef: { current: boolean }
   clearStartupTimer: () => void
+  /** Takes down the text this stream put up (its timeout, its error event), and nothing else. */
+  clearStreamError: () => void
   event: ScreencastEvent
   lastZoomResetUrlRef: { current: string }
   resetBrowserZoomState: () => void
   setAddressValue: Dispatch<SetStateAction<string>>
   setBusy: Dispatch<SetStateAction<boolean>>
   setDialog: Dispatch<SetStateAction<BrowserDialogState | null>>
-  setError: Dispatch<SetStateAction<string | null>>
+  /** Puts up the stream's own error text, which a later 'ready' or frame takes down. */
+  showStreamError: (message: string) => void
 }
 
 export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): void {
   const {
     busyRef,
     clearStartupTimer,
+    clearStreamError,
     event,
     lastZoomResetUrlRef,
     resetBrowserZoomState,
     setAddressValue,
     setBusy,
     setDialog,
-    setError
+    showStreamError
   } = args
 
   if (event.type === 'ready') {
     clearStartupTimer()
+    // A stream that says it is ready is not timed out, whatever the timer said before it came.
+    clearStreamError()
     if (busyRef.current) {
       busyRef.current = false
       setBusy(false)
@@ -80,7 +86,9 @@ export function handleBrowserScreencastEvent(args: HandleScreencastEventArgs): v
     }
     const message = event.message ?? event.error?.message ?? 'Browser stream failed.'
     if (shouldSurfaceBrowserError(message)) {
-      setError(message)
+      // The desktop's session reports some errors without ending the stream; frames after one
+      // take it down again (use-mobile-browser-stream.ts).
+      showStreamError(message)
     }
   }
 }

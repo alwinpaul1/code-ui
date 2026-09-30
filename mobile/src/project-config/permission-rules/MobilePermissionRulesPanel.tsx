@@ -69,6 +69,7 @@ export function MobilePermissionRulesPanel({
   const [destination, setDestination] = useState<PermissionRuleDestination>('project')
   const { state, setContent, refresh, save, create } = useProjectConfigFile({
     client,
+    hostId,
     worktreeId,
     relativePath: PERMISSION_SETTINGS_RELATIVE_PATH[destination]
   })
@@ -77,20 +78,22 @@ export function MobilePermissionRulesPanel({
   const styles = useThemedStyles(rulesStyles)
   const { colors } = useTheme()
   const parsed = state.status === 'ready' ? parsePermissionSettings(state.content) : null
+  // The write carries the rules as they were at the tap; no add or remove until it lands.
+  const saving = state.status === 'ready' && state.saving
 
   function commit(settings: Record<string, unknown>) {
     setContent(serializePermissionSettings(settings))
   }
 
   function addRule(category: PermissionRuleCategory, rule: string) {
-    if (!parsed?.ok) {
+    if (!parsed?.ok || saving) {
       return
     }
     commit(withPermissionRuleAdded(parsed.settings, category, rule))
   }
 
   function removeRule(category: PermissionRuleCategory, rule: string) {
-    if (!parsed?.ok) {
+    if (!parsed?.ok || saving) {
       return
     }
     commit(withPermissionRuleRemoved(parsed.settings, category, rule))
@@ -159,16 +162,28 @@ export function MobilePermissionRulesPanel({
       ) : (
         <>
           <ScrollView contentContainerStyle={styles.list}>
-            {PERMISSION_RULE_CATEGORIES.map((category) => (
-              <PermissionRuleSection
-                key={category}
-                category={category}
-                rules={parsed.rules[category]}
-                readOnly={!canWrite}
-                onAdd={() => setAddingTo(category)}
-                onRemove={(rule) => removeRule(category, rule)}
-              />
-            ))}
+            {/* While saving, taps fall through to the scroll view: the lists still scroll. */}
+            <View
+              testID="permission-rule-lists"
+              pointerEvents={saving ? 'none' : 'auto'}
+              accessibilityState={{ disabled: saving }}
+              style={saving ? styles.disabled : undefined}
+            >
+              {PERMISSION_RULE_CATEGORIES.map((category) => (
+                <PermissionRuleSection
+                  key={category}
+                  category={category}
+                  rules={parsed.rules[category]}
+                  readOnly={!canWrite}
+                  onAdd={() => {
+                    if (!saving) {
+                      setAddingTo(category)
+                    }
+                  }}
+                  onRemove={(rule) => removeRule(category, rule)}
+                />
+              ))}
+            </View>
           </ScrollView>
           {writeVerdict === 'forbidden' ? (
             <ProjectConfigReadOnlyNotice />
@@ -231,6 +246,8 @@ function rulesStyles({ colors, radius, space }: Theme) {
     center: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, padding: space.lg },
     centerText: { maxWidth: 280 },
     list: { padding: space.md },
-    footer: { padding: space.md, borderTopWidth: 1, borderTopColor: colors.border }
+    footer: { padding: space.md, borderTopWidth: 1, borderTopColor: colors.border },
+    // The same dim as a disabled Button, over the theme's own colours.
+    disabled: { opacity: 0.5 }
   }
 }
