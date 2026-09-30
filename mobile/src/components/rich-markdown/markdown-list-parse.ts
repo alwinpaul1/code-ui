@@ -1,6 +1,7 @@
 import { gatherListItemContinuation } from './markdown-reflow'
 import { openingFence, outdentCodeLine } from './markdown-code-fence'
-import { readIndentedCode } from './markdown-leaf-blocks'
+import { readIndentedCode, setextLevel } from './markdown-leaf-blocks'
+import { continuesParagraphLazily, isThematicBreak } from './markdown-lazy-line'
 import { opensTable } from './markdown-table-rows'
 import {
   endsItemWords,
@@ -19,33 +20,24 @@ export type ParsedListItem = {
   contentIndent: number
   ordered: boolean
   orderedNumber: number | null
+  /** What follows an ordered item's number, `.` or `)`; null for a bullet. */
+  delimiter: '.' | ')' | null
   /** Whether the item's checkbox is ticked, or null when it is not a task at all. */
   task: boolean | null
   text: string
   children: ParsedListItem[]
   /** The blocks after the item's words (markdown-list-blocks.ts), in order. */
   blocks: ItemBlock[]
+  /**
+   * Whether a blank line stood above the item, which only a nested one can have: past a blank line
+   * the list goes on only into an open item's words, a loose sublist ('- a\n\n  - b').
+   */
+  blankBefore: boolean
 }
 
 /** A tab indents as far as four spaces, so mixed indentation still nests the way it looks. */
 export function indentationWidth(value: string): number {
   return value.replace(/\t/g, '    ').length
-}
-
-/**
- * A thematic break: one of `-`, `*` or `_` three or more times, with spaces or tabs between them
- * allowed (CommonMark 4.1), as the PR renderer's HR reads it. The rule test took only an unbroken
- * run, so `* * *` and `- - -` read as a bullet holding the rest of the marks and saved as a list
- * item, and `_ _ _` as words (review, 2026-09-30).
- *
- * Here rather than in the block reader because both readers need it and the block reader imports
- * this one. A break wins over a list item where a line could be either, as in CommonMark. Any
- * indent, as the editor's rule test has always allowed rather than CommonMark's three columns: an
- * indented `---` under a list item has always ended the item as a rule, and three columns would
- * gather it into the item's words instead.
- */
-export function isThematicBreak(line: string): boolean {
-  return /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/.test(line)
 }
 
 export function parseListLine(line: string): ParsedListItem | null {
@@ -68,17 +60,23 @@ export function parseListLine(line: string): ParsedListItem | null {
     contentIndent: indent + marker.length + (gap >= 5 ? 1 : gap),
     ordered,
     orderedNumber: ordered ? Number.parseInt(marker, 10) : null,
+    delimiter: ordered ? (marker.endsWith(')') ? ')' : '.') : null,
     task: task ? task[1]!.toLowerCase() === 'x' : null,
     text: task ? task[2]! : rawText,
     children: [],
-    blocks: []
+    blocks: [],
+    blankBefore: false
   }
 }
 
-/** Which of the three list shapes an item belongs to; a run of one kind becomes one list. */
-export function listKind(item: ParsedListItem): 'task' | 'ol' | 'ul' {
+/**
+ * Which of the four list shapes an item belongs to; a run of one kind becomes one list. A numbered
+ * task list is a kind of its own: it was a task list like any other until 2026-09-30, drawn and
+ * saved bulleted, so '1. [ ] a' saved as '- [ ] a'.
+ */
+export function listKind(item: ParsedListItem): 'task' | 'ordered-task' | 'ol' | 'ul' {
   if (item.task !== null) {
-    return 'task'
+    return item.ordered ? 'ordered-task' : 'task'
   }
   return item.ordered ? 'ol' : 'ul'
 }
@@ -98,13 +96,35 @@ function endsInBlock(owner: ParsedListItem): boolean {
   return last !== undefined && last.kind !== 'paragraph' && last.afterChildren === owner.children.length
 }
 
+/**
+ * Whether a line ends an item's words, or a paragraph after them: it opens a block of its own
+ * (`opensBlock`, or a fence, a quote or a table the item holds), or it sits at the margin and is no
+ * lazy line (markdown-lazy-line.ts). Nor is an underline there: marked reads '- a\n===' as a
+ * heading inside the item, which the item's reader cannot hold, so the item ends at it as it
+ * always did. A line indented less than the item's words has always been more of them.
+ */
+function endsWords(
+  line: string,
+  under: string | undefined,
+  contentIndent: number,
+  opensBlock: (line: string) => boolean
+): boolean {
+  return (
+    opensBlock(line) ||
+    endsItemWords(line, under, contentIndent) ||
+    (!/^\s/.test(line) && (!continuesParagraphLazily(line, under) || setextLevel(line) !== null))
+  )
+}
+
 type OwnedBlock = { depth: number; block: ItemBlock; nextIndex: number }
 
 /**
  * The block an item owns at `next`: a fence, a quote, a table, an indented code block four columns
  * past its words, or another paragraph of words. A paragraph or indented code needs a blank line
  * before it (without one the line would have been the item's words) unless it follows a code
- * block, a quote or a table. A line that opens a block of its own, or a table the item cannot
+ * block, a quote or a table. Indented code is code whatever its words look like: a marker or a
+ * rule four columns past the item's words ended the list until 2026-09-30, so '- a\n\n      - b'
+ * saved as '- a\n\n- b'. Any other line that opens a block of its own, or a table the item cannot
  * hold, is not one: it ends the list, as it always has.
  */
 function readBlockOf(
@@ -141,7 +161,7 @@ function readBlockOf(
     const offset = leadingSpaces(line) - owner.indent
     return { block: { kind: 'table', lines: table.lines, offset, ...leaf }, nextIndex: table.nextIndex }
   }
-  if ((!blank && !endsInBlock(owner)) || opensBlock(line) || opensTable(line, lines[next + 1])) {
+  if (!blank && !endsInBlock(owner)) {
     return null
   }
   const code = readIndentedCode(lines, next, owner.contentIndent)
@@ -149,12 +169,15 @@ function readBlockOf(
     const offset = owner.contentIndent + 4 - owner.indent
     return { block: { kind: 'indented-code', text: code.code, offset, ...leaf }, nextIndex: code.nextIndex }
   }
+  if (opensBlock(line) || opensTable(line, lines[next + 1])) {
+    return null
+  }
   const words = gatherListItemContinuation(
     lines,
     next + 1,
     line.trim(),
     (candidate) => parseListLine(candidate) !== null,
-    (candidate, under) => opensBlock(candidate) || endsItemWords(candidate, under, owner.contentIndent)
+    (candidate, under) => endsWords(candidate, under, owner.contentIndent, opensBlock)
   )
   const offset = leadingSpaces(line) - owner.indent
   return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
@@ -191,6 +214,33 @@ function readOwnedBlock(
 }
 
 /**
+ * The list line past the blank lines at `index` that nests under an open item, a loose sublist
+ * ('- a\n\n  - b'): indented to the item's words, and less than four columns past them, where it
+ * would be the item's code. Null where there is none. A marker left of every open item's words
+ * ends the list there, as any line that opens a block does (readOwnedBlock).
+ *
+ * The list ended at every blank line before a marker until 2026-09-30, so a save wrote `b` at the
+ * margin as `a`'s sibling, and under a numbered item cut the numbering in two.
+ */
+function nestedItemAfterBlank(lines: string[], index: number, stack: ListLevel[]): number | null {
+  let next = index
+  while (next < lines.length && !(lines[next] ?? '').trim()) {
+    next += 1
+  }
+  const item = next > index ? parseListLine(lines[next] ?? '') : null
+  if (item === null) {
+    return null
+  }
+  for (let depth = stack.length - 1; depth >= 1; depth -= 1) {
+    const owner = stack[depth]!
+    if (isItem(owner) && item.indent >= owner.contentIndent) {
+      return item.indent < owner.contentIndent + 4 ? next : null
+    }
+  }
+  return null
+}
+
+/**
  * The run of list lines starting at an index, as a tree, and where the run ended.
  *
  * A stack rather than recursion because indentation can drop by more than one level at a time, and
@@ -208,9 +258,16 @@ export function parseListTree(
   const root: ListLevel = { indent: -1, children: [] }
   const stack: ListLevel[] = [root]
   let index = startIndex
+  let blankBefore = false
   while (index < lines.length) {
     const item = parseListLine(lines[index] ?? '')
     if (!item) {
+      const nested = nestedItemAfterBlank(lines, index, stack)
+      if (nested !== null) {
+        index = nested
+        blankBefore = true
+        continue
+      }
       const owned = readOwnedBlock(lines, index, stack, opensBlock)
       if (owned === null) {
         break
@@ -223,6 +280,8 @@ export function parseListTree(
     while (stack.length > 1 && item.indent <= stack[stack.length - 1]!.indent) {
       stack.pop()
     }
+    item.blankBefore = blankBefore
+    blankBefore = false
     stack[stack.length - 1]!.children.push(item)
     stack.push(item)
     index += 1
@@ -241,7 +300,7 @@ export function parseListTree(
       index,
       item.text,
       (line) => parseListLine(line) !== null,
-      (line, under) => opensBlock(line) || endsItemWords(line, under, item.contentIndent)
+      (line, under) => endsWords(line, under, item.contentIndent, opensBlock)
     )
     item.text = continued.text
     index = continued.nextIndex

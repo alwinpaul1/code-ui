@@ -76,10 +76,14 @@ export function paragraphParts(
 }
 
 /**
- * The lines under a list item that continue it: indented, non-blank, and neither an item of their
- * own nor the start of another block. Without this the list ENDED at the first continuation line
- * and the rest of the item became a paragraph at the left margin, outside the list — which is what
- * the device screenshot showed for numbered item 2 (2026-09-15).
+ * The lines under a list item that continue it: non-blank, and neither an item of their own nor
+ * the start of another block. Without this the list ENDED at the first continuation line and the
+ * rest of the item became a paragraph at the left margin, outside the list — which is what the
+ * device screenshot showed for numbered item 2 (2026-09-15).
+ *
+ * A line at the margin continues it too, lazily, where `opensBlock` lets it (markdown-lazy-line.ts).
+ * This ended the item at every unindented line until 2026-09-30, so a save cut a git-wrapped item
+ * in two with a blank line.
  *
  * `opensItem` and `opensBlock` are the list's and the block reader's own grammars, handed in so
  * this module reads neither and imports neither: the block reader imports the list parser.
@@ -96,12 +100,7 @@ export function gatherListItemContinuation(
   let index = startIndex
   while (index < lines.length) {
     const next = lines[index] ?? ''
-    if (
-      !next.trim() ||
-      !/^\s/.test(next) ||
-      opensItem(next) ||
-      opensBlock(next, lines[index + 1])
-    ) {
+    if (!next.trim() || opensItem(next) || opensBlock(next, lines[index + 1])) {
       break
     }
     tail.push(next.trim())

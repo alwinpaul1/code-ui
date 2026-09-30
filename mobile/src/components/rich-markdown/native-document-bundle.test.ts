@@ -238,7 +238,9 @@ describe('the bundled rich Markdown editor document', () => {
     // `html-paragraph-markdown.ts`, which writes a paragraph's `<br>` as a hard break.
     // CODE UI 2026-09-30, fix round 2: 36 with `markdown-quote.ts`, which reads a quote's code blocks
     // and nested quotes as blocks.
-    expect(inputs).toHaveLength(36)
+    // CODE UI 2026-09-30, the list batch: 37 with `markdown-lazy-line.ts`, which says which line at
+    // the margin under an item or a quote is still its paragraph's (a lazy continuation line).
+    expect(inputs).toHaveLength(37)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

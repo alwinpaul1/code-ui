@@ -1,6 +1,7 @@
 import { renderInline } from './markdown-inline-render'
 import { closesFence, fencedCodeHtml, openingFence, outdentCodeLine } from './markdown-code-fence'
 import { indentedCodeHtml, readIndentedCode } from './markdown-leaf-blocks'
+import { continuesParagraphLazily } from './markdown-lazy-line'
 
 /**
  * A quote's inside, on the reading half of the round trip: its paragraphs, and the code blocks and
@@ -29,6 +30,113 @@ const NESTED_QUOTE_LIMIT = 8
 /** A quote line with its marker and one space after it off, or null when the line is not one. */
 export function quoteLineContent(line: string): string | null {
   return line.startsWith('>') ? line.replace(/^>\s?/, '') : null
+}
+
+/** Four columns of indent, where a line with no words above it opens indented code. */
+const INDENTED_CODE = /^(?: {4}| {0,3}\t)/
+
+/** A quote's lines as they are read, as far as a lazy line after them cares. */
+type QuoteTail = {
+  take: (line: string) => void
+  /**
+   * The markers a lazy line takes to continue the paragraph the lines so far end in: none for the
+   * quote's own, one `> ` more per quote nested in it. Null when they end in no paragraph.
+   */
+  lazyMarkers: () => string | null
+}
+
+/**
+ * A quote's lines, markers off, fed one at a time, read the way `quoteBlocks` reads them: a fence
+ * runs to its closing fence, a run of marked lines is a quote nested in it, a blank line ends a
+ * paragraph, and a line four columns in with no words above it is code. One pass, so a long quote
+ * with a lazy line every other line costs no more than its length.
+ */
+function quoteTail(depth: number): QuoteTail {
+  let fence: string | null = null
+  let paragraph = false
+  let nested: QuoteTail | null = null
+  return {
+    take(line) {
+      if (fence !== null) {
+        fence = closesFence(line, fence) ? null : fence
+        return
+      }
+      const quoted = depth < NESTED_QUOTE_LIMIT ? quoteLineContent(line) : null
+      if (quoted !== null) {
+        paragraph = false
+        nested ??= quoteTail(depth + 1)
+        nested.take(quoted)
+        return
+      }
+      nested = null
+      const opened = openingFence(line)
+      if (!line.trim() || opened !== null) {
+        paragraph = false
+        fence = opened?.fence ?? null
+        return
+      }
+      paragraph ||= !INDENTED_CODE.test(line)
+    },
+    lazyMarkers() {
+      if (fence !== null) {
+        return null
+      }
+      if (nested !== null) {
+        const inner = nested.lazyMarkers()
+        return inner === null ? null : `> ${inner}`
+      }
+      return paragraph ? '' : null
+    }
+  }
+}
+
+/** How a quote's lines are told apart from the lines around it. */
+export type QuoteLines = {
+  /** A line's content with its markers off, where it is one of the quote's marked lines. */
+  marked: (line: string) => string | null
+  /** Whether a line the quote does not mark may still be one of its lazy lines. */
+  mayBeLazy: (line: string) => boolean
+  /** The quote's lines read before the first one, markers off: one on an item's marker line. */
+  before: readonly string[]
+}
+
+const DOCUMENT_QUOTE: QuoteLines = { marked: quoteLineContent, mayBeLazy: () => true, before: [] }
+
+/**
+ * A quote's lines from `index`, markers off: its marked lines, and after a paragraph the lazy lines
+ * that continue it (markdown-lazy-line.ts), each under the markers that put it in that paragraph,
+ * so '> a\nb' reads as '> a\n> b' and '> > a\nb' as '> > a\n> > b'. Until 2026-09-30 the quote
+ * ended at the first line with no marker, and a save wrote a blank line there: the wrapped words
+ * left the quote. Never after a blank quote line, a fence or indented code, where there is no
+ * paragraph to continue.
+ */
+export function readQuoteLines(
+  lines: readonly string[],
+  index: number,
+  quote: QuoteLines = DOCUMENT_QUOTE
+): { lines: string[]; nextIndex: number } {
+  const tail = quoteTail(1)
+  const read: string[] = []
+  const take = (content: string) => {
+    read.push(content)
+    tail.take(content)
+  }
+  quote.before.forEach(take)
+  let next = index
+  while (next < lines.length) {
+    const line = lines[next] ?? ''
+    const content = quote.marked(line)
+    const markers =
+      content === null && quote.mayBeLazy(line) && continuesParagraphLazily(line, lines[next + 1])
+        ? tail.lazyMarkers()
+        : null
+    if (content === null && markers === null) {
+      break
+    }
+    take(content ?? `${markers}${line.trimStart()}`)
+    next += 1
+  }
+  return { lines: read, nextIndex: next }
 }
 
 /** An element's markup with one more attribute on its opening tag. */

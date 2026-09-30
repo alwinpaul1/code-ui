@@ -41,6 +41,23 @@ function indentAttribute(item: ParsedListItem, parent: ParsedListItem | null): s
  */
 export const ITEM_TIGHT_ATTRIBUTE = 'data-md-tight'
 
+/**
+ * The attribute on a nested item its source wrote after a blank line, a loose sublist
+ * ('- a\n\n  - b'), so a save writes the blank line back (html-list-markdown.ts). Without it the
+ * sublist would be written tight, which CommonMark reads as a different list.
+ */
+export const ITEM_BLANK_ATTRIBUTE = 'data-md-item-blank'
+
+/**
+ * The attribute on a numbered task list: the number it starts from. It is drawn as the bulleted
+ * task list is, since that is the list the editor draws checkboxes in, and this is what tells a
+ * save to number it (html-list-markdown.ts).
+ */
+export const ORDERED_TASK_ATTRIBUTE = 'data-md-ordered'
+
+/** The attribute on a numbered item written with `)` after its number, as in `3)`, not `3.`. */
+export const LIST_DELIMITER_ATTRIBUTE = 'data-md-delimiter'
+
 /** One of an item's blocks as markup, with where the source put it where the writer would not. */
 function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
   const width = listMarkerColumns(item.ordered, item.orderedNumber)
@@ -101,11 +118,22 @@ function itemBodyHtml(scope: RichMarkdownEditorScope, item: ParsedListItem): str
   return parts.join('')
 }
 
+/** A numbered item's own number, and the `)` after it where its source wrote one. */
+function numberAttributes(item: ParsedListItem): string {
+  if (!item.ordered || item.orderedNumber === null) {
+    return ''
+  }
+  const delimiter = item.delimiter === ')' ? ` ${LIST_DELIMITER_ATTRIBUTE}=")"` : ''
+  return ` value="${item.orderedNumber}" data-list-number="${item.orderedNumber}"${delimiter}`
+}
+
 /**
  * A parsed list tree as markup, one list element per run of a single kind.
  *
  * A task item's checkbox mirrors the surface's own editability, because a checkbox left enabled
  * under a read-only document is a control the user can move and the document will not record.
+ * A numbered task list is the bulleted task list's markup with its numbers on it
+ * (ORDERED_TASK_ATTRIBUTE).
  */
 export function renderListItems(
   scope: RichMarkdownEditorScope,
@@ -122,17 +150,19 @@ export function renderListItems(
       index += 1
     }
     const tag = kind === 'ol' ? 'ol' : 'ul'
-    const attrs =
-      kind === 'task'
-        ? ' data-type="taskList"'
-        : kind === 'ol' && group[0]!.orderedNumber !== null
-          ? ` start="${group[0]!.orderedNumber}"`
-          : ''
+    const task = kind === 'task' || kind === 'ordered-task'
+    const first = group[0]!.orderedNumber
+    const attrs = task
+      ? ` data-type="taskList"${kind === 'ordered-task' ? ` ${ORDERED_TASK_ATTRIBUTE}="${first}"` : ''}`
+      : kind === 'ol' && first !== null
+        ? ` start="${first}"`
+        : ''
     const rendered = group
       .map((item) => {
         const body = itemBodyHtml(scope, item)
-        const indent = indentAttribute(item, parent)
-        if (kind === 'task') {
+        const blank = item.blankBefore ? ` ${ITEM_BLANK_ATTRIBUTE}="true"` : ''
+        const indent = `${numberAttributes(item)}${indentAttribute(item, parent)}${blank}`
+        if (task) {
           const checked = item.task === true
           return (
             `<li data-checked="${String(checked)}"${indent}><label contenteditable="false">` +
@@ -140,11 +170,7 @@ export function renderListItems(
             `</label><div>${body}</div></li>`
           )
         }
-        const orderedAttrs =
-          kind === 'ol' && item.orderedNumber !== null
-            ? ` value="${item.orderedNumber}" data-list-number="${item.orderedNumber}"`
-            : ''
-        return `<li${orderedAttrs}${indent}>${body}</li>`
+        return `<li${indent}>${body}</li>`
       })
       .join('')
     html.push(`<${tag}${attrs}>${rendered}</${tag}>`)
