@@ -14,8 +14,10 @@
 //   FROM THE 2.1.285 BINARY (`strings`, read, never run): the send-now row is
 //     `paddingLeft: 2`, dim, chord + "send now" (identical in 2.1.284); the
 //     placeholder is "Press up to edit queued messages" (identical in 2.1.284);
-//     the composer box takes `borderText` from the same code in both builds, so
-//     the named rule is not new in 2.1.285 - it is a shape no fixture had.
+//     the name comes from the banner row (`fv` in 2.1.285, `Ub` in 2.1.284) and
+//     `borderText` carries the fast-mode and ultracode tags; both builds build
+//     the row the same way, so the named rule is not new in 2.1.285 - it is a
+//     shape no fixture had.
 //   CAPTURED 2026-09-30 from Claude Code 2.1.285 via orca terminal read --screen
 //     (a live session named "1152", no queued message on screen): the named
 //     rule row (119 x "─", " 1152 ", ONE trailing "─": 126 columns, no trailing

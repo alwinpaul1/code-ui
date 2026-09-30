@@ -56,4 +56,31 @@ describe('Claude Code 2.1.285 queue under a named prompt rule', () => {
   it('leaves Codex alone: it has its own reader and this screen is no Codex queue', () => {
     expect(codexQueuedMessagesFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152))).toEqual([])
   })
+
+  // How Claude Code builds the row (2.1.285 `fv`, 2.1.284 `Ub`, rebuilt byte for
+  // byte by the review): glyphs = columns - name width - 3, then " name ─"; fast
+  // mode takes a tag and two more columns; a name wider than columns - 3 is cut
+  // with "…" and the row then starts with a space. Widths are the review's.
+  const rowOf = (columns: number, name: string, tag = '') => {
+    const label = tag ? `${name} ${tag}` : name
+    if (label.length > columns - 3) {
+      return ` ${label.slice(0, columns - 6)}… ─`
+    }
+    return '─'.repeat(columns - label.length - 3) + ` ${label} ─`
+  }
+
+  it.each([
+    ['40 columns, a 30-character name (7 glyphs)', rowOf(40, 'n'.repeat(30))],
+    ['46 columns, a 40-character name (3 glyphs)', rowOf(46, 'x'.repeat(40))],
+    ['a name over 81 characters at 126 columns', rowOf(126, 'y'.repeat(100))],
+    ['an overflowing name, cut with an ellipsis, no leading glyph', rowOf(30, 'z'.repeat(60))],
+    ['fast mode at a narrow width', rowOf(40, 'paper-review', '↯ /fast')],
+    ['fast mode with no name', '─'.repeat(30) + ' ↯ /fast ─']
+  ])('keeps the queue for a rule Claude builds with %s', (_name, rule) => {
+    expect(queuedMessagesFromScreen(queuedScreen2_1_285(rule))).toEqual([QUEUED_ROW_TEXT])
+  })
+
+  it('does not take a row that ends in words rather than the rule glyph for a rule', () => {
+    expect(queuedMessagesFromScreen(queuedScreen2_1_285('─'.repeat(40) + ' paper-review'))).toEqual([])
+  })
 })

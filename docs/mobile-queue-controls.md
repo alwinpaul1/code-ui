@@ -184,8 +184,10 @@ not driven live).
 
 Claude Code 2.1.285 (2026-09-30): the send-now row and the placeholder are the
 2.1.284 code, byte for byte in the binary. What broke the reading was the rule
-under the spinner: a session with a name draws the name at the rule's right end
-("──────── paper-review"), and the reader skipped only a bare rule, so it saw
+under the spinner: a session with a name draws it in the rule, `─`×n, the name, and one
+closing ` ─` (119 × `─`, ` 1152 `, `─` at 126 columns; the fast-mode tag from
+`borderText` goes in the same way, and a name wider than the row is cut with
+`…` and the row starts with a space). The reader skipped only a bare rule, so it saw
 no send-now row and the chat drew a queued message as sent. `isPromptRule`
 (`mobile-terminal-queue-block.ts`) now accepts the labelled rule. Test:
 `claude-queue-named-rule-2.1.285.test.ts`; the queued rows are transcribed from the
@@ -193,6 +195,13 @@ phone's screenshot plus the binary, and the named rule and the rows around it
 are captured live (2026-09-30, `orca terminal read --screen`, a session named
 "1152": 119 x "─", " 1152 ", one "─"; the fixture header says which is which). Only the send-now layout (2.1.277 on) is changed; the older
 indented block still stops at a labelled rule.
+
+Because Orca's composer detector accepts only a bare rule above `❯`, the
+`draft` it publishes is empty under a named or fast-mode rule. The queue still
+shows, but the pencil and delete are refused before any key is sent
+(`recallNativeQueue`, test `native-queue-editor-named-rule.test.ts`): a recall
+would move the queue into an input the phone cannot read, and the next send
+would clear it.
 
 Stock, no environment changes, three queued messages: the middle one was
 recalled, edited, and the queue retyped as
