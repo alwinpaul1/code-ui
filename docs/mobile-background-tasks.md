@@ -719,7 +719,8 @@ and `MobileWorkflowCard.tsx`.
   back at every later Stop (reviewed with the real Stop and status-line scripts,
   2026-09-30). It still ends on its own notification, a `done=`, a pane `done`,
   or a later Stop whose `run=` lacks it; a launch after the last Stop spoke is
-  not judged by it. No Stop yet: nothing retires it.
+  not judged by it. With no Stop yet, no `run=` retires it; its notification, a
+  `done=` and a pane `done` still do.
 - **Attribution rule.** A lane names no workflow, so lanes are counted on a card
   only when nothing says they could be another workflow's: exactly one workflow
   running in the loaded window; a Stop has spoken (`stopRunningTaskIds`) and
@@ -731,8 +732,9 @@ and `MobileWorkflowCard.tsx`.
   cannot vouch for what ran before it. Otherwise the lanes are left as they
   were, ordinary agent rows, not attributed and not folded. Counted lanes are
   taken off the running list and not counted twice in "N running tasks". A lane
-  a finished workflow left on a stale roster started before the next launch, so
-  it is not counted on it.
+  a finished workflow left on a stale roster usually started before the next
+  launch and is not counted on it; when two workflows overlapped it can have
+  started after, and it is counted until the next Stop's roster clear drops it.
 - **Finished**: the notification moves it to Finished. The `<usage>` block is
   read from after `</result>` (the result is model-written and can quote one),
   and gives "N agents", "N tokens", "N failed" (`agents_error`, danger tone) and
