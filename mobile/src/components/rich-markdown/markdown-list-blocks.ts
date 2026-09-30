@@ -1,16 +1,18 @@
 import { closesFence, openingFence, outdentCodeLine, type OpeningFence } from './markdown-code-fence'
 import { quoteLineContent } from './markdown-quote'
+import { opensTable, readTableRows } from './markdown-table-rows'
 
 /**
  * The blocks a list item holds after its words, read the way CommonMark reads an item's
  * container: a line belongs to the item while it sits at or past the item's content column (where
  * its words start: two columns in for `- `, three for `1. `), and a fence there is the item's
  * code block, with the content column taken off every line of it. A quote there is the item's
- * quote, its lines read as any quote's are (markdown-quote.ts).
+ * quote, its lines read as any quote's are (markdown-quote.ts), and a table is the item's table.
  *
  * Until 2026-09-30 the item's wrapped-words reader took an indented fence for more words, so
  * '- a\n  ```\n  code\n  ```\n- b', the commonest shape in a CLAUDE.md, saved as '- a ``` code ```',
- * and a quote the same way: '- a\n  > quote' saved as '- a > quote'.
+ * and a quote the same way: '- a\n  > quote' saved as '- a > quote'. A table there ended the list,
+ * so a save wrote it at the margin, outside the item.
  */
 
 /** A fenced block inside an item. */
@@ -53,7 +55,18 @@ export type ItemQuoteBlock = {
   afterChildren: number
 }
 
-export type ItemBlock = ItemCodeBlock | ItemQuoteBlock | ItemLeafBlock
+/** A table inside an item. */
+export type ItemTableBlock = {
+  kind: 'table'
+  /** Its header line, its separator line and its rows, as written. */
+  lines: readonly string[]
+  /** Columns from the item's own line to the header, or null for one on the marker line. */
+  offset: number | null
+  blankBefore: boolean
+  afterChildren: number
+}
+
+export type ItemBlock = ItemCodeBlock | ItemQuoteBlock | ItemTableBlock | ItemLeafBlock
 
 /** The spaces a line starts with. A tab is not read as indent here, so a tabbed fence is words. */
 export function leadingSpaces(line: string): number {
@@ -169,15 +182,53 @@ function opensQuoteUnder(line: string, contentColumn: number): boolean {
   return leadingSpaces(line) <= contentColumn + 3 && line.trimStart().startsWith('>')
 }
 
-/** Whether a line ends an item's wrapped words by opening a block: a fence, a quote. */
-export function endsItemWords(line: string, contentColumn: number): boolean {
-  return opensFenceUnder(line, contentColumn) || opensQuoteUnder(line, contentColumn)
+/**
+ * Whether a line and the one under it open a table an item whose words start at `contentColumn`
+ * holds: its header up to three columns past that column, and its separator not left of it. A
+ * table left of it stays what it always was, the item's words; marked takes it into the item as a
+ * lazy line, and the item's reader does not read lines lazily.
+ */
+function opensTableUnder(line: string, under: string | undefined, contentColumn: number): boolean {
+  const spaces = leadingSpaces(line)
+  return (
+    spaces >= contentColumn &&
+    spaces <= contentColumn + 3 &&
+    under !== undefined &&
+    leadingSpaces(under) >= contentColumn &&
+    opensTable(line, under)
+  )
+}
+
+/** The table an item holds from `index`, its lines as written, or null when none opens there. */
+export function readItemTable(
+  lines: readonly string[],
+  index: number,
+  contentColumn: number
+): { lines: string[]; nextIndex: number } | null {
+  if (!opensTableUnder(lines[index] ?? '', lines[index + 1], contentColumn)) {
+    return null
+  }
+  const body = readTableRows(lines, index + 2, contentColumn)
+  return { lines: lines.slice(index, index + 2).concat(body.rows), nextIndex: body.nextIndex }
+}
+
+/** Whether a line ends an item's wrapped words by opening a block: a fence, a quote, a table. */
+export function endsItemWords(
+  line: string,
+  under: string | undefined,
+  contentColumn: number
+): boolean {
+  return (
+    opensFenceUnder(line, contentColumn) ||
+    opensQuoteUnder(line, contentColumn) ||
+    opensTableUnder(line, under, contentColumn)
+  )
 }
 
 /**
- * The block an item's marker line opens rather than words: a fence ('- ```') or a quote
- * ('- > a'), and the lines under it at the content column that are the block's. Null when the
- * item's first words are words.
+ * The block an item's marker line opens rather than words: a fence ('- ```'), a quote ('- > a')
+ * or a table's header ('- | x |' over its separator), and the lines under it at the content column
+ * that are the block's. Null when the item's first words are words.
  */
 export function markerLineBlock(
   lines: readonly string[],
@@ -195,6 +246,16 @@ export function markerLineBlock(
   if (quoted !== null) {
     const quote = readItemQuoteLines(lines, index, quoted, contentColumn)
     return { block: { kind: 'quote', lines: quote.lines, ...opened }, nextIndex: quote.nextIndex }
+  }
+  const separator = lines[index]
+  if (
+    separator !== undefined &&
+    leadingSpaces(separator) >= contentColumn &&
+    opensTable(text, separator)
+  ) {
+    const body = readTableRows(lines, index + 1, contentColumn)
+    const table = [text, separator, ...body.rows]
+    return { block: { kind: 'table', lines: table, ...opened }, nextIndex: body.nextIndex }
   }
   return null
 }

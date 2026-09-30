@@ -4,6 +4,7 @@ import { CODE_BLANK_ATTRIBUTE, fencedCodeHtml } from './markdown-code-fence'
 import { indentedCodeHtml } from './markdown-leaf-blocks'
 import type { ItemBlock } from './markdown-list-blocks'
 import { quoteHtml } from './markdown-quote'
+import { tableHtml } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 
 /** The attribute that keeps how many columns in from its parent's line an item was written. */
@@ -51,14 +52,19 @@ function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
       })
     case 'indented-code':
       return indentedCodeHtml(block.text, block.offset === width + 4 ? null : block.offset)
-    case 'quote': {
-      // Where a fence keeps its blank line (CODE_BLANK_ATTRIBUTE), so does a quote.
+    case 'quote':
+    case 'table': {
+      // Where a fence keeps its blank line (CODE_BLANK_ATTRIBUTE), so do a quote and a table.
       const indent =
         block.offset === null || block.offset === width
           ? ''
           : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`
-      const blank = block.blankBefore ? ` ${CODE_BLANK_ATTRIBUTE}="true"` : ''
-      return quoteHtml(block.lines, `${indent}${blank}`)
+      const attributes = `${indent}${block.blankBefore ? ` ${CODE_BLANK_ATTRIBUTE}="true"` : ''}`
+      if (block.kind === 'quote') {
+        return quoteHtml(block.lines, attributes)
+      }
+      const [header = '', separator = '', ...rows] = block.lines
+      return tableHtml(header, separator, rows, attributes)
     }
     case 'paragraph': {
       const indent = block.offset === width ? '' : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`

@@ -4,38 +4,42 @@ import { CODE_BLANK_ATTRIBUTE, CODE_INDENT_ATTRIBUTE } from './markdown-code-fen
 import { INDENTED_CODE_ATTRIBUTE } from './markdown-leaf-blocks'
 import { ITEM_TIGHT_ATTRIBUTE, LIST_INDENT_ATTRIBUTE } from './markdown-list-render'
 
-/** One piece of what an item holds, in order: a paragraph of words, a code block, a quote or a list. */
+/** One piece of what an item holds, in order: words, a code block, a quote, a table or a list. */
 type ItemPart =
   | { kind: 'words'; words: string; element: Element | null }
   | { kind: 'list'; element: Element }
   | { kind: 'code'; element: Element }
   | { kind: 'quote'; element: Element }
+  | { kind: 'table'; element: Element }
 
 /**
  * A block element written as markdown at the margin: html-block-markdown.ts's `blockMarkdown`,
- * handed in because that module imports this one. It writes an item's quote.
+ * handed in because that module imports this one. It writes an item's quote and table.
  */
 export type BlockWriter = (block: Element) => string
 
 /**
- * The writer a caller with none gets: the element's words, which is how an item's quote was
- * written until 2026-09-30. Only a test that writes a list with no quote in it calls without one.
+ * The writer a caller with none gets: the element's words, which is how an item's quote or table
+ * was written until 2026-09-30. Only a test that writes a list with neither in it calls without one.
  */
 const wordsOf: BlockWriter = (block) => inlineMarkdown(block).trim()
 
 /** The part a block element inside an item is, or null for one that is not a block of its own. */
-function blockPartKind(tag: string): 'list' | 'code' | 'quote' | null {
+function blockPartKind(tag: string): 'list' | 'code' | 'quote' | 'table' | null {
   if (tag === 'ul' || tag === 'ol') {
     return 'list'
   }
   if (tag === 'pre') {
     return 'code'
   }
+  if (tag === 'table') {
+    return 'table'
+  }
   return tag === 'blockquote' ? 'quote' : null
 }
 
 /**
- * What an item holds, in order: its paragraphs, code blocks, quotes and nested lists.
+ * What an item holds, in order: its paragraphs, code blocks, quotes, tables and nested lists.
  *
  * Words are every inline node outside those blocks, the task box's `<label>` excluded (it is the
  * checkbox's chrome, and the writer supplies the marker). A `<p>` or `<div>` is a paragraph of its
@@ -72,7 +76,7 @@ function itemParts(item: Element): ItemPart[] {
       if (paragraph) {
         flush()
       }
-      if (child.querySelector('ul, ol, pre, blockquote, p, div') !== null) {
+      if (child.querySelector('ul, ol, pre, blockquote, table, p, div') !== null) {
         walk(child)
       } else if (paragraph) {
         run = inlineMarkdown(child)
@@ -114,8 +118,8 @@ export function holdsUnownedList(element: Element): boolean {
 
 /**
  * The block an item with no words before it opens on its marker line, written at the margin: a
- * fence nothing moved elsewhere, as `- ```` does, or a quote, as `- > a` does. Null for anything
- * else, which goes under an empty marker.
+ * fence nothing moved elsewhere, as `- ```` does, a quote, as `- > a` does, or a table. Null for
+ * anything else, which goes under an empty marker.
  */
 function markerLineMarkdown(part: ItemPart | undefined, writeBlock: BlockWriter): string | null {
   if (
@@ -125,28 +129,54 @@ function markerLineMarkdown(part: ItemPart | undefined, writeBlock: BlockWriter)
   ) {
     return codeBlockMarkdown(part.element, 0, 0, false)
   }
-  return part?.kind === 'quote' ? writeBlock(part.element) : null
+  return part?.kind === 'quote' || part?.kind === 'table' ? writeBlock(part.element) : null
+}
+
+/** Whether a first line would be read as a row of a table above it: one with a pipe. */
+function readsAsRow(written: string): boolean {
+  return (written.split('\n')[0] ?? '').includes('|')
 }
 
 /**
  * Whether a later paragraph goes straight under the block before it, as its source wrote it
- * (ITEM_TIGHT_ATTRIBUTE): after a code block, or after a quote when its words would not be read as
- * more of the quote. Without a blank line after words it would be the same paragraph.
+ * (ITEM_TIGHT_ATTRIBUTE): after a code block, after a quote when its words would not be read as
+ * more of the quote, after a table when they would not be read as a row. Without a blank line
+ * after words it would be the same paragraph.
  */
 function followsTight(previous: ItemPart['kind'] | null, part: ItemPart & { kind: 'words' }) {
   return (
     part.element?.hasAttribute(ITEM_TIGHT_ATTRIBUTE) === true &&
-    (previous === 'code' || (previous === 'quote' && !part.words.startsWith('>')))
+    (previous === 'code' ||
+      (previous === 'quote' && !part.words.startsWith('>')) ||
+      (previous === 'table' && !readsAsRow(part.words)))
   )
 }
 
 /**
+ * Whether a quote or a table goes under a blank line: where its source had one
+ * (CODE_BLANK_ATTRIBUTE), and where the block before would take its first line in — a quote after
+ * a quote, a table after a table, a quote whose first line has a pipe after a table (a row), and a
+ * table after a nested list, whose last item's words would take its header.
+ */
+function blankBeforeBlock(
+  part: ItemPart & { kind: 'quote' | 'table' },
+  previous: ItemPart['kind'] | null,
+  written: string
+): boolean {
+  if (part.element.hasAttribute(CODE_BLANK_ATTRIBUTE) || previous === part.kind) {
+    return true
+  }
+  return part.kind === 'table' ? previous === 'list' : previous === 'table' && readsAsRow(written)
+}
+
+/**
  * One item as its lines: the marker and its first paragraph at `column`, then its paragraphs, code
- * blocks, quotes and nested lists in order, each from the item's line by the marker's width unless
- * its source put it elsewhere. A later paragraph has a blank line before it (without one it would
- * be the words before it), except straight after a code block or a quote where its source had
- * none. A quote has one where its source did, and after another quote, which it would join. A code
- * block or a quote with no words before it opens on the marker line.
+ * blocks, quotes, tables and nested lists in order, each from the item's line by the marker's
+ * width unless its source put it elsewhere. A later paragraph has a blank line before it (without
+ * one it would be the words before it), except straight after a block where its source had none.
+ * A quote or a table has one where its source did, or where it would join the block before
+ * (blankBeforeBlock). A code block, a quote or a table with no words before it opens on the marker
+ * line.
  */
 function itemMarkdown(
   item: Element,
@@ -178,12 +208,13 @@ function itemMarkdown(
       if (nested) {
         lines.push(nested)
       }
-    } else if (part.kind === 'quote') {
-      if (part.element.hasAttribute(CODE_BLANK_ATTRIBUTE) || previous === 'quote') {
+    } else if (part.kind === 'quote' || part.kind === 'table') {
+      const written = writeBlock(part.element)
+      if (blankBeforeBlock(part, previous, written)) {
         lines.push('')
       }
       const pad = ' '.repeat(column + remembered(part.element, markerColumns))
-      lines.push(...writeBlock(part.element).split('\n').map((line) => (line ? pad + line : line)))
+      lines.push(...written.split('\n').map((line) => (line ? pad + line : line)))
     } else if (part.kind === 'code') {
       const indentable = previous !== 'list'
       if (writesIndented(part.element, indentable) || part.element.hasAttribute(CODE_BLANK_ATTRIBUTE)) {
@@ -212,7 +243,8 @@ function itemMarkdown(
  * An ordered item's own number is preferred over its position, because the browser renumbers a
  * pasted or split item in the markup, and the source has to say what the surface shows.
  *
- * `writeBlock` writes an item's quote (BlockWriter); html-block-markdown.ts always passes one.
+ * `writeBlock` writes an item's quote or table (BlockWriter); html-block-markdown.ts always passes
+ * one.
  */
 export function listMarkdown(
   element: Element,

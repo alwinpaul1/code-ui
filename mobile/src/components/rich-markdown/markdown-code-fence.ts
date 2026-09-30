@@ -23,7 +23,7 @@ export const CODE_FENCE_ATTRIBUTE = 'data-md-fence'
  * line of the list item that holds it.
  */
 export const CODE_INDENT_ATTRIBUTE = 'data-md-indent'
-/** The attribute that keeps the blank line a list item's fence, or its quote, was written after. */
+/** The attribute that keeps the blank line a list item's fence, quote or table was written after. */
 export const CODE_BLANK_ATTRIBUTE = 'data-md-blank'
 /**
  * The attribute that keeps how many lines a fence's code had, where every one is blank and there

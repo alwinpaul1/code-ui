@@ -1,3 +1,5 @@
+import { renderInline } from './markdown-inline-render'
+
 /**
  * A table row's cells, on both halves of the round trip.
  *
@@ -150,4 +152,60 @@ export function tableMarkdown(
       : dashesFor(headers, bare)
   return [rowMarkdown(headers, bare), separator, ...bodyRows.map((row) => rowMarkdown(row, bare))]
     .join('\n')
+}
+
+/** The columns a line's leading whitespace reaches, a tab as four. */
+function leadingColumns(line: string): number {
+  return (line.match(/^[ \t]*/)?.[0] ?? '').replace(/\t/g, '    ').length
+}
+
+/**
+ * The rows under a table's separator from `index`: every line with a pipe, `column` or more
+ * columns in, up to the first blank one or one without. `column` is 0 at the margin, where any
+ * indent is a row, and a list item's content column inside one, left of which the item has ended.
+ */
+export function readTableRows(
+  lines: readonly string[],
+  index: number,
+  column: number
+): { rows: string[]; nextIndex: number } {
+  let next = index
+  while (next < lines.length) {
+    const line = lines[next] ?? ''
+    if (!line.trim() || !line.includes('|') || leadingColumns(line) < column) {
+      break
+    }
+    next += 1
+  }
+  return { rows: lines.slice(index, next), nextIndex: next }
+}
+
+/**
+ * A table as markup, from its header line, its separator and its row lines as written, with
+ * `attributes` on the `<table>` beside the ones that keep its source (a list item's table keeps
+ * where it sits, markdown-list-render.ts).
+ *
+ * A row keeps a cell past the header's count: it is still the file's text, and cutting rows to the
+ * header deleted it on the next save (every build before 2026-09-23). The header keeps its own
+ * width, so a ragged row stays ragged, which GFM allows, rather than the whole table gaining an
+ * empty column on the desktop. A short row still pads to the header.
+ */
+export function tableHtml(
+  headerLine: string,
+  separatorLine: string,
+  rowLines: readonly string[],
+  attributes = ''
+): string {
+  const headers = splitTableRow(headerLine)
+  const head = headers.map((cell) => `<th>${renderInline(cell)}</th>`).join('')
+  const body = rowLines
+    .map((line) => {
+      const row = splitTableRow(line)
+      const width = Math.max(headers.length, row.length)
+      const cells = Array.from({ length: width }, (_, cellIndex) => row[cellIndex] ?? '')
+      return `<tr>${cells.map((cell) => `<td>${renderInline(cell)}</td>`).join('')}</tr>`
+    })
+    .join('')
+  const source = tableSourceAttributes(headerLine, separatorLine)
+  return `<table${source}${attributes}><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
 }
