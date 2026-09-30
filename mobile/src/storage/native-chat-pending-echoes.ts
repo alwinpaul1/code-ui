@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 import { withPhotosWhere, type MobileNativeChatPendingMessage } from '../session/mobile-native-chat-pending-echo'
 
 const PREFIX = 'orca:chatPendingEchoes:'
@@ -146,7 +147,7 @@ export function writeNativeChatPendingEchoes(
       ? AsyncStorage.setItem(key, JSON.stringify(stored))
       : AsyncStorage.removeItem(key)
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'chat pending echoes', pending.length > 0 ? 'save' : 'erase')
   barriers.set(sessionKey, barrier)
   void barrier.then(() => {
     if (barriers.get(sessionKey) === barrier) {

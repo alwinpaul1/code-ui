@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { barrierAfterWrite } from './refused-write-log'
 
 const PREVIEW_PREFIX = 'orca:chatImagePreviews:'
 
@@ -69,12 +70,11 @@ export function writeNativeChatImagePreviews(
 ): Promise<void> {
   const key = previewStorageKey(sessionKey)
   const kept = persistableImagePreviews(previews)
+  const saving = Object.keys(kept).length > 0
   const write = (barriers.get(sessionKey) ?? Promise.resolve()).then(() =>
-    Object.keys(kept).length > 0
-      ? AsyncStorage.setItem(key, JSON.stringify(kept))
-      : AsyncStorage.removeItem(key)
+    saving ? AsyncStorage.setItem(key, JSON.stringify(kept)) : AsyncStorage.removeItem(key)
   )
-  const barrier = write.catch(() => undefined)
+  const barrier = barrierAfterWrite(write, 'chat photo previews', saving ? 'save' : 'erase')
   barriers.set(sessionKey, barrier)
   void barrier.then(() => {
     if (barriers.get(sessionKey) === barrier) {
