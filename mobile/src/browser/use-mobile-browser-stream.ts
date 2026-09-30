@@ -220,13 +220,30 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
     }
     busyRef.current = true
     setBusy(true)
+    // The text this stream put up: its startup timeout, or an error event the desktop sends without
+    // ending the stream. The subscription stays open after either, so a later 'ready' or frame
+    // proves the stream alive and takes that text down. Only that text: a command's failure the
+    // pane shows through the same `error` is not the stream's to clear.
+    let streamError: string | null = null
+    const showStreamError = (message: string): void => {
+      streamError = message
+      setError(message)
+    }
+    const clearStreamError = (): void => {
+      if (streamError === null) {
+        return
+      }
+      const shown = streamError
+      streamError = null
+      setError((current) => (current === shown ? null : current))
+    }
     let startupTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
       if (streamGenerationRef.current !== generation) {
         return
       }
       busyRef.current = false
       setBusy(false)
-      setError('Browser stream timed out.')
+      showStreamError('Browser stream timed out.')
     }, 15_000)
     const clearStartupTimer = (): void => {
       if (startupTimer) {
@@ -248,13 +265,14 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
         handleBrowserScreencastEvent({
           busyRef,
           clearStartupTimer,
+          clearStreamError,
           event: payload as ScreencastEvent,
           lastZoomResetUrlRef,
           resetBrowserZoomState,
           setAddressValue,
           setBusy,
           setDialog,
-          setError
+          showStreamError
         })
       },
       {
@@ -263,6 +281,7 @@ export function useMobileBrowserStream(args: MobileBrowserStreamArgs) {
             return
           }
           clearStartupTimer()
+          clearStreamError()
           if (cacheKey) {
             applyFrameThrottled(frame, cacheKey)
           }
