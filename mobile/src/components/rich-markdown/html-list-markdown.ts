@@ -66,7 +66,11 @@ function itemParts(item: Element): ItemPart[] {
   return parts.filter((part) => part.kind !== 'words' || part.words !== '')
 }
 
-/** The columns a remembered attribute names, positive, or `fallback`. */
+/**
+ * The columns a nested item, or an item's later paragraph, goes in from the line of the item that
+ * holds it: where its source put it (LIST_INDENT_ATTRIBUTE, markdown-list-render.ts), or else
+ * `fallback`, the marker's width, which is where CommonMark needs it to be.
+ */
 function remembered(element: Element | null, fallback: number): number {
   const value = Number.parseInt(element?.getAttribute(LIST_INDENT_ATTRIBUTE) ?? '', 10)
   return Number.isFinite(value) && value > 0 ? value : fallback
@@ -75,21 +79,12 @@ function remembered(element: Element | null, fallback: number): number {
 /**
  * Whether an element carries a list that no list item owns, and so is a block of its own.
  *
- * The mirror of an item's own lists (`itemContent`): a list under an `li` is that item's, serialized
+ * The mirror of an item's own lists (`itemParts`): a list under an `li` is that item's, serialized
  * at its own indentation, and any other list is a block wherever the engine put it — including
  * inside a `<p>`.
  */
 export function holdsUnownedList(element: Element): boolean {
   return Array.from(element.querySelectorAll('ul, ol')).some((list) => list.closest('li') === null)
-}
-
-/**
- * The columns a nested item goes in from its parent's line: where its source put it
- * (LIST_INDENT_ATTRIBUTE, markdown-list-render.ts), or else the parent's marker width, which is
- * where CommonMark needs a child to be.
- */
-function childColumns(item: Element, parentMarkerColumns: number): number {
-  return remembered(item, parentMarkerColumns)
 }
 
 /** Whether a code block can open on its item's marker line: a fence nothing moved elsewhere. */
@@ -186,7 +181,7 @@ export function listMarkdown(
         markerColumns = marker.length
       }
       const itemColumn =
-        parentMarkerColumns === null ? column : column + childColumns(item, parentMarkerColumns)
+        parentMarkerColumns === null ? column : column + remembered(item, parentMarkerColumns)
       return itemMarkdown(item, itemColumn, marker, markerColumns)
     })
     .filter(Boolean)
