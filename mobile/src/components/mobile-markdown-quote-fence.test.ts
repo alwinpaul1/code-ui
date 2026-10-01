@@ -119,3 +119,63 @@ describe('a fenced code block written inside a quote', () => {
     })
   })
 })
+
+// Decided 2026-10-01: a fence under a list item inside a quote is drawn as
+// code, as GitHub and marked both draw it. The quote kept the whole list as
+// its raw source, so the fence drew as backticks around words. The list's
+// lines are still the quote's text, as they were; only the fence comes out,
+// inside the bar, and a list with no fence in it is untouched.
+describe('a fenced code block under a list item inside a quote', () => {
+  const quote = (...lines: string[]) => parseMobileMarkdown(lines.map((line) => `> ${line}`.trimEnd()).join('\n'))
+
+  it('comes out as code inside the quote, after the item', () => {
+    expect(quote('- a', '  ```', '  code', '  ```')).toEqual([
+      { type: 'quote', text: '- a' },
+      { type: 'code', text: 'code', language: undefined, closed: true, quoted: true, continuesQuote: true }
+    ])
+  })
+
+  it('keeps a numbered item’s number and the fence’s language, and the item after it', () => {
+    expect(quote('1. a', '   ```js', '   x = 1', '   ```', '2. b')).toEqual([
+      { type: 'quote', text: '1. a' },
+      { type: 'code', text: 'x = 1', language: 'js', closed: true, quoted: true, continuesQuote: true },
+      { type: 'quote', text: '2. b', continuesQuote: true }
+    ])
+  })
+
+  it('draws the item’s words after the fence at its indent, with no second marker', () => {
+    expect(quote('- a', '  ```', '  code', '  ```', '  after', '- b')).toEqual([
+      { type: 'quote', text: '- a' },
+      { type: 'code', text: 'code', language: undefined, closed: true, quoted: true, continuesQuote: true },
+      { type: 'quote', text: '  after\n- b', continuesQuote: true }
+    ])
+  })
+
+  it('takes a fence out of a nested item, and keeps a task’s box', () => {
+    expect(quote('- a', '  - b', '    ```', '    c', '    ```')).toEqual([
+      { type: 'quote', text: '- a\n  - b' },
+      { type: 'code', text: 'c', language: undefined, closed: true, quoted: true, continuesQuote: true }
+    ])
+    expect(quote('- [x] done', '  ```', '  log', '  ```')[0]).toEqual({ type: 'quote', text: '- [x] done' })
+  })
+
+  it('leaves a list with no fence in it the quote text it was, as written', () => {
+    expect(quote('- a', '  b', '- c')).toEqual([{ type: 'quote', text: '- a\n  b\n- c' }])
+    expect(quote('- a **x**', '  `code`', '- c')).toEqual([{ type: 'quote', text: '- a **x**\n  `code`\n- c' }])
+  })
+
+  describe('at the degenerate sizes', () => {
+    it('reads an item that is only a fence as the fence, with no empty row above it', () => {
+      expect(quote('- ```', '  x', '  ```')).toEqual([
+        { type: 'code', text: 'x', language: undefined, closed: true, quoted: true }
+      ])
+    })
+
+    it('reads an empty fence under an item as an empty code block', () => {
+      expect(quote('- a', '  ```', '  ```')).toEqual([
+        { type: 'quote', text: '- a' },
+        { type: 'code', text: '', language: undefined, closed: true, quoted: true, continuesQuote: true }
+      ])
+    })
+  })
+})

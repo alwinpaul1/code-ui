@@ -195,3 +195,21 @@ describe('a fenced code block inside a quote', () => {
     })
   })
 })
+
+// Decided 2026-10-01: a fence under a list item inside a quote is code, as
+// GitHub and marked draw it; it drew as backticks around words in the quote.
+describe('a fenced code block under a list item inside a quote', () => {
+  it.each(SCHEMES)('draws as a code block inside the bar, after the item’s words (%s)', (scheme) => {
+    const renderer = render('> - run this:\n>   ```sh\n>   pnpm test\n>   ```\n> - then this', scheme)
+    expect(codeBlocks(renderer.root, scheme).map(codeOf)).toEqual(['pnpm test'])
+    expect(quoteWords(renderer)).toEqual(['- run this:', '- then this'])
+    const quoteBars = bars(renderer)
+    expect(quoteBars).toHaveLength(3)
+    expect(codeBlocks(quoteBars[1]!, scheme)).toHaveLength(1)
+    expect(flat(quoteBars[0]!.props.style).borderLeftColor).toBe(
+      (scheme === 'light' ? lightColors : darkColors).borderStrong
+    )
+    expect(textOf(renderer.root)).not.toContain('`')
+    act(() => renderer.unmount())
+  })
+})

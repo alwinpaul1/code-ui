@@ -29,11 +29,49 @@ import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
  * too. Its words keep the `>` they were drawn with (they are the inner
  * quote's), and fill the width as the outer quote's always have. Any other
  * child (a heading, a list, a table) is still its raw source in the quote's
- * text, as before, so a fence under a list item INSIDE a quote is still drawn
- * as that text: taking it out would mean drawing a list inside the bar.
+ * text, as before.
+ *
+ * Except a list with a fence under one of its items (decided 2026-10-01: draw
+ * it as code, as GitHub and marked do). That list goes through the parser's
+ * own list conversion, which takes the fence out after its item; the list's
+ * rows stay quote text, written back as lines (listAsQuoteText), and the fence
+ * is a quoted code block between them. A list with no fence is its raw source,
+ * as before. So is one whose conversion holds a block the bar cannot hold (a
+ * table, a quote).
  */
 
 type QuotePart = { prose: string } | { code: Extract<MobileMarkdownBlock, { type: 'code' }> }
+type ListBlock = Extract<MobileMarkdownBlock, { type: 'list' }>
+
+/** Whether a fence sits anywhere under the list's items, nested lists too. */
+function holdsFence(tokens: readonly Token[] | undefined): boolean {
+  return (tokens ?? []).some(
+    (token) =>
+      token.type === 'code' ||
+      (token.type === 'list' && (token as Tokens.List).items.some((item) => holdsFence(item.tokens)))
+  )
+}
+
+/** A converted list's rows as the lines its source would draw in the quote:
+ *  each at its depth, with its marker and box, and a row that goes on after a
+ *  fence at the item's indent with no marker. */
+function listAsQuoteText(list: ListBlock): string {
+  return list.items
+    .map((item) => {
+      const pad = '  '.repeat(item.depth)
+      const marker = item.continuation
+        ? ''
+        : item.number !== undefined
+          ? `${item.number}. `
+          : '- '
+      const box = item.checked === undefined ? '' : item.checked ? '[x] ' : '[ ] '
+      const indent = pad + ' '.repeat(item.continuation ? 2 : marker.length)
+      const [first = '', ...rest] = item.text.split('\n')
+      const head = item.continuation ? indent : pad + marker + box
+      return [head + first, ...rest.map((line) => indent + line)].join('\n')
+    })
+    .join('\n')
+}
 
 /** An inner quote's words as its source marked them, blank lines as a bare `>`. */
 function markedAsQuoted(text: string): string {
@@ -70,6 +108,20 @@ function quoteParts(
         if (block.type === 'code') {
           parts.push({ code: block })
         }
+      }
+    } else if (child.type === 'list' && holdsFence((child as Tokens.List).items.flatMap((item) => item.tokens))) {
+      const blocks = convert([child])
+      if (blocks.every((block) => block.type === 'list' || block.type === 'code')) {
+        for (const block of blocks) {
+          if (block.type === 'code') {
+            flush()
+            parts.push({ code: block })
+          } else if (block.type === 'list') {
+            addProse(listAsQuoteText(block))
+          }
+        }
+      } else {
+        addProse(inlineBreaksAsNewlines(child.raw).replace(/\n+$/, ''))
       }
     } else if (child.type === 'blockquote') {
       for (const part of quoteParts(child as Tokens.Blockquote, reflow, convert)) {
