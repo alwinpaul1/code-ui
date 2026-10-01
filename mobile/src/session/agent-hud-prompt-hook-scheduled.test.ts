@@ -92,48 +92,66 @@ describe('the prompt hook on a loop tick', () => {
     expect(runHook(`${wide.slice(0, 199)}`, tickRows(wide))).not.toContain('sc=')
   })
 
-  // A sentinel loop (`/loop` with no prompt, or a loop.md) stores `<<autonomous-loop>>`
-  // and its kin as the task's prompt, so the fire row holds the sentinel, never
-  // the words Claude Code resolves it into at fire time and hands the hook
-  // (2.1.286, read from its fire handler, not seen in a payload). With no words
-  // to compare, only a fire row that is the transcript's LAST line marks: the
-  // tick's own user row is written after the hook, so a wider window would mark
-  // every prompt typed within it after a sentinel tick.
-  describe('on a tick whose fire row holds a sentinel', () => {
-    const resolved = '# Autonomous loop tick\nRun the autonomous check and report in one line.'
-    const SENTINELS = ['<<autonomous-loop>>', '<<autonomous-loop-dynamic>>', '<<loop.md>>', '<<loop.md-dynamic>>']
+  // A sentinel loop (`/loop` with no prompt, or a loop.md) stores a sentinel as
+  // its prompt, but the fire row holds the literal `/loop` or `/loop (loop.md)`
+  // (`mon` writes U(task), 2.1.286 @48710795), never the words the turn holds,
+  // which Claude Code resolves the sentinel into at fire time. With no words to
+  // compare, BOTH must hold: the last fire row of the 8-line tail is one of
+  // those two literals, AND the prompt opens as the resolved words do. Either
+  // alone marks typed prompts: any prompt typed within eight lines after a
+  // sentinel tick, or any prompt that merely opens like a tick.
+  describe('on a tick whose fire row holds /loop', () => {
+    const OPENERS = [
+      '# Autonomous loop tick\nRun the autonomous check and report in one line.',
+      '# Autonomous loop tick (dynamic pacing)\nRun the check, then pick the next delay.',
+      '# Autonomous loop check\nYou are in a loop. Each tick runs the check below.',
+      '# /loop tick — loop.md tasks\nWork through the tasks below and report.',
+      '# /loop tick — loop.md absent (dynamic pacing)\nNo file; pick the next delay.'
+    ]
+    const FIRES = ['/loop', '/loop (loop.md)']
 
-    it.each(SENTINELS)('marks a tick whose fire row holds the sentinel %s, not the words', (sentinel) => {
-      const beacon = runHook(resolved, [reply, tickRows(sentinel)[0]!])
-      expect(beacon).toContain(' sc=1')
-      expect(parseAgentHudBeaconPayload(beacon)?.desktopPrompt).toMatchObject({ scheduled: true })
-    })
-
-    it('marks a first delivery that opens with the preamble, whatever its words', () => {
-      expect(runHook('# Autonomous loop check\nYou are in a loop.', [reply, tickRows('<<autonomous-loop>>')[0]!])).toContain(' sc=1')
-    })
-
-    it('leaves a prompt typed three lines after a sentinel fire unmarked', () => {
-      const beacon = runHook('Stop the watch now', [tickRows('<<autonomous-loop>>')[0]!, toolRow, toolRow, toolRow])
-      expect(beacon).not.toContain('sc=1')
-    })
-
-    it('leaves a prompt typed after the tick’s own rows unmarked', () => {
-      expect(runHook('Stop the watch now', [reply, ...tickRows('<<autonomous-loop>>'), reply])).not.toContain('sc=1')
-    })
-
-    it('does not take a near-sentinel for one', () => {
-      for (const prompt of ['<<autonomous-loop>> now', '<<autonomous>>', 'autonomous-loop', '<<loop.md-weekly>>']) {
-        expect(runHook('Stop the watch now', [reply, tickRows(prompt)[0]!])).not.toContain('sc=1')
+    it.each(OPENERS)('marks the resolved words %#, whatever the sentinel', (words) => {
+      for (const fire of FIRES) {
+        const beacon = runHook(words, [reply, tickRows(words, fire)[0]!])
+        expect(beacon).toContain(' sc=1')
+        expect(parseAgentHudBeaconPayload(beacon)?.desktopPrompt).toMatchObject({ scheduled: true })
       }
     })
 
-    it('marks nothing without a readable transcript', () => {
-      expect(runHook(resolved, null)).not.toContain('sc=1')
+    it('marks it with a tool row between the fire row and the hook', () => {
+      expect(runHook(OPENERS[0]!, [tickRows(OPENERS[0]!, '/loop')[0]!, toolRow, toolRow])).toContain(' sc=1')
     })
 
-    it('reads a sentinel row of an empty transcript as nothing', () => {
-      expect(runHook(resolved, [''])).not.toContain('sc=1')
+    it('leaves a prompt typed with other words after a sentinel fire unmarked', () => {
+      expect(runHook('Stop the watch now', [reply, tickRows(OPENERS[0]!, '/loop')[0]!])).not.toContain('sc=1')
+    })
+
+    it('leaves a typed /loop command unmarked, bare or with a prompt', () => {
+      const fire = tickRows(OPENERS[0]!, '/loop')[0]!
+      expect(runHook('/loop check the build every 5m', [reply, fire])).not.toContain('sc=1')
+      expect(runHook('/loop', [reply, fire])).not.toContain('sc=1')
+      expect(runHook('/loop (loop.md)', [reply, tickRows(OPENERS[0]!, '/loop (loop.md)')[0]!])).not.toContain('sc=1')
+    })
+
+    it('leaves a prompt that opens like a tick unmarked when no sentinel fire row is near', () => {
+      expect(runHook(OPENERS[0]!, [reply, toolRow])).not.toContain('sc=1')
+      expect(runHook(OPENERS[0]!, [tickRows('Check the build host', 'Check the build host')[0]!])).not.toContain('sc=1')
+    })
+
+    it('leaves a sentinel fire row further back than the last eight lines unmarked', () => {
+      const rows = [tickRows(OPENERS[0]!, '/loop')[0]!, ...Array.from({ length: 8 }, () => toolRow)]
+      expect(runHook(OPENERS[0]!, rows)).not.toContain('sc=1')
+    })
+
+    it('does not take a near-literal for the sentinel row', () => {
+      for (const fire of ['/loop now', '/loops', '<<autonomous-loop>>', '/loop (loop.md) x']) {
+        expect(runHook(OPENERS[0]!, [reply, tickRows(OPENERS[0]!, fire)[0]!])).not.toContain('sc=1')
+      }
+    })
+
+    it('marks nothing without a readable transcript, or from an empty one', () => {
+      expect(runHook(OPENERS[0]!, null)).not.toContain('sc=1')
+      expect(runHook(OPENERS[0]!, [''])).not.toContain('sc=1')
     })
   })
 

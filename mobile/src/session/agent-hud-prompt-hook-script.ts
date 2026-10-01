@@ -93,19 +93,24 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // in the `case`, so a `*` or `[` in the words is a character, not a pattern.
   // A write that lands after this read leaves no mark, never a wrong one.
   'sp=""; sc=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); n=$(printf %s "$sp" | LC_ALL=C sed -e "s/\\\\\\\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/u/g" -e "s/\\\\\\\\./e/g" | LC_ALL=C tr -d "\\\\200-\\\\277" | wc -c | tr -d " "); [ -n "$sp" ] && { [ "$pr" = "$sp" ] || { [ "${n:-0}" -ge 200 ] && case "$pr" in "$sp"*) true;; *) false;; esac; }; } && sc=" sc=1"',
-  // A sentinel loop's fire row holds `<<autonomous-loop>>`, `<<autonomous-loop-dynamic>>`,
-  // `<<loop.md>>` or `<<loop.md-dynamic>>` as its `prompt`, never the words
-  // Claude Code resolves it into at fire time and passes to this hook
-  // (2.1.286: the fire handler stores the task's own prompt; that the hook
-  // receives the resolved words is inferred from those ticks drawing past a
-  // loaded loop call, not seen in a payload). With no words to compare, only
-  // such a row that is the transcript's LAST line marks: the tick's own user
-  // row is written after the hook, so a wider window would mark every prompt
-  // typed within it after a sentinel tick, and nothing in the tail tells the two
-  // apart. A mid-turn tick has tool rows after its fire row and goes unmarked,
-  // which the phone's own sentinel rule then covers (scheduled-prompt-ticks.ts).
-  '[ -n "$tp" ] && [ -r "$tp" ] && [ -z "$sc" ] && [ "$(tail -n 1 "$tp" 2>/dev/null | grep -c -E "\\"subtype\\":\\"scheduled_task_fire\\".*\\"prompt\\":\\"(<<autonomous-loop(-dynamic)?>>|<<loop\\.md(-dynamic)?>>)\\"" 2>/dev/null)" = 1 ] && sc=" sc=1"',
+  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); ss=""; case "$sp" in "/loop"|"/loop (loop.md)") ss=1; sp="";; esac; n=$(printf %s "$sp" | LC_ALL=C sed -e "s/\\\\\\\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/u/g" -e "s/\\\\\\\\./e/g" | LC_ALL=C tr -d "\\\\200-\\\\277" | wc -c | tr -d " "); [ -n "$sp" ] && { [ "$pr" = "$sp" ] || { [ "${n:-0}" -ge 200 ] && case "$pr" in "$sp"*) true;; *) false;; esac; }; } && sc=" sc=1"',
+  // A sentinel loop (`/loop` with no prompt, or a loop.md) schedules a
+  // sentinel, `<<autonomous-loop>>` and its kin, and resolves it into other
+  // words when the tick fires; this hook receives those RESOLVED words. The fire
+  // row holds neither: `mon` writes `U(task)`, which swaps a sentinel for the
+  // literal `/loop`, or `/loop (loop.md)` for the loop.md pair (Claude Code
+  // 2.1.286, @48710795 in `strings -n 20`). With no words to compare, BOTH
+  // must hold, over the same eight-line tail as above: the last fire row is
+  // one of those two literals (`ss`; set before the words rule so a typed
+  // `/loop` is never marked as the same words), AND the prompt opens as the
+  // resolved words do: `# Autonomous loop ` (tick, dynamic pacing, check) or
+  // `# /loop tick ` (the em dash after it is left out of the pattern; its JSON
+  // escaping is not worth a line). Either alone marks typed prompts. A tick
+  // that fires mid-turn with its fire row further back goes unmarked and falls
+  // to the phone's rule (scheduled-prompt-ticks.ts). The Windows writer never
+  // had `sc=1` and gets no beacon flag (hostTakesAgentHudFlag), so it is not
+  // mirrored.
+  '[ -z "$sc" ] && [ -n "$ss" ] && case "$pr" in "# Autonomous loop "*|"# /loop tick "*) sc=" sc=1";; esac',
   // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
   // session in the same terminal does not echo it (see the status line).
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',

@@ -809,28 +809,36 @@ its own transcript row lands.
 
 **Sentinel loops (`/loop` with no prompt, loop.md).** The task's stored prompt
 is `<<autonomous-loop>>`, `<<autonomous-loop-dynamic>>`, `<<loop.md>>` or
-`<<loop.md-dynamic>>`. The fire handler writes its row from the stored prompt
-(`mon` cuts `task.prompt`), so the fire row and the `CronCreate` call hold the
-sentinel, while the turn holds what `resolveLoopDefaultFire` makes of it at fire
-time (`# Autonomous loop tick…`, `# Autonomous loop tick (dynamic pacing)…`,
-`# /loop tick — loop.md tasks…`; the first delivery is prefixed with
-`# Autonomous loop check` or `The user configured a loop-tasks file.`; all read
-from the 2.1.286 binary, none from a captured transcript). Two rules cover it:
+`<<loop.md-dynamic>>`, and the `CronCreate` call holds it. The fire row does
+NOT: `mon` writes `U(task)`, which swaps a sentinel for the literal `/loop`, or
+`/loop (loop.md)` for the loop.md pair (2.1.286 @48710795). (An earlier
+revision of this section, and commit e137463b's message, said the fire row
+holds the sentinel; that was wrong.) The turn, and so the hook's prompt, holds
+what `resolveLoopDefaultFire` makes of the sentinel at fire time:
+`# Autonomous loop tick…` (also `(dynamic pacing)`), the first delivery's
+`# Autonomous loop check`, and `# /loop tick — …` (`loop.md tasks`, `tasks from
+<path>`, `loop.md absent (dynamic pacing)`), all read from the 2.1.286 binary,
+none from a captured transcript. Two rules cover it:
 
-- The hook sends `sc=1` whatever the prompt is when the transcript's LAST line
-  is a fire row whose `prompt` is exactly one of the four sentinels. Only the
-  last line: with no words to compare, a wider window would mark every prompt
-  typed within it after a sentinel tick, and the tick's own user row is written
-  after the hook, so nothing in the tail tells the two apart. A tick that fires
-  mid-turn has tool rows after its fire row and goes unmarked.
+- The hook sends `sc=1` when BOTH hold over the same eight-line tail as the
+  words rule: the last fire row's `prompt` is exactly `/loop` or
+  `/loop (loop.md)`, and the prompt starts `# Autonomous loop ` or
+  `# /loop tick ` (the em dash is left out of the pattern). Either alone would
+  mark typed prompts: any prompt typed within eight lines after a sentinel tick,
+  or any prompt that merely opens like one. A typed `/loop …` command is never
+  marked (a bare `/loop` is not matched by the words rule either: that rule
+  skips the two literals). A tick that fires mid-turn with its fire row further
+  back goes unmarked and falls to the phone's rule. The PowerShell writer never
+  had `sc=1` and gets no beacon flag, so it is not mirrored.
 - The phone (`scheduled-loop-sentinels.ts`): when a loaded or remembered call's
-  prompt is a sentinel, a desk copy that opens as that sentinel's resolved words
-  do is a tick. A mid-turn sentinel tick falls to this rule. Words a person
-  types that open exactly so, while a sentinel loop is known, lose their bubble
-  until their own row lands.
+  prompt is one of the four sentinels, a desk copy whose folded words start with
+  `# Autonomous loop tick`, `# Autonomous loop check` or `# /loop tick — ` is a
+  tick (one list for all four: `<<loop.md>>` with no file resolves to the
+  autonomous words). Words a person types that open exactly so, while a sentinel
+  loop is known, lose their bubble until their own row lands.
 
 Not seen in a payload: that the hook receives the RESOLVED words is inferred
-from these ticks drawing past a loaded call, not read from a hook payload.
+from ticks drawing past a loaded call, not read from a hook payload.
 
 **A status copy ahead of its hook twin.** On a tab with the prompt hook a tick
 that fires mid-turn reaches the phone twice: Orca's status copy, then the

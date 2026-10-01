@@ -42,11 +42,14 @@ export const TICK_PROMPT = [...TICK_LINES, '', ...Array.from({ length: 13 }, (_,
 /** The tool call that set the loop up, as the phone's transcript read draws it. */
 export const CRON_CREATE_INPUT = { cron: '*/3 * * * *', recurring: true, prompt: TICK_PROMPT }
 
-/** The two rows a tick writes, with the field names and order read from
+/** The two rows a tick writes (`firePrompt`: what the fire row holds when it is
+ *  not the tick's words: a sentinel loop's fire row holds `/loop` or
+ *  `/loop (loop.md)`, since `mon` writes `U(task)`, which swaps a sentinel for
+ *  those literals (2.1.286 @48710795), while the turn holds the RESOLVED words), with the field names and order read from
  *  session 76ba8f2f (rows 36098 and 36099), compact JSON as Claude Code
  *  writes it. The system row's `prompt` is the first 200 characters, cut
  *  with no mark. */
-export function tickRows(prompt: string = TICK_PROMPT): string[] {
+export function tickRows(prompt: string = TICK_PROMPT, firePrompt: string = prompt): string[] {
   const fire = {
     parentUuid: '814f7e30-6c7d-41b8-b81a-6c46843c1f51',
     isSidechain: false,
@@ -58,7 +61,7 @@ export function tickRows(prompt: string = TICK_PROMPT): string[] {
     uuid: '56252db0-3009-42e7-853d-62f274c7e204',
     taskId: '8b72dbfd',
     cron: '*/3 * * * *',
-    prompt: prompt.slice(0, 200),
+    prompt: firePrompt.slice(0, 200),
     userType: 'external'
   }
   const user = {
