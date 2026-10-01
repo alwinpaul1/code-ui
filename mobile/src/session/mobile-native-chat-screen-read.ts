@@ -19,7 +19,9 @@ const screenWithDraftReader: RpcCompatibleReader<
   const box = raw == null ? {} : Object(raw)
   const terminal: unknown = Reflect.get(box, 'terminal')
   const draft: unknown =
-    terminal != null && typeof terminal === 'object' ? Reflect.get(Object(terminal), 'draft') : undefined
+    terminal != null && typeof terminal === 'object'
+      ? Reflect.get(Object(terminal), 'draft')
+      : undefined
   return {
     compatible: true,
     variant: 'screen-with-draft',

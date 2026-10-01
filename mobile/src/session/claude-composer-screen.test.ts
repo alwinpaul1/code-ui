@@ -14,7 +14,7 @@ import { NAMED_RULES, queuedScreen2_1_285 } from './fixtures/claude-queued-named
 // 2026-10-01 incident (fixtures/claude-composer-2.1.287.ts says what is
 // transcribed and what is modelled).
 
-describe('reading the text in Claude Code\'s input box', () => {
+describe("reading the text in Claude Code's input box", () => {
   it('has the message the report had, 176 characters', () => {
     expect(INCIDENT_MESSAGE).toHaveLength(176)
   })
@@ -58,7 +58,10 @@ describe('reading the text in Claude Code\'s input box', () => {
       const inRows = [...EMPTY_COMPOSER]
       inRows[inRows.findIndex((row) => row.startsWith('❯'))] = `❯ ${hint}`
       expect(readClaudeInput(inRows, '')).toMatchObject({ located: true, text: '' })
-      expect(readClaudeInput(composerWithTextInDraft(), hint)).toMatchObject({ located: true, text: '' })
+      expect(readClaudeInput(composerWithTextInDraft(), hint)).toMatchObject({
+        located: true,
+        text: ''
+      })
     }
   })
 
@@ -86,11 +89,15 @@ describe('reading the text in Claude Code\'s input box', () => {
   })
 
   it('counts a single character as one row', () => {
-    expect(readClaudeInput(composerWithTextInRows('y'), '')).toEqual({ located: true, text: 'y', rows: 1 })
+    expect(readClaudeInput(composerWithTextInRows('y'), '')).toEqual({
+      located: true,
+      text: 'y',
+      rows: 1
+    })
   })
 })
 
-describe('reading Claude Code\'s review notice', () => {
+describe("reading Claude Code's review notice", () => {
   it('reads the notice painted at column 129 above the box', () => {
     expect(claudeSubmitNotice(AFTER_REVIEW_NOTICE)).toBe(REVIEW_NOTICE)
   })
@@ -107,7 +114,10 @@ describe('reading Claude Code\'s review notice', () => {
   })
 
   it('does not take the notice quoted in the conversation, or one far above the box', () => {
-    const quoted = ['  Claude said: Removed 67 invisible characters · review and press Enter to send', ...EMPTY_COMPOSER]
+    const quoted = [
+      '  Claude said: Removed 67 invisible characters · review and press Enter to send',
+      ...EMPTY_COMPOSER
+    ]
     expect(claudeSubmitNotice(quoted)).toBeNull()
     const far = [REVIEW_NOTICE, 'a', 'b', 'c', 'd', 'e', 'f', ...EMPTY_COMPOSER.slice(2)]
     expect(claudeSubmitNotice(far)).toBeNull()

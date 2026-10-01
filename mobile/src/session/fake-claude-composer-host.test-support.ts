@@ -49,11 +49,18 @@ export type FakeComposerHostOptions = {
 type Send = { text: string; enter: boolean }
 
 const RULE = '─'.repeat(90)
+/** Writes further apart than this are separate stdin reads (the host's PTY
+ *  write and Claude's read are a few milliseconds; this is generous). */
+const SEPARATE_READS_AFTER_MS = 50
 
 export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
   const width = (options.columns ?? 90) - 2
   const publishes = options.publishes ?? 'draft'
-  const conversation = options.conversation ?? ['⏺ Done. The change is in.', '', '✻ Sautéed for 31s']
+  const conversation = options.conversation ?? [
+    '⏺ Done. The change is in.',
+    '',
+    '✻ Sautéed for 31s'
+  ]
   let input = ''
   let notice: string | null = null
   let pending = ''
@@ -61,6 +68,7 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
   const sends: Send[] = []
   /** Every message Claude actually took as a turn. */
   const submitted: string[] = []
+  let lastWriteAt = -Infinity
   let reads = 0
   let enters = 0
   /** Bytes Claude read at once, per read. */
@@ -68,13 +76,15 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
   /** Runs once, in the read that follows it, before its bytes are processed. */
   let beforeNextRead: (() => void) | null = null
 
-  const hasControl = (text: string) => [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
+  const hasControl = (text: string) =>
+    [...text].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
 
   function killLastRow(): void {
     if (input.length === 0) {
       return
     }
-    const rowStart = input.length % width === 0 ? input.length - width : input.length - (input.length % width)
+    const rowStart =
+      input.length % width === 0 ? input.length - width : input.length - (input.length % width)
     input = input.slice(0, Math.max(0, rowStart))
   }
 
@@ -111,9 +121,13 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     enters += 1
     if (hasControl(input)) {
       const stripped = [...input]
-        .map((c) => (c === '\x15' ? '' : c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? '\n' : c))
+        .map((c) =>
+          c === '\x15' ? '' : c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? '\n' : c
+        )
         .join('')
-      const removed = [...input].filter((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127).length
+      const removed = [...input].filter(
+        (c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127
+      ).length
       notice = `Removed ${removed} invisible characters · review and press Enter to send`
       input = stripped
       return
@@ -159,6 +173,13 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     if (method === 'terminal.send') {
       const text = body.text ?? ''
       sends.push({ text, enter: body.enter === true })
+      // Writes made close together are one stdin read; a pause between them (a
+      // timer in the test, which has to be a fake clock for this to move) makes
+      // the next one a read of its own.
+      if (pending !== '' && Date.now() - lastWriteAt > SEPARATE_READS_AFTER_MS) {
+        flush()
+      }
+      lastWriteAt = Date.now()
       pending += text
       if (body.enter === true) {
         input += options.junkBeforeEnter ?? ''
@@ -177,7 +198,9 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
           terminal: {
             source: 'screen',
             tail: screen(),
-            ...(publishes === 'draft' ? { draft: input || options.placeholder || '' } : { draft: '' })
+            ...(publishes === 'draft'
+              ? { draft: input || options.placeholder || '' }
+              : { draft: '' })
           }
         },
         _meta: { runtimeId: 'rt' }

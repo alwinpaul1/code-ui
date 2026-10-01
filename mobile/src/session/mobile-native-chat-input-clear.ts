@@ -69,7 +69,10 @@ export function buildScreenSizedClearInput(rows: number): string {
     return ''
   }
   return buildAgentTuiClearInput(
-    Math.min(Math.ceil(rows) + MOBILE_NATIVE_CHAT_SCREEN_CLEAR_SLACK, MOBILE_NATIVE_CHAT_CLEAR_MAX_ROWS)
+    Math.min(
+      Math.ceil(rows) + MOBILE_NATIVE_CHAT_SCREEN_CLEAR_SLACK,
+      MOBILE_NATIVE_CHAT_CLEAR_MAX_ROWS
+    )
   )
 }
 

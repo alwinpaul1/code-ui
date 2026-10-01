@@ -9,7 +9,12 @@ import { clearClaudeInputVerified, CLEAR_SETTLE_MS } from './mobile-native-chat-
 // input (fake-claude-composer-host.test-support.ts) models that rule, so a clear
 // that coalesces comes back as text on the next look.
 
-const accepted = { id: 'r', ok: true, result: { send: { accepted: true } }, _meta: { runtimeId: 'rt' } }
+const accepted = {
+  id: 'r',
+  ok: true,
+  result: { send: { accepted: true } },
+  _meta: { runtimeId: 'rt' }
+}
 const noSettle = () => Promise.resolve()
 type Host = ReturnType<typeof createFakeComposerHost>
 const clientOf = (host: Host): RpcClient => ({ sendRequest: host.handle }) as unknown as RpcClient
@@ -19,7 +24,8 @@ const clearArgs = (host: Host, believedTexts: readonly (string | null)[] = ['hel
   believedTexts,
   settle: noSettle
 })
-const clearWrites = (host: Host) => host.sends.filter((write) => !write.enter).map((write) => write.text)
+const clearWrites = (host: Host) =>
+  host.sends.filter((write) => !write.enter).map((write) => write.text)
 const methods = (host: Host) => host.handle.mock.calls.map(([method]) => method)
 
 /** A client for a screen that cannot be read: writes go through, every look fails. */
@@ -35,12 +41,14 @@ function clientWithoutScreen(failure: () => Promise<unknown>) {
   return { client: { sendRequest } as unknown as RpcClient, writes, sendRequest }
 }
 
-describe('clearing Claude Code\'s input and proving it empty', () => {
+describe("clearing Claude Code's input and proving it empty", () => {
   it('looks, sends ONE write under 64 bytes, looks again, and only then reports it clear', async () => {
     const host = createFakeComposerHost()
     host.holdInput('x'.repeat(176))
 
-    await expect(clearClaudeInputVerified(clearArgs(host, ['x'.repeat(176)]))).resolves.toBe('cleared')
+    await expect(clearClaudeInputVerified(clearArgs(host, ['x'.repeat(176)]))).resolves.toBe(
+      'cleared'
+    )
 
     expect(methods(host)).toEqual(['terminal.read', 'terminal.send', 'terminal.read'])
     expect(clearWrites(host)).toHaveLength(1)
@@ -57,7 +65,13 @@ describe('clearing Claude Code\'s input and proving it empty', () => {
     await expect(clearClaudeInputVerified(clearArgs(host))).resolves.toBe('still-holds')
 
     // One clear, a look, one more clear, a look: then it stops.
-    expect(methods(host)).toEqual(['terminal.read', 'terminal.send', 'terminal.read', 'terminal.send', 'terminal.read'])
+    expect(methods(host)).toEqual([
+      'terminal.read',
+      'terminal.send',
+      'terminal.read',
+      'terminal.send',
+      'terminal.read'
+    ])
     expect(host.sends.some((write) => write.enter)).toBe(false)
   })
 
@@ -85,7 +99,9 @@ describe('clearing Claude Code\'s input and proving it empty', () => {
   it('writes nothing and reports clear when the input is empty and nothing is believed on it', async () => {
     const host = createFakeComposerHost()
 
-    await expect(clearClaudeInputVerified(clearArgs(host, [null, '', undefined as never]))).resolves.toBe('cleared')
+    await expect(
+      clearClaudeInputVerified(clearArgs(host, [null, '', undefined as never]))
+    ).resolves.toBe('cleared')
 
     expect(host.sends).toEqual([])
     expect(host.reads).toBe(1)
@@ -124,22 +140,36 @@ describe('clearing Claude Code\'s input and proving it empty', () => {
       ['the read times out', () => Promise.reject(new Error('Request timed out'))],
       [
         'an older host answers with the stream, not the screen',
-        () => Promise.resolve({ id: 'r', ok: true, result: { terminal: { source: 'stream', tail: ['x'] } } })
+        () =>
+          Promise.resolve({
+            id: 'r',
+            ok: true,
+            result: { terminal: { source: 'stream', tail: ['x'] } }
+          })
       ],
-      ['the reply is not a screen', () => Promise.resolve({ id: 'r', ok: true, result: { terminal: {} } })],
-      ['the host refuses the read', () => Promise.resolve({ id: 'r', ok: false, error: { code: 'x', message: 'no' } })]
+      [
+        'the reply is not a screen',
+        () => Promise.resolve({ id: 'r', ok: true, result: { terminal: {} } })
+      ],
+      [
+        'the host refuses the read',
+        () => Promise.resolve({ id: 'r', ok: false, error: { code: 'x', message: 'no' } })
+      ]
     ]
     for (const [name, failure] of cases) {
-      it(`sends the text-sized clear as ONE write and calls it unverified when ${name}`, async () => {
+      it(`sends the text-sized clear as ONE write, pauses, and calls it unverified when ${name}`, async () => {
         const { client, writes } = clientWithoutScreen(failure)
         const text = 'a long draft '.repeat(40)
+        const settle = vi.fn(() => Promise.resolve())
 
-        await expect(clearClaudeInputVerified({ client, terminal: 'term', believedTexts: [text], settle: noSettle })).resolves.toBe(
-          'unverified'
-        )
+        await expect(
+          clearClaudeInputVerified({ client, terminal: 'term', believedTexts: [text], settle })
+        ).resolves.toBe('unverified')
 
         expect(writes).toEqual([buildMobileNativeChatClearInputOneRead(text)])
         expect(writes[0]!.length).toBeLessThan(64)
+        // The pause is what keeps the clear out of the body's read (no look separates them).
+        expect(settle).toHaveBeenCalledWith(CLEAR_SETTLE_MS)
       })
     }
   })
@@ -164,13 +194,29 @@ describe('clearing Claude Code\'s input and proving it empty', () => {
       Promise.resolve({
         id: 'r',
         ok: true,
-        result: { terminal: { source: 'screen', tail: ['⏺ Bash(ls)', '  Do you want to proceed?', '❯ 1. Yes', '  2. No', '  Esc to cancel'] } }
+        result: {
+          terminal: {
+            source: 'screen',
+            tail: [
+              '⏺ Bash(ls)',
+              '  Do you want to proceed?',
+              '❯ 1. Yes',
+              '  2. No',
+              '  Esc to cancel'
+            ]
+          }
+        }
       })
     )
 
-    await expect(clearClaudeInputVerified({ client, terminal: 'term', believedTexts: ['hello'], settle: noSettle })).resolves.toBe(
-      'unverified'
-    )
+    await expect(
+      clearClaudeInputVerified({
+        client,
+        terminal: 'term',
+        believedTexts: ['hello'],
+        settle: noSettle
+      })
+    ).resolves.toBe('unverified')
 
     expect(writes).toHaveLength(1)
   })

@@ -9,7 +9,8 @@ import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 
 /** What the desktop input holds after the phone cleared it, said to the user
  *  when it will not go. The draft stays in the composer. */
-export const INPUT_STILL_HOLDS_TEXT = 'The desktop input still holds text. Clear it there, then send again.'
+export const INPUT_STILL_HOLDS_TEXT =
+  'The desktop input still holds text. Clear it there, then send again.'
 
 /**
  * How the clear ended.
@@ -87,8 +88,14 @@ export async function clearClaudeInputVerified(args: {
   let input = await look()
   if (!input?.located) {
     // Nothing to size from or check against: one write, as large as one read allows.
-    const written = await write(buildMobileNativeChatClearInputOneRead(...args.believedTexts))
-    return written ? 'unverified' : 'write-failed'
+    if (!(await write(buildMobileNativeChatClearInputOneRead(...args.believedTexts)))) {
+      return 'write-failed'
+    }
+    // No look follows to separate the clear from the body, so the pause does it:
+    // a clear and a long body arriving as one stdin read is a read of 64 bytes or
+    // more, where every control byte is text (the 2026-10-01 defect again).
+    await settle(CLEAR_SETTLE_MS)
+    return 'unverified'
   }
   for (let pass = 0; pass < MAX_CLEAR_PASSES; pass++) {
     if (input.text === '' && !believesSomething) {

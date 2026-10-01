@@ -89,8 +89,7 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
  *  parameter there, so it is not pinned to "Enter". Anchored to a whole row, and
  *  only in the rows directly above the composer, so a message that quotes it
  *  in the conversation is not mistaken for it. */
-const NOTICE =
-  /^\s*(Removed \d+ invisible characters? · review and press \S+ to send)\s*$/
+const NOTICE = /^\s*(Removed \d+ invisible characters? · review and press \S+ to send)\s*$/
 
 export function claudeSubmitNotice(lines: readonly string[]): string | null {
   for (let at = lines.length - 1; at >= 1; at--) {

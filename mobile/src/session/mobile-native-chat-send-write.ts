@@ -9,7 +9,10 @@ import {
 } from './mobile-native-chat-send'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
-import { clearClaudeInputVerified, INPUT_STILL_HOLDS_TEXT } from './mobile-native-chat-verified-clear'
+import {
+  clearClaudeInputVerified,
+  INPUT_STILL_HOLDS_TEXT
+} from './mobile-native-chat-verified-clear'
 
 /**
  * What a chat send does to the agent's input: clear it, type the body, and for
@@ -31,8 +34,7 @@ import { clearClaudeInputVerified, INPUT_STILL_HOLDS_TEXT } from './mobile-nativ
  */
 export type ChatSendWrite =
   /** Nothing was submitted and the draft goes back to the composer. */
-  | { kind: 'stopped'; message: string }
-  | { kind: 'written'; outcome: MobileNativeChatSendOutcome }
+  { kind: 'stopped'; message: string } | { kind: 'written'; outcome: MobileNativeChatSendOutcome }
 
 type MobileClient = { id: string; type: 'mobile' }
 
@@ -87,7 +89,9 @@ export async function writeChatSend(args: {
   receipts: () => readonly BeaconPromptReceipt[]
 }): Promise<ChatSendWrite> {
   const { agent, client, terminal, text, deadline } = args
-  const mobileClient = args.deviceToken ? { id: args.deviceToken, type: 'mobile' as const } : undefined
+  const mobileClient = args.deviceToken
+    ? { id: args.deviceToken, type: 'mobile' as const }
+    : undefined
   const resolvedLaunchDraft =
     args.syncComposer && typeof args.seed?.createdAt === 'number'
       ? { text: args.seed.text, createdAt: args.seed.createdAt }
@@ -138,7 +142,13 @@ export async function writeChatSend(args: {
   ) {
     return { kind: 'written', outcome }
   }
-  const verdict = await verifyClaudeSubmit({ client, terminal, text, receipts: args.receipts, seenNonces })
+  const verdict = await verifyClaudeSubmit({
+    client,
+    terminal,
+    text,
+    receipts: args.receipts,
+    seenNonces
+  })
   if (verdict.kind === 'not-sent') {
     // Claude asked the user to review it: nothing more is typed or submitted.
     return { kind: 'stopped', message: verdict.message }

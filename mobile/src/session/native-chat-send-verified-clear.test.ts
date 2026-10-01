@@ -16,7 +16,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeComposerHost, type FakeComposerHost } from './fake-claude-composer-host.test-support'
+import {
+  createFakeComposerHost,
+  type FakeComposerHost
+} from './fake-claude-composer-host.test-support'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
@@ -30,10 +33,16 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
 }))
 
 const clientOf = (host: FakeComposerHost): RpcClient =>
-  ({ sendRequest: host.handle, getState: () => 'connected', notifyForeground: vi.fn() }) as unknown as RpcClient
+  ({
+    sendRequest: host.handle,
+    getState: () => 'connected',
+    notifyForeground: vi.fn()
+  }) as unknown as RpcClient
 
 /** 176 characters, one line, as in the report (the words are stand-ins). */
-const MESSAGE = '! sudo pfctl -a com.apple/anchor-v6 -F all; sudo pfctl -X 1111111111111111111; '.repeat(3).slice(0, 176)
+const MESSAGE = '! sudo pfctl -a com.apple/anchor-v6 -F all; sudo pfctl -X 1111111111111111111; '
+  .repeat(3)
+  .slice(0, 176)
 const STILL_HOLDS = 'The desktop input still holds text. Clear it there, then send again.'
 
 describe('a message sent from the chat while the desktop input holds a copy of it', () => {
@@ -216,8 +225,12 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 
-  it('goes on as it did before the looks when the screen cannot be read at all', async () => {
+  it('still keeps the clear and the long body out of one read when the screen cannot be read at all', async () => {
+    // No look to size or check the clear: it goes out as one write, and the pause
+    // after it is what keeps it from coalescing with the 176-character body into
+    // one read of 200 bytes, in which every control byte is text.
     const host = createFakeComposerHost()
+    host.holdInput(MESSAGE)
     const base = host.handle.getMockImplementation()!
     host.handle.mockImplementation(async (method: string, params: unknown) => {
       if (method === 'terminal.read') {
@@ -227,10 +240,11 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     })
     mount(host)
 
-    const outcome = await sendMessage('hello there')
+    const outcome = await sendMessage(MESSAGE)
 
+    expect(host.submitted).toEqual([MESSAGE])
+    expect(host.notice).toBeNull()
     expect(outcome).toBe('accepted')
-    expect(host.submitted).toEqual(['hello there'])
     expect(acceptSend).toHaveBeenCalledTimes(1)
   })
 
@@ -252,7 +266,9 @@ describe('a message sent from the chat while the desktop input holds a copy of i
 
     expect(host.submitted).toEqual(['the short one'])
     expect(outcome).toBe('accepted')
-    expect(host.sends.filter((write) => !write.enter).every((write) => write.text.length < 64)).toBe(true)
+    expect(
+      host.sends.filter((write) => !write.enter).every((write) => write.text.length < 64)
+    ).toBe(true)
   })
 
   it('sends a one-character message into an input that holds nothing', async () => {

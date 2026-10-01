@@ -107,7 +107,10 @@ export async function verifyClaudeSubmit(args: {
       continue
     }
     lastLookAt = elapsed
-    const screen = await readMobileNativeChatScreen({ client: args.client, terminal: args.terminal })
+    const screen = await readMobileNativeChatScreen({
+      client: args.client,
+      terminal: args.terminal
+    })
     if (!screen) {
       // Two looks and not one picture of the screen: nothing here can be told,
       // and waiting out the window would only delay a send that went.
@@ -132,7 +135,8 @@ export async function verifyClaudeSubmit(args: {
       if (held >= 2) {
         return {
           kind: 'not-sent',
-          message: 'Not sent: the message is still in the desktop input. Clear it there, then send again.'
+          message:
+            'Not sent: the message is still in the desktop input. Clear it there, then send again.'
         }
       }
     } else {

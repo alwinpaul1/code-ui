@@ -35,7 +35,11 @@ function scene(looks: readonly Look[]) {
     if (look === 'fail') {
       throw new Error('Request timed out')
     }
-    return { id: 'r', ok: true, result: { terminal: { source: 'screen', tail: look.lines, draft: look.draft ?? '' } } }
+    return {
+      id: 'r',
+      ok: true,
+      result: { terminal: { source: 'screen', tail: look.lines, draft: look.draft ?? '' } }
+    }
   })
   return {
     client: { sendRequest } as unknown as RpcClient,
@@ -68,14 +72,18 @@ const verify = (
 
 const holding = (text: string): Look => ({ lines: composerWithTextInRows(text) })
 const empty: Look = { lines: EMPTY_COMPOSER }
-const receipt = (nonce: string, text: string, extra: Partial<BeaconPromptReceipt> = {}): BeaconPromptReceipt => ({
+const receipt = (
+  nonce: string,
+  text: string,
+  extra: Partial<BeaconPromptReceipt> = {}
+): BeaconPromptReceipt => ({
   nonce,
   text,
   ...extra
 })
 
 describe('checking that Claude took a message the host acked', () => {
-  it('says not sent, with Claude\'s own words, when the review notice is up', async () => {
+  it("says not sent, with Claude's own words, when the review notice is up", async () => {
     const s = scene([{ lines: AFTER_REVIEW_NOTICE }])
 
     await expect(verify(s, INCIDENT_MESSAGE)).resolves.toEqual({
@@ -126,7 +134,12 @@ describe('checking that Claude took a message the host acked', () => {
   })
 
   it('does not count a look that found other text as the words held', async () => {
-    const s = scene([holding('check the build'), holding('something typed at the desk'), holding('check the build'), holding('something typed at the desk')])
+    const s = scene([
+      holding('check the build'),
+      holding('something typed at the desk'),
+      holding('check the build'),
+      holding('something typed at the desk')
+    ])
 
     await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
   })
@@ -139,7 +152,9 @@ describe('checking that Claude took a message the host acked', () => {
   })
 
   it('says unknown, and holds the window open, when a dialog stands where the composer was', async () => {
-    const dialog = { lines: ['⏺ Bash(ls)', '  Do you want to proceed?', '❯ 1. Yes', '  2. No', '  Esc to cancel'] }
+    const dialog = {
+      lines: ['⏺ Bash(ls)', '  Do you want to proceed?', '❯ 1. Yes', '  2. No', '  Esc to cancel']
+    }
     const s = scene([dialog])
 
     await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'unknown' })
@@ -166,8 +181,8 @@ describe('checking that Claude took a message the host acked', () => {
     await expect(verify(s, 'y')).resolves.toEqual({ kind: 'sent' })
   })
 
-  describe('with the hook beacon\'s prompt copy', () => {
-    it('says sent from the agent\'s own copy of the words, before any look', async () => {
+  describe("with the hook beacon's prompt copy", () => {
+    it("says sent from the agent's own copy of the words, before any look", async () => {
       const s = scene([holding('hello')])
 
       await expect(
@@ -181,14 +196,19 @@ describe('checking that Claude took a message the host acked', () => {
       const s = scene([holding('hello')])
 
       await expect(
-        verify(s, 'hello', { receipts: () => [receipt('n1', 'hello')], seenNonces: new Set(['n1']) })
+        verify(s, 'hello', {
+          receipts: () => [receipt('n1', 'hello')],
+          seenNonces: new Set(['n1'])
+        })
       ).resolves.toMatchObject({ kind: 'not-sent' })
     })
 
     it('ignores a copy of other words', async () => {
       const s = scene([holding('hello')])
 
-      await expect(verify(s, 'hello', { receipts: () => [receipt('n2', 'goodbye')] })).resolves.toMatchObject({
+      await expect(
+        verify(s, 'hello', { receipts: () => [receipt('n2', 'goodbye')] })
+      ).resolves.toMatchObject({
         kind: 'not-sent'
       })
     })
@@ -212,7 +232,9 @@ describe('checking that Claude took a message the host acked', () => {
         }
       }
 
-      await expect(verify(s, 'hello', { receipts: () => seen, wait })).resolves.toEqual({ kind: 'sent' })
+      await expect(verify(s, 'hello', { receipts: () => seen, wait })).resolves.toEqual({
+        kind: 'sent'
+      })
     })
   })
 })

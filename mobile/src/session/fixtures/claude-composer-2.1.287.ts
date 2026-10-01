@@ -36,7 +36,10 @@ export const INCIDENT_MESSAGE =
 
 export const REVIEW_NOTICE = 'Removed 67 invisible characters · review and press Enter to send'
 
-const BELOW = ['  [Opus 5.5 xhigh | Max 20x] ██░░░░░░░░ 16% (162k/1.0M) | Project git:(main)', '  ⏵⏵ auto mode on (shift+tab to cycle)']
+const BELOW = [
+  '  [Opus 5.5 xhigh | Max 20x] ██░░░░░░░░ 16% (162k/1.0M) | Project git:(main)',
+  '  ⏵⏵ auto mode on (shift+tab to cycle)'
+]
 const ABOVE = ['⏺ The firewall rule did not help.', '✻ Sautéed for 1m 31s · done 9:40 PM']
 
 /** The input holding text, Orca's composer detector having declined (a named
