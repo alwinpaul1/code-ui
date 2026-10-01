@@ -5,7 +5,12 @@ import type {
 import { clipWithEllipsis } from '../text/whole-character-cut'
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { parseAgentQuestion } from './mobile-native-chat-question'
-import { codeFenceStarts, collectOptionLists } from './mobile-native-chat-question-lists'
+import { asksWhich } from './mobile-native-chat-question-asks'
+import {
+  codeFenceStarts,
+  collectOptionLists,
+  introIndex
+} from './mobile-native-chat-question-lists'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
 // as plain TUI text in the agent's last assistant message — there is no
@@ -150,11 +155,15 @@ function readsAsApproval(labels: readonly string[]): boolean {
  * than one, the last: the menu is what the reply ends on, and a list of
  * findings or notes around it is not choices. Null when there is none: a
  * numbered list that is not a menu sent a step, or a choice of database, as
- * the answer to "Do you want to go ahead?" (2026-09-30).
+ * the answer to "Do you want to go ahead?" (2026-09-30). `'choice'` when that
+ * list sits under a line that asks which (asksWhich): "Which do you want?"
+ * over "Allow retries…" and "Skip retries…" drew "Permission requested"
+ * before 2026-10-01.
  */
-function approvalMenu(text: string): MobileChatPermission['options'] | null {
+function approvalMenu(text: string): MobileChatPermission['options'] | 'choice' | null {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const lists = collectOptionLists(lines, codeFenceStarts(lines))
+  const fenceStarts = codeFenceStarts(lines)
+  const lists = collectOptionLists(lines, fenceStarts)
   for (let at = lists.length - 1; at >= 0; at--) {
     const { items } = lists[at]
     const options = items.flatMap(({ label, token }) =>
@@ -168,16 +177,21 @@ function approvalMenu(text: string): MobileChatPermission['options'] | null {
       answers.includes('no') &&
       !answers.includes(null)
     ) {
-      return options
+      const intro = introIndex(lines, lists[at], lists[at - 1] ?? null, fenceStarts)
+      return intro >= 0 && asksWhich(lines[intro]) ? 'choice' : options
     }
   }
   return null
 }
 
-// Whether a label reads as "allow for every future call" rather than just once.
-function isAlwaysLabel(text: string): boolean {
-  return /\balways\b|don't ask again|do not ask again|for the rest|this session/i.test(text)
-}
+// An answer hint that offers an `a` key: `(y/n/a)`, `[Y/n/a]`,
+// `(yes/no/always)`, or keys named inside the words, `(y)es, (n)o, (a)lways`.
+// "Allow always" types `a`, so only the ask's own hint may offer it. Any
+// "always", "this session" or "don't ask again" in the reply used to add it,
+// and "I always run the tests first. Proceed? (y/n)" got a button that typed a
+// key the ask never took (2026-10-01).
+const ALWAYS_KEY_HINT =
+  /[([]\s*(?:y|yes)\s*\/\s*(?:n|no)\s*\/\s*(?:a|always)\s*[)\]]|[([]a[)\]]lways/i
 
 // Cut at `max` code units, never through an emoji (a half drew a broken glyph).
 function shortLabel(text: string, max = 40): string {
@@ -214,26 +228,27 @@ export function detectAgentPermission(input: PermissionInput): MobileChatPermiss
   // Prefer an explicit numbered menu ("1. Yes  2. No, and tell…") — its labels
   // and send-digits come straight from the agent, so no guessing.
   const menu = approvalMenu(text)
-  if (menu) {
+  if (menu && menu !== 'choice') {
     return { title: 'Permission requested', detail, options: menu }
   }
   // "Which database do you want to use? 1. Postgres 2. SQLite" asks for a
-  // choice, not a yes: leave it to the question card. A list of Yes and No
-  // bullets, or one lone "1. Yes", still asks for a yes, and so do steps
-  // around a "(y/n)" ask, which draw no question card at all.
+  // choice, not a yes: leave it to the question card, and so a menu under a
+  // "Which…" line. A list of Yes and No bullets, or one lone "1. Yes", still
+  // asks for a yes, and so do steps around a "(y/n)" ask, which draw no
+  // question card at all.
   const question = parseAgentQuestion(text)
-  if (question && !readsAsApproval(question.options)) {
+  if (question && (menu === 'choice' || !readsAsApproval(question.options))) {
     return null
   }
 
-  // Otherwise fall back to a y/n prompt. We surface "Allow always" only when the
-  // text actually offers a persistent option, to avoid sending a token the agent
-  // doesn't understand.
+  // Otherwise fall back to a y/n prompt, with "Allow always" only when the
+  // ask's answer hint takes an `a` (ALWAYS_KEY_HINT): a key the agent did not
+  // offer is not sent.
   const options: MobileChatPermission['options'] = [
     { label: 'Allow', send: 'y' },
     { label: 'Deny', send: 'n' }
   ]
-  if (isAlwaysLabel(text)) {
+  if (ALWAYS_KEY_HINT.test(text)) {
     options.splice(1, 0, { label: 'Allow always', send: 'a' })
   }
 

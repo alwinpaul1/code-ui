@@ -68,10 +68,14 @@ function namesTwoChoices(line: string, list: OptionList): boolean {
  * for y or n, never for a choice (2026-10-01).
  */
 export function asksToChoose(line: string, list: OptionList): boolean {
-  return (
-    !lineAnswersYesOrNo(line) &&
-    (namesTwoChoices(line, list) || (CHOOSES.test(line) && !CONFIRMS.test(line)))
-  )
+  return !lineAnswersYesOrNo(line) && (namesTwoChoices(line, list) || asksWhich(line))
+}
+
+/** Whether a line asks which, or to pick, choose, select or prefer, and not
+ *  for leave to go on: "Which do you want?", "Pick one:". Choices under it
+ *  are choices even when they begin "Allow…" and "Skip…". */
+export function asksWhich(line: string): boolean {
+  return !lineAnswersYesOrNo(line) && CHOOSES.test(line) && !CONFIRMS.test(line)
 }
 
 /**

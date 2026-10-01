@@ -80,14 +80,41 @@ describe('detectAgentPermission', () => {
     expect(result?.options.map((o) => o.send)).toEqual(['1', '2', '3'])
   })
 
-  it('adds an "Allow always" option when the text offers a persistent grant', () => {
+  // "Allow always" types `a`, so it is offered only when the ask's own answer
+  // hint takes an `a`. Before 2026-10-01 any "always" or "this session"
+  // anywhere in the reply added it: "I always run the tests first" put a
+  // button on a (y/n) ask that typed a key the ask never offered.
+  it('adds an "Allow always" option when the answer hint offers an a', () => {
     const result = detectAgentPermission({
       state: 'waiting',
-      lastAssistantMessage:
-        'Do you want to allow this? You can allow always for this session. (y/n)'
+      lastAssistantMessage: 'Do you want to allow this? (y/n/a)'
     })
     expect(result?.options.map((o) => o.label)).toEqual(['Allow', 'Allow always', 'Deny'])
     expect(result?.options.map((o) => o.send)).toEqual(['y', 'a', 'n'])
+  })
+
+  it('offers "Allow always" for a hint that names its a key, [y]es/[n]o/[a]lways too', () => {
+    for (const hint of ['[Y/n/a]', '(yes/no/always)', '(y)es, (n)o, (a)lways']) {
+      const result = askWhileWaiting(`Allow \`make deploy\`? ${hint}`)
+      expect(result?.options.map((o) => o.send), hint).toEqual(['y', 'a', 'n'])
+    }
+  })
+
+  it('offers no "Allow always" for a (y/n) ask whose prose says always', () => {
+    for (const text of [
+      'I always run the tests first. Do you want to proceed? (y/n)',
+      'Do you want to allow this? You can allow always for this session. (y/n)',
+      'This stays on for the rest of the build.\n\nShall I go ahead? (y/n)',
+      "Deleting it means the tool won't ask again. Approve? (y/n)"
+    ]) {
+      expect(askWhileWaiting(text)?.options, text).toEqual(ALLOW_DENY)
+    }
+  })
+
+  it('offers no "Allow always" for an ask with no answer hint at all', () => {
+    expect(
+      askWhileWaiting('I need your permission to always run `pnpm test` in this session.')?.options
+    ).toEqual(ALLOW_DENY)
   })
 
   it('detects keyword-only permission asks without explicit y/n tokens', () => {
@@ -237,15 +264,45 @@ describe('a paused agent asking a question or listing a plan', () => {
     expect(askWhileWaiting('Do you want to proceed?\n- Yes\n- No')?.options).toEqual(ALLOW_DENY)
   })
 
-  // A known limit, not a goal: choices that begin with a yes and a no read
-  // as a menu. The card is titled wrong, but each button still sends the
-  // agent's own digit, so the answer it gives is the one the agent listed.
-  it('still titles a choice between "Allow…" and "Skip…" a permission, by its own digits', () => {
-    const permission = askWhileWaiting(
-      'Which do you want?\n1. Allow retries with backoff\n2. Skip retries entirely'
-    )
-    expect(permission?.title).toBe('Permission requested')
-    expect(permission?.options.map((o) => o.send)).toEqual(['1', '2'])
+  // Choices that begin with a yes and a no read as an approval menu, and
+  // before 2026-10-01 "Which do you want?" over "Allow…" and "Skip…" drew
+  // "Permission requested". The line over the list asks which: that is a
+  // choice, whatever words the choices begin with.
+  it('leaves a choice between "Allow…" and "Skip…" to the question card', () => {
+    const text = 'Which do you want?\n1. Allow retries with backoff\n2. Skip retries entirely'
+    expect(askWhileWaiting(text)).toBeNull()
+    expect(parseAgentQuestion(text)?.optionTokens).toEqual(['1', '2'])
+  })
+
+  it('leaves "Pick one" over "Yes, …" and "No, …" to the question card', () => {
+    for (const text of [
+      'Pick one:\n1. Yes, use Postgres\n2. No, use SQLite',
+      'Which would you prefer?\n1. Approve the draft as is\n2. Reject it and start over'
+    ]) {
+      expect(askWhileWaiting(text), text).toBeNull()
+      expect(parseAgentQuestion(text)?.optionTokens, text).toEqual(['1', '2'])
+    }
+  })
+
+  it('keeps the permission card for an Allow or Skip menu under a yes-or-no ask', () => {
+    for (const text of [
+      'Do you want to proceed?\n1. Allow\n2. Skip',
+      'Approve or deny this write to /etc/hosts?\n1. Approve\n2. Deny'
+    ]) {
+      const permission = askWhileWaiting(text)
+      expect(permission?.title, text).toBe('Permission requested')
+      expect(permission?.options.map((o) => o.send), text).toEqual(['1', '2'])
+    }
+  })
+
+  // The choice asks which, but the reply ends on a (y/n) ask, so the answer
+  // is y or n and no question card draws.
+  it('asks Allow or Deny when a "Which…" choice is followed by a (y/n) ask', () => {
+    expect(
+      askWhileWaiting(
+        'Which do you want?\n1. Allow retries\n2. Skip retries\n\nShall I go with 1? (y/n)'
+      )?.options
+    ).toEqual(ALLOW_DENY)
   })
 })
 
