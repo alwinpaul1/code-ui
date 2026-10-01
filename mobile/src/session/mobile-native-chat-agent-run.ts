@@ -1,3 +1,4 @@
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -48,6 +49,24 @@ export function isAgentOnlyRun(blocks: readonly NativeChatBlock[]): boolean {
     }
   }
   return calls > 0
+}
+
+/** The blocks of the Agent/Task calls in a run, each with its own result, and
+ *  nothing else. `agentRunState` counts every call and every result it is
+ *  handed, so a mixed run's Bash calls would list as agents and its Bash
+ *  results would count as answers to the launches. A result whose call the
+ *  window cut is left out: it cannot be told for an agent's. */
+export function agentPairsOf(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
+  const out: NativeChatBlock[] = []
+  for (const pair of pairToolBlocks(blocks)) {
+    if (pair.call && AGENT_TOOLS.has(pair.call.name)) {
+      out.push(pair.call)
+      if (pair.result) {
+        out.push(pair.result)
+      }
+    }
+  }
+  return out
 }
 
 export function agentRunState(

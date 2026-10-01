@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
@@ -47,6 +47,9 @@ import { useTheme } from '../theme/theme-context'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
+import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
+import { agentPairsOf, agentRunState } from './mobile-native-chat-agent-run'
+import { useNativeChatAgentRuns } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
  *  client's own: the desktop's NativeChatToolRun draws every call. */
@@ -346,6 +349,18 @@ export function ToolRun({
   // a run that is one result whose call the window cut. Counted over every
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
+  // The Claude app's row for a run with an agent still working in it:
+  // "Running agent ›", whatever else the run did (2026-10-01 screenshots). Read
+  // over the agent calls alone, so the run's commands are not counted as
+  // agents. Focus view keeps its bare count, which never says what ran.
+  const agentRuns = useNativeChatAgentRuns()
+  const runningAgent = useMemo(() => {
+    if (focusView) {
+      return false
+    }
+    const agentBlocks = agentPairsOf(blocks)
+    return agentBlocks.length > 0 && agentRunState(agentBlocks, agentRuns).running
+  }, [blocks, focusView, agentRuns])
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
@@ -396,7 +411,7 @@ export function ToolRun({
   // count sits past what a phone row shows before its ellipsis (a
   // SendMessage's preview, a command's description).
   const sentenceStatesFailures =
-    sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
+    !runningAgent && sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
   return (
     <View style={styles.toolRun}>
       <View style={styles.toolRunHeader}>
@@ -413,14 +428,30 @@ export function ToolRun({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
+          accessibilityLabel={runningAgent ? 'Running agent' : undefined}
+          accessibilityLiveRegion={runningAgent ? 'polite' : undefined}
         >
-          <ToolRunSentenceText
-            spans={sentenceSpans}
-            fallback={countLabel}
-            style={[styles.toolRunLabel, styles.toolRunSentence]}
-            styles={styles}
-          />
-          {planPreview && !focusView ? (
+          {runningAgent ? (
+            <>
+              <AgentRunGlyph color={colors.textMuted} />
+              <ShimmerText
+                text="Running agent"
+                active
+                color={colors.textSecondary}
+                style={[styles.toolRunLabel, { flex: 0 }]}
+                numberOfLines={1}
+                testID="tool-run-agent-label"
+              />
+            </>
+          ) : (
+            <ToolRunSentenceText
+              spans={sentenceSpans}
+              fallback={countLabel}
+              style={[styles.toolRunLabel, styles.toolRunSentence]}
+              styles={styles}
+            />
+          )}
+          {planPreview && !focusView && !runningAgent ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>

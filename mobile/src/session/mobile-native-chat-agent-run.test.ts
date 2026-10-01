@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { agentRunState, isAgentOnlyRun } from './mobile-native-chat-agent-run'
+import { agentPairsOf, agentRunState, isAgentOnlyRun } from './mobile-native-chat-agent-run'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
+import {
+  MIXED_RUN_AGENT_ID,
+  MIXED_RUN_AGENT_DESCRIPTION,
+  mixedRunWithBackgroundAgent
+} from './fixtures/claude-mixed-tool-run-agent-2026-10-01'
 import {
   PARALLEL_AGENTS,
   asyncAgentLaunchResult,
@@ -104,5 +109,40 @@ describe('the row for a run of agents', () => {
     expect(isAgentOnlyRun(mixed)).toBe(false)
     expect(isAgentOnlyRun([])).toBe(false)
     expect(isAgentOnlyRun([{ type: 'tool-result', output: 'orphan' }])).toBe(false)
+  })
+})
+
+describe('the agent calls of a mixed run', () => {
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
+
+  it('hands over the Agent call and its result, not the commands beside them', () => {
+    const picked = agentPairsOf(mixedRunWithBackgroundAgent())
+    expect(picked).toHaveLength(2)
+    expect(picked[0]).toMatchObject({ type: 'tool-call', name: 'Agent' })
+    expect(picked[1]).toMatchObject({ type: 'tool-result' })
+  })
+
+  it('lists one agent for CronDelete, three commands and an Agent, and runs it by its launch id', () => {
+    const state = agentRunState(agentPairsOf(mixedRunWithBackgroundAgent()), {
+      ...idle,
+      runningIds: new Set([MIXED_RUN_AGENT_ID])
+    })
+    expect(state.entries.map((entry) => entry.title)).toEqual([MIXED_RUN_AGENT_DESCRIPTION])
+    expect(state.running).toBe(true)
+    expect(agentRunState(agentPairsOf(mixedRunWithBackgroundAgent()), idle).running).toBe(false)
+  })
+
+  it('does not count the commands\' answers as the agent launch\'s answer', () => {
+    // The agent call is unanswered (its result is cut) while the turn works:
+    // its launch is being made. Counted over every result, the commands'
+    // four answers would hide that.
+    const blocks = mixedRunWithBackgroundAgent().slice(0, -1)
+    expect(agentRunState(agentPairsOf(blocks), { ...idle, agentWorking: true }).running).toBe(true)
+  })
+
+  it('hands over nothing for an empty run, a run of commands, or a lone result', () => {
+    expect(agentPairsOf([])).toEqual([])
+    expect(agentPairsOf([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }])).toEqual([])
+    expect(agentPairsOf([{ type: 'tool-result', output: 'x' }])).toEqual([])
   })
 })
