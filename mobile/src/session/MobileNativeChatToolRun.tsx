@@ -49,18 +49,38 @@ const MAX_TOOL_RUN_DIFF_ROWS = 240
  *  ("2×  Read src/app.ts · Edit …", Codex-app style) that expands to the inline
  *  tool lines. `defaultExpanded` lets the global toolbar toggle drive every run. */
 export function ToolRun(props: ToolRunProps) {
-  // Only a run that holds an Agent/Task call reads the chat's agent state,
-  // which changes with every message and status update: read by every run it
-  // re-rendered each one under the memoised message row (review, 2026-10-01).
-  const hasAgentCall = !props.focusView && props.blocks.some((block) => isToolCallBlock(block) && isAgentToolName(block.name))
-  return hasAgentCall ? <ToolRunReadingAgents {...props} /> : <ToolRunView {...props} runningAgent={false} />
+  return <ToolRunView {...props} />
 }
 
-function ToolRunReadingAgents(props: ToolRunProps) {
+/** Hands its children whether an agent of the run still runs. Only a run that
+ *  holds an Agent/Task call reads the chat's agent state, which changes with
+ *  every message and status update: read by every run it re-rendered each one
+ *  under the memoised message row (review, 2026-10-01). It wraps the header
+ *  alone, so a run gaining its first Agent call swaps only the header's subtree:
+ *  the run's own state (open row, detail sheet, shown calls, sheet owner) lives
+ *  above it and survives. */
+function RunningAgentGate({
+  blocks,
+  enabled,
+  children
+}: {
+  blocks: NativeChatBlock[]
+  enabled: boolean
+  children: (runningAgent: boolean) => React.ReactNode
+}) {
+  return enabled ? <ReadsAgents blocks={blocks}>{children}</ReadsAgents> : <>{children(false)}</>
+}
+
+function ReadsAgents({
+  blocks,
+  children
+}: {
+  blocks: NativeChatBlock[]
+  children: (runningAgent: boolean) => React.ReactNode
+}) {
   const agentRuns = useNativeChatAgentRuns()
-  const { blocks } = props
   const running = useMemo(() => agentRunState(blocks, agentRuns).running, [blocks, agentRuns])
-  return <ToolRunView {...props} runningAgent={running} />
+  return <>{children(running)}</>
 }
 
 type ToolRunProps = {
@@ -91,7 +111,6 @@ type ToolRunProps = {
 }
 
 function ToolRunView({
-  runningAgent,
   blocks,
   defaultExpanded,
   expandChildren,
@@ -103,7 +122,7 @@ function ToolRunView({
   revertScope,
   focusView = false,
   styles
-}: ToolRunProps & { runningAgent: boolean }) {
+}: ToolRunProps) {
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
   // The Claude-app detail sheet for whichever call was tapped, in this run or
@@ -187,9 +206,9 @@ function ToolRunView({
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
   // The Claude app's row for a run with an agent still working in it is
-  // "Running agent ›" (`runningAgent`, read by ToolRunReadingAgents), whatever
+  // "Running agent ›" (`runningAgent`, read by RunningAgentGate), whatever
   // else the run did (2026-10-01 screenshots).
-  const openRunSheet = useRunSheetOpener(blocks)
+  const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
@@ -239,10 +258,15 @@ function ToolRunView({
   // counted fewer failures than the run had and so states none, or one whose
   // count sits past what a phone row shows before its ellipsis (a
   // SendMessage's preview, a command's description).
-  const sentenceStatesFailures =
-    !runningAgent && sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
+  const sentenceShowsFailures =
+    sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
+  const hasAgentCall = !focusView && blocks.some((block) => isToolCallBlock(block) && isAgentToolName(block.name))
   return (
     <View style={styles.toolRun}>
+      <RunningAgentGate blocks={blocks} enabled={hasAgentCall}>
+        {(runningAgent) => {
+          const sentenceStatesFailures = !runningAgent && sentenceShowsFailures
+          return (
       <View style={styles.toolRunHeader}>
         <Pressable
           testID="tool-run-header"
@@ -318,6 +342,9 @@ function ToolRunView({
         </Pressable>
         {trailing}
       </View>
+          )
+        }}
+      </RunningAgentGate>
       {open ? renderBody() : null}
       {detailSheet}
     </View>

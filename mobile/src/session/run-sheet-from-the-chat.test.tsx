@@ -2,9 +2,11 @@ import { useEffect, useRef, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { ToolRun } from './MobileNativeChatToolRun'
+import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { peekSubagentTranscript, resetSubagentTranscriptForTests } from './subagent-transcript-store'
@@ -223,6 +225,79 @@ describe('the run sheet opened from the chat', () => {
     )
     expect(rows()).toHaveLength(6)
     expect(texts(tree)).toContain('  late.ts')
+  })
+
+  // The screenshot's own sequence: commands first, then an Agent. The run's row
+  // was remounted when it gained its first agent call, so the sheet stopped
+  // following it.
+  it.each([
+    ['an Agent call', { type: 'tool-call', name: 'Agent', input: { description: 'Look into it' } }],
+    ['a Bash call', { type: 'tool-call', name: 'Bash', input: { command: 'pwd', description: 'Print the directory' } }]
+  ] as const)('follows a run of commands that gains %s while its sheet is open', async (_name, call) => {
+    const commands = (): NativeChatMessage[] => [
+      {
+        id: 'cmds-1',
+        role: 'assistant',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [
+          { type: 'text', text: 'Working.' },
+          { type: 'tool-call', name: 'Bash', input: { command: 'ls', description: 'List' } },
+          { type: 'tool-result', output: 'a' },
+          { type: 'tool-call', name: 'Bash', input: { command: 'pwd', description: 'Where' } },
+          { type: 'tool-result', output: 'b' }
+        ]
+      }
+    ]
+    const view = (list: NativeChatMessage[]) => (
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatTasksProvider messages={list} agent="claude" agentWorking={false} agentStatus={status(false)}>
+          <MobileNativeChatMessage message={foldMobileNativeChatMessages(list).at(-1)!} />
+        </MobileNativeChatTasksProvider>
+      </ThemeProvider>
+    )
+    let tree!: ReactTestRenderer
+    await act(async () => {
+      tree = create(view(commands()))
+    })
+    await press(tree, 'tool-run-header')
+    const rows = () => tree.root.findAll((n) => n.props.testID === 'run-sheet-row' && String(n.type) === 'Pressable')
+    expect(rows()).toHaveLength(2)
+    const grown = commands()
+    grown[0]!.blocks.push(call, { type: 'tool-result', output: 'ok' })
+    await act(async () => tree.update(view(grown)))
+    expect(rows()).toHaveLength(3)
+    act(() => tree.unmount())
+  })
+
+  // FlashList recycles a cell: the same ToolRun instance is handed another
+  // message's run (a different revertScope, `${message.id}:${segmentIndex}`).
+  it('keeps its sheet on the run it opened when the row is recycled to another message', async () => {
+    const otherBlocks: NativeChatBlock[] = ['a', 'b', 'c'].flatMap((name) => [
+      { type: 'tool-call' as const, name: 'Read', input: { file_path: `/repo/${name}.ts` } },
+      { type: 'tool-result' as const, output: 'x' }
+    ])
+    function Row({ blocks, scope }: { blocks: NativeChatBlock[]; scope: string }) {
+      const styles = useChatMessageStyles()
+      return <ToolRun blocks={blocks} defaultExpanded={false} revertScope={scope} styles={styles} />
+    }
+    const view = (blocks: NativeChatBlock[], scope: string) => (
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatTasksProvider messages={[]} agent="claude" agentWorking={false} agentStatus={status(false)}>
+          <Row blocks={blocks} scope={scope} />
+        </MobileNativeChatTasksProvider>
+      </ThemeProvider>
+    )
+    let tree!: ReactTestRenderer
+    await act(async () => {
+      tree = create(view(otherBlocks.slice(0, 4), 'message-a:1'))
+    })
+    await press(tree, 'tool-run-header')
+    const rows = () => tree.root.findAll((n) => n.props.testID === 'run-sheet-row' && String(n.type) === 'Pressable')
+    expect(rows()).toHaveLength(2)
+    await act(async () => tree.update(view(otherBlocks, 'message-b:1')))
+    expect(rows()).toHaveLength(2)
+    act(() => tree.unmount())
   })
 
   it('opens no detail when the sheet is dismissed without a choice', async () => {

@@ -54,10 +54,17 @@ export function useNativeChatTasks(): NativeChatTasks {
 
 /** What a row of a run calls to open the run's sheet, or undefined outside a
  *  chat (a subagent's own transcript), where the row unfolds inline instead. */
-export function useRunSheetOpener(blocks: readonly NativeChatBlock[]): (() => void) | undefined {
+export function useRunSheetOpener(
+  blocks: readonly NativeChatBlock[],
+  runKey?: string
+): (() => void) | undefined {
   const control = useContext(NativeChatRunSheetContext)
-  const owner = useRef({})
-  useEffect(() => control?.sync(blocks, owner.current), [control, blocks])
-  const open = useCallback(() => control?.open(blocks, owner.current), [control, blocks])
+  const instance = useRef({})
+  // The run's own identity (`${message.id}:${segmentIndex}`) when it has one: the
+  // list recycles a row's cell, handing the same component instance another
+  // message's run, which an instance-keyed sheet would then follow.
+  const owner = runKey ?? instance.current
+  useEffect(() => control?.sync(blocks, owner), [control, blocks, owner])
+  const open = useCallback(() => control?.open(blocks, owner), [control, blocks, owner])
   return control ? open : undefined
 }

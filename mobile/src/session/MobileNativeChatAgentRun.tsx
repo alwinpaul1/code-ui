@@ -21,15 +21,18 @@ import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-c
 export function MobileNativeChatAgentRun({
   blocks,
   trailing,
+  revertScope,
   styles
 }: {
   blocks: readonly NativeChatBlock[]
+  /** The run's place in its message; names its sheet's owner. */
+  revertScope?: string
   trailing?: ReactNode
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
   const runs = useNativeChatAgentRuns()
-  const openRunSheet = useRunSheetOpener(blocks)
+  const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const { running, entries } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
   const label = running
     ? 'Running agent'

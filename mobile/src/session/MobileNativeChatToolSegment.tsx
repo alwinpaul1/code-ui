@@ -7,7 +7,7 @@ import { ToolRun } from './MobileNativeChatToolRun'
  *  app's "Running agent" row, anything else the ordinary tool run. */
 export function MobileNativeChatToolSegment(props: ComponentProps<typeof ToolRun>) {
   if (isAgentOnlyRun(props.blocks)) {
-    return <MobileNativeChatAgentRun blocks={props.blocks} trailing={props.trailing} styles={props.styles} />
+    return <MobileNativeChatAgentRun blocks={props.blocks} trailing={props.trailing} revertScope={props.revertScope} styles={props.styles} />
   }
   return <ToolRun {...props} />
 }

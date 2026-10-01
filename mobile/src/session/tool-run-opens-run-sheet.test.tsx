@@ -136,6 +136,26 @@ describe('tapping the header of a run of several calls', () => {
     expect(detailPair(tree)?.result?.output).toContain('Process exited with code 1')
   })
 
+  // Review of feat/tool-run-sheet: a run that gained its first Agent call was
+  // remounted (its wrapper changed type), losing the open detail sheet. This is
+  // the screenshot's own sequence: commands first, then an Agent.
+  it.each([
+    ['an Agent call', { type: 'tool-call', name: 'Agent', input: { description: 'Look into it' } }],
+    ['a Bash call', { type: 'tool-call', name: 'Bash', input: { command: 'pwd' } }]
+  ] as const)('keeps the open detail sheet when the run gains %s', (_name, call) => {
+    const tree = render({ blocks: SINGLE_BASH })
+    act(() => header(tree).props.onPress())
+    expect(detailPair(tree)?.call?.name).toBe('Bash')
+    act(() =>
+      tree.update(
+        <ThemeProvider initialPreference="light">
+          <Harness blocks={[...SINGLE_BASH, call, { type: 'tool-result', output: 'ok' }]} />
+        </ThemeProvider>
+      )
+    )
+    expect(detailPair(tree)?.call?.name).toBe('Bash')
+  })
+
   it('opens the detail sheet straight from a one-call header, as before', () => {
     const openRun = vi.fn()
     const tree = render({ blocks: SINGLE_BASH, openRun })
