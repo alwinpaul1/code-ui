@@ -208,8 +208,9 @@ describe('the conversation row for five agents launched at once', () => {
 
   it('opens a "Ran 5 agents" sheet listing each agent by its description', async () => {
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true })
-    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-sheet')).toHaveLength(0)
+    expect(tree.root.findAll((node) => node.props.testID === 'run-sheet')).toHaveLength(0)
     await press(tree, /Show the agents/)
+    expect(tree.root.findAll((node) => node.props.testID === 'run-sheet')).toHaveLength(1)
     const shown = texts(tree)
     expect(shown).toContain('Ran 5 agents')
     expect(shown.filter((text) => text === 'Ran agent')).toHaveLength(5)
