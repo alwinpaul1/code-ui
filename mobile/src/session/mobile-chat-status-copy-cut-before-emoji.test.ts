@@ -79,7 +79,10 @@ describe('a message whose status copy Orca cut', () => {
       await show('07:00:00.000', { messages: before })
       const prompts = statusCopy(text, '07:00:10.000')
       await show('07:00:10.500', { messages: before, working: true, prompts })
-      expect(drawnTimes()).toBe(1)
+      // A copy that began a run waits for its row on a tab with no prompt
+      // hook, where a loop's tick looks the same (desk-prompt-idle-submit.ts):
+      // the bubble is the row, drawn once it lands.
+      expect(drawnTimes()).toBe(0)
       const row: NativeChatMessage = userRow('4c1d2e3f', [text], '07:00:09.980')
       await show('07:00:11.000', { messages: [...before, row], working: true, prompts })
       await show('07:00:11.500', { messages: [...before, row], working: true, prompts })

@@ -457,9 +457,10 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     unmount()
   })
 
-  // The next prompt starts a turn and lands as a row; its status copy is
-  // drawn until the row comes and never again after, blink or not.
-  it('draws the next prompt once, before its row lands and after, across a status with no prompt', async () => {
+  // The next prompt starts a turn and lands as a row; its status copy began a
+  // run, so on a tab with no prompt hook it waits for that row
+  // (desk-prompt-idle-submit.ts) and is never drawn beside it, blink or not.
+  it('draws the next prompt once, from its row, across a status with no prompt', async () => {
     agent = 'claude'
     const reader = statusReader()
     await watchTheTurn(reader)
@@ -472,8 +473,7 @@ describe('a message sent mid-turn, after the reply that answered it', () => {
     vi.setSystemTime(at('05:49:47.100'))
     let prompts = reader.read(nextRun('05:49:47.000'))
     await showAt('05:49:47.200', WHOLE_TURN, prompts)
-    expect(where(NEXT).at).toHaveLength(1)
-    expect(where(NEXT).at[0]!).toBeGreaterThan(where(NEXT).reply)
+    expect(where(NEXT).at).toHaveLength(0)
     reader.read(null)
     prompts = reader.read(nextRun('05:49:50.000'))
     await showAt('05:49:50.100', [...WHOLE_TURN, NEXT_ROW], prompts)

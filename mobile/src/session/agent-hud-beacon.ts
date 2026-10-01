@@ -77,7 +77,7 @@ export type AgentHudBeaconLimit = {
  *  `foundAt`: on a status prompt read first after Orca's stand-in, which may
  *  have been found or watched arriving, the start of the run it came in;
  *  `standInAt`, when the phone read that stand-in, by its own clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; /** The prompt hook saw a loop fire this prompt (`sc=1`): a tick, never typed (scheduled-prompt-ticks.ts). */ scheduled?: true; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; /** The prompt hook saw a loop fire this prompt (`sc=1`): a tick, never typed (scheduled-prompt-ticks.ts). */ scheduled?: true; /** A status copy of a prompt that began a working run: what a loop's tick looks like with no hook (desk-prompt-idle-submit.ts). */ idleSubmit?: true; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
 
 export type AgentHudBeacon = {
   agent: string

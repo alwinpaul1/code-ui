@@ -952,18 +952,27 @@ describe('a loop tick the hook reports as a prompt', () => {
   // matches after the call has scrolled out (scheduled-loop-sentinels.ts).
   it('draws no bubble for a sentinel loop’s tick once its call has left the loaded rows', async () => {
     const sessionId = 'session-scrolled-past-its-sentinel-loop'
-    const sentinelCall = row(
-      'a1',
-      'assistant',
-      { type: 'tool-call', name: 'CronCreate', input: { cron: '*/3 * * * *', recurring: true, prompt: '<<autonomous-loop>>' } },
-      '02:19:10.000'
-    )
+    const input = { cron: '*/3 * * * *', recurring: true, prompt: '<<autonomous-loop>>' }
+    const sentinelCall = row('a1', 'assistant', { type: 'tool-call', name: 'CronCreate', input }, '02:19:10.000')
     await act(async () => {
       renderer = create(overlayElement({ messages: [sentinelCall, ...messages.slice(1)], desktopPrompts: [], sessionId }))
     })
     const tick = '# Autonomous loop tick\nRun the autonomous check and report in one line.'
     await act(async () => {
       renderer!.update(overlayElement({ messages: messages.slice(3), desktopPrompts: [status(tick, '02:24:49.600')], sessionId }))
+    })
+    expect(bubbles()).toEqual([])
+  })
+
+  // A tick of a loop whose call this phone never loaded, on a tab with no
+  // prompt hook: no mark, no words to match. Its status copy began a working
+  // run, and the first reply came with no user row of its words
+  // (desk-prompt-idle-submit.ts).
+  it('draws no bubble for a tick of a loop never loaded, on a Claude tab with no hook, once the turn’s first reply lands with no row of its words', async () => {
+    const reply = row('a4', 'assistant', { type: 'text', text: 'No change.' }, '02:21:52.000')
+    const idle: DesktopPrompt = { ...status('Check the deploy and report in one line.', '02:21:49.608'), idleSubmit: true }
+    await act(async () => {
+      renderer = create(overlayElement({ messages: [messages[2]!, reply], desktopPrompts: [idle] }))
     })
     expect(bubbles()).toEqual([])
   })

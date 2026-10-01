@@ -320,6 +320,7 @@ export function observeAgentStatusPrompt(
     text,
     ...(statusCopyMayBeCut(text) ? { cut: true } : {}),
     ...(at !== null ? { at } : {}),
+    ...(beganARun(status, found, foundAt) ? { idleSubmit: true as const } : {}),
     ...(foundAt !== undefined && standIn !== undefined ? { foundAt, standInAt: standIn.at } : {}),
     // The row that carries a prompt is never timed before the prompt was
     // taken; a state's start can be (desktop-prompt-photo-copies.ts).
@@ -352,6 +353,31 @@ export function observeAgentStatusPrompt(
   // words off a "Message from" row the moment the person replied (review of
   // 2026-09-27).
   return { ...state, last: text, prompts, issued: state.issued + 1, placed }
+}
+
+/**
+ * How far `updatedAt` may sit past `stateStartedAt` for a prompt to have
+ * begun the run, in ms. Orca stamps both on the event that switches the pane
+ * to `working`, and a prompt sent mid-turn leaves `stateStartedAt` where the
+ * turn began (minutes back). NOT pinned to a recorded status: none holds both
+ * stamps for a prompt that began a run, so this is a conservative guess, and a
+ * status read after a later ping misses and draws as before.
+ */
+export const IDLE_SUBMIT_SLACK_MS = 100
+
+/** Whether a prompt watched arriving began a working run: the pane was idle
+ *  and this prompt switched it on, so a loop's tick looks the same (the
+ *  prompt hook fires for it, the pane goes `working`). Never for a copy
+ *  found on a first reading, whose `updatedAt` a reconnect restamps. */
+function beganARun(status: AgentStatusPromptSource | undefined, found: boolean, foundAt: number | undefined): boolean {
+  if (found || foundAt !== undefined || status?.state !== 'working') {
+    return false
+  }
+  const { updatedAt, stateStartedAt } = status
+  if (typeof updatedAt !== 'number' || typeof stateStartedAt !== 'number' || !Number.isFinite(updatedAt) || !Number.isFinite(stateStartedAt)) {
+    return false
+  }
+  return updatedAt - stateStartedAt >= 0 && updatedAt - stateStartedAt <= IDLE_SUBMIT_SLACK_MS
 }
 
 /**
