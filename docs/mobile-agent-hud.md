@@ -847,63 +847,29 @@ own mark and never waits; a tab without the hook has no twin to wait for.
 The cost: a message typed mid-turn on a hook tab draws up to 5 s late when its
 twin is late. A tick that fires on an idle pane is not what this covers.
 
-**A tick on a tab with no hook (`idleSubmit`).** With no hook there is no mark,
-and a loop whose call this phone never loaded gives no words to match. The tab
-status's copy of a tick is then the copy of a prompt that began a working run,
-as a prompt typed at an idle pane is. What differs is the transcript: Claude
-Code writes a typed prompt as a user row of its words before the agent answers,
-and a tick as an `isMeta` row Orca draws nothing for. So
-`agent-status-prompts.ts` marks a copy it watched arrive on a `working` pane
-whose `updatedAt` is within 100 ms of `stateStartedAt` (`IDLE_SUBMIT_SLACK_MS`;
-a prompt sent mid-turn leaves `stateStartedAt` minutes behind), and
-`desk-prompt-idle-submit.ts`, run from `useWithoutScheduledTicks` on a Claude
-tab with no hook only, holds such a copy until the rows decide:
+**Not covered: a tick on a tab with no hook whose loop call was never loaded.**
+Telling it from a typed prompt by the transcript's rows (a typed prompt gets a
+user row of its words, a tick an `isMeta` row Orca draws nothing for) was built
+and reverted (1ffc72c5, reverted after review). It rested on the status copy of
+a tick being a prompt that began a working run, and it is not: while a loop is
+registered Orca keeps the pane `working` (2.1.286's Stop payload carries
+`session_crons`), so a live loop's tick never has a fresh `stateStartedAt`, and
+the status has no idle-submit signal to key on. It also held a typed prompt
+forever when the chat's read never settled, and Claude stamps the user row
+before `UserPromptSubmit` runs, so its row slack could judge a typed prompt a
+tick. Such a tick draws, until the loop's call is loaded or the hook marks it.
 
-- a user row of its words stamped at or just before its time (1 s of slack): it
-  was typed, and the landed-prompt rule retires the copy against that row;
-- else an assistant row stamped after it, with the held rows reaching back
-  before it (so its own row cannot be on an earlier page): a tick. It is
-  dropped, and its words are remembered for the session
-  (`scheduled-prompt-memory.ts`) only when a SECOND copy of them is judged a
-  tick, since a wrong memory costs a typed copy of those exact words its
-  bubble until its row lands;
-- else, after 30 s with the chat's read settled, drawn as before (a row that
-  never loads costs the old behaviour, never a message).
-
-A slash command, a photo-only send and a copy with no words or no time are
-never held. Why holding a typed prompt's copy costs nothing a reader sees: its
-bubble is its row, and the copy only stood in for it, so the bubble appears
-when the row loads instead of when the status is read.
-
-Verified against Claude Code 2.1.286's records (a tick writes no drawn row), not
-a live run. NOT pinned to a recorded status: no captured status holds both
-stamps for a prompt that began a run (`agent-status-prompts.test.ts` says its
-own were "not captured"), so the 100 ms slack is a conservative guess from Orca
-stamping both on the event that switches the pane to `working`. A status read
-after a later tool ping misses the slack and draws as before.
-
-Not covered: a tick that fires mid-turn (the run did not begin with it), a pane
-kept `working` by background inventory (`turnCompletedAt`), a hook copy with no
-status twin, a tab with the hook (its copies carry the mark), and a tick that is
-the first turn of a fresh session whose held rows reach back to nothing before
-it (it waits 30 s, then draws).
-
-**Why the hook never says a copy was NOT a tick (`sc=0`).** The design brief
-proposed a hook that sends `sc=0` when it read the transcript and saw no fire
-row of this prompt in the last 64 lines, so the phone could keep a typed copy of
-a loop's exact words. It was not built, because a wrong `sc=0` fails to a drawn
-bubble where a missing `sc=1` fails to the word match. Evidence (offsets into
-`strings -n 20` of the 2.1.286 binary): a write queue whose methods
-(`enqueueWrite`, `scheduleDrain`, `appendToFile`, `storageV5`; @21965780 and
-@21966388) match the session transcript's store drains on a timer of
-`FLUSH_INTERVAL_MS=100` (@21964619); a tick's `scheduled_task_fire` row and its
-user row are stamped 21 ms apart (the fixture's record shapes, session
-76ba8f2f); and the hook runs several processes before it reads the tail. So, IF
-the fire row goes through that queue (that the `mon` call reaches it was not
-traced), it may not be on disk when the hook reads. The existing mark tolerates
-that; a positive "looked, saw none" would instead draw a bubble for exactly the
-ticks the loaded-call match catches today. Revisit only with a measured
-fire-row-to-hook-read delay on a live tick.
+**Why the hook never says a copy was NOT a tick (`sc=0`).** A hook that sent
+`sc=0` when it read the transcript and saw no fire row of this prompt was
+proposed and not built, because a wrong `sc=0` fails to a drawn bubble where a
+missing `sc=1` fails to the word match. Evidence (offsets into `strings -n 20`
+of the 2.1.286 binary): a write queue whose methods (`enqueueWrite`,
+`scheduleDrain`, `appendToFile`; @21965780, @21966388) match the transcript's
+store drains on `FLUSH_INTERVAL_MS=100` (@21964619); a tick's fire row and its
+user row are stamped 21 ms apart; and the hook runs several processes before it
+reads the tail. IF the fire row goes through that queue (not traced), it may
+not be on disk when the hook reads. Revisit only with a measured delay on a
+live tick.
 
 ## Windows (2026-09-10): what actually reaches the phone, and how
 

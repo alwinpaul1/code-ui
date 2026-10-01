@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { resetPhotoCopyBindingsForTests } from './desktop-prompt-photo-copies'
 import { resetScreenPeerNoticesForTests } from './use-screen-peer-notices'
-import { resetIdleSubmitForTests } from './desk-prompt-idle-submit'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { mergeImagePreviews } from './use-host-image-previews'
@@ -180,7 +179,6 @@ export function landingHarness(frames: Record<string, unknown>[]) {
     // Each case is its own app launch: no send pairs with a copy from another.
     resetPhotoCopyBindingsForTests()
     resetScreenPeerNoticesForTests()
-    resetIdleSubmitForTests()
   })
   afterEach(async () => {
     act(() => renderer?.unmount())

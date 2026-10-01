@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
-import { gateIdleSubmits, type IdleSubmitGate } from './desk-prompt-idle-submit'
 import { resolvesFromSentinel } from './scheduled-loop-sentinels'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import {
@@ -46,10 +45,10 @@ import {
  * of such a loop, loaded or remembered.
  *
  * What it cannot see, on a tab launched without the hook: a loop whose call
- * this phone never loaded (set up while it was away, or before a resume). On a
- * Claude tab a tick of that which began a working run is told from a typed
- * prompt by the transcript's rows instead (desk-prompt-idle-submit.ts); one
- * that fires mid-turn still draws.
+ * this phone never loaded (set up while it was away, or before a resume). A
+ * tick of that still draws: Orca keeps a pane with a registered loop `working`,
+ * so the status carries no signal that a prompt began a run, and nothing here
+ * can tell it from a typed prompt (docs/mobile-agent-hud.md, "Beacon field `sc`").
  *
  * What it costs: words a person types that are exactly a loaded loop's
  * prompt lose their bubble until their own transcript row lands, which draws
@@ -179,57 +178,32 @@ export function useWithoutScheduledTicks(
   prompts: readonly DesktopPrompt[],
   messages: readonly NativeChatMessage[],
   /** The Claude session the chat reads, whose loop prompts are kept. */
-  sessionId?: string | null,
-  /** A Claude tab with no prompt hook, whose status copies of prompts that
-   *  began a run wait for the rows to say tick or typed (desk-prompt-idle-submit.ts). */
-  idle: IdleSubmitGate = NO_IDLE_GATE
+  sessionId?: string | null
 ): readonly DesktopPrompt[] {
   const seen = useMemo(() => scheduledPrompts(messages), [messages])
   useEffect(() => rememberScheduledPrompts(sessionId, seen), [seen, sessionId])
   // The same array until a prompt is kept, so the memo below holds.
   const remembered = rememberedScheduledPrompts(sessionId)
-  const { kept: unmarked, ticks } = useMemo(() => splitTicks(prompts, seen, remembered), [prompts, seen, remembered])
-  // A copy held for rows is let go at its deadline, which no reading would
-  // otherwise reach on a quiet pane.
-  const [reading, askForReading] = useState(0)
-  const gated = useMemo(
-    () => gateIdleSubmits(unmarked, messages, sessionId, idle),
-    [unmarked, messages, sessionId, idle.agent, idle.promptHook, idle.readSettled, reading]
-  )
-  useEffect(() => rememberScheduledPrompts(sessionId, gated.learned), [gated, sessionId])
-  useEffect(() => {
-    if (gated.deadline === undefined) {
-      return undefined
-    }
-    const timer = setTimeout(() => askForReading((count) => count + 1), Math.max(0, gated.deadline - Date.now()) + 1)
-    return () => clearTimeout(timer)
-  }, [gated.deadline])
+  const { kept, ticks } = useMemo(() => splitTicks(prompts, seen, remembered), [prompts, seen, remembered])
   useEffect(() => {
     for (const { prompt, scheduledBy } of ticks) {
+      if (logged.has(prompt.nonce)) {
+        continue
+      }
+      if (logged.size >= LOGGED_CAP) {
+        logged.clear()
+      }
+      logged.add(prompt.nonce)
       const why =
         scheduledBy === MARKED_BY_HOOK
           ? 'the prompt hook saw a loop fire it'
           : scheduledBy.tool
             ? `it is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}`
             : 'it is a loop prompt this session showed earlier'
-      logTick(prompt, why)
+      console.info(
+        `[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}": ${why}`
+      )
     }
-    for (const prompt of gated.ticks) {
-      logTick(prompt, 'its turn was answered with no user row of its words, which a typed prompt gets (desk-prompt-idle-submit.ts)')
-    }
-  }, [ticks, gated])
-  return gated.kept
-}
-
-const NO_IDLE_GATE: IdleSubmitGate = { agent: null, promptHook: null, readSettled: false }
-
-function logTick(prompt: DesktopPrompt, why: string): void {
-  if (logged.has(prompt.nonce)) {
-    return
-  }
-  if (logged.size >= LOGGED_CAP) {
-    logged.clear()
-  }
-  logged.add(prompt.nonce)
-  console.info(`[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}": ${why}`)
+  }, [ticks])
+  return kept
 }

@@ -207,9 +207,7 @@ export function MobileNativeChatOverlay({
   // (desk-prompt-harness-turns.ts, 2026-09-27).
   const statusAndBeaconPrompts = controller.nativeChatDesktopPrompts ?? NO_PROMPTS
   // A loop's tick is no person's prompt: no bubble (scheduled-prompt-ticks.ts).
-  // A Claude tab with no prompt hook has no mark on a tick: its status copy of
-  // a prompt that began a run waits for the rows to say tick or typed.
-  const unticked = useWithoutScheduledTicks(statusAndBeaconPrompts, session.messages, controller.nativeChatSessionIdentity?.sessionId, { agent: controller.nativeChatAgent, promptHook: controller.nativeChatPromptHook, readSettled: session.status === 'ready' && session.baseRetained !== true })
+  const unticked = useWithoutScheduledTicks(statusAndBeaconPrompts, session.messages, controller.nativeChatSessionIdentity?.sessionId)
   const desktopPrompts = useMemo(() => placedByHarnessTurns(unticked, session.messages), [session.messages, unticked])
   // The hook fires for the phone's own sends too, and those already have a
   // pending echo, so the hook's copy of one is left out (2026-09-13). The
