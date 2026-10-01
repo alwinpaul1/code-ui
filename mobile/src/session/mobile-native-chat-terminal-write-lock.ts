@@ -25,6 +25,32 @@ export function mobileNativeChatTerminalWriteOwner(terminal: string): symbol | u
   return writeOwners.get(terminal)
 }
 
+// Locks taken FOR a composer send (the caller is the image hook's send, which
+// then calls the text send). Only those may be let go early by the text send:
+// whoever else holds a terminal's lock (a permission tap, a queue edit, an answer)
+// is none of its business, even when a tab switch points the send at that terminal.
+const sendOwners = new Map<string, symbol>()
+
+/** Claim the terminal for a composer send; the holder's token, or null when
+ *  another sequence has it. */
+export function acquireMobileNativeChatTerminalWriteForSend(terminal: string): symbol | null {
+  if (!acquireMobileNativeChatTerminalWrite(terminal)) {
+    return null
+  }
+  const owner = writeOwners.get(terminal)!
+  sendOwners.set(terminal, owner)
+  return owner
+}
+
+/** Let go of the terminal's lock if it was taken for a composer send and is still
+ *  that holder's. The send calls this once its body is written. */
+export function releaseMobileNativeChatTerminalWriteForSend(terminal: string): void {
+  const owner = sendOwners.get(terminal)
+  if (owner !== undefined && writeOwners.get(terminal) === owner) {
+    releaseMobileNativeChatTerminalWrite(terminal, owner)
+  }
+}
+
 /** Whether a composed sequence currently owns the terminal. Lets a best-effort
  *  writer (the draft mirror) stand aside instead of interleaving bytes. */
 export function isMobileNativeChatTerminalWriteInFlight(terminal: string): boolean {
@@ -45,12 +71,14 @@ export function releaseMobileNativeChatTerminalWrite(
   }
   writeInFlightTerminals.delete(terminal)
   writeOwners.delete(terminal)
+  sendOwners.delete(terminal)
 }
 
 /** Test-only: module scope outlives a single test's hooks. */
 export function resetMobileNativeChatTerminalWritesForTests(): void {
   writeInFlightTerminals.clear()
   writeOwners.clear()
+  sendOwners.clear()
   burstTerminals.clear()
   halfSteppedTerminals.clear()
 }
@@ -85,7 +113,9 @@ export function markMobileNativeChatTerminalHalfStepped(
   halfSteppedTerminals.set(terminal, mark)
 }
 
-export function mobileNativeChatTerminalHalfStep(terminal: string): MobileNativeChatHalfStep | null {
+export function mobileNativeChatTerminalHalfStep(
+  terminal: string
+): MobileNativeChatHalfStep | null {
   return halfSteppedTerminals.get(terminal) ?? null
 }
 

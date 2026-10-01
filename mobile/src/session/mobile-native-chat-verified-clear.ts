@@ -64,11 +64,10 @@ export async function clearClaudeInputVerified(args: {
   client: RpcClient
   terminal: string
   /** Every text the phone believes may be on the line (a parked launch draft, a
-   *  recalled queue, the mirrored draft); sizes the clear only when the screen
-   *  cannot be read. An input the first look finds empty is not cleared, even if
-   *  the mirror typed a draft: the mirror's echoes were drained before the send,
-   *  and a look that races a paint could find the input empty and miss a copy
-   *  still on its way. Accepted: the look is a round trip after those acks. */
+   *  recalled queue, the mirrored draft). Sizes the clear when the screen cannot
+   *  be read, and an input that looks empty is still cleared (one row) while any
+   *  of it is believed, since the look may race the paint. None believed and an
+   *  empty input: no clear is written. */
   believedTexts: readonly (string | null | undefined)[]
   mobileClient?: { id: string; type: 'mobile' }
   deadline?: number
@@ -104,8 +103,12 @@ export async function clearClaudeInputVerified(args: {
     return 'unverified'
   }
   for (let pass = 0; pass < MAX_CLEAR_PASSES; pass++) {
-    // Nothing on the line, so nothing to clear: no write, no read-back.
-    if (input.text === '') {
+    // Empty on screen and nothing believed on the line: nothing to clear. If the
+    // phone believes something is there (the mirror typed this draft), an empty
+    // look may only be a screen Claude has not painted that write onto yet, and
+    // skipping the clear then appends the body to the late copy: "check the
+    // buildcheck the build", no control bytes, no notice. So clear, and look again.
+    if (input.text === '' && !args.believedTexts.some((text) => Boolean(text))) {
       return 'cleared'
     }
     if (!(await write(buildScreenSizedClearInput(input.rows)))) {

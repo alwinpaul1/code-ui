@@ -1,7 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
-import { claudeSubmitNotice, readClaudeInput } from './claude-composer-screen'
+import { claudeSentPromptRows, claudeSubmitNotice, readClaudeInput } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 
 /**
@@ -31,11 +31,14 @@ const WORDS_PREFIX_CHARS = 40
 
 /**
  * The floor before the first look. Orca 1.4.218 writes the Enter before it acks,
- * so the Enter is not what this waits for; Claude paints the emptied input, or
- * its review notice, a frame or more after it takes the Enter, and a look before
- * that only sees the old input and costs a read. It is NOT evidence-bearing: the
- * words in the input prove nothing at any time (Claude can take the Enter
- * seconds late on a busy turn), so a late Enter is never called "not sent".
+ * so the Enter is not what this waits for. It is a floor and not evidence:
+ * "the input is empty" is what a submitted message looks like, and also what a
+ * body Claude has not read yet looks like (a lagging Claude reads body and Enter
+ * together, late, as one read of 64 bytes or more, and the Enter is then text).
+ * So an empty input is `sent` only after some look saw the words in it, or with
+ * the prompt drawn in the conversation (or the queue box) above it, or the
+ * beacon's copy. A fast normal send is drawn by that echo row; anything else
+ * waits out the window and is held as `unknown`.
  */
 export const SUBMIT_SETTLE_MS = 300
 /** Between looks. */
@@ -101,12 +104,13 @@ export async function verifyClaudeSubmit(args: {
   const startedAt = now()
   const window = Math.min(
     SUBMIT_VERIFY_WINDOW_MS,
-    args.deadline === undefined ? Infinity : args.deadline - Date.now()
+    args.deadline === undefined ? Infinity : args.deadline - startedAt
   )
   const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
   let looked = false
   let failedLooks = 0
   let lastLookAt = -Infinity
+  let sawWords = false
   while (now() - startedAt < window) {
     await wait(TICK_MS)
     if (args.receipts && beaconHasWords(args.receipts(), args.seenNonces, args.text)) {
@@ -120,7 +124,8 @@ export async function verifyClaudeSubmit(args: {
     const screen = await readMobileNativeChatScreen({
       client: args.client,
       terminal: args.terminal,
-      ...(args.deadline === undefined ? {} : { deadline: args.deadline })
+      // `deadline` is on the caller's clock; the look runs on the wall clock.
+      ...(args.deadline === undefined ? {} : { deadline: Date.now() + (args.deadline - now()) })
     })
     if (!screen) {
       // Two looks and not one picture of the screen: nothing here can be told,
@@ -137,10 +142,23 @@ export async function verifyClaudeSubmit(args: {
       return { kind: 'not-sent', message: `Not sent. Claude says: ${notice}.` }
     }
     const input = readClaudeInput(screen.lines, screen.draft)
-    // The words gone from the input mean Claude took the Enter. What is left may
-    // be a placeholder (a prompt suggestion, the queue hint, "Message @agent…")
-    // or something typed at the desk, neither of which is this message.
-    if (input.located && !(words !== '' && dense(input.text).startsWith(words))) {
+    if (!input.located) {
+      continue
+    }
+    if (words !== '' && dense(input.text).startsWith(words)) {
+      sawWords = true
+      continue
+    }
+    // The words are not in the input. That is a submitted message, or a body
+    // Claude has not read yet (see SUBMIT_SETTLE_MS): told apart by having seen
+    // the words in the input, or the prompt drawn above the composer. What is
+    // left in the input may be a placeholder (a prompt suggestion, the queue
+    // hint, "Message @agent…") or text from the desk, neither of which is this
+    // message.
+    if (
+      sawWords ||
+      claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words))
+    ) {
       return { kind: 'sent' }
     }
   }

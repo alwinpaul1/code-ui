@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claudeSubmitNotice, readClaudeInput } from './claude-composer-screen'
+import { claudeSentPromptRows, claudeSubmitNotice, readClaudeInput } from './claude-composer-screen'
 import {
   AFTER_REVIEW_NOTICE,
   composerWithTextInDraft,
@@ -94,6 +94,25 @@ describe("reading the text in Claude Code's input box", () => {
       text: 'y',
       rows: 1
     })
+  })
+})
+
+describe('reading the prompts Claude drew above the composer', () => {
+  it('reads a sent prompt and a queued one, with a plain space, and not the composer', () => {
+    const lines = [
+      '❯ an earlier prompt',
+      '⏺ Done.',
+      '❯ check the build',
+      '  ctrl+enter to send now',
+      ...EMPTY_COMPOSER
+    ]
+    expect(claudeSentPromptRows(lines)).toEqual(['an earlier prompt', 'check the build'])
+  })
+
+  it('reads none where no composer is located, or for a menu row', () => {
+    expect(claudeSentPromptRows(['❯ an earlier prompt', '⏺ Done.'])).toEqual([])
+    expect(claudeSentPromptRows([])).toEqual([])
+    expect(claudeSentPromptRows(['❯ 1. Yes', ...EMPTY_COMPOSER])).toEqual([])
   })
 })
 

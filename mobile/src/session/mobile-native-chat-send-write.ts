@@ -7,10 +7,7 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
-import {
-  mobileNativeChatTerminalWriteOwner,
-  releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
+import { releaseMobileNativeChatTerminalWriteForSend } from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
 import {
@@ -102,7 +99,6 @@ export async function writeChatSend(args: {
   receipts: () => readonly BeaconPromptReceipt[]
 }): Promise<ChatSendWrite> {
   const { agent, client, terminal, text, deadline } = args
-  const lockOwner = mobileNativeChatTerminalWriteOwner(terminal)
   const mobileClient = args.deviceToken
     ? { id: args.deviceToken, type: 'mobile' as const }
     : undefined
@@ -158,11 +154,10 @@ export async function writeChatSend(args: {
   }
   // The body and its Enter are written: from here the send only reads. Let the
   // caller's write lock go, so a permission tap or a picker pick during the check
-  // is not refused with "Another input is still being sent". Only if it is still
-  // the caller's (its own release then finds nothing to undo).
-  if (lockOwner !== undefined) {
-    releaseMobileNativeChatTerminalWrite(terminal, lockOwner)
-  }
+  // is not refused with "Another input is still being sent". Only a lock the caller
+  // took for this send, and still holds (its own release then finds nothing to
+  // undo): never another sequence's on whatever terminal the send resolved.
+  releaseMobileNativeChatTerminalWriteForSend(terminal)
   const verdict = await verifyClaudeSubmit({
     client,
     terminal,

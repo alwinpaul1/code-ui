@@ -107,13 +107,23 @@ describe("clearing Claude Code's input and proving it empty", () => {
     expect(host.reads).toBe(1)
   })
 
-  it('writes no clear and reads no further when the input is empty, whatever the phone believes', async () => {
+  it('writes no clear and reads no further when the input is empty and nothing is believed on it', async () => {
+    const host = createFakeComposerHost()
+
+    await expect(clearClaudeInputVerified(clearArgs(host, [null, '']))).resolves.toBe('cleared')
+
+    expect(host.sends).toEqual([])
+    expect(host.reads).toBe(1)
+  })
+
+  it('still clears one row of an empty-looking input the phone believes it typed: the look may race the paint', async () => {
     const host = createFakeComposerHost()
 
     await expect(clearClaudeInputVerified(clearArgs(host, ['hello']))).resolves.toBe('cleared')
 
-    expect(host.sends).toEqual([])
-    expect(host.reads).toBe(1)
+    expect(clearWrites(host)).toHaveLength(1)
+    expect(clearWrites(host)[0]!.length).toBeLessThan(20)
+    expect(methods(host)).toEqual(['terminal.read', 'terminal.send', 'terminal.read'])
   })
 
   describe('text the clear cannot reach', () => {

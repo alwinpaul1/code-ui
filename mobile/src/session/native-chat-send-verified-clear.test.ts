@@ -23,7 +23,7 @@ import {
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import {
   acquireMobileNativeChatTerminalWrite,
-  mobileNativeChatTerminalWriteOwner,
+  acquireMobileNativeChatTerminalWriteForSend,
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
@@ -166,7 +166,10 @@ describe('a message sent from the chat while the desktop input holds a copy of i
   })
 
   it('refuses and writes nothing more when the input cannot be cleared, and keeps the draft', async () => {
-    // A host on which no control byte works, whatever the phone does.
+    // A host on which no control byte works, whatever the phone does. This host
+    // DRAWS the literal control characters, so a look sees the text change; what
+    // Claude draws for one is not known (see hideControlsOnScreen for the other
+    // case, which the review notice backstops).
     const host = createFakeComposerHost({ controlsAreLiteral: true })
     host.holdInput(MESSAGE)
     mount(host)
@@ -304,13 +307,32 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(report).not.toHaveBeenCalledWith(STILL_HOLDS)
   })
 
-  it('writes no clear at all when the input is empty', async () => {
+  it("still clears when the first look is a stale empty screen: the mirror's echo is not painted yet", async () => {
+    // The mirror typed the draft; Claude has not painted that write when the first
+    // look lands, so the screen reads empty. Skipping the clear then appended the
+    // body to the late copy and Claude submitted "check the buildcheck the build":
+    // no control bytes, so no notice, and the words left the input.
     const host = createFakeComposerHost()
+    host.holdInput('check the build')
+    const base = host.handle.getMockImplementation()!
+    let firstRead = true
+    host.handle.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'terminal.read' && firstRead) {
+        firstRead = false
+        const painted = host.input
+        host.holdInput('')
+        const stale = await base(method, params)
+        host.holdInput(painted)
+        return stale
+      }
+      return base(method, params)
+    })
     mount(host)
 
-    await sendMessage('hello')
+    const outcome = await sendMessage('check the build')
 
-    expect(host.sends.filter((write) => !write.enter)).toEqual([])
+    expect(host.submitted).toEqual(['check the build'])
+    expect(outcome).toBe('accepted')
   })
 
   it('calls a send sent when Claude takes the Enter 1.6 s after the ack', async () => {
@@ -342,13 +364,63 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(report).not.toHaveBeenCalledWith(expect.stringContaining('Not sent'))
   })
 
+  it('does not call a send sent just because the input emptied: Claude lagging reads body and Enter late as one read', async () => {
+    // Claude's event loop is behind: it reads the body and the Enter together
+    // 1.6 s late, a read of 64 bytes or more, so the Enter is text. Looks before
+    // then see the cleared input (the body not painted yet), which is also what a
+    // submitted message looks like. Nothing was submitted.
+    const host = createFakeComposerHost()
+    const base = host.handle.getMockImplementation()!
+    host.handle.mockImplementation(async (method: string, params: unknown) => {
+      const body = (params ?? {}) as { text?: string; enter?: boolean }
+      if (method === 'terminal.send' && body.enter === true) {
+        setTimeout(() => {
+          void base('terminal.send', { text: `${body.text ?? ''}\r`, enter: false })
+        }, 1600)
+        return {
+          id: 'r',
+          ok: true,
+          result: { send: { accepted: true } },
+          _meta: { runtimeId: 'rt' }
+        }
+      }
+      return base(method, params)
+    })
+    mount(host)
+    const message =
+      'please check the build and tell me which of the integration tests failed last night'
+
+    const outcome = await sendMessage(message)
+
+    expect(host.submitted).toEqual([])
+    expect(outcome).not.toBe('accepted')
+    expect(acceptSend).not.toHaveBeenCalled()
+  })
+
+  it('backstops a clear that cannot be seen failing: the review notice says not sent', async () => {
+    // Control bytes that land as characters but are not drawn change nothing a look
+    // can see, so the clear is unverified (a registered clear that changes nothing
+    // is a placeholder as far as a look can tell) and the body goes on top. Claude
+    // then strips them, declines to submit and draws its notice: the phone says so.
+    const host = createFakeComposerHost({ controlsAreLiteral: true, hideControlsOnScreen: true })
+    host.holdInput('check the build')
+    mount(host)
+
+    const outcome = await sendMessage('check the build')
+
+    expect(host.submitted).toEqual([])
+    expect(outcome).toBe('rejected')
+    expect(restoreRejectedDraft).toHaveBeenCalledTimes(1)
+    expect(report).toHaveBeenCalledWith(expect.stringContaining('review and press Enter to send'))
+    expect(host.enters).toBe(1)
+  })
+
   it('lets a permission tap take the terminal while the send only reads', async () => {
     // The composer send runs under its caller's write lock. Once the body is
     // written the send only looks, so it must not hold the terminal against a
     // card tap ("Another input is still being sent").
     const host = createFakeComposerHost()
-    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
-    const owner = mobileNativeChatTerminalWriteOwner('term')
+    const owner = acquireMobileNativeChatTerminalWriteForSend('term')!
     const base = host.handle.getMockImplementation()!
     let tapTook: boolean | null = null
     host.handle.mockImplementation(async (method: string, params: unknown) => {

@@ -84,6 +84,30 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
   return { located: false }
 }
 
+/**
+ * The prompts Claude has drawn in the conversation (and in its queue box) above
+ * the composer: column-zero `❯` and a PLAIN space, then the first row of the
+ * prompt (the composer's is a no-break space). A message that was submitted
+ * shows up here; one still in the input does not. Empty when no composer is
+ * located. A repeat of earlier words matches an earlier echo too: the caller
+ * cannot tell them apart from one screen.
+ */
+export function claudeSentPromptRows(lines: readonly string[]): string[] {
+  for (let at = lines.length - 1; at >= 1; at--) {
+    const row = lines[at]!
+    if (!INPUT_ROW.test(row) || MENU_ROW.test(row) || !isRule(lines[at - 1]!)) {
+      continue
+    }
+    if (lines.findIndex((line, index) => index > at && isRule(line)) === -1) {
+      continue
+    }
+    return lines
+      .slice(0, at - 1)
+      .flatMap((line) => (/^❯ \S/.test(line) && !MENU_ROW.test(line) ? [line.slice(2).trim()] : []))
+  }
+  return []
+}
+
 /** The notices Claude Code 2.1.287 draws when a submit held characters it
  *  strips (`txe(count, kind, key)`; `${i}` is "Removed 1 invisible character" or
  *  "Removed N invisible characters"). Four kinds: "review" (`· review and press

@@ -42,6 +42,10 @@ export type FakeComposerHostOptions = {
   /** Text that lands on the input just ahead of the next Enter, from anywhere
    *  the phone does not know about: the desktop user, a late echo. */
   junkBeforeEnter?: string
+  /** Control characters that landed in the input are not drawn: the screen shows
+   *  the text without them, so a clear that did not work changes nothing a look
+   *  can see. (What Claude draws for a literal control character is not known.) */
+  hideControlsOnScreen?: boolean
   /** Claude takes the Enter this long after the host acked it, in fake-clock ms. */
   enterTakenAfterMs?: number
   /** A permission dialog takes the composer's place the moment Enter is pressed:
@@ -70,6 +74,7 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
   ]
   let input = ''
   let notice: string | null = null
+  const echoes: string[] = []
   let pending = ''
   /** Every write the phone made, in order. */
   const sends: Send[] = []
@@ -142,20 +147,29 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     notice = null
     if (input.trim()) {
       submitted.push(input)
+      // Claude draws a sent prompt in the conversation: `❯` and a PLAIN space (the
+      // composer's is a no-break space), the first row of it.
+      echoes.push(`❯ ${input.slice(0, width)}`)
     }
     input = ''
   }
 
+  const shown = () =>
+    options.hideControlsOnScreen
+      ? [...input].filter((c) => !(c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)).join('')
+      : input
+
   function composerRows(): string[] {
-    if (input === '') {
+    if (shown() === '') {
       return [options.placeholder ? `❯ ${options.placeholder}` : '❯ ']
     }
     if (publishes === 'draft') {
       return ['❯']
     }
     const chunks: string[] = []
-    for (let at = 0; at < input.length; at += width) {
-      chunks.push(input.slice(at, at + width))
+    const text = shown()
+    for (let at = 0; at < text.length; at += width) {
+      chunks.push(text.slice(at, at + width))
     }
     return chunks.map((chunk, index) => (index === 0 ? `❯ ${chunk}` : `  ${chunk}`))
   }
@@ -166,6 +180,7 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     }
     return [
       ...conversation.filter((row) => row !== ''),
+      ...echoes,
       ...(notice ? [`${' '.repeat(128)}${notice}`] : []),
       RULE,
       ...composerRows(),
@@ -212,7 +227,7 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
             source: 'screen',
             tail: screen(),
             ...(publishes === 'draft'
-              ? { draft: input || options.placeholder || '' }
+              ? { draft: shown() || options.placeholder || '' }
               : { draft: '' })
           }
         },

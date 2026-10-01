@@ -72,6 +72,8 @@ const verify = (
 
 const holding = (text: string): Look => ({ lines: composerWithTextInRows(text) })
 const empty: Look = { lines: EMPTY_COMPOSER }
+/** An empty input with the sent prompt drawn above the composer, as Claude draws it. */
+const emptyWithEcho = (text: string): Look => ({ lines: [`❯ ${text}`, ...EMPTY_COMPOSER] })
 const receipt = (
   nonce: string,
   text: string,
@@ -92,12 +94,42 @@ describe('checking that Claude took a message the host acked', () => {
     })
   })
 
-  it('says sent once a look after the settle finds the input empty', async () => {
-    const s = scene([empty])
+  it('says sent once a look after the settle finds the input empty with the prompt drawn above it', async () => {
+    const s = scene([emptyWithEcho('hello')])
 
     await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'sent' })
 
     expect(s.readAt[0]).toBeGreaterThanOrEqual(SUBMIT_SETTLE_MS)
+  })
+
+  it('does not call an empty input sent on its own: a body Claude has not read yet looks the same', async () => {
+    // Claude lagging reads body and Enter late, together, as one read of 64 bytes
+    // or more, so the Enter is text. Until then the input is empty and no prompt
+    // is drawn: nothing says it was submitted.
+    const s = scene([empty])
+
+    await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'unknown' })
+  })
+
+  it('calls the input sent once it is empty after a look saw the words in it', async () => {
+    const s = scene([holding('hello'), empty])
+
+    await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'sent' })
+  })
+
+  it('takes the prompt in the queue box, mid-turn, for a message that was taken', async () => {
+    const lines = [...EMPTY_COMPOSER]
+    lines.splice(0, 0, '❯ check the build', '  ctrl+enter to send now')
+    const s = scene([{ lines }])
+
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent' })
+  })
+
+  it('does not take the composer row, with a plain space, for a drawn prompt', async () => {
+    const lines = EMPTY_COMPOSER.map((row) => (row === '❯\u00a0' ? '❯ check the build' : row))
+    const s = scene([{ lines: [...lines.slice(0, 2), ...lines.slice(2)] }])
+
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
   })
 
   it('takes no look before the Enter has had time to land', async () => {
@@ -180,7 +212,7 @@ describe('checking that Claude took a message the host acked', () => {
   })
 
   it('sends a one-character message through as sent', async () => {
-    const s = scene([empty])
+    const s = scene([emptyWithEcho('y')])
     await expect(verify(s, 'y')).resolves.toEqual({ kind: 'sent' })
   })
 

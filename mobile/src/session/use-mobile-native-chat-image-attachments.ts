@@ -28,8 +28,7 @@ import {
   mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
 import {
-  acquireMobileNativeChatTerminalWrite,
-  mobileNativeChatTerminalWriteOwner,
+  acquireMobileNativeChatTerminalWriteForSend,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
@@ -228,14 +227,14 @@ export function useMobileNativeChatImageAttachments({
         // Serialize clear/paste/submit ownership per terminal while allowing other
         // tabs to send. Shared with the prompt-card writes (answer/permission), so
         // a card tap can't interleave into a mid-flight paste sequence either.
-        if (operationTerminal && !acquireMobileNativeChatTerminalWrite(operationTerminal)) {
+        // Taken for a composer send, which may let it go once its body is written and
+        // it only reads (mobile-native-chat-send-write.ts); this release then finds it gone.
+        const lockOwner = operationTerminal ? acquireMobileNativeChatTerminalWriteForSend(operationTerminal) : null
+        if (operationTerminal && !lockOwner) {
           onError?.()
           onSendError('Message not sent')
           return false
         }
-        // The send may let the lock go once it has written its body and only reads
-        // (mobile-native-chat-send-write.ts); this release then finds it not ours.
-        const lockOwner = operationTerminal ? mobileNativeChatTerminalWriteOwner(operationTerminal) : undefined
         try {
           // A dialog on screen takes typed keys as answers: this text could pick
           // a choice by its digit and its Enter confirm the highlighted one
@@ -432,7 +431,7 @@ export function useMobileNativeChatImageAttachments({
             return false
           }
         } finally {
-          releaseMobileNativeChatTerminalWrite(operationTerminal, lockOwner)
+          releaseMobileNativeChatTerminalWrite(operationTerminal, lockOwner ?? undefined)
         }
       })
     },
