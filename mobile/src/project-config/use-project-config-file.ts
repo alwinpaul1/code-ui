@@ -28,6 +28,10 @@ import { classifyProjectConfigFileError, describeProjectConfigFileError } from '
  * one hook; a switch holds an unsaved draft for the file it leaves, and a
  * switch back restores it instead of reading the file again. A file with
  * nothing unsaved is read again, so a change made at the desk shows.
+ *
+ * Nor does a forced reconnect. The host hands down a new client object for
+ * the same file; an unsaved draft stays on screen and Save sends it on the
+ * new client, and a file with nothing unsaved is read again.
  */
 export type ProjectConfigFileState =
   | { status: 'loading' }
@@ -112,12 +116,23 @@ export function useProjectConfigFile(args: {
     stateRef.current = state
   }, [state])
   const shownPathRef = useRef(relativePath)
+  const shownWorktreeRef = useRef(worktreeId)
   const heldDraftsRef = useRef(new Map<string, ReadyProjectConfigFileState>())
 
   useEffect(() => {
     const leftPath = shownPathRef.current
+    const leftWorktree = shownWorktreeRef.current
     shownPathRef.current = relativePath
-    if (leftPath !== relativePath) {
+    shownWorktreeRef.current = worktreeId
+    if (leftPath === relativePath && leftWorktree === worktreeId) {
+      // Same file, so only the client changed: a forced reconnect closes it and the host hands
+      // down a new object. An unsaved draft stays, and Save sends it on the new client; a read
+      // here put the file back over it (review, 2026-10-01). Anything else reads again.
+      const shown = stateRef.current
+      if (shown.status === 'ready' && shown.isDirty) {
+        return
+      }
+    } else if (leftPath !== relativePath) {
       // A switch to another file holds an unsaved draft for the one it leaves, and a switch back
       // takes it out again rather than reading the file over it (review, 2026-09-30: an unsaved
       // add or remove on Permission Rules was lost to a tap on the other destination). A write
@@ -139,7 +154,7 @@ export function useProjectConfigFile(args: {
       }
     }
     void load()
-  }, [load])
+  }, [load, relativePath, worktreeId])
 
   // A screen opened before the relay was up fails its read ('Not connected') and the client object
   // is the same across reconnects, so `load` never changes: read again once per NEW connection

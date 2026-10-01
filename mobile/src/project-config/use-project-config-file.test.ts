@@ -12,10 +12,20 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
 
 function harness(client: RpcClient, worktreeId = 'w1', relativePath = '.mcp.json') {
   let latest!: ReturnType<typeof useProjectConfigFile>
-  // The file the screen shows, which Permission Rules changes with its Project/Local pills.
-  const shown = { relativePath }
+  // The file the screen shows, which Permission Rules changes with its Project/Local pills; the
+  // client the host hands down, a new object after a forced reconnect; and the worktree.
+  const shown: { relativePath: string; client: RpcClient | null; worktreeId: string } = {
+    relativePath,
+    client,
+    worktreeId
+  }
   function Harness(): null {
-    latest = useProjectConfigFile({ client, hostId: 'h1', worktreeId, relativePath: shown.relativePath })
+    latest = useProjectConfigFile({
+      client: shown.client,
+      hostId: 'h1',
+      worktreeId: shown.worktreeId,
+      relativePath: shown.relativePath
+    })
     return null
   }
   let renderer!: ReactTestRenderer
@@ -36,6 +46,17 @@ function harness(client: RpcClient, worktreeId = 'w1', relativePath = '.mcp.json
     /** The screen switching to another file, as a destination pill does. */
     switchTo: async (path: string) => {
       shown.relativePath = path
+      await rerender()
+    },
+    /** The host handing down another client: forceReconnect closes the old one and makes a new
+     *  object (client-context.tsx), with no client in between when `null`. */
+    handDown: async (next: RpcClient | null) => {
+      shown.client = next
+      await rerender()
+    },
+    /** The screen showing the same file of another worktree. */
+    switchWorktree: async (id: string) => {
+      shown.worktreeId = id
       await rerender()
     },
     unmount: () => act(() => renderer.unmount())
@@ -701,6 +722,145 @@ describe('switching to another file and back', () => {
     await settle()
     expect(readsOf(sendRequest, 'project.json')).toBe(1)
     expect(h.get().state).toMatchObject({ content: 'P1', isDirty: true })
+  })
+})
+
+// A forced reconnect (another screen's Retry, through connection-retry-action.ts) closes the client
+// and the host hands down a new object. `load` is keyed on the client, so the screen read its file
+// again over an unsaved draft: {content:'P0', isDirty:false} after setContent('P1'), on all three
+// project-config screens (review, 2026-10-01).
+describe('a forced reconnect (a new client object)', () => {
+  let cleanup: (() => void) | null = null
+  afterEach(() => {
+    cleanup?.()
+    cleanup = null
+  })
+
+  const fileReply = (content: string) => ({
+    ok: true,
+    result: { content, truncated: false, byteLength: content.length }
+  })
+  const clientReading = (...replies: unknown[]) => {
+    const sendRequest = vi.fn(async (method: string): Promise<unknown> => {
+      if (method !== 'files.read') {
+        return { ok: true, result: {} }
+      }
+      const next = replies.shift()
+      if (next === undefined) {
+        throw new Error('no read scripted')
+      }
+      return next
+    })
+    return { client: { sendRequest } as unknown as RpcClient, sendRequest }
+  }
+  const callsOf = (sendRequest: ReturnType<typeof vi.fn>, method: string) =>
+    sendRequest.mock.calls.filter(([called]) => called === method).length
+
+  it('keeps an unsaved edit when the host hands down a new client', async () => {
+    const first = clientReading(fileReply('P0'))
+    const second = clientReading(fileReply('P0 at the desk'))
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+
+    await h.handDown(second.client)
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'P1', savedContent: 'P0', isDirty: true })
+    expect(callsOf(second.sendRequest, 'files.read')).toBe(0)
+  })
+
+  it('keeps it across a gap with no client at all', async () => {
+    const first = clientReading(fileReply('P0'))
+    const second = clientReading(fileReply('P0 at the desk'))
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+
+    await h.handDown(null)
+    await h.handDown(second.client)
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'P1', isDirty: true })
+    expect(callsOf(second.sendRequest, 'files.read')).toBe(0)
+  })
+
+  it('saves the kept draft on the new client', async () => {
+    const first = clientReading(fileReply('P0'))
+    const second = clientReading()
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('P1'))
+    await h.handDown(second.client)
+    await settle()
+
+    await act(async () => {
+      await h.get().save()
+    })
+    expect(second.sendRequest).toHaveBeenLastCalledWith('files.write', {
+      worktree: 'id:w1',
+      relativePath: 'project.json',
+      content: 'P1'
+    })
+    expect(h.get().state).toMatchObject({ savedContent: 'P1', isDirty: false })
+  })
+
+  it('reads again when nothing is unsaved, so a change made at the desk shows', async () => {
+    const first = clientReading(fileReply('P0'))
+    const second = clientReading(fileReply('P0 at the desk'))
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+
+    await h.handDown(second.client)
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'P0 at the desk', isDirty: false })
+  })
+
+  it('reads again on the new client after a failed read', async () => {
+    const first = clientReading({ ok: false, error: { code: 'runtime_error', message: 'Not connected' } })
+    const second = clientReading(fileReply('P0'))
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    expect(h.get().state.status).toBe('error')
+
+    await h.handDown(second.client)
+    await settle()
+    expect(h.get().state).toMatchObject({ status: 'ready', content: 'P0' })
+  })
+
+  it("reads another worktree's file over an unsaved edit of this one's", async () => {
+    const reads = clientReading(fileReply('W1'), fileReply('W2'))
+    const h = harness(reads.client, 'w1', 'project.json')
+    cleanup = h.unmount
+    await settle()
+    act(() => h.get().setContent('W1 edited'))
+
+    await h.switchWorktree('w2')
+    await settle()
+    expect(h.get().state).toMatchObject({ content: 'W2', isDirty: false })
+  })
+
+  it('degenerate: a new client while the first read is still loading reads on the new one', async () => {
+    let releaseFirst!: (reply: unknown) => void
+    const first = clientReading(
+      new Promise((resolve) => {
+        releaseFirst = resolve
+      })
+    )
+    const second = clientReading(fileReply('P0 on the new client'))
+    const h = harness(first.client, 'w1', 'project.json')
+    cleanup = h.unmount
+
+    await h.handDown(second.client)
+    await settle()
+    await act(async () => {
+      releaseFirst(fileReply('P0 on the old client'))
+      await Promise.resolve()
+    })
+    expect(h.get().state).toMatchObject({ content: 'P0 on the new client' })
   })
 })
 
