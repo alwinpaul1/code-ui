@@ -1,22 +1,13 @@
 import { useMemo, type ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
 import { ChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
+import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState } from './mobile-native-chat-agent-run'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
-import { useNativeChatAgentRuns } from './native-chat-tasks-context'
-
-/** Two linked diamonds, the Claude app's mark for a run of agents. */
-function AgentRunGlyph({ color }: { color: string }) {
-  return (
-    <Svg width={20} height={14} viewBox="0 0 20 14" testID="agent-run-glyph">
-      <Path d="M7 1 L13 7 L7 13 L1 7 Z M13 1 L19 7 L13 13 L7 7 Z" fill="none" stroke={color} strokeWidth={1.4} strokeLinejoin="round" />
-    </Svg>
-  )
-}
+import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /**
  * A run of Agent calls, drawn the way the Claude app draws it: "Running agent ›"
@@ -30,14 +21,18 @@ function AgentRunGlyph({ color }: { color: string }) {
 export function MobileNativeChatAgentRun({
   blocks,
   trailing,
+  revertScope,
   styles
 }: {
   blocks: readonly NativeChatBlock[]
+  /** The run's place in its message; names its sheet's owner. */
+  revertScope?: string
   trailing?: ReactNode
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
   const runs = useNativeChatAgentRuns()
+  const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const { running, entries } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
   const label = running
     ? 'Running agent'
@@ -47,7 +42,7 @@ export function MobileNativeChatAgentRun({
       <View style={styles.toolRunHeader}>
         <Pressable
           style={styles.toolRunToggle}
-          onPress={() => runs.openRun?.(blocks)}
+          onPress={openRunSheet}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={`${label}. Show the agents`}

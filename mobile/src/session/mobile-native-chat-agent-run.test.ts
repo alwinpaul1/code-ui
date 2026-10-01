@@ -6,6 +6,11 @@ import { confirmedAgentDescriptions } from './mobile-background-task-agent-title
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import {
+  MIXED_RUN_AGENT_ID,
+  MIXED_RUN_AGENT_DESCRIPTION,
+  mixedRunWithBackgroundAgent
+} from './fixtures/claude-mixed-tool-run-agent-2026-10-01'
+import {
   PARALLEL_AGENTS,
   asyncAgentLaunchResult,
   parallelAgentMessages
@@ -104,5 +109,81 @@ describe('the row for a run of agents', () => {
     expect(isAgentOnlyRun(mixed)).toBe(false)
     expect(isAgentOnlyRun([])).toBe(false)
     expect(isAgentOnlyRun([{ type: 'tool-result', output: 'orphan' }])).toBe(false)
+  })
+})
+
+describe('the agents of a mixed run', () => {
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
+
+  it('lists only the Agent call as an agent, not the commands beside it', () => {
+    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).entries).toHaveLength(1)
+  })
+
+  it('lists one agent for CronDelete, three commands and an Agent, and runs it by its launch id', () => {
+    const state = agentRunState(mixedRunWithBackgroundAgent(), {
+      ...idle,
+      runningIds: new Set([MIXED_RUN_AGENT_ID])
+    })
+    expect(state.entries.map((entry) => entry.title)).toEqual([MIXED_RUN_AGENT_DESCRIPTION])
+    expect(state.running).toBe(true)
+    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).running).toBe(false)
+  })
+
+  it('does not count the commands\' answers as the agent launch\'s answer', () => {
+    // The agent call is unanswered (its result is cut) while the turn works:
+    // its launch is being made. Counted over every result, the commands'
+    // four answers would hide that.
+    const blocks = mixedRunWithBackgroundAgent().slice(0, -1)
+    expect(agentRunState(blocks, { ...idle, agentWorking: true }).running).toBe(true)
+  })
+
+  it('lists no agent for an empty run, a run of commands, or a lone result', () => {
+    expect(agentRunState([], idle).entries).toEqual([])
+    expect(agentRunState([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }], idle).entries).toEqual([])
+    expect(agentRunState([{ type: 'tool-result', output: 'x' }], idle).running).toBe(false)
+  })
+})
+
+describe('a mixed run whose results land out of call order', () => {
+  const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
+  const outOfOrder: NativeChatBlock[] = [
+    { type: 'tool-call', name: 'Read', input: { file_path: 'notes.md' } },
+    agentCall!,
+    launch!,
+    { type: 'tool-result', output: '# Notes' }
+  ]
+  const idle = { runningIds: new Set([MIXED_RUN_AGENT_ID]), confirmed: new Map<string, string>(), agentWorking: false }
+
+  it('lists the one agent with the id its launch result carries', () => {
+    const state = agentRunState(outOfOrder, idle)
+    expect(state.entries).toEqual([{ title: MIXED_RUN_AGENT_DESCRIPTION, agentId: MIXED_RUN_AGENT_ID }])
+    expect(state.running).toBe(true)
+  })
+
+  it('never lends a run an agent id from another run\'s results', () => {
+    const state = agentRunState([agentCall!], idle)
+    expect(state.entries[0]!.agentId).toBeNull()
+    expect(state.running).toBe(false)
+  })
+})
+
+// Review of feat/tool-run-sheet: `unanswered` counted every call of the run, so
+// a finished agent's run with an unrelated unanswered call read as launching.
+describe('an unanswered call that is not an agent', () => {
+  const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
+
+  it('does not make a finished agent read as running on a working tab', () => {
+    const blocks: NativeChatBlock[] = [agentCall!, launch!, { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } }]
+    expect(agentRunState(blocks, idle).running).toBe(false)
+  })
+
+  it('still reads an agent call with no answer as running while the tab works', () => {
+    expect(agentRunState([agentCall!], idle).running).toBe(true)
+  })
+
+  it('counts a launch that landed in another call\'s slot as the agent\'s answer', () => {
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } }, agentCall!, launch!]
+    expect(agentRunState(blocks, idle).running).toBe(false)
   })
 })

@@ -123,7 +123,7 @@ export function sendMessageAddressee(input: unknown): string | null {
  *  itself, else `content`. The 2026-09-26 call, seen in the sheet's Inputs
  *  list and the Claude app's row, had no summary and a `content` already cut
  *  ("…read of the fra..."), so the full `message` comes first. */
-function sendMessageDetail(block: NativeChatBlock): { to: string; preview: string | null } | null {
+export function sendMessageDetail(block: NativeChatBlock): { to: string; preview: string | null } | null {
   if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'message') {
     return null
   }

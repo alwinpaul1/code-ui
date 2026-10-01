@@ -57,7 +57,8 @@ vi.mock('lucide-react-native', () => ({
 }))
 // Both sheets reach BottomDrawer, whose styles call Platform.select at import.
 vi.mock('./MobileBackgroundTasksSheet', () => ({ MobileBackgroundTasksSheet: 'BackgroundTasksSheet' }))
-vi.mock('./MobileNativeChatAgentRunSheet', () => ({ MobileNativeChatAgentRunSheet: 'AgentRunSheet' }))
+vi.mock('./MobileNativeChatRunSheet', () => ({ MobileNativeChatRunSheet: 'RunSheet' }))
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: 'ToolDetailSheet' }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('./MobileNativeChatMessage', () => ({ MobileNativeChatMessage: 'ChatMessage' }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentIcon' }))

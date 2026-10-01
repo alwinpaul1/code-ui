@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
@@ -6,30 +6,17 @@ import {
   SquareTerminal,
   Wrench
 } from 'lucide-react-native'
-import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
-import { isEditToolName } from '../../../src/shared/native-chat-edit-normalize'
-import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
-import { DiffView, ResultBody, ShowMoreCalls } from './MobileNativeChatToolRunBodyParts'
+import { ShowMoreCalls } from './MobileNativeChatToolRunBodyParts'
+import { ToolLine } from './MobileNativeChatToolLine'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
-import { MobileNativeChatTaskList } from './MobileNativeChatTaskList'
 import {
   mobileTaskListPreview,
   mobileTaskListRows,
-  type MobileTaskListPredecessors,
-  type MobileTaskListRow
+  type MobileTaskListPredecessors
 } from './mobile-native-chat-task-list-rows'
-import {
-  ToolExecutionMeta,
-  ToolRowName,
-  ToolSearchResults
-} from './MobileNativeChatToolAnnotations'
 import { toolRunSentenceShowsFailures, toolRunSentenceSpans } from './mobile-native-chat-tool-sentence'
 import { ToolRunSentenceText } from './MobileNativeChatToolRunSentence'
-import {
-  editFilesForToolCall,
-  toolRunDiffStat,
-  type VerifiedCreateCount
-} from './mobile-native-chat-tool-run-diff-stat'
+import { toolRunDiffStat } from './mobile-native-chat-tool-run-diff-stat'
 import { useCreatedFileCounts } from './MobileNativeChatCreatedFileCounts'
 import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { toolPairOpensDetailSheet } from './mobile-native-chat-tool-detail'
@@ -37,16 +24,19 @@ import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailShe
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
-import { createToolInputDisplay } from '../../../src/shared/native-chat-tool-summary'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
-import type {
-  NativeChatBlock,
-  NativeChatToolCallBlock
+import {
+  isToolCallBlock,
+  type NativeChatBlock,
+  type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
-import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
+import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
+import { agentRunState, isAgentToolName } from './mobile-native-chat-agent-run'
+import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
+import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
  *  client's own: the desktop's NativeChatToolRun draws every call. */
@@ -55,190 +45,45 @@ const MAX_VISIBLE_TOOL_PAIRS = 6
  *  and its result's (ToolRun's `diffLineLimit`). */
 const MAX_TOOL_RUN_DIFF_ROWS = 240
 
-/** The files one edit call changed, or null when the model refuses to claim an
- *  edit — a failed call, one still running, or a turn that stopped before its
- *  call was answered. Those keep the generic tool view and its error body. A
- *  file the wire cut arrives `truncated`, the same answer the run's chip gets. */
-function editFilesForPair(pair: ToolPair) {
-  const files = pair.call ? editFilesForToolCall(pair.call, pair.result ?? null) : null
-  return files && files.length > 0 ? files : null
-}
-
-/** One request: a tool call and its result rendered together as a single
- *  expandable line. `defaultExpanded` lets the group toggle open every line. */
-function ToolLine({
-  pair,
-  taskList,
-  defaultExpanded,
-  diffLineLimit,
-  onOpenFile,
-  onOpenDetail,
-  onRevertHunk,
-  revertScope,
-  createdFileCount,
-  styles
-}: {
-  pair: ToolPair
-  /** Set when this pair is the agent revising its plan, in which case the
-   *  checklist speaks for the call AND its result. */
-  taskList: MobileTaskListRow | null
-  defaultExpanded: boolean
-  diffLineLimit: number
-  onOpenFile?: (relativePath: string) => void
-  /** Opens the Claude-app-style detail sheet for this call instead of the
-   *  inline expand, for every row that has no richer inline card of its own
-   *  (a plan checklist, an edit's diff card, a web search's result list). */
-  onOpenDetail: (pair: ToolPair) => void
-  onRevertHunk?: MobileNativeChatRevertHunk
-  /** This line's place in its message, for the diff card's identity. */
-  revertScope?: string
-  /** The run's read-back counts of the created files the wire cut. */
-  createdFileCount?: VerifiedCreateCount
-  styles: ChatMessageStyles
-}) {
-  const { colors } = useTheme()
-  const [expanded, setExpanded] = useState(defaultExpanded)
-  const { call, result } = pair
-  const name = call ? call.name : 'Result'
-  const inputDisplay = call ? createToolInputDisplay(call.input) : null
-  // A plan's input has no path and no primary argument, so the generic label
-  // falls through to a bounded JSON preview — `{"todos":[{"content":…` on the
-  // one line the phone gives a collapsed row. Say how far along it is instead.
-  // A result with no call previews its first line, never cut through an emoji.
-  const preview = taskList
-    ? mobileTaskListPreview(taskList.list)
-    : (inputDisplay?.label ?? cutWholeCharacters(result?.output.split('\n')[0] ?? '', 80))
-  // Why: collapsed tool rows are the common path; defer bounded diff parsing
-  // and detail formatting until the user asks to reveal the detail.
-  // An edit renders as one card per file it changed, which speaks for the call
-  // AND its result — the raw flat diff and the result body are suppressed, so
-  // one turn never shows two presentations of the same change.
-  const editFiles =
-    !taskList && expanded && call && isEditToolName(call.name) ? editFilesForPair(pair) : null
-  const rendered = editFiles !== null || taskList !== null
-  // A created file the wire cut keeps its cut rows and "Diff truncated", with
-  // the count read back from the file beside them once the file proved it.
-  const verifiedAdded =
-    call && editFiles?.length === 1
-      ? (createdFileCount?.(call, result ?? null) ?? undefined)
-      : undefined
-  const callDiff =
-    !rendered && expanded && call ? diffFromToolCall(call.name, call.input, diffLineLimit) : null
-  const resultDiff =
-    !rendered && expanded && result ? diffFromText(result.output, diffLineLimit) : null
-  const callDetail =
-    expanded && inputDisplay && !callDiff && !rendered ? inputDisplay.formatDetail() : undefined
-  const searchResults = call?.webSearchResults
-  const hasResults = (searchResults?.length ?? 0) > 0
-  const hasDetail =
-    callDiff !== null || result !== undefined || inputDisplay?.hasDetail === true || hasResults
-  // A row with no richer inline card (a plan checklist, an edit's diff card, a
-  // web search's result list) opens the Claude-app detail sheet instead of
-  // expanding in place — the sheet is where its inputs/output now live, so it
-  // never shows both. Because of that, the global "expand all tools" toggle
-  // has nothing to expand on these rows: there is no inline detail left to
-  // reveal, only a sheet, and opening N sheets at once for one tap makes no
-  // sense.
-  const opensSheet = toolPairOpensDetailSheet(pair, { isTaskList: taskList !== null })
-  // The group toggle opens every line at once, bypassing the tap guard, so the
-  // panel has to consult it too — else a detail-less row echoes its own label
-  // under itself and no tap can dismiss it.
-  const showDetail = !opensSheet && hasDetail && expanded
-  const filePath = inputDisplay?.filePath ?? null
-  const openable = filePath !== null && onOpenFile !== undefined
-  return (
-    <View>
-      <Pressable
-        testID="tool-line"
-        style={styles.toolLine}
-        onPress={() => {
-          if (opensSheet) {
-            onOpenDetail(pair)
-            return
-          }
-          if (hasDetail) {
-            setExpanded((v) => !v)
-          }
-        }}
-        hitSlop={6}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: showDetail }}
-      >
-        {showDetail ? (
-          <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-        )}
-        {call ? (
-          <ToolRowName name={name} mcpIdentity={call.mcpIdentity} styles={styles} />
-        ) : (
-          <Text style={styles.toolName}>{name}</Text>
-        )}
-        {preview ? (
-          <Text
-            testID="tool-line-preview"
-            style={[styles.toolPreview, openable && styles.toolPreviewLink]}
-            numberOfLines={1}
-            onPress={openable ? () => onOpenFile!(filePath!) : undefined}
-            suppressHighlighting={!openable}
-          >
-            {preview}
-          </Text>
-        ) : null}
-        {call ? <ToolExecutionMeta block={call} styles={styles} /> : null}
-      </Pressable>
-      {showDetail ? (
-        <View style={styles.toolDetail}>
-          {hasResults ? <ToolSearchResults results={searchResults} styles={styles} /> : null}
-          {taskList ? (
-            <MobileNativeChatTaskList
-              list={taskList.list}
-              {...(taskList.previous ? { previous: taskList.previous } : {})}
-            />
-          ) : null}
-          {editFiles?.map((file, index) => (
-            <MobileNativeChatDiffCard
-              key={`${file.path}:${index}`}
-              file={file}
-              rowLimit={diffLineLimit}
-              onRevertHunk={onRevertHunk}
-              revertScope={`${revertScope ?? ''}:${index}`}
-              onOpenFile={onOpenFile}
-              verifiedAdded={verifiedAdded}
-            />
-          ))}
-          {callDiff ? <DiffView lines={callDiff} styles={styles} /> : null}
-          {callDetail ? <Text style={styles.mono}>{callDetail}</Text> : null}
-          {!rendered && result ? (
-            <ResultBody
-              output={result.output}
-              isError={result.isError}
-              diff={resultDiff}
-              styles={styles}
-            />
-          ) : null}
-        </View>
-      ) : null}
-    </View>
-  )
-}
-
 /** A run of a message's tool calls/results, collapsed to a one-line summary
  *  ("2×  Read src/app.ts · Edit …", Codex-app style) that expands to the inline
  *  tool lines. `defaultExpanded` lets the global toolbar toggle drive every run. */
-export function ToolRun({
+export function ToolRun(props: ToolRunProps) {
+  return <ToolRunView {...props} />
+}
+
+/** Hands its children whether an agent of the run still runs. Only a run that
+ *  holds an Agent/Task call reads the chat's agent state, which changes with
+ *  every message and status update: read by every run it re-rendered each one
+ *  under the memoised message row (review, 2026-10-01). It wraps the header
+ *  alone, so a run gaining its first Agent call swaps only the header's subtree:
+ *  the run's own state (open row, detail sheet, shown calls, sheet owner) lives
+ *  above it and survives. */
+function RunningAgentGate({
   blocks,
-  defaultExpanded,
-  expandChildren,
-  activeCall = null,
-  taskListPredecessors,
-  trailing,
-  onOpenFile,
-  onRevertHunk,
-  revertScope,
-  focusView = false,
-  styles
+  enabled,
+  children
 }: {
+  blocks: NativeChatBlock[]
+  enabled: boolean
+  children: (runningAgent: boolean) => React.ReactNode
+}) {
+  return enabled ? <ReadsAgents blocks={blocks}>{children}</ReadsAgents> : <>{children(false)}</>
+}
+
+function ReadsAgents({
+  blocks,
+  children
+}: {
+  blocks: NativeChatBlock[]
+  children: (runningAgent: boolean) => React.ReactNode
+}) {
+  const agentRuns = useNativeChatAgentRuns()
+  const running = useMemo(() => agentRunState(blocks, agentRuns).running, [blocks, agentRuns])
+  return <>{children(running)}</>
+}
+
+type ToolRunProps = {
   blocks: NativeChatBlock[]
   defaultExpanded: boolean
   /** Child tool lines stay collapsed when the turn caret drove the run open.
@@ -263,7 +108,21 @@ export function ToolRun({
    *  label holds while open too, so a tap does not make the row jump. */
   focusView?: boolean
   styles: ChatMessageStyles
-}) {
+}
+
+function ToolRunView({
+  blocks,
+  defaultExpanded,
+  expandChildren,
+  activeCall = null,
+  taskListPredecessors,
+  trailing,
+  onOpenFile,
+  onRevertHunk,
+  revertScope,
+  focusView = false,
+  styles
+}: ToolRunProps) {
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
   // The Claude-app detail sheet for whichever call was tapped, in this run or
@@ -346,6 +205,10 @@ export function ToolRun({
   // a run that is one result whose call the window cut. Counted over every
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
+  // The Claude app's row for a run with an agent still working in it is
+  // "Running agent ›" (`runningAgent`, read by RunningAgentGate), whatever
+  // else the run did (2026-10-01 screenshots).
+  const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
@@ -395,10 +258,15 @@ export function ToolRun({
   // counted fewer failures than the run had and so states none, or one whose
   // count sits past what a phone row shows before its ellipsis (a
   // SendMessage's preview, a command's description).
-  const sentenceStatesFailures =
+  const sentenceShowsFailures =
     sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
+  const hasAgentCall = !focusView && blocks.some((block) => isToolCallBlock(block) && isAgentToolName(block.name))
   return (
     <View style={styles.toolRun}>
+      <RunningAgentGate blocks={blocks} enabled={hasAgentCall}>
+        {(runningAgent) => {
+          const sentenceStatesFailures = !runningAgent && sentenceShowsFailures
+          return (
       <View style={styles.toolRunHeader}>
         <Pressable
           testID="tool-run-header"
@@ -408,19 +276,53 @@ export function ToolRun({
               setDetailPair(singlePair)
               return
             }
+            // Two calls or more: the Claude app lists them in a sheet instead
+            // of unfolding the row (2026-10-01 screenshots). The inline list
+            // stays where the reader asked for it (the Tools toggle, the turn
+            // caret, an open row, focus view) and where no chat provides the
+            // sheet (a subagent's own transcript).
+            if (!open && !focusView && allPairs.length >= 2 && openRunSheet) {
+              // Counted in the sheet's rows, not the calls: a Codex poll folds
+              // into the command it drives, so a command and its poll are one
+              // row, and a one-row sheet is the call's own sheet.
+              const rows = runSheetRows(blocks, [])
+              const only = rows.length === 1 ? rows[0]!.pair : null
+              if (only && toolPairOpensDetailSheet(only, { isTaskList: false })) {
+                setDetailPair(only)
+              } else {
+                openRunSheet()
+              }
+              return
+            }
             setOpen((v) => !v)
           }}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
+          accessibilityLabel={runningAgent ? runningAgentLabel(failedCallCount, diffStat) : undefined}
+          accessibilityLiveRegion={runningAgent ? 'polite' : undefined}
         >
-          <ToolRunSentenceText
-            spans={sentenceSpans}
-            fallback={countLabel}
-            style={[styles.toolRunLabel, styles.toolRunSentence]}
-            styles={styles}
-          />
-          {planPreview && !focusView ? (
+          {runningAgent ? (
+            <>
+              <AgentRunGlyph color={colors.textMuted} />
+              <ShimmerText
+                text="Running agent"
+                active
+                color={colors.textSecondary}
+                style={[styles.toolRunLabel, { flex: 0 }]}
+                numberOfLines={1}
+                testID="tool-run-agent-label"
+              />
+            </>
+          ) : (
+            <ToolRunSentenceText
+              spans={sentenceSpans}
+              fallback={countLabel}
+              style={[styles.toolRunLabel, styles.toolRunSentence]}
+              styles={styles}
+            />
+          )}
+          {planPreview && !focusView && !runningAgent ? (
             <Text testID="tool-run-member-arg" style={styles.toolRunMemberArg} numberOfLines={1}>
               {planPreview}
             </Text>
@@ -440,6 +342,9 @@ export function ToolRun({
         </Pressable>
         {trailing}
       </View>
+          )
+        }}
+      </RunningAgentGate>
       {open ? renderBody() : null}
       {detailSheet}
     </View>
@@ -476,4 +381,20 @@ export function ToolRun({
       </View>
     )
   }
+}
+
+const lines = (n: number): string => `${n} line${n === 1 ? '' : 's'}`
+
+/** What a screen reader hears for the Running agent row. The label stands in for
+ *  the row's children, so what the row also shows (the failure count and the
+ *  "+A −R" pill) is said in it. */
+function runningAgentLabel(failedCallCount: number, diffStat: { added: number; removed: number } | null): string {
+  const parts = ['Running agent']
+  if (failedCallCount > 0) {
+    parts.push(`${failedCallCount} failed`)
+  }
+  if (diffStat) {
+    parts.push(`${lines(diffStat.added)} added`, `${lines(diffStat.removed)} removed`)
+  }
+  return parts.join(', ')
 }

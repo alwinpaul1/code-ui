@@ -33,13 +33,20 @@ vi.mock('react-native', () => ({
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('lucide-react-native', () =>
   Object.fromEntries(
-    ['ChevronDown', 'ChevronRight', 'Copy', 'Image', 'ListTodo', 'SquareChevronRight', 'SquareTerminal', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle', 'AlertTriangle', 'Info', 'ArrowUp'].map((name) => [name, name])
+    ['ChevronDown', 'ChevronRight', 'Copy', 'Image', 'ListTodo', 'Eye', 'Globe', 'MessageSquare', 'Pencil', 'Search', 'SquareChevronRight', 'SquareTerminal', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle', 'AlertTriangle', 'Info', 'ArrowUp'].map((name) => [name, name])
   )
 )
 vi.mock('../components/BottomDrawer', () => ({
-  BottomDrawer: ({ visible, children }: { visible: boolean; children: ReactNode }) =>
-    visible ? children : null
+  BottomDrawer: ({ visible, header, children }: { visible: boolean; header?: ReactNode; children: ReactNode }) =>
+    visible ? (
+      <>
+        {header}
+        {children}
+      </>
+    ) : null
 }))
+// A row's own detail sheet needs gesture-handler; the run tests never open it.
+vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: 'ToolDetailSheet' }))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => false }))
 vi.mock('expo-clipboard', () => ({ setStringAsync: vi.fn() }))
 vi.mock('./MobileBackgroundTasksSheet', () => ({ MobileBackgroundTasksSheet: 'BackgroundTasksSheet' }))
@@ -201,8 +208,9 @@ describe('the conversation row for five agents launched at once', () => {
 
   it('opens a "Ran 5 agents" sheet listing each agent by its description', async () => {
     const tree = await render({ status: statusWith(PARALLEL_AGENTS), agentWorking: true })
-    expect(tree.root.findAll((node) => node.props.testID === 'agent-run-sheet')).toHaveLength(0)
+    expect(tree.root.findAll((node) => node.props.testID === 'run-sheet')).toHaveLength(0)
     await press(tree, /Show the agents/)
+    expect(tree.root.findAll((node) => node.props.testID === 'run-sheet')).toHaveLength(1)
     const shown = texts(tree)
     expect(shown).toContain('Ran 5 agents')
     expect(shown.filter((text) => text === 'Ran agent')).toHaveLength(5)

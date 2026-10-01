@@ -1,3 +1,4 @@
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -34,6 +35,11 @@ export type NativeChatAgentRunState = { running: boolean; entries: NativeChatAge
 /** Claude Code's own names for the tool that launches a subagent. */
 const AGENT_TOOLS = new Set(['Agent', 'Task'])
 
+/** Whether a tool name is Claude Code's launcher for a subagent. */
+export function isAgentToolName(name: string): boolean {
+  return AGENT_TOOLS.has(name)
+}
+
 /** True when every call in the run launched a Claude subagent. A run with any
  *  other tool in it keeps the ordinary tool row, and so does Codex, whose
  *  spawn tool the Claude app has never been seen to draw. */
@@ -50,15 +56,46 @@ export function isAgentOnlyRun(blocks: readonly NativeChatBlock[]): boolean {
   return calls > 0
 }
 
+/** The agents of a run, read over the WHOLE run: the Agent/Task calls are the
+ *  agents, but a launch's answer is read from every result, because Claude Code
+ *  writes results in the order they are acknowledged and Orca drops the tool_use
+ *  ids, so a background launch's answer can land before an earlier call's. Pairing
+ *  by order handed the launch text to the wrong call (a Read) and lost the agent.
+ *  Only this run's own results are read, so a run never shows another's agent. */
+const isLaunchText = (output: string): boolean =>
+  readLaunch({ name: 'Agent', input: null, startedAt: null }, output) !== null
+
+/** Whether an Agent/Task call of the run has no answer yet. Results pair to calls
+ *  by order, which a background launch's early answer upsets, so a launch text
+ *  sitting in another call's slot counts as an unanswered agent's answer. An
+ *  unanswered call that is no agent's (a Read) says nothing about agents. */
+function hasUnansweredAgent(blocks: readonly NativeChatBlock[]): boolean {
+  let agentsWithoutResult = 0
+  let strayLaunches = 0
+  for (const pair of pairToolBlocks(blocks)) {
+    if (!pair.call) {
+      continue
+    }
+    if (AGENT_TOOLS.has(pair.call.name)) {
+      agentsWithoutResult += pair.result ? 0 : 1
+    } else if (pair.result && isLaunchText(pair.result.output)) {
+      strayLaunches += 1
+    }
+  }
+  return agentsWithoutResult > strayLaunches
+}
+
 export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
 ): NativeChatAgentRunState {
   const calls: { title: string; description: string | null; live: boolean }[] = []
   const launched: string[] = []
-  let results = 0
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
+      if (!AGENT_TOOLS.has(block.name)) {
+        continue
+      }
       const description = readString(block.input, 'description')
       calls.push({
         title: agentTitle(block.input),
@@ -66,14 +103,13 @@ export function agentRunState(
         live: block.state === 'running'
       })
     } else if (isToolResultBlock(block)) {
-      results += 1
       const id = readLaunch({ name: 'Agent', input: null, startedAt: null }, block.output)?.id
       if (id) {
         launched.push(id)
       }
     }
   }
-  const unanswered = calls.length > results
+  const unanswered = hasUnansweredAgent(blocks)
   const running =
     calls.some((call) => call.live) ||
     (unanswered && inputs.agentWorking) ||
