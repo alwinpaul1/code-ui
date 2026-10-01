@@ -49,7 +49,7 @@ export function buildMobileNativeChatClearInputForText(
  * READ is under 64 bytes (`a.length<64||u===WZ.BS` in the 2.1.286 and 2.1.287
  * input tokenizer). The limit is per READ, not per write: writes made back to
  * back arrive as one read, so cutting a longer burst into writes of 63 does not
- * help, and a control byte that coalesces with the body is text as well. The
+ * help, and a control byte that coalesces with the body is text too once the coalesced read reaches 64 bytes (a short clear and a short body are still keys). The
  * burst for `n` rows is 4n - 2 bytes (`buildAgentTuiClearInput`), so 16 rows is
  * the most that stays under 64 (62 bytes).
  */

@@ -4,6 +4,10 @@
 // woven in. Module scope for the same reason as the stale-input marker: the
 // terminal outlives any one screen, and independent hooks share the same PTY.
 const writeInFlightTerminals = new Set<string>()
+// Who holds each terminal's lock, so a holder that lets go early (a send that has
+// written its body and now only reads) cannot later release a lock someone else
+// has since taken.
+const writeOwners = new Map<string, symbol>()
 
 /** Claim the terminal for one composed write sequence. False = another
  *  sequence is mid-flight; the caller must reject its send. */
@@ -12,7 +16,13 @@ export function acquireMobileNativeChatTerminalWrite(terminal: string): boolean 
     return false
   }
   writeInFlightTerminals.add(terminal)
+  writeOwners.set(terminal, Symbol(terminal))
   return true
+}
+
+/** The current holder of the terminal's lock, or undefined when it is free. */
+export function mobileNativeChatTerminalWriteOwner(terminal: string): symbol | undefined {
+  return writeOwners.get(terminal)
 }
 
 /** Whether a composed sequence currently owns the terminal. Lets a best-effort
@@ -21,13 +31,26 @@ export function isMobileNativeChatTerminalWriteInFlight(terminal: string): boole
   return writeInFlightTerminals.has(terminal)
 }
 
-export function releaseMobileNativeChatTerminalWrite(terminal: string): void {
+/** Release the terminal. With `owner`, only if that holder still has it: an early
+ *  release by the send leaves nothing for the holder's own `finally` to undo. */
+export function releaseMobileNativeChatTerminalWrite(
+  terminal: string | null | undefined,
+  owner?: symbol
+): void {
+  if (!terminal) {
+    return
+  }
+  if (owner !== undefined && writeOwners.get(terminal) !== owner) {
+    return
+  }
   writeInFlightTerminals.delete(terminal)
+  writeOwners.delete(terminal)
 }
 
 /** Test-only: module scope outlives a single test's hooks. */
 export function resetMobileNativeChatTerminalWritesForTests(): void {
   writeInFlightTerminals.clear()
+  writeOwners.clear()
   burstTerminals.clear()
   halfSteppedTerminals.clear()
 }

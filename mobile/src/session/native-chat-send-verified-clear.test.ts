@@ -21,7 +21,12 @@ import {
   type FakeComposerHost
 } from './fake-claude-composer-host.test-support'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
-import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  mobileNativeChatTerminalWriteOwner,
+  releaseMobileNativeChatTerminalWrite,
+  resetMobileNativeChatTerminalWritesForTests
+} from './mobile-native-chat-terminal-write-lock'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
@@ -255,6 +260,110 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     await sendMessage('hello codex')
 
     expect(host.reads).toBe(0)
+  })
+
+  // Claude Code 2.1.287 draws its turn-end prompt suggestion as the empty input's
+  // placeholder (`placeholder:Sj`), Orca republishes a placeholder as `draft`,
+  // and no key removes it: Ctrl+U on an empty input does nothing and the
+  // suggestion comes back. The text is arbitrary, so no pattern recognises it.
+  for (const publishes of ['draft', 'tail'] as const) {
+    for (const mirrored of [true, false]) {
+      it(`sends while a prompt suggestion shows in the empty input (published in ${publishes}, mirrored ${mirrored})`, async () => {
+        const host = createFakeComposerHost({ publishes, placeholder: 'run the tests' })
+        if (mirrored) {
+          host.holdInput('check the build')
+        }
+        mount(host)
+
+        const outcome = await sendMessage('check the build')
+
+        expect(host.submitted).toEqual(['check the build'])
+        expect(outcome).toBe('accepted')
+        expect(report).not.toHaveBeenCalledWith(STILL_HOLDS)
+      })
+    }
+  }
+
+  it('sends while the desktop views an agent and its input says "Message @worker…"', async () => {
+    const host = createFakeComposerHost({ placeholder: 'Message @worker…' })
+    mount(host)
+
+    const outcome = await sendMessage('check the build')
+
+    expect(host.submitted).toEqual(['check the build'])
+    expect(outcome).toBe('accepted')
+  })
+
+  it('sends a slash command while a prompt suggestion shows', async () => {
+    const host = createFakeComposerHost({ placeholder: 'run the tests' })
+    mount(host)
+
+    await sendMessage('/compact')
+
+    expect(host.submitted).toEqual(['/compact'])
+    expect(report).not.toHaveBeenCalledWith(STILL_HOLDS)
+  })
+
+  it('writes no clear at all when the input is empty', async () => {
+    const host = createFakeComposerHost()
+    mount(host)
+
+    await sendMessage('hello')
+
+    expect(host.sends.filter((write) => !write.enter)).toEqual([])
+  })
+
+  it('calls a send sent when Claude takes the Enter 1.6 s after the ack', async () => {
+    // Orca writes the Enter before it acks; a busy Claude can take it 1.6 s
+    // later. The words sit in the input on every look until then. Called "not
+    // sent" on two looks, the draft went back to the composer and the user sent
+    // it twice.
+    const host = createFakeComposerHost({ enterTakenAfterMs: 1600 })
+    mount(host)
+
+    const outcome = await sendMessage('check the build')
+
+    expect(host.submitted).toEqual(['check the build'])
+    expect(outcome).toBe('accepted')
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(report).not.toHaveBeenCalled()
+  })
+
+  it('holds the send, and neither restores the draft nor says "not sent", when the words stay in the input past the window', async () => {
+    const host = createFakeComposerHost({ enterTakenAfterMs: 30_000 })
+    mount(host)
+
+    const outcome = await sendMessage('check the build')
+
+    expect(outcome).toBe('unknown')
+    expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(report).not.toHaveBeenCalledWith(expect.stringContaining('Not sent'))
+  })
+
+  it('lets a permission tap take the terminal while the send only reads', async () => {
+    // The composer send runs under its caller's write lock. Once the body is
+    // written the send only looks, so it must not hold the terminal against a
+    // card tap ("Another input is still being sent").
+    const host = createFakeComposerHost()
+    expect(acquireMobileNativeChatTerminalWrite('term')).toBe(true)
+    const owner = mobileNativeChatTerminalWriteOwner('term')
+    const base = host.handle.getMockImplementation()!
+    let tapTook: boolean | null = null
+    host.handle.mockImplementation(async (method: string, params: unknown) => {
+      if (method === 'terminal.read' && host.enters > 0 && tapTook === null) {
+        tapTook = acquireMobileNativeChatTerminalWrite('term')
+        releaseMobileNativeChatTerminalWrite('term')
+      }
+      return base(method, params)
+    })
+    mount(host)
+
+    await sendMessage('hello')
+    releaseMobileNativeChatTerminalWrite('term', owner)
+
+    expect(tapTook).toBe(true)
   })
 
   it('clears a very tall input in two passes and still sends the message once', async () => {

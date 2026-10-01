@@ -29,6 +29,7 @@ import {
 } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
+  mobileNativeChatTerminalWriteOwner,
   releaseMobileNativeChatTerminalWrite
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
@@ -232,6 +233,9 @@ export function useMobileNativeChatImageAttachments({
           onSendError('Message not sent')
           return false
         }
+        // The send may let the lock go once it has written its body and only reads
+        // (mobile-native-chat-send-write.ts); this release then finds it not ours.
+        const lockOwner = operationTerminal ? mobileNativeChatTerminalWriteOwner(operationTerminal) : undefined
         try {
           // A dialog on screen takes typed keys as answers: this text could pick
           // a choice by its digit and its Enter confirm the highlighted one
@@ -428,9 +432,7 @@ export function useMobileNativeChatImageAttachments({
             return false
           }
         } finally {
-          if (operationTerminal) {
-            releaseMobileNativeChatTerminalWrite(operationTerminal)
-          }
+          releaseMobileNativeChatTerminalWrite(operationTerminal, lockOwner)
         }
       })
     },

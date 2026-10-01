@@ -21,8 +21,13 @@ export const INPUT_STILL_HOLDS_TEXT =
  *    went before there were looks. Failing OPEN here is deliberate: refusing
  *    every send to a host that cannot be read would be a worse bug than the one
  *    this fixes, and it is said in the report.
- *  - `still-holds`: two clears, and a look after each still found text. The
- *    caller must write nothing more.
+ *  - `still-holds`: two clears, and a look after each found text that had
+ *    changed but was still there. The caller must write nothing more. The limit
+ *    is two passes of at most 16 rows (about 31 rows of input): a longer draft,
+ *    such as a 6,000-character one mirrored onto an 80-column desk, is refused
+ *    with INPUT_STILL_HOLDS_TEXT rather than glued as it was before
+ *    2026-10-01; the user clears it on the desk. (Unverified is also what a
+ *    clear that changes nothing returns: see the loop.)
  *  - `write-failed`: a clear write was refused or ran out of budget.
  */
 export type VerifiedClearResult = 'cleared' | 'unverified' | 'still-holds' | 'write-failed'
@@ -60,7 +65,10 @@ export async function clearClaudeInputVerified(args: {
   terminal: string
   /** Every text the phone believes may be on the line (a parked launch draft, a
    *  recalled queue, the mirrored draft); sizes the clear only when the screen
-   *  cannot be read, and decides whether an empty screen needs a clear at all. */
+   *  cannot be read. An input the first look finds empty is not cleared, even if
+   *  the mirror typed a draft: the mirror's echoes were drained before the send,
+   *  and a look that races a paint could find the input empty and miss a copy
+   *  still on its way. Accepted: the look is a round trip after those acks. */
   believedTexts: readonly (string | null | undefined)[]
   mobileClient?: { id: string; type: 'mobile' }
   deadline?: number
@@ -83,8 +91,6 @@ export async function clearClaudeInputVerified(args: {
     })
     return screen ? readClaudeInput(screen.lines, screen.draft) : null
   }
-  const believesSomething = args.believedTexts.some((text) => Boolean(text))
-
   let input = await look()
   if (!input?.located) {
     // Nothing to size from or check against: one write, as large as one read allows.
@@ -98,22 +104,34 @@ export async function clearClaudeInputVerified(args: {
     return 'unverified'
   }
   for (let pass = 0; pass < MAX_CLEAR_PASSES; pass++) {
-    if (input.text === '' && !believesSomething) {
+    // Nothing on the line, so nothing to clear: no write, no read-back.
+    if (input.text === '') {
       return 'cleared'
     }
-    // Empty on screen yet believed typed: the keys may be on their way to the
-    // screen, so clear one row and look again rather than trust the empty read.
     if (!(await write(buildScreenSizedClearInput(input.rows)))) {
       return 'write-failed'
     }
     await settle(CLEAR_SETTLE_MS)
-    input = await look()
-    if (!input?.located) {
+    const before: string = input.text
+    const after = await look()
+    if (!after?.located) {
       return 'unverified'
     }
-    if (input.text === '') {
+    if (after.text === '') {
       return 'cleared'
     }
+    // The same text after a clear that registered as keys (one write under 64
+    // bytes, set apart by a look) is text the clear cannot reach: a placeholder,
+    // which Orca republishes as `draft` and no key removes. Claude Code 2.1.287
+    // draws its turn-end prompt suggestion and "Message @agent…" so, and brings
+    // them back whenever the input is empty. Real text the clear can reach
+    // changes (it shrinks, or the keys land in it as characters). So this is
+    // unverified, as an unreadable screen is, not a refusal that blames the user
+    // for an input they cannot clear.
+    if (after.text === before) {
+      return 'unverified'
+    }
+    input = after
   }
   return 'still-holds'
 }

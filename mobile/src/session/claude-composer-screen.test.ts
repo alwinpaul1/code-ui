@@ -113,6 +113,19 @@ describe("reading Claude Code's review notice", () => {
     }
   })
 
+  it('reads the "nothing left to send" notice, and not the ones about text that did go', () => {
+    const at = (notice: string) => {
+      const lines = [...AFTER_REVIEW_NOTICE]
+      lines[lines.findIndex((row) => row.includes('Removed'))] = `${' '.repeat(40)}${notice}`
+      return claudeSubmitNotice(lines)
+    }
+    expect(at('Removed 2 invisible characters · nothing left to send')).toBe(
+      'Removed 2 invisible characters · nothing left to send'
+    )
+    expect(at('Removed 2 invisible characters from the launch prompt before sending it')).toBeNull()
+    expect(at('Removed 2 invisible characters from the pasted text')).toBeNull()
+  })
+
   it('does not take the notice quoted in the conversation, or one far above the box', () => {
     const quoted = [
       '  Claude said: Removed 67 invisible characters · review and press Enter to send',

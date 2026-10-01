@@ -7,12 +7,15 @@ import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 /**
  * What the desktop did with a message the host took.
  *  - `sent`: the agent's own prompt copy (the hook beacon's `up=`) carried the
- *    words, or a look after the Enter found the input empty.
- *  - `not-sent`: Claude's review notice is on screen, or the words were still in
- *    the input on two looks. `message` is what the user is told.
+ *    words, or a look after the Enter found the words gone from the input.
+ *  - `not-sent`: Claude's own notice is on screen ("Removed N invisible
+ *    characters · review and press Enter to send", or "· nothing left to
+ *    send"). Only that proves it: the words still in the input could be a lost
+ *    Enter or one Claude has not taken yet. `message` is what the user is told.
  *  - `unknown`: looks were had and none settled it (a dialog in the composer's
- *    place, other text in the input). The caller holds the send for the
- *    transcript or a beacon copy, as it does for an ack that never came.
+ *    place, the words still in the input after the whole window). The caller
+ *    holds the send for the transcript or a beacon copy, as it does for an ack
+ *    that never came; it never restores the draft or invites a resend.
  *  - `unverified`: no look could be had at all. The send is called sent, as it
  *    was before there were looks (see VerifiedClearResult).
  */
@@ -27,13 +30,15 @@ export type SubmitVerdict =
 const WORDS_PREFIX_CHARS = 40
 
 /**
- * The host spaces a send's body and its Enter about half a second apart, so a
- * look taken at the ack can see the body typed and not yet submitted. No look
- * before this settles anything. (A look that early found the words still
- * there, called the send failed, put the draft back, and then the Enter landed.)
+ * The floor before the first look. Orca 1.4.218 writes the Enter before it acks,
+ * so the Enter is not what this waits for; Claude paints the emptied input, or
+ * its review notice, a frame or more after it takes the Enter, and a look before
+ * that only sees the old input and costs a read. It is NOT evidence-bearing: the
+ * words in the input prove nothing at any time (Claude can take the Enter
+ * seconds late on a busy turn), so a late Enter is never called "not sent".
  */
-export const SUBMIT_SETTLE_MS = 700
-/** Between the two looks that must both find the words before they count. */
+export const SUBMIT_SETTLE_MS = 300
+/** Between looks. */
 export const SUBMIT_LOOK_GAP_MS = 600
 /** How long the beacon is waited for, and the looks repeated, before giving up. */
 export const SUBMIT_VERIFY_WINDOW_MS = 4_500
@@ -86,18 +91,23 @@ export async function verifyClaudeSubmit(args: {
   /** Copies already in the beacon before this send wrote anything: they are old
    *  prompts, and an identical older one proves nothing about this send. */
   seenNonces: ReadonlySet<string>
+  /** The send's own budget: no look runs past it. */
+  deadline?: number
   wait?: (ms: number) => Promise<void>
   now?: () => number
 }): Promise<SubmitVerdict> {
   const wait = args.wait ?? sleep
   const now = args.now ?? Date.now
   const startedAt = now()
+  const window = Math.min(
+    SUBMIT_VERIFY_WINDOW_MS,
+    args.deadline === undefined ? Infinity : args.deadline - Date.now()
+  )
   const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
   let looked = false
   let failedLooks = 0
   let lastLookAt = -Infinity
-  let held = 0
-  while (now() - startedAt < SUBMIT_VERIFY_WINDOW_MS) {
+  while (now() - startedAt < window) {
     await wait(TICK_MS)
     if (args.receipts && beaconHasWords(args.receipts(), args.seenNonces, args.text)) {
       return { kind: 'sent' }
@@ -109,7 +119,8 @@ export async function verifyClaudeSubmit(args: {
     lastLookAt = elapsed
     const screen = await readMobileNativeChatScreen({
       client: args.client,
-      terminal: args.terminal
+      terminal: args.terminal,
+      ...(args.deadline === undefined ? {} : { deadline: args.deadline })
     })
     if (!screen) {
       // Two looks and not one picture of the screen: nothing here can be told,
@@ -126,21 +137,11 @@ export async function verifyClaudeSubmit(args: {
       return { kind: 'not-sent', message: `Not sent. Claude says: ${notice}.` }
     }
     const input = readClaudeInput(screen.lines, screen.draft)
-    if (!input.located) {
-      held = 0
-    } else if (input.text === '') {
+    // The words gone from the input mean Claude took the Enter. What is left may
+    // be a placeholder (a prompt suggestion, the queue hint, "Message @agent…")
+    // or something typed at the desk, neither of which is this message.
+    if (input.located && !(words !== '' && dense(input.text).startsWith(words))) {
       return { kind: 'sent' }
-    } else if (words !== '' && dense(input.text).includes(words)) {
-      held += 1
-      if (held >= 2) {
-        return {
-          kind: 'not-sent',
-          message:
-            'Not sent: the message is still in the desktop input. Clear it there, then send again.'
-        }
-      }
-    } else {
-      held = 0
     }
   }
   return { kind: looked ? 'unknown' : 'unverified' }

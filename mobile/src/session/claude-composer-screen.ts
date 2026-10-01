@@ -84,12 +84,19 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
   return { located: false }
 }
 
-/** The review notice Claude Code 2.1.287 draws when a submit held characters it
- *  strips (`txe`: `${i} · review and press ${r} to send`). The key name is a
- *  parameter there, so it is not pinned to "Enter". Anchored to a whole row, and
- *  only in the rows directly above the composer, so a message that quotes it
- *  in the conversation is not mistaken for it. */
-const NOTICE = /^\s*(Removed \d+ invisible characters? · review and press \S+ to send)\s*$/
+/** The notices Claude Code 2.1.287 draws when a submit held characters it
+ *  strips (`txe(count, kind, key)`; `${i}` is "Removed 1 invisible character" or
+ *  "Removed N invisible characters"). Four kinds: "review" (`· review and press
+ *  ${key} to send`: nothing was submitted, the user must look) and "empty"
+ *  (`· nothing left to send`: nothing was submitted) are a send that did not
+ *  go, and are matched. "sent" (`from the launch prompt before sending it`) and
+ *  "pasted" (`from the pasted text`) say something was stripped from text that
+ *  did go or was only pasted, and are not a failed submit. The key name is a
+ *  parameter, so it is not pinned to "Enter". Anchored to a whole row, and only
+ *  in the rows directly above the composer, so a message that quotes it in the
+ *  conversation is not mistaken for it. */
+const NOTICE =
+  /^\s*(Removed \d+ invisible characters? · (?:review and press \S+ to send|nothing left to send))\s*$/
 
 export function claudeSubmitNotice(lines: readonly string[]): string | null {
   for (let at = lines.length - 1; at >= 1; at--) {

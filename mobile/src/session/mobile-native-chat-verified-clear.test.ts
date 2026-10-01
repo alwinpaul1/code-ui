@@ -107,13 +107,52 @@ describe("clearing Claude Code's input and proving it empty", () => {
     expect(host.reads).toBe(1)
   })
 
-  it('still clears one row of an empty-looking input the phone believes it typed (the keys may be on their way)', async () => {
+  it('writes no clear and reads no further when the input is empty, whatever the phone believes', async () => {
     const host = createFakeComposerHost()
 
     await expect(clearClaudeInputVerified(clearArgs(host, ['hello']))).resolves.toBe('cleared')
 
-    expect(clearWrites(host)).toHaveLength(1)
-    expect(clearWrites(host)[0]!.length).toBeLessThan(20)
+    expect(host.sends).toEqual([])
+    expect(host.reads).toBe(1)
+  })
+
+  describe('text the clear cannot reach', () => {
+    // Claude Code 2.1.287 draws its turn-end prompt suggestion, and "Message
+    // @agent…" while the desk views an agent, as the empty input's placeholder.
+    // Orca republishes it as `draft`, and Ctrl+U/Ctrl+K cannot remove it.
+    for (const publishes of ['draft', 'tail'] as const) {
+      it(`is unverified after one clear, not a refusal, when only a placeholder stands (${publishes})`, async () => {
+        const host = createFakeComposerHost({ publishes, placeholder: 'run the tests' })
+
+        await expect(clearClaudeInputVerified(clearArgs(host, ['abc']))).resolves.toBe('unverified')
+
+        expect(clearWrites(host)).toHaveLength(1)
+      })
+
+      it(`is unverified when the phone's own text is cleared and the placeholder shows behind it (${publishes})`, async () => {
+        const host = createFakeComposerHost({ publishes, placeholder: 'run the tests' })
+        host.holdInput('abc')
+
+        await expect(clearClaudeInputVerified(clearArgs(host, ['abc']))).resolves.toBe('unverified')
+
+        // The first clear changed the text (to the placeholder), the second did not.
+        expect(clearWrites(host)).toHaveLength(2)
+      })
+    }
+
+    it('still refuses text the clear does reach but cannot finish: it changes between the looks', async () => {
+      const host = createFakeComposerHost({ columns: 12 })
+      host.holdInput('word '.repeat(6000))
+
+      await expect(clearClaudeInputVerified(clearArgs(host))).resolves.toBe('still-holds')
+    })
+
+    it('still refuses control bytes that landed in the input as text', async () => {
+      const host = createFakeComposerHost({ controlsAreLiteral: true })
+      host.holdInput('some words')
+
+      await expect(clearClaudeInputVerified(clearArgs(host))).resolves.toBe('still-holds')
+    })
   })
 
   it('clears a one-character input', async () => {

@@ -9,7 +9,8 @@
  * inside the text run and goes into the input as a literal character. Separate
  * `terminal.send` writes made back to back arrive as ONE read, so cutting a
  * burst into writes of 63 does not keep it under the limit, and a control byte
- * that coalesces with body text is literal too.
+ * that coalesces with body text is literal too once the coalesced read reaches
+ * 64 bytes.
  *
  * What was measured, and what it did not show. Against a live Claude Code
  * 2.1.266 at 60 columns on 2026-09-10, ONE write of 63 Ctrl+U emptied a

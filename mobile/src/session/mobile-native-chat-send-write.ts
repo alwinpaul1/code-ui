@@ -7,6 +7,10 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
+import {
+  mobileNativeChatTerminalWriteOwner,
+  releaseMobileNativeChatTerminalWrite
+} from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
 import {
@@ -28,6 +32,15 @@ import {
  * back before the body; its send stays pending until the agent's own prompt copy
  * or its screen says it took the words. Codex keeps the burst it always had: the
  * 64-byte rule is Claude Code's.
+ *
+ * Limits. The clear is two passes of at most 16 rows (about 31 rows of input);
+ * a longer draft, such as a 6,000-character one mirrored onto an 80-column desk,
+ * is refused with "The desktop input still holds text. Clear it there, then send
+ * again." and stays in the composer. Main glued such a draft; this refuses it.
+ * Text the clear cannot reach at all (a placeholder such as Claude's prompt
+ * suggestion) is not a refusal: the send goes on, unverified. Only Claude's own
+ * review notice proves a send did not go; the words still in the input are held
+ * for the transcript, never restored, since the Enter can simply be late.
  *
  * A transcript row of `message + newlines + message` would not retire the chat's
  * own copy by text, one more reason "sent" has to come from that check.
@@ -89,6 +102,7 @@ export async function writeChatSend(args: {
   receipts: () => readonly BeaconPromptReceipt[]
 }): Promise<ChatSendWrite> {
   const { agent, client, terminal, text, deadline } = args
+  const lockOwner = mobileNativeChatTerminalWriteOwner(terminal)
   const mobileClient = args.deviceToken
     ? { id: args.deviceToken, type: 'mobile' as const }
     : undefined
@@ -142,12 +156,20 @@ export async function writeChatSend(args: {
   ) {
     return { kind: 'written', outcome }
   }
+  // The body and its Enter are written: from here the send only reads. Let the
+  // caller's write lock go, so a permission tap or a picker pick during the check
+  // is not refused with "Another input is still being sent". Only if it is still
+  // the caller's (its own release then finds nothing to undo).
+  if (lockOwner !== undefined) {
+    releaseMobileNativeChatTerminalWrite(terminal, lockOwner)
+  }
   const verdict = await verifyClaudeSubmit({
     client,
     terminal,
     text,
     receipts: args.receipts,
-    seenNonces
+    seenNonces,
+    deadline
   })
   if (verdict.kind === 'not-sent') {
     // Claude asked the user to review it: nothing more is typed or submitted.

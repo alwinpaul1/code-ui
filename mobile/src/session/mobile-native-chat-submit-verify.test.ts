@@ -116,39 +116,42 @@ describe('checking that Claude took a message the host acked', () => {
     await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent' })
   })
 
-  it('says not sent when the words are still in the input on two looks, spaced apart', async () => {
+  it('never says not sent because the words are still in the input: a late Enter looks the same', async () => {
+    // Orca writes the Enter before it acks, and a busy Claude can take it
+    // seconds later. The words in the input are no evidence of a lost Enter.
     const s = scene([holding('check the build')])
 
-    const verdict = await verify(s, 'check the build')
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
 
-    expect(verdict).toMatchObject({ kind: 'not-sent' })
-    expect(s.sendRequest).toHaveBeenCalledTimes(2)
-    expect(s.readAt[1]! - s.readAt[0]!).toBeGreaterThanOrEqual(SUBMIT_LOOK_GAP_MS)
-    expect((verdict as { message: string }).message).toContain('still in the desktop input')
+    expect(s.clock()).toBeGreaterThanOrEqual(SUBMIT_VERIFY_WINDOW_MS)
+    expect(
+      s.readAt.slice(1).every((at, index) => at - s.readAt[index]! >= SUBMIT_LOOK_GAP_MS)
+    ).toBe(true)
   })
 
-  it('finds the words in the draft Orca published, with a bare prompt row', async () => {
+  it('keeps waiting while the draft Orca published still holds the words', async () => {
     const s = scene([{ lines: composerWithTextInDraft(), draft: INCIDENT_MESSAGE }])
 
-    await expect(verify(s, INCIDENT_MESSAGE)).resolves.toMatchObject({ kind: 'not-sent' })
+    await expect(verify(s, INCIDENT_MESSAGE)).resolves.toEqual({ kind: 'unknown' })
   })
 
-  it('does not count a look that found other text as the words held', async () => {
-    const s = scene([
-      holding('check the build'),
-      holding('something typed at the desk'),
-      holding('check the build'),
-      holding('something typed at the desk')
-    ])
-
-    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
+  it('calls the send sent once the words are gone, whatever else the input shows (a prompt suggestion, text from the desk)', async () => {
+    for (const other of [
+      'run the tests',
+      'Press up to edit queued messages',
+      'Message @worker…',
+      'typed at the desk'
+    ]) {
+      const s = scene([holding('check the build'), { lines: composerWithTextInRows(other) }])
+      await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent' })
+    }
   })
 
   it('compares the first stretch of the words, wrapped or not', async () => {
     const long = 'word '.repeat(80).trim()
     const s = scene([{ lines: composerWithTextInRows(long, 40) }])
 
-    await expect(verify(s, long)).resolves.toMatchObject({ kind: 'not-sent' })
+    await expect(verify(s, long)).resolves.toEqual({ kind: 'unknown' })
   })
 
   it('says unknown, and holds the window open, when a dialog stands where the composer was', async () => {
@@ -200,7 +203,7 @@ describe('checking that Claude took a message the host acked', () => {
           receipts: () => [receipt('n1', 'hello')],
           seenNonces: new Set(['n1'])
         })
-      ).resolves.toMatchObject({ kind: 'not-sent' })
+      ).resolves.toEqual({ kind: 'unknown' })
     })
 
     it('ignores a copy of other words', async () => {
@@ -208,9 +211,7 @@ describe('checking that Claude took a message the host acked', () => {
 
       await expect(
         verify(s, 'hello', { receipts: () => [receipt('n2', 'goodbye')] })
-      ).resolves.toMatchObject({
-        kind: 'not-sent'
-      })
+      ).resolves.toEqual({ kind: 'unknown' })
     })
 
     it('takes a cut copy as the start of the words', async () => {

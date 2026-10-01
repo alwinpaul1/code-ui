@@ -17,9 +17,14 @@ import { vi } from 'vitest'
  * and does NOT submit, drawing "Removed N invisible characters · review and
  * press Enter to send" above the composer; the composer is `❯` and a no-break
  * space, wrapped rows indented two columns, between two rules; Orca drops blank
- * rows. NOT captured live, so MODELLED: Ctrl+U kills the last visual row (2.1.266
- * measurement, mobile-native-chat-input-clear.ts), the wrap column, and the
- * conversation rows above.
+ * rows. Ctrl+U kills to the start of the current VISUAL row, or the whole previous
+ * row when the cursor is at column 0: measured on 2.1.266 and confirmed from the
+ * 2.1.287 binary (`deleteToLineStart` kills from `startOfLine()`, which reads the
+ * wrapped text); a newline just before the cursor goes alone, which this model
+ * leaves out (single-line inputs). NOT captured live, so MODELLED: the wrap
+ * column and the conversation rows above. The placeholder (a prompt suggestion,
+ * the queue hint, "Message @name…") shows only while the input is empty, and no
+ * key removes it.
  */
 export type FakeComposerHostOptions = {
   /** The terminal's width; the input wraps two columns narrower than it. */
@@ -37,6 +42,8 @@ export type FakeComposerHostOptions = {
   /** Text that lands on the input just ahead of the next Enter, from anywhere
    *  the phone does not know about: the desktop user, a late echo. */
   junkBeforeEnter?: string
+  /** Claude takes the Enter this long after the host acked it, in fake-clock ms. */
+  enterTakenAfterMs?: number
   /** A permission dialog takes the composer's place the moment Enter is pressed:
    *  the message went, and the screen can no longer say so. */
   dialogAfterEnter?: boolean
@@ -184,7 +191,13 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
       if (body.enter === true) {
         input += options.junkBeforeEnter ?? ''
         flush()
-        pressEnter()
+        if (options.enterTakenAfterMs) {
+          // Orca acks after writing the Enter; Claude takes it when its event
+          // loop gets round to it (a busy turn).
+          setTimeout(pressEnter, options.enterTakenAfterMs)
+        } else {
+          pressEnter()
+        }
       }
       return { id: 'r', ok: true, result: { send: { accepted: true } }, _meta: { runtimeId: 'rt' } }
     }
