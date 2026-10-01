@@ -340,3 +340,21 @@ describe('a cut desk prompt an older build stored', () => {
     expect(texts).toEqual(['Schöne Grü', 'typed \uFFFD'])
   })
 })
+
+// The hook's mark on a loop tick (`sc=1`) is what keeps a tick whose loop the
+// chat never loaded from drawing; a relaunch restores the copy from here, and
+// a copy restored without its mark drew the tick again (2026-10-01).
+describe('a loop tick’s copy across a relaunch', () => {
+  beforeEach(() => store.clear())
+
+  it('keeps the hook’s mark', async () => {
+    await rememberWarmStartBeacon('terminal-1', {
+      ...beacon('opus'),
+      desktopPrompts: [{ nonce: '41', text: 'check the deploy', scheduled: true, seenAt: 1 }]
+    })
+    const restored = await readWarmStartBeacons()
+    expect(restored['terminal-1']?.desktopPrompts).toEqual([
+      { nonce: '41', text: 'check the deploy', scheduled: true, seenAt: 1 }
+    ])
+  })
+})

@@ -624,7 +624,9 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // 200 characters, uncut-marked; a row like that among the last eight lines
   // with this very prompt (escaped as both are) is the mark: the same words,
   // or, when the row's words are 200 characters (escapes decoded, a multibyte
-  // character counted once), a prefix of them. A shorter row is the whole
+  // character counted once; Claude Code cuts by UTF-16 units, so a cut prompt
+  // holding an emoji counts under 200 and gets no mark, the safe side), a
+  // prefix of them. A shorter row is the whole
   // prompt, and a prefix rule there marked a typed "status report…" as a tick
   // of a loop whose prompt was "status" (review of 8233ed8b). Compared with the
   // copy cut at 2,000 bytes, which holds any 200 characters' escaping. Quoted
