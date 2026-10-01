@@ -67,6 +67,31 @@ describe('the prompt hook on a loop tick', () => {
     expect(runHook(globby, tickRows(globby))).toContain(' sc=1')
   })
 
+  // A prompt under 200 characters is in the row whole, so only the same words
+  // are its tick. The prefix rule is for the cut one: applied to a short loop
+  // prompt it marked a typed message that merely started with it, and a
+  // marked copy mid-turn has no other way onto the screen (review of 8233ed8b).
+  it('does not mark a typed prompt that starts with a short loop prompt', () => {
+    expect(runHook('status report please, and also fix the bug', tickRows('status'))).not.toContain('sc=')
+    expect(runHook('/foo bar', tickRows('/foo'))).not.toContain('sc=')
+  })
+
+  it('counts a short prompt of multibyte letters by its letters, not its bytes', () => {
+    const accents = 'é'.repeat(120)
+    expect(runHook(`${accents} and more`, tickRows(accents))).not.toContain('sc=')
+    expect(runHook(accents, tickRows(accents))).toContain(' sc=1')
+  })
+
+  it('marks a short loop prompt’s own words', () => {
+    expect(runHook('status', tickRows('status'))).toContain(' sc=1')
+  })
+
+  it('takes the row as cut at 200 characters, multibyte or escaped ones too', () => {
+    const wide = `${'é"\\\n'.repeat(60)}${'ü'.repeat(20)} and then the rest of the loop prompt`
+    expect(runHook(wide, tickRows(wide))).toContain(' sc=1')
+    expect(runHook(`${wide.slice(0, 199)}`, tickRows(wide))).not.toContain('sc=')
+  })
+
   describe('when the transcript cannot say', () => {
     it('does not mark a prompt with no transcript, or an unreadable one', () => {
       expect(runHook(TICK_PROMPT, null)).not.toContain('sc=')

@@ -622,12 +622,16 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // bubble (2026-10-01). Just before it enqueues the prompt it writes a
   // `"subtype":"scheduled_task_fire"` row whose `prompt` is the tick's first
   // 200 characters, uncut-marked; a row like that among the last eight lines
-  // that starts this very prompt (escaped as both are) is the mark. Compared
-  // with the copy cut at 2,000 bytes, which holds any 200 characters' escaping.
-  // Quoted in the `case`, so a `*` or `[` in the words is a character, not a
-  // pattern. A write that lands after this read leaves no mark, never a wrong one.
+  // with this very prompt (escaped as both are) is the mark: the same words,
+  // or, when the row's words are 200 characters (escapes decoded, a multibyte
+  // character counted once), a prefix of them. A shorter row is the whole
+  // prompt, and a prefix rule there marked a typed "status report…" as a tick
+  // of a loop whose prompt was "status" (review of 8233ed8b). Compared with the
+  // copy cut at 2,000 bytes, which holds any 200 characters' escaping. Quoted
+  // in the `case`, so a `*` or `[` in the words is a character, not a pattern.
+  // A write that lands after this read leaves no mark, never a wrong one.
   'sp=""; sc=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); [ -n "$sp" ] && case "$pr" in "$sp"*) sc=" sc=1";; esac',
+  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); n=$(printf %s "$sp" | LC_ALL=C sed -e "s/\\\\\\\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/u/g" -e "s/\\\\\\\\./e/g" | LC_ALL=C tr -d "\\\\200-\\\\277" | wc -c | tr -d " "); [ -n "$sp" ] && { [ "$pr" = "$sp" ] || { [ "${n:-0}" -ge 200 ] && case "$pr" in "$sp"*) true;; *) false;; esac; }; } && sc=" sc=1"',
   // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
   // session in the same terminal does not echo it (see the status line).
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',

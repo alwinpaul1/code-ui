@@ -788,8 +788,11 @@ Just before Claude Code enqueues the tick it writes a `system` row,
 `"subtype":"scheduled_task_fire"`, whose `prompt` is the tick's first 200
 characters, cut with no mark (session 76ba8f2f, rows 36098 and 36099). The
 prompt hook looks at the transcript's last eight lines for such a row whose
-`prompt`, escaped as the hook's own copy is, starts this very prompt, and
-sends `sc=1` when it finds one. The comparison is a quoted `case`, so a `*`
+`prompt`, escaped as the hook's own copy is, is this very prompt, or, when it
+is 200 characters long (escapes decoded, a multibyte character counted once),
+starts it, and sends `sc=1` when it finds one. A shorter row holds the whole
+prompt, so only the same words are its tick: a prefix rule there marked a typed
+"status report…" as a tick of a loop whose prompt was "status". The comparison is a quoted `case`, so a `*`
 or `[` in the words is a character. The phone drops a marked copy, and the
 status copy that stands for it takes the mark in the merge
 (`scheduled-prompt-ticks.ts`, `desktop-prompt-merge.ts`).
