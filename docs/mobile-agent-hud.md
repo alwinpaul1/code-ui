@@ -827,7 +827,12 @@ none from a captured transcript. Two rules cover it:
   mark typed prompts: any prompt typed within eight lines after a sentinel tick,
   or any prompt that merely opens like one. A typed `/loop …` command is never
   marked (a bare `/loop` is not matched by the words rule either: that rule
-  skips the two literals). A tick that fires mid-turn with its fire row further
+  skips the two literals). That carve-out costs one mark the words rule used to
+  give: a loop whose stored prompt is literally `/loop` or `/loop (loop.md)`,
+  not a sentinel, fires with that literal as its words and goes unmarked. Only a
+  model that ignored ScheduleWakeup's "pass the sentinel" instruction stores
+  one, and the phone's loaded or remembered words match still drops its tick
+  (review of 8750e6bb). A tick that fires mid-turn with its fire row further
   back goes unmarked and falls to the phone's rule. The PowerShell writer never
   had `sc=1` and gets no beacon flag, so it is not mirrored.
 - The phone (`scheduled-loop-sentinels.ts`): when a loaded or remembered call's
@@ -853,7 +858,8 @@ only on a re-render. A twin that never comes (a frame spliced on the pty or cut
 in the relay) leaves the copy drawn after the wait. A beacon copy carries its
 own mark and never waits; a tab without the hook has no twin to wait for.
 The cost: a message typed mid-turn on a hook tab draws up to 5 s late when its
-twin is late. A tick that fires on an idle pane is not what this covers.
+twin is late. The wait holds any status copy the chat watched arrive on a hook
+tab, so a tick on an idle pane waits for its marked twin the same way.
 
 **Not covered: a tick on a tab with no hook whose loop call was never loaded.**
 Telling it from a typed prompt by the transcript's rows (a typed prompt gets a
