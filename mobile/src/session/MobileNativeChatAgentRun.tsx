@@ -7,7 +7,7 @@ import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState } from './mobile-native-chat-agent-run'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
-import { useNativeChatAgentRuns } from './native-chat-tasks-context'
+import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /**
  * A run of Agent calls, drawn the way the Claude app draws it: "Running agent ›"
@@ -29,6 +29,7 @@ export function MobileNativeChatAgentRun({
 }) {
   const { colors } = useTheme()
   const runs = useNativeChatAgentRuns()
+  const openRunSheet = useRunSheetOpener(blocks)
   const { running, entries } = useMemo(() => agentRunState(blocks, runs), [blocks, runs])
   const label = running
     ? 'Running agent'
@@ -38,7 +39,7 @@ export function MobileNativeChatAgentRun({
       <View style={styles.toolRunHeader}>
         <Pressable
           style={styles.toolRunToggle}
-          onPress={() => runs.openRun?.(blocks)}
+          onPress={openRunSheet}
           hitSlop={6}
           accessibilityRole="button"
           accessibilityLabel={`${label}. Show the agents`}

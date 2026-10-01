@@ -13,7 +13,12 @@ import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailShe
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
-import { NativeChatAgentRunsContext, NativeChatTasksContext } from './native-chat-tasks-context'
+import {
+  NativeChatAgentRunsContext,
+  NativeChatRunSheetContext,
+  NativeChatTasksContext,
+  type NativeChatRunSheetControl
+} from './native-chat-tasks-context'
 import { followSubagentTranscriptRunning, openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
@@ -55,7 +60,7 @@ export function MobileNativeChatTasksProvider({
   const [sheetOpen, setSheetOpen] = useState(false)
   // The run whose sheet is up, kept while the sheet leaves so its rows do not
   // blank mid-animation; cleared once it has gone (`finishRunSheet`).
-  const [runSheet, setRunSheet] = useState<{ blocks: readonly NativeChatBlock[]; visible: boolean } | null>(null)
+  const [runSheet, setRunSheet] = useState<{ blocks: readonly NativeChatBlock[]; visible: boolean; owner: object } | null>(null)
   // The call a run-sheet row chose, and the detail sheet that shows it. The
   // detail opens only after the run sheet has left, so the two never overlap.
   const [detailPair, setDetailPair] = useState<NativeChatToolPair | null>(null)
@@ -83,7 +88,6 @@ export function MobileNativeChatTasksProvider({
       runningIds: new Set(running.filter((task) => task.kind === 'agent').map((task) => task.id)),
       confirmed: confirmedAgentDescriptions(messages, subagents),
       agentWorking,
-      openRun: (blocks: readonly NativeChatBlock[]) => setRunSheet({ blocks, visible: true }),
       ...(agent === 'claude' ? { openTranscript } : {})
     }),
     [agent, agentWorking, messages, openTranscript, running, subagents]
@@ -91,6 +95,15 @@ export function MobileNativeChatTasksProvider({
   // The open subagent viewer sits outside this tree; its header said "Running"
   // for as long as it stayed open, because it only ever read the tap.
   useEffect(() => followSubagentTranscriptRunning(agentRuns.runningIds), [agentRuns.runningIds])
+  const runSheetControl = useMemo<NativeChatRunSheetControl>(
+    () => ({
+      open: (blocks, owner) => setRunSheet({ blocks, visible: true, owner }),
+      // Only the row whose sheet is up refreshes it, and only when its blocks changed.
+      sync: (blocks, owner) =>
+        setRunSheet((sheet) => (sheet?.visible && sheet.owner === owner && sheet.blocks !== blocks ? { ...sheet, blocks } : sheet))
+    }),
+    []
+  )
   const openSheet = useCallback(() => setSheetOpen(true), [])
   // Re-read while open, so a row that finishes while its sheet is up says so.
   const openRun = openRunBlocks ? agentRunState(openRunBlocks, agentRuns) : null
@@ -123,6 +136,7 @@ export function MobileNativeChatTasksProvider({
   return (
     <NativeChatTasksContext.Provider value={tasks}>
       <NativeChatAgentRunsContext.Provider value={agentRuns}>
+        <NativeChatRunSheetContext.Provider value={runSheetControl}>
         {children}
         <MobileNativeChatRunSheet
           visible={runSheet?.visible === true}
@@ -148,6 +162,7 @@ export function MobileNativeChatTasksProvider({
           scopeKey={scopeKey}
           onClose={() => setSheetOpen(false)}
         />
+        </NativeChatRunSheetContext.Provider>
       </NativeChatAgentRunsContext.Provider>
     </NativeChatTasksContext.Provider>
   )

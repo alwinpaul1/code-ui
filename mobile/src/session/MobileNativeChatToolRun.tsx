@@ -39,17 +39,18 @@ import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-r
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { createToolInputDisplay } from '../../../src/shared/native-chat-tool-summary'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
-import type {
-  NativeChatBlock,
-  NativeChatToolCallBlock
+import {
+  isToolCallBlock,
+  type NativeChatBlock,
+  type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
-import { agentRunState } from './mobile-native-chat-agent-run'
-import { useNativeChatAgentRuns } from './native-chat-tasks-context'
+import { agentRunState, isAgentToolName } from './mobile-native-chat-agent-run'
+import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
  *  client's own: the desktop's NativeChatToolRun draws every call. */
@@ -229,19 +230,22 @@ function ToolLine({
 /** A run of a message's tool calls/results, collapsed to a one-line summary
  *  ("2×  Read src/app.ts · Edit …", Codex-app style) that expands to the inline
  *  tool lines. `defaultExpanded` lets the global toolbar toggle drive every run. */
-export function ToolRun({
-  blocks,
-  defaultExpanded,
-  expandChildren,
-  activeCall = null,
-  taskListPredecessors,
-  trailing,
-  onOpenFile,
-  onRevertHunk,
-  revertScope,
-  focusView = false,
-  styles
-}: {
+export function ToolRun(props: ToolRunProps) {
+  // Only a run that holds an Agent/Task call reads the chat's agent state,
+  // which changes with every message and status update: read by every run it
+  // re-rendered each one under the memoised message row (review, 2026-10-01).
+  const hasAgentCall = !props.focusView && props.blocks.some((block) => isToolCallBlock(block) && isAgentToolName(block.name))
+  return hasAgentCall ? <ToolRunReadingAgents {...props} /> : <ToolRunView {...props} runningAgent={false} />
+}
+
+function ToolRunReadingAgents(props: ToolRunProps) {
+  const agentRuns = useNativeChatAgentRuns()
+  const { blocks } = props
+  const running = useMemo(() => agentRunState(blocks, agentRuns).running, [blocks, agentRuns])
+  return <ToolRunView {...props} runningAgent={running} />
+}
+
+type ToolRunProps = {
   blocks: NativeChatBlock[]
   defaultExpanded: boolean
   /** Child tool lines stay collapsed when the turn caret drove the run open.
@@ -266,7 +270,22 @@ export function ToolRun({
    *  label holds while open too, so a tap does not make the row jump. */
   focusView?: boolean
   styles: ChatMessageStyles
-}) {
+}
+
+function ToolRunView({
+  runningAgent,
+  blocks,
+  defaultExpanded,
+  expandChildren,
+  activeCall = null,
+  taskListPredecessors,
+  trailing,
+  onOpenFile,
+  onRevertHunk,
+  revertScope,
+  focusView = false,
+  styles
+}: ToolRunProps & { runningAgent: boolean }) {
   const { colors } = useTheme()
   const [open, setOpen] = useState(defaultExpanded)
   // The Claude-app detail sheet for whichever call was tapped, in this run or
@@ -349,17 +368,10 @@ export function ToolRun({
   // a run that is one result whose call the window cut. Counted over every
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
-  // The Claude app's row for a run with an agent still working in it:
-  // "Running agent ›", whatever else the run did (2026-10-01 screenshots). Read
-  // over the agent calls alone, so the run's commands are not counted as
-  // agents. Focus view keeps its bare count, which never says what ran.
-  const agentRuns = useNativeChatAgentRuns()
-  const runningAgent = useMemo(() => {
-    if (focusView) {
-      return false
-    }
-    return agentRunState(blocks, agentRuns).running
-  }, [blocks, focusView, agentRuns])
+  // The Claude app's row for a run with an agent still working in it is
+  // "Running agent ›" (`runningAgent`, read by ToolRunReadingAgents), whatever
+  // else the run did (2026-10-01 screenshots).
+  const openRunSheet = useRunSheetOpener(blocks)
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
     singlePair !== null && toolPairOpensDetailSheet(singlePair, { isTaskList: Boolean(taskLists[0]) })
@@ -427,8 +439,8 @@ export function ToolRun({
             // stays where the reader asked for it (the Tools toggle, the turn
             // caret, an open row, focus view) and where no chat provides the
             // sheet (a subagent's own transcript).
-            if (!open && !focusView && allPairs.length >= 2 && agentRuns.openRun) {
-              agentRuns.openRun(blocks)
+            if (!open && !focusView && allPairs.length >= 2 && openRunSheet) {
+              openRunSheet()
               return
             }
             setOpen((v) => !v)

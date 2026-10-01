@@ -199,6 +199,32 @@ describe('the run sheet opened from the chat', () => {
     expect(detailPair(tree)).toBeNull()
   })
 
+  // Review of feat/tool-run-sheet: the provider kept the blocks of the tap, so a
+  // run that grew under its open sheet (another call in the same turn) was not
+  // shown.
+  it('shows a call that joins the run while its sheet is open', async () => {
+    const tree = await render(true)
+    await press(tree, 'tool-run-header')
+    const rows = () => tree.root.findAll((n) => n.props.testID === 'run-sheet-row' && String(n.type) === 'Pressable')
+    expect(rows()).toHaveLength(5)
+    const grown = messages()
+    grown[0]!.blocks.push(
+      { type: 'tool-call', name: 'Read', input: { file_path: '/repo/late.ts' } },
+      { type: 'tool-result', output: 'x' }
+    )
+    await act(async () =>
+      tree.update(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatTasksProvider messages={grown} agent="claude" agentWorking={false} agentStatus={status(true)}>
+            <MobileNativeChatMessage message={foldMobileNativeChatMessages(grown).at(-1)!} />
+          </MobileNativeChatTasksProvider>
+        </ThemeProvider>
+      )
+    )
+    expect(rows()).toHaveLength(6)
+    expect(texts(tree)).toContain('  late.ts')
+  })
+
   it('opens no detail when the sheet is dismissed without a choice', async () => {
     const tree = await render(true)
     await press(tree, 'tool-run-header')

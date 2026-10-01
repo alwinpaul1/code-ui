@@ -5,7 +5,7 @@ import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
-import { NativeChatAgentRunsContext, type NativeChatAgentRuns } from './native-chat-tasks-context'
+import { NativeChatRunSheetContext, type NativeChatRunSheetControl } from './native-chat-tasks-context'
 import { mixedRunWithBackgroundAgent } from './fixtures/claude-mixed-tool-run-agent-2026-10-01'
 
 vi.mock('react-native', () => ({
@@ -71,20 +71,15 @@ describe('tapping the header of a run of several calls', () => {
     focusView
   }: {
     blocks: NativeChatBlock[]
-    openRun?: NativeChatAgentRuns['openRun']
+    openRun?: NativeChatRunSheetControl['open']
     defaultExpanded?: boolean
     focusView?: boolean
   }) {
     const styles = useChatMessageStyles()
-    const runs: NativeChatAgentRuns = {
-      runningIds: new Set(),
-      confirmed: new Map(),
-      agentWorking: false,
-      ...(openRun ? { openRun } : {})
-    }
+    const control: NativeChatRunSheetControl | null = openRun ? { open: openRun, sync: () => {} } : null
     return createElement(
-      NativeChatAgentRunsContext.Provider,
-      { value: runs },
+      NativeChatRunSheetContext.Provider,
+      { value: control },
       createElement(ToolRun, { blocks, defaultExpanded, focusView, activeCall: null, styles })
     )
   }
@@ -109,7 +104,7 @@ describe('tapping the header of a run of several calls', () => {
     const tree = render({ blocks: BASH_RUN, openRun })
     act(() => header(tree).props.onPress())
     expect(openRun).toHaveBeenCalledTimes(1)
-    expect(openRun).toHaveBeenCalledWith(BASH_RUN)
+    expect(openRun.mock.calls[0]![0]).toBe(BASH_RUN)
   })
 
   it('does not unfold the raw tool rows inline when it opens the sheet', () => {
@@ -138,7 +133,7 @@ describe('tapping the header of a run of several calls', () => {
     const blocks = mixedRunWithBackgroundAgent()
     const tree = render({ blocks, openRun })
     act(() => header(tree).props.onPress())
-    expect(openRun).toHaveBeenCalledWith(blocks)
+    expect(openRun.mock.calls[0]![0]).toBe(blocks)
   })
 
   it('still closes a run the Tools toggle opened, instead of opening a sheet over it', () => {
