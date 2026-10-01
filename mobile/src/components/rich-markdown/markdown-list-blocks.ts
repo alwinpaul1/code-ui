@@ -1,5 +1,6 @@
 import { closesFence, openingFence, outdentCodeLine, type OpeningFence } from './markdown-code-fence'
 import { quoteLineContent, readQuoteLines } from './markdown-quote'
+import type { HardBreakForm } from './markdown-reflow'
 import { opensTable, readTableRows } from './markdown-table-rows'
 
 /**
@@ -37,6 +38,8 @@ export type ItemLeafBlock = {
   kind: 'paragraph' | 'indented-code'
   /** The paragraph's words, reflowed, or the code with its columns taken off. */
   text: string
+  /** A paragraph's hard breaks' forms (hardBreakForms, markdown-reflow.ts); none for code. */
+  breaks?: readonly HardBreakForm[]
   /** Columns from the item's own line to where the paragraph's words or the code start. */
   offset: number
   /** Whether a blank line stood before it: a paragraph right after a fence need not have one. */

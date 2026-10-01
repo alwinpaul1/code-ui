@@ -4,6 +4,7 @@ import { CODE_BLANK_ATTRIBUTE, fencedCodeHtml } from './markdown-code-fence'
 import { indentedCodeHtml } from './markdown-leaf-blocks'
 import type { ItemBlock } from './markdown-list-blocks'
 import { quoteHtml } from './markdown-quote'
+import { hardBreakParts } from './markdown-reflow'
 import { tableHtml } from './markdown-table-rows'
 import type { RichMarkdownEditorScope } from './document-scope'
 
@@ -86,7 +87,8 @@ function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
     case 'paragraph': {
       const indent = block.offset === width ? '' : ` ${LIST_INDENT_ATTRIBUTE}="${block.offset}"`
       const tight = block.blankBefore ? '' : ` ${ITEM_TIGHT_ATTRIBUTE}="true"`
-      return `<p${indent}${tight}>${renderInline(block.text)}</p>`
+      const drawn = hardBreakParts(renderInline(block.text), block.breaks ?? [])
+      return `<p${indent}${tight}${drawn.attributes}>${drawn.html}</p>`
     }
     default: {
       const unhandled: never = block
@@ -102,7 +104,10 @@ function itemBlockHtml(block: ItemBlock, item: ParsedListItem): string {
 function itemBodyHtml(scope: RichMarkdownEditorScope, item: ParsedListItem): string {
   const parts: string[] = []
   if (item.blocks[0]?.offset !== null) {
-    parts.push(`<p>${renderInline(item.text)}</p>`)
+    // A hard break in the words is a <br>, as a paragraph's is; it was the newline in `text`,
+    // drawn as a space, until 2026-10-01.
+    const drawn = hardBreakParts(renderInline(item.text), item.breaks ?? [])
+    parts.push(`<p${drawn.attributes}>${drawn.html}</p>`)
   }
   let drawnChildren = 0
   for (const block of item.blocks) {

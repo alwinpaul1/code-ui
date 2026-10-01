@@ -78,9 +78,6 @@ describe('a break outside a paragraph', () => {
     expect(editedSurface('<blockquote><p>a<br>b</p></blockquote>').saved()).toBe('> a\n> b')
   })
 
-  it('keeps a list item’s break as it was written before', () => {
-    expect(editedSurface('<ul><li><p>a<br>b</p></li></ul>').saved()).toBe('- a\nb')
-  })
 
   it('never breaks a table row at a cell’s break', () => {
     expect(
@@ -88,5 +85,58 @@ describe('a break outside a paragraph', () => {
         '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>a<br>b<br></td></tr></tbody></table>'
       ).saved()
     ).toBe('| h |\n| --- |\n| a b |')
+  })
+})
+
+// 2026-10-01: a hard break in a list item loaded as a newline in the item's text, drawn as a space,
+// and the writer put it back bare and at the margin, so '- a  \n  b' saved as '- a\nb': a lazy
+// line, one item reading 'a b', the break gone. A middle line's trailing spaces were trimmed before
+// they were read, so '- a\n  b  \n  c' lost its break on load. An item's break is now a <br>, its
+// form remembered, and written as a hard break at the item's indent.
+describe('a hard line break in a list item', () => {
+  it.each([
+    ['two trailing spaces', '- a  \n  b'],
+    ['a trailing backslash', '- a\\\n  b'],
+    ['an ordered item', '1. a  \n   b'],
+    ['an item before another', '- a  \n  b\n- c'],
+    ['a nested item', '- x\n  - a  \n    b'],
+    ['a task item', '- [ ] a  \n  b'],
+    ['a later paragraph of an item', '- a\n\n  b  \n  c']
+  ])('saves %s back as written', (_name, markdown) => {
+    const { editor, saved } = openedSurface(markdown)
+    expect(editor.querySelector('li br')).not.toBeNull()
+    expect(saved()).toBe(markdown)
+  })
+
+  // The soft line before it joins, as a soft line in an item always has ('- a\n  b' saves as
+  // '- a b'); the break after it is what was lost.
+  it('keeps a break on an item’s middle line', () => {
+    const { editor, saved } = openedSurface('- a\n  b  \n  c')
+    expect(editor.querySelectorAll('li br')).toHaveLength(1)
+    expect(saved()).toBe('- a b  \n  c')
+  })
+
+  it('writes a break the user types in an item as a backslash at the item’s indent', () => {
+    const saved = editedSurface('<ul><li><p>a<br>b</p></li></ul>').saved()
+    expect(saved).toBe('- a\\\n  b')
+    const reopened = openedSurface(saved)
+    expect(reopened.editor.querySelectorAll('li br')).toHaveLength(1)
+    expect(reopened.saved()).toBe(saved)
+  })
+
+  it('writes the break at the marker’s width for a numbered item, and in an item with no paragraph', () => {
+    expect(editedSurface('<ol><li><p>a<br>b</p></li></ol>').saved()).toBe('1. a\\\n   b')
+    expect(editedSurface('<ul><li>a<br>b</li></ul>').saved()).toBe('- a\\\n  b')
+  })
+
+  it('still joins a soft line in an item, which is no break', () => {
+    const { editor, saved } = openedSurface('- a\n  b')
+    expect(editor.querySelector('li br')).toBeNull()
+    expect(saved()).toBe('- a b')
+  })
+
+  it('degenerate: writes nothing for the break an engine leaves at an item’s end', () => {
+    expect(editedSurface('<ul><li><p>a<br></p></li></ul>').saved()).toBe('- a')
+    expect(editedSurface('<ul><li><p><br></p></li></ul>').saved()).toBe('-')
   })
 })

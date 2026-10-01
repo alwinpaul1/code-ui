@@ -1,4 +1,5 @@
-import { inlineMarkdown } from './html-inline-markdown'
+import { breakMark, inlineMarkdown } from './html-inline-markdown'
+import { markedBreaksMarkdown, paragraphMarkdown } from './html-paragraph-markdown'
 import { codeBlockMarkdown, writesIndented } from './html-code-block-markdown'
 import { CODE_BLANK_ATTRIBUTE, CODE_INDENT_ATTRIBUTE } from './markdown-code-fence'
 import { INDENTED_CODE_ATTRIBUTE } from './markdown-leaf-blocks'
@@ -52,20 +53,27 @@ function blockPartKind(tag: string): 'list' | 'code' | 'quote' | 'table' | null 
  * own, so a second paragraph is not glued onto the first; one that holds blocks — the task's
  * `<div>`, a `<p>` the engine nested a list in — is walked into. A list inside a nested item is
  * that item's, and is never reached here, and a quote's paragraphs are the quote's.
+ *
+ * A `<br>` in the words is a hard break, written as a paragraph's is (html-paragraph-markdown.ts);
+ * it was a bare newline until 2026-10-01, and the line after it was written at the margin, so
+ * '- a  \n  b' saved as '- a\nb', one item reading 'a b'. itemMarkdown puts each later line at
+ * the item's indent.
  */
 function itemParts(item: Element): ItemPart[] {
   const parts: ItemPart[] = []
+  const lineBreak = { lineBreak: () => breakMark() }
   let run = ''
   const flush = () => {
-    if (run.trim()) {
-      parts.push({ kind: 'words', words: run.trim(), element: null })
+    const words = markedBreaksMarkdown(run, [])
+    if (words) {
+      parts.push({ kind: 'words', words, element: null })
     }
     run = ''
   }
   const walk = (container: Element) => {
     for (const child of Array.from(container.childNodes)) {
       if (!(child instanceof Element)) {
-        run += inlineMarkdown(child)
+        run += inlineMarkdown(child, lineBreak)
         continue
       }
       const tag = child.tagName.toLowerCase()
@@ -85,11 +93,9 @@ function itemParts(item: Element): ItemPart[] {
       if (child.querySelector('ul, ol, pre, blockquote, table, p, div') !== null) {
         walk(child)
       } else if (paragraph) {
-        run = inlineMarkdown(child)
-        parts.push({ kind: 'words', words: run.trim(), element: child })
-        run = ''
+        parts.push({ kind: 'words', words: paragraphMarkdown(child), element: child })
       } else {
-        run += inlineMarkdown(child)
+        run += inlineMarkdown(child, lineBreak)
       }
       if (paragraph) {
         flush()
@@ -197,7 +203,12 @@ function itemMarkdown(
   let rest = parts.slice(1)
   const opening = markerLineMarkdown(first, writeBlock)
   if (first?.kind === 'words') {
-    lines.push(' '.repeat(column) + marker + first.words)
+    // The words' later lines, after a hard break, at the item's indent: at the margin they are a
+    // lazy line, and the break before one is read as no break by every reader but CommonMark's.
+    const [head = '', ...more] = first.words.split('\n')
+    const content = ' '.repeat(column + markerColumns)
+    lines.push(' '.repeat(column) + marker + head)
+    lines.push(...more.map((line) => (line ? content + line : line)))
   } else if (opening !== null) {
     const [head, ...body] = opening.split('\n')
     const content = ' '.repeat(column + markerColumns)

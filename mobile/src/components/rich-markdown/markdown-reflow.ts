@@ -62,11 +62,23 @@ export function paragraphParts(
   lines: readonly string[],
   renderInline: (text: string) => string
 ): { attributes: string; html: string } {
-  const drawn = renderInline(reflowLines(lines))
-  const forms = lines
+  return hardBreakParts(renderInline(reflowLines(lines)), hardBreakForms(lines))
+}
+
+/** The forms of the hard breaks that end `lines`, in order: every line's but the last's. */
+export function hardBreakForms(lines: readonly string[]): HardBreakForm[] {
+  return lines
     .slice(0, -1)
     .map((line) => hardBreakForm(line))
     .filter((form): form is HardBreakForm => form !== null)
+}
+
+/** Drawn words, each newline in them a hard break, as markup with the breaks' forms remembered
+ *  (paragraphParts): a paragraph's, or a list item's (markdown-list-render.ts). */
+export function hardBreakParts(
+  drawn: string,
+  forms: readonly HardBreakForm[]
+): { attributes: string; html: string } {
   const breaks = drawn.split('\n').length - 1
   const remembered = forms.includes('spaces') && breaks === forms.length
   return {
@@ -90,6 +102,10 @@ export function paragraphParts(
  * `opensBlock` is given the line under the one it tests too, since a table opens on two, and the
  * line over it as written where that is one of the lines gathered here (undefined under the first
  * line, which the caller has read), since a lazy line continues only paragraph text.
+ *
+ * `breaks` is the forms of the hard breaks in the words (hardBreakForms). Each line is taken as
+ * written, its trailing spaces too: they were trimmed before they were read until 2026-10-01, so
+ * '- a\n  b  \n  c' lost its break on load.
  */
 export function gatherListItemContinuation(
   lines: readonly string[],
@@ -97,7 +113,7 @@ export function gatherListItemContinuation(
   text: string,
   opensItem: (line: string) => boolean,
   opensBlock: (line: string, under: string | undefined, above: string | undefined) => boolean
-): { text: string; nextIndex: number } {
+): { text: string; nextIndex: number; breaks: HardBreakForm[] } {
   const tail = [text]
   let index = startIndex
   while (index < lines.length) {
@@ -106,8 +122,12 @@ export function gatherListItemContinuation(
     if (!next.trim() || opensItem(next) || opensBlock(next, lines[index + 1], above)) {
       break
     }
-    tail.push(next.trim())
+    tail.push(next)
     index += 1
   }
-  return { text: tail.length > 1 ? reflowLines(tail) : text, nextIndex: index }
+  return {
+    text: tail.length > 1 ? reflowLines(tail) : text,
+    nextIndex: index,
+    breaks: hardBreakForms(tail)
+  }
 }

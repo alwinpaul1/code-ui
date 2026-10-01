@@ -22,13 +22,24 @@ import { isBlockStart } from './markdown-to-html'
  */
 export function paragraphMarkdown(paragraph: Element): string {
   const mark = breakMark()
-  const segments = inlineChildren(paragraph, { lineBreak: () => mark }).split(mark)
+  return markedBreaksMarkdown(
+    inlineChildren(paragraph, { lineBreak: () => mark }),
+    (paragraph.getAttribute(HARD_BREAKS_ATTRIBUTE) ?? '').split(' ')
+  )
+}
+
+/**
+ * Words with each `<br>` written as the break mark (breakMark), as markdown: each mark the hard
+ * break paragraphMarkdown writes, in the `remembered` forms where there are as many of them as
+ * breaks kept. A list item's words are written with it too (html-list-markdown.ts).
+ */
+export function markedBreaksMarkdown(marked: string, remembered: readonly string[]): string {
+  const segments = marked.split(breakMark())
   let last = segments.length - 1
   while (last > 0 && !segments[last]!.trim()) {
     last -= 1
   }
   const kept = segments.slice(0, last + 1)
-  const remembered = (paragraph.getAttribute(HARD_BREAKS_ATTRIBUTE) ?? '').split(' ')
   const forms = remembered.length === kept.length - 1 ? remembered : []
   let out = kept[0] ?? ''
   for (let index = 1; index < kept.length; index += 1) {

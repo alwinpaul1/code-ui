@@ -1,4 +1,4 @@
-import { gatherListItemContinuation } from './markdown-reflow'
+import { gatherListItemContinuation, type HardBreakForm } from './markdown-reflow'
 import { openingFence, outdentCodeLine } from './markdown-code-fence'
 import { readIndentedCode, setextLevel } from './markdown-leaf-blocks'
 import { continuesParagraphLazily, isThematicBreak } from './markdown-lazy-line'
@@ -25,6 +25,8 @@ export type ParsedListItem = {
   /** Whether the item's checkbox is ticked, or null when it is not a task at all. */
   task: boolean | null
   text: string
+  /** The forms of the hard breaks in `text`, whose newlines they are (hardBreakForms). */
+  breaks?: readonly HardBreakForm[]
   children: ParsedListItem[]
   /** The blocks after the item's words (markdown-list-blocks.ts), in order. */
   blocks: ItemBlock[]
@@ -214,12 +216,15 @@ function readBlockOf(
   const words = gatherListItemContinuation(
     lines,
     next + 1,
-    line.trim(),
+    line.trimStart(),
     (candidate) => parseListLine(candidate) !== null,
     (candidate, under, above) => endsWords(candidate, under, above ?? line, owner, opensBlock)
   )
   const offset = leadingSpaces(line) - owner.indent
-  return { block: { kind: 'paragraph', text: words.text, offset, ...leaf }, nextIndex: words.nextIndex }
+  return {
+    block: { kind: 'paragraph', text: words.text, breaks: words.breaks, offset, ...leaf },
+    nextIndex: words.nextIndex
+  }
 }
 
 /**
@@ -343,6 +348,7 @@ export function parseListTree(
       (line, under, above) => endsWords(line, under, above ?? markerLine, item, opensBlock)
     )
     item.text = continued.text
+    item.breaks = continued.breaks
     index = continued.nextIndex
   }
   return { items: root.children, nextIndex: index }
