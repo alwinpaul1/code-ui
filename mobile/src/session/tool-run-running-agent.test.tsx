@@ -169,6 +169,21 @@ describe('a mixed run whose background agent is still running', () => {
     expect(headerText(tree)).toBe('Used a tool, ran 3 commands')
   })
 
+  // Claude Code writes results in the order they are acknowledged, and Orca drops
+  // the tool_use ids: a background launch's answer can land before an earlier
+  // call's. Paired by order, the Read's slot held the launch text.
+  it('reads Running agent when the launch result lands before the earlier call\'s result', () => {
+    const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Read', input: { file_path: 'notes.md' }, state: 'completed' },
+      agentCall!,
+      launch!,
+      { type: 'tool-result', output: '# Notes' }
+    ]
+    const tree = render({ blocks, agentRuns: RUNNING })
+    expect(headerText(tree)).toBe('Running agent')
+  })
+
   it('keeps a failed command visible on the Running agent row', () => {
     const blocks = mixedRunWithBackgroundAgent()
     const at = blocks.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')

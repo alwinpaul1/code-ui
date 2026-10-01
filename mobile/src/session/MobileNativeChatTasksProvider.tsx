@@ -5,7 +5,7 @@ import type { NativeChatSessionIdentity } from './native-chat-kept-session'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
-import { agentPairsOf, agentRunState } from './mobile-native-chat-agent-run'
+import { agentRunState } from './mobile-native-chat-agent-run'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
@@ -93,7 +93,7 @@ export function MobileNativeChatTasksProvider({
   useEffect(() => followSubagentTranscriptRunning(agentRuns.runningIds), [agentRuns.runningIds])
   const openSheet = useCallback(() => setSheetOpen(true), [])
   // Re-read while open, so a row that finishes while its sheet is up says so.
-  const openRun = openRunBlocks ? agentRunState(agentPairsOf(openRunBlocks), agentRuns) : null
+  const openRun = openRunBlocks ? agentRunState(openRunBlocks, agentRuns) : null
   const rows = useMemo(
     () => (openRunBlocks && openRun ? runSheetRows(openRunBlocks, openRun.entries) : []),
     [openRunBlocks, openRun]

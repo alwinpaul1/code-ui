@@ -134,7 +134,7 @@ function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 
 /** One row per call of the run, in run order, every call and no cap. A Codex
  *  poll of a command the run already counts gives no row, as the run's
  *  sentence counts none (codex-stdin-poll.ts). `agentEntries` are the run's
- *  agents in call order (`agentRunState(agentPairsOf(blocks), …).entries`):
+ *  agents in call order (`agentRunState(blocks, …).entries`):
  *  the nth Agent/Task row takes the nth entry's id. */
 export function runSheetRows(
   blocks: readonly NativeChatBlock[],

@@ -48,7 +48,7 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
-import { agentPairsOf, agentRunState } from './mobile-native-chat-agent-run'
+import { agentRunState } from './mobile-native-chat-agent-run'
 import { useNativeChatAgentRuns } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
@@ -358,8 +358,7 @@ export function ToolRun({
     if (focusView) {
       return false
     }
-    const agentBlocks = agentPairsOf(blocks)
-    return agentBlocks.length > 0 && agentRunState(agentBlocks, agentRuns).running
+    return agentRunState(blocks, agentRuns).running
   }, [blocks, focusView, agentRuns])
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =

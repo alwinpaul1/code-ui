@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { agentPairsOf, agentRunState, isAgentOnlyRun } from './mobile-native-chat-agent-run'
+import { agentRunState, isAgentOnlyRun } from './mobile-native-chat-agent-run'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -112,24 +112,21 @@ describe('the row for a run of agents', () => {
   })
 })
 
-describe('the agent calls of a mixed run', () => {
+describe('the agents of a mixed run', () => {
   const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
 
-  it('hands over the Agent call and its result, not the commands beside them', () => {
-    const picked = agentPairsOf(mixedRunWithBackgroundAgent())
-    expect(picked).toHaveLength(2)
-    expect(picked[0]).toMatchObject({ type: 'tool-call', name: 'Agent' })
-    expect(picked[1]).toMatchObject({ type: 'tool-result' })
+  it('lists only the Agent call as an agent, not the commands beside it', () => {
+    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).entries).toHaveLength(1)
   })
 
   it('lists one agent for CronDelete, three commands and an Agent, and runs it by its launch id', () => {
-    const state = agentRunState(agentPairsOf(mixedRunWithBackgroundAgent()), {
+    const state = agentRunState(mixedRunWithBackgroundAgent(), {
       ...idle,
       runningIds: new Set([MIXED_RUN_AGENT_ID])
     })
     expect(state.entries.map((entry) => entry.title)).toEqual([MIXED_RUN_AGENT_DESCRIPTION])
     expect(state.running).toBe(true)
-    expect(agentRunState(agentPairsOf(mixedRunWithBackgroundAgent()), idle).running).toBe(false)
+    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).running).toBe(false)
   })
 
   it('does not count the commands\' answers as the agent launch\'s answer', () => {
@@ -137,12 +134,35 @@ describe('the agent calls of a mixed run', () => {
     // its launch is being made. Counted over every result, the commands'
     // four answers would hide that.
     const blocks = mixedRunWithBackgroundAgent().slice(0, -1)
-    expect(agentRunState(agentPairsOf(blocks), { ...idle, agentWorking: true }).running).toBe(true)
+    expect(agentRunState(blocks, { ...idle, agentWorking: true }).running).toBe(true)
   })
 
-  it('hands over nothing for an empty run, a run of commands, or a lone result', () => {
-    expect(agentPairsOf([])).toEqual([])
-    expect(agentPairsOf([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }])).toEqual([])
-    expect(agentPairsOf([{ type: 'tool-result', output: 'x' }])).toEqual([])
+  it('lists no agent for an empty run, a run of commands, or a lone result', () => {
+    expect(agentRunState([], idle).entries).toEqual([])
+    expect(agentRunState([{ type: 'tool-call', name: 'Bash', input: { command: 'ls' } }], idle).entries).toEqual([])
+    expect(agentRunState([{ type: 'tool-result', output: 'x' }], idle).running).toBe(false)
+  })
+})
+
+describe('a mixed run whose results land out of call order', () => {
+  const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
+  const outOfOrder: NativeChatBlock[] = [
+    { type: 'tool-call', name: 'Read', input: { file_path: 'notes.md' } },
+    agentCall!,
+    launch!,
+    { type: 'tool-result', output: '# Notes' }
+  ]
+  const idle = { runningIds: new Set([MIXED_RUN_AGENT_ID]), confirmed: new Map<string, string>(), agentWorking: false }
+
+  it('lists the one agent with the id its launch result carries', () => {
+    const state = agentRunState(outOfOrder, idle)
+    expect(state.entries).toEqual([{ title: MIXED_RUN_AGENT_DESCRIPTION, agentId: MIXED_RUN_AGENT_ID }])
+    expect(state.running).toBe(true)
+  })
+
+  it('never lends a run an agent id from another run\'s results', () => {
+    const state = agentRunState([agentCall!], idle)
+    expect(state.entries[0]!.agentId).toBeNull()
+    expect(state.running).toBe(false)
   })
 })

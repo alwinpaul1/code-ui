@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { agentPairsOf, agentRunState } from './mobile-native-chat-agent-run'
+import { agentRunState } from './mobile-native-chat-agent-run'
 import { runSheetRows, type RunSheetRow } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import {
@@ -48,7 +48,7 @@ describe("the Claude app's sheet for CronDelete, three commands and an agent (20
 
   it('hands the agent row the id of the agent its call launched, and no other row one', () => {
     const blocks = mixedRunWithBackgroundAgent()
-    const entries = agentRunState(agentPairsOf(blocks), {
+    const entries = agentRunState(blocks, {
       runningIds: new Set([MIXED_RUN_AGENT_ID]),
       confirmed: new Map(),
       agentWorking: false

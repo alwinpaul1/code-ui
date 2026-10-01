@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
-import { agentPairsOf, agentRunState } from './mobile-native-chat-agent-run'
+import { agentRunState } from './mobile-native-chat-agent-run'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { darkColors, lightColors } from '../theme/tokens'
@@ -40,7 +40,7 @@ vi.mock('../components/BottomDrawer', () => ({
 }))
 
 const BLOCKS = mixedRunWithBackgroundAgent()
-const ENTRIES = agentRunState(agentPairsOf(BLOCKS), {
+const ENTRIES = agentRunState(BLOCKS, {
   runningIds: new Set([MIXED_RUN_AGENT_ID]),
   confirmed: new Map(),
   agentWorking: false

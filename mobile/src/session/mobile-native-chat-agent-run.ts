@@ -1,4 +1,3 @@
-import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -56,33 +55,26 @@ export function isAgentOnlyRun(blocks: readonly NativeChatBlock[]): boolean {
   return calls > 0
 }
 
-/** The blocks of the Agent/Task calls in a run, each with its own result, and
- *  nothing else. `agentRunState` counts every call and every result it is
- *  handed, so a mixed run's Bash calls would list as agents and its Bash
- *  results would count as answers to the launches. A result whose call the
- *  window cut is left out: it cannot be told for an agent's. */
-export function agentPairsOf(blocks: readonly NativeChatBlock[]): NativeChatBlock[] {
-  const out: NativeChatBlock[] = []
-  for (const pair of pairToolBlocks(blocks)) {
-    if (pair.call && AGENT_TOOLS.has(pair.call.name)) {
-      out.push(pair.call)
-      if (pair.result) {
-        out.push(pair.result)
-      }
-    }
-  }
-  return out
-}
-
+/** The agents of a run, read over the WHOLE run: the Agent/Task calls are the
+ *  agents, but a launch's answer is read from every result, because Claude Code
+ *  writes results in the order they are acknowledged and Orca drops the tool_use
+ *  ids, so a background launch's answer can land before an earlier call's. Pairing
+ *  by order handed the launch text to the wrong call (a Read) and lost the agent.
+ *  Only this run's own results are read, so a run never shows another's agent. */
 export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
 ): NativeChatAgentRunState {
   const calls: { title: string; description: string | null; live: boolean }[] = []
   const launched: string[] = []
+  let allCalls = 0
   let results = 0
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
+      allCalls += 1
+      if (!AGENT_TOOLS.has(block.name)) {
+        continue
+      }
       const description = readString(block.input, 'description')
       calls.push({
         title: agentTitle(block.input),
@@ -97,7 +89,8 @@ export function agentRunState(
       }
     }
   }
-  const unanswered = calls.length > results
+  // Every call, not only the agents': a result is one call's, whichever it is.
+  const unanswered = allCalls > results
   const running =
     calls.some((call) => call.live) ||
     (unanswered && inputs.agentWorking) ||
