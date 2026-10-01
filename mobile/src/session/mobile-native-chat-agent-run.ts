@@ -1,3 +1,4 @@
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
 import {
   isToolCallBlock,
   isToolResultBlock,
@@ -61,17 +62,37 @@ export function isAgentOnlyRun(blocks: readonly NativeChatBlock[]): boolean {
  *  ids, so a background launch's answer can land before an earlier call's. Pairing
  *  by order handed the launch text to the wrong call (a Read) and lost the agent.
  *  Only this run's own results are read, so a run never shows another's agent. */
+const isLaunchText = (output: string): boolean =>
+  readLaunch({ name: 'Agent', input: null, startedAt: null }, output) !== null
+
+/** Whether an Agent/Task call of the run has no answer yet. Results pair to calls
+ *  by order, which a background launch's early answer upsets, so a launch text
+ *  sitting in another call's slot counts as an unanswered agent's answer. An
+ *  unanswered call that is no agent's (a Read) says nothing about agents. */
+function hasUnansweredAgent(blocks: readonly NativeChatBlock[]): boolean {
+  let agentsWithoutResult = 0
+  let strayLaunches = 0
+  for (const pair of pairToolBlocks(blocks)) {
+    if (!pair.call) {
+      continue
+    }
+    if (AGENT_TOOLS.has(pair.call.name)) {
+      agentsWithoutResult += pair.result ? 0 : 1
+    } else if (pair.result && isLaunchText(pair.result.output)) {
+      strayLaunches += 1
+    }
+  }
+  return agentsWithoutResult > strayLaunches
+}
+
 export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
 ): NativeChatAgentRunState {
   const calls: { title: string; description: string | null; live: boolean }[] = []
   const launched: string[] = []
-  let allCalls = 0
-  let results = 0
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
-      allCalls += 1
       if (!AGENT_TOOLS.has(block.name)) {
         continue
       }
@@ -82,15 +103,13 @@ export function agentRunState(
         live: block.state === 'running'
       })
     } else if (isToolResultBlock(block)) {
-      results += 1
       const id = readLaunch({ name: 'Agent', input: null, startedAt: null }, block.output)?.id
       if (id) {
         launched.push(id)
       }
     }
   }
-  // Every call, not only the agents': a result is one call's, whichever it is.
-  const unanswered = allCalls > results
+  const unanswered = hasUnansweredAgent(blocks)
   const running =
     calls.some((call) => call.live) ||
     (unanswered && inputs.agentWorking) ||

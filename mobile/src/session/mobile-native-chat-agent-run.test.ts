@@ -166,3 +166,24 @@ describe('a mixed run whose results land out of call order', () => {
     expect(state.running).toBe(false)
   })
 })
+
+// Review of feat/tool-run-sheet: `unanswered` counted every call of the run, so
+// a finished agent's run with an unrelated unanswered call read as launching.
+describe('an unanswered call that is not an agent', () => {
+  const [agentCall, launch] = mixedRunWithBackgroundAgent().slice(-2)
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
+
+  it('does not make a finished agent read as running on a working tab', () => {
+    const blocks: NativeChatBlock[] = [agentCall!, launch!, { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } }]
+    expect(agentRunState(blocks, idle).running).toBe(false)
+  })
+
+  it('still reads an agent call with no answer as running while the tab works', () => {
+    expect(agentRunState([agentCall!], idle).running).toBe(true)
+  })
+
+  it('counts a launch that landed in another call\'s slot as the agent\'s answer', () => {
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } }, agentCall!, launch!]
+    expect(agentRunState(blocks, idle).running).toBe(false)
+  })
+})
