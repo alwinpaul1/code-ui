@@ -352,6 +352,20 @@ describe("an approval menu keeps each agent's own choices", () => {
     ])
   })
 
+  // The row over Codex's menu, past the blank, is the command. A command
+  // that says pick or select ("git cherry-pick", a SQL SELECT) read as a
+  // line asking which, and the dialog lost its card to the question card
+  // (advisor review of 2026-10-01). Only a line that asks or introduces
+  // ("?" or ":") can ask which.
+  it('keeps the permission card for a Codex command that says pick or select', () => {
+    for (const command of ['  $ git cherry-pick abc123', '  $ psql -c "SELECT name FROM users"']) {
+      const dialog = CODEX_DIALOG.map((line) => (line.startsWith('  $ ') ? command : line))
+      const permission = askWhileWaiting(dialog.join('\n'))
+      expect(permission?.title, command).toBe('Permission requested')
+      expect(permission?.options.map((o) => o.send), command).toEqual(['1', '2', '3'])
+    }
+  })
+
   it("offers Codex's three choices by their digits, the selected one too", () => {
     expect(askWhileWaiting(CODEX_DIALOG.join('\n'))?.options).toEqual([
       { label: 'Yes, proceed (y)', send: '1' },

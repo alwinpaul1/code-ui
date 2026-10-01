@@ -9,7 +9,8 @@ import { asksWhich } from './mobile-native-chat-question-asks'
 import {
   codeFenceStarts,
   collectOptionLists,
-  introIndex
+  introIndex,
+  lineIntroduces
 } from './mobile-native-chat-question-lists'
 
 // Agent permission asks (e.g. Claude/Codex "Do you want to proceed?") surface
@@ -158,7 +159,9 @@ function readsAsApproval(labels: readonly string[]): boolean {
  * the answer to "Do you want to go ahead?" (2026-09-30). `'choice'` when that
  * list sits under a line that asks which (asksWhich): "Which do you want?"
  * over "Allow retries…" and "Skip retries…" drew "Permission requested"
- * before 2026-10-01.
+ * before 2026-10-01. Only a line that asks or introduces (`?` or `:`): over
+ * Codex's menu, past the blank, is the command, and "git cherry-pick" or a
+ * SQL SELECT is no question.
  */
 function approvalMenu(text: string): MobileChatPermission['options'] | 'choice' | null {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
@@ -178,7 +181,8 @@ function approvalMenu(text: string): MobileChatPermission['options'] | 'choice' 
       !answers.includes(null)
     ) {
       const intro = introIndex(lines, lists[at], lists[at - 1] ?? null, fenceStarts)
-      return intro >= 0 && asksWhich(lines[intro]) ? 'choice' : options
+      const title = intro >= 0 ? lines[intro] : ''
+      return lineIntroduces(title) && asksWhich(title) ? 'choice' : options
     }
   }
   return null
