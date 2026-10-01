@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useStableEchoes } from './use-stable-echoes'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT } from './desk-prompt-stand-in-place'
+import { placeAfterStandIn, replaceFoundByLateTwin, STAND_IN_WAIT, STAND_IN_TWIN_WAIT_MS } from './desk-prompt-stand-in-place'
+import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 
 /** Which prompts the transcript already shows lives in desk-prompt-landed.ts;
@@ -170,10 +171,20 @@ export function useDesktopPromptEchoes(
   const refused: DesktopPrompt[] = []
   const drawnWhereFirstSeen: DesktopPrompt[] = []
   const rowBefore = (at: number | undefined) => lastRowBefore(rawMessages, at)
+  // The earliest moment a status copy waiting for its hook twin may be drawn
+  // (waitsForHookTwin), and a reading to come at it: readings happen only when
+  // something re-renders, and a quiet pane would leave the copy hidden.
+  let twinDeadline: number | undefined
+  const [, askForReading] = useState(0)
   for (const prompt of prompts) {
     // A status copy held back for want of a time pairs with the phone's sends
     // and is never drawn (agent-status-prompts.ts, 2026-09-26).
     if (prompt.heldBack === true) {
+      continue
+    }
+    const deadline = waitsForHookTwin(prompt, promptHook)
+    if (deadline !== undefined) {
+      twinDeadline = twinDeadline === undefined ? deadline : Math.min(twinDeadline, deadline)
       continue
     }
     if (foundWithoutItsRow(prompt, rawMessages)) {
@@ -368,6 +379,13 @@ export function useDesktopPromptEchoes(
     ])
   ])
   useEffect(() => {
+    if (twinDeadline === undefined) {
+      return undefined
+    }
+    const timer = setTimeout(() => askForReading((reading) => reading + 1), Math.max(0, twinDeadline - Date.now()) + 1)
+    return () => clearTimeout(timer)
+  }, [twinDeadline])
+  useEffect(() => {
     for (const [key, line] of JSON.parse(refusals) as [string, string][]) {
       if (!loggedRefusals.has(key)) {
         loggedRefusals.add(key)
@@ -376,6 +394,36 @@ export function useDesktopPromptEchoes(
     }
   }, [refusals])
   return useStableEchoes(echoes)
+}
+
+/**
+ * When a status copy that waits for its hook twin may be drawn, or undefined
+ * when it does not wait.
+ *
+ * On a tab with the prompt hook a tick that fires mid-turn reaches the phone
+ * twice, and the hook's copy alone carries the loop's mark (`sc=1`); the
+ * status copy came first and drew as a user bubble until the mark arrived, a
+ * flash of the loop's words every tick (2026-10-01). So a status copy the chat
+ * watched arrive, with no twin yet, waits as long as a copy found after Orca's
+ * stand-in does (STAND_IN_TWIN_WAIT_MS), and is drawn after that when the twin
+ * never comes (a frame lost on the pty or the relay). Not a beacon copy, which
+ * carries its own mark; not a tab without the hook, which has no twin to wait
+ * for; not a copy found on a first reading, which is old, or one read after
+ * Orca's stand-in, which waits in its own way (placeAfterStandIn).
+ */
+function waitsForHookTwin(prompt: DesktopPrompt, promptHook: boolean): number | undefined {
+  if (
+    !promptHook ||
+    !prompt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) ||
+    prompt.hookTwin !== undefined ||
+    prompt.atStateStart === true ||
+    prompt.foundAt !== undefined ||
+    typeof prompt.seenAt !== 'number'
+  ) {
+    return undefined
+  }
+  const deadline = prompt.seenAt + STAND_IN_TWIN_WAIT_MS
+  return Date.now() < deadline ? deadline : undefined
 }
 
 /** The lines already logged, by kind and nonce, so each says so once. */

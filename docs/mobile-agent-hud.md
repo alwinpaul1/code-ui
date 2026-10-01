@@ -832,6 +832,21 @@ from the 2.1.286 binary, none from a captured transcript). Two rules cover it:
 Not seen in a payload: that the hook receives the RESOLVED words is inferred
 from these ticks drawing past a loaded call, not read from a hook payload.
 
+**A status copy ahead of its hook twin.** On a tab with the prompt hook a tick
+that fires mid-turn reaches the phone twice: Orca's status copy, then the
+hook's beacon copy, which alone carries `sc=1`. Until the mark arrived the
+status copy drew as a user bubble and vanished a moment later, a flash of the
+loop's words every tick. `useDesktopPromptEchoes` now holds back a status copy
+(nonce `status:`) the chat watched arrive (not found on a first reading, not
+read after Orca's stand-in) while the tab has the hook and no twin has paired
+with it, for `STAND_IN_TWIN_WAIT_MS` (5 s, the wait a copy found after the
+stand-in already has), and arms a timer for the deadline, since readings happen
+only on a re-render. A twin that never comes (a frame spliced on the pty or cut
+in the relay) leaves the copy drawn after the wait. A beacon copy carries its
+own mark and never waits; a tab without the hook has no twin to wait for.
+The cost: a message typed mid-turn on a hook tab draws up to 5 s late when its
+twin is late. A tick that fires on an idle pane is not what this covers.
+
 ## Windows (2026-09-10): what actually reaches the phone, and how
 
 An earlier version of this section claimed the sh script's MSYS branch reached

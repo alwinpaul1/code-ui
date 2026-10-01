@@ -35,7 +35,7 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 
 /** How long a copy read after Orca's stand-in, on a tab with the prompt
  *  hook, waits for the hook's copy of it before it is taken for one found. */
-const STAND_IN_TWIN_WAIT_MS = 5_000
+export const STAND_IN_TWIN_WAIT_MS = 5_000
 export const STAND_IN_WAIT = Symbol('wait for the hook copy')
 
 /** Copies placed as found, which a late hook copy may still move. */
