@@ -156,6 +156,7 @@ type Held = {
   state: Record<string, unknown>
   write: (field: string, value: unknown) => void
   addLinearComment: (item: unknown) => Promise<void>
+  createLinearSubIssue: (item: unknown) => Promise<void>
 }
 
 /**
@@ -252,7 +253,8 @@ async function openSheet(item: unknown = ITEM) {
   const held: Held = {
     state: {},
     write: () => undefined,
-    addLinearComment: async () => undefined
+    addLinearComment: async () => undefined,
+    createLinearSubIssue: async () => undefined
   }
   function Probe({ at }: { at: number | null }): null {
     const model = useStrictModel(
@@ -272,9 +274,9 @@ async function openSheet(item: unknown = ITEM) {
       held
     )
     useMobileTasksItemDetailLoading(model as never, at)
-    held.addLinearComment = useMobileTasksLinearItemActions(model as never).addLinearComment as (
-      item: unknown
-    ) => Promise<void>
+    const actions = useMobileTasksLinearItemActions(model as never)
+    held.addLinearComment = actions.addLinearComment as (item: unknown) => Promise<void>
+    held.createLinearSubIssue = actions.createLinearSubIssue as (item: unknown) => Promise<void>
     return null
   }
   await act(async () => {
@@ -298,6 +300,23 @@ async function openSheet(item: unknown = ITEM) {
         await held.addLinearComment(item)
       })
       await settle()
+    },
+    /** A post (or, with `subIssue`, a sub-issue) sent and left on the wire: the test lands its
+     *  reply, then awaits what this returns. */
+    startPost: async (body: string, kind: 'comment' | 'subIssue' = 'comment') => {
+      await act(async () => {
+        held.write(kind === 'comment' ? 'linearCommentDraft' : 'linearSubIssueTitle', body)
+      })
+      let sent: Promise<void> = Promise.resolve()
+      await act(async () => {
+        sent = kind === 'comment' ? held.addLinearComment(item) : held.createLinearSubIssue(item)
+      })
+      return async () => {
+        await act(async () => {
+          await sent
+        })
+        await settle()
+      }
     },
     connectedAt: async (at: number) => {
       await act(async () => {
@@ -575,5 +594,142 @@ describe('a comment posted over a refused list, when a read of the issue fails o
     await sheet.edit('detailRefreshSeq', 3)
     expect(sheet.held.state.detailPayload).toMatchObject({ comments: [], commentsFailed: true })
     expect(discussionLines(sheet.held.state)).toEqual(['Discussion', "Couldn't load comments", 'Retry'])
+  })
+})
+
+// A post on one issue that answers after the sheet moved: the reply appended to whatever Linear
+// payload was on screen, which named no issue, so issue A's comment was drawn on issue B, and the
+// draft typed on B was cleared as A's. A sub-issue created on A was listed under B the same way
+// (review, 2026-10-01; found from source, first driven here).
+describe('a post that answers after the sheet moved to another issue', () => {
+  const READ = (comments: unknown[]) => ({ ok: true, result: comments })
+  const POSTED_HERE = { ok: true, result: { ok: true, id: 'comment-9' } }
+
+  it('does not draw a comment posted on one issue on the issue opened before it answered', async () => {
+    const post = inFlight()
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: OTHER_ISSUE })
+    script('linear.issueComments', READ([EARLIER]), READ([]))
+    script('linear.addIssueComment', post.reply)
+    const sheet = await openSheet()
+    const answered = await sheet.startPost('looks good')
+
+    await sheet.edit('actionItem', OTHER_ITEM)
+    await sheet.edit('linearCommentDraft', 'a draft for ENG-2')
+    await post.land(POSTED_HERE)
+    await answered()
+
+    expect(sheet.held.state.detailPayload).toMatchObject({ provider: 'linear', comments: [] })
+    expect(sheet.held.state.linearCommentDraft).toBe('a draft for ENG-2')
+    expect(sheet.held.state.error).toBe('')
+  })
+
+  it('does not list a sub-issue created on one issue under the issue opened before it answered', async () => {
+    const created = inFlight()
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: OTHER_ISSUE })
+    script('linear.issueComments', READ([]), READ([]))
+    script('linear.createIssue', created.reply)
+    const sheet = await openSheet()
+    const answered = await sheet.startPost('Split the parser', 'subIssue')
+
+    await sheet.edit('actionItem', OTHER_ITEM)
+    await sheet.edit('linearSubIssueTitle', 'a title for ENG-2')
+    await created.land({
+      ok: true,
+      result: { ok: true, id: 'issue-3', identifier: 'ENG-3', title: 'Split the parser', url: '' }
+    })
+    await answered()
+
+    expect(sheet.held.state.detailPayload).toMatchObject({ provider: 'linear', children: [] })
+    expect(sheet.held.state.linearSubIssueTitle).toBe('a title for ENG-2')
+  })
+
+  it('reads its own issue again when the sheet came back to it before the post answered', async () => {
+    const post = inFlight()
+    script(
+      'linear.getIssue',
+      { ok: true, result: ISSUE },
+      { ok: true, result: OTHER_ISSUE },
+      { ok: true, result: ISSUE },
+      { ok: true, result: ISSUE }
+    )
+    // Back on ENG-1, the list was read before the desktop took the post; the read after it has it.
+    script('linear.issueComments', READ([EARLIER]), READ([]), READ([EARLIER]), READ([EARLIER, POSTED_ON_HOST]))
+    script('linear.addIssueComment', post.reply)
+    const sheet = await openSheet()
+    const answered = await sheet.startPost('looks good')
+    await sheet.edit('actionItem', OTHER_ITEM)
+    await sheet.edit('actionItem', ITEM)
+    await sheet.edit('linearCommentDraft', 'a second thought')
+
+    await post.land({ ok: true, result: { ok: true, id: POSTED_ON_HOST.id } })
+    await answered()
+
+    expect((sheet.held.state.detailPayload as { comments: unknown[] }).comments).toEqual([
+      EARLIER,
+      POSTED_ON_HOST
+    ])
+    expect(sheet.held.state.linearCommentDraft).toBe('a second thought')
+  })
+
+  // Retry while the post is on the wire clears the payload, and a reply that lands before the
+  // read does found nothing to add to. The read could still answer from before the desktop took
+  // the post, and the comment stayed missing until the next one.
+  it('reads again after a post that answered while a refresh was in flight', async () => {
+    const post = inFlight()
+    const refresh = inFlight()
+    script(
+      'linear.getIssue',
+      { ok: true, result: ISSUE },
+      refresh.reply,
+      { ok: true, result: ISSUE }
+    )
+    script('linear.issueComments', READ([EARLIER]), READ([EARLIER]), READ([EARLIER, POSTED_ON_HOST]))
+    script('linear.addIssueComment', post.reply)
+    const sheet = await openSheet()
+    const answered = await sheet.startPost('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+    expect(sheet.held.state.detailPayload).toBeNull()
+
+    await post.land({ ok: true, result: { ok: true, id: POSTED_ON_HOST.id } })
+    await answered()
+    await refresh.land({ ok: true, result: ISSUE })
+
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(3)
+    expect((sheet.held.state.detailPayload as { comments: unknown[] }).comments).toEqual([
+      EARLIER,
+      POSTED_ON_HOST
+    ])
+    expect(sheet.held.state.linearCommentDraft).toBe('')
+  })
+
+  it('adds a comment once when a refresh already read it before the post answered', async () => {
+    const post = inFlight()
+    script('linear.getIssue', { ok: true, result: ISSUE }, { ok: true, result: ISSUE })
+    script('linear.issueComments', READ([EARLIER]), READ([EARLIER, POSTED_ON_HOST]))
+    script('linear.addIssueComment', post.reply)
+    const sheet = await openSheet()
+    const answered = await sheet.startPost('looks good')
+    await sheet.edit('detailRefreshSeq', 1)
+
+    await post.land({ ok: true, result: { ok: true, id: POSTED_ON_HOST.id } })
+    await answered()
+    expect((sheet.held.state.detailPayload as { comments: unknown[] }).comments).toEqual([
+      EARLIER,
+      POSTED_ON_HOST
+    ])
+  })
+
+  it('still adds the comment and clears the draft when the sheet stayed on the issue', async () => {
+    script('linear.getIssue', { ok: true, result: ISSUE })
+    script('linear.issueComments', READ([EARLIER]))
+    script('linear.addIssueComment', POSTED_HERE)
+    const sheet = await openSheet()
+
+    await sheet.post('looks good')
+    expect(sheet.held.state.detailPayload).toMatchObject({
+      comments: [EARLIER, { id: 'comment-9', body: 'looks good', user: { displayName: 'You' } }]
+    })
+    expect(sheet.held.state.linearCommentDraft).toBe('')
+    expect(host.requests.filter((sent) => sent === 'linear.getIssue')).toHaveLength(1)
   })
 })

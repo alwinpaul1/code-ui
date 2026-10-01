@@ -145,7 +145,17 @@ const hash = (parts: string[] | string): string =>
 // the same two entries only (the `useRef`'s type argument and the detail effect's body);
 // `semantics` holds at 3,293 (the two `'linear'` comparisons swap one for one). Declarations, the
 // render tree and the StyleSheets do not move.
-const PROVIDER_RPC_SCREEN_HOOKS = '63553a41732fb840d17df1ebd3a68cf94eaef6ea4e87ee629a8361666bdee466'
+// 2026-10-01 (edge cases, Linear post after a switch): a comment or sub-issue whose reply landed
+// after the sheet moved to another issue was appended to that issue's payload, which names no
+// issue. useMobileTasksLinearItemActions now keeps a ref naming the open issue, how many times it
+// changed and whether its detail is shown, fed by two effects, and a `replyLanding` callback both
+// posts consult. Checked by dumping every reader's output before and after and diffing: hooks
+// 367 -> 371 (the `useRef`, the two `useEffect`s and the `useCallback`, and the two posts' bodies
+// move); statements 435 -> 440 (those four and the `openIssueId` const, the same two bodies
+// moving); `semantics` 3,293 -> 3,294 (one `'linear'` comparison). Declarations, the render tree
+// and the StyleSheets do not move. mobile-tasks-linear-comment-over-failed-list.test.tsx guards
+// the behaviour.
+const PROVIDER_RPC_SCREEN_HOOKS = '38ffbdb52e09127e2da0a1638a7ed6c1e4673e1293ba361dc640273c444890c7'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -189,7 +199,8 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // 2026-09-30 (fix round 3, finding 2): 431 still, then 434 (notes above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 434 -> 435 (note above the hooks pin).
 // 2026-10-01 (fix round 2, finding 4): two statements changed, 435 still (note above the hooks pin).
-const PROVIDER_RPC_STATEMENTS = '78e53ac13432dd99fa33e00ba5831f9e0fc5f510a0cd147610dd1c476037fabf'
+// 2026-10-01 (edge cases, Linear post after a switch): 435 -> 440 (note above the hooks pin).
+const PROVIDER_RPC_STATEMENTS = 'e28cb4c5c3e84934817deddf7d1e631c11a7147cf2acedf1526e317c8721b160'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -223,7 +234,8 @@ const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb
 // 2026-09-30 (fix round 3, finding 1): 3,278 -> 3,282 (note above the hooks pin).
 // 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292, then 3,289 (notes above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 3,289 -> 3,291, then 3,293 (notes above the hooks pin).
-const A11Y_BACK_SEMANTICS = '82a0491f571ed98a4ea5152d8a6a9e9a6044498d06a7496aa399f22467d0dab7'
+// 2026-10-01 (edge cases, Linear post after a switch): 3,293 -> 3,294 (note above the hooks pin).
+const A11Y_BACK_SEMANTICS = 'b0d2bc4ec881956c00be0a75e9499e5ec42e1a3db1168e031cb03d69240fc50c'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
@@ -236,7 +248,7 @@ const A11Y_BACK_RENDER_TREE = 'a90cdedea3327b69bf1aea640e4abc321f81c0288c9a6ff16
 describe('Mobile Tasks refactor parity', () => {
   it('preserves recursively flattened hook and dependency order', () => {
     const screenHooks = readFlattenedMobileTasksHookSignatures('MobileTasksScreen')
-    expect(screenHooks).toHaveLength(367)
+    expect(screenHooks).toHaveLength(371)
     expect(hash(screenHooks)).toBe(PROVIDER_RPC_SCREEN_HOOKS)
 
     const diffHooks = readFlattenedMobileTasksHookSignatures('GitHubPrFileDiff')
@@ -246,7 +258,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves every screen statement in execution order', () => {
     const statements = readFlattenedMobileTasksCoreStatements()
-    expect(statements).toHaveLength(435)
+    expect(statements).toHaveLength(440)
     expect(hash(statements)).toBe(PROVIDER_RPC_STATEMENTS)
   })
 
@@ -258,7 +270,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_293)
+    expect(semantics.split('\n')).toHaveLength(3_294)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
