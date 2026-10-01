@@ -41,6 +41,11 @@ export type RunSheetRow = {
   failed: boolean
   /** The call and its result, for the detail sheet a tap opens. */
   pair: NativeChatToolPair
+  /** A tap on the row opens something. False for an Agent/Task row whose agent
+   *  id the phone does not know: its generic detail sheet would show the launch
+   *  result's own text ("internal metadata, never quote"), so the row stays
+   *  inert, as the agent-only sheet's rows were. */
+  opens: boolean
   /** The agent this call launched, where the phone knows which one; a row
    *  with one opens that agent's transcript. */
   agentId: string | null
@@ -83,7 +88,7 @@ function editDetail(pair: NativeChatToolPair): { verb: string; detail: string | 
   return { verb, detail: fileName(paths[0] ?? own) ?? inputLabel(call.input) }
 }
 
-function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 'agentId'> {
+function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 'agentId' | 'opens'> {
   const call = pair.call
   if (!call) {
     // A result whose call the window cut: its first line is all there is.
@@ -152,11 +157,13 @@ export function runSheetRows(
       continue
     }
     const isAgentCall = pair.call !== undefined && isAgentToolName(pair.call.name)
+    const agentId = isAgentCall ? (agentEntries[agentIndex++]?.agentId ?? null) : null
     rows.push({
       ...rowOf(pair),
       failed: toolDetailStatus(pair) === 'Failed',
       pair,
-      agentId: isAgentCall ? (agentEntries[agentIndex++]?.agentId ?? null) : null
+      agentId,
+      opens: !isAgentCall || agentId !== null
     })
   }
   return rows

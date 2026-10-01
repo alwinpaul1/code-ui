@@ -140,10 +140,16 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
     expect(onSelectPair).not.toHaveBeenCalled()
   })
 
-  it('opens the detail sheet for an agent row the phone cannot tell the id of', () => {
-    const { tree, onSelectPair } = render({ rows: runSheetRows(BLOCKS, []) })
-    act(() => rowNodes(tree)[4]!.props.onPress())
-    expect(onSelectPair.mock.calls[0]![0].call?.name).toBe('Agent')
+  // The generic detail sheet of a launch showed its result's "internal metadata,
+  // never quote" text, so an agent row with no known id is not tappable.
+  it('leaves an agent row with no known id disabled, opening nothing', () => {
+    const { tree, onSelectPair, onOpenTranscript } = render({ rows: runSheetRows(BLOCKS, []) })
+    const row = rowNodes(tree)[4]!
+    expect(row.props.disabled).toBe(true)
+    act(() => row.props.onPress?.())
+    expect(onSelectPair).not.toHaveBeenCalled()
+    expect(onOpenTranscript).not.toHaveBeenCalled()
+    expect(rowNodes(tree).slice(0, 4).every((node) => node.props.disabled !== true)).toBe(true)
   })
 
   it('says Failed on a failed call, in the danger tone, and nowhere else', () => {

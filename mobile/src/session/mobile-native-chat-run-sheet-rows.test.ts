@@ -204,6 +204,12 @@ describe('the odd shapes a run can hold', () => {
     expect(drawn(rows[119]!)).toBe('Ran  Step 119')
   })
 
+  it('marks an Agent row with no known id as not opening anything, and every other row as opening', () => {
+    expect(rowsOf(mixedRunWithBackgroundAgent()).map((row) => row.opens)).toEqual([true, true, true, true, false])
+    const entries = [{ title: MIXED_RUN_AGENT_DESCRIPTION, agentId: MIXED_RUN_AGENT_ID }]
+    expect(runSheetRows(mixedRunWithBackgroundAgent(), entries).map((row) => row.opens)).toEqual([true, true, true, true, true])
+  })
+
   it('leaves an agent row with no id when the run knows fewer agents than it has calls', () => {
     const blocks: NativeChatBlock[] = [
       { type: 'tool-call', name: 'Agent', input: { description: 'one' } },

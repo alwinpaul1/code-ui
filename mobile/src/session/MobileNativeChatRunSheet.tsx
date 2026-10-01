@@ -109,11 +109,12 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
   const Icon = ICON_BY_KIND[row.kind]
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={row.opens ? 'button' : undefined}
+      disabled={!row.opens}
       accessibilityLabel={`${row.detail ? `${row.verb} ${row.detail}` : row.verb}${row.failed ? '. Failed' : ''}`}
-      accessibilityHint={row.agentId ? 'Shows what this agent did' : 'Shows this call'}
+      accessibilityHint={row.opens ? (row.agentId ? 'Shows what this agent did' : 'Shows this call') : undefined}
       testID="run-sheet-row"
-      onPress={onPress}
+      onPress={row.opens ? onPress : undefined}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
