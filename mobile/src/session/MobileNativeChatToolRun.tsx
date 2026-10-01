@@ -50,6 +50,7 @@ import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState, isAgentToolName } from './mobile-native-chat-agent-run'
+import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
 /** Calls a run's body shows before a "Show N more tool calls" button. This
@@ -440,7 +441,16 @@ function ToolRunView({
             // caret, an open row, focus view) and where no chat provides the
             // sheet (a subagent's own transcript).
             if (!open && !focusView && allPairs.length >= 2 && openRunSheet) {
-              openRunSheet()
+              // Counted in the sheet's rows, not the calls: a Codex poll folds
+              // into the command it drives, so a command and its poll are one
+              // row, and a one-row sheet is the call's own sheet.
+              const rows = runSheetRows(blocks, [])
+              const only = rows.length === 1 ? rows[0]!.pair : null
+              if (only && toolPairOpensDetailSheet(only, { isTaskList: false })) {
+                setDetailPair(only)
+              } else {
+                openRunSheet()
+              }
               return
             }
             setOpen((v) => !v)

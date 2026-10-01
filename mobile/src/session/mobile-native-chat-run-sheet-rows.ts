@@ -145,6 +145,10 @@ export function runSheetRows(
   let agentIndex = 0
   for (const pair of pairToolBlocks(blocks)) {
     if (pair.call && foldsIntoCommand(pair.call.name, pair.call.input)) {
+      const command = rows.at(-1)
+      if (command) {
+        rows[rows.length - 1] = withPoll(command, pair)
+      }
       continue
     }
     const isAgentCall = pair.call !== undefined && isAgentToolName(pair.call.name)
@@ -156,4 +160,25 @@ export function runSheetRows(
     })
   }
   return rows
+}
+
+/** A poll folded into the command it drives: the command's row keeps its own
+ *  call and its detail sheet then shows the start's output and each poll's, in
+ *  order, as one result that is an error when any of them was. Folded away
+ *  whole, a failed poll left a row that said the command went fine. */
+function withPoll(row: RunSheetRow, poll: NativeChatToolPair): RunSheetRow {
+  const pollFailed = toolDetailStatus(poll) === 'Failed'
+  const outputs = [row.pair.result?.output, poll.result?.output].filter(
+    (text): text is string => text !== undefined && text.length > 0
+  )
+  const isError = row.pair.result?.isError === true || poll.result?.isError === true
+  const result =
+    row.pair.result || poll.result
+      ? { ...(row.pair.result ?? poll.result!), output: outputs.join('\n\n'), isError }
+      : undefined
+  return {
+    ...row,
+    failed: row.failed || pollFailed,
+    pair: { ...row.pair, ...(result ? { result } : {}) }
+  }
 }

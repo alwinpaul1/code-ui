@@ -102,6 +102,35 @@ describe('the verbs for every kind of call', () => {
     expect(rows[0]!.kind).toBe('command')
   })
 
+  // Review of feat/tool-run-sheet: the poll folded away, and with it its failure.
+  const POLLED: NativeChatBlock[] = [
+    { type: 'tool-call', name: 'exec_command', input: { cmd: 'sleep 90' } },
+    { type: 'tool-result', output: 'Process running with session ID 7' },
+    { type: 'tool-call', name: 'write_stdin', input: { session_id: 7, chars: '' } },
+    { type: 'tool-result', output: 'Process exited with code 1', isError: true }
+  ]
+
+  it('marks a command failed when the poll folded into it failed', () => {
+    const rows = rowsOf(POLLED)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.failed).toBe(true)
+  })
+
+  it("keeps the folded poll's output and failure reachable from the command's own pair", () => {
+    const pair = rowsOf(POLLED)[0]!.pair
+    expect(pair.call?.name).toBe('exec_command')
+    expect(pair.result?.isError).toBe(true)
+    expect(pair.result?.output).toContain('Process running with session ID 7')
+    expect(pair.result?.output).toContain('Process exited with code 1')
+  })
+
+  it('leaves a command whose polls all succeeded as it was, and unmarked', () => {
+    const ok = POLLED.slice(0, 3).concat({ type: 'tool-result', output: 'done' })
+    const row = rowsOf(ok)[0]!
+    expect(row.failed).toBe(false)
+    expect(row.pair.result?.isError).toBeFalsy()
+  })
+
   it('draws a Codex code-mode cell, and folds the poll of the command it started', () => {
     const rows = rowsOf([
       ...call('exec', CODE_MODE_START),

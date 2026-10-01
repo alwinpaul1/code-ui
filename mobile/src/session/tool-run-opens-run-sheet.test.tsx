@@ -120,6 +120,22 @@ describe('tapping the header of a run of several calls', () => {
     expect(openRun).toHaveBeenCalledTimes(1)
   })
 
+  // exec_command and its poll are two calls but one row of the sheet.
+  it('opens the command\'s detail, not a one-row sheet, for a Codex command and its failed poll', () => {
+    const openRun = vi.fn()
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'exec_command', input: { cmd: 'sleep 90' } },
+      { type: 'tool-result', output: 'Process running with session ID 7' },
+      { type: 'tool-call', name: 'write_stdin', input: { session_id: 7, chars: '' } },
+      { type: 'tool-result', output: 'Process exited with code 1', isError: true }
+    ]
+    const tree = render({ blocks, openRun })
+    act(() => header(tree).props.onPress())
+    expect(openRun).not.toHaveBeenCalled()
+    expect(detailPair(tree)?.call?.name).toBe('exec_command')
+    expect(detailPair(tree)?.result?.output).toContain('Process exited with code 1')
+  })
+
   it('opens the detail sheet straight from a one-call header, as before', () => {
     const openRun = vi.fn()
     const tree = render({ blocks: SINGLE_BASH, openRun })
