@@ -41,3 +41,39 @@ export const TICK_PROMPT = [...TICK_LINES, '', ...Array.from({ length: 13 }, (_,
 
 /** The tool call that set the loop up, as the phone's transcript read draws it. */
 export const CRON_CREATE_INPUT = { cron: '*/3 * * * *', recurring: true, prompt: TICK_PROMPT }
+
+/** The two rows a tick writes, with the field names and order read from
+ *  session 76ba8f2f (rows 36098 and 36099), compact JSON as Claude Code
+ *  writes it. The system row's `prompt` is the first 200 characters, cut
+ *  with no mark. */
+export function tickRows(prompt: string = TICK_PROMPT): string[] {
+  const fire = {
+    parentUuid: '814f7e30-6c7d-41b8-b81a-6c46843c1f51',
+    isSidechain: false,
+    type: 'system',
+    subtype: 'scheduled_task_fire',
+    content: 'Running scheduled task (Oct 1 4:21am)',
+    isMeta: false,
+    timestamp: '2026-10-01T02:21:49.587Z',
+    uuid: '56252db0-3009-42e7-853d-62f274c7e204',
+    taskId: '8b72dbfd',
+    cron: '*/3 * * * *',
+    prompt: prompt.slice(0, 200),
+    userType: 'external'
+  }
+  const user = {
+    parentUuid: fire.uuid,
+    isSidechain: false,
+    promptId: '59f9f05d-3edb-4e38-85b5-8e6236525cf8',
+    type: 'user',
+    message: { role: 'user', content: prompt },
+    isMeta: true,
+    uuid: '93976243-587f-4f75-8231-8a3e5fbb03d3',
+    timestamp: '2026-10-01T02:21:49.608Z',
+    promptSource: 'system',
+    scheduledTaskId: '8b72dbfd',
+    scheduledFireId: fire.uuid,
+    turnOrigin: 'scheduled'
+  }
+  return [JSON.stringify(fire), JSON.stringify(user)]
+}

@@ -133,3 +133,23 @@ describe('a status copy the field cut, and the hook copy of the same message', (
   })
 })
 
+
+// The prompt hook marks a loop's tick (`sc=1`); the tab status cannot. Its
+// copy of the tick takes the twin's mark, or the chat drew the status copy
+// as the user's bubble while dropping the beacon copy (2026-10-01).
+describe("a loop tick's two copies", () => {
+  const words = 'READ-ONLY WATCH of the build host (3-minute tick)'
+  it('keeps the hook’s mark on the status copy that stands for both', () => {
+    const merged = mergeDesktopPrompts(
+      [{ nonce: 'status:tab:1:0', text: words, at: 1 }],
+      [{ nonce: '41', text: words, scheduled: true }]
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0]).toMatchObject({ nonce: 'status:tab:1:0', scheduled: true })
+  })
+
+  it('marks no status copy whose twin was not marked', () => {
+    const merged = mergeDesktopPrompts([{ nonce: 'status:tab:1:0', text: words, at: 1 }], [{ nonce: '41', text: words }])
+    expect(merged[0]?.scheduled).toBeUndefined()
+  })
+})

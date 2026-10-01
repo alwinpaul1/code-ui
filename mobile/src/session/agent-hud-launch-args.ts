@@ -616,6 +616,18 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // backslashes, which Git Bash cannot open; slashes work on every platform.
   '[ -n "$tp" ] && tp=$(printf %s "$tp" | tr "\\\\\\\\" /)',
   '[ -n "$tp" ] && [ -r "$tp" ] && at=$(tail -c 1048576 "$tp" 2>/dev/null | grep -E "\\"type\\":\\"(user|assistant)\\"" 2>/dev/null | grep -E "\\"role\\":\\"user\\",\\"content\\":\\"|\\"type\\":\\"(text|image)\\"" 2>/dev/null | grep -v -E "\\"type\\":\\"(tool_use|tool_result|thinking)\\"" 2>/dev/null | tail -n 1 | grep -o "\\"uuid\\":\\"[0-9a-fA-F-]*\\"" 2>/dev/null | head -n 1 | sed -e "s/.*\\"uuid\\":\\"//" -e "s/\\"$//")',
+  // `sc=1`: this prompt is a loop's tick, not something typed. Claude Code
+  // fires a CronCreate prompt through this same hook with nothing in the
+  // payload that says so (2.1.286), and the chat drew every tick as a user
+  // bubble (2026-10-01). Just before it enqueues the prompt it writes a
+  // `"subtype":"scheduled_task_fire"` row whose `prompt` is the tick's first
+  // 200 characters, uncut-marked; a row like that among the last eight lines
+  // that starts this very prompt (escaped as both are) is the mark. Compared
+  // with the copy cut at 2,000 bytes, which holds any 200 characters' escaping.
+  // Quoted in the `case`, so a `*` or `[` in the words is a character, not a
+  // pattern. A write that lands after this read leaves no mark, never a wrong one.
+  'sp=""; sc=""',
+  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); [ -n "$sp" ] && case "$pr" in "$sp"*) sc=" sc=1";; esac',
   // `sid`, ahead of `up=`: the session this prompt was typed into, so a later
   // session in the same terminal does not echo it (see the status line).
   'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
@@ -628,7 +640,7 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // (reported 2026-09-29). A `date` that cannot say `%s` sends no time.
   'ts=$(date +%s 2>/dev/null)',
   'case "$ts" in ""|*[!0-9]*) ts="";; esac',
-  'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct${at:+ at=$at}${ts:+ ts=$ts}"',
+  'o="CUIHUD1 agent=claude${si:+ sid=$si} up=$$:$(q "$pr")$ct$sc${at:+ at=$at}${ts:+ ts=$ts}"',
   '[ -z "$pr" ] && exit 0',
   ...AGENT_HUD_TTY_WRITE,
   // Claude Code treats ANY stdout from a UserPromptSubmit hook as context,

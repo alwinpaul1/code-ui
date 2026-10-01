@@ -774,6 +774,36 @@ hook's copies (a Codex tab, a Windows host, a Claude tab launched without the
 hook, a submission made while the phone did not listen to the terminal) each
 case behaves as before, and the tests pin those limits.
 
+### Beacon field `sc` (a loop's tick, 2026-10-01)
+
+A recurring loop (`CronCreate`) fires its prompt through `UserPromptSubmit`
+like a typed one: Claude Code 2.1.286 builds that payload as the common fields
+plus `prompt` and `session_title`, nothing that says it was scheduled. Orca's
+decoder draws nothing for the tick's own row (an `isMeta` user row,
+`turnOrigin: "scheduled"`), so the status copy and the hook copy drew every
+tick as a user bubble, cut at 200, every three minutes; the Claude app draws
+none (reported 2026-10-01).
+
+Just before Claude Code enqueues the tick it writes a `system` row,
+`"subtype":"scheduled_task_fire"`, whose `prompt` is the tick's first 200
+characters, cut with no mark (session 76ba8f2f, rows 36098 and 36099). The
+prompt hook looks at the transcript's last eight lines for such a row whose
+`prompt`, escaped as the hook's own copy is, starts this very prompt, and
+sends `sc=1` when it finds one. The comparison is a quoted `case`, so a `*`
+or `[` in the words is a character. The phone drops a marked copy, and the
+status copy that stands for it takes the mark in the merge
+(`scheduled-prompt-ticks.ts`, `desktop-prompt-merge.ts`).
+
+Verified against 2.1.286's row order in a real transcript, not a live run:
+if the row is written after the hook reads, there is no mark, never a wrong
+one, and the chat falls back to matching the words against the loop's
+`CronCreate` or `ScheduleWakeup` call in the loaded transcript. A tab launched
+before this flag, or one launched without the hook, has only that fallback.
+No mark proves a copy was typed: a tick that fires mid-turn can have a tool row
+written between its `system` row and the hook, and the words alone cannot tell
+a typed copy of a loop's prompt from a tick, so such a copy is drawn only when
+its own transcript row lands.
+
 ## Windows (2026-09-10): what actually reaches the phone, and how
 
 An earlier version of this section claimed the sh script's MSYS branch reached

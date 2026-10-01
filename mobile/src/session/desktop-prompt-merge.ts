@@ -50,9 +50,12 @@ export function mergeDesktopPrompts(
       return copy
     }
     const hookTwin = { nonce: twin.nonce, ...(twin.anchorId ? { anchorId: twin.anchorId } : {}), ...(twin.seenAt !== undefined ? { seenAt: twin.seenAt } : {}) }
+    // The hook's mark of a loop tick (`sc=1`), which the status cannot carry:
+    // the status copy stands for both, and drew the tick (2026-10-01).
+    const tick = twin.scheduled === true ? { scheduled: true as const } : {}
     return copy.cut === true && twin.text.length > copy.text.length
-      ? { ...copy, text: twin.text, cut: twin.cut === true, hookTwin }
-      : { ...copy, hookTwin }
+      ? { ...copy, text: twin.text, cut: twin.cut === true, hookTwin, ...tick }
+      : { ...copy, hookTwin, ...tick }
   })
   // The two copies of one message are told by the status's own folding: it
   // keeps a prompt on one line and cuts it at 200 characters

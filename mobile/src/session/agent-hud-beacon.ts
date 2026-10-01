@@ -77,7 +77,7 @@ export type AgentHudBeaconLimit = {
  *  `foundAt`: on a status prompt read first after Orca's stand-in, which may
  *  have been found or watched arriving, the start of the run it came in;
  *  `standInAt`, when the phone read that stand-in, by its own clock. */
-export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
+export type DesktopPrompt = { nonce: string; text: string; cut?: boolean; /** The prompt hook saw a loop fire this prompt (`sc=1`): a tick, never typed (scheduled-prompt-ticks.ts). */ scheduled?: true; anchorId?: string; at?: number; atStateStart?: true; heldBack?: true; ifHarnessStarted?: { at: number; crossings: readonly { after: number; before: number }[] }; seenAt?: number; typedAt?: number; hookTwin?: { nonce: string; anchorId?: string; seenAt?: number }; foundAt?: number; standInAt?: number }
 
 export type AgentHudBeacon = {
   agent: string
@@ -238,7 +238,7 @@ export function parseAgentHudBeaconPayload(
     runningTaskIdsAt: values.has('live') || values.has('run') ? receivedAt : null,
     ...(values.has('run') ? stopList(values.get('run'), receivedAt) : {}),
     promptHook: values.get('hk') === '1',
-    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at'), values.get('ts')),
+    desktopPrompt: readDesktopPrompt(values.get('up'), values.get('cut') === '1', values.get('at'), values.get('ts'), values.get('sc') === '1'),
     desktopPrompts: [],
     launchedTaskIds: (values.get('bg') ?? '')
       .split(',')

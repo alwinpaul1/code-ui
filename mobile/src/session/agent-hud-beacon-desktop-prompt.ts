@@ -25,7 +25,9 @@ export function readDesktopPrompt(
   raw: string | undefined,
   cutByHook: boolean,
   anchorRaw?: string,
-  typedRaw?: string
+  typedRaw?: string,
+  /** `sc=1`: the hook saw a loop fire this prompt (agent-hud-launch-args.ts). */
+  scheduled = false
 ): DesktopPrompt | null {
   if (!raw) {
     return null
@@ -48,7 +50,14 @@ export function readDesktopPrompt(
   if (text.length === 0) {
     return null
   }
-  return { nonce, text, cut: cutByHook, ...(anchorId ? { anchorId } : {}), ...(typedAt !== undefined ? { typedAt } : {}) }
+  return {
+    nonce,
+    text,
+    cut: cutByHook,
+    ...(anchorId ? { anchorId } : {}),
+    ...(typedAt !== undefined ? { typedAt } : {}),
+    ...(scheduled ? { scheduled: true as const } : {})
+  }
 }
 
 /** A cut body less what the cut left half-written. The hook cuts the JSON

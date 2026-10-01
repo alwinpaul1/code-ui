@@ -17,8 +17,12 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
  * like a typed prompt, and the chat drew it as a user bubble every three
  * minutes (reported 2026-10-01).
  *
- * The phone knows a session's scheduled prompts from the tool calls that set
- * them up, which its transcript read does draw. A desk copy of one of those
+ * A copy the prompt hook marked (`scheduled`, `sc=1`) is a tick: the hook saw
+ * the transcript's `scheduled_task_fire` row for these very words
+ * (agent-hud-launch-args.ts). That covers tabs launched with the hook.
+ *
+ * Otherwise the phone knows a session's scheduled prompts from the tool calls
+ * that set them up, which its transcript read does draw. A desk copy of one of those
  * words is a tick: the same words, or, where one side was cut (the status at
  * 200 characters, the hook at its own length, the wire at 4,000), the cut one
  * a prefix of the other. Compared folded to single spaces, since the status
@@ -44,6 +48,9 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
 const SCHEDULING_TOOLS: ReadonlySet<string> = new Set(['CronCreate', 'ScheduleWakeup'])
 
 type ScheduledPrompt = { words: string; cut: boolean; messageId: string; tool: string }
+
+/** What a copy the hook marked was scheduled by, for the log. */
+const MARKED_BY_HOOK: ScheduledPrompt = { words: '', cut: false, messageId: '', tool: '' }
 
 function folded(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
@@ -99,14 +106,15 @@ type Ticks = {
 const NO_TICKS: Ticks['ticks'] = []
 
 function splitTicks(prompts: readonly DesktopPrompt[], messages: readonly NativeChatMessage[]): Ticks {
+  const marked = prompts.some((prompt) => prompt.scheduled === true)
   const scheduled = prompts.length === 0 ? [] : scheduledPrompts(messages)
-  if (scheduled.length === 0) {
+  if (scheduled.length === 0 && !marked) {
     return { kept: prompts, ticks: NO_TICKS }
   }
   const kept: DesktopPrompt[] = []
   const ticks: { prompt: DesktopPrompt; scheduledBy: ScheduledPrompt }[] = []
   for (const prompt of prompts) {
-    const scheduledBy = tickOf(prompt, scheduled)
+    const scheduledBy = prompt.scheduled === true ? MARKED_BY_HOOK : tickOf(prompt, scheduled)
     if (scheduledBy === null) {
       kept.push(prompt)
     } else {
@@ -148,8 +156,12 @@ export function useWithoutScheduledTicks(
         logged.clear()
       }
       logged.add(prompt.nonce)
+      const why =
+        scheduledBy === MARKED_BY_HOOK
+          ? 'the prompt hook saw a loop fire it'
+          : `it is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}`
       console.info(
-        `[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}" is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}, fired by the loop`
+        `[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}": ${why}`
       )
     }
   }, [ticks])

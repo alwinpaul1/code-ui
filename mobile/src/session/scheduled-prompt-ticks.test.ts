@@ -78,6 +78,15 @@ describe('a loop tick reported as a desk prompt', () => {
     expect(kept([statusCopy('ls the folder')], [codexRun, typed('ls the folder')])).toEqual(['ls the folder'])
   })
 
+  // The prompt hook marks a tick it saw the loop fire (`sc=1`,
+  // agent-hud-prompt-hook-scheduled.test.ts): dropped with no CronCreate in
+  // view, a loop set up on a page the chat never loaded.
+  it('is no bubble when the hook marked it, with no loop call loaded', () => {
+    const marked: DesktopPrompt = { ...statusCopy(TICK_PROMPT), scheduled: true }
+    expect(kept([marked, statusCopy('Now look at the logs')], [typed('earlier')])).toEqual(['Now look at the logs'])
+    expect(kept([marked], [])).toEqual([])
+  })
+
   describe('at the degenerate sizes', () => {
     it('hands back the same list when nothing is scheduled', () => {
       const prompts = [statusCopy('a'), beaconCopy('b')]
