@@ -153,6 +153,10 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
     const { tree } = render({ rows: runSheetRows(failed, []) })
     const marks = tree.root.findAll((node) => node.props.testID === 'run-sheet-row-failed' && String(node.type) === 'Text')
     expect(marks).toHaveLength(1)
+    // A screen reader hears the row's label, not its children.
+    const labels = rowNodes(tree).map((node) => String(node.props.accessibilityLabel))
+    expect(labels.filter((label) => label.includes('Failed'))).toEqual([expect.stringContaining('Ran Cancel our two')])
+    expect(labels.filter((label) => !label.includes('Failed'))).toHaveLength(4)
     expect(colorsOf(tree)).toContain(lightColors.danger)
   })
 

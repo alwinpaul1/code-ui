@@ -275,7 +275,7 @@ function ToolRunView({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={runningAgent ? 'Running agent' : undefined}
+          accessibilityLabel={runningAgent ? runningAgentLabel(failedCallCount, diffStat) : undefined}
           accessibilityLiveRegion={runningAgent ? 'polite' : undefined}
         >
           {runningAgent ? (
@@ -354,4 +354,20 @@ function ToolRunView({
       </View>
     )
   }
+}
+
+const lines = (n: number): string => `${n} line${n === 1 ? '' : 's'}`
+
+/** What a screen reader hears for the Running agent row. The label stands in for
+ *  the row's children, so what the row also shows (the failure count and the
+ *  "+A −R" pill) is said in it. */
+function runningAgentLabel(failedCallCount: number, diffStat: { added: number; removed: number } | null): string {
+  const parts = ['Running agent']
+  if (failedCallCount > 0) {
+    parts.push(`${failedCallCount} failed`)
+  }
+  if (diffStat) {
+    parts.push(`${lines(diffStat.added)} added`, `${lines(diffStat.removed)} removed`)
+  }
+  return parts.join(', ')
 }

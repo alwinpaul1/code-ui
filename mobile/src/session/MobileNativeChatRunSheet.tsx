@@ -110,7 +110,7 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={row.detail ? `${row.verb} ${row.detail}` : row.verb}
+      accessibilityLabel={`${row.detail ? `${row.verb} ${row.detail}` : row.verb}${row.failed ? '. Failed' : ''}`}
       accessibilityHint={row.agentId ? 'Shows what this agent did' : 'Shows this call'}
       testID="run-sheet-row"
       onPress={onPress}

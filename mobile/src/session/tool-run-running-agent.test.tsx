@@ -192,6 +192,23 @@ describe('a mixed run whose background agent is still running', () => {
     expect(headerText(tree)).toBe('Running agent1 failed')
   })
 
+  // Review of feat/tool-run-sheet: the row's accessibilityLabel replaces its
+  // children for a screen reader, which dropped the failure and the chip.
+  it('announces the failure and the line count, not only Running agent', () => {
+    const blocks = mixedRunWithBackgroundAgent()
+    const at = blocks.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')
+    blocks[at] = { type: 'tool-result', output: 'ssh: timed out', isError: true }
+    blocks.push(
+      { type: 'tool-call', name: 'Write', input: { file_path: '/repo/NEW.md', content: 'x\ny\n' } },
+      { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
+    )
+    const tree = render({ blocks, agentRuns: RUNNING })
+    const label = String(tree.root.findByProps({ testID: 'tool-run-header' }).props.accessibilityLabel)
+    expect(label).toContain('Running agent')
+    expect(label).toContain('1 failed')
+    expect(label).toContain('2 lines added')
+  })
+
   it('says only the count in focus view, where the row never names what ran', () => {
     const tree = render({ blocks: mixedRunWithBackgroundAgent(), focusView: true, agentRuns: RUNNING })
     expect(headerText(tree)).toBe('5 tool calls')
