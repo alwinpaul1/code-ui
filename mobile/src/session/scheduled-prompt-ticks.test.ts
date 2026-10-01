@@ -87,6 +87,52 @@ describe('a loop tick reported as a desk prompt', () => {
     expect(kept([marked], [])).toEqual([])
   })
 
+  // A sentinel loop stores `<<autonomous-loop>>` and its kin as its prompt;
+  // Claude Code resolves it into other words when the tick fires (2.1.286,
+  // resolveLoopDefaultFire), and the desk copy carries those words.
+  describe('a sentinel loop’s tick, whose words are not the call’s', () => {
+    const sentinelCall = (prompt: string) => call('CronCreate', { cron: '*/5 * * * *', recurring: true, prompt })
+    const autonomous = '# Autonomous loop tick\nRun the autonomous check and report in one line.'
+    const dynamic = '# Autonomous loop tick (dynamic pacing)\nRun the check, then pick the next delay.'
+    const firstDelivery = '# Autonomous loop check\nYou are in a loop. Each tick runs the check below.'
+    const loopMd = '# /loop tick — loop.md tasks\nWork through the tasks below and report.'
+    const configured = 'The user configured a loop-tasks file. Work through the tasks defined below.'
+
+    it('drops a resolved autonomous tick when a sentinel CronCreate is loaded', () => {
+      const loaded = [sentinelCall('<<autonomous-loop>>')]
+      expect(kept([statusCopy(autonomous)], loaded)).toEqual([])
+      expect(kept([beaconCopy(autonomous)], loaded)).toEqual([])
+      expect(kept([statusCopy(firstDelivery)], loaded)).toEqual([])
+    })
+
+    it('drops the dynamic pacing tick, and the loop.md ones, for their own sentinels', () => {
+      expect(kept([beaconCopy(dynamic)], [sentinelCall('<<autonomous-loop-dynamic>>')])).toEqual([])
+      expect(kept([beaconCopy(loopMd)], [sentinelCall('<<loop.md>>')])).toEqual([])
+      expect(kept([beaconCopy(configured)], [sentinelCall('<<loop.md-dynamic>>')])).toEqual([])
+    })
+
+    it('keeps a typed “# Autonomous loop tick” when no sentinel loop is known', () => {
+      expect(kept([beaconCopy(autonomous)], [])).toHaveLength(1)
+      expect(kept([beaconCopy(autonomous)], [typed('earlier')])).toHaveLength(1)
+      expect(kept([beaconCopy(autonomous)], [cron])).toHaveLength(1)
+    })
+
+    it('keeps an autonomous tick’s words when the only sentinel loop is a loop.md one', () => {
+      expect(kept([beaconCopy(autonomous)], [sentinelCall('<<loop.md>>')])).toHaveLength(1)
+      expect(kept([beaconCopy(loopMd)], [sentinelCall('<<autonomous-loop>>')])).toHaveLength(1)
+    })
+
+    it('keeps other prompts beside a sentinel loop, and does not take its call’s own words for a tick', () => {
+      const loaded = [sentinelCall('<<autonomous-loop>>')]
+      expect(kept([statusCopy('Now look at the logs')], loaded)).toEqual(['Now look at the logs'])
+      expect(kept([beaconCopy('# Autonomous')], loaded)).toHaveLength(1)
+    })
+
+    it('keeps the words on a Codex tab, whose rows hold no CronCreate', () => {
+      expect(kept([beaconCopy(autonomous)], [call('exec_command', { cmd: 'ls' }), typed('ls')])).toHaveLength(1)
+    })
+  })
+
   describe('at the degenerate sizes', () => {
     it('hands back the same list when nothing is scheduled', () => {
       const prompts = [statusCopy('a'), beaconCopy('b')]

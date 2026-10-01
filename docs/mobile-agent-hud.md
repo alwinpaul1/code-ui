@@ -807,6 +807,31 @@ written between its `system` row and the hook, and the words alone cannot tell
 a typed copy of a loop's prompt from a tick, so such a copy is drawn only when
 its own transcript row lands.
 
+**Sentinel loops (`/loop` with no prompt, loop.md).** The task's stored prompt
+is `<<autonomous-loop>>`, `<<autonomous-loop-dynamic>>`, `<<loop.md>>` or
+`<<loop.md-dynamic>>`. The fire handler writes its row from the stored prompt
+(`mon` cuts `task.prompt`), so the fire row and the `CronCreate` call hold the
+sentinel, while the turn holds what `resolveLoopDefaultFire` makes of it at fire
+time (`# Autonomous loop tick…`, `# Autonomous loop tick (dynamic pacing)…`,
+`# /loop tick — loop.md tasks…`; the first delivery is prefixed with
+`# Autonomous loop check` or `The user configured a loop-tasks file.`; all read
+from the 2.1.286 binary, none from a captured transcript). Two rules cover it:
+
+- The hook sends `sc=1` whatever the prompt is when the transcript's LAST line
+  is a fire row whose `prompt` is exactly one of the four sentinels. Only the
+  last line: with no words to compare, a wider window would mark every prompt
+  typed within it after a sentinel tick, and the tick's own user row is written
+  after the hook, so nothing in the tail tells the two apart. A tick that fires
+  mid-turn has tool rows after its fire row and goes unmarked.
+- The phone (`scheduled-loop-sentinels.ts`): when a loaded or remembered call's
+  prompt is a sentinel, a desk copy that opens as that sentinel's resolved words
+  do is a tick. A mid-turn sentinel tick falls to this rule. Words a person
+  types that open exactly so, while a sentinel loop is known, lose their bubble
+  until their own row lands.
+
+Not seen in a payload: that the hook receives the RESOLVED words is inferred
+from these ticks drawing past a loaded call, not read from a hook payload.
+
 ## Windows (2026-09-10): what actually reaches the phone, and how
 
 An earlier version of this section claimed the sh script's MSYS branch reached

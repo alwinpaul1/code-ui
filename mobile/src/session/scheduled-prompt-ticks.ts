@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
+import { resolvesFromSentinel } from './scheduled-loop-sentinels'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import {
   rememberScheduledPrompts,
@@ -37,10 +38,15 @@ import {
  * so a loop whose call has since scrolled out of the loaded pages, or was
  * there before a relaunch, still matches.
  *
+ * A sentinel loop (`<<autonomous-loop>>`, `<<loop.md>>` and their dynamic
+ * forms) schedules the sentinel, which Claude Code resolves into other words
+ * when the tick fires, so its call and its tick share no words; a desk copy
+ * that opens as the resolved words do (scheduled-loop-sentinels.ts) is a tick
+ * of such a loop, loaded or remembered.
+ *
  * What it cannot see, on a tab launched without the hook: a loop whose call
- * this phone never loaded (set up while it was away, or before a resume), and the
- * `<<autonomous-loop…>>` sentinels, which Claude Code resolves into other
- * words when the tick fires. A tick of those still draws.
+ * this phone never loaded (set up while it was away, or before a resume). A
+ * tick of that still draws.
  *
  * What it costs: words a person types that are exactly a loaded loop's
  * prompt lose their bubble until their own transcript row lands, which draws
@@ -100,7 +106,10 @@ function tickOf(prompt: DesktopPrompt, scheduled: readonly ScheduledPrompt[]): S
       (entry) =>
         entry.words === words ||
         (prompt.cut === true && entry.words.startsWith(words)) ||
-        (entry.cut && words.startsWith(entry.words))
+        (entry.cut && words.startsWith(entry.words)) ||
+        // A sentinel loop's call holds the sentinel, its tick the words it
+        // resolves to (scheduled-loop-sentinels.ts).
+        resolvesFromSentinel(entry.words, words)
     ) ?? null
   )
 }

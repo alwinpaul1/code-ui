@@ -92,6 +92,51 @@ describe('the prompt hook on a loop tick', () => {
     expect(runHook(`${wide.slice(0, 199)}`, tickRows(wide))).not.toContain('sc=')
   })
 
+  // A sentinel loop (`/loop` with no prompt, or a loop.md) stores `<<autonomous-loop>>`
+  // and its kin as the task's prompt, so the fire row holds the sentinel, never
+  // the words Claude Code resolves it into at fire time and hands the hook
+  // (2.1.286, read from its fire handler, not seen in a payload). With no words
+  // to compare, only a fire row that is the transcript's LAST line marks: the
+  // tick's own user row is written after the hook, so a wider window would mark
+  // every prompt typed within it after a sentinel tick.
+  describe('on a tick whose fire row holds a sentinel', () => {
+    const resolved = '# Autonomous loop tick\nRun the autonomous check and report in one line.'
+    const SENTINELS = ['<<autonomous-loop>>', '<<autonomous-loop-dynamic>>', '<<loop.md>>', '<<loop.md-dynamic>>']
+
+    it.each(SENTINELS)('marks a tick whose fire row holds the sentinel %s, not the words', (sentinel) => {
+      const beacon = runHook(resolved, [reply, tickRows(sentinel)[0]!])
+      expect(beacon).toContain(' sc=1')
+      expect(parseAgentHudBeaconPayload(beacon)?.desktopPrompt).toMatchObject({ scheduled: true })
+    })
+
+    it('marks a first delivery that opens with the preamble, whatever its words', () => {
+      expect(runHook('# Autonomous loop check\nYou are in a loop.', [reply, tickRows('<<autonomous-loop>>')[0]!])).toContain(' sc=1')
+    })
+
+    it('leaves a prompt typed three lines after a sentinel fire unmarked', () => {
+      const beacon = runHook('Stop the watch now', [tickRows('<<autonomous-loop>>')[0]!, toolRow, toolRow, toolRow])
+      expect(beacon).not.toContain('sc=1')
+    })
+
+    it('leaves a prompt typed after the tick’s own rows unmarked', () => {
+      expect(runHook('Stop the watch now', [reply, ...tickRows('<<autonomous-loop>>'), reply])).not.toContain('sc=1')
+    })
+
+    it('does not take a near-sentinel for one', () => {
+      for (const prompt of ['<<autonomous-loop>> now', '<<autonomous>>', 'autonomous-loop', '<<loop.md-weekly>>']) {
+        expect(runHook('Stop the watch now', [reply, tickRows(prompt)[0]!])).not.toContain('sc=1')
+      }
+    })
+
+    it('marks nothing without a readable transcript', () => {
+      expect(runHook(resolved, null)).not.toContain('sc=1')
+    })
+
+    it('reads a sentinel row of an empty transcript as nothing', () => {
+      expect(runHook(resolved, [''])).not.toContain('sc=1')
+    })
+  })
+
   describe('when the transcript cannot say', () => {
     it('does not mark a prompt with no transcript, or an unreadable one', () => {
       expect(runHook(TICK_PROMPT, null)).not.toContain('sc=')
