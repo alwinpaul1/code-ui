@@ -139,8 +139,9 @@ export function useTerminalLivePendingInputFlush<TTabType extends string>({
       }
 
       // Why several: a long erase run read as one chunk is pasted rather than
-      // applied. See AGENT_TUI_MAX_KEY_WRITE_BYTES; the common edit is still
-      // one write.
+      // applied (the limit is per stdin READ and writes coalesce, so this only
+      // narrows the chance). See AGENT_TUI_MAX_KEY_WRITE_BYTES; the common edit
+      // is still one write.
       const payloadWrites = buildTerminalLiveMirrorWrites(step)
       if (payloadWrites.length === 0) {
         return waitForPendingLiveInputFlush()

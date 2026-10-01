@@ -9,6 +9,8 @@ describe('mirroring an edit that deletes a lot of a long draft', () => {
     // 2.1.266 read 63 control bytes as keys and 64 as pasted text. A long
     // erase run went out as one write, so the deletes were inserted instead
     // of applied and the draft the agent held stopped matching the phone's.
+    // (The bound is per stdin READ and writes coalesce; see
+    // agent-tui-clear-write-chunks.ts. 2.1.287 reads every DEL as its own key.)
     const writes = buildTerminalLiveMirrorWrites({
       eraseCount: 200,
       appendText: 'the replacement text',

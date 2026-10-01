@@ -11,7 +11,9 @@ describe('clearing an agent input that holds a long draft', () => {
     // One write of 63 Ctrl+U cleared the composer; 64 did nothing at all, and
     // on the phone those bytes landed inside the submitted message: the
     // transcript received the text, then 37 literal kill-line bytes and 37
-    // literal kill-to-end bytes, then the text again.
+    // literal kill-to-end bytes, then the text again. (The bound is per stdin
+    // READ, not per write: see agent-tui-clear-write-chunks.ts. This pins the
+    // split for the callers that still use it, not that it is enough.)
     const draft = 'When i open the codeui app'.repeat(16)
     const clearInput = buildMobileNativeChatClearInputForText(draft)
     expect(clearInput.length).toBeGreaterThanOrEqual(AGENT_TUI_MAX_KEY_WRITE_BYTES)

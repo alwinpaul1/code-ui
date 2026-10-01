@@ -166,9 +166,13 @@ export async function clearMobileNativeChatInput(args: {
     return false
   }
   try {
-    // Why several writes: an agent reads a big enough chunk as pasted text, not
-    // as keys, and a long draft needs a burst past that bound. See
-    // AGENT_TUI_MAX_KEY_WRITE_BYTES — measured, not guessed.
+    // Why several writes: Claude Code reads a control byte as a key only in a
+    // stdin READ under 64 bytes. The limit is per READ and writes made back to
+    // back coalesce into one, so cutting a long burst up only narrows the chance
+    // (AGENT_TUI_MAX_KEY_WRITE_BYTES). Claude's own send does not come this way:
+    // it sends one write sized from the screen and reads back
+    // (mobile-native-chat-verified-clear.ts). This is the Codex send's clear and
+    // the stale-input heal's, which cannot read a Claude composer.
     for (const text of splitAgentTuiClearWrites(args.clearInput)) {
       const remainingMs =
         args.deadline === undefined ? MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS : args.deadline - Date.now()

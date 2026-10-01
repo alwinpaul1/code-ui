@@ -13,6 +13,16 @@ import {
 } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 
+// These cases script the host's replies to each WRITE in order, so the looks a
+// Claude send takes at the screen are mocked away (they would take a scripted
+// reply of their own): the clear goes out unverified and the body is called
+// sent. The looks are driven against a stand-in Claude input in
+// native-chat-send-verified-clear.test.ts.
+vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: () => Promise.resolve(null) }))
+vi.mock('./mobile-native-chat-submit-verify', () => ({
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+}))
+
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
 
 function reply(accepted: boolean) {

@@ -357,7 +357,7 @@ export function useMobileNativeChatController(
     holdUnconfirmedSend,
     onSendError,
     beforeSend: settleDraftMirrorBeforeSend,
-    onCommandDispatched: peekTerminalForDispatchedCommand
+    onCommandDispatched: peekTerminalForDispatchedCommand, promptReceipts: tailPrompts
   })
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({

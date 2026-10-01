@@ -12,6 +12,15 @@ vi.mock('../transport/mobile-relay-e2ee-link', async (importOriginal) => ({
   MobileRelayE2eeLink: (await import('../transport/relay-desktop-fake-link')).FakeRelayLink
 }))
 
+// The desktop on the far end of this relay does not draw a Claude input, so the
+// looks a Claude send takes at it are mocked away (the clear goes out unverified,
+// the body is called sent). They are driven against a stand-in Claude input in
+// native-chat-send-verified-clear.test.ts.
+vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: () => Promise.resolve(null) }))
+vi.mock('./mobile-native-chat-submit-verify', () => ({
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+}))
+
 import {
   fakeRelayCell,
   fakeRelayLinks,

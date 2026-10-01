@@ -163,9 +163,11 @@ export async function clearInput(
   for (let attempt = 0; remaining && attempt < 12 && Date.now() < clearBy; attempt++) {
     // Over-killing an empty composer is a no-op, but another pass is a whole
     // relay round trip, so send enough kills to finish in one.
-    // Capped so one write stays under the size an agent reads as pasted text
-    // rather than as keys (AGENT_TUI_MAX_KEY_WRITE_BYTES, measured). The loop
-    // above already sends another pass, and confirms the input between them.
+    // Capped so one write stays under the size Claude Code reads as pasted text
+    // rather than as keys (AGENT_TUI_MAX_KEY_WRITE_BYTES: the limit is per stdin
+    // READ, and this loop reads the screen between passes, which also keeps one
+    // pass out of the previous one's read). The loop above already sends another
+    // pass, and confirms the input between them.
     const burst = '\x15\x0b'.repeat(
       Math.min(remaining.split('\n').length * 2 + 4, MAX_QUEUE_CLEAR_PAIRS_PER_WRITE)
     )

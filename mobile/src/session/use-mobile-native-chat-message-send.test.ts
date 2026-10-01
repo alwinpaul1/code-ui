@@ -22,6 +22,15 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./mobile-native-chat-stale-input')>()),
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
+// This suite's client has no screen, so the looks a Claude send takes are mocked
+// away: the clear goes out unverified and the body is called sent. The looks
+// themselves are driven against a stand-in Claude input in
+// native-chat-send-verified-clear.test.ts.
+const readScreen = vi.hoisted(() => vi.fn(() => Promise.resolve(null)))
+vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: readScreen }))
+vi.mock('./mobile-native-chat-submit-verify', () => ({
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+}))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import {
@@ -29,7 +38,10 @@ import {
   releaseMobileNativeChatTerminalWrite,
   resetMobileNativeChatTerminalWritesForTests
 } from './mobile-native-chat-terminal-write-lock'
-import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
+import {
+  buildMobileNativeChatClearInputForText,
+  buildMobileNativeChatClearInputOneRead
+} from './mobile-native-chat-input-clear'
 import { phoneTerminalSends } from './native-chat-kept-session-state'
 
 type Send = ReturnType<typeof useMobileNativeChatMessageSend>
@@ -190,21 +202,48 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(sentArgs().resolvedLaunchDraft).toEqual({ text: DRAFT, createdAt: 1 })
   })
 
-  it('clears every wrapped line of the mirrored draft, not just the last one', async () => {
+  it('clears every wrapped line of the mirrored draft in ONE read when the screen cannot be read', async () => {
     // Claude Code 2.1.266: one Ctrl+U on a wrapped input removes only the last
     // visual line. The draft mirror had typed the message onto the line, the
     // single Ctrl+U left " review … /unslop " standing, and the body was typed
     // after it — the transcript shows the message glued onto its own residue.
+    // And 2.1.287 reads a control byte as a key only in a read under 64 bytes, so
+    // the text-sized burst for this draft (66 bytes, cut into 63 + 3 and
+    // coalesced back into one read on 2026-10-01) is held to one write under 64.
     mount(() => null)
     const wrapped =
       'Ok now review my paper each section with opus and Sonnet 5 agents and fable as main orchestator and final reviewer go through each section with each agent use /unslop skill to write'
+    expect(buildMobileNativeChatClearInputForText(wrapped).length).toBeGreaterThanOrEqual(64)
     await act(async () => {
       await api!.send(wrapped)
     })
-    expect(clearArgs().clearInput).toBe(buildMobileNativeChatClearInputForText(wrapped))
-    expect(clearArgs().clearInput).not.toBe('\x15')
+    expect(clearInputWrite).toHaveBeenCalledTimes(1)
+    expect(clearArgs().clearInput).toBe(buildMobileNativeChatClearInputOneRead(wrapped))
+    expect(clearArgs().clearInput!.length).toBeLessThan(64)
+    expect(clearArgs().clearInput!.split('\x15').length - 1).toBeGreaterThan(10)
     expect(sentArgs()).not.toHaveProperty('clearInputFirst')
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  it('keeps Codex, and a tab whose agent is not known, on the text-sized burst with no screen look', async () => {
+    // The 64-byte read rule is Claude Code's (2.1.287 tokenizer). Codex's send
+    // path is unchanged: the same burst, however long, and no read of a Claude
+    // composer that Codex's screen does not have.
+    const wrapped = 'Ok now review my paper each section with opus and Sonnet 5 agents '.repeat(3)
+    for (const agent of ['codex', null]) {
+      readScreen.mockClear()
+      clearInputWrite.mockClear()
+      mount(() => null, agent)
+      await act(async () => {
+        await api!.send(wrapped)
+      })
+      expect(clearArgs().clearInput).toBe(buildMobileNativeChatClearInputForText(wrapped))
+      expect(clearArgs().clearInput!.length).toBeGreaterThanOrEqual(64)
+      expect(readScreen).not.toHaveBeenCalled()
+      act(() => {
+        renderer?.unmount()
+      })
+    }
   })
 
   it('writes the ordinary clear before the body', async () => {

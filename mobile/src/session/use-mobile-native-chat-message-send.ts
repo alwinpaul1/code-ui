@@ -1,10 +1,7 @@
-import { useCallback, type MutableRefObject } from 'react'
+import { useCallback, useRef, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import {
-  clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
-  sendMobileNativeChatMessageWithOutcome,
-  typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import type { PickDispatch, PickDispatchOptions } from './session-option-pick-failure'
@@ -17,15 +14,15 @@ import {
 } from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
-import { buildMobileNativeChatClearInputForText } from './mobile-native-chat-input-clear'
-import {
-  clearMobileNativeChatInputResidue,
-  mobileNativeChatInputResidue
-} from './mobile-native-chat-stale-input'
+import { mobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
 import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
 import { notePhoneTerminalSend } from './native-chat-kept-session-state'
+import { writeChatSend } from './mobile-native-chat-send-write'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
+
+const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
 
 
 export type MobileNativeChatMessageSend = {
@@ -83,6 +80,9 @@ export function useMobileNativeChatMessageSend(args: {
   /** The look at the screen before an answer or a pick types (the screen read
    *  by default; mobile-native-chat-dialog-guard.ts). */
   refuseUnderDialog?: typeof readSendUnderDialogRefusal
+  /** The agent's own prompt copies (the hook beacon's `up=`). A copy that
+   *  carries a send's words proves Claude took it. */
+  promptReceipts?: readonly BeaconPromptReceipt[]
 }): MobileNativeChatMessageSend {
   const {
     client,
@@ -100,8 +100,12 @@ export function useMobileNativeChatMessageSend(args: {
     onSendError,
     beforeSend,
     onCommandDispatched,
-    refuseUnderDialog = readSendUnderDialogRefusal
+    refuseUnderDialog = readSendUnderDialogRefusal,
+    promptReceipts = NO_RECEIPTS
   } = args
+  // Read when the send verifies, not as of the render it began in.
+  const promptReceiptsRef = useRef(promptReceipts)
+  promptReceiptsRef.current = promptReceipts
   const sendGate = useMobileNativeChatSendGate({
     client,
     sendable: enabled,
@@ -182,62 +186,34 @@ export function useMobileNativeChatMessageSend(args: {
         classification !== 'chat' &&
         isSlashCommandDraft(text) &&
         !images?.length
-      // Keep terminal controls in their own write. When bundled with the body,
-      // a pasted burst can become literal prompt text instead of editing input.
-      const residue = mobileNativeChatInputResidue(handle)
-      if (!images?.length && (seededLaunchDraft || !typesCodexCommand)) {
-        const cleared = await clearMobileNativeChatInput({
-          client,
-          terminal: handle,
-          // A queue edit can leave the whole recalled queue on the agent, and the
-          // draft mirror has typed this very draft onto the line. One Ctrl+U
-          // clears one VISUAL line (Claude Code 2.1.266), so anything longer
-          // would be submitted glued to this message; clear for the longest
-          // text believed to be sitting there.
-          clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft?.text, residue, text),
-          deadline,
-          ...(deviceTokenRef.current
-            ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
-            : {})
-        })
-        if (cleared) {
-          clearMobileNativeChatInputResidue(handle)
+      // Clear, body, and for Claude a check that it took the words. The limit
+      // behind it is per stdin READ and writes coalesce, so the host's ack is not
+      // proof (mobile-native-chat-send-write.ts).
+      const written = await writeChatSend({
+        agent,
+        client,
+        terminal: handle,
+        text,
+        hasImages: Boolean(images?.length),
+        syncComposer,
+        classification,
+        typesCodexCommand,
+        seed: seededLaunchDraft,
+        residue: mobileNativeChatInputResidue(handle),
+        deadline,
+        deviceToken: deviceTokenRef.current,
+        receipts: () => promptReceiptsRef.current
+      })
+      if (written.kind === 'stopped') {
+        // Refused before the body, or Claude declined it. Nothing more is typed,
+        // and Enter is not pressed again: Claude asked the user to review.
+        if (syncComposer) {
+          restoreRejectedDraft(origin, draftText)
         }
-        if (!cleared) {
-          if (syncComposer) {
-            restoreRejectedDraft(origin, draftText)
-          }
-          report('Message not sent')
-          return 'rejected'
-        }
+        report(written.message)
+        return 'rejected'
       }
-      const mobileClient = deviceTokenRef.current
-        ? { id: deviceTokenRef.current, type: 'mobile' as const }
-        : undefined
-      const resolvedLaunchDraft =
-        syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
-          ? { text: seededLaunchDraft.text, createdAt: seededLaunchDraft.createdAt }
-          : undefined
-      const outcome = typesCodexCommand
-        ? await typeMobileNativeChatCommandWithOutcome({
-            client,
-            terminal: handle,
-            command: text,
-            ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
-            ...(mobileClient ? { mobileClient } : {}),
-            deadline
-          })
-        : await sendMobileNativeChatMessageWithOutcome({
-            client,
-            terminal: handle,
-            text,
-            ...(agent === 'codex' && syncComposer && classification === 'chat'
-              ? { queueWithTab: true }
-              : {}),
-            ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
-            deadline,
-            ...(mobileClient ? { mobileClient } : {})
-          })
+      const outcome = written.outcome
       if (outcome !== 'rejected') {
         // What this phone wrote to the terminal, for the chat's session rule
         // (native-chat-kept-session.ts `phoneOwnership`).

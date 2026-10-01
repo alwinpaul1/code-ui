@@ -12,7 +12,7 @@ import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
  * when it does not understand `screen: true` — old repaints, not the current
  * screen — so it is read as incompatible rather than trusted.
  */
-const screenLinesReader: RpcCompatibleReader<unknown, 'screen-lines', string[]> = (raw) => {
+export const screenLinesReader: RpcCompatibleReader<unknown, 'screen-lines', string[]> = (raw) => {
   const box = raw == null ? {} : Object(raw)
   const terminal: unknown = Reflect.get(box, 'terminal')
   const terminalBox = terminal != null && typeof terminal === 'object' ? Object(terminal) : {}

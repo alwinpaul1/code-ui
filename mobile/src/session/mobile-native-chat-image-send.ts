@@ -60,9 +60,10 @@ export async function pasteMobileNativeChatImagePaths({
   // once and let each write draw from what's left.
   const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
   for (const text of [
-    // Why split: an agent reads a big enough chunk as pasted text rather than
-    // as keys, and a long draft needs a clear burst past that bound. See
-    // AGENT_TUI_MAX_KEY_WRITE_BYTES.
+    // Why split: Claude Code reads a control byte as a key only in a stdin READ
+    // under 64 bytes. The limit is per READ and back-to-back writes coalesce, so
+    // this narrows the chance and does not remove it (see
+    // AGENT_TUI_MAX_KEY_WRITE_BYTES; the text send's clear reads back instead).
     ...splitAgentTuiClearWrites(clearInput ?? MOBILE_NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT),
     ...agentImagePasteWrites(
       agent,

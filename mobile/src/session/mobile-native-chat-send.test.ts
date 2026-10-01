@@ -362,11 +362,15 @@ describe('clearMobileNativeChatInput', () => {
   const params = (client: RpcClient) =>
     vi.mocked(client.sendRequest).mock.calls[0]![1] as { text: string; enter: boolean }
 
-  it('splits a long clear so the agent never reads it as one pasted block', async () => {
+  it('splits a long clear into writes under 64 bytes, as far as writes can help', async () => {
     // Live Claude Code 2.1.266, 60 columns, 2026-09-10: one write of 63 Ctrl+U
     // cleared a 400-character draft and 64 did nothing at all. On the phone the
     // 74-byte burst was carried into the message, and the transcript received
     // the text, the literal control bytes, and the text again as one turn.
+    // The limit is per stdin READ and back-to-back writes coalesce into one (the
+    // 2026-10-01 incident: 63 + 3 arrived as a 66-byte read), so this split is
+    // best effort. Claude's text send does not depend on it any more: it sends
+    // one write sized from the screen (native-chat-send-verified-clear.test.ts).
     const client = clientWithResponse(accepted)
     const clearInput = buildMobileNativeChatClearInputForText('a long draft '.repeat(40))
     expect(clearInput.length).toBeGreaterThanOrEqual(AGENT_TUI_MAX_KEY_WRITE_BYTES)

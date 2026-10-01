@@ -8,7 +8,11 @@ import { TERMINAL_DEL_BYTE, type TerminalLiveMirrorStep } from './terminal-live-
  * paste — measured at 64 bytes against a live Claude Code 2.1.266 (see
  * `AGENT_TUI_MAX_KEY_WRITE_BYTES`). Past that the deletes are inserted rather
  * than applied, and the draft the agent holds silently stops matching the
- * phone's.
+ * phone's. That limit is per stdin READ, not per write, and writes made back to
+ * back coalesce, so this split narrows the chance and does not remove it. It is
+ * also unchecked against 2.1.287, whose tokenizer takes every DEL byte as its
+ * own key whatever the read size (`u===WZ.DEL` is tested before the length
+ * rule): a run of DEL may be safe there. Left as it is (2026-10-01).
  *
  * The appended text stays whole: text read as a paste is exactly what we want,
  * and splitting it would turn one paste into several.

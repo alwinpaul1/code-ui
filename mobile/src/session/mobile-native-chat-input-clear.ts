@@ -2,6 +2,7 @@ import {
   AGENT_TUI_CLEAR_LINE_SLACK,
   buildAgentTuiClearInput
 } from '../../../src/shared/agent-tui-input-clear'
+import { AGENT_TUI_MAX_KEY_WRITE_BYTES } from './agent-tui-clear-write-chunks'
 
 /**
  * The narrowest input the phone will ever put an agent in: `measure` refuses
@@ -39,4 +40,50 @@ export function buildMobileNativeChatClearInputForText(
     visualLines = Math.max(visualLines, lines)
   }
   return buildAgentTuiClearInput(visualLines + AGENT_TUI_CLEAR_LINE_SLACK)
+}
+
+/**
+ * Most input rows ONE clear write can cover and still be read as keys.
+ *
+ * Claude Code turns a control byte into its own key only when the whole stdin
+ * READ is under 64 bytes (`a.length<64||u===WZ.BS` in the 2.1.286 and 2.1.287
+ * input tokenizer). The limit is per READ, not per write: writes made back to
+ * back arrive as one read, so cutting a longer burst into writes of 63 does not
+ * help, and a control byte that coalesces with the body is text as well. The
+ * burst for `n` rows is 4n - 2 bytes (`buildAgentTuiClearInput`), so 16 rows is
+ * the most that stays under 64 (62 bytes).
+ */
+export const MOBILE_NATIVE_CHAT_CLEAR_MAX_ROWS = 16
+
+/** Rows past the ones counted on the screen: the input can wrap one more row
+ *  between the look and the keys. Small, because it eats the 16. */
+export const MOBILE_NATIVE_CHAT_SCREEN_CLEAR_SLACK = 2
+
+/**
+ * The clear for an input the screen shows taking `rows` rows: ONE write, under
+ * 64 bytes whatever `rows` is. A taller input gets the most one write can do
+ * (the caller reads back and clears again, then gives up); no rows, no bytes.
+ */
+export function buildScreenSizedClearInput(rows: number): string {
+  if (!(rows >= 1)) {
+    return ''
+  }
+  return buildAgentTuiClearInput(
+    Math.min(Math.ceil(rows) + MOBILE_NATIVE_CHAT_SCREEN_CLEAR_SLACK, MOBILE_NATIVE_CHAT_CLEAR_MAX_ROWS)
+  )
+}
+
+/**
+ * The text-sized clear (above) for a send whose screen cannot be read, held to
+ * one read: the same bytes while they fit, and the tallest single write when
+ * they do not. Splitting a longer burst into writes was the 2026-10-01 defect.
+ * Unverified: nothing reads back whether it emptied the input.
+ */
+export function buildMobileNativeChatClearInputOneRead(
+  ...texts: readonly (string | null | undefined)[]
+): string {
+  const clearInput = buildMobileNativeChatClearInputForText(...texts)
+  return clearInput.length < AGENT_TUI_MAX_KEY_WRITE_BYTES
+    ? clearInput
+    : buildAgentTuiClearInput(MOBILE_NATIVE_CHAT_CLEAR_MAX_ROWS)
 }
