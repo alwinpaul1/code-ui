@@ -14,6 +14,8 @@ import { peekImageMarkup, resetImageMarkupForTests } from './image-markup-store'
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
+import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
+import { CRON_CREATE_INPUT, TICK_PROMPT } from './fixtures/claude-scheduled-tick-2.1.286'
 
 const clipboard = { hasImage: false }
 const appStateListeners: ((state: string) => void)[] = []
@@ -873,5 +875,57 @@ describe('the queued messages\' pencil', () => {
 
   it('degenerate: is not offered before any read said so', async () => {
     expect(await onEditQueue({ queued: [] })).toBeUndefined()
+  })
+})
+
+// A loop's tick is fired by Claude Code as an `isMeta` user row Orca draws
+// nothing for, but the prompt hook reports it like a typed prompt, so the
+// chat drew a user bubble of its words, cut at 200, every three minutes
+// (reported 2026-10-01 from Claude Code 2.1.286; the Claude app draws none).
+describe('a loop tick the hook reports as a prompt', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const at = (clock: string) => Date.parse(`2026-10-01T${clock}Z`)
+  const row = (id: string, role: 'assistant' | 'user', block: NativeChatMessage['blocks'][number], clock: string): NativeChatMessage => ({
+    id,
+    role,
+    blocks: [block],
+    timestamp: at(clock),
+    source: 'transcript'
+  })
+  const messages = [
+    row('a1', 'assistant', { type: 'tool-call', name: 'CronCreate', input: CRON_CREATE_INPUT }, '02:19:10.000'),
+    row('a2', 'user', { type: 'tool-result', output: 'Scheduled recurring job 8b72dbfd (Every 3 minutes).' }, '02:19:10.500'),
+    row('a3', 'assistant', { type: 'text', text: 'The watch is set.' }, '02:19:12.000'),
+    row('a4', 'assistant', { type: 'tool-call', name: 'Bash', input: { description: 'Read-only watch tick' } }, '02:21:52.000'),
+    row('a5', 'assistant', { type: 'text', text: 'No change.' }, '02:22:10.000')
+  ]
+  const status = (text: string, clock: string): DesktopPrompt => ({
+    nonce: `status:tab:${at(clock)}:0`,
+    text: normalizePromptField(text),
+    ...(text.length > 199 ? { cut: true } : {}),
+    at: at(clock)
+  })
+  const bubbles = (): string[] => {
+    const view = renderer!.root.findAll((node) => node.type === 'ChatView')[0]!
+    return (view.props.pending as { id: string; text: string }[]).map((item) => item.text)
+  }
+  const render = async (desktopPrompts: DesktopPrompt[]) => {
+    await act(async () => {
+      renderer = create(overlayElement({ messages, desktopPrompts }))
+    })
+  }
+
+  it('draws no bubble for the tick', async () => {
+    await render([status(TICK_PROMPT, '02:21:49.608')])
+    expect(bubbles()).toEqual([])
+  })
+
+  it('still draws a prompt typed at the desk beside it', async () => {
+    await render([status(TICK_PROMPT, '02:21:49.608'), status('Stop the watch now', '02:22:05.000')])
+    expect(bubbles()).toEqual(['Stop the watch now'])
   })
 })

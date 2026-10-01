@@ -1,0 +1,157 @@
+import { useEffect, useMemo } from 'react'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { DesktopPrompt } from './agent-hud-beacon'
+import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
+import { cutWholeCharacters } from '../text/whole-character-cut'
+
+/**
+ * A loop's tick is no message from a person, and draws no bubble.
+ *
+ * Claude Code fires a CronCreate job's prompt (and a dynamic loop's
+ * ScheduleWakeup prompt) as a turn of its own: an `isMeta` user row with
+ * `turnOrigin: 'scheduled'`, whose words are the tool's `prompt` byte for
+ * byte (fixtures/claude-scheduled-tick-2.1.286.ts). Orca's decoder draws
+ * nothing for it, as the Claude app draws nothing, but the UserPromptSubmit
+ * hook fires for it with nothing that says it was scheduled, so Orca's
+ * `agentStatus.prompt` and the prompt hook's beacon copy reported each tick
+ * like a typed prompt, and the chat drew it as a user bubble every three
+ * minutes (reported 2026-10-01).
+ *
+ * The phone knows a session's scheduled prompts from the tool calls that set
+ * them up, which its transcript read does draw. A desk copy of one of those
+ * words is a tick: the same words, or, where one side was cut (the status at
+ * 200 characters, the hook at its own length, the wire at 4,000), the cut one
+ * a prefix of the other. Compared folded to single spaces, since the status
+ * folds its lines into one.
+ *
+ * What it cannot see: a loop set up on a page of the transcript the chat has
+ * not loaded (a resumed session's cron, a loop set hours of rows ago), and the
+ * `<<autonomous-loop…>>` sentinels, which Claude Code resolves into other
+ * words when the tick fires. A tick of those still draws.
+ *
+ * What it costs: words a person types that are exactly a loaded loop's
+ * prompt lose their bubble until their own transcript row lands, which draws
+ * them as it does every prompt; the match is on words alone.
+ *
+ * ScheduleWakeup: only its `/loop …` form was seen fire (Claude Code 2.1.278),
+ * as a scheduled user row that is NOT `isMeta`, a command envelope the chat
+ * draws from the transcript as a `/loop …` turn
+ * (mobile-native-chat-command-turns.ts). Dropping its desk copy loses nothing
+ * there. How a plain-words ScheduleWakeup tick is written is not known.
+ */
+
+/** Tools whose `prompt` Claude Code fires later as a turn of its own. */
+const SCHEDULING_TOOLS: ReadonlySet<string> = new Set(['CronCreate', 'ScheduleWakeup'])
+
+type ScheduledPrompt = { words: string; cut: boolean; messageId: string; tool: string }
+
+function folded(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/** The prompts the loaded transcript's tool calls scheduled. */
+function scheduledPrompts(messages: readonly NativeChatMessage[]): ScheduledPrompt[] {
+  const out: ScheduledPrompt[] = []
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (block.type !== 'tool-call' || !SCHEDULING_TOOLS.has(block.name)) {
+        continue
+      }
+      const prompt =
+        block.input !== null && typeof block.input === 'object'
+          ? (block.input as { prompt?: unknown }).prompt
+          : undefined
+      if (typeof prompt !== 'string') {
+        continue
+      }
+      const cut = prompt.endsWith(MOBILE_CUT)
+      const words = folded(cut ? prompt.slice(0, -MOBILE_CUT.length) : prompt)
+      if (words) {
+        out.push({ words, cut, messageId: message.id, tool: block.name })
+      }
+    }
+  }
+  return out
+}
+
+function tickOf(prompt: DesktopPrompt, scheduled: readonly ScheduledPrompt[]): ScheduledPrompt | null {
+  const words = folded(prompt.text)
+  if (!words) {
+    return null
+  }
+  return (
+    scheduled.find(
+      (entry) =>
+        entry.words === words ||
+        (prompt.cut === true && entry.words.startsWith(words)) ||
+        (entry.cut && words.startsWith(entry.words))
+    ) ?? null
+  )
+}
+
+type Ticks = {
+  /** `prompts` less the ticks, the same array when there are none. */
+  kept: readonly DesktopPrompt[]
+  /** Each tick with the call that scheduled it. */
+  ticks: readonly { prompt: DesktopPrompt; scheduledBy: ScheduledPrompt }[]
+}
+
+const NO_TICKS: Ticks['ticks'] = []
+
+function splitTicks(prompts: readonly DesktopPrompt[], messages: readonly NativeChatMessage[]): Ticks {
+  const scheduled = prompts.length === 0 ? [] : scheduledPrompts(messages)
+  if (scheduled.length === 0) {
+    return { kept: prompts, ticks: NO_TICKS }
+  }
+  const kept: DesktopPrompt[] = []
+  const ticks: { prompt: DesktopPrompt; scheduledBy: ScheduledPrompt }[] = []
+  for (const prompt of prompts) {
+    const scheduledBy = tickOf(prompt, scheduled)
+    if (scheduledBy === null) {
+      kept.push(prompt)
+    } else {
+      ticks.push({ prompt, scheduledBy })
+    }
+  }
+  return ticks.length === 0 ? { kept: prompts, ticks: NO_TICKS } : { kept, ticks }
+}
+
+/** `prompts` less the loop ticks among them, the same array when there are none. */
+export function withoutScheduledTicks(
+  prompts: readonly DesktopPrompt[],
+  messages: readonly NativeChatMessage[]
+): readonly DesktopPrompt[] {
+  return splitTicks(prompts, messages).kept
+}
+
+/** The lines already logged, by nonce, so each tick says so once. Bounded:
+ *  a 3-minute loop gives out 20 nonces an hour. */
+const logged = new Set<string>()
+const LOGGED_CAP = 256
+
+/**
+ * withoutScheduledTicks for the chat, which says once in the log of each tick
+ * it held back which call scheduled it, so a tick that still draws can be
+ * told from one never seen.
+ */
+export function useWithoutScheduledTicks(
+  prompts: readonly DesktopPrompt[],
+  messages: readonly NativeChatMessage[]
+): readonly DesktopPrompt[] {
+  const { kept, ticks } = useMemo(() => splitTicks(prompts, messages), [prompts, messages])
+  useEffect(() => {
+    for (const { prompt, scheduledBy } of ticks) {
+      if (logged.has(prompt.nonce)) {
+        continue
+      }
+      if (logged.size >= LOGGED_CAP) {
+        logged.clear()
+      }
+      logged.add(prompt.nonce)
+      console.info(
+        `[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}" is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}, fired by the loop`
+      )
+    }
+  }, [ticks])
+  return kept
+}
