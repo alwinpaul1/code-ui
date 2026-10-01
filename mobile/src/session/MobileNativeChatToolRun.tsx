@@ -423,6 +423,15 @@ export function ToolRun({
               setDetailPair(singlePair)
               return
             }
+            // Two calls or more: the Claude app lists them in a sheet instead
+            // of unfolding the row (2026-10-01 screenshots). The inline list
+            // stays where the reader asked for it (the Tools toggle, the turn
+            // caret, an open row, focus view) and where no chat provides the
+            // sheet (a subagent's own transcript).
+            if (!open && !focusView && allPairs.length >= 2 && agentRuns.openRun) {
+              agentRuns.openRun(blocks)
+              return
+            }
             setOpen((v) => !v)
           }}
           hitSlop={6}

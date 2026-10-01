@@ -62,7 +62,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { MobileAgentModeSheet } from './MobileAgentModeSheet'
 import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
-import { MobileNativeChatAgentRunSheet } from './MobileNativeChatAgentRunSheet'
+import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 
 let renderer: ReactTestRenderer | null = null
@@ -104,8 +104,16 @@ const SHEETS: [string, () => ReactElement][] = [
       } as never)
   ],
   [
-    'the agent run sheet',
-    () => createElement(MobileNativeChatAgentRunSheet, { visible: true, entries: [], running: false, onClose: noop } as never)
+    'the run sheet',
+    () =>
+      createElement(MobileNativeChatRunSheet, {
+        visible: true,
+        title: 'Ran an agent',
+        rows: [],
+        running: false,
+        onSelectPair: noop,
+        onClose: noop
+      })
   ],
   [
     'the dictation setup sheet',

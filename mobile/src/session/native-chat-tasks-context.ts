@@ -13,7 +13,7 @@ export type NativeChatAgentRuns = NativeChatAgentRunInputs & {
   /** Opens one subagent's transcript, or undefined where there is none to
    *  open (a Codex tab, or no chat around the row). */
   openTranscript?: (agentId: string, title: string, running: boolean) => void
-  /** Opens the "Ran N agents" sheet for one run; undefined outside a chat. */
+  /** Opens the run sheet, one row per call, for one run; undefined outside a chat. */
   openRun?: (blocks: readonly NativeChatBlock[]) => void
 }
 

@@ -105,7 +105,9 @@ describe('a mixed run whose background agent is still running', () => {
   function render(props: Parameters<typeof Harness>[0], scheme: 'light' | 'dark' = 'light') {
     act(() => {
       renderer = create(
-        createElement(ThemeProvider, { initialPreference: scheme }, createElement(Harness, props))
+        <ThemeProvider initialPreference={scheme}>
+          <Harness {...props} />
+        </ThemeProvider>
       )
     })
     return renderer!

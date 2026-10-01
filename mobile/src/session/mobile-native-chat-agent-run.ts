@@ -35,6 +35,11 @@ export type NativeChatAgentRunState = { running: boolean; entries: NativeChatAge
 /** Claude Code's own names for the tool that launches a subagent. */
 const AGENT_TOOLS = new Set(['Agent', 'Task'])
 
+/** Whether a tool name is Claude Code's launcher for a subagent. */
+export function isAgentToolName(name: string): boolean {
+  return AGENT_TOOLS.has(name)
+}
+
 /** True when every call in the run launched a Claude subagent. A run with any
  *  other tool in it keeps the ordinary tool row, and so does Codex, whose
  *  spawn tool the Claude app has never been seen to draw. */

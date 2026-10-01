@@ -857,7 +857,10 @@ describe('tapping a tool row opens the Claude-app detail sheet', () => {
     expect(tree.root.findAllByProps({ testID: 'tool-line' })).toHaveLength(1)
   })
 
-  it('keeps a multi-call run\'s header as reveal-first, then opens the sheet per call', () => {
+  // With no run sheet to open (no chat provider around the run) the header
+  // still reveals the rows; inside a chat it opens the run sheet
+  // (tool-run-opens-run-sheet.test.tsx).
+  it('without a run sheet to open, reveals a multi-call run inline, then opens the sheet per call', () => {
     const tree = render(LONG_RUN)
     const header = tree.root.findByProps({ testID: 'tool-run-header' })
     act(() => header.props.onPress())
