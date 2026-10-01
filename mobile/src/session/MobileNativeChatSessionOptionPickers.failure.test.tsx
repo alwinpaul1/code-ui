@@ -85,6 +85,18 @@ vi.mock('../components/BottomDrawer', async () => {
 vi.mock('../transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: () => 1
 }))
+// This suite's host refuses every read, so a Claude send's clear goes out
+// unverified and then pauses (CLEAR_SETTLE_MS) to keep itself out of the body's
+// stdin read. The suite's settles wait one macrotask, not 150 ms: the pause is
+// taken out here, and pinned in mobile-native-chat-verified-clear.test.ts.
+vi.mock('./mobile-native-chat-verified-clear', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./mobile-native-chat-verified-clear')>()
+  return {
+    ...actual,
+    clearClaudeInputVerified: (args: Parameters<typeof actual.clearClaudeInputVerified>[0]) =>
+      actual.clearClaudeInputVerified({ ...args, settle: () => Promise.resolve() })
+  }
+})
 
 const BUSY = 'Another input is still being sent. Try again.'
 const NOT_SENT = 'Message not sent'
