@@ -443,7 +443,7 @@ export function MobileNativeChatOverlay({
         getSendCompletionGeneration={getSendCompletionGeneration}
         getComposerEditGeneration={controller.getChatComposerEditGeneration}
         queuedMessages={projectedQueue.queue}
-        onEditQueue={controller.openNativeChatQueueEditor}
+        onEditQueue={controller.nativeChatQueueEditable ? controller.openNativeChatQueueEditor : undefined}
         onSendQueueNow={controller.sendNativeChatQueueNow}
         queueEditor={controller.nativeChatQueueEditor}
         pending={pendingInArrivalOrder}

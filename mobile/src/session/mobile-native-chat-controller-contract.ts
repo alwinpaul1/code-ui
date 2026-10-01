@@ -85,6 +85,11 @@ export type MobileNativeChatController = {
    *  then unknown, not empty, and the queue-box witness changes nothing on it
    *  (use-absorbed-queue-echoes.ts). Absent reads as readable. */
   nativeChatQueueReadable?: boolean
+  /** Whether a queued entry can be recalled for editing from the read behind
+   *  `nativeChatQueuedMessages` (QueueBoxRead.editable). The pencil is offered
+   *  only then: under a Claude rule that carries the session name Orca
+   *  publishes no draft and the recall is refused (native-queue-editor.ts). */
+  nativeChatQueueEditable?: boolean
   chatImagePreviewsByMessageId: Record<string, string[]>
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */

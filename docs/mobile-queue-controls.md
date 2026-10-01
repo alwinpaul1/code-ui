@@ -205,10 +205,12 @@ show here.
 
 Because Orca's composer detector accepts only a bare rule above `❯`, the
 `draft` it publishes is empty under a named or fast-mode rule. The queue still
-shows, but the pencil and delete are refused before any key is sent
-(`recallNativeQueue`, test `native-queue-editor-named-rule.test.ts`): a recall
-would move the queue into an input the phone cannot read, and the next send
-would clear it.
+shows, but a recall would move the queue into an input the phone cannot read,
+and the next send would clear it. So since 2026-10-01 the queue box offers no
+pencil there (`QueueBoxRead.editable`, tests `claude-queue-named-rule-2.1.285`,
+`hud-observation-queue-readable` and `MobileNativeChatOverlay`), and a tap that
+reaches the editor from an older read is still refused before any key is sent
+(`recallNativeQueue`, test `native-queue-editor-named-rule.test.ts`).
 
 Stock, no environment changes, three queued messages: the middle one was
 recalled, edited, and the queue retyped as

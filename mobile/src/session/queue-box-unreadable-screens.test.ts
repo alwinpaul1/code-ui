@@ -147,11 +147,11 @@ const CODEX_QUEUED_0158 = [
 
 describe('a Claude Code queue box read that cannot see the box', () => {
   it('is not an emptied box while an entry is selected at the desk', () => {
-    expect(queueBoxReadFromScreen(SELECTED_2_1_263, 'claude', SELECTED_HINT)).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(SELECTED_2_1_263, 'claude', SELECTED_HINT)).toEqual({ entries: [], readable: false, editable: false })
   })
 
   it('is not an emptied box while a permission prompt covers the composer', () => {
-    expect(queueBoxReadFromScreen(PERMISSION_2_1_283, 'claude')).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(PERMISSION_2_1_283, 'claude')).toEqual({ entries: [], readable: false, editable: false })
   })
 
   it('is not an emptied box when the reader refuses a block Claude says holds messages', () => {
@@ -159,7 +159,7 @@ describe('a Claude Code queue box read that cannot see the box', () => {
     // shows it: nothing bounds the block above, so the reader refuses rather
     // than take what may be the transcript for the queue.
     const unbounded = QUEUE_2_1_277.slice(5)
-    expect(queueBoxReadFromScreen(unbounded, 'claude', QUEUE_HINT)).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(unbounded, 'claude', QUEUE_HINT)).toEqual({ entries: [], readable: false, editable: false })
   })
 
   it('reads the box it can see: listed messages, and an empty box under an idle composer', () => {
@@ -167,33 +167,35 @@ describe('a Claude Code queue box read that cannot see the box', () => {
     expect(queueBoxReadFromScreen(QUEUE_ROWS_2_1_263, 'claude', SELECT_HINT).entries).toHaveLength(3)
     expect(queueBoxReadFromScreen(QUEUE_2_1_277, 'claude', QUEUE_HINT)).toEqual({
       entries: ["[Image #4] [Image #5] Also see a message i send from claude mobile app isn't\nstill here on our codeui app"],
-      readable: true
+      readable: true,
+      editable: true
     })
-    expect(queueBoxReadFromScreen(IDLE_2_1_278, 'claude')).toEqual({ entries: [], readable: true })
+    expect(queueBoxReadFromScreen(IDLE_2_1_278, 'claude')).toEqual({ entries: [], readable: true, editable: false })
   })
 
   // Degenerate: nothing on screen at all, and a one-entry box.
   it('cannot see a box on an empty screen, and reads a box of one', () => {
-    expect(queueBoxReadFromScreen([], 'claude')).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen([], 'claude')).toEqual({ entries: [], readable: false, editable: false })
     expect(queueBoxReadFromScreen(QUEUE_ROWS_2_1_263.slice(3), 'claude', QUEUE_HINT)).toEqual({
       entries: ['bravo short second', 'charlie another very long third queued message written so that it also\nwraps onto a second line inside the queue block for comparison purposes'],
-      readable: true
+      readable: true,
+      editable: true
     })
   })
 })
 
 describe('a Codex queue box read that cannot see the box', () => {
   it('is not an emptied box while a command approval covers the composer', () => {
-    expect(queueBoxReadFromScreen(CODEX_APPROVAL_0158, 'codex')).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(CODEX_APPROVAL_0158, 'codex')).toEqual({ entries: [], readable: false, editable: false })
   })
 
   it('is not an emptied box while the folder trust prompt is up', () => {
-    expect(queueBoxReadFromScreen(CODEX_TRUST_PROMPT_0158, 'codex')).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(CODEX_TRUST_PROMPT_0158, 'codex')).toEqual({ entries: [], readable: false, editable: false })
   })
 
   it('reads the box it can see: a listed message, and an empty box under the composer', () => {
-    expect(queueBoxReadFromScreen(CODEX_QUEUED_0158, 'codex')).toEqual({ entries: ['run the tests again'], readable: true })
-    expect(queueBoxReadFromScreen(CODEX_WORKING_0158, 'codex')).toEqual({ entries: [], readable: true })
+    expect(queueBoxReadFromScreen(CODEX_QUEUED_0158, 'codex')).toEqual({ entries: ['run the tests again'], readable: true, editable: true })
+    expect(queueBoxReadFromScreen(CODEX_WORKING_0158, 'codex')).toEqual({ entries: [], readable: true, editable: false })
   })
 
   it('reads a listed message under an open slash popup', () => {
@@ -204,18 +206,18 @@ describe('a Codex queue box read that cannot see the box', () => {
       '› /res',
       ...CODEX_WORKING_0158.slice(15)
     ]
-    expect(queueBoxReadFromScreen(popup, 'codex')).toEqual({ entries: ['run the tests again'], readable: true })
+    expect(queueBoxReadFromScreen(popup, 'codex')).toEqual({ entries: ['run the tests again'], readable: true, editable: true })
   })
 
   // Degenerate: nothing on screen.
   it('cannot see a box on an empty screen', () => {
-    expect(queueBoxReadFromScreen([], 'codex')).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen([], 'codex')).toEqual({ entries: [], readable: false, editable: false })
   })
 })
 
 describe('an agent whose queue box the phone does not read', () => {
   it('never reads it as an emptied box', () => {
-    expect(queueBoxReadFromScreen(CODEX_WORKING_0158, 'omp')).toEqual({ entries: [], readable: false })
-    expect(queueBoxReadFromScreen(IDLE_2_1_278, null)).toEqual({ entries: [], readable: false })
+    expect(queueBoxReadFromScreen(CODEX_WORKING_0158, 'omp')).toEqual({ entries: [], readable: false, editable: false })
+    expect(queueBoxReadFromScreen(IDLE_2_1_278, null)).toEqual({ entries: [], readable: false, editable: false })
   })
 })

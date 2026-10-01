@@ -50,6 +50,10 @@ export function useMobileTerminalHudObservation(args: {
    *  the chat began watching this terminal, and while it is not watching: an
    *  unread box is not an empty one (use-absorbed-queue-echoes.ts). */
   queueReadable: boolean
+  /** Whether the phone can recall an entry of `queuedMessages` from that read
+   *  (QueueBoxRead.editable): false under the same conditions as
+   *  `queueReadable`, and for Claude while Orca publishes no draft. */
+  queueEditable: boolean
   /** Prompts the agent has already accepted, read off its scrollback. */
   sentPrompts: string[]
   /** Photos Claude painted above an accepted prompt, which the transcript
@@ -93,6 +97,7 @@ export function useMobileTerminalHudObservation(args: {
   const [permissionDismissed, setPermissionDismissed] = useState(false)
   const [queuedMessages, setQueuedMessages] = useState<string[]>([])
   const [queueReadable, setQueueReadable] = useState(false)
+  const [queueEditable, setQueueEditable] = useState(false)
   const [sentPrompts, setSentPrompts] = useState<string[]>([])
   const [sentPhotos, setSentPhotos] = useState<ScreenSentPhotos[]>([])
   // Tagged with the terminal it was read from, so a new terminal's rows are
@@ -114,6 +119,7 @@ export function useMobileTerminalHudObservation(args: {
     setPermissionDismissed(false)
     setQueuedMessages((current) => (current.length ? [] : current))
     setQueueReadable(false)
+    setQueueEditable(false)
     setTaskCompletions(null)
     setObservation(null)
     setSpinner(null)
@@ -181,6 +187,7 @@ export function useMobileTerminalHudObservation(args: {
           JSON.stringify(current) === JSON.stringify(queued) ? current : queued
         )
         setQueueReadable(box.readable)
+        setQueueEditable(box.editable)
         // Only Claude paints its accepted prompts this way; Codex does not.
         // The reader takes the `❯` row and nothing under it — see
         // mobile-terminal-single-row-prompts.test.ts for why.
@@ -289,6 +296,7 @@ export function useMobileTerminalHudObservation(args: {
     terminalPermission,
     queuedMessages: enabled && queueScopeRef.current === handleKey ? queuedMessages : [],
     queueReadable: enabled && queueScopeRef.current === handleKey && queueReadable,
+    queueEditable: enabled && queueScopeRef.current === handleKey && queueEditable,
     sentPrompts: enabled && queueScopeRef.current === handleKey ? sentPrompts : [],
     sentPhotos: enabled && queueScopeRef.current === handleKey ? sentPhotos : [],
     taskCompletions: enabled && taskCompletions?.handleKey === handleKey ? taskCompletions.rows : null,

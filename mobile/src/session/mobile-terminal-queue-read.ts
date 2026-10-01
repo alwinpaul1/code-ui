@@ -7,9 +7,14 @@ export type QueueBoxRead = {
   entries: string[]
   /** Whether the read could see the box: false means unknown, not empty. */
   readable: boolean
+  /** Whether the phone can recall an entry from this read. Claude's needs the
+   *  `draft` Orca publishes, which it leaves '' under a rule that carries the
+   *  session name or the fast-mode tag (Claude Code 2.1.285): the recall is
+   *  refused there (native-queue-editor.ts), so no pencil is offered. */
+  editable: boolean
 }
 
-const UNREAD: QueueBoxRead = { entries: [], readable: false }
+const UNREAD: QueueBoxRead = { entries: [], readable: false, editable: false }
 
 /**
  * The queue box on one screen read, and whether that read could see it.
@@ -46,6 +51,7 @@ export function queueBoxReadFromScreen(lines: readonly string[], agent: string |
   }
   return {
     entries: read.entries,
-    readable: read.entries.length > 0 || (read.readable && terminalDialogKind(lines, agent) === null)
+    readable: read.entries.length > 0 || (read.readable && terminalDialogKind(lines, agent) === null),
+    editable: read.entries.length > 0 && (agent === 'codex' || (typeof draft === 'string' && draft !== ''))
   }
 }

@@ -5,6 +5,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
+import { NAMED_RULES, QUEUED_ROW_TEXT, queuedScreen2_1_285 } from './fixtures/claude-queued-named-rule-2.1.285'
 
 // The chat's queue box, handed over with whether the read behind it could see
 // the box at all. Before a watch's first read lands (a reconnect, another
@@ -111,5 +112,33 @@ describe('the queue box the chat is handed', () => {
     await nextPoll()
     await answer({ ok: false, error: { message: 'timed out' } })
     expect(observation).toMatchObject({ queuedMessages: ['bravo short second'], queueReadable: true })
+  })
+})
+
+// Under a rule that carries the session name Orca publishes no draft, so the
+// phone cannot recall the queue (native-queue-editor.ts refuses): the chat is
+// told the box is not editable, and draws no pencil (2026-10-01).
+describe('whether the queue box the chat is handed can be edited', () => {
+  it('cannot be under a named rule, and can be under the bare one', async () => {
+    const { render, land } = harness()
+    await render(true)
+    expect(observation.queueEditable).toBe(false)
+    await land(queuedScreen2_1_285(NAMED_RULES.captured1152), '')
+    expect(observation).toMatchObject({ queuedMessages: [QUEUED_ROW_TEXT], queueEditable: false })
+
+    await nextPoll()
+    await land(queuedScreen2_1_285(NAMED_RULES.bare), HINT)
+    expect(observation).toMatchObject({ queuedMessages: [QUEUED_ROW_TEXT], queueEditable: true })
+  })
+
+  it('cannot be while the watch is off or on a tab whose first read has not landed', async () => {
+    const { render, land } = harness()
+    await render(true)
+    await land(queuedScreen2_1_285(NAMED_RULES.bare), HINT)
+    expect(observation.queueEditable).toBe(true)
+    await render(true, 'terminal-b')
+    expect(observation.queueEditable).toBe(false)
+    await render(false, 'terminal-b')
+    expect(observation.queueEditable).toBe(false)
   })
 })

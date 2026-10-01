@@ -74,9 +74,13 @@ type Tick = {
   desktopPrompts?: DesktopPrompt[]
   /** The rows the agent's queue box shows right now. */
   queued?: string[]
+  /** Whether the read behind them could recall the queue (Orca published a draft). */
+  queueEditable?: boolean
   /** The composer's chips and their actions; nothing by default. */
   images?: Partial<MobileNativeChatImageAttachments>
 }
+
+const openQueueEditor = vi.fn(async () => undefined)
 
 function overlayElement(tick: Tick): ReturnType<typeof createElement> {
   const controller = {
@@ -93,6 +97,8 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     chatPending: tick.pending ?? [],
     nativeChatDesktopPrompts: tick.desktopPrompts,
     nativeChatQueuedMessages: tick.queued,
+    nativeChatQueueEditable: tick.queueEditable,
+    openNativeChatQueueEditor: openQueueEditor,
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
     setChatComposerText: vi.fn(),
@@ -839,4 +845,33 @@ it('opens markup on the photo the preview\'s pencil was for, and brings Done bac
     act(() => renderer!.unmount())
     resetImageMarkupForTests()
   }
+})
+
+// Under a Claude rule that carries the session name or the fast-mode tag Orca
+// publishes no draft, and native-queue-editor.ts refuses to recall the queue.
+// The pencil stayed on every queued row and every tap said so (2026-10-01).
+describe('the queued messages\' pencil', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const onEditQueue = async (tick: Tick) => {
+    await act(async () => {
+      renderer = create(overlayElement(tick))
+    })
+    return renderer!.root.findByType('ChatView' as never).props.onEditQueue as unknown
+  }
+
+  it('is not offered when the read behind the queue cannot recall it', async () => {
+    expect(await onEditQueue({ queued: ['later'], queueEditable: false })).toBeUndefined()
+  })
+
+  it('is offered when it can', async () => {
+    expect(await onEditQueue({ queued: ['later'], queueEditable: true })).toBe(openQueueEditor)
+  })
+
+  it('degenerate: is not offered before any read said so', async () => {
+    expect(await onEditQueue({ queued: [] })).toBeUndefined()
+  })
 })

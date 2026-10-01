@@ -7,6 +7,7 @@ import {
   takenScreen2_1_285
 } from './fixtures/claude-queued-named-rule-2.1.285'
 import { claudeQueueViewFromScreen, queuedMessagesFromScreen } from './mobile-terminal-queued-messages'
+import { queueBoxReadFromScreen } from './mobile-terminal-queue-read'
 
 // Claude Code 2.1.285 (reported 2026-09-30). The fixture's provenance, and what
 // only a live capture can settle, are in the fixture file.
@@ -82,5 +83,43 @@ describe('Claude Code 2.1.285 queue under a named prompt rule', () => {
 
   it('does not take a row that ends in words rather than the rule glyph for a rule', () => {
     expect(queuedMessagesFromScreen(queuedScreen2_1_285('─'.repeat(40) + ' paper-review'))).toEqual([])
+  })
+})
+
+// Orca publishes `draft` only when its composer detector accepts the row above
+// Claude's `❯`, and it accepts only a bare rule: under a named rule `draft` is ''
+// while the queue shows (captured 2026-09-30, Claude Code 2.1.285; 2.1.286 keeps
+// the strings). recallNativeQueue refuses the edit then, so a pencil there was
+// one that could only ever say "Edit this queued message on the desktop".
+describe('the queue box offers editing only where Orca can read the input box', () => {
+  const HINT = 'Press up to edit queued messages'
+
+  it('offers no editing under a named rule, where Orca publishes no draft', () => {
+    const read = queueBoxReadFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152), 'claude', '')
+    expect(read).toMatchObject({ entries: [QUEUED_ROW_TEXT], readable: true, editable: false })
+  })
+
+  it('offers no editing when the read carried no draft at all', () => {
+    const read = queueBoxReadFromScreen(queuedScreen2_1_285(NAMED_RULES.captured1152), 'claude')
+    expect(read.editable).toBe(false)
+  })
+
+  it('offers editing under the bare rule, where the draft is the queue hint', () => {
+    const read = queueBoxReadFromScreen(queuedScreen2_1_285(NAMED_RULES.bare), 'claude', HINT)
+    expect(read).toMatchObject({ entries: [QUEUED_ROW_TEXT], editable: true })
+  })
+
+  it('offers editing for Codex, which recalls its latest entry whatever the draft', () => {
+    const codex = ['• Queued follow-up inputs', '  ↳ mobile task', '    alt + ↑ edit last queued message', '› ']
+    expect(queueBoxReadFromScreen(codex, 'codex', '')).toMatchObject({
+      entries: ['mobile task'],
+      editable: true
+    })
+  })
+
+  it('degenerate: offers no editing for an empty box or a screen it cannot read', () => {
+    expect(queueBoxReadFromScreen(takenScreen2_1_285(NAMED_RULES.bare), 'claude', HINT).editable).toBe(false)
+    expect(queueBoxReadFromScreen([], 'claude', HINT).editable).toBe(false)
+    expect(queueBoxReadFromScreen(['some', 'lines'], 'gemini', HINT).editable).toBe(false)
   })
 })
