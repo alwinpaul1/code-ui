@@ -78,6 +78,8 @@ type Tick = {
   queued?: string[]
   /** Whether the read behind them could recall the queue (Orca published a draft). */
   queueEditable?: boolean
+  /** The Claude session the chat reads. */
+  sessionId?: string
   /** The composer's chips and their actions; nothing by default. */
   images?: Partial<MobileNativeChatImageAttachments>
 }
@@ -100,6 +102,7 @@ function overlayElement(tick: Tick): ReturnType<typeof createElement> {
     nativeChatDesktopPrompts: tick.desktopPrompts,
     nativeChatQueuedMessages: tick.queued,
     nativeChatQueueEditable: tick.queueEditable,
+    nativeChatSessionIdentity: tick.sessionId ? { sessionId: tick.sessionId, transcriptPath: null, nestedSessionId: null } : null,
     openNativeChatQueueEditor: openQueueEditor,
     chatImagePreviewsByMessageId: {},
     chatComposerText: '',
@@ -927,5 +930,32 @@ describe('a loop tick the hook reports as a prompt', () => {
   it('still draws a prompt typed at the desk beside it', async () => {
     await render([status(TICK_PROMPT, '02:21:49.608'), status('Stop the watch now', '02:22:05.000')])
     expect(bubbles()).toEqual(['Stop the watch now'])
+  })
+
+  // The loop's CronCreate is matched only while its page is loaded: once the
+  // rows a session's chat holds no longer reach back to it, every tick drew a
+  // bubble again. The phone keeps the loop prompts a session has shown.
+  it('draws no bubble for a tick once the loop’s call has left the loaded rows', async () => {
+    const sessionId = 'session-scrolled-past-its-loop'
+    await act(async () => {
+      renderer = create(overlayElement({ messages, desktopPrompts: [], sessionId }))
+    })
+    const tail = messages.slice(3)
+    await act(async () => {
+      renderer!.update(overlayElement({ messages: tail, desktopPrompts: [status(TICK_PROMPT, '02:24:49.600')], sessionId }))
+    })
+    expect(bubbles()).toEqual([])
+  })
+
+  it('draws the bubble in another session, which never showed the loop', async () => {
+    await act(async () => {
+      renderer = create(overlayElement({ messages, desktopPrompts: [], sessionId: 'session-with-the-loop' }))
+    })
+    await act(async () => {
+      renderer!.update(
+        overlayElement({ messages: messages.slice(3), desktopPrompts: [status(TICK_PROMPT, '02:24:49.600')], sessionId: 'another-session' })
+      )
+    })
+    expect(bubbles()).toHaveLength(1)
   })
 })

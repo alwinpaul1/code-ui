@@ -5,6 +5,7 @@ import { hydrateNativeChatImagePreviewCache } from './mobile-native-chat-image-p
 import { hydrateWaitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 import { hydrateSessionTabsCache } from './mobile-session-tabs-cache'
 import { hydrateNativeChatKeptSessions } from './native-chat-kept-session-store'
+import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 
 /** Load the persisted project caches once at app start, before any project opens. */
 export function hydrateSessionCaches(): Promise<void> {
@@ -22,6 +23,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateAgentHudBeacons(),
     // Why: the tab's own agent session, kept over a nested agent's status on
     // the same pane; a cold start's first status can be that nested one.
-    hydrateNativeChatKeptSessions()
+    hydrateNativeChatKeptSessions(),
+    // Why: the loop prompts a session showed, so a tick whose loop call is
+    // not on the first page loaded draws no bubble (scheduled-prompt-memory).
+    hydrateScheduledPromptMemory()
   ]).then(() => undefined)
 }

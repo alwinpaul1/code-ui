@@ -3,6 +3,11 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { MOBILE_CUT } from './mobile-native-chat-edit-wire-cut'
 import { cutWholeCharacters } from '../text/whole-character-cut'
+import {
+  rememberScheduledPrompts,
+  rememberedScheduledPrompts,
+  type RememberedScheduledPrompt
+} from './scheduled-prompt-memory'
 
 /**
  * A loop's tick is no message from a person, and draws no bubble.
@@ -28,8 +33,12 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
  * a prefix of the other. Compared folded to single spaces, since the status
  * folds its lines into one.
  *
- * What it cannot see: a loop set up on a page of the transcript the chat has
- * not loaded (a resumed session's cron, a loop set hours of rows ago), and the
+ * Each prompt seen is also kept for the session (scheduled-prompt-memory.ts),
+ * so a loop whose call has since scrolled out of the loaded pages, or was
+ * there before a relaunch, still matches.
+ *
+ * What it cannot see, on a tab launched without the hook: a loop whose call
+ * this phone never loaded (set up while it was away, or before a resume), and the
  * `<<autonomous-loop…>>` sentinels, which Claude Code resolves into other
  * words when the tick fires. A tick of those still draws.
  *
@@ -105,9 +114,21 @@ type Ticks = {
 
 const NO_TICKS: Ticks['ticks'] = []
 
-function splitTicks(prompts: readonly DesktopPrompt[], messages: readonly NativeChatMessage[]): Ticks {
+const NOTHING_REMEMBERED: readonly RememberedScheduledPrompt[] = []
+
+function splitTicks(
+  prompts: readonly DesktopPrompt[],
+  seen: readonly ScheduledPrompt[],
+  remembered: readonly RememberedScheduledPrompt[] = NOTHING_REMEMBERED
+): Ticks {
   const marked = prompts.some((prompt) => prompt.scheduled === true)
-  const scheduled = prompts.length === 0 ? [] : scheduledPrompts(messages)
+  const scheduled =
+    prompts.length === 0
+      ? []
+      : [
+          ...seen,
+          ...remembered.map((entry) => ({ words: entry.words, cut: entry.cut === true, messageId: '', tool: '' }))
+        ]
   if (scheduled.length === 0 && !marked) {
     return { kept: prompts, ticks: NO_TICKS }
   }
@@ -129,7 +150,7 @@ export function withoutScheduledTicks(
   prompts: readonly DesktopPrompt[],
   messages: readonly NativeChatMessage[]
 ): readonly DesktopPrompt[] {
-  return splitTicks(prompts, messages).kept
+  return splitTicks(prompts, scheduledPrompts(messages)).kept
 }
 
 /** The lines already logged, by nonce, so each tick says so once. Bounded:
@@ -144,9 +165,15 @@ const LOGGED_CAP = 256
  */
 export function useWithoutScheduledTicks(
   prompts: readonly DesktopPrompt[],
-  messages: readonly NativeChatMessage[]
+  messages: readonly NativeChatMessage[],
+  /** The Claude session the chat reads, whose loop prompts are kept. */
+  sessionId?: string | null
 ): readonly DesktopPrompt[] {
-  const { kept, ticks } = useMemo(() => splitTicks(prompts, messages), [prompts, messages])
+  const seen = useMemo(() => scheduledPrompts(messages), [messages])
+  useEffect(() => rememberScheduledPrompts(sessionId, seen), [seen, sessionId])
+  // The same array until a prompt is kept, so the memo below holds.
+  const remembered = rememberedScheduledPrompts(sessionId)
+  const { kept, ticks } = useMemo(() => splitTicks(prompts, seen, remembered), [prompts, seen, remembered])
   useEffect(() => {
     for (const { prompt, scheduledBy } of ticks) {
       if (logged.has(prompt.nonce)) {
@@ -159,7 +186,9 @@ export function useWithoutScheduledTicks(
       const why =
         scheduledBy === MARKED_BY_HOOK
           ? 'the prompt hook saw a loop fire it'
-          : `it is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}`
+          : scheduledBy.tool
+            ? `it is the prompt ${scheduledBy.tool} scheduled in ${scheduledBy.messageId}`
+            : 'it is a loop prompt this session showed earlier'
       console.info(
         `[desk-prompt] not drawn: "${cutWholeCharacters(prompt.text, 32)}${prompt.text.length > 32 ? '…' : ''}": ${why}`
       )
