@@ -30,6 +30,7 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { useExpandableBottomDrawer } from './use-expandable-bottom-drawer'
 import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
+import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
 const SHOW_DURATION = 180
@@ -88,13 +89,6 @@ export function MountedBottomDrawer({
   // The sheet's own laid-out height; 0 until its first layout, when the only
   // distance known to be off screen is the whole window.
   const sheetLayoutHeight = useSharedValue(0)
-  // The latest onClose, behind one stable function, so the gestures built
-  // around it survive a parent that passes a new arrow on every render.
-  const onCloseRef = useRef(onClose)
-  useEffect(() => {
-    onCloseRef.current = onClose
-  }, [onClose])
-  const close = useCallback(() => onCloseRef.current(), [])
   useKeyboardDismissedOnOpen(visible && dismissKeyboardOnOpen)
   // Why: fill mode needs the keyboard inset in React layout (not only the
   // reanimated translate) so height shrinks as the sheet lifts and the top
@@ -114,7 +108,16 @@ export function MountedBottomDrawer({
   // transforms below) is unchanged, so phone behavior stays identical.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useInsideBottomDrawerModalHost()
-  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, close })
+  // What the close-request hook calls to put the sheet back (`showSheet` below);
+  // the sheet and drag hooks it feeds are built from the hook's own `requestClose`.
+  const restoreRef = useRef(() => {})
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({
+    visible,
+    onClose,
+    onHidden,
+    restore: () => restoreRef.current()
+  })
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, close: requestClose })
   const drag = useBottomDrawerDrag({
     expandable,
     hasList: contentScrollable && dragContentToDismiss,
@@ -122,7 +125,7 @@ export function MountedBottomDrawer({
     translateY,
     progress,
     sheet,
-    close
+    close: requestClose
   })
   const fillHeight = fillAvailable
     ? resolveBottomDrawerFillHeight({
@@ -155,12 +158,23 @@ export function MountedBottomDrawer({
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
+  // Stands the sheet at its rest (0, or an expandable sheet's opening offset)
+  // and animates it in: an open, and a close its parent refused.
+  const showSheet = () => {
+    drag.resetList()
+    sheet.reset()
+    progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
+  }
+  restoreRef.current = showSheet
+
   useEffect(() => {
     if (visible) {
-      drag.resetList()
-      // Stands the sheet at its rest: 0, or an expandable sheet's opening offset.
-      sheet.reset()
-      progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
+      showSheet()
+    } else if (leftScreenRef.current) {
+      // Its own exit animation has run to its end (use-drawer-close-request.ts).
+      Keyboard.dismiss()
+      setKeyboardInset(0)
+      onHidden()
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
@@ -179,7 +193,16 @@ export function MountedBottomDrawer({
   useEffect(() => {
     // Pinned-under sheets stay visible for size but must not ride the keyboard —
     // only the top interactive sheet owns inset/lift.
-    if (!visible || !interactive) {
+    if (!visible) {
+      // Why it animates, and the cleanup below does not zero it: a sheet closed
+      // by its parent while the keyboard is up (a rename's Save) used to drop
+      // the keyboard's whole height in the first frame of its exit, before
+      // it started to leave. The exit's travel counts the lift (see drawerStyle).
+      keyboardOffset.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS })
+      setKeyboardInset(0)
+      return
+    }
+    if (!interactive) {
       keyboardOffset.value = 0
       setKeyboardInset(0)
       return
@@ -224,19 +247,25 @@ export function MountedBottomDrawer({
     return () => {
       onShow.remove()
       onHide.remove()
-      keyboardOffset.value = 0
       setKeyboardInset(0)
     }
   }, [visible, interactive, insets.bottom, fillAvailable])
 
   const dismiss = useCallback(() => {
+    // The parent is already closing the sheet, and its exit is running. The
+    // Modal's own Back (onRequestClose) still lands here after `visible` went
+    // false; a second exit would cancel the parent's, and its hidden report
+    // would never come: an invisible Modal that takes every tap, for good.
+    if (!visible) {
+      return
+    }
     Keyboard.dismiss()
     progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
       if (finished) {
-        runOnJS(onClose)()
+        runOnJS(requestClose)()
       }
     })
-  }, [onClose, progress])
+  }, [requestClose, progress, visible])
 
   // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
   // a claim the shell hands one press over on. Every session sheet renders through this component,

@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -19,6 +19,8 @@ import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { draggableDetailSheetStyles as styles } from './draggable-detail-sheet-styles'
 import { DRAWER_SPRING } from './drawer-spring'
+import { useDrawerCloseRequest } from './use-drawer-close-request'
+import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 import {
   resolveDraggableSheetHeights,
@@ -66,40 +68,15 @@ export function DraggableDetailSheet({
   header,
   children
 }: DraggableDetailSheetProps) {
-  const [mounted, setMounted] = useState(visible)
-  const onAfterCloseRef = useRef(onAfterClose)
-  const hiddenHandledRef = useRef(false)
+  const { mounted, handleHidden } = useDrawerMountLifecycle(visible, onAfterClose)
   // A tool row tapped with the composer's keyboard up: without this the
   // sheet sat under the keyboard until its window took focus.
   useKeyboardDismissedOnOpen(visible)
 
-  useEffect(() => {
-    onAfterCloseRef.current = onAfterClose
-  }, [onAfterClose])
-
-  useEffect(() => {
-    if (visible) {
-      hiddenHandledRef.current = false
-    }
-  }, [visible])
-
-  const handleHidden = useCallback(() => {
-    if (hiddenHandledRef.current) {
-      return
-    }
-    hiddenHandledRef.current = true
-    setMounted(false)
-    onAfterCloseRef.current?.()
-  }, [])
-
   // Why: mount before commit so the entrance can animate on the very first
   // frame; unmount only once the exit animation reports finished, keeping a
   // closed sheet's gesture/Reanimated setup out of the render tree.
-  const resolvedMounted = visible || mounted
-  if (resolvedMounted !== mounted) {
-    setMounted(resolvedMounted)
-  }
-  if (!resolvedMounted) {
+  if (!mounted) {
     return null
   }
 
@@ -144,12 +121,22 @@ function MountedDraggableDetailSheet({
   })
   const collapsedOffset = Math.max(0, fullHeight - defaultHeight)
 
+  // `showSheet` stands the sheet at its default rest and animates it in: an
+  // open, and a close its parent refused (use-drawer-close-request.ts, which
+  // also tells a sheet already off the screen from one still to animate out).
+  const showSheet = () => {
+    translateY.value = collapsedOffset
+    scrollOffsetY.value = 0
+    setSnap('default')
+    progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
+  }
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, onHidden, restore: showSheet })
+
   useEffect(() => {
     if (visible) {
-      translateY.value = collapsedOffset
-      scrollOffsetY.value = 0
-      setSnap('default')
-      progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
+      showSheet()
+    } else if (leftScreenRef.current) {
+      onHidden()
     } else {
       progress.value = withTiming(0, { duration: HIDE_DURATION_MS }, (finished) => {
         if (finished) {
@@ -164,14 +151,21 @@ function MountedDraggableDetailSheet({
   }, [visible])
 
   const dismiss = useCallback(() => {
-    translateY.value = 0
+    // Already closing: Back through the Modal's onRequestClose must not start a
+    // second exit that cancels the parent's (see mounted-bottom-drawer.tsx).
+    if (!visible) {
+      return
+    }
+    // Not `translateY.value = 0`: that moved a sheet standing at its default
+    // rest up to its full-height position in one frame before it slid down.
+    // The exit's own travel is the whole sheet height, so it clears the
+    // screen from wherever the sheet stands.
     progress.value = withTiming(0, { duration: HIDE_DURATION_MS }, (finished) => {
       if (finished) {
-        runOnJS(onClose)()
+        runOnJS(requestClose)()
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose])
+  }, [progress, requestClose, visible])
 
   // The seam every session sheet takes since upstream #22308: the hardware key natively, and a
   // claim on the shell's key inside the page. This sheet is the fork's own, so upstream's sweep
@@ -186,98 +180,109 @@ function MountedDraggableDetailSheet({
       : null
   )
 
-  function settle(nextTranslateY: number, velocityY: number) {
-    'worklet'
-    const outcome = resolveDraggableSheetSnap({
-      translateY: nextTranslateY,
-      velocityY,
-      fullHeight,
-      defaultHeight
-    })
-    if (outcome === 'closed') {
-      const velocity = Math.max(velocityY, DISMISS_VELOCITY_FLOOR)
-      const remaining = fullHeight - nextTranslateY
-      const duration = Math.min(
-        Math.max((remaining / velocity) * 1000, MIN_DISMISS_DURATION_MS),
-        MAX_DISMISS_DURATION_MS
-      )
-      translateY.value = withTiming(fullHeight, { duration })
-      progress.value = withTiming(0, { duration }, (finished) => {
-        if (finished) {
-          runOnJS(onClose)()
-        }
-      })
-      return
-    }
-    translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, DRAWER_SPRING)
-    runOnJS(setSnap)(outcome)
-  }
-
   const scrollHandler = useAnimatedScrollHandler((event) => {
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
   })
-  const scrollGesture = Gesture.Native()
 
-  const handlePanGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => {
-      dragStartOffset.value = translateY.value
-    })
-    .onUpdate((e) => {
-      const next = dragStartOffset.value + e.translationY
-      translateY.value = next < 0 ? next * RUBBER_BAND_FACTOR : next
-    })
-    .onEnd((e) => {
-      settle(translateY.value, e.velocityY)
-    })
+  // Why every gesture is memoised: the sheet re-renders whenever the call it
+  // shows changes (a running tool streams its output), and a new Gesture.Pan()
+  // per render makes gesture-handler reconfigure the handler tracking the
+  // finger, mid-drag (the bottom drawer's gestures are built once for the same reason).
+  const gestures = useMemo(() => {
+    const settle = (nextTranslateY: number, velocityY: number) => {
+      'worklet'
+      const outcome = resolveDraggableSheetSnap({
+        translateY: nextTranslateY,
+        velocityY,
+        fullHeight,
+        defaultHeight
+      })
+      if (outcome === 'closed') {
+        const velocity = Math.max(velocityY, DISMISS_VELOCITY_FLOOR)
+        const remaining = fullHeight - nextTranslateY
+        const duration = Math.min(
+          Math.max((remaining / velocity) * 1000, MIN_DISMISS_DURATION_MS),
+          MAX_DISMISS_DURATION_MS
+        )
+        translateY.value = withTiming(fullHeight, { duration })
+        progress.value = withTiming(0, { duration }, (finished) => {
+          if (finished) {
+            runOnJS(requestClose)()
+          }
+        })
+        return
+      }
+      translateY.value = withSpring(outcome === 'full' ? 0 : collapsedOffset, DRAWER_SPRING)
+      runOnJS(setSnap)(outcome)
+    }
+    const scroll = Gesture.Native()
 
-  // Why: at the default height nothing scrolls yet (per the evidence, the
-  // sheet opens static and only scrolls once pulled to full), so dragging
-  // anywhere on the body should behave exactly like dragging the handle.
-  const bodyPanGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .onBegin(() => {
-      dragStartOffset.value = translateY.value
-    })
-    .onUpdate((e) => {
-      const next = dragStartOffset.value + e.translationY
-      translateY.value = next < 0 ? next * RUBBER_BAND_FACTOR : next
-    })
-    .onEnd((e) => {
-      settle(translateY.value, e.velocityY)
-    })
+    const handle = Gesture.Pan()
+      .activeOffsetY([-8, 8])
+      .simultaneousWithExternalGesture(scroll)
+      .onBegin(() => {
+        dragStartOffset.value = translateY.value
+      })
+      .onUpdate((e) => {
+        const next = dragStartOffset.value + e.translationY
+        translateY.value = next < 0 ? next * RUBBER_BAND_FACTOR : next
+      })
+      .onEnd((e) => {
+        settle(translateY.value, e.velocityY)
+      })
 
-  const contentPanGesture = Gesture.Pan()
-    .activeOffsetY([-8, 8])
-    .simultaneousWithExternalGesture(scrollGesture)
-    .onBegin(() => {
-      contentDragStartY.value = 0
-      contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
-    })
-    .onUpdate((e) => {
-      if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
-        contentDragCanDismiss.value = false
+    // Why: at the default height nothing scrolls yet (per the evidence, the
+    // sheet opens static and only scrolls once pulled to full), so dragging
+    // anywhere on the body should behave exactly like dragging the handle.
+    const body = Gesture.Pan()
+      .activeOffsetY([-8, 8])
+      .onBegin(() => {
+        dragStartOffset.value = translateY.value
+      })
+      .onUpdate((e) => {
+        const next = dragStartOffset.value + e.translationY
+        translateY.value = next < 0 ? next * RUBBER_BAND_FACTOR : next
+      })
+      .onEnd((e) => {
+        settle(translateY.value, e.velocityY)
+      })
+
+    const content = Gesture.Pan()
+      .activeOffsetY([-8, 8])
+      .simultaneousWithExternalGesture(scroll)
+      .onBegin(() => {
         contentDragStartY.value = 0
-        if (translateY.value !== 0) {
-          translateY.value = withSpring(0, DRAWER_SPRING)
+        contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
+      })
+      .onUpdate((e) => {
+        if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+          contentDragCanDismiss.value = false
+          contentDragStartY.value = 0
+          if (translateY.value !== 0) {
+            translateY.value = withSpring(0, DRAWER_SPRING)
+          }
+          return
         }
-        return
-      }
-      if (!contentDragCanDismiss.value) {
-        contentDragCanDismiss.value = true
-        contentDragStartY.value = e.translationY
-      }
-      const dragged = e.translationY - contentDragStartY.value
-      translateY.value = dragged < 0 ? dragged * RUBBER_BAND_FACTOR : dragged
-    })
-    .onEnd((e) => {
-      if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) {
-        return
-      }
-      const dragged = e.translationY - contentDragStartY.value
-      settle(Math.max(0, dragged), e.velocityY)
-    })
+        if (!contentDragCanDismiss.value) {
+          contentDragCanDismiss.value = true
+          contentDragStartY.value = e.translationY
+        }
+        const dragged = e.translationY - contentDragStartY.value
+        translateY.value = dragged < 0 ? dragged * RUBBER_BAND_FACTOR : dragged
+      })
+      .onEnd((e) => {
+        if (!contentDragCanDismiss.value || scrollOffsetY.value > TOP_SCROLL_EPSILON) {
+          return
+        }
+        const dragged = e.translationY - contentDragStartY.value
+        settle(Math.max(0, dragged), e.velocityY)
+      })
+    return { scroll, handle, body, content }
+  }, [fullHeight, defaultHeight, collapsedOffset, requestClose])
+  const scrollGesture = gestures.scroll
+  const handlePanGesture = gestures.handle
+  const bodyPanGesture = gestures.body
+  const contentPanGesture = gestures.content
 
   const sheetStyle = useAnimatedStyle(() => {
     const enterTravel = reduceMotion
