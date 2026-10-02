@@ -31,6 +31,12 @@ export type MobileNativeChatSendClaim = {
  * phone's own active handle moving without the snapshot saying so (closing the
  * active terminal re-points it at another tab's) is read as a switch and refuses.
  *
+ * The screen check is not airtight (agentComposerOnScreen, claudeLiveFrame): a
+ * restored PTY's emulator is seeded with the old scrollback, so a seeded box whose
+ * indented footer rows came with it and with nothing drawn below by the new process
+ * yet still reads as Claude. A device check must settle it: wake a sleeping Claude
+ * tab and read its screen before the agent paints.
+ *
  * Following is a hazard: if the agent exited, the tab's new terminal can be a
  * plain shell, and the message and its Enter would run there as a command. The
  * tab's `agent` is no evidence (a hand-started agent's type outlives its process

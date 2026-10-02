@@ -1,3 +1,5 @@
+import { readFileSync, readdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
 import {
   AFTER_REVIEW_NOTICE,
@@ -73,7 +75,28 @@ describe('agentComposerOnScreen', () => {
     ['a bash-mode box, which has no `❯` row', [RULE, '! ', RULE, '  ? for shortcuts']],
     ['a menu Claude is asking, whose `❯ 1.` row is no input', [RULE, '❯ 1. Yes', '  2. No', RULE]],
     ['a box cut off before its bottom rule', [RULE, '❯ ']],
-    ['an `❯` row with no rule above it', ['❯ ', RULE]]
+    ['an `❯` row with no rule above it', ['❯ ', RULE]],
+    // A restored PTY's emulator is seeded with the old scrollback (new incarnation, new
+    // handle): the old box with the new process's rows under it.
+    ['the old box over a zsh prompt', [...EMPTY_COMPOSER, 'alwin@mac Code UI % ']],
+    ['the old box over a bash prompt', [...EMPTY_COMPOSER, 'alwin@host:~$ ']],
+    ['the old box over a `$ ` prompt', [...EMPTY_COMPOSER, '$ ']],
+    ['the old box over a `> ` prompt', [...EMPTY_COMPOSER, '> ']],
+    [
+      'the old box over a restore banner at column 0',
+      [...EMPTY_COMPOSER, 'Restored session 2026-10-01 14:02 · the previous process exited']
+    ],
+    [
+      'the old box over a zsh prompt with an RPROMPT',
+      [...EMPTY_COMPOSER, 'alwin@mac Code UI %                                          14:02:11']
+    ],
+    [
+      'the old box over a prompt, with its own footer rows kept above',
+      [...EMPTY_COMPOSER.slice(0, -1), 'alwin@mac ~ % ', EMPTY_COMPOSER.at(-1)!]
+    ],
+    // Every composer screen in fixtures/ has footer rows; a box with none is not shown to be whole.
+    ['a box with nothing under it', EMPTY_COMPOSER.slice(0, -2)],
+    ['a box with only blank rows under it', [...EMPTY_COMPOSER.slice(0, -2), '', '']]
   ])('is false for %s', async (_name, lines) => {
     expect(
       await agentComposerOnScreen({ client: answering(lines), terminal: 'term-2', agent: 'claude' })
@@ -103,6 +126,44 @@ describe('agentComposerOnScreen', () => {
       ).not.toHaveBeenCalled()
     }
   )
+})
+
+describe('the captured Claude screens under fixtures/', () => {
+  const dir = new URL('./fixtures/', import.meta.url)
+  const screens = readdirSync(fileURLToPath(dir))
+    .filter((name) => name.startsWith('claude-screen-') && name.endsWith('.txt'))
+    .map((name) => {
+      const rows = readFileSync(new URL(name, dir), 'utf8').split('\n')
+      return [
+        name,
+        rows.slice(rows.findIndex((row) => /^=== screen: .* ===$/.test(row)) + 1)
+      ] as const
+    })
+
+  // Claude Code 2.1.278 to 2.1.283: every row under the box is indented two spaces.
+  it.each(screens.filter(([name]) => !name.includes('permission')))(
+    'follows %s',
+    async (_name, lines) => {
+      expect(
+        await agentComposerOnScreen({
+          client: answering([...lines]),
+          terminal: 'term-2',
+          agent: 'claude'
+        })
+      ).toBe(true)
+    }
+  )
+
+  it('refuses the subagent permission dialog, which has no box', async () => {
+    const [, lines] = screens.find(([name]) => name.includes('permission'))!
+    expect(
+      await agentComposerOnScreen({
+        client: answering([...lines]),
+        terminal: 'term-2',
+        agent: 'claude'
+      })
+    ).toBe(false)
+  })
 })
 
 describe('hostTerminalOfTab', () => {
