@@ -15,7 +15,9 @@ const BASH_INPUT = /^<bash-input>([\s\S]*)<\/bash-input>$/
  * its output turn (`<bash-stdout>`, `<bash-stderr>`) stays hidden, since a bubble carrying the
  * output would no longer match the text the phone sent and its own copy would draw twice. The
  * command is kept as stored, a leading space included, so the words match what was typed.
- * Like surfaceCommandTurns, it runs before the noise filter.
+ * Like surfaceCommandTurns, it runs before the noise filter. It runs in the chat lane (use-mobile-
+ * native-chat-session-lane.ts), so the render and every reconciler that retires the phone's own
+ * copy of a send read the same `!cmd` turn; the render's own call finds nothing left to surface.
  */
 export function surfaceShellCommandTurns(
   messages: readonly NativeChatMessage[]
