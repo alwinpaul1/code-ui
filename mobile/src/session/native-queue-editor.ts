@@ -237,9 +237,6 @@ export async function finishNativeQueueEdit(
   await submitInput(io, agent, text)
 }
 
-/** Raised once part of a rebuild has reached the agent. Retrying from here
- * would queue the messages that already landed a second time, so the editor
- * must stop offering to write and let the user read what is left. */
 /** A delete is finished only once the agent's own queue no longer holds it.
  *
  *  Clearing the composer is not the same thing: the recall is what takes an
@@ -273,6 +270,10 @@ async function confirmRemoved(
   throw new Error('That message is still queued on the agent. It has not been deleted.')
 }
 
+/** Raised when the messages of a recalled queue cannot be put back: part of a rebuild reached the
+ * agent (retrying would queue the landed ones a second time), or the rebuild was refused before
+ * any write because a queued message starts with `!` (retyping it would run it again). Either way
+ * the editor must stop offering to write and let the user read what is left. */
 export class QueueRebuildError extends Error {
   readonly remaining: string[]
   constructor(message: string, remaining: string[]) {

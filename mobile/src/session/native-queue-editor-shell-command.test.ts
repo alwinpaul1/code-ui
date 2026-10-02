@@ -179,10 +179,14 @@ describe('rebuilding a queue that holds a message starting with !', () => {
     expect(write).not.toHaveBeenCalled()
   })
 
-  it('says the queue was not rebuilt, and why, in terms of what is left', () => {
+  // The recall put the queue in the desktop input and marked it residue (markMobileNativeChatInputResidue),
+  // and nothing was written, so the mark stands: the next message sent from the phone clears that input.
+  // The strand says so, so the messages can be copied first.
+  it('says the queue was not rebuilt, why, what is left, and that the next phone send clears it', () => {
     expect(SHELL_COMMAND_QUEUE_REBUILD_REFUSAL).toBe(
-      'A queued message starts with ! and would run as a shell command again if it were retyped, so the queue was not rebuilt. Your messages are in the desktop input, unsent.'
+      'A queued message starts with ! and would run as a shell command again if it were retyped, so the queue was not rebuilt. Your messages are in the desktop input, unsent; the next message you send from the phone clears that input, so copy them first.'
     )
+    expect(SHELL_COMMAND_QUEUE_REBUILD_REFUSAL).toContain('next message you send from the phone clears')
   })
 
   it('rebuilds a queue with no ! in it as before', async () => {
