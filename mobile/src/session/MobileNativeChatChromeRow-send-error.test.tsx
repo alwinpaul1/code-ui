@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { contrastRatio } from '../test/contrast'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider, useTheme } from '../theme/theme-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
@@ -25,7 +26,8 @@ vi.mock('lucide-react-native', () => ({
 // 2026-10-02 (screenshot): the red "Couldn't open <file>" line sat over the assistant's text and
 // the Tools row. The dock draws no ground by design (mobile-native-chat-dock-glass.test.ts), so the
 // line itself needs an opaque surface of its own. dangerSoft is translucent in both schemes and
-// would still let the text through, so the surface is bgRaised, as FloatingToast uses.
+// would still let the text through, and danger text on bgRaised measures 4.40:1 light / 4.47:1
+// dark, under the 4.5 bar, so the surface is bgPanel (opaque, 5.21 / 5.06).
 const message = "Couldn't open reports/draft.pdf: binary files don't open on the phone"
 
 function Row() {
@@ -85,13 +87,33 @@ describe('the failure line above the composer', () => {
 
   it('sits on an opaque surface so the chat text does not show through, in light', () => {
     const surface = surfaceBehindText('light')
-    expect(surface?.backgroundColor).toBe(lightColors.bgRaised)
+    expect(surface?.backgroundColor).toBe(lightColors.bgPanel)
     expect(surface?.borderColor).toBe(lightColors.border)
+    expect(contrastRatio(lightColors.danger, String(surface?.backgroundColor))).toBeGreaterThanOrEqual(4.5)
   })
 
   it('sits on an opaque surface so the chat text does not show through, in dark', () => {
     const surface = surfaceBehindText('dark')
-    expect(surface?.backgroundColor).toBe(darkColors.bgRaised)
+    expect(surface?.backgroundColor).toBe(darkColors.bgPanel)
     expect(surface?.borderColor).toBe(darkColors.border)
+    expect(contrastRatio(darkColors.danger, String(surface?.backgroundColor))).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe('the failure line band around the pill', () => {
+  it('passes list swipes through everywhere but the pill', () => {
+    let renderer: ReactTestRenderer | null = null
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <Row />
+        </ThemeProvider>
+      )
+    })
+    const alert = renderer!.root.findAll(
+      (node) => String(node.type) === 'View' && node.props.accessibilityRole === 'alert'
+    )[0]
+    expect(alert.props.pointerEvents).toBe('box-none')
+    act(() => renderer!.unmount())
   })
 })

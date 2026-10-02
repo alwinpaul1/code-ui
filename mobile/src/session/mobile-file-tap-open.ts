@@ -255,15 +255,16 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
 }
 
 /**
- * A PDF or a raster image is shown by the phone's own viewer (files.readPreview), so the tap never
- * asks the desktop for a tab. Orca 1.4.218 answers files.open for these with `opened: false`,
- * kind `binary`, and the tap then said "binary files don't open on the phone" about a file the
- * phone draws. Files the phone shows as text keep the desktop tab; a genuinely binary one (.psd)
- * still reaches the honest refusal.
+ * A PDF is shown by the phone's own viewer (files.readPreview), so the tap never asks the desktop
+ * for a tab. Orca 1.4.218 answers files.open for a PDF with `opened: false`, kind `binary` (its
+ * binary set: avif, heic, mov, mp3, mp4, pdf, zip), and the tap then said "binary files don't open
+ * on the phone" about a file the phone draws. Raster images are not in that set: the desktop opens
+ * a tab (`kind: 'image'`, `opened: true`) and the phone shows it, so they keep that path. Files
+ * the phone shows as text keep the desktop tab too; a genuinely binary one (.zip) still reaches
+ * the honest refusal.
  */
 function phoneShowsItself(path: string): boolean {
-  const kind = classifyMobileArtifact(path)
-  return kind === 'pdf' || kind === 'image'
+  return classifyMobileArtifact(path) === 'pdf'
 }
 
 function displayNameFromPath(path: string): string | undefined {

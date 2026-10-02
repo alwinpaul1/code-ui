@@ -811,16 +811,16 @@ describe('every other failed chat tap says why', () => {
 
   it('says a binary file does not open on the phone', async () => {
     const desktop = fakeDesktop({
-      files: ['assets/logo.psd'],
+      files: ['dist/archive.zip'],
       open: (relativePath) => ok({ worktree: 'wt-1', relativePath, kind: 'binary', opened: false })
     })
     const { options } = mount(desktop)
 
-    tap('assets/logo.psd')
+    tap('dist/archive.zip')
     await settle()
 
     expect(options.reportChatTapFailure).toHaveBeenCalledWith(
-      "Couldn't open assets/logo.psd: binary files don't open on the phone"
+      "Couldn't open dist/archive.zip: binary files don't open on the phone"
     )
   })
 

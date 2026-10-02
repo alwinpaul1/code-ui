@@ -9,6 +9,16 @@ describe('mobile text contrast', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
+  ] as const)('%s: keeps danger text readable on the chat failure pill (bgPanel)', (scheme, palette) => {
+    expect(
+      contrastRatio(palette.danger, palette.bgPanel),
+      `${scheme}: danger ${palette.danger} on ${palette.bgPanel}`
+    ).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
   ] as const)('%s: keeps muted text readable on every standard surface', (scheme, palette) => {
     for (const surface of [palette.bg, palette.bgPanel, palette.bgRaised]) {
       expect(

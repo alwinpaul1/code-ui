@@ -37,7 +37,7 @@ export function makeChatViewStyles(theme: Theme) {
       paddingBottom: space.xs
     },
     // The dock draws no ground, so a bare line here is painted over the transcript behind it
-    // (2026-10-02). An opaque raised surface, as FloatingToast uses; dangerSoft is translucent.
+    // (2026-10-02). An opaque panel surface: dangerSoft is translucent, and danger text on bgRaised is under 4.5:1.
     sendErrorPill: {
       maxWidth: '100%',
       paddingHorizontal: space.md,
@@ -45,7 +45,7 @@ export function makeChatViewStyles(theme: Theme) {
       borderRadius: radius.lg,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.bgRaised
+      backgroundColor: colors.bgPanel
     },
     chromeToggle: {
       flexDirection: 'row',

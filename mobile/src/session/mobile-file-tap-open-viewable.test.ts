@@ -24,12 +24,18 @@ function resolved(relativePath: string) {
   })
 }
 
+// What Orca 1.4.218's openMobileFile answers: a raster image opens a desktop tab, a PDF, zip or
+// similar is declined as binary.
+function openReply(relativePath: string) {
+  return /\.(png|jpe?g)$/i.test(relativePath)
+    ? ok({ worktree: 'wt-1', relativePath, kind: 'image', opened: true })
+    : ok({ worktree: 'wt-1', relativePath, kind: 'binary', opened: false })
+}
+
 function tap(relativePath: string) {
   const client = {
     sendRequest: vi.fn(async (method: string) =>
-      method === 'files.open'
-        ? ok({ worktree: 'wt-1', relativePath, kind: 'binary', opened: false })
-        : resolved(relativePath)
+      method === 'files.open' ? openReply(relativePath) : resolved(relativePath)
     )
   }
   const pushPreviewRoute = vi.fn()
@@ -67,8 +73,8 @@ async function settle() {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
-describe('tapping a file the phone draws itself, in the session worktree', () => {
-  it.each(['reports/draft_2026.pdf', 'shots/Screen.PDF', 'shots/home.png', 'shots/photo.JPG'])(
+describe('tapping a PDF the phone draws itself, in the session worktree', () => {
+  it.each(['reports/draft_2026.pdf', 'shots/Screen.PDF'])(
     'opens %s in the phone viewer without asking the desktop for a tab',
     async (path) => {
       const { client, pushPreviewRoute, onOpenFailed } = tap(path)
@@ -93,6 +99,22 @@ describe('tapping a file the phone draws itself, in the session worktree', () =>
     }
   )
 
+  it.each(['shots/home.png', 'shots/photo.JPG'])(
+    'still opens %s as a desktop tab, which the desktop does for images',
+    async (path) => {
+      const { client, pushPreviewRoute, onOpenFailed } = tap(path)
+      await settle()
+
+      expect(client.sendRequest).toHaveBeenCalledWith(
+        'files.open',
+        { worktree: 'id:wt-1', relativePath: path },
+        { timeoutMs: 15_000 }
+      )
+      expect(pushPreviewRoute).not.toHaveBeenCalled()
+      expect(onOpenFailed).not.toHaveBeenCalled()
+    }
+  )
+
   it('still asks the desktop to open a file the phone shows as text', async () => {
     const { client, pushPreviewRoute } = tap('src/app.ts')
     await settle()
@@ -106,7 +128,7 @@ describe('tapping a file the phone draws itself, in the session worktree', () =>
   })
 
   it('still says a binary file the phone cannot draw does not open', async () => {
-    const { pushPreviewRoute, onOpenFailed } = tap('assets/logo.psd')
+    const { pushPreviewRoute, onOpenFailed } = tap('dist/archive.zip')
     await settle()
 
     expect(pushPreviewRoute).not.toHaveBeenCalled()
