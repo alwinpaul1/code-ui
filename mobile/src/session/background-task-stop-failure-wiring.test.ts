@@ -58,7 +58,7 @@ describe("a failed background-task Stop reaches the sheet's own reporter", () =>
   })
 
   it('passes it and the tab to the chat view', () => {
-    const view = onlyMount('MobileNativeChatOverlay.tsx', 'MobileNativeChatView')
+    const view = onlyMount('MobileNativeChatOverlay.tsx', 'MobileNativeChatShellConfirmView')
     expect(view.get('reportBackgroundTaskFailure')).toBe('onSendFailure')
     expect(view.get('sendSurfaceId')).toBe('sendSurfaceId')
   })

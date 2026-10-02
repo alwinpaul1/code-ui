@@ -28,10 +28,19 @@ export type ClaudeInputRead =
       /** Rows the input takes, at least 1. The larger of the rows drawn and the
        *  rows `draft` would take at the screen's width. */
       rows: number
+      /** `'bash'` when the box is in `!` bash mode (its row starts `!`, not `❯`).
+       *  Absent for the ordinary prompt box. */
+      mode?: 'bash'
     }
 
 const INPUT_ROW = /^❯(?: |\s|$)/
 const MENU_ROW = /^❯\s+\d+[.)]\s/
+/** The bash-mode box's row: `!` and a no-break space where the prompt box has `❯`
+ *  and one (Claude Code 2.1.287's `qw`, read from the binary; MODELLED, not
+ *  captured). Used by readClaudeInput only: every other reader of the box
+ *  (claudeRowsUnderBox, claudeComposerLive, the sent-prompt rows) keeps to the
+ *  `❯` box, so a send onto a box already in bash mode is still refused. */
+const BASH_ROW = /^!(?:\u00a0| |$)/
 /** What Claude draws in an empty input: the queue hints (QUEUE_HINT and
  *  SELECTED_HINT, every wording the 2.1.287 binary holds) and its example
  *  prompt. Dim on the desktop, so the screen cannot tell it from typed text. */
@@ -56,18 +65,21 @@ function rowsFor(text: string, columns: number): number {
  * The composer is the last `❯` row with a rule directly above it and another
  * rule below it (the box's two rules), so a sent prompt's `❯` row in the
  * conversation, a menu's `❯ 1.` row and a quoted `❯` are never taken for it.
+ * The same box in `!` bash mode has `!` where `❯` is and is read the same way,
+ * with `mode: 'bash'` (modelled from the binary, not captured).
  */
 export function readClaudeInput(lines: readonly string[], draft: string): ClaudeInputRead {
   for (let at = lines.length - 1; at >= 1; at--) {
     const row = lines[at]!
-    if (!INPUT_ROW.test(row) || MENU_ROW.test(row) || !isRule(lines[at - 1]!)) {
+    const bash = BASH_ROW.test(row)
+    if (!(INPUT_ROW.test(row) || bash) || MENU_ROW.test(row) || !isRule(lines[at - 1]!)) {
       continue
     }
     const bottom = lines.findIndex((line, index) => index > at && isRule(line))
     if (bottom === -1) {
       continue
     }
-    const drawn = [row.replace(/^❯[  ]?/, ''), ...lines.slice(at + 1, bottom)]
+    const drawn = [row.replace(/^[❯!][  ]?/, ''), ...lines.slice(at + 1, bottom)]
       .map((part) => part.trim())
       .filter((part) => part !== '')
     const tailText = isPlaceholder(drawn.join(' ')) ? '' : drawn.join('\n')
@@ -78,7 +90,8 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
     return {
       located: true,
       text,
-      rows: text === '' ? 1 : Math.max(1 + (bottom - at - 1), rowsFor(draftText, columns), 1)
+      rows: text === '' ? 1 : Math.max(1 + (bottom - at - 1), rowsFor(draftText, columns), 1),
+      ...(bash ? { mode: 'bash' as const } : {})
     }
   }
   return { located: false }

@@ -165,7 +165,7 @@ describe('the wait reaches the dock', () => {
   }
 
   it('from the controller into the chat view', () => {
-    const view = jsxAttributes('MobileNativeChatOverlay.tsx', 'MobileNativeChatView')
+    const view = jsxAttributes('MobileNativeChatOverlay.tsx', 'MobileNativeChatShellConfirmView')
     expect(view.get('terminalWait')).toBe('{controller.nativeChatTerminalWait}')
     expect(view.get('onOpenTerminal')).toBe('{controller.openNativeChatTerminal}')
   })
