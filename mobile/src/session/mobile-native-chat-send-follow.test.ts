@@ -6,6 +6,11 @@ import {
   EMPTY_COMPOSER
 } from './fixtures/claude-composer-2.1.287'
 import {
+  NAMED_RULES,
+  queuedScreen2_1_285,
+  takenScreen2_1_285
+} from './fixtures/claude-queued-named-rule-2.1.285'
+import {
   agentComposerOnScreen,
   claudeComposerIsLastOnScreen
 } from './mobile-native-chat-send-follow'
@@ -23,7 +28,12 @@ describe('claudeComposerIsLastOnScreen', () => {
     ['a box holding a typed message', composerWithTextInRows('look at the diff')],
     ['a box whose text Orca moved out into the draft', composerWithTextInDraft()],
     ['a box under the review notice', AFTER_REVIEW_NOTICE],
-    ['a box whose status row under it ends in a percentage', [...EMPTY_COMPOSER, '  Context 16%']]
+    ['a box whose status row under it ends in a percentage', [...EMPTY_COMPOSER, '  Context 16%']],
+    // Claude Code 2.1.285: the session's name on the rule above the box, status rows under it.
+    ['a box under a named rule, with a queued message above it', queuedScreen2_1_285(NAMED_RULES.captured1152)],
+    ['a box under a named rule, once the queue is taken', takenScreen2_1_285(NAMED_RULES.captured1152)],
+    // Modelled: the label on the bottom rule as readClaudeInput's rule test allows.
+    ['a box whose bottom rule carries a label', [...EMPTY_COMPOSER.slice(0, -3), NAMED_RULES.captured1152, ...EMPTY_COMPOSER.slice(-2)]]
   ])('is true for %s', (_name, lines) => {
     expect(claudeComposerIsLastOnScreen(lines)).toBe(true)
   })

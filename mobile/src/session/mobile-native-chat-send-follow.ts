@@ -1,4 +1,5 @@
 import { readClaudeInput } from './claude-composer-screen'
+import { isPromptRule } from './mobile-terminal-queue-block'
 import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
 /** What a send says when the tab's terminal changed under it and the new one
@@ -19,7 +20,8 @@ export type MobileNativeChatSendFollow = {
  *  `% `, where a percentage in a status row has a digit before it), or starting with
  *  a prompt glyph. What a plain shell draws under the box an exited Claude left. */
 const SHELL_PROMPT = /[$#]\s*$|\s%\s*$|^\s*[➜❯λ]/u
-const RULE_ROW = /^[\s─━]*[─━]{3}[\s─━]*$/
+/** A rule as readClaudeInput takes one, a named rule (2.1.285) included. */
+const isRule = (row: string): boolean => /[─━]{3}/.test(row) && isPromptRule(row)
 
 /**
  * Whether the screen shows Claude Code's own input box as the last thing drawn:
@@ -35,7 +37,7 @@ export function claudeComposerIsLastOnScreen(lines: readonly string[]): boolean 
   if (!readClaudeInput(lines, '').located) {
     return false
   }
-  const bottom = lines.findLastIndex((row) => RULE_ROW.test(row))
+  const bottom = lines.findLastIndex(isRule)
   return !lines.slice(bottom + 1).some((row) => SHELL_PROMPT.test(row))
 }
 
