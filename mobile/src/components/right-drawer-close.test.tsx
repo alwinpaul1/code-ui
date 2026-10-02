@@ -1,4 +1,4 @@
-import { createElement, type ReactElement } from 'react'
+import { createElement, type ComponentProps, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -85,7 +85,7 @@ function Content(): null {
 }
 
 function drawer(visible: boolean, onClose: () => void = () => {}): ReactElement {
-  return createElement(RightDrawer, { visible, onClose, children: createElement(Content) })
+  return createElement(RightDrawer, { visible, onClose } as ComponentProps<typeof RightDrawer>, createElement(Content))
 }
 
 let renderer: ReactTestRenderer | null = null

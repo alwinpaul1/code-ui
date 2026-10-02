@@ -1,4 +1,4 @@
-import { createElement, useState } from 'react'
+import { createElement, useState, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -132,7 +132,7 @@ function drawer(props: {
   onHidden: () => void
   expandable?: boolean
 }) {
-  return createElement(MountedBottomDrawer, { ...props, children: createElement(Content) })
+  return createElement(MountedBottomDrawer, props as ComponentProps<typeof MountedBottomDrawer>, createElement(Content))
 }
 
 let renderer: ReactTestRenderer | null = null

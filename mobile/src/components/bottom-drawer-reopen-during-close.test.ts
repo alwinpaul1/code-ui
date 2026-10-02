@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BottomDrawer } from './BottomDrawer'
@@ -12,12 +12,8 @@ function DrawerContent(): null {
 }
 
 function drawer(visible: boolean, onAfterClose: () => void) {
-  return createElement(BottomDrawer, {
-    visible,
-    onClose: () => {},
-    onAfterClose,
-    children: createElement(DrawerContent)
-  })
+  const props = { visible, onClose: () => {}, onAfterClose } as ComponentProps<typeof BottomDrawer>
+  return createElement(BottomDrawer, props, createElement(DrawerContent))
 }
 
 // The mock above makes the mounted drawer a host element named after it.
