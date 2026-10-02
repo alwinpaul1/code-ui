@@ -113,10 +113,9 @@ describe('agentComposerOnScreen', () => {
     expect(await agentComposerOnScreen({ client, terminal: 'term-2', agent: 'claude' })).toBe(false)
   })
 
-  // Codex draws its input with `›`, and so does a sent prompt, a popup's selected row
-  // and an approval's selected option (codex-terminal-queued-messages.ts): no screen
-  // proves its composer is up, so a send never follows a Codex tab to a new terminal.
-  it.each(['codex', 'omp', null, undefined])(
+  // An agent whose composer the phone cannot locate: a send never follows its tab to a
+  // new terminal, and the screen is not even read.
+  it.each(['omp', null, undefined])(
     'is false for a composer-shaped screen when the agent is %s, without reading it',
     async (agent) => {
       const client = answering(EMPTY_COMPOSER)
@@ -126,6 +125,17 @@ describe('agentComposerOnScreen', () => {
       ).not.toHaveBeenCalled()
     }
   )
+
+  // Codex draws its input with `›`, and so does a sent prompt, a popup's selected row and an
+  // approval's selected option (codex-terminal-queued-messages.ts): its footer under that row
+  // is the proof (codexComposerLive), so a Claude composer is not it.
+  it('reads the screen for Codex, and a Claude composer is not Codex\'s', async () => {
+    const client = answering(EMPTY_COMPOSER)
+    expect(await agentComposerOnScreen({ client, terminal: 'term-2', agent: 'codex' })).toBe(false)
+    expect(
+      (client as { sendRequest: ReturnType<typeof vi.fn> }).sendRequest
+    ).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('the captured Claude screens under fixtures/', () => {

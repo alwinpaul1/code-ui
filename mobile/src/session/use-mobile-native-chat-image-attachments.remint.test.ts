@@ -53,6 +53,11 @@ import {
 // on a screen that shows Claude's composer.
 
 const SHELL = ['alwin@mac Code UI % ']
+import {
+  APPROVAL_0158,
+  codexExitedToShell,
+  WORKING_0158
+} from './fixtures/codex-composer-screens'
 const RULE = '─'.repeat(190)
 // Claude Code 2.1.287's `!` bash-mode box: the rules without a `❯` row (modelled from
 // the 2.1.287 binary's mode prefix, not captured), so readClaudeInput does not locate it.
@@ -272,21 +277,38 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
   })
 
-  // Codex draws its input with `›`, and so do a sent prompt, a popup's selected
-  // row and an approval's selected option, so no screen proves Codex's composer.
+  // Another agent, or none named: the phone cannot locate its composer on a screen,
+  // so a follow never goes ahead, whatever the screen shows.
   it.each([
-    ['Codex', 'codex'],
     ['another agent', 'omp'],
     ['an agent the tab does not name', null]
   ])("refuses even a composer-shaped screen when the tab's agent is %s", async (_name, agent) => {
     const t = setUp(
-      { 'term-1': CODEX_COMPOSER, 'term-2': agent === 'codex' ? CODEX_COMPOSER : EMPTY_COMPOSER },
+      { 'term-1': CODEX_COMPOSER, 'term-2': EMPTY_COMPOSER },
       { agent, onLook: { 'term-1': () => void (t.activeHandleRef.current = 'term-2') } }
     )
     expect(await send('hello')).toBe(false)
     expect(t.baseSend).not.toHaveBeenCalled()
     expect(t.writes('term-2')).toEqual([])
     expect(t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+  })
+
+  // Codex: a `›` row alone proves nothing (a sent prompt, a popup row, an approval
+  // option wear it), so the follow wants its footer under it too
+  // (codexComposerLive; Codex 0.158.0 screens from fixtures/codex-composer-screens.ts).
+  it.each([
+    ['a Codex composer', WORKING_0158, true],
+    ['a Claude composer, which is not Codex', EMPTY_COMPOSER, false],
+    ['a shell under the old Codex frame (modelled)', codexExitedToShell(WORKING_0158, '66% '), false],
+    ['a Codex approval', APPROVAL_0158, false]
+  ])('for a Codex tab, a follow onto %s', async (_name, screen, follows) => {
+    const t = setUp(
+      { 'term-1': WORKING_0158, 'term-2': screen },
+      { agent: 'codex', onLook: { 'term-1': () => void (t.activeHandleRef.current = 'term-2') } }
+    )
+    expect(await send('hello')).toBe(follows)
+    expect(t.baseSend.mock.calls.length > 0).toBe(follows)
+    expect(t.onSendError.mock.calls).toEqual(follows ? [] : [[SEND_TERMINAL_RESTARTED]])
   })
 
   it('refuses when the tab is given a terminal a second time, however it looks', async () => {

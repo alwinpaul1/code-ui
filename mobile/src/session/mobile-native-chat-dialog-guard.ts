@@ -1,5 +1,6 @@
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { claudeComposerLive } from './claude-composer-screen'
+import { codexComposerLive } from './codex-composer-screen'
 import { hostAnswersScreens, noteScreenReplySource } from './host-screen-answers'
 import {
   replyIsScreen,
@@ -16,6 +17,10 @@ export const SEND_WITHOUT_COMPOSER_REFUSAL =
 /** Said when the host answered that it has no screen to show for the terminal. */
 export const SEND_SCREEN_UNAVAILABLE_REFUSAL =
   'The desktop has no screen to show for this terminal yet, so the message was not typed.'
+
+/** Said when a screen that can be read does not show Codex's input box. */
+export const SEND_WITHOUT_CODEX_COMPOSER_REFUSAL =
+  "Codex's input box isn't on the desktop screen, so the message was not typed."
 
 /** Said when a read of the screen failed on a host that has shown its screen. */
 export const SEND_SCREEN_UNREADABLE_REFUSAL =
@@ -169,8 +174,11 @@ export function terminalDialogOnScreen(lines: readonly string[], agent?: string 
 }
 
 /** The agents whose composer the phone can locate on a screen, so a send to one
- *  that shows none (a shell, a dialog) can be refused. */
-const composerLocated = (agent: string | null | undefined): boolean => agent === 'claude'
+ *  that shows none (a shell, a dialog) can be refused. Codex's `›` row alone is
+ *  also a sent prompt, a popup row and an approval option; its footer under it is
+ *  what codexComposerLive reads. */
+const composerLocated = (agent: string | null | undefined): boolean =>
+  agent === 'claude' || agent === 'codex'
 
 /** The pause before the one more read of a screen that was not there. */
 const RETRY_PAUSE_MS = 200
@@ -213,7 +221,7 @@ async function lookAtScreen(args: Parameters<typeof readSendUnderDialogRefusal>[
  * presses Enter (a composer send, a photo paste, an answer, a picked command).
  * After the dialog check, which keeps its place and its own message, it refuses
  * a screen that is a screen (`source: 'screen'`, said outright) and does not show
- * Claude's input box: a shell the agent exited to, transcript mode, `!` bash
+ * the agent's input box (Claude's, or Codex's): a shell the agent exited to, transcript mode, `!` bash
  * mode (what is typed there runs as a command, so it is refused too). The tab
  * still says `claude` for about 30 minutes after the process is gone (a
  * hand-started agent's type outlives it), so the tab is no evidence.
@@ -230,7 +238,8 @@ async function lookAtScreen(args: Parameters<typeof readSendUnderDialogRefusal>[
  *  - a reply with no `source`, or a stream tail: an older host, which cannot
  *    show a screen. Fails open for the same reason: refusing every send to it
  *    would be the worse bug.
- * Codex and every other agent are unchanged here (composerLocated).
+ * Codex gets the same looks with its own proof (codexComposerLive); every other
+ * agent is unchanged (composerLocated).
  */
 export async function readSendUnderDialogRefusal(args: {
   client: Parameters<typeof terminalScreenLinesRead.request>[0]
@@ -263,9 +272,13 @@ export async function readSendUnderDialogRefusal(args: {
   if (terminalDialogOnScreen(seen.lines, args.agent)) {
     return SEND_UNDER_DIALOG_REFUSAL
   }
-  return wantsBox && replyIsScreen(seen.reply) && !claudeComposerLive(seen.lines)
-    ? SEND_WITHOUT_COMPOSER_REFUSAL
-    : null
+  if (!wantsBox || !replyIsScreen(seen.reply)) {
+    return null
+  }
+  if (args.agent === 'codex') {
+    return codexComposerLive(seen.lines) ? null : SEND_WITHOUT_CODEX_COMPOSER_REFUSAL
+  }
+  return claudeComposerLive(seen.lines) ? null : SEND_WITHOUT_COMPOSER_REFUSAL
 }
 
 /** Runs `look`, says its refusal through `report`, and answers whether the

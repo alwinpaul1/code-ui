@@ -20,6 +20,7 @@ import {
   createFakeComposerHost,
   type FakeComposerHost
 } from './fake-claude-composer-host.test-support'
+import { WORKING_0158 } from './fixtures/codex-composer-screens'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import {
   acquireMobileNativeChatTerminalWrite,
@@ -258,12 +259,30 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(acceptSend).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a Codex tab on its own send: no look at a Claude composer, the same bytes', async () => {
+  it('keeps a Codex tab on its own send: one look at its composer, no Claude clear-and-verify, the same bytes', async () => {
     const host = createFakeComposerHost()
-    mount(host, 'codex')
+    const reads = vi.fn()
+    // Codex 0.158.0 mid-turn (fixtures/codex-composer-screens.ts), whatever the Claude stand-in draws.
+    const codexHost = {
+      ...host,
+      handle: vi.fn(async (method: string, params: unknown) => {
+        if (method === 'terminal.read') {
+          reads()
+          return {
+            id: 'r',
+            ok: true,
+            result: { terminal: { tail: WORKING_0158, source: 'screen' } },
+            _meta: { runtimeId: 'r' }
+          }
+        }
+        return host.handle(method, params)
+      })
+    } as FakeComposerHost
+    mount(codexHost, 'codex')
 
     await sendMessage('hello codex')
 
+    expect(reads).toHaveBeenCalledTimes(1)
     expect(host.reads).toBe(0)
   })
 

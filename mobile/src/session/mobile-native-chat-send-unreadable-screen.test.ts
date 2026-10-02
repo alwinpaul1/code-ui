@@ -122,8 +122,8 @@ describe('a send to a host that says it has no screen to show', () => {
 
   it('is left alone for an agent whose composer the phone cannot locate', async () => {
     const host = scripted([unavailable()])
-    expect(await look(host.client, 'codex')).toBeNull()
     expect(await look(host.client, 'openclaude')).toBeNull()
+    expect(await look(host.client, null)).toBeNull()
   })
 })
 

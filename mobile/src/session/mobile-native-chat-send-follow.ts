@@ -1,4 +1,5 @@
 import { claudeRowsUnderBox } from './claude-composer-screen'
+import { codexComposerLive } from './codex-composer-screen'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
@@ -48,11 +49,12 @@ const SCREEN_READ_MS = 2_000
 /**
  * Positive evidence that `terminal`'s screen is the agent's composer, read
  * fresh: `readClaudeInput` locates the `❯` row between the box's two rules.
- * Only Claude has a reader that tells its composer from everything else on
- * screen. Codex draws its input with `›`, and so does a sent prompt, a popup's
- * selected row and an approval's selected option
- * (codex-terminal-queued-messages.ts), so no screen proves Codex's composer is
- * up: Codex, any other agent and a read that fails or times out are all false.
+ * Claude and Codex have a reader that tells their composer from everything
+ * else on screen. Codex draws its input with `›`, and so does a sent prompt, a
+ * popup's selected row and an approval's selected option
+ * (codex-terminal-queued-messages.ts), so for Codex the proof is that row with
+ * its indented footer under it (codexComposerLive, which says which captures
+ * stand behind it). Any other agent and a read that fails or times out are false.
  * `located: false` (a shell, a dialog, a `!` bash-mode box, a screen not drawn
  * yet) is no evidence either, nor is a box with a column-0 row or nothing under it
  * (claudeLiveFrame).
@@ -80,7 +82,7 @@ export async function agentComposerOnScreen(args: {
   agent?: string | null
   deadline?: number
 }): Promise<boolean> {
-  if (args.agent !== 'claude') {
+  if (args.agent !== 'claude' && args.agent !== 'codex') {
     return false
   }
   try {
@@ -97,7 +99,10 @@ export async function agentComposerOnScreen(args: {
         }
       )
     )
-    return lines !== null && claudeLiveFrame(lines)
+    return (
+      lines !== null &&
+      (args.agent === 'codex' ? codexComposerLive(lines) : claudeLiveFrame(lines))
+    )
   } catch {
     return false
   }
