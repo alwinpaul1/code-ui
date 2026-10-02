@@ -178,7 +178,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   if (
     resolvedWorktreeId !== options.worktreeId ||
     options.line !== null ||
-    options.column !== null
+    options.column !== null ||
+    phoneShowsItself(openedPath)
   ) {
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
@@ -251,6 +252,18 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
   options.scheduleDelayedAction(() => void activateOpenedTab(), 300)
   options.scheduleDelayedAction(() => void activateOpenedTab(), 900)
   options.scheduleDelayedAction(() => void activateOpenedTab(), 1800)
+}
+
+/**
+ * A PDF or a raster image is shown by the phone's own viewer (files.readPreview), so the tap never
+ * asks the desktop for a tab. Orca 1.4.218 answers files.open for these with `opened: false`,
+ * kind `binary`, and the tap then said "binary files don't open on the phone" about a file the
+ * phone draws. Files the phone shows as text keep the desktop tab; a genuinely binary one (.psd)
+ * still reaches the honest refusal.
+ */
+function phoneShowsItself(path: string): boolean {
+  const kind = classifyMobileArtifact(path)
+  return kind === 'pdf' || kind === 'image'
 }
 
 function displayNameFromPath(path: string): string | undefined {
