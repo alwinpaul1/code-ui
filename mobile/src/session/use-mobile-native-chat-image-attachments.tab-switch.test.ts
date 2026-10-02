@@ -140,6 +140,20 @@ describe('a composer send when the tab changes while it waits', () => {
     expect(baseSend).toHaveBeenCalledTimes(1)
   })
 
+  // Degenerate: a terminal tab that had no terminal and still has none is no
+  // switch; the message send says why it cannot go, as before.
+  it('hands a terminal tab with no terminal, before or after, to the message send', async () => {
+    const activeHandleRef = { current: null as string | null }
+    const baseSend = vi.fn().mockResolvedValue('rejected')
+    const onSendError = vi.fn()
+    mount(baseArgs({ client: makeClient([]) as unknown as RpcClient, activeHandleRef, baseSend, onSendError }))
+    await act(async () => {
+      await hook!.sendNativeChat('hello')
+    })
+    expect(baseSend).toHaveBeenCalledTimes(1)
+    expect(onSendError).not.toHaveBeenCalledWith('Message not sent (session changed)')
+  })
+
   // Degenerate: a structured chat has no terminal to switch from, and a tab
   // that had none and still has none is no switch.
   it('sends when there was no terminal and still is none', async () => {
