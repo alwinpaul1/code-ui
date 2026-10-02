@@ -6,7 +6,7 @@ export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer 
 
 /** Said when a screen that can be read does not show Claude's input box. */
 export const SEND_WITHOUT_COMPOSER_REFUSAL =
-  "Claude's input box isn't on the desktop screen, so the message was not typed. If Claude exited, start it again there."
+  "Claude's input box isn't on the desktop screen, so the message was not typed."
 
 /** How long a send waits for its look at the screen. A slower read goes
  *  without the look, as a send did before there was one. */

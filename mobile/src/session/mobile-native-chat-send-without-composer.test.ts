@@ -32,6 +32,7 @@ import {
   NAMED_RULES,
   queuedScreen2_1_285
 } from './fixtures/claude-queued-named-rule-2.1.285'
+import { claudeLiveFrame } from './mobile-native-chat-send-follow'
 import {
   readSendUnderDialogRefusal,
   SEND_UNDER_DIALOG_REFUSAL,
@@ -131,6 +132,11 @@ const LEGIT: [string, string[]][] = [
   ],
   ['vim mode, -- INSERT -- under the box (modelled)', ['⏺ Done.', RULE, '❯ ', RULE, '  -- INSERT --']],
   ['text typed on the desktop, in the rows', composerWithTextInRows('half a thought')],
+  // 2.1.287's agents panel under the footer has no left padding: a selected or
+  // mouse-hovered row starts with `❯ ` at column 0 (a desk mouse resting on it).
+  ['an agents panel, no row selected', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '  ◯ main', '  ◯ general-purpose  Probe the relay   1m 3s']],
+  ['an agents panel with the main row hovered', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '❯ ◉ main', '  ◯ general-purpose  Probe the relay   1m 3s']],
+  ['an agents panel with a task row hovered', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '  ◉ main', '❯ ◯ general-purpose  Probe the relay   1m 3s']],
   // The footer is `null` in default mode with the hint suppressed: nothing under
   // the box. A shell leaves its prompt there, so an EMPTY area is not a shell.
   ['no status line and no footer at all', ['⏺ Done.', RULE, '❯ ', RULE]]
@@ -143,7 +149,7 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
 
   it('says why, and what to do', () => {
     expect(SEND_WITHOUT_COMPOSER_REFUSAL).toBe(
-      "Claude's input box isn't on the desktop screen, so the message was not typed. If Claude exited, start it again there."
+      "Claude's input box isn't on the desktop screen, so the message was not typed."
     )
   })
 
@@ -186,6 +192,19 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
   it('refuses an empty screen and accepts a one-row-under box', async () => {
     expect(await look(reply([]))).toBe(SEND_WITHOUT_COMPOSER_REFUSAL)
     expect(await look(reply([RULE, '❯ ', RULE, '  ? for shortcuts']))).toBeNull()
+  })
+})
+
+describe('the remint follow reads a hovered agents-panel row as Claude too', () => {
+  it.each([
+    ['main row', '❯ ◉ main'],
+    ['task row', '❯ ◯ general-purpose  Probe the relay']
+  ])('accepts the box with the %s hovered', (_name, row) => {
+    expect(claudeLiveFrame(['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, row])).toBe(true)
+  })
+
+  it('still refuses a starship prompt under the box', () => {
+    expect(claudeLiveFrame(claudeExitedToShell(SHELL_PROMPTS.starship))).toBe(false)
   })
 })
 

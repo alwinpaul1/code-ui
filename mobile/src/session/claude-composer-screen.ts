@@ -84,6 +84,14 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
   return { located: false }
 }
 
+/** A SELECTED row of the agents panel Claude Code 2.1.287 draws under the footer
+ *  (background agents and tasks running). The panel container has no left
+ *  padding, unlike the footer's `paddingX: 2`, so its rows start with two spaces
+ *  and a selected or mouse-hovered one starts with `❯ ` at column 0, then the
+ *  row's circle glyph (`◯` idle, `◉` selected-main; read from the binary). A
+ *  shell prompt is not followed by one. */
+const AGENTS_PANEL_SELECTED = /^❯ (?=[◯◉])/
+
 /**
  * The non-blank rows under the composer's bottom rule, or null when no composer
  * is located (`readClaudeInput`'s own test). Claude Code 2.1.287 draws every row
@@ -98,7 +106,10 @@ export function claudeRowsUnderBox(lines: readonly string[]): string[] | null {
     }
     const bottom = lines.findIndex((line, index) => index > at && isRule(line))
     if (bottom !== -1) {
-      return lines.slice(bottom + 1).filter((row) => row.trim() !== '')
+      return lines
+        .slice(bottom + 1)
+        .filter((row) => row.trim() !== '')
+        .map((row) => row.replace(AGENTS_PANEL_SELECTED, '  '))
     }
   }
   return null
