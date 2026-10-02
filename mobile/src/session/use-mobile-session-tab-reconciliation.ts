@@ -81,7 +81,8 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       pendingBrowserFocusPageIdRef.current !== null ||
       hasConnectedTerminalAbsentFromSessionTabs(terminalsRef.current, sessionTabsRef.current) ||
       // Why: a chat-covered handle that ran out of rearms and left `terminal.list`
-      // was reminted by a desktop graph reload. Only a fresh tab snapshot carries
+      // was reminted by a desktop graph reload (a synthetic handle is re-minted for the
+      // same live PTY; a restart gives a new PTY: orca-runtime.ts, 1.4.178-rc.2). Only a fresh tab snapshot carries
       // the replacement handle, so force one instead of holding the composer locked.
       nativeChatStream.hasTabsRecoveryNeed(),
     [nativeChatStream]

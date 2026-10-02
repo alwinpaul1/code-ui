@@ -28,6 +28,7 @@ function baseArgs(overrides: Partial<HookArgs> = {}): HookArgs {
     connState: 'connected',
     deviceTokenRef: { current: null },
     nativeChatScopeKey: 'scope-1',
+    hostTerminalOfTab: () => null,
     nativeChatInputLeaseReady: false,
     getActiveWorktreeConnectionId: async () => 'conn-1',
     beforeTerminalSend: async () => true,

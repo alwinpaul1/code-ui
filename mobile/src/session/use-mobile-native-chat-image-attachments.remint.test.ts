@@ -44,20 +44,19 @@ import {
 } from './use-mobile-native-chat-image-attachments.send-while-uploading.test-support'
 
 // The desktop can give a tab a new terminal handle while a composer send waits (a
-// chip's upload, the relay, its look at the screen): a PTY restart. Orca re-mints
-// a leaf's handle when the leaf is bound to a different PTY (orca-runtime.ts
-// graph sync: invalidateLeafHandle on `existing.ptyId !== ptyId`), so the new
-// terminal is a FRESH process. If the agent had exited, it is a plain shell, and
-// the message and its Enter would run there as a command. The send follows the
-// tab to the new terminal only on a screen that shows Claude's composer.
+// chip's upload, the relay, its look at the screen): a PTY restart (a new PTY, whose
+// screen is blank until the agent paints) or a renderer reload (Orca 1.4.178-rc.2,
+// orca-runtime.ts markRendererReloading clears `handles`, so a synthetic handle is
+// re-minted for the SAME live PTY). If the agent had exited, the new terminal can be
+// a plain shell, and the message and its Enter would run there as a command. The
+// send follows the tab only to a handle the host's snapshot names for it, and only
+// on a screen that shows Claude's composer.
 
 const SHELL = ['alwin@mac Code UI % ']
 const RULE = '─'.repeat(190)
 // Claude Code 2.1.287's `!` bash-mode box: the rules without a `❯` row (modelled from
 // the 2.1.287 binary's mode prefix, not captured), so readClaudeInput does not locate it.
 const BASH_MODE_BOX = [RULE, '! ', RULE, '  ? for shortcuts']
-// What Claude's box leaves behind when it exits, a shell prompt under it.
-const STALE_BOX_OVER_SHELL = [...EMPTY_COMPOSER, 'alwin@mac Code UI % ']
 // A Codex composer as the queue reader pins it (`› ` at column 0; codex-terminal-queued-messages.ts).
 const CODEX_COMPOSER = ['• Working (3s • esc to interrupt)', '', '› ', '  gpt-5 high · ~/Project']
 
@@ -150,6 +149,8 @@ describe('a composer send when the tab is given a new terminal while it waits', 
       onError,
       beginImageSend: vi.fn(() => undo),
       ...(options.sleep ? { sleep: options.sleep } : {}),
+      // The host's snapshot names whatever terminal the tab has now (a reload or restart re-mint).
+      hostTerminalOfTab: () => activeHandleRef.current,
       refuseUnderDialog: async ({ terminal }) => {
         looks.push(terminal)
         options.onLook?.[terminal]?.()
@@ -241,7 +242,6 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     ['a plain shell prompt', { 'term-2': SHELL }],
     ['a screen with nothing on it', { 'term-2': [] }],
     ['one blank row', { 'term-2': [''] }],
-    ['the box Claude left behind with a shell prompt under it', { 'term-2': STALE_BOX_OVER_SHELL }],
     ["Claude's bash-mode box", { 'term-2': BASH_MODE_BOX }],
     ['a screen that cannot be read', { 'term-2': 'unreadable' as const }]
   ])('refuses, writing nothing, when the new terminal shows %s', async (_name, screens) => {

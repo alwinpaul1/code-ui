@@ -26,6 +26,11 @@ export type MobileNativeChatSendClaim = {
  * tab given a new terminal handle (a PTY restart, a desktop graph reload) is
  * followed, once.
  *
+ * Identity comes from the host: a handle counts as this tab's only when the
+ * session-tab snapshot names it as the tab's `terminal` (`hostTerminal`). The
+ * phone's own active handle moving without the snapshot saying so (closing the
+ * active terminal re-points it at another tab's) is read as a switch and refuses.
+ *
  * Following is a hazard: if the agent exited, the tab's new terminal can be a
  * plain shell, and the message and its Enter would run there as a command. The
  * tab's `agent` is no evidence (a hand-started agent's type outlives its process
@@ -41,6 +46,8 @@ export async function sendFollowingTheTab(
     readonly structured: boolean
     readonly liveTerminal: () => string | null
     readonly tabChanged: () => boolean
+    /** The terminal the host's snapshot names for this tab (hostTerminalOfTab). */
+    readonly hostTerminal: () => string | null
     readonly sendGate: Pick<MobileNativeChatSendGate, 'wait'>
     readonly deadline: number
     /** The look at the screen for a dialog; its refusal, or null. */
@@ -94,6 +101,11 @@ export async function sendFollowingTheTab(
         return refuse('Message not sent (session changed)')
       }
       const live = liveTerminal()
+      // The phone's own active handle moving (closing a terminal re-points it at
+      // another tab's) is not the host giving THIS tab a terminal.
+      if (live && args.hostTerminal() !== live) {
+        return refuse('Message not sent (session changed)')
+      }
       if (!live || followed) {
         return refuse(SEND_TERMINAL_RESTARTED)
       }

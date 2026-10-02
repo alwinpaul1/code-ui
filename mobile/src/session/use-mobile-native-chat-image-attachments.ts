@@ -84,10 +84,9 @@ type Args = {
   /** Why a send must not write to the terminal now, read off its screen: a
    *  dialog there takes typed keys as answers (mobile-native-chat-dialog-guard.ts). */
   readonly refuseUnderDialog: typeof readSendUnderDialogRefusal
-  /** Whether the screen of a terminal this send FOLLOWED to (the tab got a new
-   *  handle while it waited) shows the agent's composer: the only thing that lets
-   *  it write there (mobile-native-chat-send-follow.ts). */
-  readonly verifyAgentComposer?: typeof agentComposerOnScreen
+  /** The terminal the host's session-tab snapshot names for the tab with this scope key. Without
+   *  it no handle change is the tab's own, and a send refuses as a tab switch does. */
+  readonly hostTerminalOfTab?: (scopeKey: string) => string | null
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -140,7 +139,7 @@ export function useMobileNativeChatImageAttachments({
   beginImageSend,
   structuredNativeChat,
   refuseUnderDialog,
-  verifyAgentComposer = agentComposerOnScreen,
+  hostTerminalOfTab,
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
@@ -250,10 +249,11 @@ export function useMobileNativeChatImageAttachments({
             // The tab, not the handle, is who this send belongs to: the same tab
             // given a new terminal is followed, verified (mobile-native-chat-send-claim.ts).
             tabChanged: () => scopeKeyRef.current !== scope,
+            hostTerminal: () => (scope ? (hostTerminalOfTab?.(scope) ?? null) : null),
             sendGate,
             deadline,
             look: (client, terminal) => refuseUnderDialog({ client, terminal, deadline, agent }),
-            verify: (client, terminal) => verifyAgentComposer({ client, terminal, agent, deadline }),
+            verify: (client, terminal) => agentComposerOnScreen({ client, terminal, agent, deadline }),
             refuse
           },
           async ({ terminal, follow }) => {
@@ -439,7 +439,7 @@ export function useMobileNativeChatImageAttachments({
       beforeImagePaste,
       beginImageSend,
       agent,
-      verifyAgentComposer,
+      hostTerminalOfTab,
       deviceTokenRef,
       onError,
       onSendError,

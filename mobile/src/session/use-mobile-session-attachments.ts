@@ -6,10 +6,13 @@ import { loadMobileNewTabAgentOptions } from './mobile-new-tab-agent-loader'
 import { useMobileSessionImageAttachments } from './use-mobile-session-image-attachments'
 import { useMobileAttachmentInputLeaseGate } from './use-mobile-attachment-input-lease-gate'
 import { useMobileTerminalPaste } from './use-mobile-terminal-paste'
+import { hostTerminalOfTab } from './mobile-native-chat-send-follow'
 import type { MobileSessionAccessorySelectionModel } from './use-mobile-session-accessory-selection'
 
 export function useMobileSessionAttachments(scope: MobileSessionAccessorySelectionModel) {
   const {
+    hostId,
+    sessionTabsRef,
     worktreeId,
     client,
     connState,
@@ -85,6 +88,7 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
       connState,
       deviceTokenRef,
       nativeChatScopeKey,
+      hostTerminalOfTab: (scopeKey) => hostTerminalOfTab(sessionTabsRef.current, hostId, worktreeId, scopeKey),
       nativeChatInputLeaseReady,
       getActiveWorktreeConnectionId,
       beforeTerminalSend: flushPendingLiveInputBeforeAttachmentSend,

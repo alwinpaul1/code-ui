@@ -23,6 +23,8 @@ type Args = {
   /** Active-tab identity (same key shape as the drafts hook) — native-chat chips
    *  are scoped per tab so a switch can't ride an image into another terminal. */
   readonly nativeChatScopeKey: string | null
+  /** The terminal the host's latest session-tab snapshot names for the tab with this scope key. */
+  readonly hostTerminalOfTab: (scopeKey: string) => string | null
   readonly nativeChatInputLeaseReady: boolean
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
@@ -68,6 +70,7 @@ export function useMobileSessionImageAttachments({
   connState,
   deviceTokenRef,
   nativeChatScopeKey,
+  hostTerminalOfTab,
   nativeChatInputLeaseReady,
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
@@ -107,6 +110,7 @@ export function useMobileSessionImageAttachments({
     getActiveWorktreeConnectionId,
     connState,
     scopeKey: nativeChatScopeKey,
+    hostTerminalOfTab,
     enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
     structuredNativeChat,
     refuseUnderDialog: readSendUnderDialogRefusal,

@@ -1,7 +1,10 @@
 /** Whether a known terminal handle should be dropped after a `terminal.list` refresh.
  *
  *  A handle covered by native chat is retained even when the list omits it: the list
- *  drops every handle while the desktop graph reloads (it re-mints handle ids), and
+ *  drops every handle while the desktop graph reloads (it re-mints handle ids; Orca
+ *  1.4.178-rc.2: markRendererReloading clears `handles` and `handleByLeafKey` but keeps
+ *  `handleByPtyId`, so a pre-allocated CLI handle survives and a synthetic one is re-minted
+ *  for the same live PTY), and
  *  the covered stream IS the input lease — nothing else re-subscribes it, so dropping
  *  it there locks the composer for good (#10681). A genuinely dead PTY still arrives
  *  as an `end`/`error` stream frame, and the chat stream hook bounds its rearms —
