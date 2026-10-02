@@ -55,8 +55,10 @@ export function useExpandableBottomDrawer(args: {
       const settle = settleExpandableSheet({ offset: translateY.value, velocityY }, heights)
       if (settle === 'dismiss') {
         translateY.value = withTiming(screenHeight, { duration: DISMISS_DURATION_MS })
-        progress.value = withTiming(0, { duration: DISMISS_DURATION_MS }, () => {
-          runOnJS(close)()
+        progress.value = withTiming(0, { duration: DISMISS_DURATION_MS }, (finished) => {
+          if (finished) {
+            runOnJS(close)()
+          }
         })
         return settle
       }

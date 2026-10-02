@@ -106,7 +106,7 @@ function pressClose(): void {
 
 /** The hide animation the sheet last started, as the UI thread would finish it. */
 function lastHide() {
-  const hide = seam.timings.filter((timing) => timing.to === 0 && timing.done).at(-1)
+  const hide = seam.timings.findLast((timing) => timing.to === 0 && timing.done)
   expect(hide, 'a hide animation was started').toBeDefined()
   return hide!
 }

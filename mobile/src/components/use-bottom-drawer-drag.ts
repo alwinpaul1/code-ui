@@ -100,8 +100,12 @@ export function useBottomDrawerDrag(args: {
         const remaining = screenHeight - translationY
         const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
         translateY.value = withTiming(screenHeight, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(close)()
+        // Only a finished exit is a close: one cut short (Back or a tap on the
+        // backdrop while it ran) is followed by the exit that cut it.
+        progress.value = withTiming(0, { duration }, (finished) => {
+          if (finished) {
+            runOnJS(close)()
+          }
         })
       } else {
         translateY.value = withSpring(0, DRAWER_SPRING)
