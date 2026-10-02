@@ -1,5 +1,5 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import type { ReactNode } from 'react'
+import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 type Props = {
@@ -42,45 +42,7 @@ export function BottomDrawer({
   zIndex,
   dismissKeyboardOnOpen = false
 }: Props) {
-  const [mounted, setMounted] = useState(visible)
-  const onAfterCloseRef = useRef(onAfterClose)
-  const hiddenHandledRef = useRef(false)
-  const afterClosePendingRef = useRef(false)
-
-  useEffect(() => {
-    onAfterCloseRef.current = onAfterClose
-  }, [onAfterClose])
-
-  useEffect(() => {
-    if (visible) {
-      hiddenHandledRef.current = false
-      afterClosePendingRef.current = false
-    }
-  }, [visible])
-
-  useEffect(() => {
-    if (mounted || !afterClosePendingRef.current) {
-      return
-    }
-    afterClosePendingRef.current = false
-    onAfterCloseRef.current?.()
-  }, [mounted])
-
-  const handleHidden = useCallback(() => {
-    if (hiddenHandledRef.current) {
-      return
-    }
-    hiddenHandledRef.current = true
-    afterClosePendingRef.current = true
-    setMounted(false)
-  }, [])
-  const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
-
-  // Why: opening drawers should mount before commit; waiting for a passive
-  // Effect adds a null render before every drawer can animate in.
-  if (resolvedMounted !== mounted) {
-    setMounted(resolvedMounted)
-  }
+  const { mounted: resolvedMounted, handleHidden } = useDrawerMountLifecycle(visible, onAfterClose)
 
   // Why: hidden drawers are rendered by parent screens even while closed; keep
   // their Reanimated/Gesture setup out of hot paths like commit-message typing.
