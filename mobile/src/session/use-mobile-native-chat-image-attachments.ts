@@ -224,6 +224,11 @@ export function useMobileNativeChatImageAttachments({
       // terminal, so a card tapped meanwhile is not refused (2026-09-26 review).
       const tap = { scope, deadline, terminal: operationTerminal, text: composerText }
       return settleSendChips(tap, async (pendingAll) => {
+        const refuse = (message: string): false => {
+          onError?.()
+          onSendError(message)
+          return false
+        }
         // Serialize clear/paste/submit ownership per terminal while allowing other
         // tabs to send. Shared with the prompt-card writes (answer/permission), so
         // a card tap can't interleave into a mid-flight paste sequence either.
@@ -231,9 +236,7 @@ export function useMobileNativeChatImageAttachments({
         // it only reads (mobile-native-chat-send-write.ts); this release then finds it gone.
         const lockOwner = operationTerminal ? acquireMobileNativeChatTerminalWriteForSend(operationTerminal) : null
         if (operationTerminal && !lockOwner) {
-          onError?.()
-          onSendError('Message not sent')
-          return false
+          return refuse('Message not sent')
         }
         try {
           // A dialog on screen takes typed keys as answers: this text could pick
@@ -250,6 +253,12 @@ export function useMobileNativeChatImageAttachments({
               }
               return false
             }
+          }
+          // The terminal this send was tapped on, still: a switch while it waited (a chip, the link,
+          // the look above) took a text-only send to the other tab's agent, and pasted a photo
+          // there (Opus review, 2026-10-02). Not a session tab's send, which goes to the session.
+          if (!structuredNativeChat && activeHandleRef.current !== operationTerminal) {
+            return refuse('Message not sent (session changed)')
           }
           // Documents never paste as images: their note joins the text body, and
           // the chip clears with the images once the send is accepted. A
@@ -317,9 +326,7 @@ export function useMobileNativeChatImageAttachments({
               // A tab switch during the clear would send this text to a terminal the
               // clear never touched, so abort rather than reroute it.
               if (!healed || activeHandleRef.current !== staleTerminal) {
-                onError?.()
-                onSendError('Message not sent')
-                return false
+                return refuse('Message not sent')
               }
             }
             // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
@@ -331,9 +338,7 @@ export function useMobileNativeChatImageAttachments({
           }
           const handle = activeHandleRef.current
           if (!handle) {
-            onError?.()
-            onSendError('Message not sent (no terminal on this tab)')
-            return false
+            return refuse('Message not sent (no terminal on this tab)')
           }
           const pasteClient = await sendGate.wait(deadline, () => activeHandleRef.current !== handle)
           if (!pasteClient) {
@@ -384,9 +389,7 @@ export function useMobileNativeChatImageAttachments({
               // Put the chips and text back so the user can retry; the failed paste never submitted.
               restoreOptimistic()
               markMobileNativeChatInputStale(handle)
-              onError?.()
-              onSendError('Message not sent')
-              return false
+              return refuse('Message not sent')
             }
             // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
             clearMobileNativeChatInputStale(handle)
@@ -404,9 +407,7 @@ export function useMobileNativeChatImageAttachments({
             if (activeHandleRef.current !== handle) {
               restoreOptimistic()
               markMobileNativeChatInputStale(handle)
-              onError?.()
-              onSendError('Message not sent')
-              return false
+              return refuse('Message not sent')
             }
             const outcome = await baseSend(text, previewUris, textDeadline)
             if (outcome !== 'accepted') {
@@ -426,9 +427,7 @@ export function useMobileNativeChatImageAttachments({
             // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
             restoreOptimistic()
             markMobileNativeChatInputStale(handle)
-            onError?.()
-            onSendError('Message not sent')
-            return false
+            return refuse('Message not sent')
           }
         } finally {
           releaseMobileNativeChatTerminalWrite(operationTerminal, lockOwner ?? undefined)
