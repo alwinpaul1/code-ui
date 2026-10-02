@@ -25,6 +25,7 @@ vi.mock('expo-clipboard', () => ({
 }))
 
 import {
+  FOLLOWING_TAB,
   baseArgs,
   makeClient,
   methodNotFound,
@@ -243,7 +244,7 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     await act(async () => {
       await hook!.sendNativeChat('push it')
     })
-    expect(args.baseSend).toHaveBeenCalledWith('push it', undefined, expect.any(Number))
+    expect(args.baseSend).toHaveBeenCalledWith('push it', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
     expect(args.onSendError).not.toHaveBeenCalled()
   })
 
@@ -283,7 +284,7 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
     await act(async () => {
       await hook!.sendNativeChat(draft)
     })
-    expect(args.baseSend).toHaveBeenCalledWith(draft, undefined, expect.any(Number))
+    expect(args.baseSend).toHaveBeenCalledWith(draft, undefined, expect.any(Number), undefined, FOLLOWING_TAB)
     expect(args.onSendError).not.toHaveBeenCalled()
   })
 

@@ -79,6 +79,23 @@ export function useNativeChatAttachmentScopeWriters() {
     },
     [setAttachmentsByScope]
   )
+  // A send takes its chips out of the strip as it starts, and a send that fails
+  // before its text goes puts them back at the front, in the order they were.
+  const takeSentAttachments = useCallback(
+    (scope: string, sent: readonly PendingNativeChatImage[]) => {
+      const sentIds = new Set(sent.map((chip) => chip.id))
+      setAttachmentsByScope((prev) =>
+        withScopeAttachments(prev, scope, (prev[scope] ?? []).filter((chip) => !sentIds.has(chip.id)))
+      )
+    },
+    [setAttachmentsByScope]
+  )
+  const restoreSentAttachments = useCallback(
+    (scope: string, sent: readonly PendingNativeChatImage[]) => {
+      setAttachmentsByScope((prev) => withScopeAttachments(prev, scope, [...sent, ...(prev[scope] ?? [])]))
+    },
+    [setAttachmentsByScope]
+  )
   const setVideoFrameExtractionUpdate = useNativeChatImageAttachmentsStore(
     (state) => state.updateVideoFrameExtraction
   )
@@ -107,6 +124,8 @@ export function useNativeChatAttachmentScopeWriters() {
     settleUploads,
     markAttachmentReuploading,
     replaceAttachmentImage,
+    takeSentAttachments,
+    restoreSentAttachments,
     setVideoFrameExtractionProgress
   }
 }

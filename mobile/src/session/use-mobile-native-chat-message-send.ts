@@ -21,6 +21,7 @@ import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-
 import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { writeChatSend } from './mobile-native-chat-send-write'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
+import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
 
@@ -35,7 +36,8 @@ export type MobileNativeChatMessageSend = {
   sendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>
   /** Answer to an agent question — never touches the composer draft. */
   answerQuestion: (text: string) => Promise<boolean>
@@ -120,7 +122,8 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      report: (message: string) => void = onSendError
+      report: (message: string) => void = onSendError,
+      follow?: MobileNativeChatSendFollow
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
       // where it can glue the next rapid send onto this one (#14262). Only the
@@ -135,6 +138,23 @@ export function useMobileNativeChatMessageSend(args: {
         report(handle ? 'Message not sent (no chat on this tab)' : 'Message not sent (no terminal on this tab)')
         return 'rejected'
       }
+      // The image hook's send follows its TAB: a handle other than the one it
+      // verified, before this wrote a byte, goes back to it unsent and unsaid
+      // (`reminted`), and a switch to another tab says so below.
+      const movedUnderSend = (): boolean => {
+        if (!follow || handleRef.current === follow.terminal) {
+          return false
+        }
+        if (follow.tabChanged()) {
+          report('Message not sent (session changed)')
+        } else {
+          follow.reminted = true
+        }
+        return true
+      }
+      if (movedUnderSend()) {
+        return 'rejected'
+      }
       // One budget for the whole action, the wait for the link included: a hung
       // heal must eat into the text send's time, not hand it a fresh timeout and
       // pin the composer for twice as long. An image send already opened one
@@ -145,9 +165,9 @@ export function useMobileNativeChatMessageSend(args: {
       // A card answer or a command does not: what it types was chosen against a
       // screen the phone has not seen since the link dropped.
       const client = syncComposer
-        ? await sendGate.wait(deadline, () => handleRef.current !== handle)
+        ? await sendGate.wait(deadline, follow ? follow.tabChanged : () => handleRef.current !== handle)
         : sendGate.now(recordControlSend ? 'Answer' : 'Command', report)
-      if (!client) {
+      if (!client || movedUnderSend()) {
         return 'rejected'
       }
       // An answer or a pick types text and an Enter, which a dialog on screen
@@ -284,8 +304,8 @@ export function useMobileNativeChatMessageSend(args: {
   )
 
   const sendWithOutcome = useCallback(
-    (text: string, images?: string[], deadline?: number) =>
-      sendMessage(text, images, true, true, deadline),
+    (text: string, images?: string[], deadline?: number, follow?: MobileNativeChatSendFollow) =>
+      sendMessage(text, images, true, true, deadline, undefined, follow),
     [sendMessage]
   )
 

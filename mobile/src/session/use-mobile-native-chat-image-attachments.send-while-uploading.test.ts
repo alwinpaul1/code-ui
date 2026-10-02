@@ -21,6 +21,7 @@ import {
   uploadHost
 } from './use-mobile-native-chat-image-attachments.send-while-uploading.test-support'
 import {
+  FOLLOWING_TAB,
   ok,
   SCOPE_A,
   SCOPE_B,
@@ -177,7 +178,7 @@ describe('a send tapped while a photo is still uploading', () => {
       await sending
     })
     expect(sentPaths('terminal', args, pasted)).toEqual(['/tmp/a.png'])
-    expect(args.baseSend).toHaveBeenCalledExactlyOnceWith('', ['file:///a.jpg'], expect.any(Number))
+    expect(args.baseSend).toHaveBeenCalledExactlyOnceWith('', ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
   })
 
   it.each(LANES)(

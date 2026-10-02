@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import type { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
@@ -55,6 +55,14 @@ export function makeClient(
 
 export type HookArgs = Parameters<typeof useMobileNativeChatImageAttachments>[0]
 export type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>
+
+/** The follow a terminal tab's send hands its message send: the terminal it was verified
+ *  against and the tab predicate (mobile-native-chat-send-follow.ts). */
+export const FOLLOWING_TAB = expect.objectContaining({
+  terminal: expect.any(String),
+  reminted: false,
+  tabChanged: expect.any(Function)
+})
 
 export const SCOPE_A = 'h\0w\0tab-a'
 export const SCOPE_B = 'h\0w\0tab-b'

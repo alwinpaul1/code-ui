@@ -14,8 +14,6 @@ import {
   type MobileNativeChatSendGate
 } from './mobile-native-chat-send-readiness'
 
-type CurrentRef<T> = { readonly current: T }
-
 /** Why a send tapped beside a chip still uploading (or a video still being
  *  read) wrote nothing, and the chip it waited on — `null` for `extracting`,
  *  which has no chip yet to name. */
@@ -78,7 +76,7 @@ export async function settleMobileNativeChatSendChips(args: {
    *  frame that arrived during the wait). */
   readonly tapBatches: ReadonlySet<string>
   readonly deadline: number
-  /** True once the send's tab or terminal has gone, or the store was reset. */
+  /** True once the send's tab has gone, or the store was reset. */
   readonly abandoned: () => boolean
 }): Promise<PendingNativeChatImage[] | MobileNativeChatSendChipsRefusal> {
   // Each chip as it was drawn while it uploaded. A first upload that fails
@@ -184,15 +182,16 @@ export function mobileNativeChatSendChipsRefusalMessage({
 export type MobileNativeChatSendChipsTap = {
   readonly scope: string | null
   readonly deadline: number
-  readonly terminal: string | null
   readonly text: string
 }
 
 /** Runs `send` with a send's chips: at once when none is uploading, so that
  *  send runs exactly as it did before any wait existed, or else once they
- *  have settled, checked against the tab (and, on a terminal lane, the
- *  terminal) of the latest render, so a wait that outlives a tab switch gives
- *  up instead of sending one tab's photo into another. A refusal goes to
+ *  have settled, checked against the tab of the latest render, so a wait that
+ *  outlives a tab switch gives up instead of sending one tab's photo into
+ *  another. The terminal is not checked: the same tab given a new terminal
+ *  handle while it waited is followed by the send itself, once it has shown the
+ *  agent's composer there (mobile-native-chat-send-claim.ts). A refusal goes to
  *  `onSendError` and resolves false.
  *
  *  A chat that remounts during the wait draws Send live again beside the
@@ -205,9 +204,6 @@ export type MobileNativeChatSendChipsTap = {
  *  session tab as it always was (2026-09-26 reviews). */
 export function useMobileNativeChatSendChips(args: {
   readonly scopeKey: string | null
-  readonly activeHandleRef: CurrentRef<string | null>
-  /** A session lane's send goes to the session, whatever the tab's terminal. */
-  readonly structuredNativeChat: boolean
   readonly client: Pick<RpcClient, 'getState'> | null
   /** The lane's gate, which names the link when the link is what held the upload up. */
   readonly sendGate: Pick<MobileNativeChatSendGate, 'now'>
@@ -219,7 +215,7 @@ export function useMobileNativeChatSendChips(args: {
 ) => Promise<boolean> {
   const latest = useRef(args)
   latest.current = args
-  return useCallback(({ scope, deadline, terminal, text }, send) => {
+  return useCallback(({ scope, deadline, text }, send) => {
     const chips = scope ? chipsIn(scope) : NO_NATIVE_CHAT_IMAGE_ATTACHMENTS
     const refuse = (settled: MobileNativeChatSendChipsRefusal): boolean => {
       const { client, sendGate } = latest.current
@@ -284,9 +280,7 @@ export function useMobileNativeChatSendChips(args: {
       deadline,
       abandoned: () =>
         nativeChatAttachmentsResets.current !== resets ||
-        latest.current.scopeKey !== scope ||
-        (!latest.current.structuredNativeChat &&
-          latest.current.activeHandleRef.current !== terminal)
+        latest.current.scopeKey !== scope
     })
     const entry = {
       text,

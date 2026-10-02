@@ -32,6 +32,7 @@ import type { detectAgentPermission } from './mobile-native-chat-permission'
 import type { parseAgentQuestion } from './mobile-native-chat-question'
 import type { NativeChatTerminalWait } from './mobile-terminal-permission-options-merge'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 import type { MobileNativeChatPendingMessage } from './use-mobile-native-chat-drafts'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
@@ -209,7 +210,10 @@ export type MobileNativeChatController = {
       path: string
       previewUri: string
       contentFingerprint?: string
-    }[]
+    }[],
+    /** The image hook's send follows its TAB, not the handle it started on
+     *  (mobile-native-chat-send-follow.ts). */
+    follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>
   /** Launch-context text still parked on the agent's TUI input line, or null.
    *  Image sends read it to size their leading clear (one Ctrl+U per line). */

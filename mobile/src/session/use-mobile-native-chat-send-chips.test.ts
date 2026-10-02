@@ -210,8 +210,6 @@ describe('useMobileNativeChatSendChips — joining a wait for a video still bein
   function Harness({ scopeKey, onSendError }: { scopeKey: string; onSendError: (message: string) => void }): null {
     bound = useMobileNativeChatSendChips({
       scopeKey,
-      activeHandleRef: { current: 'term-1' },
-      structuredNativeChat: false,
       client: { getState: () => 'connected' as const },
       sendGate: { now: () => null },
       onSendError
@@ -240,7 +238,7 @@ describe('useMobileNativeChatSendChips — joining a wait for a video still bein
     const deadline = Date.now() + 5000
     let first: Promise<boolean> = Promise.resolve(false)
     act(() => {
-      first = bound!({ scope: SCOPE, deadline, terminal: 'term-1', text: 'look at these' }, send)
+      first = bound!({ scope: SCOPE, deadline, text: 'look at these' }, send)
     })
     await act(async () => {
       await Promise.resolve()
@@ -257,7 +255,7 @@ describe('useMobileNativeChatSendChips — joining a wait for a video still bein
 
     let second: Promise<boolean> = Promise.resolve(false)
     act(() => {
-      second = bound!({ scope: SCOPE, deadline, terminal: 'term-1', text: 'look at these' }, send)
+      second = bound!({ scope: SCOPE, deadline, text: 'look at these' }, send)
     })
 
     act(() => {
@@ -295,7 +293,7 @@ describe('useMobileNativeChatSendChips — joining a wait for a video still bein
     const deadline = Date.now() + 5000
     let tapped: Promise<boolean> = Promise.resolve(false)
     act(() => {
-      tapped = bound!({ scope: SCOPE, deadline, terminal: 'term-1', text: 'these' }, send)
+      tapped = bound!({ scope: SCOPE, deadline, text: 'these' }, send)
     })
     await act(async () => {
       await Promise.resolve()
@@ -354,8 +352,6 @@ describe('useMobileNativeChatSendChips — a multi-photo pick rides together wit
   function Harness({ scopeKey, onSendError }: { scopeKey: string; onSendError: (message: string) => void }): null {
     bound = useMobileNativeChatSendChips({
       scopeKey,
-      activeHandleRef: { current: 'term-1' },
-      structuredNativeChat: false,
       client: { getState: () => 'connected' as const },
       sendGate: { now: () => null },
       onSendError
@@ -386,7 +382,7 @@ describe('useMobileNativeChatSendChips — a multi-photo pick rides together wit
     const deadline = Date.now() + 5000
     let tapped: Promise<boolean> = Promise.resolve(false)
     act(() => {
-      tapped = bound!({ scope: SCOPE, deadline, terminal: 'term-1', text: 'three photos' }, send)
+      tapped = bound!({ scope: SCOPE, deadline, text: 'three photos' }, send)
     })
     await act(async () => {
       await Promise.resolve()

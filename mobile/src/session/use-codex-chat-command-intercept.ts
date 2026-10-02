@@ -4,6 +4,7 @@
 import { useCallback, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
 
 export function useCodexChatCommandIntercept(args: {
@@ -17,7 +18,8 @@ export function useCodexChatCommandIntercept(args: {
   rawSendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>
 }): {
   modelSheetRequest: number
@@ -25,7 +27,9 @@ export function useCodexChatCommandIntercept(args: {
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
-    deadline?: number
+    deadline?: number,
+    attachments?: unknown,
+    follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>
 } {
   const { agentRef, captureSendOrigin, clearDraftForSend, sessionOptions, rawSendWithOutcome } =
@@ -69,15 +73,19 @@ export function useCodexChatCommandIntercept(args: {
     async (
       text: string,
       images?: string[],
-      deadline?: number
+      deadline?: number,
+      _attachments?: unknown,
+      follow?: MobileNativeChatSendFollow
     ): Promise<MobileNativeChatSendOutcome> => {
       const intercepted = images?.length ? null : await intercept(text)
       if (intercepted !== null) {
         return intercepted
       }
-      return deadline === undefined
-        ? rawSendWithOutcome(text, images)
-        : rawSendWithOutcome(text, images, deadline)
+      return follow
+        ? rawSendWithOutcome(text, images, deadline, follow)
+        : deadline === undefined
+          ? rawSendWithOutcome(text, images)
+          : rawSendWithOutcome(text, images, deadline)
     },
     [intercept, rawSendWithOutcome]
   )

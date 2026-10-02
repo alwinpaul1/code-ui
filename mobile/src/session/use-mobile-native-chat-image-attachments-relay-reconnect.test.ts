@@ -289,6 +289,6 @@ describe('a photo sent while the relay re-dials', () => {
     expect(onSendError).not.toHaveBeenCalled()
     // The heal's clear went on the new socket, then the text body.
     expect(terminalWrites(1).length).toBeGreaterThan(0)
-    expect(baseSend).toHaveBeenCalledWith('hello', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('hello', undefined, expect.any(Number), undefined, expect.objectContaining({ terminal: 'term', reminted: false }))
   }, 30_000)
 })

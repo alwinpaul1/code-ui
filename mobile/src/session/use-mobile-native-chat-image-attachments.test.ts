@@ -27,6 +27,7 @@ vi.mock('./mobile-image-source-picker', () => ({
 }))
 
 import {
+  FOLLOWING_TAB,
   baseArgs,
   makeClient,
   methodNotFound,
@@ -185,7 +186,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     // Clear, then paste, then settle, then the text send — in that order.
     expect(order).toEqual(['drain-mirror', 'box-cleared:look at this', 'clear', 'paste', 'settle', 'text:look at this'])
     // The local preview URI rides along so the sent bubble shows the photo.
-    expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('look at this', ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
     // Chips clear once the send is accepted.
     expect(hook!.attachments).toEqual([])
   })
@@ -328,7 +329,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(accepted).toBe(true)
     // Attachment-only text still goes through baseSend (which submits Enter) so the
     // optimistic echo carries the preview URI.
-    expect(baseSend).toHaveBeenCalledWith(text, ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith(text, ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     // Only the clear + image paste hit the wire here; baseSend owns the submit.
     expect(sendCalls).toHaveLength(2)
@@ -344,7 +345,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.sendNativeChat('just text')
     })
-    expect(baseSend).toHaveBeenCalledWith('just text', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('just text', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
     expect(client.calls).toHaveLength(0)
   })
 
@@ -442,7 +443,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     await act(async () => {
       await hook!.sendNativeChat('hi')
     })
-    expect(baseSend).toHaveBeenCalledWith('hi', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('hi', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
     expect(client.calls.some((c) => c.method === 'terminal.send')).toBe(false)
 
     // Back on the original tab the chip is still pending.
@@ -545,57 +546,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     })
 
     // Only the first (sent) image rode along; the mid-send chip survives.
-    expect(baseSend).toHaveBeenCalledWith('hi', ['file:///a.jpg'], expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('hi', ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
     expect(hook!.attachments.map((a) => a.previewUri)).toEqual(['file:///b.jpg'])
-  })
-
-  it('aborts the send when the active terminal changes during the settle window', async () => {
-    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
-    const client = makeClient([
-      methodNotFound('start'),
-      ok('save', '/tmp/a.png'),
-      sendResult(true), // Ctrl+U clear
-      sendResult(true) // image paste — into term-1
-    ])
-    const baseSend = vi.fn().mockResolvedValue('accepted')
-    const onSendError = vi.fn()
-    const activeHandleRef = { current: 'term-1' }
-    let releaseSettle: (() => void) | null = null
-    const args = baseArgs({
-      client: client as unknown as RpcClient,
-      activeHandleRef,
-      baseSend,
-      onSendError,
-      sleep: () =>
-        new Promise<void>((resolve) => {
-          releaseSettle = resolve
-        })
-    })
-    mount(args)
-    await act(async () => {
-      await hook!.attachImage('library')
-    })
-
-    let sendPromise: Promise<boolean> | null = null
-    await act(async () => {
-      sendPromise = hook!.sendNativeChat('hi')
-      for (let i = 0; i < 50 && !releaseSettle; i++) {
-        await Promise.resolve()
-      }
-    })
-    expect(releaseSettle).not.toBeNull()
-    // The user switches tabs while the paste settles: the text + Enter must not
-    // land in term-2 when the images went to term-1.
-    activeHandleRef.current = 'term-2'
-    let accepted = true
-    await act(async () => {
-      releaseSettle!()
-      accepted = await sendPromise!
-    })
-    expect(accepted).toBe(false)
-    expect(baseSend).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
-    expect(hook!.attachments).toHaveLength(1)
   })
 
   it('leads the next text-only send with Ctrl+U after a failed paste, even with the chip removed', async () => {
@@ -631,7 +583,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     // Failed attempt's clear + rejected paste, then the healing clear.
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenCalledWith('hi again', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenCalledWith('hi again', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
   })
 
   it('heals before the next text-only send when an image submit delivery is unknown (#10228)', async () => {
@@ -668,8 +620,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(1, 'pic', ['file:///a.jpg'], expect.any(Number))
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(1, 'pic', ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
+    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
   })
 
   it('still heals after the session screen unmounts and remounts (#10228)', async () => {
@@ -705,7 +657,7 @@ describe('useMobileNativeChatImageAttachments', () => {
     const sendCalls = client.calls.filter((c) => c.method === 'terminal.send')
     expect(sendCalls).toHaveLength(3)
     expect(sendCalls[2]?.params).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(2, 'later message', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
   })
 
   it('does not heal after an unknown text-only send (nothing was pasted first)', async () => {
@@ -764,8 +716,8 @@ describe('useMobileNativeChatImageAttachments', () => {
     expect(sendCalls).toHaveLength(4)
     expect(sendCalls[2]?.params).toMatchObject({ text: '\x15', enter: false })
     expect(sendCalls[3]?.params).toMatchObject({ text: '\x15', enter: false })
-    expect(baseSend).toHaveBeenNthCalledWith(1, 'hi', ['file:///a.jpg'], expect.any(Number))
-    expect(baseSend).toHaveBeenNthCalledWith(2, 'hi again', undefined, expect.any(Number))
+    expect(baseSend).toHaveBeenNthCalledWith(1, 'hi', ['file:///a.jpg'], expect.any(Number), undefined, FOLLOWING_TAB)
+    expect(baseSend).toHaveBeenNthCalledWith(2, 'hi again', undefined, expect.any(Number), undefined, FOLLOWING_TAB)
   })
 
   it('does not reroute text when the active terminal changes during a healing clear', async () => {

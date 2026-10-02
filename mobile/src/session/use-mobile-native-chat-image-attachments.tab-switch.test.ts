@@ -24,6 +24,9 @@ import {
   makeClient,
   methodNotFound,
   ok,
+  SCOPE_A,
+  SCOPE_B,
+  sendResult,
   type Hook,
   type HookArgs
 } from './use-mobile-native-chat-image-attachments.test-support'
@@ -63,10 +66,39 @@ describe('a composer send when the tab changes while it waits', () => {
     })
   }
 
-  /** The look at the screen the send makes before it writes, during which the user switches tabs. */
-  const switchesDuringLook = (activeHandleRef: { current: string | null }) => async () => {
-    activeHandleRef.current = 'term-2'
-    return null
+  /** A look at the screen that stays open until `release`, so the test can act while the send waits on it. */
+  function holdLook(): { look: () => Promise<null>; release: () => void } {
+    let release: () => void = () => {}
+    const held = new Promise<null>((resolve) => {
+      release = () => resolve(null)
+    })
+    return { look: () => held, release }
+  }
+
+  /** Taps send, switches to the other tab while the send waits on its look, lets the look finish. */
+  async function sendSwitchingTabsDuringLook(
+    args: HookArgs,
+    look: { release: () => void },
+    text: string
+  ): Promise<boolean> {
+    let sending: Promise<boolean> = Promise.resolve(true)
+    await act(async () => {
+      sending = hook!.sendNativeChat(text)
+      for (let turn = 0; turn < 20; turn++) {
+        await Promise.resolve()
+      }
+    })
+    // The other tab's terminal, and the composer's scope: what a tab switch changes.
+    ;(args.activeHandleRef as { current: string | null }).current = 'term-2'
+    act(() => {
+      renderer!.update(createElement(Harness, { args: { ...args, scopeKey: SCOPE_B } }))
+    })
+    let sent = true
+    await act(async () => {
+      look.release()
+      sent = await sending
+    })
+    return sent
   }
 
   it('does not send a text message to the tab switched to during its look', async () => {
@@ -74,19 +106,16 @@ describe('a composer send when the tab changes while it waits', () => {
     const baseSend = vi.fn().mockResolvedValue('accepted')
     const onSendError = vi.fn()
     const client = makeClient([])
-    mount(
-      baseArgs({
-        client: client as unknown as RpcClient,
-        activeHandleRef,
-        baseSend,
-        onSendError,
-        refuseUnderDialog: switchesDuringLook(activeHandleRef)
-      })
-    )
-    let sent = true
-    await act(async () => {
-      sent = await hook!.sendNativeChat('deploy the staging build')
+    const held = holdLook()
+    const args = baseArgs({
+      client: client as unknown as RpcClient,
+      activeHandleRef,
+      baseSend,
+      onSendError,
+      refuseUnderDialog: held.look
     })
+    mount(args)
+    const sent = await sendSwitchingTabsDuringLook(args, held, 'deploy the staging build')
     expect(sent).toBe(false)
     expect(baseSend).not.toHaveBeenCalled()
     expect(onSendError).toHaveBeenCalledWith('Message not sent (session changed)')
@@ -98,34 +127,79 @@ describe('a composer send when the tab changes while it waits', () => {
     const baseSend = vi.fn().mockResolvedValue('accepted')
     const onSendError = vi.fn()
     const client = makeClient([methodNotFound('start'), ok('save', '/tmp/a.png')])
-    let switchOnLook = false
-    mount(
-      baseArgs({
-        client: client as unknown as RpcClient,
-        activeHandleRef,
-        baseSend,
-        onSendError,
-        refuseUnderDialog: async () => {
-          if (switchOnLook) {
-            activeHandleRef.current = 'term-2'
-          }
-          return null
-        }
-      })
-    )
+    const held = holdLook()
+    let look: () => Promise<null> = async () => null
+    const args = baseArgs({
+      client: client as unknown as RpcClient,
+      activeHandleRef,
+      baseSend,
+      onSendError,
+      refuseUnderDialog: () => look()
+    })
+    mount(args)
     await act(async () => {
       await hook!.attachImage('library')
     })
-    switchOnLook = true
-    let sent = true
-    await act(async () => {
-      sent = await hook!.sendNativeChat('this one')
-    })
+    look = held.look
+    const sent = await sendSwitchingTabsDuringLook(args, held, 'this one')
     expect(sent).toBe(false)
     expect(client.calls.filter((call) => call.method === 'terminal.send')).toEqual([])
     expect(baseSend).not.toHaveBeenCalled()
-    expect(hook!.attachments).toHaveLength(1)
+    // The chip stays with the tab that picked it.
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[SCOPE_A]).toHaveLength(1)
     expect(onSendError).toHaveBeenCalledWith('Message not sent (session changed)')
+  })
+
+  it('does not send the text into the tab switched to while the photo\'s paste settles', async () => {
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+    const client = makeClient([
+      methodNotFound('start'),
+      ok('save', '/tmp/a.png'),
+      sendResult(true), // Ctrl+U clear
+      sendResult(true) // image paste, into term-1
+    ])
+    const baseSend = vi.fn().mockResolvedValue('accepted')
+    const onSendError = vi.fn()
+    const activeHandleRef = { current: 'term-1' as string | null }
+    let releaseSettle: (() => void) | null = null
+    const args = baseArgs({
+      client: client as unknown as RpcClient,
+      activeHandleRef,
+      baseSend,
+      onSendError,
+      sleep: () =>
+        new Promise<void>((resolve) => {
+          releaseSettle = resolve
+        })
+    })
+    mount(args)
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    let sending: Promise<boolean> = Promise.resolve(true)
+    await act(async () => {
+      sending = hook!.sendNativeChat('hi')
+      for (let turn = 0; turn < 50 && !releaseSettle; turn++) {
+        await Promise.resolve()
+      }
+    })
+    expect(releaseSettle).not.toBeNull()
+    // The user switches tabs while the paste settles: the text + Enter must not
+    // land in term-2 when the images went to term-1.
+    activeHandleRef.current = 'term-2'
+    act(() => {
+      renderer!.update(createElement(Harness, { args: { ...args, scopeKey: SCOPE_B } }))
+    })
+    let sent = true
+    await act(async () => {
+      releaseSettle!()
+      sent = await sending
+    })
+    expect(sent).toBe(false)
+    expect(baseSend).not.toHaveBeenCalled()
+    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+    // The chip stays with the tab that picked it.
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[SCOPE_A]).toHaveLength(1)
   })
 
   it('still sends on the tab it was tapped on when nothing changed', async () => {

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import { useNativeChatAttachmentScopeWriters } from './use-native-chat-attachment-scope-writers'
 import { useMobileNativeChatImageMarkup } from './use-mobile-native-chat-image-markup'
@@ -27,10 +27,12 @@ import {
   markMobileNativeChatInputStale,
   mobileNativeChatInputResidue
 } from './mobile-native-chat-stale-input'
+import { SEND_REMINTED, sendFollowingTheTab } from './mobile-native-chat-send-claim'
 import {
-  acquireMobileNativeChatTerminalWriteForSend,
-  releaseMobileNativeChatTerminalWrite
-} from './mobile-native-chat-terminal-write-lock'
+  agentComposerOnScreen,
+  SEND_TERMINAL_RESTARTED,
+  type MobileNativeChatSendFollow
+} from './mobile-native-chat-send-follow'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 import { isPendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
@@ -74,13 +76,18 @@ type Args = {
     text: string,
     imagePreviewUris?: string[],
     deadline?: number,
-    attachments?: readonly PendingNativeChatImage[]
+    attachments?: readonly PendingNativeChatImage[],
+    follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured sessions send attachments without the terminal paste path. */
   readonly structuredNativeChat: boolean
   /** Why a send must not write to the terminal now, read off its screen: a
    *  dialog there takes typed keys as answers (mobile-native-chat-dialog-guard.ts). */
   readonly refuseUnderDialog: typeof readSendUnderDialogRefusal
+  /** Whether the screen of a terminal this send FOLLOWED to (the tab got a new
+   *  handle while it waited) shows the agent's composer: the only thing that lets
+   *  it write there (mobile-native-chat-send-follow.ts). */
+  readonly verifyAgentComposer?: typeof agentComposerOnScreen
   /** Launch-context text parked on the agent's TUI input line, or null. The
    *  paste's leading clear must cover every line of it, or the draft's earlier
    *  lines survive and ride along with the image. */
@@ -133,6 +140,7 @@ export function useMobileNativeChatImageAttachments({
   beginImageSend,
   structuredNativeChat,
   refuseUnderDialog,
+  verifyAgentComposer = agentComposerOnScreen,
   readSeededLaunchDraft,
   onAttachSuccess,
   onError,
@@ -149,6 +157,8 @@ export function useMobileNativeChatImageAttachments({
     settleUploads,
     markAttachmentReuploading,
     replaceAttachmentImage,
+    takeSentAttachments,
+    restoreSentAttachments,
     setVideoFrameExtractionProgress
   } = useNativeChatAttachmentScopeWriters()
   const replaceAttachment = useMobileNativeChatImageMarkup({
@@ -162,12 +172,15 @@ export function useMobileNativeChatImageAttachments({
   // ends unready refuses as the gate always did, the box, chips and bubble
   // untouched (mobile-native-chat-send-readiness.ts). The tab's scope is the
   // target: a wait that outlives a tab switch gives up instead of sending.
+  // The tab a send belongs to, read live: a closure's scopeKey is the one it was tapped on.
+  const scopeKeyRef = useRef(scopeKey)
+  scopeKeyRef.current = scopeKey
   const sendGate = useMobileNativeChatSendGate({
     client, sendable: enabled && connState === 'connected', target: scopeKey, action: 'Message',
     lane: structuredNativeChat ? 'session' : 'terminal', onUnready: (message) => { onError?.(); onSendError(message) }
   })
   const settleSendChips = useMobileNativeChatSendChips({
-    scopeKey, activeHandleRef, structuredNativeChat, client, sendGate, onError, onSendError
+    scopeKey, client, sendGate, onError, onSendError
   })
 
   const {
@@ -222,216 +235,202 @@ export function useMobileNativeChatImageAttachments({
       // waits for it on this budget and says why when it never lands
       // (use-mobile-native-chat-send-chips.ts). It waits before it takes the
       // terminal, so a card tapped meanwhile is not refused (2026-09-26 review).
-      const tap = { scope, deadline, terminal: operationTerminal, text: composerText }
+      const tap = { scope, deadline, text: composerText }
       return settleSendChips(tap, async (pendingAll) => {
         const refuse = (message: string): false => {
           onError?.()
           onSendError(message)
           return false
         }
-        // Serialize clear/paste/submit ownership per terminal while allowing other
-        // tabs to send. Shared with the prompt-card writes (answer/permission), so
-        // a card tap can't interleave into a mid-flight paste sequence either.
-        // Taken for a composer send, which may let it go once its body is written and
-        // it only reads (mobile-native-chat-send-write.ts); this release then finds it gone.
-        const lockOwner = operationTerminal ? acquireMobileNativeChatTerminalWriteForSend(operationTerminal) : null
-        if (operationTerminal && !lockOwner) {
-          return refuse('Message not sent')
-        }
-        try {
-          // A dialog on screen takes typed keys as answers: this text could pick
-          // a choice by its digit and its Enter confirm the highlighted one
-          // (2026-09-27). Looked at before anything is written or cleared, so a
-          // refusal leaves the draft and its chips where they are.
-          if (!structuredNativeChat && operationTerminal) {
-            const screenClient = await sendGate.wait(deadline, () => activeHandleRef.current !== operationTerminal)
-            const refusal = screenClient && (await refuseUnderDialog({ client: screenClient, terminal: operationTerminal, deadline, agent }))
-            if (!screenClient || refusal) {
-              if (refusal) {
-                onError?.()
-                onSendError(refusal)
-              }
-              return false
-            }
-          }
-          // The terminal this send was tapped on, still: a switch while it waited (a chip, the link,
-          // the look above) took a text-only send to the other tab's agent, and pasted a photo
-          // there (Opus review, 2026-10-02). Not a session tab's send, which goes to the session.
-          if (!structuredNativeChat && activeHandleRef.current !== operationTerminal) {
-            return refuse('Message not sent (session changed)')
-          }
-          // Documents never paste as images: their note joins the text body, and
-          // the chip clears with the images once the send is accepted. A
-          // video's frames DO paste as images (they are ordinary photos to
-          // the terminal/session send below) — only their note joins the
-          // text body the same way a document's does.
-          const pendingFiles = pendingAll.filter(isPendingNativeChatFile)
-          const pendingImages = pendingAll.filter(
-            (attachment) => !isPendingNativeChatFile(attachment)
-          )
-          const text = withMobileNativeChatAttachmentNotes(composerText, pendingAll)
-          const clearSent = (): void => {
-            if (!scope) {
-              return
-            }
-            const sentIds = new Set(pendingAll.map((attachment) => attachment.id))
-            setAttachmentsByScope((prev) =>
-              withScopeAttachments(
-                prev,
-                scope,
-                (prev[scope] ?? []).filter((attachment) => !sentIds.has(attachment.id))
-              )
+        return sendFollowingTheTab(
+          {
+            tappedTerminal: operationTerminal,
+            structured: structuredNativeChat,
+            liveTerminal: () => activeHandleRef.current,
+            // The tab, not the handle, is who this send belongs to: the same tab
+            // given a new terminal is followed, verified (mobile-native-chat-send-claim.ts).
+            tabChanged: () => scopeKeyRef.current !== scope,
+            sendGate,
+            deadline,
+            look: (client, terminal) => refuseUnderDialog({ client, terminal, deadline, agent }),
+            verify: (client, terminal) => verifyAgentComposer({ client, terminal, agent, deadline }),
+            refuse
+          },
+          async ({ terminal, follow }) => {
+            // Documents never paste as images: their note joins the text body, and
+            // the chip clears with the images once the send is accepted. A
+            // video's frames DO paste as images (they are ordinary photos to
+            // the terminal/session send below) — only their note joins the
+            // text body the same way a document's does.
+            const pendingFiles = pendingAll.filter(isPendingNativeChatFile)
+            const pendingImages = pendingAll.filter(
+              (attachment) => !isPendingNativeChatFile(attachment)
             )
-          }
-          if (structuredNativeChat && pendingImages.length > 0 && scope) {
-            if (!(await sendGate.wait(deadline))) {
-              return false
+            const text = withMobileNativeChatAttachmentNotes(composerText, pendingAll)
+            const clearSent = (): void => {
+              if (scope) {
+                takeSentAttachments(scope, pendingAll)
+              }
             }
-            // Empty the composer and add the optimistic bubble now, in the same
-            // tick — not after the RPC settles (2026-09-24: the chips lingered
-            // after the text left, then the bubble popped in once the send
-            // resolved). A definite rejection puts text, chips and the echo back.
-            const previewUris = pendingImages.map((attachment) => attachment.previewUri)
-            const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
-            clearSent()
-            const outcome = await baseSend(text, previewUris, deadline, pendingImages)
-            if (outcome === 'rejected') {
-              undoDraftClear?.()
-              setAttachmentsByScope((prev) =>
-                withScopeAttachments(prev, scope, [...pendingAll, ...(prev[scope] ?? [])])
-              )
-            }
-            return outcome !== 'rejected'
-          }
-          if (pendingImages.length === 0 || !scope) {
-            // Heal a previously failed paste: a text-only send to that terminal would
-            // otherwise glue the stale image paste onto this message. Best-effort —
-            // on failure the marker stays set and the text must not be submitted.
-            const staleTerminal = activeHandleRef.current
-            if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
-              // Why: the heal is itself a terminal.send, so without the input lease it
-              // can only be rejected — which used to latch the marker and fail every
-              // later send with a bare "Message not sent" (#10681). Gate it like the
-              // image path: it waits for the lease, or leaves the marker for later.
-              const healClient = await sendGate.wait(deadline, () => activeHandleRef.current !== staleTerminal)
-              if (!healClient) {
+            if (structuredNativeChat && pendingImages.length > 0 && scope) {
+              if (!(await sendGate.wait(deadline))) {
                 return false
               }
-              const healed = await healMobileNativeChatStaleInput({
-                client: healClient,
-                terminal: staleTerminal,
-                deviceToken: deviceTokenRef.current,
-                deadline
-              })
-              // A tab switch during the clear would send this text to a terminal the
-              // clear never touched, so abort rather than reroute it.
-              if (!healed || activeHandleRef.current !== staleTerminal) {
-                return refuse('Message not sent')
-              }
-            }
-            // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
-            const accepted = (await baseSend(text, undefined, deadline)) !== 'rejected'
-            if (accepted && pendingFiles.length > 0) {
+              // Empty the composer and add the optimistic bubble now, in the same
+              // tick — not after the RPC settles (2026-09-24: the chips lingered
+              // after the text left, then the bubble popped in once the send
+              // resolved). A definite rejection puts text, chips and the echo back.
+              const previewUris = pendingImages.map((attachment) => attachment.previewUri)
+              const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
               clearSent()
+              const outcome = await baseSend(text, previewUris, deadline, pendingImages)
+              if (outcome === 'rejected') {
+                undoDraftClear?.()
+                restoreSentAttachments(scope, pendingAll)
+              }
+              return outcome !== 'rejected'
             }
-            return accepted
-          }
-          const handle = activeHandleRef.current
-          if (!handle) {
-            return refuse('Message not sent (no terminal on this tab)')
-          }
-          const pasteClient = await sendGate.wait(deadline, () => activeHandleRef.current !== handle)
-          if (!pasteClient) {
-            return false
-          }
-          // Set once the box has been emptied for this send; a no-op before that.
-          let restoreOptimistic = (): void => {}
-          try {
-            // Drain caption mirroring before clearing/pasting. A delayed mirror
-            // write after the image would overwrite or split this submission.
-            await beforeImagePaste?.()
-            if (activeHandleRef.current !== handle) {
-              onSendError('Message not sent (session changed)')
+            if (pendingImages.length === 0 || !scope) {
+              // Heal a previously failed paste: a text-only send to that terminal would
+              // otherwise glue the stale image paste onto this message. Best-effort —
+              // on failure the marker stays set and the text must not be submitted.
+              const staleTerminal = structuredNativeChat ? activeHandleRef.current : terminal
+              if (staleTerminal && isMobileNativeChatInputStale(staleTerminal)) {
+                // Why: the heal is itself a terminal.send, so without the input lease it
+                // can only be rejected — which used to latch the marker and fail every
+                // later send with a bare "Message not sent" (#10681). Gate it like the
+                // image path: it waits for the lease, or leaves the marker for later.
+                const healClient = await sendGate.wait(deadline, () => scopeKeyRef.current !== scope)
+                if (!healClient) {
+                  return false
+                }
+                const healed = await healMobileNativeChatStaleInput({
+                  client: healClient,
+                  terminal: staleTerminal,
+                  deviceToken: deviceTokenRef.current,
+                  deadline
+                })
+                // A tab switch during the clear would send this text to a terminal the
+                // clear never touched, so abort rather than reroute it.
+                if (!healed || activeHandleRef.current !== staleTerminal) {
+                  return refuse(healed && follow && !follow.tabChanged() ? SEND_TERMINAL_RESTARTED : 'Message not sent')
+                }
+              }
+              // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
+              const sent = await baseSend(text, undefined, deadline, undefined, follow ?? undefined)
+              if (follow?.reminted) {
+                return SEND_REMINTED
+              }
+              const accepted = sent !== 'rejected'
+              if (accepted && pendingFiles.length > 0) {
+                clearSent()
+              }
+              return accepted
+            }
+            const handle = terminal
+            if (!handle || !follow) {
+              return refuse('Message not sent (no terminal on this tab)')
+            }
+            // Nothing is written until the paste: a tab given another terminal
+            // before it restarts from the top and is verified there, a switch refuses.
+            const gone = (): false | typeof SEND_REMINTED =>
+              follow.tabChanged() ? refuse('Message not sent (session changed)') : SEND_REMINTED
+            const pasteClient = await sendGate.wait(deadline, follow.tabChanged)
+            if (!pasteClient) {
               return false
             }
-            // The box empties now, chips, echo and all, not after the paste and
-            // the settle (2026-09-13: the Claude app sends both at once). A
-            // paste that fails before the text goes puts all three back.
-            const previewUris = pendingImages.map((attachment) => attachment.previewUri)
-            // The agent's row names each path pasted: how the echo finds its row.
-            const undoDraftClear = beginImageSend?.(text, previewUris, pendingImages.map((image) => image.path)) ?? null
-            clearSent()
-            restoreOptimistic = (): void => {
-              undoDraftClear?.()
-              if (scope) {
-                setAttachmentsByScope((prev) =>
-                  withScopeAttachments(prev, scope, [...pendingAll, ...(prev[scope] ?? [])])
-                )
-              }
-            }
-            const seededLaunchDraft = readSeededLaunchDraft()
-            // A queue edit can leave the whole recalled queue on the agent, and the
-            // draft mirror has typed this caption onto the line. One Ctrl+U clears
-            // one VISUAL line (Claude Code 2.1.266), so the survivors would submit
-            // glued to this photo's caption — size the clear for whatever is there.
-            const residue = mobileNativeChatInputResidue(handle)
-            const pasted = await pasteMobileNativeChatImagePaths({
-              client: pasteClient,
-              terminal: handle,
-              agent,
-              deviceToken: deviceTokenRef.current,
-              imagePaths: pendingImages.map((attachment) => attachment.path),
-              followedByText: text.trim().length > 0,
-              deadline,
-              clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft, residue, text)
-            })
-            if (!pasted) {
-              // Put the chips and text back so the user can retry; the failed paste never submitted.
-              restoreOptimistic()
-              markMobileNativeChatInputStale(handle)
-              return refuse('Message not sent')
-            }
-            // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
-            clearMobileNativeChatInputStale(handle)
-            clearMobileNativeChatInputResidue(handle)
-            // Let the TUI absorb the image paste before the text + Enter follow. The
-            // preview URIs ride along to baseSend so the sent bubble shows the photo
-            // immediately (empty text still submits a bare Enter through baseSend).
-            await sleep(MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS)
-            // The settle is deliberate pacing, not transport latency — credit it back
-            // so a shared budget doesn't charge the text body for the TUI's beat.
-            const textDeadline = deadline + MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS
-            // The paste above targeted `handle`; a tab switch during the settle would
-            // route the text + Enter to a different terminal than the images. Abort —
-            // the chips keep their scope and a retry's Ctrl+U clears the stale paste.
             if (activeHandleRef.current !== handle) {
+              return gone()
+            }
+            // Set once the box has been emptied for this send; a no-op before that.
+            let restoreOptimistic = (): void => {}
+            try {
+              // Drain caption mirroring before clearing/pasting. A delayed mirror
+              // write after the image would overwrite or split this submission.
+              await beforeImagePaste?.()
+              if (activeHandleRef.current !== handle) {
+                return gone()
+              }
+              // The box empties now, chips, echo and all, not after the paste and
+              // the settle (2026-09-13: the Claude app sends both at once). A
+              // paste that fails before the text goes puts all three back.
+              const previewUris = pendingImages.map((attachment) => attachment.previewUri)
+              // The agent's row names each path pasted: how the echo finds its row.
+              const undoDraftClear = beginImageSend?.(text, previewUris, pendingImages.map((image) => image.path)) ?? null
+              clearSent()
+              restoreOptimistic = (): void => {
+                undoDraftClear?.()
+                if (scope) {
+                  restoreSentAttachments(scope, pendingAll)
+                }
+              }
+              const seededLaunchDraft = readSeededLaunchDraft()
+              // A queue edit can leave the whole recalled queue on the agent, and the
+              // draft mirror has typed this caption onto the line. One Ctrl+U clears
+              // one VISUAL line (Claude Code 2.1.266), so the survivors would submit
+              // glued to this photo's caption — size the clear for whatever is there.
+              const residue = mobileNativeChatInputResidue(handle)
+              const pasted = await pasteMobileNativeChatImagePaths({
+                client: pasteClient,
+                terminal: handle,
+                agent,
+                deviceToken: deviceTokenRef.current,
+                imagePaths: pendingImages.map((attachment) => attachment.path),
+                followedByText: text.trim().length > 0,
+                deadline,
+                clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft, residue, text)
+              })
+              if (!pasted) {
+                // Put the chips and text back so the user can retry; the failed paste never submitted.
+                restoreOptimistic()
+                markMobileNativeChatInputStale(handle)
+                return refuse('Message not sent')
+              }
+              // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
+              clearMobileNativeChatInputStale(handle)
+              clearMobileNativeChatInputResidue(handle)
+              // Let the TUI absorb the image paste before the text + Enter follow. The
+              // preview URIs ride along to baseSend so the sent bubble shows the photo
+              // immediately (empty text still submits a bare Enter through baseSend).
+              await sleep(MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS)
+              // The settle is deliberate pacing, not transport latency — credit it back
+              // so a shared budget doesn't charge the text body for the TUI's beat.
+              const textDeadline = deadline + MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS
+              // The paste above targeted `handle`; a tab switch during the settle would
+              // route the text + Enter to a different terminal than the images. Abort —
+              // the chips keep their scope and a retry's Ctrl+U clears the stale paste.
+              if (activeHandleRef.current !== handle) {
+                restoreOptimistic()
+                markMobileNativeChatInputStale(handle)
+                return refuse(follow.tabChanged() ? 'Message not sent' : SEND_TERMINAL_RESTARTED)
+              }
+              const outcome = await baseSend(text, previewUris, textDeadline, undefined, follow)
+              if (follow.reminted) {
+                restoreOptimistic()
+                markMobileNativeChatInputStale(handle)
+                return refuse(SEND_TERMINAL_RESTARTED)
+              }
+              if (outcome !== 'accepted') {
+                // 'rejected' leaves the pasted image path on this input line; 'unknown'
+                // may have lost the text+Enter AFTER the paste landed, orphaning the
+                // image onto whatever is sent next (#10228) — both must heal first.
+                markMobileNativeChatInputStale(handle)
+              }
+              if (outcome === 'rejected') {
+                // The chips and echo come back; baseSend already put the text back.
+                restoreOptimistic()
+              }
+              return outcome !== 'rejected'
+            } catch {
+              // A thrown paste/send (network/RPC) puts the chips back and honors the
+              // Promise<boolean> contract instead of rejecting. Retry-safe: the next
+              // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
               restoreOptimistic()
               markMobileNativeChatInputStale(handle)
               return refuse('Message not sent')
             }
-            const outcome = await baseSend(text, previewUris, textDeadline)
-            if (outcome !== 'accepted') {
-              // 'rejected' leaves the pasted image path on this input line; 'unknown'
-              // may have lost the text+Enter AFTER the paste landed, orphaning the
-              // image onto whatever is sent next (#10228) — both must heal first.
-              markMobileNativeChatInputStale(handle)
             }
-            if (outcome === 'rejected') {
-              // The chips and echo come back; baseSend already put the text back.
-              restoreOptimistic()
-            }
-            return outcome !== 'rejected'
-          } catch {
-            // A thrown paste/send (network/RPC) puts the chips back and honors the
-            // Promise<boolean> contract instead of rejecting. Retry-safe: the next
-            // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
-            restoreOptimistic()
-            markMobileNativeChatInputStale(handle)
-            return refuse('Message not sent')
-          }
-        } finally {
-          releaseMobileNativeChatTerminalWrite(operationTerminal, lockOwner ?? undefined)
-        }
+        )
       })
     },
     [
@@ -440,6 +439,7 @@ export function useMobileNativeChatImageAttachments({
       beforeImagePaste,
       beginImageSend,
       agent,
+      verifyAgentComposer,
       deviceTokenRef,
       onError,
       onSendError,
