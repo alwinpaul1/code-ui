@@ -151,7 +151,7 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(host.readSizes.filter((size) => size >= 64 && size !== MESSAGE.length)).toEqual([])
   })
 
-  it('looks at the input before it types the message, and again after it cleared', async () => {
+  it('looks for Claude\'s box, then at the input, before it types the message, and again after it cleared', async () => {
     const host = createFakeComposerHost()
     host.holdInput(MESSAGE)
     mount(host)
@@ -162,7 +162,9 @@ describe('a message sent from the chat while the desktop input holds a copy of i
       const body = params as { text?: string; enter?: boolean }
       return method === 'terminal.read' ? 'read' : body.enter ? 'body' : 'clear'
     })
-    expect(order.slice(0, 4)).toEqual(['read', 'clear', 'read', 'body'])
+    // The first read is the send's own look for a dialog and for Claude's input
+    // box (a send with no image hook in front of it); the next sizes the clear.
+    expect(order.slice(0, 5)).toEqual(['read', 'read', 'clear', 'read', 'body'])
   })
 
   it('refuses and writes nothing more when the input cannot be cleared, and keeps the draft', async () => {

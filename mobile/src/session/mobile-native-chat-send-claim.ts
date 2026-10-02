@@ -56,8 +56,11 @@ export async function sendFollowingTheTab(
     readonly hostTerminal: () => string | null
     readonly sendGate: Pick<MobileNativeChatSendGate, 'wait'>
     readonly deadline: number
-    /** The look at the screen for a dialog; its refusal, or null. */
-    readonly look: (client: RpcClient, terminal: string) => Promise<string | null>
+    /** The look at the screen for a dialog, and for a screen with no input box;
+     *  its refusal, or null. `followed` is true on the restarted attempt, where
+     *  `verify` is the stricter proof of the composer and says its own word
+     *  (SEND_TERMINAL_RESTARTED): the look then asks for the dialog only. */
+    readonly look: (client: RpcClient, terminal: string, followed: boolean) => Promise<string | null>
     readonly verify: (client: RpcClient, terminal: string) => Promise<boolean>
     /** Says why nothing was written, and answers false. */
     readonly refuse: (message: string) => false
@@ -83,7 +86,7 @@ export async function sendFollowingTheTab(
         // A dialog on screen takes typed keys as answers (2026-09-27): looked at
         // before anything is written, so a refusal leaves the draft where it is.
         const client = await args.sendGate.wait(args.deadline, tabChanged)
-        const refusal = client && (await args.look(client, held))
+        const refusal = client && (await args.look(client, held, followed))
         if (!client || refusal) {
           return refusal ? refuse(refusal) : false
         }

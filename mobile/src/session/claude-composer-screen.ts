@@ -84,6 +84,59 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
   return { located: false }
 }
 
+/** A SELECTED row of the agents panel Claude Code 2.1.287 draws under the footer
+ *  (background agents and tasks running). The panel container has no left
+ *  padding, unlike the footer's `paddingX: 2`, so its rows start with two spaces
+ *  and a selected or mouse-hovered one starts with `❯ ` at column 0, then the
+ *  row's glyph. Claude Code 2.1.287 (read from the binary): `◯` (U+25EF) for
+ *  unviewed task rows, "N idle agents" and workflow rows; the VIEWED row's `⏺`
+ *  (U+23FA, macOS) or `●` (U+25CF, elsewhere), and "main" is viewed by default;
+ *  `⏸` (U+23F8) for a paused workflow. Nested task rows put `"  "` per level
+ *  below the first, then a tree connector `├` or `└` and a space, before it.
+ *  (`◉` is the effort indicator, never in the panel.) A shell prompt, a starship
+ *  `❯ ` included, is not followed by one. */
+const AGENTS_PANEL_SELECTED = /^❯ (?=(?: {2})*(?:[├└] )?[◯⏺●⏸])/
+
+/**
+ * The non-blank rows under the composer's bottom rule, or null when no composer
+ * is located (`readClaudeInput`'s own test). Claude Code 2.1.287 draws every row
+ * under its box (the status line, the `⏵⏵ … mode` footer, `? for shortcuts`)
+ * with `paddingX: 2`, and every composer screen in fixtures/ has them indented;
+ * a shell prompt or a resume hint printed after Claude's last frame is at column 0.
+ */
+export function claudeRowsUnderBox(lines: readonly string[]): string[] | null {
+  for (let at = lines.length - 1; at >= 1; at--) {
+    if (!INPUT_ROW.test(lines[at]!) || MENU_ROW.test(lines[at]!) || !isRule(lines[at - 1]!)) {
+      continue
+    }
+    const bottom = lines.findIndex((line, index) => index > at && isRule(line))
+    if (bottom !== -1) {
+      return lines
+        .slice(bottom + 1)
+        .filter((row) => row.trim() !== '')
+        .map((row) => row.replace(AGENTS_PANEL_SELECTED, '  '))
+    }
+  }
+  return null
+}
+
+/**
+ * Whether Claude's composer is up, as far as a screen can show: the box is
+ * located and nothing under it sits at column 0. An EMPTY area under the box
+ * passes: with no status line Claude's footer can be `null` in default mode
+ * (the hint suppressed), and a shell always leaves its prompt there, so
+ * "nothing under the box" is not a shell. A remint follow wants more
+ * (claudeLiveFrame requires at least one indented row), because it must also
+ * rule out an emulator seeded with an old frame; a send to the terminal the
+ * chat has been using does not. Not checked against the 2.1.287 binary for the
+ * indent of vim's `-- INSERT --` or of the slash-command popup rows ("below the
+ * prompt" is all its settings text says); both are modelled at two columns.
+ */
+export function claudeComposerLive(lines: readonly string[]): boolean {
+  const below = claudeRowsUnderBox(lines)
+  return below !== null && below.every((row) => row.startsWith('  '))
+}
+
 /**
  * The prompts Claude has drawn in the conversation (and in its queue box) above
  * the composer: column-zero `❯` and a PLAIN space, then the first row of the

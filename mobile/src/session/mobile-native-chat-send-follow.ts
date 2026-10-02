@@ -1,5 +1,4 @@
-import { readClaudeInput } from './claude-composer-screen'
-import { isPromptRule } from './mobile-terminal-queue-block'
+import { claudeRowsUnderBox } from './claude-composer-screen'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
@@ -17,8 +16,6 @@ export type MobileNativeChatSendFollow = {
   readonly tabChanged: () => boolean
   reminted: boolean
 }
-
-const isRule = (row: string): boolean => /[\u2500\u2501]{3}/.test(row) && isPromptRule(row)
 
 /**
  * Whether the screen is a live Claude frame: the box `readClaudeInput` locates,
@@ -41,22 +38,8 @@ const isRule = (row: string): boolean => /[\u2500\u2501]{3}/.test(row) && isProm
  * its screen before the agent paints to settle it.
  */
 export function claudeLiveFrame(lines: readonly string[]): boolean {
-  if (!readClaudeInput(lines, '').located) {
-    return false
-  }
-  let bottom = -1
-  for (let at = lines.length - 1; at >= 1 && bottom === -1; at--) {
-    const row = lines[at]!
-    if (
-      /^\u276f(?: |\s|$)/.test(row) &&
-      !/^\u276f\s+\d+[.)]\s/.test(row) &&
-      isRule(lines[at - 1]!)
-    ) {
-      bottom = lines.findIndex((line, index) => index > at && isRule(line))
-    }
-  }
-  const below = lines.slice(bottom + 1).filter((row) => row.trim() !== '')
-  return bottom !== -1 && below.length > 0 && below.every((row) => row.startsWith('  '))
+  const below = claudeRowsUnderBox(lines)
+  return below !== null && below.length > 0 && below.every((row) => row.startsWith('  '))
 }
 
 /** The screen read the verification takes; the look's own. */

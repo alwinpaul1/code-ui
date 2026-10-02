@@ -278,8 +278,11 @@ describe('a message sent from the chat while a prompt waits on screen', () => {
   // never be sent.
   it('lets the chat send its own draft once the mirror typed it into Codex', async () => {
     const draft = '1. Yes, use postgres\n2. No caching for now'
-    const { args } = setUp(() =>
-      read(['• ok', '› 1. Yes, use postgres', '  2. No caching for now', '  gpt-5.6-sol xhigh · ~/Project'])
+    // The tab is Codex's: a screen with no Claude box is Codex's own, not a shell
+    // under a Claude tab (mobile-native-chat-send-without-composer.test.ts).
+    const { args } = setUp(
+      () => read(['• ok', '› 1. Yes, use postgres', '  2. No caching for now', '  gpt-5.6-sol xhigh · ~/Project']),
+      { agent: 'codex' }
     )
     await act(async () => {
       await hook!.sendNativeChat(draft)
