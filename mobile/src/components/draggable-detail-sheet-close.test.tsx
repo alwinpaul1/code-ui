@@ -195,6 +195,25 @@ describe('the tool-detail sheet closed by its cross', () => {
     expect(afterClose).toHaveBeenCalledTimes(1)
   })
 
+  it('comes back when the parent refuses the close, instead of staying invisible over a live Modal', () => {
+    vi.useFakeTimers()
+    try {
+      const onClose = vi.fn() // refuses: visible stays true
+      render(sheet(true, onClose))
+
+      pressClose()
+      act(() => lastHide().done!(true))
+      act(() => {
+        vi.advanceTimersByTime(150)
+      })
+
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(seam.timings.at(-1)?.to, 'animated back in').toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still waits for the exit animation when the parent hides it on its own', () => {
     const afterClose = vi.fn()
     render(sheet(true, vi.fn(), afterClose))

@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react'
 import { Modal, Pressable, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -19,6 +19,7 @@ import { useReducedMotion } from '../ui/use-reduced-motion'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { draggableDetailSheetStyles as styles } from './draggable-detail-sheet-styles'
 import { DRAWER_SPRING } from './drawer-spring'
+import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 import {
@@ -120,30 +121,20 @@ function MountedDraggableDetailSheet({
   })
   const collapsedOffset = Math.max(0, fullHeight - defaultHeight)
 
-  // The latest onClose behind one stable function, so the gestures built around it
-  // survive a parent that passes a new arrow on every render.
-  const onCloseRef = useRef(onClose)
-  useEffect(() => {
-    onCloseRef.current = onClose
-  }, [onClose])
-  // True from the moment the sheet's own exit animation has run to its end (a
-  // cross, Back, a backdrop tap or a drag) until it opens again. The parent's
-  // `visible=false` that follows then finds the sheet already off the screen:
-  // it unmounts it at once instead of running the same 150 ms exit a second
-  // time under an invisible Modal that takes every tap.
-  const leftScreenRef = useRef(false)
-  const requestClose = useCallback(() => {
-    leftScreenRef.current = true
-    onCloseRef.current()
-  }, [])
+  // `showSheet` stands the sheet at its default rest and animates it in: an
+  // open, and a close its parent refused (use-drawer-close-request.ts, which
+  // also tells a sheet already off the screen from one still to animate out).
+  const showSheet = () => {
+    translateY.value = collapsedOffset
+    scrollOffsetY.value = 0
+    setSnap('default')
+    progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
+  }
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, restore: showSheet })
 
   useEffect(() => {
     if (visible) {
-      leftScreenRef.current = false
-      translateY.value = collapsedOffset
-      scrollOffsetY.value = 0
-      setSnap('default')
-      progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
+      showSheet()
     } else if (leftScreenRef.current) {
       onHidden()
     } else {
