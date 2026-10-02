@@ -33,3 +33,15 @@ export function shellCommandOfSend(
  *  queue editor): nothing was written. */
 export const SHELL_COMMAND_QUEUE_REFUSAL =
   'A message that starts with ! runs as a shell command, so it cannot be put back in the queue. Send it from the chat box, where you are asked first.'
+
+/** Said when a confirmed `!` message was typed and nothing on the screen or in the
+ *  transcript showed the command ran. It may have: a retry would run it twice, so the
+ *  word is about the shell and invites no retry. */
+export const SHELL_COMMAND_UNCONFIRMED =
+  "Sent to the desktop's shell; check the terminal before running it again."
+
+/** What a chat send says when nothing showed it landed: the usual word, or the shell's. */
+export const unconfirmedChatSendNotice = (text: string, agent: string | null | undefined): string =>
+  shellCommandOfSend(text, agent) === null
+    ? 'Delivery unconfirmed — check chat before retrying'
+    : SHELL_COMMAND_UNCONFIRMED

@@ -1,7 +1,13 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
-import { claudeSentPromptRows, claudeSubmitNotice, readClaudeInput } from './claude-composer-screen'
+import {
+  claudeSentBashRows,
+  claudeSentPromptRows,
+  claudeSubmitNotice,
+  readClaudeInput
+} from './claude-composer-screen'
+import { shellCommandOfSend } from './mobile-native-chat-shell-command'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 
 /**
@@ -106,14 +112,24 @@ export async function verifyClaudeSubmit(args: {
     SUBMIT_VERIFY_WINDOW_MS,
     args.deadline === undefined ? Infinity : args.deadline - startedAt
   )
+  // A confirmed `!` message is a shell command: while it is in the input the box shows the
+  // command with the `!` taken off (bash mode), and once it is submitted Claude draws it as a
+  // `! cmd` row, not a `❯` row, and fires no prompt hook (claudeSentBashRows). Both the command
+  // and the full text count as "the words", so a message that went as a plain prompt is seen too.
+  const shell = shellCommandOfSend(args.text, 'claude')
   const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
+  const commandWords = shell === null ? '' : dense(shell).slice(0, WORDS_PREFIX_CHARS)
+  const heard = (typed: string): boolean => {
+    const wanted = dense(typed)
+    return (words !== '' && wanted.startsWith(words)) || (commandWords !== '' && wanted.startsWith(commandWords))
+  }
   let looked = false
   let failedLooks = 0
   let lastLookAt = -Infinity
   let sawWords = false
   while (now() - startedAt < window) {
     await wait(TICK_MS)
-    if (args.receipts && beaconHasWords(args.receipts(), args.seenNonces, args.text)) {
+    if (shell === null && args.receipts && beaconHasWords(args.receipts(), args.seenNonces, args.text)) {
       return { kind: 'sent' }
     }
     const elapsed = now() - startedAt
@@ -145,7 +161,7 @@ export async function verifyClaudeSubmit(args: {
     if (!input.located) {
       continue
     }
-    if (words !== '' && dense(input.text).startsWith(words)) {
+    if (heard(input.text)) {
       sawWords = true
       continue
     }
@@ -157,7 +173,8 @@ export async function verifyClaudeSubmit(args: {
     // message.
     if (
       sawWords ||
-      claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words))
+      claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words)) ||
+      (shell !== null && claudeSentBashRows(screen.lines).some(heard))
     ) {
       return { kind: 'sent' }
     }

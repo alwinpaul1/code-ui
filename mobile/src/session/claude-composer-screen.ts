@@ -174,6 +174,31 @@ export function claudeSentPromptRows(lines: readonly string[]): string[] {
   return []
 }
 
+/**
+ * The shell commands Claude has drawn in the conversation above the composer: a
+ * column-0 `!`, a PLAIN space and the command (Claude Code 2.1.287's `pnt`, read
+ * from the binary: `! ` in `bashBorder`, then the text, on a tinted row; MODELLED,
+ * not captured). A `!` message the user confirmed lands here, not as a `❯` row,
+ * and the command is stored as `<bash-input>cmd</bash-input>`. The composer's own
+ * bash-mode row (a no-break space, between the rules) is not one, and neither is
+ * an indented quote. Empty when no composer is located.
+ */
+export function claudeSentBashRows(lines: readonly string[]): string[] {
+  for (let at = lines.length - 1; at >= 1; at--) {
+    const row = lines[at]!
+    if (!INPUT_ROW.test(row) || MENU_ROW.test(row) || !isRule(lines[at - 1]!)) {
+      continue
+    }
+    if (lines.findIndex((line, index) => index > at && isRule(line)) === -1) {
+      continue
+    }
+    return lines
+      .slice(0, at - 1)
+      .flatMap((line) => (/^! +\S/.test(line) ? [line.slice(1).trim()] : []))
+  }
+  return []
+}
+
 /** The notices Claude Code 2.1.287 draws when a submit held characters it
  *  strips (`txe(count, kind, key)`; `${i}` is "Removed 1 invisible character" or
  *  "Removed N invisible characters"). Four kinds: "review" (`· review and press

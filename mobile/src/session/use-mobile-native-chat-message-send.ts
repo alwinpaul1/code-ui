@@ -17,6 +17,7 @@ import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-l
 import { mobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
+import { unconfirmedChatSendNotice } from './mobile-native-chat-shell-command'
 import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
 import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { writeChatSend } from './mobile-native-chat-send-write'
@@ -261,9 +262,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (classification === 'chat') {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
-          holdUnconfirmedSend(origin, text, () =>
-            report('Delivery unconfirmed — check chat before retrying')
-          )
+          holdUnconfirmedSend(origin, text, () => report(unconfirmedChatSendNotice(text, agent)))
         } else {
           // A command has no echo to wait for, so this is the only word it gets.
           report(COMMAND_UNCONFIRMED)
