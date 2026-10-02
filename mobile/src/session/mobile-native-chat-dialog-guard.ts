@@ -1,7 +1,12 @@
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
-import { terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
+import { claudeComposerLive } from './claude-composer-screen'
+import { replyIsScreen, terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
 export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer it first.'
+
+/** Said when a screen that can be read does not show Claude's input box. */
+export const SEND_WITHOUT_COMPOSER_REFUSAL =
+  "Claude's input box isn't on the desktop screen, so the message was not typed. If Claude exited, start it again there."
 
 /** How long a send waits for its look at the screen. A slower read goes
  *  without the look, as a send did before there was one. */
@@ -155,6 +160,26 @@ export function terminalDialogOnScreen(lines: readonly string[], agent?: string 
  * chat's last poll, which can be seconds old. Fails open: a read that fails,
  * times out or comes from the stream instead of the screen lets the send go,
  * as every send went before this look existed.
+ *
+ * `requireComposer` is for a write that types words into Claude's input and
+ * presses Enter (a composer send, a photo paste, an answer, a picked command).
+ * After the dialog check, which keeps its place and its own message, it refuses
+ * a screen that is a screen (`source: 'screen'`, said outright) and does not show
+ * Claude's input box: a shell the agent exited to, transcript mode, `!` bash
+ * mode (what is typed there runs as a command, so it is refused too). The tab
+ * still says `claude` for about 30 minutes after the process is gone (a
+ * hand-started agent's type outlives it), so the tab is no evidence.
+ *
+ * THE GAP: a read the phone cannot get (an older host, a timeout, a rejected RPC,
+ * a reply with no `source` or a stream tail) still fails open, because refusing
+ * every send to a host that cannot be read would be the worse bug. Closing it
+ * needs a host that answers `screen: true` for every terminal (the phone has no
+ * other proof of what a terminal shows), after which this can refuse on `null`
+ * too. Codex and every other agent are unchanged: the `›` row is also a sent
+ * prompt, a popup row and an approval option (agentComposerOnScreen), so no
+ * screen locates Codex's composer. The same hazard exists there; Codex's footer
+ * row (`<model> · <cwd>`), once captured from a real session, would close it.
+ * Not guessed here.
  */
 export async function readSendUnderDialogRefusal(args: {
   client: Parameters<typeof terminalScreenLinesRead.request>[0]
@@ -163,19 +188,31 @@ export async function readSendUnderDialogRefusal(args: {
   agent?: string | null
   /** The action's own budget, when it has one; the look never takes longer. */
   deadline?: number
+  /** The write types into Claude's input: also refuse a screen with no box. */
+  requireComposer?: boolean
 }): Promise<string | null> {
   try {
-    const lines = terminalScreenLinesRead.interpret(
-      await terminalScreenLinesRead.request(
-        args.client,
-        { terminal: args.terminal, screen: true },
-        {
-          timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
-          budgetSpansConnect: true
-        }
-      )
+    const reply = await terminalScreenLinesRead.request(
+      args.client,
+      { terminal: args.terminal, screen: true },
+      {
+        timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
+        budgetSpansConnect: true
+      }
     )
-    return lines && terminalDialogOnScreen(lines, args.agent) ? SEND_UNDER_DIALOG_REFUSAL : null
+    const lines = terminalScreenLinesRead.interpret(reply)
+    if (!lines) {
+      return null
+    }
+    if (terminalDialogOnScreen(lines, args.agent)) {
+      return SEND_UNDER_DIALOG_REFUSAL
+    }
+    return args.requireComposer &&
+      args.agent === 'claude' &&
+      replyIsScreen(reply) &&
+      !claudeComposerLive(lines)
+      ? SEND_WITHOUT_COMPOSER_REFUSAL
+      : null
   } catch {
     return null
   }

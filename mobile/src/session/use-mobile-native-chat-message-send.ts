@@ -171,9 +171,22 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       // An answer or a pick types text and an Enter, which a dialog on screen
-      // takes as its answer (2026-09-27). A composer send looked already,
-      // before its paste (use-mobile-native-chat-image-attachments.ts).
-      if (!syncComposer && (await refusedUnderDialog(refuseUnderDialog, { client, terminal: handle, deadline, agent }, report))) {
+      // takes as its answer (2026-09-27), and Claude exited back to a shell
+      // takes as a command to run (2026-10-02): the look also refuses a screen
+      // with no Claude input box (readSendUnderDialogRefusal `requireComposer`;
+      // an unreadable screen still fails open, said there). A composer send
+      // through the image hook looked already, before any paste, and its follow
+      // says so (use-mobile-native-chat-image-attachments.ts). One that did not
+      // (a caller with no hook) looks here when the agent is Claude; Codex's
+      // composer send has never looked and does not start (said there).
+      if (
+        (!syncComposer || (!follow && agent === 'claude')) &&
+        (await refusedUnderDialog(
+          refuseUnderDialog,
+          { client, terminal: handle, deadline, agent, requireComposer: true },
+          report
+        ))
+      ) {
         return 'rejected'
       }
       if (syncComposer && beforeSend) {
