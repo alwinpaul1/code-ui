@@ -103,6 +103,18 @@ const NO_COMPOSER: [string, string[]][] = [
   ['bash mode (the ! composer)', ['⏺ Done.', RULE, '! ls', RULE, '  ! for bash mode']]
 ]
 
+/** Selected or hovered rows of Claude Code 2.1.287's agents panel (glyphs read
+ *  from the binary): `◯` unviewed, `⏺` (macOS) or `●` viewed, `⏸` paused
+ *  workflow, a tree connector first on nested task rows. */
+const PANEL_ROWS: [string, string][] = [
+  ['an unviewed task row', '❯ ◯ general-purpose  Probe the relay'],
+  ['the viewed main row on macOS', '❯ ⏺ main'],
+  ['the viewed main row elsewhere', '❯ ● main'],
+  ['a depth-1 child row', '❯ ├ ◯ child'],
+  ['a depth-2 grandchild row', '❯   └ ◯ grandchild'],
+  ['a paused workflow row', '❯ ⏸ workflow']
+]
+
 const LEGIT: [string, string[]][] = [
   ['an idle composer with a user status line', EMPTY_COMPOSER],
   [
@@ -135,8 +147,10 @@ const LEGIT: [string, string[]][] = [
   // 2.1.287's agents panel under the footer has no left padding: a selected or
   // mouse-hovered row starts with `❯ ` at column 0 (a desk mouse resting on it).
   ['an agents panel, no row selected', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '  ◯ main', '  ◯ general-purpose  Probe the relay   1m 3s']],
-  ['an agents panel with the main row hovered', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '❯ ◉ main', '  ◯ general-purpose  Probe the relay   1m 3s']],
-  ['an agents panel with a task row hovered', ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, '  ◉ main', '❯ ◯ general-purpose  Probe the relay   1m 3s']],
+  ...PANEL_ROWS.map(([name, row]): [string, string[]] => [
+    `an agents panel with ${name} hovered (2.1.287)`,
+    ['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, row, '  ◯ general-purpose  Probe the relay   1m 3s']
+  ]),
   // The footer is `null` in default mode with the hint suppressed: nothing under
   // the box. A shell leaves its prompt there, so an EMPTY area is not a shell.
   ['no status line and no footer at all', ['⏺ Done.', RULE, '❯ ', RULE]]
@@ -196,10 +210,7 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
 })
 
 describe('the remint follow reads a hovered agents-panel row as Claude too', () => {
-  it.each([
-    ['main row', '❯ ◉ main'],
-    ['task row', '❯ ◯ general-purpose  Probe the relay']
-  ])('accepts the box with the %s hovered', (_name, row) => {
+  it.each(PANEL_ROWS)('accepts the box with %s hovered', (_name, row) => {
     expect(claudeLiveFrame(['⏺ Done.', RULE, '❯ ', RULE, ...FOOTER, row])).toBe(true)
   })
 

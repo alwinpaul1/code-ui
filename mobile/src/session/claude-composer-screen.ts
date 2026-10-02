@@ -88,9 +88,14 @@ export function readClaudeInput(lines: readonly string[], draft: string): Claude
  *  (background agents and tasks running). The panel container has no left
  *  padding, unlike the footer's `paddingX: 2`, so its rows start with two spaces
  *  and a selected or mouse-hovered one starts with `❯ ` at column 0, then the
- *  row's circle glyph (`◯` idle, `◉` selected-main; read from the binary). A
- *  shell prompt is not followed by one. */
-const AGENTS_PANEL_SELECTED = /^❯ (?=[◯◉])/
+ *  row's glyph. Claude Code 2.1.287 (read from the binary): `◯` (U+25EF) for
+ *  unviewed task rows, "N idle agents" and workflow rows; the VIEWED row's `⏺`
+ *  (U+23FA, macOS) or `●` (U+25CF, elsewhere), and "main" is viewed by default;
+ *  `⏸` (U+23F8) for a paused workflow. Nested task rows put `"  "` per level
+ *  below the first, then a tree connector `├` or `└` and a space, before it.
+ *  (`◉` is the effort indicator, never in the panel.) A shell prompt, a starship
+ *  `❯ ` included, is not followed by one. */
+const AGENTS_PANEL_SELECTED = /^❯ (?=(?: {2})*(?:[├└] )?[◯⏺●⏸])/
 
 /**
  * The non-blank rows under the composer's bottom rule, or null when no composer
