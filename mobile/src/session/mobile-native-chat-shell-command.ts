@@ -28,3 +28,8 @@ export function shellCommandOfSend(
   }
   return text.slice(1).trim()
 }
+
+/** Said where text is typed into the agent's input with no room to ask first (the
+ *  queue editor): nothing was written. */
+export const SHELL_COMMAND_QUEUE_REFUSAL =
+  'A message that starts with ! runs as a shell command, so it cannot be put back in the queue. Send it from the chat box, where you are asked first.'

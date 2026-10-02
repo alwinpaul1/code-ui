@@ -1,3 +1,4 @@
+import { SHELL_COMMAND_QUEUE_REFUSAL, shellCommandOfSend } from './mobile-native-chat-shell-command'
 import { claudeQueueViewFromScreen, type ClaudeQueueView } from './mobile-terminal-queued-messages'
 import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
 import {
@@ -193,9 +194,17 @@ export async function finishNativeQueueEdit(
   if (draftOf(before) !== edit.draft) {
     throw new Error('The draft changed on desktop. Reopen the editor before saving.')
   }
-  const text = replacement?.trim() ?? ''
+  // Trimmed at the END only, as the chat's send is: the text is judged by what the
+  // agent will be typed, and a leading space is no `!` switch in either door.
+  const text = replacement?.trimEnd() ?? ''
   if (hasControlCharacters(text)) {
     throw new Error('Remove control characters before saving.')
+  }
+  // Typed into the emptied input, a leading `!` is a shell command (the chat asks first;
+  // this sheet cannot). Before any write, so nothing is cleared or lost. Text that is
+  // already in the input (an unchanged restore) is not typed and is not judged.
+  if (!edit.segments && text !== edit.draft && shellCommandOfSend(text, agent) !== null) {
+    throw new Error(SHELL_COMMAND_QUEUE_REFUSAL)
   }
   if (edit.segments) {
     await rebuildQueue(io, edit, text, onReplaced)
@@ -279,6 +288,11 @@ async function rebuildQueue(
   const parts = edit
     .segments!.map((part, at) => (at === edit.index ? text : part))
     .filter((part) => part.trim().length > 0)
+  // Every part is retyped into the emptied input and submitted, so any that starts with `!`
+  // would run as a shell command (the queued ones too). Refused before the clear.
+  if (parts.some((part) => shellCommandOfSend(part, 'claude') !== null)) {
+    throw new Error(SHELL_COMMAND_QUEUE_REFUSAL)
+  }
   if (edit.segments!.some(opaque)) {
     throw new Error(
       'A queued message holds an attachment or collapsed paste that Orca cannot retype.'
