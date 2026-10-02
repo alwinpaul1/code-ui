@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo } from 'react'
 import { View, Pressable, StyleSheet, Platform, useWindowDimensions, Keyboard } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -18,7 +18,8 @@ import { useThemedStyles, type Theme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 // Why: mount-before-commit logic is anchor-agnostic, so the X-axis drawer reuses
 // the exact same gate as BottomDrawer rather than duplicating it.
-import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
+import { useDrawerMountLifecycle } from './use-drawer-mount-lifecycle'
+import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
 import { DRAWER_SPRING } from './drawer-spring'
 import { useResponsiveLayout } from '../layout/responsive-layout'
@@ -39,14 +40,11 @@ type Props = {
 }
 
 export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Props) {
-  const [mounted, setMounted] = useState(visible)
-  const resolvedMounted = resolveBottomDrawerMounted(visible, mounted)
-
-  // Why: opening drawers should mount before commit; waiting for a passive
-  // Effect adds a null render before the drawer can animate in.
-  if (resolvedMounted !== mounted) {
-    setMounted(resolvedMounted)
-  }
+  // Why a stable `handleHidden`: the mount effect lists it, and a new one per render
+  // re-ran that effect on every re-render of the parent: it snapped a panel under
+  // the finger back to its rest, and restarted an exit that was running, which a
+  // parent re-rendering faster than 150 ms could then postpone for ever.
+  const { mounted: resolvedMounted, handleHidden } = useDrawerMountLifecycle(visible, undefined)
 
   // Why: hidden drawers are rendered by parent screens even while closed; keep
   // their Reanimated/Gesture setup out of hot paths until they are actually shown.
@@ -58,7 +56,7 @@ export function RightDrawer({ visible, onClose, children, zIndex, widthPx }: Pro
     <MountedRightDrawer
       visible={visible}
       onClose={onClose}
-      onHidden={() => setMounted(false)}
+      onHidden={handleHidden}
       zIndex={zIndex}
       widthPx={widthPx}
     >
@@ -90,11 +88,20 @@ function MountedRightDrawer({
   // Why: read at style time only; `null` runs full motion. See the bottom sheet.
   const reduceMotion = useReducedMotion() === true
 
+  const showPanel = () => {
+    translateX.value = 0
+    scrollOffsetY.value = 0
+    progress.value = withTiming(1, { duration: SHOW_DURATION })
+  }
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, restore: showPanel })
+
   useEffect(() => {
     if (visible) {
-      translateX.value = 0
-      scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: SHOW_DURATION })
+      showPanel()
+    } else if (leftScreenRef.current) {
+      // Its own swipe has already taken it off the screen (use-drawer-close-request.ts).
+      Keyboard.dismiss()
+      onHidden()
     } else {
       Keyboard.dismiss()
       progress.value = withTiming(0, { duration: HIDE_DURATION }, (finished) => {
@@ -125,32 +132,40 @@ function MountedRightDrawer({
     scrollOffsetY.value = Math.max(event.contentOffset.y, 0)
   })
 
-  const scrollGesture = Gesture.Native()
-  // Why: swipe-from-right (positive translationX) dismisses; the horizontal
-  // activeOffset lets the inner vertical ScrollView keep its gestures.
-  const panGesture = Gesture.Pan()
-    .activeOffsetX([-8, 8])
-    .simultaneousWithExternalGesture(scrollGesture)
-    .onUpdate((e) => {
-      if (e.translationX > 0) {
-        translateX.value = e.translationX
-      } else {
-        translateX.value = e.translationX * RUBBER_BAND_FACTOR
-      }
-    })
-    .onEnd((e) => {
-      if (e.translationX > DISMISS_THRESHOLD || e.velocityX > 500) {
-        const velocity = Math.max(e.velocityX, 800)
-        const remaining = panelWidth - e.translationX
-        const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
-        translateX.value = withTiming(panelWidth, { duration })
-        progress.value = withTiming(0, { duration }, () => {
-          runOnJS(dismiss)()
-        })
-      } else {
-        translateX.value = withSpring(0, DRAWER_SPRING)
-      }
-    })
+  // Why memoised: the drawer re-renders with its parent, and a new Gesture.Pan()
+  // per render reconfigures the handler tracking the finger, mid-swipe.
+  const { scrollGesture, panGesture } = useMemo(() => {
+    const scroll = Gesture.Native()
+    // Why: swipe-from-right (positive translationX) dismisses; the horizontal
+    // activeOffset lets the inner vertical ScrollView keep its gestures.
+    const pan = Gesture.Pan()
+      .activeOffsetX([-8, 8])
+      .simultaneousWithExternalGesture(scroll)
+      .onUpdate((e) => {
+        if (e.translationX > 0) {
+          translateX.value = e.translationX
+        } else {
+          translateX.value = e.translationX * RUBBER_BAND_FACTOR
+        }
+      })
+      .onEnd((e) => {
+        if (e.translationX > DISMISS_THRESHOLD || e.velocityX > 500) {
+          const velocity = Math.max(e.velocityX, 800)
+          const remaining = panelWidth - e.translationX
+          const duration = Math.min(Math.max((remaining / velocity) * 1000, 120), 300)
+          translateX.value = withTiming(panelWidth, { duration })
+          // Only a finished exit is a close: one cut short is followed by what cut it.
+          progress.value = withTiming(0, { duration }, (finished) => {
+            if (finished) {
+              runOnJS(requestClose)()
+            }
+          })
+        } else {
+          translateX.value = withSpring(0, DRAWER_SPRING)
+        }
+      })
+    return { scrollGesture: scroll, panGesture: pan }
+  }, [panelWidth, requestClose])
 
   const drawerStyle = useAnimatedStyle(() => {
     // Why: under reduced motion the panel has no enter travel; `progress`
