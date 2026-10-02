@@ -174,7 +174,7 @@ export function useMobileNativeChatMessageSend(args: {
       // takes as its answer (2026-09-27), and Claude exited back to a shell
       // takes as a command to run (2026-10-02): the look also refuses a screen
       // with no Claude input box (readSendUnderDialogRefusal `requireComposer`;
-      // an unreadable screen still fails open, said there). A composer send
+      // a screen the host cannot show, or a read that fails on a host that has shown screens, refuses; an older host's fails open, said there). A composer send
       // through the image hook looked already, before any paste, and its follow
       // says so (use-mobile-native-chat-image-attachments.ts). One that did not
       // (a caller with no hook) looks here when the agent is Claude; Codex's
