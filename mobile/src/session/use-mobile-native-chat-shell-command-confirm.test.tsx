@@ -220,4 +220,19 @@ describe('a message that starts with ! from the chat', () => {
     await press('Run')
     expect(send).toHaveBeenCalledExactlyOnceWith(long)
   })
+
+  it('does not queue a second question while the first is still loading', async () => {
+    const send = vi.fn(async () => true)
+    mount('claude', send)
+    let second: boolean | null = null
+    await act(async () => {
+      void api.send('!ls')
+      void api.send('!pwd').then((accepted) => (second = accepted))
+    })
+    await flushLazy()
+    expect(second).toBe(false)
+    await press('Run')
+    expect(send).toHaveBeenCalledExactlyOnceWith('!ls')
+  })
+
 })
