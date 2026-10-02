@@ -1,7 +1,6 @@
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { claudeComposerLive } from './claude-composer-screen'
 import { codexComposerLive } from './codex-composer-screen'
-import { hostAnswersScreens } from './host-screen-answers'
 import { lookAtScreen } from './mobile-native-chat-screen-look'
 import { replyIsScreen, terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
@@ -223,7 +222,7 @@ export async function readSendUnderDialogRefusal(args: {
     return wantsBox ? SEND_SCREEN_UNAVAILABLE_REFUSAL : null
   }
   if (seen.kind === 'rejected' || seen.kind === 'unreachable') {
-    return wantsBox && hostAnswersScreens(args.client) ? SEND_SCREEN_UNREADABLE_REFUSAL : null
+    return wantsBox && seen.hostAnswers ? SEND_SCREEN_UNREADABLE_REFUSAL : null
   }
   if (terminalDialogOnScreen(seen.lines, args.agent)) {
     return SEND_UNDER_DIALOG_REFUSAL

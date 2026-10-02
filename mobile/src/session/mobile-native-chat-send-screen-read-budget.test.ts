@@ -52,7 +52,7 @@ function timed(
     getState: () => link(Date.now() - origin),
     getLastConnectedAt: () => 1,
     notifyForeground: vi.fn(),
-    sendRequest: vi.fn(async () => {
+    sendRequest: vi.fn(async (..._args: unknown[]): Promise<RpcResponse> => {
       const elapsed = Date.now() - origin
       reads.push(elapsed)
       if (link(elapsed) !== 'connected') {
@@ -194,5 +194,91 @@ describe('a host that answers but has no screen to show right now', () => {
     expect(await ask(host.client, 4_200)).toBe(SEND_SCREEN_UNAVAILABLE_REFUSAL)
     expect(Date.now() - startedAt).toBeLessThan(1_000)
     expect(host.reads.length).toBeLessThanOrEqual(3)
+  })
+})
+
+// A re-dial during the look. `hostAnswersScreens` is stamped per connection, so after the
+// reconnect that happens in the middle of a look the note read as "not known", the loop gave up as
+// if the host had never shown a screen, and the send was typed without the composer seen. Whether
+// the host answers screens is taken once, at the start of the look, and kept across any reconnect.
+describe('a link that re-dials in the middle of the look', () => {
+  it('still refuses when every read fails, on a host that had shown a screen before it started', async () => {
+    let connectedAt = 1
+    let failing = false
+    const host = timed(() => (failing ? new Error('Connection closed') : screen(EMPTY_COMPOSER)))
+    host.client.getLastConnectedAt = () => connectedAt
+    host.client.sendRequest.mockImplementation(async () => {
+      if (!failing) {
+        return screen(EMPTY_COMPOSER)
+      }
+      // The link re-dials under the first failed read: a new connection, still no answer.
+      connectedAt += 1
+      throw new Error('Connection closed')
+    })
+    await shownScreen(host.client)
+    failing = true
+
+    expect(await ask(host.client)).toBe(SEND_SCREEN_UNREADABLE_REFUSAL)
+    expect(host.client.sendRequest.mock.calls.length).toBeGreaterThan(3)
+  })
+
+  it('goes when a read after the re-dial shows the composer', async () => {
+    let connectedAt = 1
+    let phase: 'up' | 'redialing' | 'back' = 'up'
+    const host = timed(() => screen(EMPTY_COMPOSER))
+    host.client.getLastConnectedAt = () => connectedAt
+    host.client.sendRequest.mockImplementation(async () => {
+      if (phase === 'redialing') {
+        connectedAt += 1
+        phase = 'back'
+        throw new Error('Connection closed')
+      }
+      return screen(EMPTY_COMPOSER)
+    })
+    await shownScreen(host.client)
+    phase = 'redialing'
+
+    expect(await ask(host.client)).toBeNull()
+  })
+
+  it('still fails open on a host that never showed a screen, re-dial or not', async () => {
+    const host = timed(() => new Error('Connection closed'))
+    expect(await ask(host.client)).toBeNull()
+  })
+})
+
+// The writes behind the look need MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS (4 s) of the send's budget.
+// The look used to bound each read by the send's whole deadline, so the last read could start just
+// inside the reserve and run its full 2 s into it.
+describe('what the look leaves of the send budget', () => {
+  it('ends by the time the writes\' reserve begins, however the reads time out', async () => {
+    let slow = false
+    const host = timed(() => screen(EMPTY_COMPOSER))
+    host.client.sendRequest.mockImplementation(async (...args: unknown[]) => {
+      const options = args[2] as { timeoutMs?: number } | undefined
+      if (!slow) {
+        return screen(EMPTY_COMPOSER)
+      }
+      // A relay so slow that every read runs to its own timeout.
+      await new Promise((resolve) => setTimeout(resolve, options?.timeoutMs ?? 2_000))
+      throw new Error('Request timed out')
+    })
+    await shownScreen(host.client)
+    slow = true
+
+    const startedAt = Date.now()
+    const outcome = await ask(host.client, 15_000)
+
+    expect(outcome).toBe(SEND_SCREEN_UNREADABLE_REFUSAL)
+    // 15 s budget, 4 s reserve: the look is over by 11 s.
+    expect(Date.now() - startedAt).toBeLessThanOrEqual(11_000)
+  })
+
+  it('does not read again once the pause has used up the budget', async () => {
+    const host = timed(() => unavailable())
+    const outcome = await ask(host.client, 4_300)
+    expect(outcome).toBe(SEND_SCREEN_UNAVAILABLE_REFUSAL)
+    // Budget end is 300 ms in; the 500 ms pause overruns it, so there is no second read.
+    expect(host.reads).toHaveLength(1)
   })
 })

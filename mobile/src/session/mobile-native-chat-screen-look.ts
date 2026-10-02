@@ -39,15 +39,16 @@ type LookArgs = {
   deadline?: number
 }
 
-async function lookOnce(args: LookArgs): Promise<ScreenLook> {
+/** What the first read gets at least, though the budget less the reserve is short. */
+const FIRST_READ_FLOOR_MS = 500
+
+/** One read, no longer than `timeoutMs`. */
+async function lookOnce(args: LookArgs, timeoutMs: number): Promise<ScreenLook> {
   try {
     const reply = await terminalScreenLinesRead.request(
       args.client,
       { terminal: args.terminal, screen: true },
-      {
-        timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
-        budgetSpansConnect: true
-      }
+      { timeoutMs: Math.max(1, timeoutMs), budgetSpansConnect: true }
     )
     const source = replySource(reply)
     noteScreenReplySource(args.client, source)
@@ -77,16 +78,27 @@ const linkIsUp = (client: object): boolean => {
  *  - unreachable, on a host that has shown a screen: wait for the link when it is down or
  *    re-dialing, and read again, until the budget less what the writes behind it need
  *    (MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS) has run out. A slow relay is not a refusal.
+ * No read is allowed to run into that reserve: each one is cut at the end of the budget, and
+ * the budget is checked again after every pause.
+ * Whether the host shows screens is taken ONCE, at the start, and kept across a reconnect in
+ * the middle of the look (`hostAnswers` in the result): the note is stamped per connection, so
+ * asking again after a re-dial read as "never shown a screen" and the send was typed unseen.
  * A failure on a host that has not shown a screen on this connection is not read again
  * (nothing could change it into a refusal): the caller fails open, as before.
  * `retry` false is a single look.
  */
-export async function lookAtScreen(args: LookArgs, retry: boolean): Promise<ScreenLook> {
+export async function lookAtScreen(
+  args: LookArgs,
+  retry: boolean
+): Promise<ScreenLook & { hostAnswers: boolean }> {
   const startedAt = Date.now()
-  const budgetEnd = (args.deadline ?? startedAt + FALLBACK_BUDGET_MS) - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS
-  let seen = await lookOnce(args)
+  const deadline = args.deadline ?? startedAt + FALLBACK_BUDGET_MS
+  const budgetEnd = deadline - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS
+  const answeredAtStart = hostAnswersScreens(args.client)
+  const first = Math.min(deadline - startedAt, Math.max(budgetEnd - startedAt, FIRST_READ_FLOOR_MS))
+  let seen = await lookOnce(args, Math.min(SCREEN_READ_MS, first))
   while (retry && seen.kind !== 'read') {
-    const answers = seen.kind === 'unavailable' || hostAnswersScreens(args.client)
+    const answers = seen.kind === 'unavailable' || answeredAtStart
     if (!answers || Date.now() >= budgetEnd) {
       break
     }
@@ -103,7 +115,11 @@ export async function lookAtScreen(args: LookArgs, retry: boolean): Promise<Scre
       break
     }
     await sleep(RETRY_PAUSE_MS)
-    seen = await lookOnce(args)
+    // The pause may have used the budget up: no read goes into the writes' reserve.
+    if (Date.now() >= budgetEnd) {
+      break
+    }
+    seen = await lookOnce(args, Math.min(SCREEN_READ_MS, budgetEnd - Date.now()))
   }
-  return seen
+  return { ...seen, hostAnswers: answeredAtStart || seen.kind === 'unavailable' || hostAnswersScreens(args.client) }
 }
