@@ -5,7 +5,7 @@ import { openMobileFileTap } from './mobile-file-tap-open'
 // 2026-10-02: "binary files don't open on the phone" on a PDF the phone draws itself). Stand-in
 // file names; the reply shapes are the ones the existing tap tests use.
 function ok(result: unknown) {
-  return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
+  return { id: 'rpc-1', ok: true as const, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
 function resolved(relativePath: string) {

@@ -83,9 +83,11 @@ export function MobileNativeChatChromeRow({
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
         >
-          <Txt variant="caption" weight="semibold" tone="danger">
-            {sendErrorMessage}
-          </Txt>
+          <View style={styles.sendErrorPill}>
+            <Txt variant="caption" weight="semibold" tone="danger">
+              {sendErrorMessage}
+            </Txt>
+          </View>
         </View>
       ) : null}
     </>
