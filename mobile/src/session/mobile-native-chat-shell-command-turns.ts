@@ -1,4 +1,13 @@
-import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+
+/** The property a surfaced block carries: the command as the transcript stored it. */
+const SURFACED_COMMAND = 'shellCommand'
+
+/** The command a surfaced shell-command turn carries, or null for any other block. */
+export function surfacedShellCommand(block: NativeChatBlock): string | null {
+  const command: unknown = (block as Record<string, unknown>)[SURFACED_COMMAND]
+  return block.type === 'text' && typeof command === 'string' ? command : null
+}
 
 /** A turn that is exactly one `<bash-input>` envelope (Claude Code writes a `!` command so, one
  *  turn each; the output is the next turn). Anything around the tags is not this shape. */
@@ -44,5 +53,8 @@ function surfacedCommand(message: NativeChatMessage): NativeChatMessage | null {
   if (command === undefined || command.trim() === '') {
     return null
   }
-  return { ...message, blocks: [{ ...texts[0]!, text: `!${command}` }] }
+  // The command is kept on the block, so a reader that needs the command itself (the created-file
+  // count) does not have to guess it back out of the `!cmd` text.
+  const block = Object.assign({ ...texts[0]!, text: `!${command}` }, { [SURFACED_COMMAND]: command })
+  return { ...message, blocks: [block] }
 }

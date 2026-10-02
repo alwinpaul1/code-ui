@@ -27,6 +27,7 @@
 // Write's count, taken through the same pipeline, so a small create and a
 // large one agree. The reading is in mobile-native-chat-created-file-count-store.ts.
 
+import { surfacedShellCommand } from './mobile-native-chat-shell-command-turns'
 import type {
   NativeChatBlock,
   NativeChatMessage,
@@ -344,7 +345,7 @@ function isTheFile(word: string, target: string): boolean {
 
 /** A command the user ran with `!`. Claude Code writes it as a user turn,
  *  `<bash-input>…</bash-input>`, raw, and Orca hands the phone that turn as
- *  text. One the wire cut has lost its closing tag. */
+ *  text (the chat lane then surfaces it as `!cmd`, read by userCommandCalls too). One the wire cut has lost its closing tag. */
 const USER_COMMAND = /<bash-input>([\s\S]*?)(?:<\/bash-input>|$)/g
 
 /** The `!` commands in a user's text block, as the Bash calls they amount
@@ -353,7 +354,17 @@ function userCommandCalls(
   message: NativeChatMessage,
   block: NativeChatBlock
 ): NativeChatToolCallBlock[] {
-  if (message.role !== 'user' || block.type !== 'text' || !block.text.includes('<bash-input>')) {
+  if (message.role !== 'user' || block.type !== 'text') {
+    return []
+  }
+  // The chat lane hands out a `!` command as the user's turn `!cmd`, the command kept on the block
+  // (mobile-native-chat-shell-command-turns.ts); the raw envelope is read too (a wire-cut one
+  // is never surfaced, and tests feed it raw).
+  const surfaced = surfacedShellCommand(block)
+  if (surfaced !== null) {
+    return [{ type: 'tool-call', name: 'Bash', input: { command: surfaced } }]
+  }
+  if (!block.text.includes('<bash-input>')) {
     return []
   }
   return [...block.text.matchAll(USER_COMMAND)].map((match) => ({

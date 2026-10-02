@@ -11,9 +11,16 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type {
+  NativeChatToolCallBlock,
+  NativeChatToolResultBlock
+} from '../../../src/shared/native-chat-types'
+import { CREATED_A_FILE_RUN } from './fixtures/claude-edit-runs-2.1.282'
+import { cutCreateOf, cutCreateStandings } from './mobile-native-chat-created-file-count'
 import { findLandedUnconfirmedSends } from './mobile-native-chat-draft-reconcile'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
+import { surfaceShellCommandTurns } from './mobile-native-chat-shell-command-turns'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 
 const mocks = vi.hoisted(() => ({ bridge: [] as unknown[], structured: [] as unknown[] }))
@@ -121,6 +128,70 @@ describe('the messages the chat lane hands out', () => {
   it('leave a structured session alone: its sends go to the API, not a terminal', () => {
     mount(true)
     expect(lane!.session.messages).toBe(structuredMessages)
+  })
+})
+
+// The created-file count marks a create "touched" when a later command may have changed its file,
+// and it reads the user's own `!` commands from the SAME list (CreatedFileCountProvider is fed
+// the lane's messages). The lane hands out the surfaced `!cmd`, so the count must read that shape
+// as well as the raw envelope, or the agent's create is counted as untouched after the user ran
+// `!echo x >> file`, and the chat shows a wrong `+N`.
+const WRITE = CREATED_A_FILE_RUN[0] as NativeChatToolCallBlock
+const WRITE_RESULT = CREATED_A_FILE_RUN[1] as NativeChatToolResultBlock
+const CREATE_KEY = cutCreateOf(WRITE, WRITE_RESULT)!.key
+const CREATED_PATH = 'hybrid-model/scripts/cluster/jobs/queue-sweep-k-one.sh'
+const CREATE_ROWS: NativeChatMessage[] = [
+  { id: 'c1', role: 'assistant', blocks: [WRITE], timestamp: 1, source: 'transcript' },
+  { id: 'c2', role: 'user', blocks: [WRITE_RESULT], timestamp: 1, source: 'transcript' }
+]
+
+describe('the created-file count, through the lane', () => {
+  let renderer: ReactTestRenderer | null = null
+  let lane: ReturnType<typeof useMobileNativeChatSessionLane> | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    lane = null
+  })
+  function Harness(): null {
+    lane = useMobileNativeChatSessionLane({
+      client: null,
+      structured: false,
+      agent: null,
+      resolvedAgent: 'claude',
+      transcriptPath: null,
+      sessionId: 'session-1',
+      sourceIdentity: 'host-1',
+      callerIdentity: 'device',
+      enabled: true,
+      connState: 'connected',
+      onSendError: vi.fn()
+    })
+    return null
+  }
+  const touchedAfter = (command: string): boolean | undefined => {
+    mocks.bridge = [...CREATE_ROWS, row('u', 'user', `<bash-input>${command}</bash-input>`)]
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    return cutCreateStandings(lane!.session.messages).get(CREATE_KEY)?.touched
+  }
+
+  it.each([
+    ['appends to the file', `echo '# tuned' >> ${CREATED_PATH}`],
+    ['edits it in place by its name', "sed -i '' 's/a/b/' queue-sweep-k-one.sh"]
+  ])('is told the create was touched by a `!` command that %s', (_name, command) => {
+    expect(touchedAfter(command)).toBe(true)
+  })
+
+  it('still counts a create after a `!` command that names another file', () => {
+    expect(touchedAfter('npm test -- sweep.test.ts')).toBe(false)
+  })
+
+  // The desktop's own `!cmd` (a turn typed on the desk) is the same envelope, surfaced the same way.
+  it('reads the surfaced turn the same whether the phone or the desk ran it', () => {
+    const surfaced = surfaceShellCommandTurns([row('d', 'user', `<bash-input>echo x >> ${CREATED_PATH}</bash-input>`)])
+    expect(cutCreateStandings([...CREATE_ROWS, ...surfaced]).get(CREATE_KEY)?.touched).toBe(true)
   })
 })
 
