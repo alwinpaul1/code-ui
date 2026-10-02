@@ -10,6 +10,9 @@ import {
 import { releaseMobileNativeChatTerminalWriteForSend } from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
+import { claudeSentBashRows } from './claude-composer-screen'
+import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
+import { shellCommandOfSend } from './mobile-native-chat-shell-command'
 import {
   clearClaudeInputVerified,
   INPUT_STILL_HOLDS_TEXT
@@ -123,6 +126,12 @@ export async function writeChatSend(args: {
   }
   // Copies the beacon already holds: an older identical prompt proves nothing.
   const seenNonces = new Set(args.receipts().map((receipt) => receipt.nonce))
+  // A shell command's echo is a `! cmd` row in the scrollback, which keeps every one ever run:
+  // the rows there now are the baseline a repeat has to exceed (verifyClaudeSubmit).
+  const priorBashRows =
+    shellCommandOfSend(text, agent) === null
+      ? []
+      : claudeSentBashRows((await readMobileNativeChatScreen({ client, terminal, deadline }))?.lines ?? [])
   const outcome = args.typesCodexCommand
     ? await typeMobileNativeChatCommandWithOutcome({
         client,
@@ -164,6 +173,7 @@ export async function writeChatSend(args: {
     text,
     receipts: args.receipts,
     seenNonces,
+    priorBashRows,
     deadline
   })
   if (verdict.kind === 'not-sent') {

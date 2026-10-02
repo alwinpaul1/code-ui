@@ -167,12 +167,11 @@ export function terminalDialogOnScreen(lines: readonly string[], agent?: string 
 
 /** The agents whose composer the phone can locate on a screen, so a send to one
  *  that shows none (a shell, a dialog) can be refused. Codex's `›` row alone is
- *  also a sent prompt, a popup row and an approval option; its footer under it is
- *  what codexComposerLive reads. */
+ *  also a sent prompt, a popup row and an approval option; what is under it (nothing at
+ *  column 0, no dialog key hint) is what codexComposerLive reads. */
 const composerLocated = (agent: string | null | undefined): boolean =>
   agent === 'claude' || agent === 'codex'
 
-/** The pause before the one more read of a screen that was not there. */
 /**
  * Why a write from the chat must not go now, or null. Read fresh, not from the
  * chat's last poll, which can be seconds old.

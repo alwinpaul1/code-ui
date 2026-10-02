@@ -115,7 +115,7 @@ describe('a send to a host that says it has no screen to show', () => {
     )
   })
 
-  it('reads once more first, and goes when the second read shows the box', async () => {
+  it('reads again first, and goes when the second read shows the box', async () => {
     const host = scripted([unavailable(), reply(EMPTY_COMPOSER)])
     expect(await look(host.client)).toBeNull()
     expect(host.client.sendRequest).toHaveBeenCalledTimes(2)

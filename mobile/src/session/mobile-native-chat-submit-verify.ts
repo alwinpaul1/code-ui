@@ -100,6 +100,10 @@ export async function verifyClaudeSubmit(args: {
   /** Copies already in the beacon before this send wrote anything: they are old
    *  prompts, and an identical older one proves nothing about this send. */
   seenNonces: ReadonlySet<string>
+  /** The `! cmd` rows the screen held BEFORE a shell-command send wrote anything. The
+   *  scrollback keeps every command ever run, so a repeat of one proves nothing: it counts
+   *  as run only when the screen now holds more rows of it than it did then. */
+  priorBashRows?: readonly string[]
   /** The send's own budget: no look runs past it. */
   deadline?: number
   wait?: (ms: number) => Promise<void>
@@ -174,7 +178,9 @@ export async function verifyClaudeSubmit(args: {
     if (
       sawWords ||
       claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words)) ||
-      (shell !== null && claudeSentBashRows(screen.lines).some(heard))
+      (shell !== null &&
+        claudeSentBashRows(screen.lines).filter(heard).length >
+          (args.priorBashRows ?? []).filter(heard).length)
     ) {
       return { kind: 'sent' }
     }

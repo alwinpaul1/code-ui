@@ -52,9 +52,9 @@ const SCREEN_READ_MS = 2_000
  * Claude and Codex have a reader that tells their composer from everything
  * else on screen. Codex draws its input with `›`, and so does a sent prompt, a
  * popup's selected row and an approval's selected option
- * (codex-terminal-queued-messages.ts), so for Codex the proof is that row with
- * its indented footer under it (codexComposerLive, which says which captures
- * stand behind it). Any other agent and a read that fails or times out are false.
+ * (codex-terminal-queued-messages.ts), so for Codex the proof is that row with only
+ * indented rows under it, at least one for a follow (codexComposerLive, which says
+ * which captures stand behind it). Any other agent and a read that fails or times out are false.
  * `located: false` (a shell, a dialog, a `!` bash-mode box, a screen not drawn
  * yet) is no evidence either, nor is a box with a column-0 row or nothing under it
  * (claudeLiveFrame).

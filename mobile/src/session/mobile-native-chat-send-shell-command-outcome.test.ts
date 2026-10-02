@@ -39,6 +39,7 @@ describe('a confirmed ! message once it is typed', () => {
   const report = vi.fn()
   let typed = false
   let screenAfter: string[] = EMPTY_COMPOSER
+  let screenBefore: string[] = EMPTY_COMPOSER
 
   const mount = (agent = 'claude'): void => {
     const handle = vi.fn(async (method: string, params: unknown) => {
@@ -48,7 +49,7 @@ describe('a confirmed ! message once it is typed', () => {
         return { id: 'r', ok: true, result: { send: { accepted: true } }, _meta: { runtimeId: 'r' } }
       }
       if (method === 'terminal.read') {
-        return reply(typed ? screenAfter : EMPTY_COMPOSER)
+        return reply(typed ? screenAfter : screenBefore)
       }
       throw new Error(`unexpected ${method}`)
     })
@@ -92,6 +93,7 @@ describe('a confirmed ! message once it is typed', () => {
     }
     typed = false
     screenAfter = EMPTY_COMPOSER
+    screenBefore = EMPTY_COMPOSER
     resetMobileNativeChatTerminalWritesForTests()
     resetMobileNativeChatStaleInputForTests()
   })
@@ -139,4 +141,22 @@ describe('a confirmed ! message once it is typed', () => {
     onUnconfirmed()
     expect(report).toHaveBeenCalledExactlyOnceWith('Delivery unconfirmed — check chat before retrying')
   })
+  it('does not take the same command run earlier for this one: the screen before the send is the baseline', async () => {
+    screenBefore = ['! ls -la', ...EMPTY_COMPOSER]
+    screenAfter = ['! ls -la', ...EMPTY_COMPOSER]
+    mount()
+
+    expect(await send('!ls -la')).toBe('unknown')
+    expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
+  })
+
+  it('is sent when a second row of the command appears beside the earlier one', async () => {
+    screenBefore = ['! ls -la', ...EMPTY_COMPOSER]
+    screenAfter = ['! ls -la', '! ls -la', ...EMPTY_COMPOSER]
+    mount()
+
+    expect(await send('!ls -la')).toBe('accepted')
+    expect(holdUnconfirmedSend).not.toHaveBeenCalled()
+  })
+
 })

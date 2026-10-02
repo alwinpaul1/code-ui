@@ -40,12 +40,13 @@ function scene(looks: readonly Look[]) {
     clock: () => now
   }
 }
-const verify = (s: ReturnType<typeof scene>, text: string) =>
+const verify = (s: ReturnType<typeof scene>, text: string, priorBashRows: readonly string[] = []) =>
   verifyClaudeSubmit({
     client: s.client,
     terminal: 'term',
     text,
     seenNonces: new Set(),
+    priorBashRows,
     wait: s.wait,
     now: s.clock
   })
@@ -97,4 +98,27 @@ describe('checking that Claude ran a confirmed `!` message', () => {
     const s = scene(['fail'])
     expect((await verify(s, '!ls')).kind).toBe('unverified')
   })
+
+  // The scrollback holds every `! cmd` row the session ever drew. A command run before, again,
+  // must not make a repeat that was never submitted look sent.
+  it('does not take an earlier identical command for this one', async () => {
+    const s = scene([{ lines: withBashEcho('git status') }])
+    expect((await verify(s, '!git status', ['git status'])).kind).toBe('unknown')
+  })
+
+  it('says sent once a NEW row of the same command is drawn beside the earlier one', async () => {
+    const s = scene([{ lines: [`! git status`, `! git status`, ...EMPTY_COMPOSER] }])
+    expect(await verify(s, '!git status', ['git status'])).toEqual({ kind: 'sent' })
+  })
+
+  it('counts rows the way they were before: two earlier, two now, is nothing new', async () => {
+    const s = scene([{ lines: [`! pwd`, `! pwd`, ...EMPTY_COMPOSER] }])
+    expect((await verify(s, '!pwd', ['pwd', 'pwd'])).kind).toBe('unknown')
+  })
+
+  it('still sees the command in the bash box, whatever was drawn before', async () => {
+    const s = scene([{ lines: bashBox('git status') }, { lines: EMPTY_COMPOSER }])
+    expect(await verify(s, '!git status', ['git status'])).toEqual({ kind: 'sent' })
+  })
+
 })
