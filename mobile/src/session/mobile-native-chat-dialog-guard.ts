@@ -1,12 +1,9 @@
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { claudeComposerLive } from './claude-composer-screen'
 import { codexComposerLive } from './codex-composer-screen'
-import { hostAnswersScreens, noteScreenReplySource } from './host-screen-answers'
-import {
-  replyIsScreen,
-  replySource,
-  terminalScreenLinesRead
-} from './mobile-terminal-ask-about-screen-operations'
+import { hostAnswersScreens } from './host-screen-answers'
+import { lookAtScreen } from './mobile-native-chat-screen-look'
+import { replyIsScreen, terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
 export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer it first.'
 
@@ -25,12 +22,6 @@ export const SEND_WITHOUT_CODEX_COMPOSER_REFUSAL =
 /** Said when a read of the screen failed on a host that has shown its screen. */
 export const SEND_SCREEN_UNREADABLE_REFUSAL =
   "Couldn't read the desktop screen, so the message was not typed. Send again."
-
-/** How long one read of the screen may take. A slower read counts as a failed one:
- *  it goes without the look on a host that has not shown a screen on this
- *  connection (as every send did before there was one), and is refused on one
- *  that has (readSendUnderDialogRefusal). */
-const SCREEN_READ_MS = 2_000
 
 /** A numbered choice: `  2. Lint`, `❯ 1. Yes`, `› 1. Yes, proceed (y)`. */
 const OPTION = /^(\s*)(?:([❯›>]) )?(\d+)[.)] (\S.*?)\s*$/
@@ -183,38 +174,6 @@ const composerLocated = (agent: string | null | undefined): boolean =>
   agent === 'claude' || agent === 'codex'
 
 /** The pause before the one more read of a screen that was not there. */
-const RETRY_PAUSE_MS = 200
-
-type ScreenLook =
-  /** A reply that names itself a screen, or names no source (an older host). */
-  | { kind: 'read'; reply: Awaited<ReturnType<typeof terminalScreenLinesRead.request>>; lines: string[] }
-  /** The host said it has no screen to show now. */
-  | { kind: 'unavailable' }
-  /** No usable reply: a timeout, a rejection, a reply that is no screen. */
-  | { kind: 'failed' }
-
-async function lookAtScreen(args: Parameters<typeof readSendUnderDialogRefusal>[0]): Promise<ScreenLook> {
-  try {
-    const reply = await terminalScreenLinesRead.request(
-      args.client,
-      { terminal: args.terminal, screen: true },
-      {
-        timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
-        budgetSpansConnect: true
-      }
-    )
-    const source = replySource(reply)
-    noteScreenReplySource(args.client, source)
-    if (source === 'screen-unavailable') {
-      return { kind: 'unavailable' }
-    }
-    const lines = terminalScreenLinesRead.interpret(reply)
-    return lines ? { kind: 'read', reply, lines } : { kind: 'failed' }
-  } catch {
-    return { kind: 'failed' }
-  }
-}
-
 /**
  * Why a write from the chat must not go now, or null. Read fresh, not from the
  * chat's last poll, which can be seconds old.
@@ -232,11 +191,15 @@ async function lookAtScreen(args: Parameters<typeof readSendUnderDialogRefusal>[
  * puts `source` on every reply to a screen request; the host-screen-answers.ts
  * comment has the history):
  *  - `source: 'screen-unavailable'`: the host can read screens and has none to
- *    show. Read once more, then refuse (SEND_SCREEN_UNAVAILABLE_REFUSAL).
- *  - a timeout, a rejection or a reply that is no screen: read once more, then
- *    refuse (SEND_SCREEN_UNREADABLE_REFUSAL) ONLY on a host that has answered a
- *    screen on this connection. On any other host (nothing answered yet) it
- *    fails open, as every send did before this look existed.
+ *    show. Read again for about 1.5 s, then refuse (SEND_SCREEN_UNAVAILABLE_REFUSAL).
+ *  - a rejection or a reply that is no screen: the same, ONLY on a host that has
+ *    answered a screen on this connection.
+ *  - a timeout, or a link that is down or re-dialing: wait for the link inside the
+ *    send's budget (less what its writes need) and read again, refusing
+ *    (SEND_SCREEN_UNREADABLE_REFUSAL) only when that has run out, and only on a host
+ *    that has answered a screen on this connection. On any other host (nothing
+ *    answered yet) it fails open, as every send did before this look existed.
+ *    (mobile-native-chat-screen-look.ts has the timings.)
  *  - a reply with no `source`, or a stream tail: an older host, which cannot
  *    show a screen. Fails open for the same reason: refusing every send to it
  *    would be the worse bug.
@@ -255,21 +218,11 @@ export async function readSendUnderDialogRefusal(args: {
   requireComposer?: boolean
 }): Promise<string | null> {
   const wantsBox = args.requireComposer === true && composerLocated(args.agent)
-  let seen = await lookAtScreen(args)
-  // One more read only where it can change the answer: a host that has said it
-  // can show screens. On any other host a failed read ends the same way twice.
-  if (
-    wantsBox &&
-    (seen.kind === 'unavailable' || (seen.kind === 'failed' && hostAnswersScreens(args.client))) &&
-    (args.deadline ?? Infinity) - Date.now() > SCREEN_READ_MS / 4
-  ) {
-    await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS))
-    seen = await lookAtScreen(args)
-  }
+  const seen = await lookAtScreen(args, wantsBox)
   if (seen.kind === 'unavailable') {
     return wantsBox ? SEND_SCREEN_UNAVAILABLE_REFUSAL : null
   }
-  if (seen.kind === 'failed') {
+  if (seen.kind === 'rejected' || seen.kind === 'unreachable') {
     return wantsBox && hostAnswersScreens(args.client) ? SEND_SCREEN_UNREADABLE_REFUSAL : null
   }
   if (terminalDialogOnScreen(seen.lines, args.agent)) {
