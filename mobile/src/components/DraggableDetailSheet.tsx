@@ -130,7 +130,7 @@ function MountedDraggableDetailSheet({
     setSnap('default')
     progress.value = reduceMotion ? 1 : withTiming(1, { duration: SHOW_DURATION_MS })
   }
-  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, restore: showSheet })
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, onHidden, restore: showSheet })
 
   useEffect(() => {
     if (visible) {
@@ -151,6 +151,11 @@ function MountedDraggableDetailSheet({
   }, [visible])
 
   const dismiss = useCallback(() => {
+    // Already closing: Back through the Modal's onRequestClose must not start a
+    // second exit that cancels the parent's (see mounted-bottom-drawer.tsx).
+    if (!visible) {
+      return
+    }
     // Not `translateY.value = 0`: that moved a sheet standing at its default
     // rest up to its full-height position in one frame before it slid down.
     // The exit's own travel is the whole sheet height, so it clears the
@@ -160,7 +165,7 @@ function MountedDraggableDetailSheet({
         runOnJS(requestClose)()
       }
     })
-  }, [progress, requestClose])
+  }, [progress, requestClose, visible])
 
   // The seam every session sheet takes since upstream #22308: the hardware key natively, and a
   // claim on the shell's key inside the page. This sheet is the fork's own, so upstream's sweep

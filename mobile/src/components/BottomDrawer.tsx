@@ -4,6 +4,8 @@ import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 type Props = {
   visible: boolean
+  /** Must flip `visible` to false synchronously, or refuse on purpose: a sheet
+   *  still `visible` 100 ms after it asked to close comes back (use-drawer-close-request.ts). */
   onClose: () => void
   onAfterClose?: () => void
   children: ReactNode

@@ -153,6 +153,26 @@ describe('the tool-detail sheet reopened while its last hide report is still in 
   })
 })
 
+describe('Back pressed while the parent is already closing the tool-detail sheet', () => {
+  it('leaves the parent\'s exit running, so the sheet still unmounts and hands off', () => {
+    const afterClose = vi.fn()
+    render(sheet(true, vi.fn(), afterClose))
+    act(() => renderer!.update(sheet(false, vi.fn(), afterClose)))
+    const parentExit = lastHide()
+    const exits = () => seam.timings.filter((timing) => timing.to === 0 && timing.done).length
+    const before = exits()
+
+    const modal = renderer!.root.findAll((node) => String(node.type) === 'Modal')[0]!
+    act(() => modal.props.onRequestClose())
+
+    // A second exit would cancel the parent's, whose report then never came.
+    expect(exits(), 'Back starts no second exit').toBe(before)
+    act(() => parentExit.done!(true))
+    expect(renderer!.toJSON()).toBeNull()
+    expect(afterClose).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('the tool-detail sheet closed by its cross', () => {
   it('leaves from where it stands instead of jumping up to full height first', () => {
     render(sheet(true, vi.fn()))

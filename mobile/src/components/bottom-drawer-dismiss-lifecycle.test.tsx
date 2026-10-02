@@ -118,6 +118,7 @@ vi.mock('react-native-reanimated', async () => {
   }
 })
 
+import { BottomDrawer } from './BottomDrawer'
 import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 const KEYBOARD = 300
@@ -237,6 +238,63 @@ describe('a bottom sheet closed by a backdrop tap, Back or a drag', () => {
       vi.advanceTimersByTime(150)
     })
     expect(seam.timings.filter((timing) => timing.to === 1).length, 'only the opening animation').toBe(1)
+  })
+})
+
+function pressBack(): void {
+  const modal = renderer!.root.findAll((node) => String(node.type) === 'Modal')[0]
+  expect(modal, 'the sheet owns a Modal').toBeDefined()
+  act(() => modal!.props.onRequestClose())
+}
+
+// The sheet's Modal keeps answering Back after `visible` went false (the Back
+// claim lets go, the Modal's own onRequestClose does not). That Back started a
+// new exit, which cancelled the parent's: its callback saw finished=false, so
+// the sheet never reported hidden, and the finished Back exit asked a parent
+// that had already closed. The sheet stayed mounted at progress 0, an invisible
+// Modal that took every tap and every later Back, and onAfterClose never ran.
+describe('Back pressed while the parent is already closing a bottom sheet', () => {
+  it('leaves the parent\'s exit running, so the sheet still reaches hidden', () => {
+    const onHidden = vi.fn()
+    render({ visible: true, onClose: vi.fn(), onHidden })
+    act(() => renderer!.update(drawer({ visible: false, onClose: vi.fn(), onHidden })))
+    const parentExit = lastHide()
+    const exitsBefore = seam.timings.filter((timing) => timing.to === 0 && timing.done).length
+
+    pressBack()
+
+    expect(
+      seam.timings.filter((timing) => timing.to === 0 && timing.done).length,
+      'Back starts no second exit'
+    ).toBe(exitsBefore)
+    act(() => parentExit.done!(true))
+    expect(onHidden).toHaveBeenCalledTimes(1)
+  })
+
+  it('still hands off through onAfterClose (the run sheet to the detail sheet)', () => {
+    const afterClose = vi.fn()
+    function Parent({ visible }: { visible: boolean }) {
+      return createElement(BottomDrawer, {
+        visible,
+        onClose: () => {},
+        onAfterClose: afterClose
+      } as unknown as ComponentProps<typeof BottomDrawer>, createElement(Content))
+    }
+    act(() => {
+      renderer = create(createElement(Parent, { visible: true }))
+    })
+    act(() => renderer!.update(createElement(Parent, { visible: false })))
+
+    pressBack()
+    // A newer exit cancels the one before it, as Reanimated does: only the
+    // last one started runs to its end.
+    const exitsStarted = seam.timings.filter((t) => t.to === 0 && t.done)
+    for (const timing of exitsStarted) {
+      act(() => timing.done!(timing === exitsStarted.at(-1)))
+    }
+
+    expect(renderer!.toJSON()).toBeNull()
+    expect(afterClose).toHaveBeenCalledTimes(1)
   })
 })
 

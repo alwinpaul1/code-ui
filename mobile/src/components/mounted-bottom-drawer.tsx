@@ -114,6 +114,7 @@ export function MountedBottomDrawer({
   const { requestClose, leftScreenRef } = useDrawerCloseRequest({
     visible,
     onClose,
+    onHidden,
     restore: () => restoreRef.current()
   })
   const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, close: requestClose })
@@ -251,13 +252,20 @@ export function MountedBottomDrawer({
   }, [visible, interactive, insets.bottom, fillAvailable])
 
   const dismiss = useCallback(() => {
+    // The parent is already closing the sheet, and its exit is running. The
+    // Modal's own Back (onRequestClose) still lands here after `visible` went
+    // false; a second exit would cancel the parent's, and its hidden report
+    // would never come: an invisible Modal that takes every tap, for good.
+    if (!visible) {
+      return
+    }
     Keyboard.dismiss()
     progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
       if (finished) {
         runOnJS(requestClose)()
       }
     })
-  }, [requestClose, progress])
+  }, [requestClose, progress, visible])
 
   // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
   // a claim the shell hands one press over on. Every session sheet renders through this component,

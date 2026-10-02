@@ -24,11 +24,17 @@ const REFUSAL_GRACE_MS = 100
  */
 export function useDrawerCloseRequest(args: {
   visible: boolean
+  /** Must flip `visible` to false in the same update, or refuse on purpose: a
+   *  sheet still `visible` REFUSAL_GRACE_MS after asking comes back. A parent
+   *  that closes later (a navigation, an await) sees the sheet flash in again. */
   onClose: () => void
+  /** The sheet's mount-state report; called if a close is requested for a sheet
+   *  whose parent had already hidden it, so it still reaches hidden. */
+  onHidden: () => void
   /** Puts a sheet that animated out back on screen. Read when a refusal is seen. */
   restore: () => void
 }): { requestClose: () => void; leftScreenRef: { current: boolean } } {
-  const { visible, onClose, restore } = args
+  const { visible, onClose, onHidden, restore } = args
   // The latest onClose, behind one stable function, so the gestures built
   // around it survive a parent that passes a new arrow on every render.
   const onCloseRef = useRef(onClose)
@@ -36,15 +42,24 @@ export function useDrawerCloseRequest(args: {
     onCloseRef.current = onClose
   }, [onClose])
   const leftScreenRef = useRef(false)
+  const visibleRef = useRef(visible)
+  const onHiddenRef = useRef(onHidden)
+  useEffect(() => {
+    onHiddenRef.current = onHidden
+  }, [onHidden])
   const [attempt, setAttempt] = useState(0)
 
   const requestClose = useCallback(() => {
     leftScreenRef.current = true
     onCloseRef.current()
+    // Asked while the parent had already hidden it: no `visible` change is
+    // coming to run the exit effect, so report hidden here.
+    if (!visibleRef.current) {
+      onHiddenRef.current()
+    }
     setAttempt((count) => count + 1)
   }, [])
 
-  const visibleRef = useRef(visible)
   const restoreRef = useRef(restore)
   useEffect(() => {
     restoreRef.current = restore

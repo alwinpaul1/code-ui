@@ -93,7 +93,7 @@ function MountedRightDrawer({
     scrollOffsetY.value = 0
     progress.value = withTiming(1, { duration: SHOW_DURATION })
   }
-  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, restore: showPanel })
+  const { requestClose, leftScreenRef } = useDrawerCloseRequest({ visible, onClose, onHidden, restore: showPanel })
 
   useEffect(() => {
     if (visible) {
