@@ -517,4 +517,52 @@ describe('a composer send when the tab is given a new terminal while it waits', 
     expect(chipsOfTabA()).toBe(1)
     expect(holder.t.onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
   })
+
+  // The question about a `!` message is asked at the tap (MobileNativeChatShellConfirmView), and
+  // not for a send that carries a chip: the picture is pasted first, so the input is not empty
+  // when the text arrives. If the only chip is removed while the send waits for its upload, the
+  // text must not then go alone into an empty input, a shell command nobody was asked about. It
+  // does not: the chip wait itself refuses when the chip it waited on is gone (use-mobile-native-
+  // chat-send-chips.ts), before anything is written. Pinned here because the shell question
+  // relies on it.
+  it('refuses a `!` message whose only chip was removed while it waited, writing nothing', async () => {
+    const save = deferred()
+    const t = setUp({ 'term-1': EMPTY_COMPOSER }, { saves: [save.promise] })
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+    let attach: Promise<void> = Promise.resolve()
+    let sending: Promise<boolean> = Promise.resolve(true)
+    await act(async () => {
+      attach = hook!.attachImage('library')
+      await settle()
+      sending = hook!.sendNativeChat('!rm -rf build')
+      await settle()
+    })
+    await act(async () => {
+      hook!.removeAttachment(hook!.attachments[0]!.id)
+      save.resolve(ok('save', '/tmp/a.png'))
+      await attach
+    })
+    let sent = true
+    await act(async () => {
+      sent = await sending
+    })
+
+    expect(sent).toBe(false)
+    expect(t.baseSend).not.toHaveBeenCalled()
+    expect(t.writes('term-1')).toEqual([])
+    expect(t.onSendError).toHaveBeenCalledTimes(1)
+  })
+
+  it('still sends a `!` message whose chip is kept, and a message with no `!`', async () => {
+    for (const text of ['!ls', 'look']) {
+      useNativeChatImageAttachmentsStore.getState().reset()
+      const t = setUp({ 'term-1': EMPTY_COMPOSER })
+      await attachPhoto()
+      expect(await send(text)).toBe(true)
+      expect(t.baseSend).toHaveBeenCalled()
+      act(() => renderer?.unmount())
+      renderer = null
+    }
+  })
+
 })
