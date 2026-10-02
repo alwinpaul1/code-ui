@@ -108,7 +108,27 @@ describe('a Codex send that finds no composer on the desktop screen', () => {
       _meta: { runtimeId: 'r' }
     }
     expect(await look(response)).toBe(SEND_SCREEN_UNAVAILABLE_REFUSAL)
-    expect(SEND_SCREEN_UNREADABLE_REFUSAL).toContain("Couldn't read")
+  })
+
+  // The unreadable-screen rules (mobile-native-chat-send-unreadable-screen.test.ts) cover Codex too.
+  it('is refused when a read fails on a host that has shown a Codex screen on this connection', async () => {
+    let reads = 0
+    const client = makeClient(() => {
+      reads += 1
+      if (reads > 1) {
+        throw new Error('timed out')
+      }
+      return reply(WORKING_0158)
+    }) as unknown as RpcClient
+    const ask = () =>
+      readSendUnderDialogRefusal({
+        client,
+        terminal: 'term',
+        agent: 'codex',
+        requireComposer: true
+      } as Parameters<typeof readSendUnderDialogRefusal>[0])
+    expect(await ask()).toBeNull()
+    expect(await ask()).toBe(SEND_SCREEN_UNREADABLE_REFUSAL)
   })
 
   it('leaves an agent that is not Codex or Claude alone', async () => {

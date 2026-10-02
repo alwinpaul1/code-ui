@@ -11,13 +11,17 @@
 //   codex-quiet-ready-screen.test.ts, v1.4.217, pasted there verbatim).
 //   Codex 0.155.1, REAL: WORKING_0155 (same file, mid-turn).
 //
-//   Codex 0.153.4 (the build installed on this machine): NO screen capture of a
-//   composer exists in this repo or on this desktop (its only `orca terminal
-//   read --screen` capture, in codex-picker-screen.test.ts, is the /model
-//   picker). Its footer was therefore never seen drawn here, and
-//   nothing below stands for it.
+//   Codex 0.153.4 (the build installed on this machine), REAL: LIVE_0153_S23 is
+//   the bottom of a live Galaxy S23 session (2026-09-09, `orca terminal show`,
+//   pasted from mobile-terminal-hud-parse.test.ts), a four-row excerpt; and the
+//   /model and effort PICKER steps from codex-picker-screen.test.ts (`orca
+//   terminal read --screen`, 2026-09-05). There is no full-screen capture of a
+//   0.153.4 composer, and none with a slash or `@` popup open.
 //
-//   MODELLED, not captured: every `*_EXITED_*` screen (what a shell shows
+//   MODELLED, not captured: the popup screens (POPUP_BELOW_COMPOSER: 0.153.4 draws
+//   it below the composer with no `›` of its own, POPUP_ABOVE_COMPOSER: 0.158
+//   draws it above, both from codex-queue-under-an-open-popup.test.ts, which
+//   built them from rust snapshots), every `*_EXITED_*` screen (what a shell shows
 //   after Codex exits: the old frame, Codex's "Token usage" and resume lines
 //   from the 0.153.4 binary's strings, then a prompt) and the context-left
 //   footer (composed from rust-v0.158.0 snapshots in
@@ -221,3 +225,52 @@ export const codexExitedToShell = (
 
 /** MODELLED. Codex's frame gone and only a shell left. */
 export const plainShellScreen = (prompt: string): string[] => ['hi', prompt]
+
+/** Codex 0.153.4, REAL: the bottom of a live Galaxy S23 session, 2026-09-09
+ *  (excerpt as pasted in mobile-terminal-hud-parse.test.ts). */
+export const LIVE_0153_S23 = [
+  '› Reply with the single word ready.   tab to queue message',
+  '                                                                        100% context left',
+  '› Reply with the single word ready.',
+  '  gpt-5.6-terra xhigh · ~/Desktop/Project/Code UI'
+]
+
+/** Codex 0.153.4, REAL (`orca terminal read --screen`, 2026-09-05): the /model
+ *  picker, whose selected row wears the composer's `›`. */
+export const MODEL_PICKER_0153 = [
+  '│  Weekly limit:                [████████████████████] 100% left (resets 17:16 on 12 Sep) │',
+  '╰─────────────────────────────────────────────────────────────────────────────────────────╯',
+  '  Select Model and Effort',
+  '  Access legacy models by running codex -m <model_name> or in your config.toml',
+  '  1. gpt-6-astra (default)  Our most capable model for complex, demanding work.',
+  '› 2. gpt-5.6-sol (current)  Reliable agentic workhorse for everyday tasks.',
+  '  3. gpt-5.6-terra          Balanced agentic coding model for everyday work.',
+  '  Press enter to confirm or esc to go back'
+]
+
+/** MODELLED. A picker whose selected row is NOT numbered, with its key hint
+ *  (the hint wording is the real 0.153.4 picker's). */
+export const UNNUMBERED_PICKER = [
+  '• Done.',
+  '  Resume a previous session',
+  '› Today  fix the build',
+  '  Yesterday  review the diff',
+  '  Press enter to confirm or esc to go back'
+]
+
+/** MODELLED. Codex 0.153.4's slash popup, BELOW the composer, no `›` of its own. */
+export const POPUP_BELOW_COMPOSER = [
+  '• Done.',
+  '› /mo',
+  '  /model     choose what model and reasoning effort to use',
+  '  /memories  configure memory use and generation'
+]
+
+/** MODELLED. Codex 0.158's slash popup, ABOVE the composer, its selected row
+ *  wearing `›` too, the footer under the composer. */
+export const POPUP_ABOVE_COMPOSER = [
+  '• Working (12s • esc to interrupt)',
+  '› /resume  resume a saved chat',
+  '› /res',
+  '  tab to queue message                   100% context left'
+]

@@ -101,7 +101,9 @@ export async function agentComposerOnScreen(args: {
     )
     return (
       lines !== null &&
-      (args.agent === 'codex' ? codexComposerLive(lines) : claudeLiveFrame(lines))
+      (args.agent === 'codex'
+        ? codexComposerLive(lines, { underneath: true })
+        : claudeLiveFrame(lines))
     )
   } catch {
     return false

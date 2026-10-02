@@ -1,46 +1,53 @@
-import { hasCodexFooter } from './mobile-terminal-hud-parse'
-
 /** Codex's own input row: `›` at column 0, then a space (or nothing, once a
- *  reader trims it). A sent prompt, a popup's selected row and an approval's
- *  selected option wear the same glyph, so it is only the START of the proof. */
+ *  reader trims it). A sent prompt, a popup's selected row and an approval's or
+ *  picker's selected option wear the same glyph, so it is only the START of the
+ *  proof. */
 const COMPOSER_ROW = /^›(?: |$)/
-/** The footer when Codex draws no model or directory (the default hint row, or
- *  a `tui.status_line` holding the context item): "tab to queue message   100%
- *  context left". MODELLED from rust-v0.158.0 snapshots, not a capture. */
-const CONTEXT_LEFT_FOOTER = /^ {2}\S.*\b\d{1,3}% context left\s*$/
-const INDENTED = /^ {2}\S/
-
-/** A real footer is indented two columns; `hasCodexFooter`'s own pattern also
- *  takes column 0, where a shell prompt like `x-y · ~/proj` would match. */
-const isFooterRow = (row: string): boolean =>
-  INDENTED.test(row) && (hasCodexFooter([row]) || CONTEXT_LEFT_FOOTER.test(row))
+/** The key hint under a picker or a dialog ("Press enter to confirm or esc to go
+ *  back", "Press enter to confirm or esc to cancel", "enter continue · esc quit").
+ *  Real Codex 0.153.4 and 0.158.0 wording. The composer's footer rows
+ *  ("tab to queue message", "esc again to edit previous message", "ctrl + c
+ *  again to quit", the model row) hold none of these pairs. */
+const DIALOG_HINT = /^\s*(?:press\s+)?(?:enter|esc)\b.*\b(?:confirm|cancel|go back|continue|quit|select)\b/i
 
 /**
  * Whether Codex's composer is up, as far as a screen can show: the last `›` row
- * at column 0 (the composer's, or its only candidate), then rows indented two
- * columns (its wrapped draft, a popup under it) up to a footer row, and under
- * the footer nothing at column 0. The footer is the proof: a shell, an approval
- * and the trust prompt draw none under a `›` row.
+ * at column 0, with nothing under it at column 0 and no dialog key hint under it
+ * (an approval's, a picker's and the trust prompt's selected rows wear `›` too,
+ * and each has its hint). The row may start with a number: the chat's own draft
+ * answering by number is typed into the composer (the dialog check owns the
+ * numbered-menu cases, mobile-native-chat-dialog-guard.ts). Rows under the composer are indented two
+ * columns: the footer, a popup, a transient hint (a shell prompt is at column
+ * 0, and so are Codex's own exit lines, `Token usage: ...`).
  *
- * Codex 0.155.1 and 0.158.0 screens of an idle or working composer, real and
- * with Orca's blank rows dropped, all pass (fixtures/codex-composer-screens.ts
- * says which are real). Codex 0.153.4 has no composer capture here. What a
- * shell shows after Codex exits is NOT captured: a prompt or Codex's exit lines
- * under the old frame are modelled as column-0 rows and refuse; an exit that
- * leaves the frame with nothing drawn under it passes, as it does for Claude
- * (claudeComposerLive). A footer cut by a narrow pane (no `·` item) is not
- * known to read.
+ * Evidence: every captured Codex screen of a ready or working composer passes
+ * (0.153.4: the bottom of a live S23 session; 0.155.1; 0.158.0; with and without
+ * the blank rows Orca drops, fixtures/codex-composer-screens.ts), and the
+ * approval, the trust prompt and the /model picker do not. The footer
+ * (`  <model> <effort> · <cwd>`) is under the composer in all of them but is NOT
+ * required: a slash or `@` popup (modelled: 0.153.4 draws it below the composer,
+ * 0.158 above), a custom `tui.status_line` and a Windows directory would each
+ * refuse a live composer for good, and the phone's own typing opens popups.
+ *
+ * `underneath` is for a follow onto a new terminal, which wants a row drawn
+ * under the composer, as claudeLiveFrame does for Claude: a bare composer row is
+ * not shown to be a whole frame (a restored terminal is seeded with an old one).
+ *
+ * NOT captured: what a shell shows after Codex exits. Its prompt and exit lines
+ * are modelled at column 0 and refuse; an exit that leaves the old frame with
+ * nothing drawn under it passes, and no screen can tell it from a live one.
  */
-export function codexComposerLive(lines: readonly string[]): boolean {
+export function codexComposerLive(
+  lines: readonly string[],
+  options: { underneath?: boolean } = {}
+): boolean {
   const composer = lines.findLastIndex((row) => COMPOSER_ROW.test(row))
   if (composer === -1) {
     return false
   }
-  const rest = lines.slice(composer + 1).filter((row) => row.trim() !== '')
-  const footer = rest.findIndex(isFooterRow)
+  const below = lines.slice(composer + 1).filter((row) => row.trim() !== '')
   return (
-    footer !== -1 &&
-    rest.slice(0, footer).every((row) => row.startsWith('  ')) &&
-    rest.slice(footer + 1).every((row) => row.startsWith('  '))
+    (!options.underneath || below.length > 0) &&
+    below.every((row) => row.startsWith('  ') && !DIALOG_HINT.test(row))
   )
 }

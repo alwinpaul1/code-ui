@@ -2,19 +2,26 @@
 //
 // Codex draws its input with `›`, and so does a sent prompt, a popup's selected
 // row and an approval's selected option, so that glyph alone says nothing. What
-// a live composer has that the others do not is its footer row under it,
-// indented two columns: `  <model> <effort> · <cwd>` in every captured Codex
-// 0.155.1 and 0.158.0 screen of a ready or working composer, and none under an
-// approval or the trust prompt. A shell prompt is at column 0.
+// the composer's `›` row has under it is indented rows only (the footer, a popup
+// or a hint), where a shell's prompt is at column 0; an approval's or a
+// picker's selected row is a numbered option or has a key hint under it.
+// Every real capture of a ready or working composer (0.153.4 excerpt, 0.155.1,
+// 0.158.0) also has an indented footer row `  <model> <effort> · <cwd>`, but the
+// footer is not REQUIRED: a popup (modelled), a custom status line and a Windows
+// path would each have refused a live composer for good.
 //
-// Screens: fixtures/codex-composer-screens.ts, which says which are real
-// (0.155.1, 0.158.0) and which are modelled. Codex 0.153.4 has no screen
-// capture here. NOT captured: Codex exited to a shell.
+// Screens: fixtures/codex-composer-screens.ts, which says which are real and
+// which are modelled. NOT captured: Codex exited to a shell, a popup open.
 
 import { describe, expect, it } from 'vitest'
 import { codexComposerLive } from './codex-composer-screen'
 import {
   APPROVAL_0158,
+  LIVE_0153_S23,
+  MODEL_PICKER_0153,
+  POPUP_ABOVE_COMPOSER,
+  POPUP_BELOW_COMPOSER,
+  UNNUMBERED_PICKER,
   CODEX_EXITED_PROMPTS,
   codexExitedToShell,
   CONTEXT_LEFT_FOOTER,
@@ -32,7 +39,8 @@ const READY: [string, string[]][] = [
   ['Codex 0.158.0 idle after a turn', IDLE_AFTER_TURN_0158],
   ['Codex 0.158.0 mid-turn', WORKING_0158],
   ['Codex 0.158.0 idle under an answer that quotes the busy row', QUOTED_IN_ANSWER_0158],
-  ['Codex 0.155.1 mid-turn, whose footer is the last row', WORKING_0155]
+  ['Codex 0.155.1 mid-turn, whose footer is the last row', WORKING_0155],
+  ['the bottom of a live Codex 0.153.4 session (S23, 2026-09-09)', LIVE_0153_S23]
 ]
 
 describe('a Codex screen that shows its composer', () => {
@@ -55,6 +63,24 @@ describe('a Codex screen that shows its composer', () => {
     expect(codexComposerLive(wrapped)).toBe(true)
   })
 
+  it.each([
+    ['a slash popup below the composer, no footer under it (modelled 0.153.4)', POPUP_BELOW_COMPOSER],
+    ['a slash popup above the composer, its selected row wearing the glyph too (modelled 0.158)', POPUP_ABOVE_COMPOSER],
+    ['a footer whose directory is a Windows path', ['› ', '  gpt-5.6-sol medium · D:\\work\\proj']],
+    ['a custom status line with another item before the directory', ['› ', '  gpt-5.6-sol medium · main · ~/p']],
+    ['a footer whose model id has no digit or hyphen', ['› ', '  codex medium · ~/p']],
+    ['the hint Codex draws for a second Esc', ['› ', '  esc again to edit previous message']],
+    ['the hint Codex draws for a second Ctrl+C', ['› ', '  ctrl + c again to quit']]
+  ])('is live with %s', (_name, lines) => {
+    expect(codexComposerLive(lines)).toBe(true)
+  })
+
+  it('is live with the chat\'s own draft answering by number typed into it', () => {
+    expect(
+      codexComposerLive(['• ok', '› 1. Yes, use postgres', '  2. No caching for now', '  gpt-5.6-sol xhigh · ~/Project'])
+    ).toBe(true)
+  })
+
   it('is live with the context-left footer (modelled)', () => {
     expect(codexComposerLive(['• Working (3s • esc to interrupt)', ...CONTEXT_LEFT_FOOTER])).toBe(true)
   })
@@ -63,6 +89,14 @@ describe('a Codex screen that shows its composer', () => {
 describe('a Codex screen that shows no composer', () => {
   it('is not live under the approval, whose selected option wears the composer glyph', () => {
     expect(codexComposerLive(APPROVAL_0158)).toBe(false)
+  })
+
+  it('is not live under the real 0.153.4 /model picker, whose selected row wears the glyph and whose hint is drawn', () => {
+    expect(codexComposerLive(MODEL_PICKER_0153)).toBe(false)
+  })
+
+  it('is not live under a picker whose selected row is not numbered but whose key hint is drawn (modelled)', () => {
+    expect(codexComposerLive(UNNUMBERED_PICKER)).toBe(false)
   })
 
   it('is not live under the folder trust prompt', () => {
@@ -99,13 +133,24 @@ describe('a Codex screen that shows no composer', () => {
   })
 
   // Degenerate sizes: nothing at all, and the glyph alone.
-  it('is not live for an empty screen, or a lone `›` row', () => {
+  it('is not live for an empty screen, or one with no composer row', () => {
     expect(codexComposerLive([])).toBe(false)
-    expect(codexComposerLive(['›'])).toBe(false)
-    expect(codexComposerLive(['› '])).toBe(false)
+    expect(codexComposerLive([''])).toBe(false)
+    expect(codexComposerLive(['  gpt-6-sol medium · ~/r'])).toBe(false)
   })
 
-  it('is live for the smallest screen that has both: the composer row and its footer', () => {
+  it('is live for the smallest screens: the composer row alone, and with its footer', () => {
+    expect(codexComposerLive(['› Ask Codex to do anything'])).toBe(true)
     expect(codexComposerLive(['› ', '  gpt-6-sol medium · ~/r'])).toBe(true)
+  })
+
+  // A follow onto a new terminal wants more, as Claude's does (claudeLiveFrame): the composer
+  // alone is not shown to be a whole frame, because a restored terminal is seeded with an
+  // old one.
+  it('is a live frame for a follow only with a row drawn under the composer', () => {
+    expect(codexComposerLive(['› Ask Codex to do anything'], { underneath: true })).toBe(false)
+    expect(codexComposerLive(['› ', '  gpt-6-sol medium · ~/r'], { underneath: true })).toBe(true)
+    expect(codexComposerLive(WORKING_0158, { underneath: true })).toBe(true)
+    expect(codexComposerLive(codexExitedToShell(WORKING_0158, '66% '), { underneath: true })).toBe(false)
   })
 })

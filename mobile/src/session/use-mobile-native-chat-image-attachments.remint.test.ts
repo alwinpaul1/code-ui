@@ -307,7 +307,11 @@ describe('a composer send when the tab is given a new terminal while it waits', 
       { agent: 'codex', onLook: { 'term-1': () => void (t.activeHandleRef.current = 'term-2') } }
     )
     expect(await send('hello')).toBe(follows)
-    expect(t.baseSend.mock.calls.length > 0).toBe(follows)
+    if (follows) {
+      expect(t.baseSend).toHaveBeenCalled()
+    } else {
+      expect(t.baseSend).not.toHaveBeenCalled()
+    }
     expect(t.onSendError.mock.calls).toEqual(follows ? [] : [[SEND_TERMINAL_RESTARTED]])
   })
 

@@ -180,9 +180,10 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
     expect(await look(reply(SUBAGENT_DIALOG))).toBe(SEND_UNDER_DIALOG_REFUSAL)
   })
 
-  // Failing OPEN is the stated gap: a phone that cannot read a screen cannot tell
-  // a shell from Claude, and refusing every send to an older host would be the
-  // worse bug.
+  // Failing OPEN stays for a host that has not shown a screen on this connection: a
+  // phone that cannot read one there cannot tell a shell from Claude, and refusing
+  // every send to an older host would be the worse bug. A host that HAS shown one
+  // is refused instead (mobile-native-chat-send-unreadable-screen.test.ts).
   it.each([
     ['a reply with no source (an older host sends the stream tail)', reply(claudeExitedToShell('66% '), null)],
     ['a stream tail', reply(claudeExitedToShell('66% '), 'stream')],

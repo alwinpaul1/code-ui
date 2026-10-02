@@ -26,8 +26,10 @@ export const SEND_WITHOUT_CODEX_COMPOSER_REFUSAL =
 export const SEND_SCREEN_UNREADABLE_REFUSAL =
   "Couldn't read the desktop screen, so the message was not typed. Send again."
 
-/** How long a send waits for its look at the screen. A slower read goes
- *  without the look, as a send did before there was one. */
+/** How long one read of the screen may take. A slower read counts as a failed one:
+ *  it goes without the look on a host that has not shown a screen on this
+ *  connection (as every send did before there was one), and is refused on one
+ *  that has (readSendUnderDialogRefusal). */
 const SCREEN_READ_MS = 2_000
 
 /** A numbered choice: `  2. Lint`, `❯ 1. Yes`, `› 1. Yes, proceed (y)`. */
@@ -217,7 +219,7 @@ async function lookAtScreen(args: Parameters<typeof readSendUnderDialogRefusal>[
  * Why a write from the chat must not go now, or null. Read fresh, not from the
  * chat's last poll, which can be seconds old.
  *
- * `requireComposer` is for a write that types words into Claude's input and
+ * `requireComposer` is for a write that types words into the agent's input and
  * presses Enter (a composer send, a photo paste, an answer, a picked command).
  * After the dialog check, which keeps its place and its own message, it refuses
  * a screen that is a screen (`source: 'screen'`, said outright) and does not show
@@ -248,7 +250,8 @@ export async function readSendUnderDialogRefusal(args: {
   agent?: string | null
   /** The action's own budget, when it has one; the look never takes longer. */
   deadline?: number
-  /** The write types into Claude's input: also refuse a screen with no box. */
+  /** The write types into the agent's input (Claude's or Codex's): also refuse a
+   *  screen that shows no box, and a screen that cannot be had. */
   requireComposer?: boolean
 }): Promise<string | null> {
   const wantsBox = args.requireComposer === true && composerLocated(args.agent)
