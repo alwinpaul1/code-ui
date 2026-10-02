@@ -47,7 +47,7 @@ export function Button({
     primary: colors.textInverse,
     secondary: colors.text,
     ghost: colors.text,
-    danger: '#FFFFFF',
+    danger: colors.onDanger,
     accent: colors.onAccent
   }[variant]
   const height = { sm: 36, md: 44, lg: 52 }[size]

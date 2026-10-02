@@ -16,6 +16,18 @@ describe('mobile text contrast', () => {
     ).toBeGreaterThanOrEqual(4.5)
   })
 
+  // The label of a destructive Button (the "Run" in the shell-command question, "Discard", "Delete")
+  // was a literal #FFFFFF in both schemes: 5.4:1 on the light danger red, 3.25:1 on the dark one.
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: keeps the label of a destructive button readable on the danger fill', (scheme, palette) => {
+    expect(
+      contrastRatio(palette.onDanger, palette.danger),
+      `${scheme}: onDanger ${palette.onDanger} on danger ${palette.danger}`
+    ).toBeGreaterThanOrEqual(4.5)
+  })
+
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
