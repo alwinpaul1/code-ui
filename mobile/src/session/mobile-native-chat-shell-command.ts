@@ -45,3 +45,9 @@ export const unconfirmedChatSendNotice = (text: string, agent: string | null | u
   shellCommandOfSend(text, agent) === null
     ? 'Delivery unconfirmed — check chat before retrying'
     : SHELL_COMMAND_UNCONFIRMED
+
+/** Said when a rebuilt queue holds a `!` message the user did not just type: Claude Code
+ *  2.1.287 can queue a shell command, and retyping it would run it again. The messages
+ *  were recalled into the input and nothing was written. */
+export const SHELL_COMMAND_QUEUE_REBUILD_REFUSAL =
+  'A queued message starts with ! and would run as a shell command again if it were retyped, so the queue was not rebuilt. Your messages are in the desktop input, unsent.'
