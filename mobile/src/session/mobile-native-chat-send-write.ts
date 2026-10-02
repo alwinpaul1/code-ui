@@ -12,6 +12,7 @@ import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-in
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
 import { claudeSentBashRows } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
+import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
 import { shellCommandOfSend } from './mobile-native-chat-shell-command'
 import {
   clearClaudeInputVerified,
@@ -82,6 +83,15 @@ async function clearInputForSend(args: {
   return null
 }
 
+async function readBashRows(
+  client: RpcClient,
+  terminal: string,
+  deadline: number
+): Promise<string[] | null> {
+  const screen = await readMobileNativeChatScreen({ client, terminal, deadline })
+  return screen ? claudeSentBashRows(screen.lines) : null
+}
+
 export async function writeChatSend(args: {
   agent: string | null
   client: RpcClient
@@ -126,12 +136,15 @@ export async function writeChatSend(args: {
   }
   // Copies the beacon already holds: an older identical prompt proves nothing.
   const seenNonces = new Set(args.receipts().map((receipt) => receipt.nonce))
-  // A shell command's echo is a `! cmd` row in the scrollback, which keeps every one ever run:
-  // the rows there now are the baseline a repeat has to exceed (verifyClaudeSubmit).
+  // A Claude shell command's echo is a `! cmd` row in the scrollback, which keeps every one ever
+  // run: the rows there now are the baseline a repeat has to exceed (verifyClaudeSubmit). Only
+  // Claude's check uses it. The look is cut so the body keeps what it needs
+  // (MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS): it may not be the read that makes the body refuse
+  // after the clear went out. No baseline, and the echo row proves nothing (`null`).
   const priorBashRows =
-    shellCommandOfSend(text, agent) === null
+    agent !== 'claude' || shellCommandOfSend(text, agent) === null
       ? []
-      : claudeSentBashRows((await readMobileNativeChatScreen({ client, terminal, deadline }))?.lines ?? [])
+      : await readBashRows(client, terminal, deadline - MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS)
   const outcome = args.typesCodexCommand
     ? await typeMobileNativeChatCommandWithOutcome({
         client,

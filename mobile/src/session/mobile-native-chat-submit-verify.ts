@@ -102,8 +102,9 @@ export async function verifyClaudeSubmit(args: {
   seenNonces: ReadonlySet<string>
   /** The `! cmd` rows the screen held BEFORE a shell-command send wrote anything. The
    *  scrollback keeps every command ever run, so a repeat of one proves nothing: it counts
-   *  as run only when the screen now holds more rows of it than it did then. */
-  priorBashRows?: readonly string[]
+   *  as run only when the screen now holds more rows of it than it did then. `null`: no
+   *  baseline could be had, so the echo row proves nothing (the bash box still does). */
+  priorBashRows?: readonly string[] | null
   /** The send's own budget: no look runs past it. */
   deadline?: number
   wait?: (ms: number) => Promise<void>
@@ -179,6 +180,7 @@ export async function verifyClaudeSubmit(args: {
       sawWords ||
       claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words)) ||
       (shell !== null &&
+        args.priorBashRows !== null &&
         claudeSentBashRows(screen.lines).filter(heard).length >
           (args.priorBashRows ?? []).filter(heard).length)
     ) {
