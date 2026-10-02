@@ -71,9 +71,10 @@ describe('the chat view as the overlay mounts it', () => {
     agent: string,
     onSend: (text: string) => Promise<boolean>,
     report = vi.fn(),
-    onAnswerQuestion?: (text: string) => Promise<boolean>
+    onAnswerQuestion?: (text: string) => Promise<boolean>,
+    extra: Record<string, unknown> = {}
   ) => {
-    const props = { agent, onSend, onAnswerQuestion, reportBackgroundTaskFailure: report } as unknown as ComponentProps<
+    const props = { agent, onSend, onAnswerQuestion, reportBackgroundTaskFailure: report, ...extra } as unknown as ComponentProps<
       typeof MobileNativeChatShellConfirmView
     >
     act(() => {
@@ -156,6 +157,49 @@ describe('the chat view as the overlay mounts it', () => {
     act(() => renderer?.unmount())
     mount('claude', vi.fn(async () => true))
     expect(view.props!.onAnswerQuestion).toBeUndefined()
+  })
+
+  // The question belongs where `!` actually reaches an EMPTY agent input. A structured session's
+  // sends go to the API, not a PTY; a send with a photo pastes the picture first, so the input
+  // is not empty when the text arrives and the `!` is no switch.
+  it('does not ask on a structured session, whose sends are not typed into a terminal', async () => {
+    const onSend = vi.fn(async () => true)
+    mount('claude', onSend, vi.fn(), undefined, { structuredActivityUi: true })
+    await act(async () => {
+      void sendFromView('!ls')
+    })
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('!ls')
+  })
+
+  it.each([
+    ['a photo', [{ id: 'p', uri: 'file:///a.jpg' }]],
+    ['a pending file', [{ id: 'f', uri: 'file:///a.pdf', kind: 'file' }]]
+  ])('does not ask when the send carries %s: the input is not empty when the text arrives', async (_name, attachments) => {
+    const onSend = vi.fn(async () => true)
+    mount('claude', onSend, vi.fn(), undefined, { attachments })
+    await act(async () => {
+      void sendFromView('!look at this')
+    })
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('!look at this')
+  })
+
+  it('asks again once the attachments are gone, and with none attached at all', async () => {
+    const onSend = vi.fn(async () => true)
+    mount('claude', onSend, vi.fn(), undefined, { attachments: [] })
+    await act(async () => {
+      void sendFromView('!ls')
+    })
+    await flushLazy()
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('does not ask for a structured session\'s answer either', async () => {
+    const onAnswerQuestion = vi.fn(async () => true)
+    mount('claude', vi.fn(async () => true), vi.fn(), onAnswerQuestion, { structuredActivityUi: true })
+    await act(async () => {
+      void (view.props!.onAnswerQuestion as (text: string) => Promise<boolean>)('!ls')
+    })
+    expect(onAnswerQuestion).toHaveBeenCalledExactlyOnceWith('!ls')
   })
 
 })

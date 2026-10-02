@@ -19,13 +19,17 @@ const NO_ANSWER = (): Promise<boolean> => Promise.resolve(false)
 export function MobileNativeChatShellConfirmView(
   props: ComponentProps<typeof MobileNativeChatView>
 ): React.JSX.Element {
+  // Asked only where `!` reaches an EMPTY agent input: a structured session's sends go to the
+  // API, and a send with a photo or a file pastes it first, so the text is not at the start.
+  const typedIntoEmptyInput = !props.structuredActivityUi && !props.attachments?.length
+  const agent = typedIntoEmptyInput ? props.agent : null
   const send = useMobileNativeChatShellCommandConfirm(
-    props.agent,
+    agent,
     props.onSend,
     props.reportBackgroundTaskFailure
   )
   const answer = useMobileNativeChatShellCommandConfirm(
-    props.agent,
+    agent,
     props.onAnswerQuestion ?? NO_ANSWER,
     props.reportBackgroundTaskFailure
   )
