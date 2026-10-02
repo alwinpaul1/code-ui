@@ -80,8 +80,12 @@ import { RightDrawer } from './RightDrawer'
 
 const handlers = (gestureHandler as unknown as { __handlers: Handlers }).__handlers
 
+function Content(): null {
+  return null
+}
+
 function drawer(visible: boolean, onClose: () => void = () => {}): ReactElement {
-  return createElement(RightDrawer, { visible, onClose }, createElement('View'))
+  return createElement(RightDrawer, { visible, onClose, children: createElement(Content) })
 }
 
 let renderer: ReactTestRenderer | null = null

@@ -7,16 +7,23 @@ vi.mock('./mounted-bottom-drawer', () => ({
   MountedBottomDrawer: 'MountedBottomDrawer'
 }))
 
-function drawer(visible: boolean, onAfterClose: () => void) {
-  return createElement(
-    BottomDrawer,
-    { visible, onClose: () => {}, onAfterClose },
-    createElement('DrawerContent')
-  )
+function DrawerContent(): null {
+  return null
 }
 
+function drawer(visible: boolean, onAfterClose: () => void) {
+  return createElement(BottomDrawer, {
+    visible,
+    onClose: () => {},
+    onAfterClose,
+    children: createElement(DrawerContent)
+  })
+}
+
+// The mock above makes the mounted drawer a host element named after it.
 function mountedDrawer(renderer: ReactTestRenderer) {
-  return renderer.root.findByType('MountedBottomDrawer')
+  const [found] = renderer.root.findAll((node) => String(node.type) === 'MountedBottomDrawer')
+  return found!
 }
 
 // The close animation finishes on the UI thread and reaches `onHidden` through

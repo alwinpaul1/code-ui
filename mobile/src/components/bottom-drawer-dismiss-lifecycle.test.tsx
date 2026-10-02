@@ -95,7 +95,7 @@ vi.mock('react-native-reanimated', async () => {
               }
             }
           }
-          seam.cells.push(cell)
+          seam.cells.push(cell as unknown as (typeof seam.cells)[number])
           return cell
         })()
       ).current,
@@ -122,13 +122,17 @@ import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 const KEYBOARD = 300
 
+function Content(): null {
+  return null
+}
+
 function drawer(props: {
   visible: boolean
   onClose: () => void
   onHidden: () => void
   expandable?: boolean
 }) {
-  return createElement(MountedBottomDrawer, props, createElement('View', { testID: 'content' }))
+  return createElement(MountedBottomDrawer, { ...props, children: createElement(Content) })
 }
 
 let renderer: ReactTestRenderer | null = null
