@@ -8,7 +8,7 @@ import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
-import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
+import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { boundPhotoCopy, isOwnPhotoStatusCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
@@ -398,7 +398,7 @@ export function MobileNativeChatOverlay({
   }
   const chat = (
     <View style={styles.overlay}>
-      <MobileNativeChatView
+      <MobileNativeChatShellConfirmView
         messages={session.messages}
         folded={folded}
         status={session.status}

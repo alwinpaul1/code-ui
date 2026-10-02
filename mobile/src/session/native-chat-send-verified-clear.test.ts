@@ -20,6 +20,7 @@ import {
   createFakeComposerHost,
   type FakeComposerHost
 } from './fake-claude-composer-host.test-support'
+import { WORKING_0158 } from './fixtures/codex-composer-screens'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import {
   acquireMobileNativeChatTerminalWrite,
@@ -163,8 +164,11 @@ describe('a message sent from the chat while the desktop input holds a copy of i
       return method === 'terminal.read' ? 'read' : body.enter ? 'body' : 'clear'
     })
     // The first read is the send's own look for a dialog and for Claude's input
-    // box (a send with no image hook in front of it); the next sizes the clear.
-    expect(order.slice(0, 5)).toEqual(['read', 'read', 'clear', 'read', 'body'])
+    // box (a send with no image hook in front of it); the next sizes the clear. MESSAGE starts
+    // with `!`, a shell command, so one more read follows the clear: the screen as it stands
+    // before the body, the baseline a repeat of a command already run has to exceed
+    // (mobile-native-chat-send-write.ts priorBashRows).
+    expect(order.slice(0, 6)).toEqual(['read', 'read', 'clear', 'read', 'read', 'body'])
   })
 
   it('refuses and writes nothing more when the input cannot be cleared, and keeps the draft', async () => {
@@ -258,12 +262,30 @@ describe('a message sent from the chat while the desktop input holds a copy of i
     expect(acceptSend).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps a Codex tab on its own send: no look at a Claude composer, the same bytes', async () => {
+  it('keeps a Codex tab on its own send: one look at its composer, no Claude clear-and-verify, the same bytes', async () => {
     const host = createFakeComposerHost()
-    mount(host, 'codex')
+    const reads = vi.fn()
+    // Codex 0.158.0 mid-turn (fixtures/codex-composer-screens.ts), whatever the Claude stand-in draws.
+    const codexHost = {
+      ...host,
+      handle: vi.fn(async (method: string, params: unknown) => {
+        if (method === 'terminal.read') {
+          reads()
+          return {
+            id: 'r',
+            ok: true,
+            result: { terminal: { tail: WORKING_0158, source: 'screen' } },
+            _meta: { runtimeId: 'r' }
+          }
+        }
+        return host.handle(method, params)
+      })
+    } as FakeComposerHost
+    mount(codexHost, 'codex')
 
     await sendMessage('hello codex')
 
+    expect(reads).toHaveBeenCalledTimes(1)
     expect(host.reads).toBe(0)
   })
 

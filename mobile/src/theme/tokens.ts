@@ -40,6 +40,8 @@ export type ThemeColors = {
   warning: string
   warningSoft: string
   danger: string
+  /** The label on a `danger` fill (a destructive button): 4.5:1 or better in both schemes. */
+  onDanger: string
   dangerSoft: string
   info: string
   /** Merged-PR icon accent (violet, mirrors the desktop ReviewIcon's purple-400/70).
@@ -114,6 +116,7 @@ export const lightColors: ThemeColors = {
   warning: '#B7791F',
   warningSoft: 'rgba(183, 121, 31, 0.14)',
   danger: '#C0392B',
+  onDanger: '#FFFFFF',
   dangerSoft: 'rgba(192, 57, 43, 0.12)',
   info: '#3B6FB6',
   mergedPurple: '#7C3AED',
@@ -158,6 +161,7 @@ export const darkColors: ThemeColors = {
   warning: '#D9A441',
   warningSoft: 'rgba(217, 164, 65, 0.16)',
   danger: '#E06C5B',
+  onDanger: '#1A1917',
   dangerSoft: 'rgba(224, 108, 91, 0.16)',
   info: '#7FA7E0',
   // Violet-400, the desktop ReviewIcon's tone, exactly as the sidebar always drew

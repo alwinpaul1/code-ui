@@ -9,9 +9,14 @@ import type { RpcResponse } from '../transport/types'
  * screen" doesn't grow that file's grandfathered reference count (it stays a
  * ceiling per unvalidated-rpc-request-port-inventory.ts).
  *
- * A `source` other than 'screen' is the stream fallback an older host sends
- * when it does not understand `screen: true` — old repaints, not the current
- * screen — so it is read as incompatible rather than trusted.
+ * A `source` other than 'screen' is read as incompatible rather than trusted:
+ * 'screen-unavailable' (Orca 1.4.218's answer when it has no rows to show for a
+ * screen request: no ptyId, nothing drawn, or a recovery in flight, read from
+ * its bundle) and 'stream' (old repaints, which 1.4.218 sends only to a request
+ * that did not ask for a screen). An OLDER host (1.4.178-rc.2 has no
+ * `screen: true` handling) sends no `source` at all and answers with the
+ * stream's tail; that reply is accepted here, and `replySource` is what tells
+ * the three apart for a write that must not guess.
  */
 export const screenLinesReader: RpcCompatibleReader<unknown, 'screen-lines', string[]> = (raw) => {
   const box = raw == null ? {} : Object(raw)
@@ -70,4 +75,17 @@ export function replyIsScreen(response: RpcResponse): boolean {
     typeof terminal === 'object' &&
     Reflect.get(Object(terminal), 'source') === 'screen'
   )
+}
+
+/** What a `terminal.read` reply says its `source` is: the string, `undefined`
+ *  when the reply is a success that names none (a host older than screen
+ *  reads), or `null` when it is no success or no terminal object at all. */
+export function replySource(response: RpcResponse): string | undefined | null {
+  const result: unknown = response.ok ? response.result : undefined
+  const terminal: unknown = result == null ? undefined : Reflect.get(Object(result), 'terminal')
+  if (terminal == null || typeof terminal !== 'object') {
+    return null
+  }
+  const source: unknown = Reflect.get(Object(terminal), 'source')
+  return source === undefined ? undefined : typeof source === 'string' ? source : null
 }

@@ -2,6 +2,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { nativeChatIdentityHostId } from './native-chat-identity-host'
+import { useMemo } from 'react'
+import { surfaceShellCommandTurns } from './mobile-native-chat-shell-command-turns'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -68,8 +70,16 @@ export function useMobileNativeChatSessionLane({
     agent: structured ? agent : null,
     onSendError
   })
+  // A confirmed `!` command is the user's turn `!cmd`, here, once, upstream of the render and of
+  // every reconciler that decides whether the phone's own copy of a send has landed
+  // (mobile-native-chat-shell-command-turns.ts). Only the terminal lane: a structured
+  // session's sends go to the API. The same list when nothing is surfaced.
+  const messages = useMemo(
+    () => surfaceShellCommandTurns(bridgeSession.messages),
+    [bridgeSession.messages]
+  )
   return {
     structuredSession,
-    session: structured ? structuredSession.session : bridgeSession
+    session: structured ? structuredSession.session : { ...bridgeSession, messages }
   }
 }

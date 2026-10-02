@@ -1,3 +1,4 @@
+import { noteScreenReplySource } from './host-screen-answers'
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
@@ -166,6 +167,7 @@ export function useMobileTerminalHudObservation(args: {
         const terminal = (response as RpcSuccess).result as {
           terminal?: { tail?: unknown; lines?: unknown; source?: string; draft?: unknown }
         }
+        noteScreenReplySource(client, terminal.terminal?.source)
         // Stream fallback contains old repaints, not the current queue or dialog.
         if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
           return null

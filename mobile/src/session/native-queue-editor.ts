@@ -1,3 +1,8 @@
+import {
+  SHELL_COMMAND_QUEUE_REBUILD_REFUSAL,
+  SHELL_COMMAND_QUEUE_REFUSAL,
+  shellCommandOfSend
+} from './mobile-native-chat-shell-command'
 import { claudeQueueViewFromScreen, type ClaudeQueueView } from './mobile-terminal-queued-messages'
 import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
 import {
@@ -193,9 +198,19 @@ export async function finishNativeQueueEdit(
   if (draftOf(before) !== edit.draft) {
     throw new Error('The draft changed on desktop. Reopen the editor before saving.')
   }
+  // Trimmed at both ends, as it always was: the host reads the input back trimmed
+  // (terminal-composer-draft.ts), so text typed with a leading space or newline would never read
+  // back and the save would fail AFTER the clear and the paste had gone out.
   const text = replacement?.trim() ?? ''
   if (hasControlCharacters(text)) {
     throw new Error('Remove control characters before saving.')
+  }
+  // Typed into the emptied input, a leading `!` is a shell command (the chat asks first;
+  // this sheet cannot). Judged on the trimmed text, which is what is typed: `  !cmd` would be
+  // typed `!cmd`. Before any write, so nothing is cleared or lost. Text that is
+  // already in the input (an unchanged restore) is not typed and is not judged.
+  if (!edit.segments && text !== edit.draft && shellCommandOfSend(text, agent) !== null) {
+    throw new Error(SHELL_COMMAND_QUEUE_REFUSAL)
   }
   if (edit.segments) {
     await rebuildQueue(io, edit, text, onReplaced)
@@ -222,9 +237,6 @@ export async function finishNativeQueueEdit(
   await submitInput(io, agent, text)
 }
 
-/** Raised once part of a rebuild has reached the agent. Retrying from here
- * would queue the messages that already landed a second time, so the editor
- * must stop offering to write and let the user read what is left. */
 /** A delete is finished only once the agent's own queue no longer holds it.
  *
  *  Clearing the composer is not the same thing: the recall is what takes an
@@ -258,6 +270,10 @@ async function confirmRemoved(
   throw new Error('That message is still queued on the agent. It has not been deleted.')
 }
 
+/** Raised when the messages of a recalled queue cannot be put back: part of a rebuild reached the
+ * agent (retrying would queue the landed ones a second time), or the rebuild was refused before
+ * any write because a queued message starts with `!` (retyping it would run it again). Either way
+ * the editor must stop offering to write and let the user read what is left. */
 export class QueueRebuildError extends Error {
   readonly remaining: string[]
   constructor(message: string, remaining: string[]) {
@@ -279,6 +295,18 @@ async function rebuildQueue(
   const parts = edit
     .segments!.map((part, at) => (at === edit.index ? text : part))
     .filter((part) => part.trim().length > 0)
+  // Every part is retyped into the emptied input and submitted, so any that starts with `!`
+  // would run as a shell command. Refused before the clear. Claude Code 2.1.287 can queue a
+  // shell command (its queue entries carry a `mode`), so an unedited part may start with one
+  // too: retyping it would run it AGAIN, and the same refusal could never succeed, so the
+  // messages stay where they are, stranded, and the message says so. A `!` the user just typed
+  // into the edited message is theirs to fix, and is refused plainly.
+  if (text !== edit.text && shellCommandOfSend(text, 'claude') !== null) {
+    throw new Error(SHELL_COMMAND_QUEUE_REFUSAL)
+  }
+  if (parts.some((part) => shellCommandOfSend(part, 'claude') !== null)) {
+    throw new QueueRebuildError(SHELL_COMMAND_QUEUE_REBUILD_REFUSAL, parts)
+  }
   if (edit.segments!.some(opaque)) {
     throw new Error(
       'A queued message holds an attachment or collapsed paste that Orca cannot retype.'

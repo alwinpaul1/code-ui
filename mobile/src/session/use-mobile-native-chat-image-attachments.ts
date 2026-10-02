@@ -252,7 +252,7 @@ export function useMobileNativeChatImageAttachments({
             hostTerminal: () => (scope ? (hostTerminalOfTab?.(scope) ?? null) : null),
             sendGate,
             deadline,
-            // One read, before any paste: a dialog first, then (Claude) a screen with no input box.
+            // One read, before any paste: a dialog first, then (Claude or Codex) a screen with no input box.
             look: (client, terminal, followed) => refuseUnderDialog({ client, terminal, deadline, agent, requireComposer: !followed }),
             verify: (client, terminal) => agentComposerOnScreen({ client, terminal, agent, deadline }),
             refuse

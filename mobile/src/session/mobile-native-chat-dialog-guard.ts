@@ -1,5 +1,7 @@
 import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { claudeComposerLive } from './claude-composer-screen'
+import { codexComposerLive } from './codex-composer-screen'
+import { lookAtScreen } from './mobile-native-chat-screen-look'
 import { replyIsScreen, terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
 export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer it first.'
@@ -8,9 +10,17 @@ export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer 
 export const SEND_WITHOUT_COMPOSER_REFUSAL =
   "Claude's input box isn't on the desktop screen, so the message was not typed."
 
-/** How long a send waits for its look at the screen. A slower read goes
- *  without the look, as a send did before there was one. */
-const SCREEN_READ_MS = 2_000
+/** Said when the host answered that it has no screen to show for the terminal. */
+export const SEND_SCREEN_UNAVAILABLE_REFUSAL =
+  'The desktop has no screen to show for this terminal yet, so the message was not typed.'
+
+/** Said when a screen that can be read does not show Codex's input box. */
+export const SEND_WITHOUT_CODEX_COMPOSER_REFUSAL =
+  "Codex's input box isn't on the desktop screen, so the message was not typed."
+
+/** Said when a read of the screen failed on a host that has shown its screen. */
+export const SEND_SCREEN_UNREADABLE_REFUSAL =
+  "Couldn't read the desktop screen, so the message was not typed. Send again."
 
 /** A numbered choice: `  2. Lint`, `❯ 1. Yes`, `› 1. Yes, proceed (y)`. */
 const OPTION = /^(\s*)(?:([❯›>]) )?(\d+)[.)] (\S.*?)\s*$/
@@ -155,31 +165,44 @@ export function terminalDialogOnScreen(lines: readonly string[], agent?: string 
   return terminalDialogKind(lines, agent) !== null
 }
 
+/** The agents whose composer the phone can locate on a screen, so a send to one
+ *  that shows none (a shell, a dialog) can be refused. Codex's `›` row alone is
+ *  also a sent prompt, a popup row and an approval option; what is under it (nothing at
+ *  column 0, no dialog key hint) is what codexComposerLive reads. */
+const composerLocated = (agent: string | null | undefined): boolean =>
+  agent === 'claude' || agent === 'codex'
+
 /**
  * Why a write from the chat must not go now, or null. Read fresh, not from the
- * chat's last poll, which can be seconds old. Fails open: a read that fails,
- * times out or comes from the stream instead of the screen lets the send go,
- * as every send went before this look existed.
+ * chat's last poll, which can be seconds old.
  *
- * `requireComposer` is for a write that types words into Claude's input and
+ * `requireComposer` is for a write that types words into the agent's input and
  * presses Enter (a composer send, a photo paste, an answer, a picked command).
  * After the dialog check, which keeps its place and its own message, it refuses
  * a screen that is a screen (`source: 'screen'`, said outright) and does not show
- * Claude's input box: a shell the agent exited to, transcript mode, `!` bash
+ * the agent's input box (Claude's, or Codex's): a shell the agent exited to, transcript mode, `!` bash
  * mode (what is typed there runs as a command, so it is refused too). The tab
  * still says `claude` for about 30 minutes after the process is gone (a
  * hand-started agent's type outlives it), so the tab is no evidence.
  *
- * THE GAP: a read the phone cannot get (an older host, a timeout, a rejected RPC,
- * a reply with no `source` or a stream tail) still fails open, because refusing
- * every send to a host that cannot be read would be the worse bug. Closing it
- * needs a host that answers `screen: true` for every terminal (the phone has no
- * other proof of what a terminal shows), after which this can refuse on `null`
- * too. Codex and every other agent are unchanged: the `›` row is also a sent
- * prompt, a popup row and an approval option (agentComposerOnScreen), so no
- * screen locates Codex's composer. The same hazard exists there; Codex's footer
- * row (`<model> · <cwd>`), once captured from a real session, would close it.
- * Not guessed here.
+ * A screen that cannot be had is told apart by what the host said (Orca 1.4.218
+ * puts `source` on every reply to a screen request; the host-screen-answers.ts
+ * comment has the history):
+ *  - `source: 'screen-unavailable'`: the host can read screens and has none to
+ *    show. Read again for about 1.5 s, then refuse (SEND_SCREEN_UNAVAILABLE_REFUSAL).
+ *  - a rejection or a reply that is no screen: the same, ONLY on a host that has
+ *    answered a screen on this connection.
+ *  - a timeout, or a link that is down or re-dialing: wait for the link inside the
+ *    send's budget (less what its writes need) and read again, refusing
+ *    (SEND_SCREEN_UNREADABLE_REFUSAL) only when that has run out, and only on a host
+ *    that has answered a screen on this connection. On any other host (nothing
+ *    answered yet) it fails open, as every send did before this look existed.
+ *    (mobile-native-chat-screen-look.ts has the timings.)
+ *  - a reply with no `source`, or a stream tail: an older host, which cannot
+ *    show a screen. Fails open for the same reason: refusing every send to it
+ *    would be the worse bug.
+ * Codex gets the same looks with its own proof (codexComposerLive); every other
+ * agent is unchanged (composerLocated).
  */
 export async function readSendUnderDialogRefusal(args: {
   client: Parameters<typeof terminalScreenLinesRead.request>[0]
@@ -188,34 +211,28 @@ export async function readSendUnderDialogRefusal(args: {
   agent?: string | null
   /** The action's own budget, when it has one; the look never takes longer. */
   deadline?: number
-  /** The write types into Claude's input: also refuse a screen with no box. */
+  /** The write types into the agent's input (Claude's or Codex's): also refuse a
+   *  screen that shows no box, and a screen that cannot be had. */
   requireComposer?: boolean
 }): Promise<string | null> {
-  try {
-    const reply = await terminalScreenLinesRead.request(
-      args.client,
-      { terminal: args.terminal, screen: true },
-      {
-        timeoutMs: Math.max(1, Math.min(SCREEN_READ_MS, (args.deadline ?? Infinity) - Date.now())),
-        budgetSpansConnect: true
-      }
-    )
-    const lines = terminalScreenLinesRead.interpret(reply)
-    if (!lines) {
-      return null
-    }
-    if (terminalDialogOnScreen(lines, args.agent)) {
-      return SEND_UNDER_DIALOG_REFUSAL
-    }
-    return args.requireComposer &&
-      args.agent === 'claude' &&
-      replyIsScreen(reply) &&
-      !claudeComposerLive(lines)
-      ? SEND_WITHOUT_COMPOSER_REFUSAL
-      : null
-  } catch {
+  const wantsBox = args.requireComposer === true && composerLocated(args.agent)
+  const seen = await lookAtScreen(args, wantsBox)
+  if (seen.kind === 'unavailable') {
+    return wantsBox ? SEND_SCREEN_UNAVAILABLE_REFUSAL : null
+  }
+  if (seen.kind === 'rejected' || seen.kind === 'unreachable') {
+    return wantsBox && seen.hostAnswers ? SEND_SCREEN_UNREADABLE_REFUSAL : null
+  }
+  if (terminalDialogOnScreen(seen.lines, args.agent)) {
+    return SEND_UNDER_DIALOG_REFUSAL
+  }
+  if (!wantsBox || !replyIsScreen(seen.reply)) {
     return null
   }
+  if (args.agent === 'codex') {
+    return codexComposerLive(seen.lines) ? null : SEND_WITHOUT_CODEX_COMPOSER_REFUSAL
+  }
+  return claudeComposerLive(seen.lines) ? null : SEND_WITHOUT_COMPOSER_REFUSAL
 }
 
 /** Runs `look`, says its refusal through `report`, and answers whether the

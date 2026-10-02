@@ -1,3 +1,4 @@
+import { surfacedShellCommand } from './mobile-native-chat-shell-command-turns'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { DesktopPrompt } from './agent-hud-beacon'
 import { normalizePromptField } from '../../../src/shared/agent-status-field-normalization'
@@ -167,7 +168,9 @@ export function joinedLineBetween(
     return false
   }
   return raw.slice(from + 1, to).some((message) => {
-    if (message.role !== 'user' || owners.has(message.id)) {
+    // A `!` command the user ran, surfaced as `!cmd`, is no prompt the agent took (it was machinery
+    // as `<bash-input>`): its own lines are no dequeued copy (desk-prompt-surfaced-shell-command.test.ts).
+    if (message.role !== 'user' || owners.has(message.id) || message.blocks.some((block) => surfacedShellCommand(block) !== null)) {
       return false
     }
     const text = message.blocks.map((block) => (block.type === 'text' ? block.text : '')).join('')

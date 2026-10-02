@@ -18,6 +18,7 @@ import {
 } from './fixtures/claude-exited-to-shell-2.1.287'
 import {
   readSendUnderDialogRefusal,
+  SEND_WITHOUT_CODEX_COMPOSER_REFUSAL,
   SEND_WITHOUT_COMPOSER_REFUSAL
 } from './mobile-native-chat-dialog-guard'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
@@ -170,7 +171,7 @@ describe('a photo sent from the chat to a terminal with no Claude input box', ()
     expect(args.baseSend).toHaveBeenCalledTimes(1)
   })
 
-  it('leaves Codex alone', async () => {
+  it('refuses a photo into a shell for Codex too, in Codex\'s words', async () => {
     pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
     const { client, args } = setUp(() => read(plainShell(SHELL_PROMPTS.zsh)), { agent: 'codex' })
     await act(async () => {
@@ -181,7 +182,7 @@ describe('a photo sent from the chat to a terminal with no Claude input box', ()
       await hook!.sendNativeChat('see this')
     })
 
-    expect(typed(client).length).toBeGreaterThan(0)
-    expect(args.onSendError).not.toHaveBeenCalledWith(SEND_WITHOUT_COMPOSER_REFUSAL)
+    expect(typed(client)).toEqual([])
+    expect(args.onSendError).toHaveBeenCalledWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
   })
 })

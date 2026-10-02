@@ -17,6 +17,7 @@ import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-l
 import { mobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-codex-command'
+import { unconfirmedChatSendNotice } from './mobile-native-chat-shell-command'
 import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
 import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { writeChatSend } from './mobile-native-chat-send-write'
@@ -171,16 +172,17 @@ export function useMobileNativeChatMessageSend(args: {
         return 'rejected'
       }
       // An answer or a pick types text and an Enter, which a dialog on screen
-      // takes as its answer (2026-09-27), and Claude exited back to a shell
-      // takes as a command to run (2026-10-02): the look also refuses a screen
-      // with no Claude input box (readSendUnderDialogRefusal `requireComposer`;
-      // an unreadable screen still fails open, said there). A composer send
-      // through the image hook looked already, before any paste, and its follow
-      // says so (use-mobile-native-chat-image-attachments.ts). One that did not
-      // (a caller with no hook) looks here when the agent is Claude; Codex's
-      // composer send has never looked and does not start (said there).
+      // takes as its answer (2026-09-27), and an agent that exited back to a shell
+      // takes as a command to run (Claude 2026-10-02): the look also refuses a screen
+      // with no input box of the agent's (readSendUnderDialogRefusal
+      // `requireComposer`, for Claude and Codex; a screen the host cannot show, or
+      // a read that fails on a host that has shown screens, refuses too, and an
+      // older host's fails open, said there). A composer send through the image
+      // hook looked already, before any paste, and its follow says so
+      // (use-mobile-native-chat-image-attachments.ts). One that did not (a caller
+      // with no hook) looks here when the agent is Claude or Codex.
       if (
-        (!syncComposer || (!follow && agent === 'claude')) &&
+        (!syncComposer || (!follow && (agent === 'claude' || agent === 'codex'))) &&
         (await refusedUnderDialog(
           refuseUnderDialog,
           { client, terminal: handle, deadline, agent, requireComposer: true },
@@ -260,9 +262,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (classification === 'chat') {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
-          holdUnconfirmedSend(origin, text, () =>
-            report('Delivery unconfirmed — check chat before retrying')
-          )
+          holdUnconfirmedSend(origin, text, () => report(unconfirmedChatSendNotice(text, agent)))
         } else {
           // A command has no echo to wait for, so this is the only word it gets.
           report(COMMAND_UNCONFIRMED)

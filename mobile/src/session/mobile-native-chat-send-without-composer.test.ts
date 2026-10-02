@@ -36,6 +36,7 @@ import { claudeLiveFrame } from './mobile-native-chat-send-follow'
 import {
   readSendUnderDialogRefusal,
   SEND_UNDER_DIALOG_REFUSAL,
+  SEND_WITHOUT_CODEX_COMPOSER_REFUSAL,
   SEND_WITHOUT_COMPOSER_REFUSAL
 } from './mobile-native-chat-dialog-guard'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
@@ -179,9 +180,10 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
     expect(await look(reply(SUBAGENT_DIALOG))).toBe(SEND_UNDER_DIALOG_REFUSAL)
   })
 
-  // Failing OPEN is the stated gap: a phone that cannot read a screen cannot tell
-  // a shell from Claude, and refusing every send to an older host would be the
-  // worse bug.
+  // Failing OPEN stays for a host that has not shown a screen on this connection: a
+  // phone that cannot read one there cannot tell a shell from Claude, and refusing
+  // every send to an older host would be the worse bug. A host that HAS shown one
+  // is refused instead (mobile-native-chat-send-unreadable-screen.test.ts).
   it.each([
     ['a reply with no source (an older host sends the stream tail)', reply(claudeExitedToShell('66% '), null)],
     ['a stream tail', reply(claudeExitedToShell('66% '), 'stream')],
@@ -192,12 +194,14 @@ describe('a Claude send that finds no input box on the desktop screen', () => {
     expect(await look(response)).toBeNull()
   })
 
-  it('leaves Codex alone, whatever its screen shows', async () => {
-    expect(await look(reply(plainShell(SHELL_PROMPTS.zsh)), 'codex')).toBeNull()
-    expect(await look(reply(claudeExitedToShell(SHELL_PROMPTS.bash)), 'codex')).toBeNull()
+  // Codex has its own rule and its own message
+  // (mobile-native-chat-send-without-codex-composer.test.ts).
+  it('does not read Codex\'s screen by Claude\'s rule: its own message, from its own proof', async () => {
+    expect(await look(reply(plainShell(SHELL_PROMPTS.zsh)), 'codex')).toBe(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
+    expect(await look(reply(EMPTY_COMPOSER), 'codex')).toBe(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
   })
 
-  it('leaves an agent that is not Claude alone', async () => {
+  it('leaves an agent that is not Claude or Codex alone', async () => {
     expect(await look(reply(plainShell(SHELL_PROMPTS.zsh)), 'openclaude')).toBeNull()
     expect(await look(reply(plainShell(SHELL_PROMPTS.zsh)), null)).toBeNull()
   })
@@ -411,13 +415,13 @@ describe('the real send onto a terminal with no Claude input box', () => {
     expect(host.writes.some((write) => write.text.includes('check the build'))).toBe(true)
   })
 
-  it('leaves Codex as it was: its screen is not looked at for a box', async () => {
+  it('applies Codex\'s own rule to a Codex tab, not Claude\'s: a shell is refused with Codex\'s message', async () => {
     const host = screenHost(() => reply(plainShell(SHELL_PROMPTS.zsh)))
     mount(host.handle, 'codex')
 
     await run(() => api!.sendWithOutcome('check the build'))
 
-    expect(host.writes.some((write) => write.text.includes('check the build'))).toBe(true)
-    expect(report).not.toHaveBeenCalledWith(SEND_WITHOUT_COMPOSER_REFUSAL)
+    expect(host.writes).toEqual([])
+    expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
   })
 })

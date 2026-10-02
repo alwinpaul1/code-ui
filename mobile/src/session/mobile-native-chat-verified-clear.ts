@@ -22,8 +22,10 @@ export const INPUT_STILL_HOLDS_TEXT =
  *    every send to a host that cannot be read would be a worse bug than the one
  *    this fixes, and it is said in the report. A screen that IS read and shows
  *    no Claude box (a shell) never gets this far: the send's own look refuses it
- *    first (readSendUnderDialogRefusal `requireComposer`), so only an unreadable
- *    screen, or a box that vanished between that look and this one, ends here.
+ *    first (readSendUnderDialogRefusal `requireComposer`), and so does a host that
+ *    has shown screens and then cannot read this one, so only an older host's
+ *    unreadable screen, or a box that vanished between that look and this one,
+ *    ends here.
  *  - `still-holds`: two clears, and a look after each found text that had
  *    changed but was still there. The caller must write nothing more. The limit
  *    is two passes of at most 16 rows (about 31 rows of input): a longer draft,
