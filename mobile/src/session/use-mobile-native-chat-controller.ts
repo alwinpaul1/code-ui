@@ -278,7 +278,7 @@ export function useMobileNativeChatController(
       legacyQuestion == null &&
       nativeChatAskPrompt == null && terminalDialogKind === null,
     handleRef: activeHandleRef,
-    deviceTokenRef,
+    deviceTokenRef, agentRef: activeChatAgentRef,
     text: chatComposerText
   })
   const peekTerminalForDispatchedCommand = useMobileChatCommandPeek(

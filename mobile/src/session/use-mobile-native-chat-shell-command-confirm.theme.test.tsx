@@ -50,7 +50,11 @@ async function openIn(scheme: 'light' | 'dark'): Promise<ReactTestRenderer> {
     return createElement('View', null, api.confirm)
   }
   act(() => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, createElement(Probe)))
+    renderer = create(
+      <ThemeProvider initialPreference={scheme}>
+        <Probe />
+      </ThemeProvider>
+    )
   })
   await act(async () => {
     void api.send('!ls -la')

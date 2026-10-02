@@ -12,6 +12,7 @@ import {
 } from '../terminal/terminal-live-pending-flush-state'
 import type { RpcClient } from '../transport/rpc-client'
 import { planNativeChatDraftMirror } from './mobile-native-chat-draft-mirror'
+import { shellCommandOfSend } from './mobile-native-chat-shell-command'
 import { isMobileNativeChatTerminalWriteInFlight } from './mobile-native-chat-terminal-write-lock'
 
 export type MobileNativeChatDraftMirror = {
@@ -34,11 +35,15 @@ export function useMobileNativeChatDraftMirror(args: {
   enabled: boolean
   handleRef: MutableRefObject<string | null>
   deviceTokenRef: MutableRefObject<string | null>
+  /** The tab's agent: a draft that starts with `!` is not echoed on a tab whose
+   *  agent runs it as a shell command (below). */
+  agentRef?: MutableRefObject<string | null | undefined>
   text: string
   /** The composer's own edit counter; only a keystroke moves it. */
   getComposerEditGeneration: () => number
 }): MobileNativeChatDraftMirror {
-  const { client, enabled, handleRef, deviceTokenRef, text, getComposerEditGeneration } = args
+  const { client, enabled, handleRef, deviceTokenRef, agentRef, text, getComposerEditGeneration } =
+    args
   const flushStateRef = useRef(createTerminalLivePendingFlushState())
   const sentTextRef = useRef('')
   const mirroredHandleRef = useRef<string | null>(null)
@@ -101,6 +106,15 @@ export function useMobileNativeChatDraftMirror(args: {
     if (!handle) {
       return
     }
+    // A leading `!` arriving into the empty desktop input switches the agent to
+    // shell mode (mobile-native-chat-shell-command.ts), so a draft that starts with
+    // one is not echoed: the question before the send is the first the desktop
+    // hears of it. What was echoed before the `!` went in front is dropped with the
+    // line, and the next echo starts from a clear, as the send's own clear does.
+    if (shellCommandOfSend(text, agentRef?.current) !== null) {
+      forget()
+      return
+    }
     if (mirroredHandleRef.current !== null && mirroredHandleRef.current !== handle) {
       // The active terminal changed under the draft; the old line is not ours to edit.
       forget()
@@ -117,7 +131,7 @@ export function useMobileNativeChatDraftMirror(args: {
     for (const payload of plan.writes) {
       void queueTerminalLiveMirrorSend(flushStateRef.current, handle, payload, sendPayload)
     }
-  }, [enabled, forget, getComposerEditGeneration, handleRef, sendPayload, text])
+  }, [agentRef, enabled, forget, getComposerEditGeneration, handleRef, sendPayload, text])
 
   useEffect(() => forget, [forget])
 

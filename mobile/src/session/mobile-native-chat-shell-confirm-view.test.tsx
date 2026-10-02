@@ -5,7 +5,7 @@
 
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { createElement } from 'react'
+import type { ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -67,18 +67,20 @@ describe('the chat overlay', () => {
 })
 
 describe('the chat view as the overlay mounts it', () => {
-  const mount = (agent: string, onSend: (text: string) => Promise<boolean>, report = vi.fn()) => {
+  const mount = (
+    agent: string,
+    onSend: (text: string) => Promise<boolean>,
+    report = vi.fn(),
+    onAnswerQuestion?: (text: string) => Promise<boolean>
+  ) => {
+    const props = { agent, onSend, onAnswerQuestion, reportBackgroundTaskFailure: report } as unknown as ComponentProps<
+      typeof MobileNativeChatShellConfirmView
+    >
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: 'light' },
-          createElement(MobileNativeChatShellConfirmView, {
-            agent,
-            onSend,
-            reportBackgroundTaskFailure: report
-          } as never)
-        )
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatShellConfirmView {...props} />
+        </ThemeProvider>
       )
     })
     return report
@@ -123,4 +125,37 @@ describe('the chat view as the overlay mounts it', () => {
     expect(onSend).not.toHaveBeenCalled()
     expect(report).toHaveBeenCalledTimes(1)
   })
+  // A plain-text question's answer is typed into the composer and submitted, the same door.
+  it('asks before a free-text answer that starts with ! is typed too', async () => {
+    const onAnswerQuestion = vi.fn(async () => true)
+    mount('claude', vi.fn(async () => true), vi.fn(), onAnswerQuestion)
+
+    await act(async () => {
+      void (view.props!.onAnswerQuestion as (text: string) => Promise<boolean>)('!rm -rf build')
+    })
+    await flushLazy()
+    expect(onAnswerQuestion).not.toHaveBeenCalled()
+
+    const run = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === 'Run' && typeof node.props.onPress === 'function'
+    )
+    await act(async () => {
+      run.props.onPress()
+    })
+    expect(onAnswerQuestion).toHaveBeenCalledExactlyOnceWith('!rm -rf build')
+  })
+
+  it('passes an ordinary answer straight through, and hands the view none when there was none', async () => {
+    const onAnswerQuestion = vi.fn(async () => true)
+    mount('claude', vi.fn(async () => true), vi.fn(), onAnswerQuestion)
+    await act(async () => {
+      void (view.props!.onAnswerQuestion as (text: string) => Promise<boolean>)('yes')
+    })
+    expect(onAnswerQuestion).toHaveBeenCalledExactlyOnceWith('yes')
+
+    act(() => renderer?.unmount())
+    mount('claude', vi.fn(async () => true))
+    expect(view.props!.onAnswerQuestion).toBeUndefined()
+  })
+
 })

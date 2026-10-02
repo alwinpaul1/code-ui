@@ -1,5 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-mirror'
@@ -34,8 +36,13 @@ describe('useMobileNativeChatDraftMirror', () => {
   /** Stands in for the composer's own edit counter, which only a keystroke bumps. */
   let edits = 0
 
-  function mount(client: RpcClient, initial: { enabled: boolean; text: string }) {
+  function mount(
+    client: RpcClient,
+    initial: { enabled: boolean; text: string },
+    agent: string | null = null
+  ) {
     const handleRef = { current: 'term-1' }
+    const agentRef = { current: agent }
     const deviceTokenRef = { current: 'dev' }
     let latest: ReturnType<typeof useMobileNativeChatDraftMirror> | null = null
     function Harness(props: { enabled: boolean; text: string }): null {
@@ -43,6 +50,7 @@ describe('useMobileNativeChatDraftMirror', () => {
         client,
         handleRef,
         deviceTokenRef,
+        agentRef,
         getComposerEditGeneration: () => edits,
         ...props
       })
@@ -138,4 +146,81 @@ describe('useMobileNativeChatDraftMirror', () => {
     await flush()
     expect(sendRequest).toHaveBeenCalled()
   })
+  // A leading `!` arriving into the empty desktop input switches Claude Code 2.1.287 to bash mode
+  // (and Codex has `! for shell commands`), so echoing a draft that starts with `!` put the desktop
+  // in shell mode while the user was still typing, before the "Run on the desktop?" question and
+  // before the send (mobile-native-chat-shell-command.ts says how it was read).
+  describe.each(['claude', 'codex'])('on a %s tab, a draft that starts with !', (agent) => {
+    it('is not echoed onto the desktop input', async () => {
+      const { client, sendRequest } = makeClient()
+      const { type } = mount(client, { enabled: true, text: '' }, agent)
+      type({ enabled: true, text: '!' })
+      await flush()
+      type({ enabled: true, text: '!l' })
+      await flush()
+      type({ enabled: true, text: '!ls -la' })
+      await flush()
+      expect(sendRequest).not.toHaveBeenCalled()
+    })
+
+    it('stops being echoed once a ! is typed in front of an echoed draft', async () => {
+      const { client, sendRequest } = makeClient()
+      const { type } = mount(client, { enabled: true, text: '' }, agent)
+      type({ enabled: true, text: 'ls' })
+      await flush()
+      sendRequest.mockClear()
+      type({ enabled: true, text: '!ls' })
+      await flush()
+      expect(sendRequest).not.toHaveBeenCalled()
+    })
+
+    it('is echoed again, from a fresh line, once the ! is deleted', async () => {
+      const { client, sendRequest } = makeClient()
+      const { type } = mount(client, { enabled: true, text: '' }, agent)
+      type({ enabled: true, text: '!ls' })
+      await flush()
+      type({ enabled: true, text: 'ls' })
+      await flush()
+      expect(sendRequest.mock.calls.map(([, params]) => params.text)).toEqual([CTRL_U + 'ls'])
+    })
+
+    it('is echoed when a space comes first: the agent keeps the space and it is no switch', async () => {
+      const { client, sendRequest } = makeClient()
+      const { type } = mount(client, { enabled: true, text: '' }, agent)
+      type({ enabled: true, text: ' !ls' })
+      await flush()
+      expect(sendRequest).toHaveBeenCalled()
+    })
+
+    it('is echoed when the bang is not first', async () => {
+      const { client, sendRequest } = makeClient()
+      const { type } = mount(client, { enabled: true, text: '' }, agent)
+      type({ enabled: true, text: 'wow!' })
+      await flush()
+      expect(sendRequest).toHaveBeenCalled()
+    })
+  })
+
+  it('still echoes a draft that starts with ! on a tab that has no shell command door', async () => {
+    const { client, sendRequest } = makeClient()
+    const { type } = mount(client, { enabled: true, text: '' }, 'omp')
+    type({ enabled: true, text: '!ls' })
+    await flush()
+    expect(sendRequest).toHaveBeenCalled()
+  })
+
+  // Structure: the controller is what hands the hook the tab's agent. Without it the
+  // hook cannot tell a `!` draft from any other and echoes it onto the desktop.
+  it('is given the tab\'s agent by the chat controller', () => {
+    const controller = readFileSync(
+      fileURLToPath(new URL('./use-mobile-native-chat-controller.ts', import.meta.url)),
+      'utf8'
+    )
+      .split('\n')
+      .filter((row) => !/^\s*(\/\/|\/\*|\*)/.test(row))
+      .join('\n')
+    const call = controller.slice(controller.indexOf('useMobileNativeChatDraftMirror({'))
+    expect(call.slice(0, call.indexOf('})'))).toMatch(/agentRef: activeChatAgentRef/)
+  })
+
 })

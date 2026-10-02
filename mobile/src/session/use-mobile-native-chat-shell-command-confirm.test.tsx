@@ -48,7 +48,11 @@ function mount(agent: string | null, send: (text: string) => Promise<boolean>, r
     return createElement('View', null, api.confirm)
   }
   act(() => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: 'light' }, createElement(Probe)))
+    renderer = create(
+      <ThemeProvider initialPreference="light">
+        <Probe />
+      </ThemeProvider>
+    )
   })
   return report
 }
