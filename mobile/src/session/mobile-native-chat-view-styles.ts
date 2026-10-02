@@ -36,6 +36,17 @@ export function makeChatViewStyles(theme: Theme) {
       paddingHorizontal: space.md,
       paddingBottom: space.xs
     },
+    // The dock draws no ground, so a bare line here is painted over the transcript behind it
+    // (2026-10-02). An opaque panel surface: dangerSoft is translucent, and danger text on bgRaised is under 4.5:1.
+    sendErrorPill: {
+      maxWidth: '100%',
+      paddingHorizontal: space.md,
+      paddingVertical: space.xs + 2,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.bgPanel
+    },
     chromeToggle: {
       flexDirection: 'row',
       alignItems: 'center',

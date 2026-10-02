@@ -178,7 +178,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   if (
     resolvedWorktreeId !== options.worktreeId ||
     options.line !== null ||
-    options.column !== null
+    options.column !== null ||
+    phoneShowsItself(openedPath)
   ) {
     options.pushPreviewRoute(
       createMobileFilePreviewHref({
@@ -251,6 +252,19 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
   options.scheduleDelayedAction(() => void activateOpenedTab(), 300)
   options.scheduleDelayedAction(() => void activateOpenedTab(), 900)
   options.scheduleDelayedAction(() => void activateOpenedTab(), 1800)
+}
+
+/**
+ * A PDF is shown by the phone's own viewer (files.readPreview), so the tap never asks the desktop
+ * for a tab. Orca 1.4.218 answers files.open for a PDF with `opened: false`, kind `binary` (its
+ * binary set: avif, heic, mov, mp3, mp4, pdf, zip), and the tap then said "binary files don't open
+ * on the phone" about a file the phone draws. Raster images are not in that set: the desktop opens
+ * a tab (`kind: 'image'`, `opened: true`) and the phone shows it, so they keep that path. Files
+ * the phone shows as text keep the desktop tab too; a genuinely binary one (.zip) still reaches
+ * the honest refusal.
+ */
+function phoneShowsItself(path: string): boolean {
+  return classifyMobileArtifact(path) === 'pdf'
 }
 
 function displayNameFromPath(path: string): string | undefined {

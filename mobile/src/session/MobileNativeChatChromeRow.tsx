@@ -80,12 +80,15 @@ export function MobileNativeChatChromeRow({
         // This banner is the only channel for a send failure — announce it.
         <View
           style={styles.sendError}
+          pointerEvents="box-none"
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
         >
-          <Txt variant="caption" weight="semibold" tone="danger">
-            {sendErrorMessage}
-          </Txt>
+          <View style={styles.sendErrorPill}>
+            <Txt variant="caption" weight="semibold" tone="danger">
+              {sendErrorMessage}
+            </Txt>
+          </View>
         </View>
       ) : null}
     </>
