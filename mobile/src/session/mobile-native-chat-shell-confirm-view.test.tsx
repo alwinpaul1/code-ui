@@ -23,10 +23,14 @@ vi.mock('../components/BottomDrawer', () => ({
   BottomDrawer: ({ visible, children }: { visible: boolean; children: unknown }) =>
     visible ? children : null
 }))
-const view = vi.hoisted(() => ({ props: null as null | Record<string, unknown> }))
+const view = vi.hoisted(() => ({
+  props: null as null | Record<string, unknown>,
+  record: null as null | ((props: Record<string, unknown>) => void)
+}))
 vi.mock('./MobileNativeChatView', () => ({
   MobileNativeChatView: (props: Record<string, unknown>) => {
     view.props = props
+    view.record?.(props)
     return null
   }
 }))
@@ -63,6 +67,63 @@ describe('the chat overlay', () => {
     const overlay = code('./MobileNativeChatOverlay.tsx')
     expect(overlay).toMatch(/<MobileNativeChatShellConfirmView\b/)
     expect(overlay).not.toMatch(/<MobileNativeChatView\b/)
+  })
+})
+
+const asProps = (props: Record<string, unknown>): ComponentProps<typeof MobileNativeChatShellConfirmView> =>
+  props as unknown as ComponentProps<typeof MobileNativeChatShellConfirmView>
+
+describe('the wrapper around the chat view', () => {
+  it('renders the chat view once, with every prop it was handed except the two sends it guards', () => {
+    const handed = {
+      agent: 'claude',
+      messages: [{ id: 'm' }],
+      status: 'ready',
+      composerText: 'draft',
+      sendSurfaceId: 'surface-1',
+      keyboardInset: 12,
+      queuedMessages: ['a', 'b'],
+      onStop: vi.fn(),
+      onLoadEarlier: vi.fn(),
+      reportBackgroundTaskFailure: vi.fn()
+    }
+    const views: Record<string, unknown>[] = []
+    view.record = (props) => views.push(props)
+    act(() => {
+      renderer = create(
+        <ThemeProvider initialPreference="light">
+          <MobileNativeChatShellConfirmView
+            {...(asProps({ ...handed, onSend: vi.fn(), onAnswerQuestion: vi.fn() }))}
+          />
+        </ThemeProvider>
+      )
+    })
+
+    expect(views).toHaveLength(1)
+    for (const [key, value] of Object.entries(handed)) {
+      expect(views[0]![key]).toBe(value)
+    }
+    expect(typeof views[0]!.onSend).toBe('function')
+    expect(typeof views[0]!.onAnswerQuestion).toBe('function')
+    expect(views[0]!.onSend).not.toBe(undefined)
+    view.record = null
+  })
+
+  it('hands the view the same props on a re-render: nothing is added, dropped or renamed', () => {
+    const views: Record<string, unknown>[] = []
+    view.record = (props) => views.push(props)
+    const element = (extra: Record<string, unknown>) => (
+      <ThemeProvider initialPreference="light">
+        <MobileNativeChatShellConfirmView {...asProps({ agent: 'codex', onSend: vi.fn(), ...extra })} />
+      </ThemeProvider>
+    )
+    act(() => {
+      renderer = create(element({ composerText: 'one' }))
+    })
+    act(() => renderer!.update(element({ composerText: 'two' })))
+    expect(views.map((props) => props.composerText)).toEqual(['one', 'two'])
+    expect(Object.keys(views[0]!).sort()).toEqual(Object.keys(views[1]!).sort())
+    view.record = null
   })
 })
 
