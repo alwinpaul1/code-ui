@@ -266,6 +266,25 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
     })
   })
 
+  it('keeps the retained rows on screen when the path appears while the read is in error', async () => {
+    await mount({ transcriptPath: null })
+    answer(0, rows(30))
+    act(() => subs[0]!.emit({ type: 'error', message: 'Transcript stream failed' }))
+    expect(ids()).toHaveLength(30)
+    await rerender({ transcriptPath: PATH })
+    expect(ids()).toHaveLength(30)
+    answer(subs.length - 1, rows(30))
+    expect(ids()).toHaveLength(30)
+  })
+
+  it('does not lend file P\'s retained rows to P2 while the read is in error', async () => {
+    await mount({ transcriptPath: PATH })
+    answer(0, rows(30))
+    act(() => subs[0]!.emit({ type: 'error', message: 'Transcript stream failed' }))
+    await rerender({ transcriptPath: OTHER_PATH })
+    expect(ids()).toEqual([])
+  })
+
   describe('degenerate transcripts', () => {
     it.each(['claude', 'codex'])('an empty %s transcript stays empty and ready when the path appears', async (agent) => {
       await mount({ agent, transcriptPath: null })

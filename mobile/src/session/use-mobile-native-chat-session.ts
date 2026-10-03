@@ -311,14 +311,14 @@ export function useMobileNativeChatSession(args: {
         // renders the new connection. A test double may not say.
         whole.frame(frame.type, applied, client.getLastConnectedAt?.())
         if (applied.windowReplaced) {
-          // Only a genuinely fresh window resets the grown read window — an
-          // overlapping reconnect replay keeps the paged-in history and limit.
-          // Never below what this subscribe asked for: a re-read that kept 200 rows must not let the
-          // next live frame or page bound the list back to 40.
+          // A fresh window sets the read window to what this subscribe asked for, never below 40: an
+          // overlapping reconnect replay keeps the paged-in history, and a re-read that kept 200 rows
+          // must not let the next live frame or page bound the list back to 40.
           limitRef.current = Math.max(INITIAL_LIMIT, requested)
           beforeOffsetRef.current = applied.beforeOffset ?? null
-          // Against the window this subscribe asked for: a ladder rung of 4 that came back with 4
-          // rows has more behind it, and a host that omits `hasMore` must not strand it there.
+          // A host that omits `hasMore` is judged against the window this subscribe asked for on its
+          // first snapshot (a ladder rung of 4 that came back with 4 rows has more behind it); later
+          // windows compare against INITIAL_LIMIT.
           setHasMore(applied.hasMore ?? applied.messages.length >= (firstSnapshot ? requested : INITIAL_LIMIT))
         }
         // Why: a re-subscribe of a conversation this hook already showed (chat →
@@ -387,11 +387,18 @@ export function useMobileNativeChatSession(args: {
 
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.
-  const visibleMessages = transcriptRetentionRef.current.visible({
-    identity: retentionKey,
-    messages,
-    settled: settledReady
-  })
+  const retention = transcriptRetentionRef.current
+  const visibleOwn = retention.visible({ identity: retentionKey, messages, settled: settledReady })
+  // The rows captured while the file was unknown were read by id: the file the path has only just
+  // named. Never after a move (pin.moved), which is a different file.
+  const visibleMessages =
+    visibleOwn.length === 0 && !settledReady && readPath !== null && pin.moved === null
+      ? retention.visible({
+          identity: encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId, null]),
+          messages,
+          settled: false
+        })
+      : visibleOwn
 
   return {
     // Withheld until the settled read belongs to this identity: the effect that
