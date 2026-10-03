@@ -40,6 +40,7 @@ vi.mock('expo-clipboard', () => ({
 
 import {
   baseArgs,
+  composerHoldingChips,
   makeClient,
   methodNotFound,
   ok,
@@ -78,9 +79,15 @@ describe('a photo sent from the chat to a terminal with no Claude input box', ()
 
   function setUp(screen: () => RpcResponse, overrides: Partial<HookArgs> = {}) {
     const attach = [methodNotFound('start'), ok('save', '/tmp/a.png')]
-    const client = makeClient((method) =>
-      method === 'terminal.read' ? screen() : method === 'terminal.send' ? sendResult(true) : attach.shift()!
-    )
+    let pasted = false
+    const client = makeClient((method, params) => {
+      if (method === 'terminal.send') {
+        pasted ||= String(params.text ?? '').startsWith('\x1b[200~')
+        return sendResult(true)
+      }
+      // Once the photo is pasted Claude's input holds its chip, which the send waits for.
+      return method === 'terminal.read' ? (pasted ? read(composerHoldingChips(1)) : screen()) : attach.shift()!
+    })
     const args = baseArgs({
       client: client as unknown as RpcClient,
       refuseUnderDialog: readSendUnderDialogRefusal,

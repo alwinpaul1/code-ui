@@ -29,7 +29,7 @@ vi.mock('./mobile-image-source-picker', () => ({
 import {
   FOLLOWING_TAB,
   baseArgs,
-  makeClient,
+  makeClientWithoutScreen as makeClient,
   methodNotFound,
   ok,
   SCOPE_B,

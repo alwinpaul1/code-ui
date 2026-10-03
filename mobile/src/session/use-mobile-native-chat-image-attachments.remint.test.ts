@@ -111,15 +111,25 @@ describe('a composer send when the tab is given a new terminal while it waits', 
   ) {
     const activeHandleRef = { current: options.start === undefined ? 'term-1' : options.start }
     const saves = options.saves ?? [ok('save', '/tmp/a.png')]
+    // A terminal that took a photo paste shows its chip in Claude's input, which a photo
+    // send waits for before it types the caption (mobile-native-chat-image-send-settle.ts).
+    const pasted = new Set<string>()
     const host = makeClient((method, params) => {
       if (method === 'terminal.read') {
         const screen = screens[String(params.terminal)]
         if (!screen || screen === 'unreadable') {
           throw new Error('screen unreadable')
         }
-        return read(screen)
+        return read(
+          pasted.has(String(params.terminal))
+            ? screen.map((row) => (row.trim() === '❯' ? '❯ [Image #1]' : row))
+            : screen
+        )
       }
       if (method === 'terminal.send') {
+        if (String(params.text ?? '').startsWith('\x1b[200~')) {
+          pasted.add(String(params.terminal))
+        }
         return sendResult(true)
       }
       if (method === 'clipboard.startImageUpload') {

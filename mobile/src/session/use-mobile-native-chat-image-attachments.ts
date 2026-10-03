@@ -11,10 +11,8 @@ import {
   NO_NATIVE_CHAT_IMAGE_ATTACHMENTS,
   withScopeAttachments
 } from './mobile-native-chat-image-scope-state'
-import {
-  MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS,
-  pasteMobileNativeChatImagePaths
-} from './mobile-native-chat-image-send'
+import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
+import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
 import {
   openMobileNativeChatSendBudget,
   type MobileNativeChatSendOutcome
@@ -390,20 +388,21 @@ export function useMobileNativeChatImageAttachments({
               // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
               clearMobileNativeChatInputStale(handle)
               clearMobileNativeChatInputResidue(handle)
-              // Let the TUI absorb the image paste before the text + Enter follow. The
-              // preview URIs ride along to baseSend so the sent bubble shows the photo
-              // immediately (empty text still submits a bare Enter through baseSend).
-              await sleep(MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS)
-              // The settle is deliberate pacing, not transport latency — credit it back
-              // so a shared budget doesn't charge the text body for the TUI's beat.
-              const textDeadline = deadline + MOBILE_NATIVE_CHAT_IMAGE_SETTLE_MS
+              // Let the TUI take every image before the text + Enter follow: Claude drops an
+              // Enter that lands while a pasted path is still being read, so its settle
+              // looks for the chips (mobile-native-chat-image-send-settle.ts). The preview
+              // URIs ride along to baseSend so the sent bubble shows the photo at once.
+              const settled = await settleAfterImagePaste({
+                client: pasteClient, terminal: handle, agent, expected: pendingImages.length, deadline, sleep
+              })
+              const textDeadline = settled.textDeadline
               // The paste above targeted `handle`; a tab switch during the settle would
               // route the text + Enter to a different terminal than the images. Abort —
               // the chips keep their scope and a retry's Ctrl+U clears the stale paste.
-              if (activeHandleRef.current !== handle) {
+              if (activeHandleRef.current !== handle || settled.refusal) {
                 restoreOptimistic()
                 markMobileNativeChatInputStale(handle)
-                return refuse(follow.tabChanged() ? 'Message not sent' : SEND_TERMINAL_RESTARTED)
+                return refuse(activeHandleRef.current === handle ? settled.refusal! : follow.tabChanged() ? 'Message not sent' : SEND_TERMINAL_RESTARTED)
               }
               const outcome = await baseSend(text, previewUris, textDeadline, undefined, follow)
               if (follow.reminted) {
