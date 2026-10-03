@@ -457,3 +457,4 @@ src/shared/zcode-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halv
 src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md
 src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
+src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
