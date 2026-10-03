@@ -1,12 +1,15 @@
+import { useWallAppUpdate } from '../app-update/use-wall-app-update'
 import { openExternalLink } from '../platform/external-link'
 import { useRouteHandoff } from '../navigation/route-handoff'
-import { Platform, Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { useThemedStyles, type Theme } from '../theme/theme-context'
 import type { CompatVerdict } from '../transport/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../transport/mobile-web-bundle-compat'
 
-const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
-const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
+// The desktop is stock Orca, so the desktop remedy points at Orca's own releases.
+const ORCA_DESKTOP_RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+// This app is an APK on its own repo and has no store listing, on any platform.
+const CODE_UI_RELEASES_URL = 'https://github.com/alwinpaul1/code-ui/releases'
 
 /** Every wall this screen renders: the protocol one and the bundle one. Both are terminal — there
  *  is no native workspace to fall back to, so the only way out is updating one of the two apps. */
@@ -49,18 +52,18 @@ function blockTitle(remedy: BlockRemedy): string {
   }
 }
 
-function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy, storeName: string): string {
+function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy): string {
   if (remedy === 'refresh-bundle') {
     return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
   }
   if (verdict.reason === 'mobile-too-old') {
-    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.`
   }
   if (verdict.reason === 'bundle-unavailable') {
     return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
   }
   if (remedy === 'update-mobile') {
-    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from ${storeName}, then try this host again.`
+    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.`
   }
   return DESKTOP_TOO_OLD_BODY
 }
@@ -71,21 +74,22 @@ export function ProtocolBlockScreen({ verdict }: Props) {
   const styles = useThemedStyles(blockScreenStyles)
   const router = useRouteHandoff()
   const remedy = blockRemedy(verdict)
-  // Why: Android APKs ship through GitHub Releases until a Play Store listing exists.
-  const mobileUpdateTarget =
-    Platform.OS === 'ios'
-      ? { label: 'Open App Store', url: IOS_APP_STORE_URL, storeName: 'the App Store' }
-      : { label: 'Open GitHub Releases', url: RELEASES_URL, storeName: 'GitHub Releases' }
+  const knownRelease = useWallAppUpdate()
+  // Why: Code UI ships as an APK on GitHub Releases and nowhere else, so every platform gets the
+  // same honest answer. The exact release when the update check has found one, else the list.
+  const mobileUpdateTarget = knownRelease
+    ? { label: `Get Code UI ${knownRelease.version}`, url: knownRelease.releaseUrl }
+    : { label: 'Open GitHub Releases', url: CODE_UI_RELEASES_URL }
   // No download to offer when the fix is a refetch: reconnecting is what this screen leaves you to do.
   const primaryAction =
     remedy === 'refresh-bundle'
       ? null
       : remedy === 'update-mobile'
-        ? { label: mobileUpdateTarget.label, url: mobileUpdateTarget.url }
-        : { label: 'Open GitHub Releases', url: RELEASES_URL }
+        ? mobileUpdateTarget
+        : { label: 'Open GitHub Releases', url: ORCA_DESKTOP_RELEASES_URL }
 
   const title = blockTitle(remedy)
-  const body = blockBody(verdict, remedy, mobileUpdateTarget.storeName)
+  const body = blockBody(verdict, remedy)
   const recoveryNote =
     remedy === 'refresh-bundle'
       ? 'If this message stays, remove this host and pair it again.'

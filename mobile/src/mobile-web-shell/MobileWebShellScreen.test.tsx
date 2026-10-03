@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const harness = await vi.hoisted(async () => await import('./mobile-web-shell-screen-test-harness'))
+// The wall asks the update checker for a known release; that checker needs native modules.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
+
 const dependencies = vi.hoisted(() => harness.createScreenDependencies())
 const SNAPSHOT = harness.SCREEN_SNAPSHOT
 const UNREADABLE_HOST_MESSAGE = "This paired desktop can't be read right now."
