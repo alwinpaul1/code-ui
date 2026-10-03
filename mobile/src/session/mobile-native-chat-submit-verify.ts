@@ -58,8 +58,11 @@ const dense = (text: string): string => text.replace(/[\s`]+/g, '').toLowerCase(
 /** The chip Claude Code 2.1.288 draws for a pasted image, in the input and in the
  *  sent prompt's row (`[Image #${n}]`, read from the binary). */
 const IMAGE_CHIP = /\[Image #\d+\]/g
-const hasImageChip = (text: string): boolean => /\[Image #\d+\]/.test(text)
-const withoutImageChips = (text: string): string => text.replace(IMAGE_CHIP, '')
+/** Whitespace is folded before a chip is matched: Claude's word wrap can break a chip at its
+ *  inner space (`[Image` over `#4]`) and the input's rows are joined with a newline. */
+const folded = (text: string): string => text.replace(/\s+/g, ' ')
+const hasImageChip = (text: string): boolean => /\[Image #\d+\]/.test(folded(text))
+const withoutImageChips = (text: string): string => folded(text).replace(IMAGE_CHIP, '')
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 

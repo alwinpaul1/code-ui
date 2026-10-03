@@ -31,7 +31,8 @@ export type RespondByMethod = (
 // (mobile-native-chat-send-readiness.ts), so the double carries it too.
 // Answers from the queue in turn, or by method when handed a function.
 export function makeClient(
-  responses: (RpcResponse | Promise<RpcResponse>)[] | RespondByMethod
+  responses: (RpcResponse | Promise<RpcResponse>)[] | RespondByMethod,
+  options: { screenUnsupported?: boolean } = {}
 ): Pick<RpcClient, 'sendRequest' | 'getState' | 'notifyForeground'> & {
   calls: { method: string; params: Record<string, unknown> }[]
 } {
@@ -42,9 +43,10 @@ export function makeClient(
     notifyForeground: vi.fn(),
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params: params as Record<string, unknown> })
-      // A photo send for Claude looks at the screen for its chips; these doubles have no
-      // screen, which is a host that cannot show one, and the send goes on as before.
-      if (method === 'terminal.read' && typeof responses !== 'function') {
+      // A photo send for Claude looks at the screen for its chips. A queued client answers
+      // that look from its queue like any request, unless the test says its host cannot show a
+      // screen (`screenUnsupported`): then the send goes on as it did before it looked.
+      if (method === 'terminal.read' && options.screenUnsupported === true) {
         return methodNotFound('screen')
       }
       if (typeof responses === 'function') {
@@ -58,6 +60,11 @@ export function makeClient(
     })
   }
 }
+
+/** `makeClient` for a suite whose desktop cannot show a screen: a photo send's look at it fails
+ *  and the send goes on as it did before it looked. */
+export const makeClientWithoutScreen = (responses: Parameters<typeof makeClient>[0]) =>
+  makeClient(responses, { screenUnsupported: true })
 
 export type HookArgs = Parameters<typeof useMobileNativeChatImageAttachments>[0]
 export type Hook = ReturnType<typeof useMobileNativeChatImageAttachments>

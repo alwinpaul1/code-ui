@@ -22,7 +22,11 @@ import type { RpcClient } from '../transport/rpc-client'
  * screen is read: Codex has no chip to look for and keeps the fixed beat it always had.
  * A screen that cannot be read at all keeps the fixed beat too (the submit check after
  * the Enter then says what it can). Chips that never all appear within the wait refuse
- * the send before the caption is typed.
+ * the send before the caption is typed, the draft restored. That fails CLOSED in two
+ * cases that are not a slow read: Claude draws no chip because it could not read the
+ * image and typed the path as text, and a screen read that fails AFTER the composer was
+ * seen (a missed look is waited through, and the wait then ends in the refusal). Both
+ * restore the draft and press no Enter.
  */
 export const IMAGE_CHIPS_POLL_MS = 250
 /** The longest the chips are waited for. The wait is the TUI's pace, not transport
@@ -31,7 +35,9 @@ export const IMAGE_CHIPS_WAIT_MS = 6_000
 export const IMAGE_CHIPS_MISSING =
   'The photos did not attach on the desktop, so nothing was sent. Your message is still here; send it again.'
 
-const chipsIn = (text: string): number => text.match(/\[Image #\d+\]/g)?.length ?? 0
+/** Whitespace is folded first: at phone width Claude's word wrap can break a chip at its inner
+ *  space (`[Image` over `#4]`), and the rows are joined with a newline. */
+const chipsIn = (text: string): number => text.replace(/\s+/g, ' ').match(/\[Image #\d+\]/g)?.length ?? 0
 
 export type ImageSendSettle = {
   /** Why the caption must not be sent, or null to go on. */
