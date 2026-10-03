@@ -80,20 +80,37 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   // fires a CronCreate prompt through this same hook with nothing in the
   // payload that says so (2.1.286), and the chat drew every tick as a user
   // bubble (2026-10-01). Just before it enqueues the prompt it writes a
-  // `"subtype":"scheduled_task_fire"` row whose `prompt` is the tick's first
-  // 200 characters, uncut-marked; a row like that among the last eight lines
-  // with this very prompt (escaped as both are) is the mark: the same words,
-  // or, when the row's words are 200 characters (escapes decoded, a multibyte
-  // character counted once; Claude Code cuts by UTF-16 units, so a cut prompt
-  // holding an emoji counts under 200 and gets no mark, the safe side), a
-  // prefix of them. A shorter row is the whole
-  // prompt, and a prefix rule there marked a typed "status report…" as a tick
-  // of a loop whose prompt was "status" (review of 8233ed8b). Compared with the
-  // copy cut at 2,000 bytes, which holds any 200 characters' escaping. Quoted
-  // in the `case`, so a `*` or `[` in the words is a character, not a pattern.
-  // A write that lands after this read leaves no mark, never a wrong one.
+  // `"subtype":"scheduled_task_fire"` row whose `prompt` is the tick's words
+  // FOLDED and cut: `mon` writes `V3(task.prompt, 200)` (2.1.286; `H4(...)` in
+  // 2.1.288, the same code renamed), which is the prompt with each run of
+  // whitespace (a line break, a tab, a double space) made ONE space, the ends
+  // trimmed, control and format characters dropped, then cut at 200 UTF-16
+  // units. A row like that among the last eight lines is the mark when it
+  // holds this very prompt as the hook holds it, folded the same way (`pn`
+  // below: `\n`, `\t`, `\r`, `\f` and `\u000X` whitespace escapes to a space,
+  // runs squeezed, ends trimmed; `\\` is set aside first, so a backslash
+  // before an `n` stays a backslash). Compared unfolded, as it was until
+  // 2026-10-03, a prompt with a line break inside its first 200 characters
+  // never matched, and a heredoc loop's tick drew as a user bubble (0.9.112).
+  // The row's words equal `pn`, or, when they are 200 characters (escapes
+  // decoded, a multibyte character counted once; Claude Code cuts by UTF-16
+  // units, so a cut prompt holding an emoji counts under 200 and gets no mark,
+  // the safe side), a prefix of it. A shorter row is the whole prompt, and a
+  // prefix rule there marked a typed "status report..." as a tick of a loop
+  // whose prompt was "status" (review of 8233ed8b). Both are the copy cut at
+  // 2,000 bytes, which holds any 200 characters' escaping. Quoted in the
+  // `case`, so a `*` or `[` in the words is a character, not a pattern.
+  // Where the fold's shape is unclear the prompt stays unmarked, never wrongly
+  // marked: a raw no-break space or another Unicode space that `\s` folds, a
+  // `\u00XX` control or format character Claude Code drops, and a prompt
+  // whose first 200 folded characters hold an escape the row spells another
+  // way. A write that lands after this read leaves no mark, never a wrong one.
+  // Known limit, unproven: the fire row is looked for in the last EIGHT lines
+  // only. A tick that fires mid-turn, with more rows written before this hook
+  // runs, goes unmarked and falls to the phone's rule (scheduled-prompt-ticks.ts).
+  'b=$(printf "\\001"); pn=$(printf %s "$pr" | LC_ALL=C sed -e "s/\\\\\\\\\\\\\\\\/$b/g" -e "s/\\\\\\\\[ntrf]/ /g" -e "s/\\\\\\\\u000[9aAbBcCdD]/ /g" -e "s/$b/\\\\\\\\\\\\\\\\/g" -e "s/[[:space:]][[:space:]]*/ /g" -e "s/^ //" -e "s/ \\$//")',
   'sp=""; sc=""',
-  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); ss=""; case "$sp" in "/loop"|"/loop (loop.md)") ss=1; sp="";; esac; n=$(printf %s "$sp" | LC_ALL=C sed -e "s/\\\\\\\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/u/g" -e "s/\\\\\\\\./e/g" | LC_ALL=C tr -d "\\\\200-\\\\277" | wc -c | tr -d " "); [ -n "$sp" ] && { [ "$pr" = "$sp" ] || { [ "${n:-0}" -ge 200 ] && case "$pr" in "$sp"*) true;; *) false;; esac; }; } && sc=" sc=1"',
+  '[ -n "$tp" ] && [ -r "$tp" ] && sp=$(tail -n 8 "$tp" 2>/dev/null | grep "\\"subtype\\":\\"scheduled_task_fire\\"" 2>/dev/null | tail -n 1 | LC_ALL=C sed -nE "s/.*\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\".*/\\\\1/p"); ss=""; case "$sp" in "/loop"|"/loop (loop.md)") ss=1; sp="";; esac; n=$(printf %s "$sp" | LC_ALL=C sed -e "s/\\\\\\\\u[0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]/u/g" -e "s/\\\\\\\\./e/g" | LC_ALL=C tr -d "\\\\200-\\\\277" | wc -c | tr -d " "); [ -n "$sp" ] && { [ "$pn" = "$sp" ] || { [ "${n:-0}" -ge 200 ] && case "$pn" in "$sp"*) true;; *) false;; esac; }; } && sc=" sc=1"',
   // A sentinel loop (`/loop` with no prompt, or a loop.md) schedules a
   // sentinel, `<<autonomous-loop>>` and its kin, and resolves it into other
   // words when the tick fires; this hook receives those RESOLVED words. The fire

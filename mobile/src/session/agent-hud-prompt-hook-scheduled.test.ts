@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
@@ -11,14 +11,15 @@ import { TICK_PROMPT, tickRows } from './fixtures/claude-scheduled-tick-2.1.286'
 // A loop's tick fires UserPromptSubmit like a typed prompt (Claude Code
 // 2.1.286's payload has no field saying it was scheduled), and the chat drew
 // it as a user bubble. What does say so is the transcript: Claude Code writes
-// a `scheduled_task_fire` row holding the tick's first 200 characters just
-// before it enqueues the prompt. The hook marks its copy `sc=1` when a row
-// like that among the transcript's last lines starts this very prompt.
+// a `scheduled_task_fire` row holding the tick's words, whitespace folded and
+// cut at 200 characters, just before it enqueues the prompt. The hook marks
+// its copy `sc=1` when a row like that among the transcript's last lines holds
+// this very prompt, folded the same way.
 // Verified against 2.1.286's row order in a real transcript (2026-10-01), not
 // a live run: a write that lands after the hook reads only means no mark, and
 // the chat then matches the words against the loop's CronCreate call.
 
-function runHook(prompt: string, transcriptLines: string[] | null): string {
+function runHook(prompt: string, transcriptLines: string[] | null, shell = '/bin/sh'): string {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-tick-'))
   const tty = join(dir, 'tty')
   const input: Record<string, unknown> = { session_id: 'abc', hook_event_name: 'UserPromptSubmit', prompt }
@@ -27,12 +28,13 @@ function runHook(prompt: string, transcriptLines: string[] | null): string {
     writeFileSync(transcriptPath, `${transcriptLines.join('\n')}\n`)
     input.transcript_path = transcriptPath
   }
-  execFileSync('/bin/sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
+  execFileSync(shell, ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
     input: JSON.stringify(input),
     encoding: 'utf8',
     env: { ...process.env, CUIHUD_TTY: tty }
   })
-  return decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n')
+  // An empty prompt writes no beacon at all (the hook exits before the tty write).
+  return existsSync(tty) ? decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n') : ''
 }
 
 const reply = JSON.stringify({ type: 'assistant', uuid: 'a-1', message: { role: 'assistant', content: [{ type: 'text', text: 'No change.' }] } })
@@ -80,6 +82,72 @@ describe('the prompt hook on a loop tick', () => {
     const accents = 'é'.repeat(120)
     expect(runHook(`${accents} and more`, tickRows(accents))).not.toContain('sc=')
     expect(runHook(accents, tickRows(accents))).toContain(' sc=1')
+  })
+
+  // The fire row's words are FOLDED: Claude Code 2.1.286 and 2.1.288 write `prompt` as
+  // `V3(task.prompt, 200)`, whitespace runs become one space and the ends are trimmed
+  // (fixtures/claude-scheduled-tick-2.1.286.ts, fireRowWords). The hook's own copy keeps its line
+  // breaks as `\\n`, so a prompt with one inside its first 200 characters was never marked, and the
+  // chat drew the tick as a user bubble (reported 2026-10-03, 0.9.112, a heredoc watcher loop).
+  describe('on a tick whose prompt has whitespace the fire row folds', () => {
+    const HEREDOC = [
+      "Round G watcher v2 (3 Oct). Use ssh -o ConnectTimeout=15 host bash -s <<'EOF' (login shell tcsh; never put 2>&1 inside a quoted ssh command;",
+      'cd /scratch/proj && squeue -u me 2>&1 | head -20',
+      'echo "done" & wait',
+      'EOF',
+      'Report "No change" when nothing moved. Path C:\\tmp\\a, snow \u2603 end.'
+    ].join('\n')
+
+    it('marks a loop tick whose prompt has a line break in its first 200 characters', () => {
+      expect(runHook(HEREDOC, [reply, tickRows(HEREDOC)[0]!])).toContain(' sc=1')
+      expect(runHook(HEREDOC, [reply, ...tickRows(HEREDOC)])).toContain(' sc=1')
+    })
+
+    it.each(['sh', 'bash', ...(existsSync('/bin/dash') ? ['/bin/dash'] : [])])('marks the heredoc tick under %s too', (shell) => {
+      expect(runHook(HEREDOC, [reply, tickRows(HEREDOC)[0]!], shell)).toContain(' sc=1')
+    })
+
+    it('marks a short two-line loop prompt, which the row holds whole on one line', () => {
+      const prompt = 'Check the build\nthen report in one line'
+      expect(tickRows(prompt)[0]).toContain('Check the build then report in one line')
+      expect(runHook(prompt, [reply, tickRows(prompt)[0]!])).toContain(' sc=1')
+    })
+
+    it('marks a tick whose prompt has a tab, a double space and a leading blank line', () => {
+      const prompt = '\n  Poll\tthe  host   and report\r\n'
+      expect(runHook(prompt, [reply, tickRows(prompt)[0]!])).toContain(' sc=1')
+    })
+
+    it('marks a cut tick with its line breaks past the first 200 characters', () => {
+      const prompt = `${'word '.repeat(60)}\nsecond line\n${'z'.repeat(50)}`
+      expect(runHook(prompt, [reply, tickRows(prompt)[0]!])).toContain(' sc=1')
+    })
+
+    it('does not mark a typed multi-line prompt that is not the loop’s', () => {
+      expect(runHook('Stop the watch now\nand tell me why', [reply, tickRows(HEREDOC)[0]!])).not.toContain('sc=')
+    })
+
+    it('does not mark a typed prompt that opens like a cut loop prompt and goes on differently', () => {
+      const typed = `${HEREDOC.slice(0, 120)}\nbut cancel everything instead`
+      expect(runHook(typed, [tickRows(HEREDOC)[0]!])).not.toContain('sc=')
+    })
+
+    it('does not mark a typed prompt that starts with a short two-line loop prompt', () => {
+      const loop = 'status\nreport'
+      expect(runHook(`${loop}\nplease, and also fix the bug`, [tickRows(loop)[0]!])).not.toContain('sc=')
+      expect(runHook('status', [tickRows(loop)[0]!])).not.toContain('sc=')
+    })
+
+    it('marks nothing for an empty prompt or one of only whitespace', () => {
+      for (const prompt of ['', ' ', '\n\n', '\t \r\n']) {
+        expect(runHook(prompt, [reply, tickRows('x')[0]!])).not.toContain('sc=')
+        expect(runHook(prompt, [reply, tickRows(prompt)[0]!])).not.toContain('sc=')
+      }
+    })
+
+    it('marks a one-line, one-character loop prompt', () => {
+      expect(runHook('x', [tickRows('x')[0]!])).toContain(' sc=1')
+    })
   })
 
   it('marks a short loop prompt’s own words', () => {
