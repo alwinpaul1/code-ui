@@ -54,9 +54,13 @@ export const CRON_CREATE_INPUT = { cron: '*/3 * * * *', recurring: true, prompt:
  * hook's comparison agreed with that invention (2026-10-03).
  */
 export function fireRowWords(prompt: string): string {
-  const control = /[\x00-\x08\x0E-\x1F\x7F-\x9F]/g
+  // `kQ` in the binary: [\x00-\x08\x0E-\x1F\x7F-\x9F], by char code here (a control-character regex is a lint error).
+  const isControl = (ch: string) => {
+    const code = ch.charCodeAt(0)
+    return code <= 0x08 || (code >= 0x0e && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)
+  }
   const dropped = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu
-  const folded = prompt.replace(control, '').replace(/\s+/g, ' ').trim().replace(dropped, '').trim()
+  const folded = Array.from(prompt).filter((ch) => !isControl(ch)).join('').replace(/\s+/g, ' ').trim().replace(dropped, '').trim()
   if (folded.length <= 200) {
     return folded
   }
