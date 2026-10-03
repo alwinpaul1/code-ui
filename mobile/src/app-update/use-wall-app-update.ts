@@ -1,22 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useEffect, useState } from 'react'
 
+import { normalizeCodeUiReleaseUrl } from './code-ui-release-url'
 import { evaluateUpdate, type UpdateCheckResult } from './check-update'
 import { LAST_AVAILABLE_KEY, useAppUpdateStore } from './app-update-store'
 import { getInstalledBuildNumber, getInstalledVersion } from './installed-version'
 
 /** The newest release of this app that the update check has found: its version and its own page. */
 export type WallAppUpdate = { version: string; releaseUrl: string }
-
-/** Where this app's APKs are published. A release link from anywhere else is never opened. */
-const CODE_UI_RELEASE_PAGE_PREFIX = 'https://github.com/alwinpaul1/code-ui/releases'
-
-function isCodeUiReleasePage(url: unknown): url is string {
-  return (
-    typeof url === 'string' &&
-    (url === CODE_UI_RELEASE_PAGE_PREFIX || url.startsWith(`${CODE_UI_RELEASE_PAGE_PREFIX}/`))
-  )
-}
 
 async function readRememberedRelease(): Promise<WallAppUpdate | null> {
   const raw = await AsyncStorage.getItem(LAST_AVAILABLE_KEY).catch(() => null)
@@ -29,7 +20,9 @@ async function readRememberedRelease(): Promise<WallAppUpdate | null> {
   } catch {
     return null
   }
-  if (stored.status !== 'available' || !isCodeUiReleasePage(stored.releaseUrl)) {
+  const releaseUrl =
+    stored.status === 'available' ? normalizeCodeUiReleaseUrl(stored.releaseUrl) : null
+  if (stored.status !== 'available' || releaseUrl === null) {
     return null
   }
   // A release the installed build has caught up with is no way past a wall.
@@ -47,7 +40,7 @@ async function readRememberedRelease(): Promise<WallAppUpdate | null> {
         }
       ]
     }).status === 'available'
-  return stillNewer ? { version: stored.latestVersion, releaseUrl: stored.releaseUrl } : null
+  return stillNewer ? { version: stored.latestVersion, releaseUrl } : null
 }
 
 /**
@@ -61,7 +54,8 @@ export function useWallAppUpdate(): WallAppUpdate | null {
   const version = useAppUpdateStore((state) => state.latestVersion)
   const releaseUrl = useAppUpdateStore((state) => state.releaseUrl)
   const [remembered, setRemembered] = useState<WallAppUpdate | null>(null)
-  const inStore = version !== null && isCodeUiReleasePage(releaseUrl)
+  const storeReleaseUrl = normalizeCodeUiReleaseUrl(releaseUrl)
+  const inStore = version !== null && storeReleaseUrl !== null
   useEffect(() => {
     if (inStore) {
       return
@@ -76,5 +70,5 @@ export function useWallAppUpdate(): WallAppUpdate | null {
       cancelled = true
     }
   }, [inStore])
-  return inStore ? { version, releaseUrl } : remembered
+  return inStore ? { version, releaseUrl: storeReleaseUrl } : remembered
 }

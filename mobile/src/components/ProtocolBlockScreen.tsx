@@ -22,7 +22,7 @@ type Props = {
 }
 
 const DESKTOP_TOO_OLD_BODY =
-  'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+  'This paired desktop app is too old for your current Code UI app. Update Orca on your computer, then try this host again.'
 
 /** What clears the wall. `refresh-bundle` is the one that no store can: the cached workspace is
  *  older than this host's client floor, so a download fixes it and an app update does not. */
@@ -44,7 +44,7 @@ function blockRemedy(verdict: BlockedVerdict): BlockRemedy {
 function blockTitle(remedy: BlockRemedy): string {
   switch (remedy) {
     case 'update-mobile':
-      return 'Update Orca Mobile'
+      return 'Update Code UI'
     case 'update-desktop':
       return 'Update Orca on your computer'
     case 'refresh-bundle':
@@ -57,13 +57,13 @@ function blockBody(verdict: BlockedVerdict, remedy: BlockRemedy): string {
     return 'The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.'
   }
   if (verdict.reason === 'mobile-too-old') {
-    return `This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.`
+    return `This desktop needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again.`
   }
   if (verdict.reason === 'bundle-unavailable') {
     return 'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
   }
   if (remedy === 'update-mobile') {
-    return `This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.`
+    return `This desktop's mobile workspace needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again.`
   }
   return DESKTOP_TOO_OLD_BODY
 }

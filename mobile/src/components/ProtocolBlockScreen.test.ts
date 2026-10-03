@@ -117,9 +117,9 @@ describe('ProtocolBlockScreen', () => {
       desktopVersion: 5,
       requiredMobileVersion: 99
     })
-    expect(mobile).toContain('Update Orca Mobile')
+    expect(mobile).toContain('Update Code UI')
     expect(mobile).toContain(
-      'This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.'
+      'This desktop needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again.'
     )
     expect(mobile).toContain('Open GitHub Releases')
     expect(mobile).not.toContain('App Store')
@@ -133,7 +133,7 @@ describe('ProtocolBlockScreen', () => {
     })
     expect(desktop).toContain('Update Orca on your computer')
     expect(desktop).toContain(
-      'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+      'This paired desktop app is too old for your current Code UI app. Update Orca on your computer, then try this host again.'
     )
     expect(desktop).toContain('Open GitHub Releases')
   })
@@ -215,6 +215,58 @@ describe('ProtocolBlockScreen', () => {
     expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
 
+  it("never opens a release link that only starts with this app's releases path", () => {
+    // `..` climbs out of the releases path; the browser resolves it to Orca's repo.
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: `${CODE_UI_RELEASES_URL}/../../../stablyai/orca/releases`
+    })
+    const output = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(output).not.toContain('Get Code UI')
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
+  })
+
+  it('opens the collapsed form of a release link that has dot segments', () => {
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: `${CODE_UI_RELEASES_URL}/./tag/mobile-android-v0.9.200`
+    })
+    render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(primaryActionUrl()).toBe(`${CODE_UI_RELEASES_URL}/tag/mobile-android-v0.9.200`)
+  })
+
+  it('names the phone app Code UI and the desktop Orca, never the phone app Orca Mobile', () => {
+    const phone = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(phone).not.toContain('Orca Mobile')
+    expect(phone).toContain('Update Code UI')
+    act(() => renderer?.unmount())
+    const desktop = render({
+      kind: 'blocked',
+      reason: 'desktop-too-old',
+      desktopVersion: 0,
+      requiredDesktopVersion: 2
+    })
+    expect(desktop).not.toContain('Orca Mobile')
+    expect(desktop).toContain('Update Orca on your computer')
+  })
+
   it("never opens a release link that is not on this app's repo", () => {
     useAppUpdateStore.setState({
       status: 'available',
@@ -246,9 +298,9 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Code UI')
     expect(output).toContain(
-      "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again."
+      "This desktop's mobile workspace needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again."
     )
     expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
@@ -287,7 +339,7 @@ describe('ProtocolBlockScreen', () => {
       requiredHostProtocolVersion: 2
     })
     expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain('This paired desktop app is too old for your current Orca Mobile app')
+    expect(output).toContain('This paired desktop app is too old for your current Code UI app')
     expect(primaryActionUrl()).toBe(ORCA_DESKTOP_RELEASES_URL)
   })
 
@@ -298,7 +350,7 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
+    expect(output).toContain('Update Code UI from GitHub Releases')
     expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
 
