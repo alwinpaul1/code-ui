@@ -55,6 +55,12 @@ const TICK_MS = 150
 
 const dense = (text: string): string => text.replace(/[\s`]+/g, '').toLowerCase()
 
+/** The chip Claude Code 2.1.288 draws for a pasted image, in the input and in the
+ *  sent prompt's row (`[Image #${n}]`, read from the binary). */
+const IMAGE_CHIP = /\[Image #\d+\]/g
+const hasImageChip = (text: string): boolean => /\[Image #\d+\]/.test(text)
+const withoutImageChips = (text: string): string => text.replace(IMAGE_CHIP, '')
+
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 function beaconHasWords(
@@ -100,6 +106,10 @@ export async function verifyClaudeSubmit(args: {
   /** Copies already in the beacon before this send wrote anything: they are old
    *  prompts, and an identical older one proves nothing about this send. */
   seenNonces: ReadonlySet<string>
+  /** The send pasted photos ahead of its words: Claude draws each as an `[Image #N]`
+   *  chip in the input and in the sent prompt's row. The chips are set aside when
+   *  the words are compared, and a photo-only send is told by the chips alone. */
+  images?: boolean
   /** The `! cmd` rows the screen held BEFORE a shell-command send wrote anything. The
    *  scrollback keeps every command ever run, so a repeat of one proves nothing: it counts
    *  as run only when the screen now holds more rows of it than it did then. `null`: no
@@ -124,9 +134,16 @@ export async function verifyClaudeSubmit(args: {
   const shell = shellCommandOfSend(args.text, 'claude')
   const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
   const commandWords = shell === null ? '' : dense(shell).slice(0, WORDS_PREFIX_CHARS)
+  const photos = args.images === true
+  // `typed` is the input or a drawn prompt row. A photo send's words come after its chips,
+  // so they are compared with the chips taken out; with no caption the chips are all there is.
   const heard = (typed: string): boolean => {
-    const wanted = dense(typed)
-    return (words !== '' && wanted.startsWith(words)) || (commandWords !== '' && wanted.startsWith(commandWords))
+    const wanted = dense(photos ? withoutImageChips(typed) : typed)
+    return (
+      (words !== '' && wanted.startsWith(words)) ||
+      (commandWords !== '' && wanted.startsWith(commandWords)) ||
+      (photos && words === '' && hasImageChip(typed))
+    )
   }
   let looked = false
   let failedLooks = 0
@@ -178,7 +195,11 @@ export async function verifyClaudeSubmit(args: {
     // message.
     if (
       sawWords ||
-      claudeSentPromptRows(screen.lines).some((row) => words !== '' && dense(row).startsWith(words)) ||
+      claudeSentPromptRows(screen.lines).some((row) =>
+        photos
+          ? words !== '' && heard(row)
+          : words !== '' && dense(row).startsWith(words)
+      ) ||
       (shell !== null &&
         args.priorBashRows !== null &&
         claudeSentBashRows(screen.lines).filter(heard).length >

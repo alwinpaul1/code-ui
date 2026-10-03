@@ -97,7 +97,9 @@ export async function writeChatSend(args: {
   client: RpcClient
   terminal: string
   text: string
-  /** The send carries pasted images: no clear, and no check of the input. */
+  /** The send carries pasted images: no clear (the paste ahead of it did that), but the
+   *  submit is checked like a text send's, with the `[Image #N]` chips set aside
+   *  (verifyClaudeSubmit `images`). Codex has no such check, for photos or text. */
   hasImages: boolean
   /** A composer send, as against an answer to a question or a command pick. */
   syncComposer: boolean
@@ -169,7 +171,6 @@ export async function writeChatSend(args: {
     outcome !== 'accepted' ||
     agent !== 'claude' ||
     !args.syncComposer ||
-    args.hasImages ||
     args.classification !== 'chat'
   ) {
     return { kind: 'written', outcome }
@@ -184,6 +185,7 @@ export async function writeChatSend(args: {
     client,
     terminal,
     text,
+    images: args.hasImages,
     receipts: args.receipts,
     seenNonces,
     priorBashRows,
