@@ -9,7 +9,13 @@ import { RpcClientStreamRegistry } from './rpc-client-stream-registry'
 // An older host (checked in v1.4.216/217: `TerminalUnsubscribe` is a plain `z.object`, parsed with
 // `safeParse`) strips the field and falls back to the slot, which is today's behaviour.
 
-type Frame = { id: string; method: string; params?: Record<string, unknown> }
+type Frame = { id: string; method: string; params?: unknown }
+
+function requestIdOf(params: unknown): unknown {
+  return typeof params === 'object' && params !== null && 'requestId' in params
+    ? params.requestId
+    : undefined
+}
 
 const TERMINAL = { terminal: 'term-1', client: { id: 'phone-1' } }
 const SLOT = 'term-1:phone-1'
@@ -23,7 +29,7 @@ function fakeHost() {
       if (frame.method === 'terminal.subscribe') {
         holder.set(SLOT, frame.id)
       } else if (frame.method === 'terminal.unsubscribe') {
-        const requestId = frame.params?.requestId
+        const requestId = requestIdOf(frame.params)
         if (requestId === undefined || holder.get(SLOT) === requestId) {
           holder.delete(SLOT)
         }
