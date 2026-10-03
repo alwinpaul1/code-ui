@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { HostProtocolGate, useHostProtocolGates } from './HostProtocolGate'
 
+// The wall asks the update checker for a known release; that checker needs native modules.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
+
 const nativeTestState = vi.hoisted(() => ({
   openUrl: vi.fn(),
   platform: { OS: 'ios' as 'ios' | 'android' }
@@ -101,8 +104,9 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Open App Store')
+    expect(output).toContain('Update Code UI')
+    expect(output).toContain('Open GitHub Releases')
+    expect(output).not.toContain('App Store')
     expect(output).not.toContain('HostContent')
   })
 
@@ -115,14 +119,15 @@ describe('HostProtocolGate', () => {
     }
     renderer = await renderGate()
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
+    expect(output).toContain('Update Code UI')
+    expect(output).toContain('Update Code UI from GitHub Releases')
     expect(output).toContain('Open GitHub Releases')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
     act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
+    // This app's own releases, never Orca's: an Orca release holds no Code UI APK.
     expect(nativeTestState.openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca/releases'
+      'https://github.com/alwinpaul1/code-ui/releases'
     )
   })
 
@@ -218,7 +223,7 @@ describe('HostProtocolGate', () => {
     })
 
     const output = renderedText(renderer)
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Code UI')
     expect(output).not.toContain('HostContent')
   })
 

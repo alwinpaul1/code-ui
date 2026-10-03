@@ -7,7 +7,6 @@ import {
   replaceList
 } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
 import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 import {
@@ -18,6 +17,7 @@ import {
   applyMobileNativeChatStreamFrame,
   readNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
+import { newNativeChatFeedToken } from './mobile-native-chat-feed-token'
 import { createWholeSessionTracker } from './mobile-native-chat-whole-session'
 
 export type MobileNativeChatStatus =
@@ -228,7 +228,7 @@ export function useMobileNativeChatSession(args: {
         agent,
         sessionId,
         limit: limitRef.current,
-        subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
+        subscriptionId: newNativeChatFeedToken(agent, sessionId),
         capabilities: { transcriptPending: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },

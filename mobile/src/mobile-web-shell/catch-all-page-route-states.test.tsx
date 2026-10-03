@@ -20,6 +20,9 @@ type Dependencies = {
   storage: Map<string, string>
 }
 
+// The wall asks the update checker for a known release; that checker needs native modules.
+vi.mock('../app-update/use-wall-app-update', () => ({ useWallAppUpdate: () => null }))
+
 const SNAPSHOT = vi.hoisted(() => ({
   host: { id: 'host-1', name: 'Host One', endpoint: 'ws://host-1', lastConnected: 3 }
 }))

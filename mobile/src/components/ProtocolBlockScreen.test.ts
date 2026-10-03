@@ -5,12 +5,27 @@ import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemePreference } from '../theme/tokens'
 import type { BlockedVerdict } from './ProtocolBlockScreen'
 import { ProtocolBlockScreen } from './ProtocolBlockScreen'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { LAST_AVAILABLE_KEY, useAppUpdateStore } from '../app-update/app-update-store'
 
 const nativeTestState = vi.hoisted(() => {
   // Declared wide so a test can switch stores; an assertion here would only widen the same literal.
   const platform: { OS: 'ios' | 'android' } = { OS: 'ios' }
   return { openUrl: vi.fn(), platform }
 })
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: {
+    getItem: vi.fn(() => Promise.resolve(null)),
+    setItem: vi.fn(() => Promise.resolve()),
+    removeItem: vi.fn(() => Promise.resolve())
+  }
+}))
+
+vi.mock('../app-update/installed-version', () => ({
+  getInstalledVersion: vi.fn(() => '0.9.100'),
+  getInstalledBuildNumber: vi.fn(() => '100')
+}))
 
 vi.mock('react-native', () => ({
   Linking: { openURL: nativeTestState.openUrl },
@@ -29,7 +44,12 @@ vi.mock('expo-router', () => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn(), dismissTo: vi.fn() })
 }))
 
-const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+// The desktop is stock Orca, so the desktop remedy still points at Orca's own releases.
+const ORCA_DESKTOP_RELEASES_URL = 'https://github.com/stablyai/orca/releases'
+// This app ships as an APK on its own repo; Orca's mobile releases and App Store listing are not it.
+const CODE_UI_RELEASES_URL = 'https://github.com/alwinpaul1/code-ui/releases'
+const KNOWN_RELEASE_URL =
+  'https://github.com/alwinpaul1/code-ui/releases/tag/mobile-android-v0.9.200'
 
 let renderer: ReactTestRenderer | null = null
 
@@ -72,7 +92,16 @@ function primaryActionUrl(): unknown {
 describe('ProtocolBlockScreen', () => {
   beforeEach(() => {
     nativeTestState.openUrl.mockClear()
-    nativeTestState.platform.OS = 'ios'
+    nativeTestState.platform.OS = 'android'
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    useAppUpdateStore.setState({
+      status: 'idle',
+      latestVersion: null,
+      latestBuildNumber: null,
+      releaseNotes: null,
+      updateUrl: null,
+      releaseUrl: null
+    })
   })
 
   afterEach(() => {
@@ -88,11 +117,12 @@ describe('ProtocolBlockScreen', () => {
       desktopVersion: 5,
       requiredMobileVersion: 99
     })
-    expect(mobile).toContain('Update Orca Mobile')
+    expect(mobile).toContain('Update Code UI')
     expect(mobile).toContain(
-      'This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.'
+      'This desktop needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again.'
     )
-    expect(mobile).toContain('Open App Store')
+    expect(mobile).toContain('Open GitHub Releases')
+    expect(mobile).not.toContain('App Store')
     act(() => renderer?.unmount())
 
     const desktop = render({
@@ -103,9 +133,154 @@ describe('ProtocolBlockScreen', () => {
     })
     expect(desktop).toContain('Update Orca on your computer')
     expect(desktop).toContain(
-      'This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.'
+      'This paired desktop app is too old for your current Code UI app. Update Orca on your computer, then try this host again.'
     )
     expect(desktop).toContain('Open GitHub Releases')
+  })
+
+  it("sends a too-old phone to this app's releases, never to Orca's releases or Orca's App Store listing", () => {
+    for (const os of ['android', 'ios'] as const) {
+      nativeTestState.platform.OS = os
+      nativeTestState.openUrl.mockClear()
+      const output = render({
+        kind: 'blocked',
+        reason: 'mobile-too-old',
+        desktopVersion: 5,
+        requiredMobileVersion: 99
+      })
+      expect(output).not.toContain('App Store')
+      expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('names the exact release and opens its page when the update check already found one', () => {
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: KNOWN_RELEASE_URL
+    })
+    const output = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(output).toContain('Get Code UI 0.9.200')
+    expect(primaryActionUrl()).toBe(KNOWN_RELEASE_URL)
+  })
+
+  it('still opens the exact release after the user chose Later on the home card', async () => {
+    // "Later" clears the store's copy of the release; the way past a wall is not a nudge to decline.
+    const found = {
+      status: 'available',
+      latestVersion: '0.9.200',
+      updateUrl: 'https://github.com/alwinpaul1/code-ui/releases/download/x/code-ui.apk',
+      releaseUrl: KNOWN_RELEASE_URL
+    }
+    vi.mocked(AsyncStorage.getItem).mockImplementation((key) =>
+      Promise.resolve(key === LAST_AVAILABLE_KEY ? JSON.stringify(found) : null)
+    )
+    await act(async () => {
+      renderer = create(
+        createElement(ProtocolBlockScreen, {
+          verdict: {
+            kind: 'blocked',
+            reason: 'mobile-too-old',
+            desktopVersion: 5,
+            requiredMobileVersion: 99
+          }
+        })
+      )
+    })
+    expect(JSON.stringify(renderer?.toJSON())).toContain('Get Code UI 0.9.200')
+    expect(primaryActionUrl()).toBe(KNOWN_RELEASE_URL)
+  })
+
+  it('ignores a remembered release the installed build has already caught up with', async () => {
+    const stale = { status: 'available', latestVersion: '0.9.100', releaseUrl: KNOWN_RELEASE_URL }
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(stale))
+    await act(async () => {
+      renderer = create(
+        createElement(ProtocolBlockScreen, {
+          verdict: {
+            kind: 'blocked',
+            reason: 'mobile-too-old',
+            desktopVersion: 5,
+            requiredMobileVersion: 99
+          }
+        })
+      )
+    })
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
+  })
+
+  it("never opens a release link that only starts with this app's releases path", () => {
+    // `..` climbs out of the releases path; the browser resolves it to Orca's repo.
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: `${CODE_UI_RELEASES_URL}/../../../stablyai/orca/releases`
+    })
+    const output = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(output).not.toContain('Get Code UI')
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
+  })
+
+  it('opens the collapsed form of a release link that has dot segments', () => {
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: `${CODE_UI_RELEASES_URL}/./tag/mobile-android-v0.9.200`
+    })
+    render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(primaryActionUrl()).toBe(`${CODE_UI_RELEASES_URL}/tag/mobile-android-v0.9.200`)
+  })
+
+  it('names the phone app Code UI and the desktop Orca, never the phone app Orca Mobile', () => {
+    const phone = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(phone).not.toContain('Orca Mobile')
+    expect(phone).toContain('Update Code UI')
+    act(() => renderer?.unmount())
+    const desktop = render({
+      kind: 'blocked',
+      reason: 'desktop-too-old',
+      desktopVersion: 0,
+      requiredDesktopVersion: 2
+    })
+    expect(desktop).not.toContain('Orca Mobile')
+    expect(desktop).toContain('Update Orca on your computer')
+  })
+
+  it("never opens a release link that is not on this app's repo", () => {
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: 'https://github.com/stablyai/orca/releases/tag/v1.4.219'
+    })
+    const output = render({
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    })
+    expect(output).not.toContain('Get Code UI')
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
 
   it('sends a host without a bundle to the desktop update', () => {
@@ -114,7 +289,7 @@ describe('ProtocolBlockScreen', () => {
     expect(output).toContain(
       'This paired desktop app does not include the mobile workspace yet. Update Orca on your computer, then try this host again.'
     )
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+    expect(primaryActionUrl()).toBe(ORCA_DESKTOP_RELEASES_URL)
   })
 
   it('sends an unknown manifest schema to the mobile update', () => {
@@ -123,11 +298,11 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile')
+    expect(output).toContain('Update Code UI')
     expect(output).toContain(
-      "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again."
+      "This desktop's mobile workspace needs a newer Code UI app. Update Code UI from GitHub Releases, then try this host again."
     )
-    expect(primaryActionUrl()).toBe('itms-apps://apps.apple.com/app/orca-ide/id6766130217')
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
 
   it('offers no download for a cached bundle the host outgrew, because none would clear it', () => {
@@ -164,8 +339,8 @@ describe('ProtocolBlockScreen', () => {
       requiredHostProtocolVersion: 2
     })
     expect(output).toContain('Update Orca on your computer')
-    expect(output).toContain('This paired desktop app is too old for your current Orca Mobile app')
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+    expect(output).toContain('This paired desktop app is too old for your current Code UI app')
+    expect(primaryActionUrl()).toBe(ORCA_DESKTOP_RELEASES_URL)
   })
 
   it('routes an Android bundle wall to GitHub Releases, not a store that has no listing', () => {
@@ -175,8 +350,8 @@ describe('ProtocolBlockScreen', () => {
       reason: 'bundle-shell-too-old',
       schemaVersion: 2
     })
-    expect(output).toContain('Update Orca Mobile from GitHub Releases')
-    expect(primaryActionUrl()).toBe(RELEASES_URL)
+    expect(output).toContain('Update Code UI from GitHub Releases')
+    expect(primaryActionUrl()).toBe(CODE_UI_RELEASES_URL)
   })
 
   it('keeps the update walls on two buttons and the full recovery note', () => {
@@ -190,6 +365,9 @@ describe('ProtocolBlockScreen', () => {
 // Code UI (2026-09-19): the wall painted from the legacy static palette until this test, which
 // passed every check while rendering dark on a light phone. Both schemes are required states.
 describe('ProtocolBlockScreen follows the appearance setting', () => {
+  beforeEach(() => {
+    nativeTestState.platform.OS = 'android'
+  })
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
@@ -207,6 +385,29 @@ describe('ProtocolBlockScreen follows the appearance setting', () => {
     expect(light).toContain(lightColors.bg)
     expect(light).toContain(lightColors.text)
     expect(light).not.toContain(darkColors.bg)
+  })
+
+  it('paints the named-release button in both themes', () => {
+    useAppUpdateStore.setState({
+      status: 'available',
+      latestVersion: '0.9.200',
+      releaseUrl: KNOWN_RELEASE_URL
+    })
+    const phoneVerdict: BlockedVerdict = {
+      kind: 'blocked',
+      reason: 'mobile-too-old',
+      desktopVersion: 5,
+      requiredMobileVersion: 99
+    }
+    const light = renderThemed('light', phoneVerdict)
+    expect(light).toContain('Get Code UI 0.9.200')
+    expect(light).toContain(lightColors.text)
+    expect(light).not.toContain(darkColors.bg)
+    act(() => renderer?.unmount())
+    const dark = renderThemed('dark', phoneVerdict)
+    expect(dark).toContain('Get Code UI 0.9.200')
+    expect(dark).toContain(darkColors.text)
+    expect(dark).not.toContain(lightColors.bg)
   })
 
   it('paints the dark canvas and text in dark', () => {

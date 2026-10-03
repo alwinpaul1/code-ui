@@ -172,6 +172,10 @@
     {
       "file": "src/terminal/terminal-text-field-submit-binding.web.ts",
       "reason": "react-native-web's keydown handler withholds onSubmitEditing whenever the Enter keydown reports a composition — nativeEvent.isComposing, or the Android keyCode 229 that stands for it — which is a soft keyboard's normal state mid-word, so Enter on the page neither sent the line nor cleared the field while native Android's editor action fired as it always does. Both terminal fields reach their send through onSubmitEditing alone and both are bound here: the live input's carriage return, and the buffered command field's draft. The native file binds nothing, because that editor action needs no help; this one listens for beforeinput and acts on insertLineBreak and insertParagraph, the browser's own end-of-line signals. react-native-web calls preventDefault on every keydown it does submit on, so those events exist only in the cases it dropped and never produce a second carriage return; an IME still choosing a candidate reports insertCompositionText and is left alone."
+    },
+    {
+      "file": "src/app-update/use-wall-app-update.web.ts",
+      "reason": "The compat wall runs in the tasks page closure, which has no update checker and no AsyncStorage. The native file reads the release the checker already found, to name and open it; this one answers none, so the wall falls back to this app's releases list."
     }
   ]
 }

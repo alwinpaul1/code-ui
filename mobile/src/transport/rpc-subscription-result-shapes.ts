@@ -9,6 +9,10 @@ export function isTerminalSubscribedResult(
   )
 }
 
+export function isStreamEndResult(value: unknown): value is { type: 'end' } {
+  return !!value && typeof value === 'object' && (value as { type?: unknown }).type === 'end'
+}
+
 export function isStreamingSubscriptionReadyResult(
   value: unknown
 ): value is { type: 'ready'; subscriptionId: string } {
