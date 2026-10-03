@@ -785,10 +785,19 @@ tick as a user bubble, cut at 200, every three minutes; the Claude app draws
 none (reported 2026-10-01).
 
 Just before Claude Code enqueues the tick it writes a `system` row,
-`"subtype":"scheduled_task_fire"`, whose `prompt` is the tick's first 200
-characters, cut with no mark (session 76ba8f2f, rows 36098 and 36099). The
-prompt hook looks at the transcript's last eight lines for such a row whose
-`prompt`, escaped as the hook's own copy is, is this very prompt, or, when it
+`"subtype":"scheduled_task_fire"`, whose `prompt` is the tick's words
+FOLDED and cut at 200, with no mark (session 76ba8f2f, rows 36098 and 36099).
+The fold is read from the 2.1.286 and 2.1.288 binaries (`V3`/`H4`): each run of
+whitespace (line break, tab, double space) becomes one space, the ends are
+trimmed, control and format characters are dropped. The one real record had a
+first line over 200 characters, so a line break inside the row was never seen;
+until 2026-10-03 the hook compared its unfolded copy, and a prompt with a line
+break in its first 200 characters (a heredoc loop) was never marked and drew as
+a bubble. The prompt hook folds its own copy the same way (`pn`, whitespace
+escapes to a space, runs squeezed, ends trimmed) and looks at the transcript's
+last eight lines (a known limit: a mid-turn tick with more rows written before
+the hook runs goes unmarked) for such a row whose `prompt`, escaped as the
+hook's own copy is, is this very prompt, or, when it
 is 200 characters long (escapes decoded, a multibyte character counted once),
 starts it, and sends `sc=1` when it finds one. A shorter row holds the whole
 prompt, so only the same words are its tick: a prefix rule there marked a typed

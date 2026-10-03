@@ -42,6 +42,33 @@ export const TICK_PROMPT = [...TICK_LINES, '', ...Array.from({ length: 13 }, (_,
 /** The tool call that set the loop up, as the phone's transcript read draws it. */
 export const CRON_CREATE_INPUT = { cron: '*/3 * * * *', recurring: true, prompt: TICK_PROMPT }
 
+/**
+ * The words the fire row holds for a prompt: `mon` writes `prompt: V3(task.prompt, 200)` in 2.1.286
+ * (`H4(task.prompt, 200)` in 2.1.288, the same code under other minified names), and that is
+ * `cut200(strip(trim(replace(/\s+/g, ' ', ansiStripped))))`: a line break, a tab or a run of spaces
+ * becomes ONE space, the ends are trimmed, control, format, surrogate and default-ignorable
+ * characters are dropped, and the cut is at 200 UTF-16 units (never leaving half a pair).
+ * MODELLED FROM THE BINARY (strings of both builds, 2026-10-03), not read from a transcript: the one
+ * real record had a first line longer than 200 characters, so no line break fell inside the row.
+ * Fixtures used to cut the raw text with `slice(0, 200)`, which Claude Code never writes, and the
+ * hook's comparison agreed with that invention (2026-10-03).
+ */
+export function fireRowWords(prompt: string): string {
+  // `kQ` in the binary: [\x00-\x08\x0E-\x1F\x7F-\x9F], by char code here (a control-character regex is a lint error).
+  const isControl = (ch: string) => {
+    const code = ch.charCodeAt(0)
+    return code <= 0x08 || (code >= 0x0e && code <= 0x1f) || (code >= 0x7f && code <= 0x9f)
+  }
+  const dropped = /[\p{Cc}\p{Cf}\p{Cs}\p{Default_Ignorable_Code_Point}\u2028\u2029]/gu
+  const folded = Array.from(prompt).filter((ch) => !isControl(ch)).join('').replace(/\s+/g, ' ').trim().replace(dropped, '').trim()
+  if (folded.length <= 200) {
+    return folded
+  }
+  const cut = folded.slice(0, 200)
+  const last = cut.charCodeAt(199)
+  return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut
+}
+
 /** The two rows a tick writes (`firePrompt`: what the fire row holds when it is
  *  not the tick's words: a sentinel loop's fire row holds `/loop` or
  *  `/loop (loop.md)`, since `mon` writes `U(task)`, which swaps a sentinel for
@@ -61,7 +88,7 @@ export function tickRows(prompt: string = TICK_PROMPT, firePrompt: string = prom
     uuid: '56252db0-3009-42e7-853d-62f274c7e204',
     taskId: '8b72dbfd',
     cron: '*/3 * * * *',
-    prompt: firePrompt.slice(0, 200),
+    prompt: fireRowWords(firePrompt),
     userType: 'external'
   }
   const user = {
