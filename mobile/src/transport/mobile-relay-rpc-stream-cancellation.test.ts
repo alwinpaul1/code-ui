@@ -101,7 +101,7 @@ describe('mobile relay subscription cancellation', () => {
       'terminal.subscribe',
       { terminal: 'term', client: { id: 'phone' } },
       'terminal.unsubscribe',
-      { subscriptionId: 'term:phone', client: { id: 'phone' } }
+      { subscriptionId: 'term:phone', client: { id: 'phone' }, requestId: 'request-1' }
     ],
     [
       'session.tabs.subscribe',

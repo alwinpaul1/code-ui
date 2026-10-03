@@ -3,8 +3,7 @@ import {
   type BrowserScreencastFrame
 } from './browser-screencast-protocol'
 import {
-  buildStreamUnsubscribe,
-  buildTerminalUnsubscribeParams,
+  buildRequestStreamUnsubscribe,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
 import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
@@ -209,16 +208,9 @@ export class RpcClientStreamRegistry {
       this.disposeServerSubscription(id, stream)
       return
     }
-    if (stream?.method === 'terminal.subscribe') {
-      const params = buildTerminalUnsubscribeParams(stream.params)
-      if (params) {
-        this.sendRpc('terminal.unsubscribe', params)
-      }
-    } else {
-      const unsubscribe = buildStreamUnsubscribe(stream?.method, stream?.params)
-      if (unsubscribe) {
-        this.sendRpc(unsubscribe.method, unsubscribe.params)
-      }
+    const unsubscribe = buildRequestStreamUnsubscribe(stream?.method, stream?.params, id)
+    if (unsubscribe) {
+      this.sendRpc(unsubscribe.method, unsubscribe.params)
     }
     this.remove(id)
   }

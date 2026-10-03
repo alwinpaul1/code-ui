@@ -30,7 +30,7 @@ type StreamRecord = {
   receivedSnapshot?: boolean
 }
 
-type StreamUnsubscribe = { method: string; params: unknown }
+type StreamUnsubscribe = { method: string; params: Record<string, unknown> }
 
 /** The host cleanup slot an unsubscribe names; the rest of its params never identify a sibling. */
 function unsubscribeSlot({ method, params }: StreamUnsubscribe): string | null {
@@ -205,7 +205,7 @@ export class MobileRelayRpcStreams {
       const byParams = buildParamsUnsubscribe(stream.method, stream.params, id)
       if (stream.method === 'terminal.subscribe') {
         if (byParams) {
-          this.sendUnsubscribe(byParams, stream.sendOrder)
+          this.sendUnsubscribe(byParams, stream.sendOrder, id)
         }
       } else {
         const unsubscribe = stream.subscriptionId
@@ -238,11 +238,19 @@ export class MobileRelayRpcStreams {
 
   /** Skip when a same-slot sibling sent later has already replaced this stream on the host. A
    *  sibling sent EARLIER was itself replaced by this one, so this goodbye is the only one left. */
-  private sendUnsubscribe(unsubscribe: StreamUnsubscribe, sendOrder: number): void {
+  private sendUnsubscribe(
+    unsubscribe: StreamUnsubscribe,
+    sendOrder: number,
+    terminalRequestId?: string
+  ): void {
     if (this.hasNewerSlotOwner(unsubscribe, sendOrder)) {
       return
     }
-    this.options.sendFrame({ id: this.options.nextId(), ...unsubscribe })
+    // Why after the sibling check: a host before 1.4.218 strips `requestId` and would evict by slot.
+    const params = terminalRequestId
+      ? { ...unsubscribe.params, requestId: terminalRequestId }
+      : unsubscribe.params
+    this.options.sendFrame({ id: this.options.nextId(), method: unsubscribe.method, params })
   }
 
   private hasNewerSlotOwner(unsubscribe: StreamUnsubscribe, sendOrder: number): boolean {

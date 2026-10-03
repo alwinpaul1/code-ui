@@ -68,6 +68,24 @@ export function buildStreamUnsubscribe(
   return null
 }
 
+/** Direct-connection unsubscribe for the stream opened by `requestId`, or null when none is required.
+ *  A terminal goodbye names its own request, so one sent after a newer stream took the slot cannot
+ *  end it. Hosts before 1.4.218 strip the field (`TerminalUnsubscribe` is a non-strict z.object in
+ *  v1.4.216/217) and use the slot, as they always did. */
+export function buildRequestStreamUnsubscribe(
+  method: string | undefined,
+  params: unknown,
+  requestId: string
+): { method: string; params: Record<string, unknown> } | null {
+  if (method !== 'terminal.subscribe') {
+    return buildStreamUnsubscribe(method, params, requestId)
+  }
+  const unsubscribeParams = buildTerminalUnsubscribeParams(params)
+  return unsubscribeParams
+    ? { method: 'terminal.unsubscribe', params: { ...unsubscribeParams, requestId } }
+    : null
+}
+
 export function buildTerminalUnsubscribeParams(
   params: unknown
 ): { subscriptionId: string; client?: { id: string } } | null {

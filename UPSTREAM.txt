@@ -202,7 +202,6 @@ src/shared/rpc-contract/terminal-quick-command-params.ts: c84007c54
 src/shared/rpc-contract/terminal-stream-params.ts: d5dc7b9cf (the optional `snapshotByteBudget` on terminal.subscribe, OTA C7.3)
 src/shared/rpc-contract/terminal-unary-params.ts: c84007c54
 src/shared/rpc-contract/terminal-viewport-methods-params.ts: c84007c54
-src/shared/rpc-contract/terminal-viewport-schemas-params.ts: c84007c54
 src/shared/rpc-contract/ui-update-value-tolerance-params.ts: 231e805b1
 src/shared/rpc-contract/updater-params.ts: c84007c54
 src/shared/rpc-contract/workspace-cleanup-ui-params.ts: c84007c54
@@ -458,3 +457,4 @@ src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 sha
 src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
+src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)

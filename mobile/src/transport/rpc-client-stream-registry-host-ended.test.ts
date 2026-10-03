@@ -98,7 +98,7 @@ describe('RpcClientStreamRegistry stream the host ended', () => {
     expect(unsubscribes(sent)).toEqual([
       expect.objectContaining({
         method: 'terminal.unsubscribe',
-        params: { subscriptionId: 'term-1' }
+        params: { subscriptionId: 'term-1', requestId: 'rpc-1' }
       })
     ])
   })
