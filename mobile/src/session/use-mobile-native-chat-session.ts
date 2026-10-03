@@ -20,10 +20,10 @@ import { newNativeChatFeedToken } from './mobile-native-chat-feed-token'
 import { createWholeSessionTracker } from './mobile-native-chat-whole-session'
 import {
   logSnapshot,
-  pinTranscriptPath,
+  NO_TRANSCRIPT_PATH_PIN,
+  nextTranscriptPathPin,
   planSubscribe,
-  type SubscribeRun,
-  type TranscriptPathPin
+  type SubscribeRun
 } from './mobile-native-chat-subscribe-identity'
 
 export type MobileNativeChatStatus =
@@ -108,11 +108,17 @@ export function useMobileNativeChatSession(args: {
   // MOVES to another file for the same id is ambiguous, and the chat refuses to guess that the rows
   // it shows belong to the new file: that one does change the identity.
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
-  const pathPinRef = useRef<TranscriptPathPin | null>(null)
-  const pin = pinTranscriptPath(pathPinRef, sessionKey, transcriptPath)
+  const [pinState, setPinState] = useState(NO_TRANSCRIPT_PATH_PIN)
+  const pin = nextTranscriptPathPin(pinState, sessionKey, !agent || !sessionId, transcriptPath)
+  if (pin !== pinState) {
+    setPinState(pin)
+  }
   // A path the status stops naming is no news: keep reading the file it last named.
   const readPath = transcriptPath ?? pin.pinned
   const identity = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId, pin.moved])
+  // Retained rows belong to the FILE read, so the path is in this key (though not in the subscribe
+  // identity): rows kept for one file are never handed to another.
+  const retentionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId, readPath])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
   const initialStatus: MobileNativeChatStatus =
@@ -197,9 +203,9 @@ export function useMobileNativeChatSession(args: {
   const settledReady = settled?.status === 'ready'
   useEffect(() => {
     if (settledReady) {
-      transcriptRetentionRef.current.capture(identity, messages)
+      transcriptRetentionRef.current.capture(retentionKey, messages)
     }
-  }, [identity, messages, settledReady])
+  }, [retentionKey, messages, settledReady])
 
   // Replace the base list (read results are an ordered tail). Resets the merger
   // cache so the index is rebuilt once over the new base.
@@ -217,8 +223,9 @@ export function useMobileNativeChatSession(args: {
     const run = { identity, client, readPath, subscribeAttempt, reconnectEpoch }
     // Rows already on screen for this very identity survive a re-read of the same conversation
     // (the path appeared, a ladder rung, a reconnect); see planSubscribe.
+    const last = lastRunRef.current
     const { keepRows, requested, logBase } = planSubscribe({
-      last: lastRunRef.current,
+      last,
       run,
       shown: mergerRef.current.list.length,
       attemptLimit,
@@ -228,6 +235,11 @@ export function useMobileNativeChatSession(args: {
       headroom: INITIAL_LIMIT
     })
     lastRunRef.current = run
+    // Rows read while the file was still unknown were read by id: the same file the path now names.
+    const fallbackKey =
+      keepRows && last?.readPath === null
+        ? encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId, null])
+        : null
     limitRef.current = requested
     loadingEarlierRef.current = false
     snapshotSeenRef.current = false
@@ -263,6 +275,7 @@ export function useMobileNativeChatSession(args: {
           return
         }
         frameSeen = true
+        const firstSnapshot = !snapshotSeenRef.current
         if (!logged && logSnapshot(logBase, raw)) {
           logged = true
         }
@@ -300,11 +313,13 @@ export function useMobileNativeChatSession(args: {
         if (applied.windowReplaced) {
           // Only a genuinely fresh window resets the grown read window — an
           // overlapping reconnect replay keeps the paged-in history and limit.
-          limitRef.current = INITIAL_LIMIT
+          // Never below what this subscribe asked for: a re-read that kept 200 rows must not let the
+          // next live frame or page bound the list back to 40.
+          limitRef.current = Math.max(INITIAL_LIMIT, requested)
           beforeOffsetRef.current = applied.beforeOffset ?? null
           // Against the window this subscribe asked for: a ladder rung of 4 that came back with 4
           // rows has more behind it, and a host that omits `hasMore` must not strand it there.
-          setHasMore(applied.hasMore ?? applied.messages.length >= requested)
+          setHasMore(applied.hasMore ?? applied.messages.length >= (firstSnapshot ? requested : INITIAL_LIMIT))
         }
         // Why: a re-subscribe of a conversation this hook already showed (chat →
         // file tab → chat) can come back as an empty base when the host fails to
@@ -313,7 +328,8 @@ export function useMobileNativeChatSession(args: {
         // transcript is the better base; live appends fold onto it as usual.
         const retained =
           applied.windowReplaced && applied.messages.length === 0 && !applied.pending
-            ? transcriptRetentionRef.current.retained(identity)
+            ? (transcriptRetentionRef.current.retained(retentionKey) ??
+                (fallbackKey === null ? null : transcriptRetentionRef.current.retained(fallbackKey)))
             : null
         if (retained && retained.length > 0) {
           baseRetainedRef.current = true
@@ -372,7 +388,7 @@ export function useMobileNativeChatSession(args: {
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.
   const visibleMessages = transcriptRetentionRef.current.visible({
-    identity,
+    identity: retentionKey,
     messages,
     settled: settledReady
   })

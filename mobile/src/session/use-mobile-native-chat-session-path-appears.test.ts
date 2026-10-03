@@ -4,6 +4,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
+import { pathRelation } from './mobile-native-chat-subscribe-identity'
 import { useMobileNativeChatSession, type MobileNativeChatSession } from './use-mobile-native-chat-session'
 
 // Reported 2026-10-03 (Code UI 0.9.113, Claude Code 2.1.288, Orca 1.4.219): a Claude tab resumed from
@@ -178,6 +179,93 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
     expect(ids()).toHaveLength(30)
   })
 
+  const page = async (messages: NativeChatMessage[], extra: Record<string, unknown>) => {
+    sendRequest.mockResolvedValueOnce({ ok: true, result: { messages, ...extra } })
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  describe('rows paged back before the path re-read', () => {
+    it('keeps every row after the first live append when the user had paged back to 160', async () => {
+      const file = rows(300)
+      await mount({ transcriptPath: null })
+      answer(0, file)
+      await page(file.slice(200, 260), { hasMore: true, beforeOffset: 200 })
+      await page(file.slice(140, 200), { hasMore: true, beforeOffset: 140 })
+      expect(ids()).toHaveLength(160)
+      await rerender({ transcriptPath: PATH })
+      answer(1, [...file, row(300)])
+      expect(ids()).toHaveLength(200)
+      act(() => subs[1]!.emit({ type: 'appended', messages: [row(301)] }))
+      expect(ids()).toHaveLength(200)
+      expect(ids()?.[0]).toBe('r102')
+    })
+
+    it('does not shrink on load earlier from a host that sends no beforeOffset', async () => {
+      const file = rows(300)
+      await mount({ transcriptPath: null })
+      act(() => subs[0]!.emit({ type: 'snapshot', messages: file.slice(-40), hasMore: true }))
+      await page(file.slice(-100), { hasMore: true })
+      await page(file.slice(-160), { hasMore: true })
+      await rerender({ transcriptPath: PATH })
+      act(() => subs[1]!.emit({ type: 'snapshot', messages: file.slice(-200), hasMore: true }))
+      expect(ids()).toHaveLength(200)
+      sendRequest.mockImplementationOnce(async (_method: string, params: { limit: number }) => ({
+        ok: true,
+        result: { messages: file.slice(-params.limit), hasMore: true }
+      }))
+      await act(async () => {
+        state?.loadEarlier()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(ids()!.length).toBeGreaterThanOrEqual(200)
+    })
+
+    it('judges a later replacement without hasMore against the usual window, not the re-read one', async () => {
+      await mount({ transcriptPath: null })
+      answer(0, rows(160)) // the first window is 40 rows, so the re-read asks for 80
+      await rerender({ transcriptPath: PATH })
+      expect(subs[1]!.params.limit).toBe(80)
+      answer(1, rows(160))
+      act(() => subs[1]!.emit({ type: 'replacement', messages: rows(60), beforeOffset: 0 }))
+      expect(state?.hasMore).toBe(true)
+    })
+  })
+
+  describe('rows kept for one file are never shown as another file\'s', () => {
+    it('shows nothing of file P for the same session read at P2 after a trip through the terminal', async () => {
+      await mount({ transcriptPath: PATH })
+      answer(0, rows(30))
+      await rerender({ agent: null as unknown as string, sessionId: null, transcriptPath: null })
+      await rerender({ transcriptPath: OTHER_PATH })
+      expect(ids()).toEqual([])
+      act(() => subs.at(-1)!.emit({ type: 'snapshot', messages: [], hasMore: false }))
+      expect(ids()).toEqual([])
+    })
+
+    it('still keeps the rows when only the path appears and the path-bearing read comes back empty', async () => {
+      await mount({ transcriptPath: null })
+      answer(0, rows(30))
+      await rerender({ transcriptPath: PATH })
+      act(() => subs[1]!.emit({ type: 'snapshot', messages: [], hasMore: false }))
+      expect(ids()).toHaveLength(30)
+    })
+
+    it('still clears for the same path after a trip through the terminal only when the session differs', async () => {
+      await mount({ transcriptPath: PATH })
+      answer(0, rows(30))
+      await rerender({ agent: null as unknown as string, sessionId: null, transcriptPath: null })
+      await rerender({ transcriptPath: PATH })
+      expect(subs.at(-1)!.params.transcriptPath).toBe(PATH)
+      answer(subs.length - 1, rows(30))
+      expect(ids()).toHaveLength(30)
+    })
+  })
+
   describe('degenerate transcripts', () => {
     it.each(['claude', 'codex'])('an empty %s transcript stays empty and ready when the path appears', async (agent) => {
       await mount({ agent, transcriptPath: null })
@@ -212,9 +300,9 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
       answer(1, rows(30))
       expect(lines()).toEqual([
         '[native-chat] subscribe session=cccccccc agent=claude path=none limit=40 reason=first snapshot rows=30 hasMore=false',
-        `[native-chat] subscribe session=cccccccc agent=claude path=${SESSION}.jsonl limit=70 reason=path-only snapshot rows=30 hasMore=false`
+        `[native-chat] subscribe session=cccccccc agent=claude path=same limit=70 reason=path-only snapshot rows=30 hasMore=false`
       ])
-      expect(lines().join('\n')).not.toContain('/home')
+      expect(lines().join('\n')).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}|\.jsonl|\/home/)
     })
 
     it('names a silent host and the ladder step', async () => {
@@ -222,8 +310,8 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
       await silence()
       act(() => subs[1]!.emit({ type: 'snapshot', messages: [], hasMore: false, pending: true }))
       expect(lines()).toEqual([
-        `[native-chat] subscribe session=cccccccc agent=claude path=${SESSION}.jsonl limit=40 reason=first snapshot=none after 20s`,
-        `[native-chat] subscribe session=cccccccc agent=claude path=${SESSION}.jsonl limit=12 reason=ladder snapshot rows=0 hasMore=false pending=true`
+        `[native-chat] subscribe session=cccccccc agent=claude path=same limit=40 reason=first snapshot=none after 20s`,
+        `[native-chat] subscribe session=cccccccc agent=claude path=same limit=12 reason=ladder snapshot rows=0 hasMore=false pending=true`
       ])
     })
 
@@ -235,6 +323,38 @@ describe('useMobileNativeChatSession: the transcript path appears for a resumed 
       await rerender({ sessionId: OTHER_SESSION, transcriptPath: null })
       answer(2, rows(2))
       expect(lines().map((line: string) => /reason=(\S+)/.exec(line)?.[1])).toEqual(['first', 'path-moved', 'new-session'])
+      expect(lines()[1]).toContain('path=same')
+      expect(pathRelation(`/x/${OTHER_SESSION}.jsonl`, SESSION)).toBe('other')
+      expect(pathRelation('C:\\p\\rollout-2026-10-03T01-02-03-' + SESSION + '.jsonl', SESSION)).toBe('same')
     })
+
+    it('gives an agent or host change its own reason, not path-moved', async () => {
+      await mount({ transcriptPath: PATH })
+      answer(0, rows(2))
+      await rerender({ agent: 'codex', transcriptPath: PATH })
+      answer(1, rows(2))
+      expect(lines().map((line: string) => /reason=(\S+)/.exec(line)?.[1])).toEqual(['first', 'new-source'])
+    })
+  })
+})
+
+describe('the transcript path pin is derived while rendering, never written there', () => {
+  it('holds no ref write outside an effect or callback in the hook source', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { join } = await import('node:path')
+    const source = readFileSync(join(import.meta.dirname, 'use-mobile-native-chat-session.ts'), 'utf8')
+    let depth = 0
+    const renderWrites: string[] = []
+    for (const raw of source.split('\n')) {
+      const line = raw.trim()
+      if (depth <= 1 && /^\w*[Pp]in\w*Ref\.current\s*=[^=]/.test(line)) {
+        renderWrites.push(line)
+      }
+      for (const char of raw) {
+        depth += char === '{' ? 1 : char === '}' ? -1 : 0
+      }
+    }
+    expect(renderWrites).toEqual([])
+    expect(source).not.toMatch(/pathPinRef/)
   })
 })
