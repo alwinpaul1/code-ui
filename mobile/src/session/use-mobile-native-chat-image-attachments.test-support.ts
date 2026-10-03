@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
+import { EMPTY_COMPOSER } from './fixtures/claude-composer-2.1.287'
 import type { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 
 // Shared by the image-attachment suites. The picker mock cannot live here:
@@ -41,6 +42,11 @@ export function makeClient(
     notifyForeground: vi.fn(),
     sendRequest: vi.fn(async (method: string, params?: unknown) => {
       calls.push({ method, params: params as Record<string, unknown> })
+      // A photo send for Claude looks at the screen for its chips; these doubles have no
+      // screen, which is a host that cannot show one, and the send goes on as before.
+      if (method === 'terminal.read' && typeof responses !== 'function') {
+        return methodNotFound('screen')
+      }
       if (typeof responses === 'function') {
         return responses(method, params as Record<string, unknown>)
       }
@@ -88,4 +94,13 @@ export function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>
     sleep: async () => {},
     ...overrides
   }
+}
+
+/** Claude's composer once its photo paste has been read: the input holds the `[Image #N]`
+ *  chips (Claude Code 2.1.288 `f1e`). A photo send waits for them before it types the
+ *  caption (mobile-native-chat-image-send-settle.ts), so a fake desktop that shows
+ *  only an empty box is one whose photo never attached. */
+export function composerHoldingChips(count = 1): string[] {
+  const chips = Array.from({ length: count }, (_, i) => `[Image #${i + 1}]`).join('')
+  return EMPTY_COMPOSER.map((row) => (row.trim() === '❯' ? `❯ ${chips}` : row))
 }

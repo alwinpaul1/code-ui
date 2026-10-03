@@ -22,7 +22,7 @@ vi.mock('../transport/mobile-relay-e2ee-link', async (importOriginal) => ({
   MobileRelayE2eeLink: (await import('../transport/relay-desktop-fake-link')).FakeRelayLink
 }))
 
-import { fakeRelayLinks, resetFakeRelayLinks } from '../transport/relay-desktop-fake-link'
+import { fakeDesktop, fakeRelayLinks, resetFakeRelayLinks } from '../transport/relay-desktop-fake-link'
 import {
   acceptRelayDial,
   dropRelayLink,
@@ -30,6 +30,7 @@ import {
   type RelayOnlyPhone
 } from '../transport/relay-desktop-test-fakes'
 import { useRelayChatTabGate } from '../test-support/relay-chat-tab-gate'
+import { composerHoldingChips } from './use-mobile-native-chat-image-attachments.test-support'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import {
   markMobileNativeChatInputStale,
@@ -155,6 +156,8 @@ describe('a photo sent while the relay re-dials', () => {
 
   it('pastes the photo and sends its caption once the replacement relay and the lease are back', async () => {
     phone = await openConnectedChat(false)
+    // The photo is read once it is pasted: the desktop's input then holds its chip.
+    fakeDesktop.screen = composerHoldingChips(1)
     seedChip()
     await desktopLegDrops()
 
