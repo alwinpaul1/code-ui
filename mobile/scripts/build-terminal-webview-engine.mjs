@@ -81,10 +81,12 @@ async function buildEngineJs() {
     },
     bundle: true,
     format: 'iife',
-    // Why: keep identifiers readable so a runtime ReferenceError names the real
-    // symbol in the phone log (whitespace and syntax are still minified).
-    minify: true,
+    // Why: esbuild 0.25 syntax folding drops xterm's local DECRQM enum declaration (Orca #24626),
+    // so the built-in mode-query handler threw a ReferenceError. Whitespace is still minified.
+    // Identifiers stay readable so a runtime ReferenceError names the real symbol in the phone log.
+    minifyWhitespace: true,
     minifyIdentifiers: false,
+    minifySyntax: false,
     platform: 'browser',
     target,
     legalComments: 'none',
