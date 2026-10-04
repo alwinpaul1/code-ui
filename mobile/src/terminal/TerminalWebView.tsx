@@ -1,14 +1,19 @@
-import { useRef, useCallback, forwardRef, useImperativeHandle } from 'react'
-import { Platform, View } from 'react-native'
-import { WebView, type WebViewMessageEvent } from 'react-native-webview'
+import { useRef, useCallback, useEffect, useState, forwardRef, useImperativeHandle } from 'react'
+import { AppState, Platform, View } from 'react-native'
+import { WebView, type WebViewMessageEvent, type WebViewProps } from 'react-native-webview'
 import type { TerminalWebViewHandle, TerminalWebViewProps } from './terminal-webview-contract'
-import { TerminalWebViewEngineErrorOverlay } from './terminal-webview-engine-error-state'
+import {
+  describeNativeWebViewEngineError,
+  TerminalWebViewEngineErrorOverlay
+} from './terminal-webview-engine-error-state'
 import { TERMINAL_WEBVIEW_FRAME_STYLES } from './terminal-webview-frame-styles'
 import { XTERM_WEBVIEW_SOURCE } from './terminal-webview-html'
 import type { TerminalWebViewCommand } from './terminal-webview-messages'
 import { useTerminalWebViewController } from './use-terminal-webview-controller'
 
 type Props = TerminalWebViewProps
+
+type RenderProcessGoneEvent = Parameters<NonNullable<WebViewProps['onRenderProcessGone']>>[0]
 
 export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
@@ -25,6 +30,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       engineError,
       handle,
       receive,
+      reportEngineError,
       reportNativeEngineError,
       resetReadiness
     } = useTerminalWebViewController(props, {
@@ -33,7 +39,33 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       pingsOnForegroundRecovery: () => Platform.OS === 'ios'
     })
 
+    // Code UI (upstream reloads the dead view): which native WebView is mounted. A new key is a new
+    // WebView with a new renderer; the controller, the handle and the session's ref stay the same.
+    const [webViewKey, setWebViewKey] = useState(0)
+    // Whether the mounted WebView's document has reported itself ready. A renderer that dies before
+    // that is not remounted on its own again, so a renderer that cannot stay up cannot loop.
+    const documentCameUpRef = useRef(false)
+    // A renderer the system killed while the app was in the background, remounted on return.
+    const remountWhenActiveRef = useRef(false)
+
     useImperativeHandle(ref, () => handle, [handle])
+
+    const remountWebView = useCallback(() => {
+      remountWhenActiveRef.current = false
+      documentCameUpRef.current = false
+      clearEngineError()
+      resetReadiness()
+      setWebViewKey((key) => key + 1)
+    }, [clearEngineError, resetReadiness])
+
+    useEffect(() => {
+      const subscription = AppState.addEventListener('change', (state) => {
+        if (state === 'active' && remountWhenActiveRef.current) {
+          remountWebView()
+        }
+      })
+      return () => subscription.remove()
+    }, [remountWebView])
 
     const handleMessage = useCallback(
       (event: WebViewMessageEvent) => {
@@ -43,15 +75,46 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
         } catch {
           return
         }
+        if (msg.type === 'web-ready') {
+          documentCameUpRef.current = true
+        }
         receive(msg)
       },
       [receive]
     )
 
-    const handleReload = useCallback(() => {
-      clearEngineError()
-      webViewRef.current?.reload()
-    }, [clearEngineError])
+    // A new WebView rather than reload(): after a renderer loss the old one cannot be used, and a
+    // fresh one is the same recovery for every other failure the overlay reports.
+    const handleReload = remountWebView
+
+    /**
+     * Android's renderer is gone: killed by the system (memory, usually in the background) or
+     * crashed. react-native-webview 13.16.2 only reports it, and "the given WebView can't be used,
+     * and should be removed from the view hierarchy" (WebViewClient#onRenderProcessGone), so the
+     * recovery is a new WebView. Its document reports web-ready and the session re-subscribes the
+     * pane for a fresh snapshot. A kill is remounted on its own once the app is in front; a crash,
+     * or a second loss before the new document came up, shows the overlay and its Reload instead.
+     */
+    const handleRenderProcessGone = useCallback(
+      (event: RenderProcessGoneEvent) => {
+        // Nothing may be posted to the dead view, and nothing queued for it is the next one's.
+        resetReadiness()
+        if (event.nativeEvent?.didCrash === true || !documentCameUpRef.current) {
+          reportNativeEngineError('Terminal WebView render process ended', event)
+          return
+        }
+        reportEngineError(
+          `${describeNativeWebViewEngineError('Terminal WebView render process ended', event)} - remounting`,
+          false
+        )
+        if (AppState.currentState === 'active') {
+          remountWebView()
+        } else {
+          remountWhenActiveRef.current = true
+        }
+      },
+      [remountWebView, reportEngineError, reportNativeEngineError, resetReadiness]
+    )
 
     const handleContentProcessDidTerminate = useCallback(() => {
       // Why: WKWebView content-process loss is recoverable; stale commands belong
@@ -64,6 +127,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     return (
       <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, props.style]}>
         <WebView
+          key={webViewKey}
           ref={webViewRef}
           source={XTERM_WEBVIEW_SOURCE}
           style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
@@ -84,9 +148,7 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
           onMessage={handleMessage}
           onError={(event) => reportNativeEngineError('Terminal WebView load failed', event)}
           onHttpError={(event) => reportNativeEngineError('Terminal WebView HTTP error', event)}
-          onRenderProcessGone={(event) =>
-            reportNativeEngineError('Terminal WebView render process ended', event)
-          }
+          onRenderProcessGone={handleRenderProcessGone}
           onContentProcessDidTerminate={handleContentProcessDidTerminate}
         />
         {engineError ? (

@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TerminalWebView } from './TerminalWebView'
 
 vi.mock('react-native', () => ({
+  // TerminalWebView listens for the app coming back, to remount a WebView whose renderer was lost.
+  AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
   Platform: { OS: 'ios' },
   StyleSheet: {
     absoluteFill: {

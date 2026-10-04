@@ -312,6 +312,7 @@ export function useTerminalWebViewController(
     engineError,
     handle,
     receive,
+    reportEngineError,
     reportNativeEngineError,
     resetReadiness
   }
