@@ -24,7 +24,11 @@ vi.mock('react-native', async () => {
     ActivityIndicator: 'ActivityIndicator',
     FlatList: 'FlatList',
     Image: 'Image',
-    Keyboard: { dismiss: vi.fn(), isVisible: () => true, addListener: () => ({ remove: () => {} }) },
+    Keyboard: {
+      dismiss: vi.fn(),
+      isVisible: () => true,
+      addListener: () => ({ remove: () => {} })
+    },
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
@@ -82,7 +86,9 @@ const idleDictation = {
 
 async function mount(element: ReactNode, scheme: 'light' | 'dark'): Promise<void> {
   await act(async () => {
-    renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, element))
+    renderer = create(
+      createElement(ThemeProvider, { initialPreference: scheme, children: element })
+    )
   })
 }
 

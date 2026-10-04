@@ -42,13 +42,18 @@ describe('the native host stack', () => {
     async (scheme) => {
       await act(async () => {
         renderer = create(
-          createElement(ThemeProvider, { initialPreference: scheme }, createElement(HostStack, { animation: 'default' }))
+          createElement(ThemeProvider, {
+            initialPreference: scheme,
+            children: createElement(HostStack, { animation: 'default' })
+          })
         )
       })
       const stack = renderer!.root.find((n) => (n.type as unknown) === 'Stack')
       const screens = renderer!.root.findAll((n) => (n.type as unknown) === 'StackScreen')
       expect(screens.map((s) => s.props.name)).toEqual(HOST_STACK_SCREENS.map((s) => s.name))
-      expect(screens.map((s) => s.props.options.title)).toEqual(HOST_STACK_SCREENS.map((s) => s.title))
+      expect(screens.map((s) => s.props.options.title)).toEqual(
+        HOST_STACK_SCREENS.map((s) => s.title)
+      )
       expect(stack.props.screenOptions.animation).toBe('default')
       // A literal dark colour in light mode would pass every other check; the two modes differ.
       expect(typeof stack.props.screenOptions.contentStyle.backgroundColor).toBe('string')
@@ -58,10 +63,15 @@ describe('the native host stack', () => {
   it('hands the tablet split view no animation', async () => {
     await act(async () => {
       renderer = create(
-        createElement(ThemeProvider, { initialPreference: 'light' }, createElement(HostStack, { animation: 'none' }))
+        createElement(ThemeProvider, {
+          initialPreference: 'light',
+          children: createElement(HostStack, { animation: 'none' })
+        })
       )
     })
-    expect(renderer!.root.find((n) => (n.type as unknown) === 'Stack').props.screenOptions.animation).toBe('none')
+    expect(
+      renderer!.root.find((n) => (n.type as unknown) === 'Stack').props.screenOptions.animation
+    ).toBe('none')
   })
 
   it('paints a different surface in light and dark', async () => {
@@ -69,11 +79,15 @@ describe('the native host stack', () => {
     for (const scheme of ['light', 'dark'] as const) {
       await act(async () => {
         renderer = create(
-          createElement(ThemeProvider, { initialPreference: scheme }, createElement(HostStack, { animation: 'default' }))
+          createElement(ThemeProvider, {
+            initialPreference: scheme,
+            children: createElement(HostStack, { animation: 'default' })
+          })
         )
       })
       surfaces.push(
-        renderer!.root.find((n) => (n.type as unknown) === 'Stack').props.screenOptions.contentStyle.backgroundColor
+        renderer!.root.find((n) => (n.type as unknown) === 'Stack').props.screenOptions.contentStyle
+          .backgroundColor
       )
       act(() => renderer?.unmount())
     }
