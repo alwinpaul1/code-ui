@@ -424,3 +424,8 @@ modules are not taken at all (see the port rows).
   `children` on the background-task state and the status summary, the reducer's admission step) is
   not taken: nothing on the phone would read a `children` field without a roster UI for it, and
   upstream's mobile app is unchanged by that PR.
+  #24301 (7176648759): the stop capabilities move to `agent-session-stop-capabilities.ts`
+  (taken whole; `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` is no longer defined inline,
+  `export *` re-exports it with `AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY` and
+  `AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY`, and `RUNTIME_CAPABILITIES` spreads the set).
+  The phone does not read the two new constants: it joins an in-flight Stop itself, whatever the host.

@@ -1,4 +1,5 @@
 import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -130,6 +131,7 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export * from './agent-session-stop-capabilities'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
@@ -198,11 +200,6 @@ export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' a
 // Readers must understand a monitoring roster with no available stop control.
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
-// Why: agentSession.cancel has a strict schema, so clients must not send prompt identity to an
-// older host that would reject the whole cancellation instead of falling back to turn stop.
-// (Orca #20601, f55b7ba68, hand-applied.)
-export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
-  'agent-session.prompt-cancel.v1' as const
 // Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
 // `answers` to an older host; they fall back to the answer packed into `optionId`.
 export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
@@ -303,6 +300,7 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'runtime.status.compat.v1',
@@ -362,7 +360,6 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
