@@ -150,12 +150,12 @@ export function useTerminalMouseWebViewHarness() {
   let select: Select
   let terminals: TerminalStub[]
 
-  function boot(): void {
+  function boot(initialData = ''): void {
     document.body.innerHTML = bodyMarkup()
     runInThisContext(TERMINAL_DOCUMENT_SCRIPT)
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
+        data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData })
       })
     )
     // Why: init commits the replacement surface on the next animation frame.

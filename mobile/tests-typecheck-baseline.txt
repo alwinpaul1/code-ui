@@ -146,7 +146,6 @@ src/source-control/mobile-create-pr-action.test.ts
 src/source-control/mobile-hosted-review-create-intent-runner.test.ts
 src/source-control/mobile-pr-create.test.ts
 src/source-control/use-mobile-hosted-review-eligibility.test.ts
-src/terminal/TerminalGhosttyView.test.tsx
 src/terminal/buffered-terminal-draft-restoration.test.ts
 src/terminal/terminal-caret-rendering-oracle.test.ts
 src/terminal/terminal-live-mirror-writes.test.ts

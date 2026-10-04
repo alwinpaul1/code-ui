@@ -29,7 +29,7 @@ export { CLAUDE_HUD_PROMPT_HOOK_SCRIPT }
  *    own PTY by walking its parent processes (`ps -o tty= -p <pid>`, which
  *    gives `ttys003` on macOS and `pts/3` on Linux) and writes one frame of
  *    the C0 channel (`agent-hud-channel.ts`) to `/dev/<tty>`: four control
- *    bytes xterm.js and Ghostty ignore in every state, so nothing is drawn
+ *    bytes xterm.js and Ghostty (the second parser they were checked against) ignore in every state, so nothing is drawn
  *    even when the kernel splices the frame into the middle of the agent's
  *    own escapes, which an `ESC ] 7777 ; … BEL` did not survive (2026-09-25).
  *    The phone already receives the raw PTY byte stream and takes the frame

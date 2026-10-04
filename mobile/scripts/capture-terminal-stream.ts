@@ -1,7 +1,7 @@
 /**
  * Records a real terminal stream — the bytes the phone's terminal view would
  * receive — with the arrival time of every chunk, for replaying into a
- * terminal engine under production load (see app/ghostty-spike.tsx).
+ * terminal engine under production load, or into a test as a real fixture.
  *
  * Subscribes the way the app does: binary stream, mobile client, and a phone
  * viewport so the host fits the PTY to those dims before serializing

@@ -139,7 +139,9 @@ ESC aborts whatever sequence it lands in. That drew `❯ 2026h` in the desktop
 Claude Code composer on 2026-09-25 (the tail of a cut `ESC[?2026h`), and a
 frame landing inside the beacon drew the rest of its payload. SOH, STX, ETX
 and ACK draw nothing in xterm.js or Ghostty wherever a splice puts them,
-checked against both parsers' source. The reasons every other C0 byte is out,
+checked against both parsers' source (Ghostty was the phone's engine then; the
+phone now draws every pane with xterm.js in a WebView, and Ghostty stays in
+this note only as the second parser the bytes were verified against). The reasons every other C0 byte is out,
 and the splices no byte choice fixes (right after `ESC[`, where xterm.js drops
 a private-mode CSI; inside a UTF-8 character; before a combining mark), are
 in `docs/mobile-agent-hud.md`. The phone still reads the old `ESC ] 7777 ; … BEL`
