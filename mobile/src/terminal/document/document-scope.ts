@@ -53,6 +53,13 @@ export type TerminalDocumentState = {
   termObserverDisposables: TerminalDocumentDisposable[]
   /** `terminal-init`: the row count the last init or reflow settled on. */
   initRows: number
+  /**
+   * `terminal-init` (Code UI): the geometry an empty snapshot brought while a snapshot with content
+   * was still being drawn; applied once that one commits, or null.
+   */
+  emptyInitGeometry: { cols: number; rows: number } | null
+  /** `terminal-init` (Code UI): the generation of the init that opened `pendingTerm`. */
+  pendingInitGeneration: number
   /** `webgl-recovery`: the loaded WebGL addon, or null on the DOM renderer. */
   webglAddon: TerminalDocumentWebglAddon | null
   /** `webgl-recovery`: the pending single retry after a context loss. */
@@ -277,6 +284,8 @@ function createTerminalDocumentState(): TerminalDocumentState {
     terminalGeneration: 0,
     termObserverDisposables: [],
     initRows: 24,
+    emptyInitGeometry: null,
+    pendingInitGeneration: -1,
     webglAddon: null,
     webglRecoveryTimer: null,
     terminalThemeInput: null,

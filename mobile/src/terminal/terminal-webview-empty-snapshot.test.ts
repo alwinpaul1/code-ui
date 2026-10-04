@@ -40,7 +40,10 @@ function bodyMarkup(): string {
 }
 
 let posted: Posted[] = []
-let frames: FrameRequestCallback[] = []
+// Keyed by id so cancelAnimationFrame is honoured: a terminal disposed by a newer init cancels the
+// repaint it had booked, and running it anyway reads a renderer that is gone.
+let frames = new Map<number, FrameRequestCallback>()
+let nextFrameId = 1
 let listeners: {
   target: EventTarget
   type: string
@@ -69,8 +72,10 @@ function send(message: Record<string, unknown>): void {
 
 async function settle(): Promise<void> {
   for (let i = 0; i < 20; i++) {
-    while (frames.length > 0) {
-      frames.shift()?.(performance.now())
+    while (frames.size > 0) {
+      const [id, frame] = frames.entries().next().value!
+      frames.delete(id)
+      frame(performance.now())
     }
     await new Promise((resolve) => setTimeout(resolve, 5))
   }
@@ -113,16 +118,20 @@ function replies(): string[] {
 describe('a drawn pane that the host sends an empty snapshot (real xterm engine)', () => {
   beforeEach(() => {
     posted = []
-    frames = []
+    frames = new Map()
+    nextFrameId = 1
     listeners = []
     nextId = 1
     recordListeners(window)
     recordListeners(document)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frames.push(callback)
-      return frames.length
+      const id = nextFrameId++
+      frames.set(id, callback)
+      return id
     })
-    vi.stubGlobal('cancelAnimationFrame', () => {})
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => {
+      frames.delete(id)
+    })
     vi.stubGlobal('OffscreenCanvas', undefined)
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(((kind: string) => {
       if (kind !== '2d') {
@@ -244,6 +253,37 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
 
     expect(visibleText()).toContain('NEW-SCREEN')
     expect(visibleText()).not.toContain('OLD-SCREEN')
+  })
+
+  // Two inits can reach the document back to back (the controller flushes everything it queued
+  // before web-ready at once): a snapshot with content, then an empty one, before the first has
+  // drawn. The empty one must neither resize the half-drawn terminal under its replay nor leave the
+  // first init's `ready` to arrive late with the old geometry (found by the second review).
+  it('applies an empty snapshot geometry after a snapshot still being drawn, with one ready', async () => {
+    send({ type: 'init', cols: 80, rows: 24, initialData: 'SNAPSHOT-BEING-DRAWN' })
+    send({ type: 'init', cols: 40, rows: 30, initialData: '' })
+    expect(readyNotices()).toEqual([])
+
+    await settle()
+
+    expect(readyNotices()).toEqual([expect.objectContaining({ type: 'ready', cols: 40, rows: 30 })])
+    expect(visibleRowCount()).toBe(30)
+    expect(visibleText()).toContain('SNAPSHOT-BEING-DRAWN')
+  })
+
+  // A Clear that lands while a snapshot is still being drawn abandons that init, and its hidden
+  // surface never commits. An empty snapshot after it must not keep that hidden terminal: it opens
+  // a visible one, as it did before empty snapshots kept the grid.
+  it('opens a visible terminal for an empty snapshot after a Clear interrupted a drawing one', async () => {
+    send({ type: 'init', cols: 80, rows: 24, initialData: 'INTERRUPTED' })
+    send({ type: 'clear' })
+    send({ type: 'init', cols: 80, rows: 24, initialData: '' })
+    await settle()
+
+    expect(readyNotices()).toEqual([expect.objectContaining({ type: 'ready', cols: 80, rows: 24 })])
+    expect(visibleRowCount()).toBe(24)
+    // The surface carrying the id is the newest; an uncommitted one is still hidden.
+    expect(document.getElementById('terminal-surface')?.style.visibility).not.toBe('hidden')
   })
 
   // The degenerate end: a document that has no terminal yet. An empty first snapshot (a host
