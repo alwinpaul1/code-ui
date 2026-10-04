@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionWireRefusal } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
@@ -76,8 +77,14 @@ export function parseStructuredRewindSupport(options: unknown): StructuredRewind
     : null
 }
 
-function rewindRefusalReason(message: string): string | null {
-  return message.startsWith(REFUSAL_PREFIX) ? message.slice(REFUSAL_PREFIX.length) : null
+/** The reason rides the host's own refusal message, `agent_session_rewind:<reason>`, on every
+ *  host from 1.4.205 to 1.4.220 (`structured-rewind-refusal.ts`). Read from the refusal the host
+ *  sent: the result's `message` is the notice table's wording (Orca #22999), not the host's. */
+function rewindRefusalReason(
+  refusal: Pick<AgentSessionWireRefusal, 'message'> | undefined
+): string | null {
+  const message = refusal?.message
+  return message?.startsWith(REFUSAL_PREFIX) ? message.slice(REFUSAL_PREFIX.length) : null
 }
 
 function isRewindTarget(items: readonly AgentJournalRenderItem[], itemId: string): boolean {
@@ -140,7 +147,7 @@ export async function dispatchStructuredRewind(args: {
   // the retry asks about THIS rewind instead of running a second one.
   if (
     result.status === 'unknown' ||
-    (result.status === 'refused' && rewindRefusalReason(result.message) === 'outcome-unknown')
+    (result.status === 'refused' && rewindRefusalReason(result.refusal) === 'outcome-unknown')
   ) {
     return { status: 'unknown', message: UNCONFIRMED }
   }
@@ -149,7 +156,7 @@ export async function dispatchStructuredRewind(args: {
     return { status: 'accepted', epoch: result.value.epoch }
   }
   if (result.status === 'refused') {
-    const reason = rewindRefusalReason(result.message)
+    const reason = rewindRefusalReason(result.refusal)
     return {
       status: 'rejected',
       message: (reason !== null ? REFUSAL_COPY[reason] : undefined) ?? result.message

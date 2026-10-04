@@ -5,9 +5,22 @@ import {
 } from '../../../src/shared/agent-session-host-authority'
 import type {
   AgentSessionMutationResult,
+  AgentSessionWireRefusal,
   AgentSessionWireRefusalCode
 } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import {
+  agentSessionRefusalNotice,
+  agentSessionWriteNoticeEnglish,
+  agentSessionWriteNoticeParts
+} from '../../../src/shared/agent-session-refusal-notice'
+import {
+  agentSessionRefusalFailure,
+  agentSessionThrownFailure,
+  agentSessionWriteKindForMethod,
+  readAgentSessionErrorRefusal,
+  type AgentSessionWriteKind
+} from '../../../src/shared/agent-session-write-failure'
 import { structuredSessionOperationId } from './structured-session-operation-id'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
@@ -18,8 +31,18 @@ export const STRUCTURED_SEND_TIMEOUT_MS = 15_000
 
 export type StructuredAgentSessionMutationCallResult<TValue> =
   | { status: 'accepted'; value: TValue }
-  | { status: 'refused'; code: AgentSessionWireRefusalCode; message: string }
-  | { status: 'failed'; message: string; code?: string }
+  /** `message` is worded from the refusal's code and reason, never its own message (Orca #22999):
+   *  every code has a host path whose message is written for a log. `refusal` is the host's, for
+   *  a caller that has words of its own for a reason (rewind). */
+  | {
+      status: 'refused'
+      code: AgentSessionWireRefusalCode
+      message: string
+      refusal?: AgentSessionWireRefusal
+    }
+  /** `code` is the RPC error code a pre-handler refusal came with; `hostMessage` its own text, for
+   *  a caller that explains a cause the notice table cannot see (an answer too long for the host). */
+  | { status: 'failed'; message: string; code?: string; hostMessage?: string }
   /** `hostReportedOperationUnknown` separates a host answer about the id from doubt
    *  about the effect. Whether that id can still be retried is the method's own
    *  question: a plan that recovers an unknown ledger row replays or reruns it, one
@@ -36,19 +59,22 @@ export type MutateOptions = {
    *  open option drawer brings its own, because that banner draws under it. */
   onError?: (message: string) => void
   /** Rewords a failure before it is said, for a call whose failure has a cause the host's own
-   *  text does not name. `code` is the RPC error code of a pre-handler refusal, else null. */
+   *  text does not name. `code` is the RPC error code of a pre-handler refusal, else null, and
+   *  `message` then the host's own text; for a refusal it is the notice the phone would show. */
   explainFailure?: (failure: { code: string | null; message: string }) => string
 }
 
 /** The words a failed or refused mutation is reported in. */
 export function failureMessage(
-  result: { status: 'failed'; message: string; code?: string } | { status: 'refused'; message: string },
+  result:
+    | { status: 'failed'; message: string; code?: string; hostMessage?: string }
+    | { status: 'refused'; message: string },
   options?: MutateOptions
 ): string {
   return options?.explainFailure
     ? options.explainFailure({
         code: result.status === 'failed' ? (result.code ?? null) : null,
-        message: result.message
+        message: result.status === 'failed' ? (result.hostMessage ?? result.message) : result.message
       })
     : result.message
 }
@@ -63,18 +89,45 @@ export type StructuredAgentSessionMutate = <TValue>(
 class AgentSessionRpcResponseError extends Error {
   constructor(
     readonly code: string,
-    message: string
+    message: string,
+    /** A thrown refusal's reason rides here; its message is only the bare code (Orca #23674). */
+    readonly data?: unknown
   ) {
     super(message)
   }
 }
 
-const PRE_HANDLER_RPC_REFUSALS = new Set([
-  'invalid_argument',
-  'method_not_found',
-  'method_not_supported',
-  'unauthorized'
-])
+/** A failed read of a chat's history as the chat shows it, from a thrown error or a stream's error
+ *  frame (`{ message, error }`). A refusal the host throws has the bare code as its message, so its
+ *  words come from the refusal in the error's data (Orca #23674); any other failure keeps its own
+ *  text, as before. */
+export function agentSessionReadFailureText(failure: unknown): string {
+  const refusal = readAgentSessionErrorRefusal(
+    typeof failure === 'object' && failure !== null && 'error' in failure ? failure.error : failure
+  )
+  if (refusal) {
+    return agentSessionWriteNoticeEnglish(
+      agentSessionWriteNoticeParts(agentSessionRefusalFailure(refusal), 'read-history')
+    )
+  }
+  if (failure instanceof Error) {
+    return failure.message
+  }
+  return typeof failure === 'object' && failure !== null
+    ? 'message' in failure
+      ? String(failure.message ?? '')
+      : ''
+    : String(failure)
+}
+
+/** A refused phone send goes back into the composer; there is no Retry control. */
+function phoneWriteKind(
+  fingerprintMethod: string,
+  fields: Record<string, unknown>
+): AgentSessionWriteKind {
+  const write = agentSessionWriteKindForMethod(fingerprintMethod, fields)
+  return write === 'send' ? 'composer-send' : write
+}
 
 export async function callAgentSession<TResult>(
   client: RpcClient,
@@ -89,7 +142,11 @@ export async function callAgentSession<TResult>(
     ...(options?.failWhenDisconnected ? { failWhenDisconnected: true } : {})
   })
   if (!response.ok) {
-    throw new AgentSessionRpcResponseError(response.error.code, response.error.message)
+    throw new AgentSessionRpcResponseError(
+      response.error.code,
+      response.error.message,
+      response.error.data
+    )
   }
   return response.result as TResult
 }
@@ -191,10 +248,32 @@ export async function requestStructuredAgentSessionMutation<TValue>(args: {
     }
     return result.ok
       ? { status: 'accepted', value: result.value }
-      : { status: 'refused', code: result.refusal.code, message: result.refusal.message }
+      : {
+          status: 'refused',
+          code: result.refusal.code,
+          message: agentSessionRefusalNotice(
+            result.refusal,
+            phoneWriteKind(fingerprintMethod, fields)
+          ),
+          refusal: result.refusal
+        }
   } catch (error) {
-    if (error instanceof AgentSessionRpcResponseError && PRE_HANDLER_RPC_REFUSALS.has(error.code)) {
-      return { status: 'failed', message: error.message, code: error.code }
+    // A refusal the host threw (its reason in the error's data), or an RPC error the host answers
+    // before running the method (Orca #22999's rule, `agentSessionRpcErrorFailure`), proves the
+    // write did not happen; its words come from the refusal, never the error's text, which is a
+    // bare code or written for a log. Anything else may have run, and stays unconfirmed below.
+    if (error instanceof AgentSessionRpcResponseError) {
+      const answered = agentSessionThrownFailure(error, error.code)
+      if (answered.kind !== 'unconfirmed') {
+        return {
+          status: 'failed',
+          message: agentSessionWriteNoticeEnglish(
+            agentSessionWriteNoticeParts(answered, phoneWriteKind(fingerprintMethod, fields))
+          ),
+          code: error.code,
+          hostMessage: error.message
+        }
+      }
     }
     if (
       isRpcDeliveryUnknown(error) ||

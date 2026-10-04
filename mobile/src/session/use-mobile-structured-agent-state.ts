@@ -13,7 +13,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../src/shared/structured-agent-session-reducer'
 import type { RpcClient } from '../transport/rpc-client'
-import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { agentSessionReadFailureText, callAgentSession } from './mobile-structured-agent-session-rpc'
 
 const MAX_RETAINED_SESSION_STATES = 32
 /** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
@@ -118,7 +118,8 @@ export function useMobileStructuredAgentState(args: {
             raw !== null &&
             (raw as { type?: unknown }).type === 'error'
           ) {
-            apply({ type: 'error', message: String((raw as { message?: unknown }).message ?? '') })
+            // A refused feed's message is the refusal's bare code; its words are in the data.
+            apply({ type: 'error', message: agentSessionReadFailureText(raw) })
             return
           }
           if (isSubscribeEvent(raw)) {
@@ -128,7 +129,7 @@ export function useMobileStructuredAgentState(args: {
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+          apply({ type: 'error', message: agentSessionReadFailureText(error) })
         }
       })
     return () => {
@@ -190,7 +191,7 @@ export function useMobileStructuredAgentState(args: {
     })()
       .catch((error: unknown) => {
         if (isCurrentRead()) {
-          apply({ type: 'error', message: error instanceof Error ? error.message : String(error) })
+          apply({ type: 'error', message: agentSessionReadFailureText(error) })
         }
       })
       .finally(() => {

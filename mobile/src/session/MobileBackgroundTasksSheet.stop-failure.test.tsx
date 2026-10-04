@@ -75,6 +75,9 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 const REFUSED = 'That task is not running any more'
+// What the phone says for it: the refusal's code, worded through the shared notice table, never the
+// host's own message (Orca #22999). `agent_session_conflict` names no cause of its own.
+const SAID = "The background task wasn't stopped."
 const UNCONFIRMED = 'Stop unconfirmed — check chat before retrying'
 const TAB = 'host-a\0wt-1\0tab-1'
 
@@ -228,7 +231,7 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
     await pressStop()
 
     expect(cancels()).toHaveLength(1)
-    expectSaidInSheet(REFUSED)
+    expectSaidInSheet(SAID)
     // Said once, where it can be seen; the banner under the sheet stays quiet.
     expect(screen).not.toHaveBeenCalled()
   })
@@ -250,13 +253,13 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
       ok({ ok: false, refusal: { code: 'agent_session_conflict', message: REFUSED } })
     await mountTab()
     await pressStop()
-    expectSaidInSheet(REFUSED)
+    expectSaidInSheet(SAID)
 
     // The next Stop is still on its way; the old reason must not sit over it.
     cancelReply = () => new Promise(() => undefined)
     await pressStop()
 
-    expect(said(REFUSED)).toEqual([])
+    expect(said(SAID)).toEqual([])
   })
 
   it("says a Stop that fails after the sheet closed on the chat's banner", async () => {
@@ -280,7 +283,7 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
     })
 
     expect(screen).toHaveBeenCalledTimes(1)
-    expect(screen).toHaveBeenCalledWith(REFUSED)
+    expect(screen).toHaveBeenCalledWith(SAID)
   })
 
   it.each([
@@ -294,7 +297,7 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
 
     await pressStop()
 
-    const [message] = said(REFUSED)
+    const [message] = said(SAID)
     expect(message).toBeDefined()
     const style = [message!.props.style].flat(Infinity) as Array<{ color?: string } | null>
     const colors = style.map((entry) => entry?.color).filter((color) => color !== undefined)
