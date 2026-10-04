@@ -674,3 +674,21 @@ describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
     }
   })
 })
+
+describe('the main agent verdict on a status payload', () => {
+  it('admits the host-observed verdicts, and reads an arm it cannot name as no verdict', () => {
+    for (const outcome of ['interruption', 'unconfirmed'] as const) {
+      expect(
+        parseAgentStatusPayload(
+          `{"state":"done","mainAgent":{"state":"done","outcome":"${outcome}","stateStartedAt":5}}`
+        )?.mainAgent
+      ).toEqual({ state: 'done', outcome, stateStartedAt: 5 })
+    }
+    // A newer host's arm drops the verdict, never the row: the row reads today's done.
+    expect(
+      parseAgentStatusPayload(
+        '{"state":"done","prompt":"keep me","mainAgent":{"state":"done","outcome":"from-a-newer-host","stateStartedAt":5}}'
+      )
+    ).toMatchObject({ state: 'done', prompt: 'keep me', mainAgent: { state: 'done' } })
+  })
+})

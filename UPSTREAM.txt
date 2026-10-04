@@ -4,7 +4,7 @@ Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md
 src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
@@ -35,15 +35,15 @@ src/shared/structured-agent-session-options.test.ts: e0144a9eb6 (v1.4.211..v1.4.
 src/shared/structured-agent-session-option-picks.test.ts: c287a5d9b
 src/shared/structured-agent-session-option-codec.ts: c287a5d9b
 src/shared/structured-agent-session-option-codec.test.ts: c287a5d9b
-src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6627c6503c), see LOCAL-FILES.md
+src/shared/agent-session-wire.ts: f1d854502 (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6627c6503c), see LOCAL-FILES.md; plus #23467 (24edf0f64b) hunks by hand: the AgentTurnOutcome type and its guard, see LOCAL-FILES.md
 src/shared/agent-session-background-task-wire.ts: f2af92b2f
 src/shared/remote-runtime-client-capabilities.ts: 2626e2eca
 src/shared/agent-session-background-task-state-equality.ts: 2626e2eca
-src/shared/agent-session-turn-record.ts: 2626e2eca
+src/shared/agent-session-turn-record.ts: 2626e2eca; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md
 src/shared/agent-session-turn-record.test.ts: 2626e2eca
 src/shared/agent-turn-lifecycle-text.ts: 2626e2eca
-src/shared/structured-agent-session-turn-timing.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
-src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6ae6ed08bb), see LOCAL-FILES.md
+src/shared/structured-agent-session-turn-timing.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves); plus #23467 (24edf0f64b) verdict hunks merged by hand (the fork keeps its `thinking` row; no queue-until hunk)
+src/shared/structured-agent-session-turn-timing.test.ts: 533b0bd02; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 6ae6ed08bb), see LOCAL-FILES.md; plus #23467 (24edf0f64b) tests merged by hand
 src/shared/structured-agent-turn-clock-anchor.ts: 533b0bd02
 src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
@@ -70,8 +70,8 @@ src/shared/native-chat-tool-activity.ts: 641a7f36d9 (v1.4.210..v1.4.211 shared h
 src/shared/native-chat-tool-run-outcome.ts: 68ea3b92e
 src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
-src/shared/native-chat-turn-status.ts: 533b0bd02
-src/shared/native-chat-turn-status.test.ts: 533b0bd02
+src/shared/native-chat-turn-status.ts: 533b0bd02; plus #23467 (24edf0f64b) verdict hunks merged by hand (the fork keeps its `thinking` row; no queue-until hunk)
+src/shared/native-chat-turn-status.test.ts: 533b0bd02; plus #23467 (24edf0f64b) tests merged by hand
 src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-live-turn.test.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299, #22349)
 src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
@@ -285,7 +285,7 @@ src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared ha
 src/shared/agent-hook-listener/listener-event.ts: c62eca398
 src/shared/agent-status-ipc-payload.ts: c62eca398
 src/shared/agent-status-observation.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves)
-src/shared/runtime-worktree-contracts.ts: c62eca398
+src/shared/runtime-worktree-contracts.ts: c62eca398; plus v1.4.220 whole (#23467 24edf0f64b adds the `mainAgent` row field the phone reads; #23837 6f2a7d05c9 adds `removing`); the fork's copy equalled v1.4.217
 src/shared/agent-status-run.ts: c62eca398
 
 v1.4.209 shared halves (#21734, #21665, #21577, #21606, #21925, #21891, #21863, #22073), and the
@@ -332,7 +332,7 @@ src/shared/claude-background-task-status.test.ts: a0e24905f6 (v1.4.211..v1.4.217
 src/shared/agent-hook-listener/providers/claude-roster-state.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
 src/shared/draft-paste-ready-scanner.test.ts: fe51c804b8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-interrupt-intent.ts: a7a3c021d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20149's change)
-src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment)
+src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
 src/shared/agent-hook-listener/providers/muse-events.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because provider-dispatch.ts imports it)
 src/shared/agent-hook-listener/providers/muse-events.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new)
 src/shared/muse-session-log.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because listener-state.ts and muse-events.ts import it)
@@ -367,7 +367,7 @@ src/shared/agent-hook-listener-claude-subagents.test.ts: 80f5aae0f9 (v1.4.211..v
 src/shared/agent-hook-listener-claude-turn-state.test.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-hook-listener-codex-main-agent.test.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
 src/shared/agent-hook-listener-interactive-prompts.test.ts: 14087c8e32 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/agent-hook-listener/main-agent-turn-state.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-hook-listener/main-agent-turn-state.ts: b4d732685c (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
 src/shared/agent-hook-listener/providers/claude-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-hook-listener/providers/claude-lifecycle-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-hook-listener/providers/claude-status-build.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -390,7 +390,7 @@ src/shared/agent-session-refusal-retry.ts: d443320af2 (v1.4.211..v1.4.217 shared
 src/shared/agent-session-surface-tab-id.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
 src/shared/agent-state-history.ts: 5e6fcca0b3 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
 src/shared/agent-status-field-normalization.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/agent-turn-outcome.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/agent-turn-outcome.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
 src/shared/browser-url.test.ts: 2ce47d9bc2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/browser-url.ts: 2ce47d9bc2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/claude-subagent-roster.ts: 517ef56c66 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -411,7 +411,7 @@ src/shared/keybindings/definitions-core-1.ts: 0a5e73e3bb (v1.4.211..v1.4.217 sha
 src/shared/local-build-compatibility-contract.json: 0cabc02fff (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/local-build-compatibility-contract.ts: 0cabc02fff (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/machine-name.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
-src/shared/main-agent-status.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
+src/shared/main-agent-status.ts: 80f5aae0f9 (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
 src/shared/main-process-ndjson-framer.ts: fed613bab7 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/native-chat-href-routing.test.ts: 845db9e5e2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/native-chat-href-routing.ts: 845db9e5e2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -420,7 +420,7 @@ src/shared/non-secure-context-uuid.ts: 7d2c399329 (v1.4.211..v1.4.217 shared hal
 src/shared/orca-dispatch-status-prompt.ts: ca75bc4c8d (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/orcad-artifacts.ts: 6fc3cdcad6 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/orchestration-compatibility-evidence.ts: 18bbf6f209 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/plugins/plugin-events.ts: 85642d0d88 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/plugins/plugin-events.ts: 85642d0d88 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
 src/shared/powershell-native-argument.test.ts: 58d1ff3b6a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/powershell-native-argument.ts: 58d1ff3b6a (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/process-table-index.ts: 1c2cf120e3 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -453,8 +453,8 @@ src/shared/ui-chrome-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; fir
 src/shared/window-shortcut-policy.test.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/windows-cmd-runner-delayed-launch.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/zcode-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
-src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md
-src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
+src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md
+src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md; plus #23467 (24edf0f64b) hunks by hand: the AgentTurnOutcome type and its guard, see LOCAL-FILES.md
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
@@ -464,3 +464,4 @@ src/shared/structured-agent-session-projection.ts: vendor base; plus #22619 (cb3
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
 src/shared/agent-session-next-fence.ts: vendor base; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
+src/shared/agent-status-types.test.ts: vendor base; plus a verdict test appended (the fork's file lacks upstream's surrounding describe), #23467

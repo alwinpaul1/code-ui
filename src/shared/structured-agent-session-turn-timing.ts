@@ -9,7 +9,8 @@ import type {
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
-import { readAgentJournalTurn } from './agent-session-turn-record'
+import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
+import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 
 export type StructuredAgentTurnTiming = {
@@ -26,6 +27,8 @@ export type StructuredAgentTurnTiming = {
   /** Host clock when the lifecycle row was appended; with `startedAt` it gives
    *  the host-side lag a client must subtract to anchor a live counter. */
   observedAt: number
+  /** The turn's verdict, the provider's or the host-observed end's; absent when unknown. */
+  verdict?: AgentTurnOutcome
 }
 
 function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | null {
@@ -49,13 +52,15 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
     durationMs !== undefined && Number.isFinite(durationMs) && durationMs >= 0
       ? durationMs
       : undefined
+  const verdict = agentTurnVerdict({ state, outcome: readAgentJournalTurnOutcome(turn) })
   return {
     state,
     startedAt,
     ...(requested !== undefined ? { requestedAt: requested } : {}),
     ...(end !== undefined ? { completedAt: end } : {}),
     ...(measured !== undefined ? { durationMs: measured } : {}),
-    observedAt: item.observedAt
+    observedAt: item.observedAt,
+    ...(verdict ? { verdict } : {})
   }
 }
 
@@ -178,7 +183,11 @@ export function selectStructuredAgentSettledTurns(
       userItemId,
       workedSeconds === null || timing === null
         ? null
-        : { startedAt: timing.startedAt, workedSeconds }
+        : {
+            startedAt: timing.startedAt,
+            workedSeconds,
+            ...(timing.verdict ? { verdict: timing.verdict } : {})
+          }
     )
   }
   for (const submission of submissions) {

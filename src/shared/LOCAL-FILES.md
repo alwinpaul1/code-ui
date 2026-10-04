@@ -374,3 +374,27 @@ desktop settings, catalog or rewind code in behind them and nothing on the phone
 fixtures), `agent-status-types.test.ts` and
 `agent-hook-listener-extraction-characterization.test.ts`. None of them is imported by production code under
 `mobile/`.
+
+## The v1.4.219..v1.4.220 chat-lane shared halves (Orca v1.4.220)
+
+This fork's chat-lane shared files sit at v1.4.217 plus local hunks; the v1.4.217..v1.4.219 chat
+work (the failure-fact family `agent-session-failure*.ts` and `agent-session-refusal-notice.ts`,
+queue delivery and `structured-agent-session-draft-hand-off.ts`, `agent-main-agent-verdict.ts`,
+`structured-agent-session-latest-request.ts`) was never taken. The v1.4.220 changes are therefore
+taken as hunks on the older base, not by re-vendoring, and the ones that build on those missing
+modules are not taken at all (see the port rows).
+
+- `agent-turn-outcome.ts`, `main-agent-status.ts`, `agent-hook-listener/main-agent-turn-state.ts`,
+  `plugins/plugin-events.ts`, `notification-settings-types.ts`, `runtime-worktree-contracts.ts` —
+  taken whole at v1.4.220 (#23467, #23837); the fork's copies equalled v1.4.219 (v1.4.217 for
+  the last one).
+- `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts`,
+  `agent-session-turn-record.ts` — `outcome` on a turn lifecycle row (open string in the schema,
+  both carriers) and `readAgentJournalTurnOutcome`, by hand from v1.4.217. #23467's
+  `agentTurnVerdict` reads it: without it a user's Stop (state `interrupted`, outcome
+  `cancellation`) would read as a crash.
+- `agent-status-types.ts`, `agent-session-wire.ts` — `AgentTurnOutcome` / `isAgentTurnOutcome`
+  in place of the journal-only type (#23467), by hand.
+- `native-chat-turn-status.ts`, `structured-agent-session-turn-timing.ts` — the verdict hunks of
+  #23467 on top of the fork's `thinking` row; upstream's queue-until hunk in the timing file is
+  not taken (no queue delivery here).

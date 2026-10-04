@@ -6,6 +6,8 @@ import {
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
+  agentRowVerdict,
+  agentRowVerdictMark,
   formatTimeAgo,
   previewLine
 } from './agent-row-display'
@@ -39,8 +41,65 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'unknown-state' as never }), 0)).toBe('idle')
   })
 
-  it('reports interrupted regardless of state', () => {
+  it("reads an old host's legacy interrupted flag as a user's Stop, on a done row", () => {
     expect(agentDotState(row({ state: 'done', interrupted: true }), 0)).toBe('interrupted')
+  })
+
+  // Orca #23467. `mainAgent.outcome` is the host's verdict on the main agent's last turn.
+  const mainAgentDone = (outcome: string) => ({
+    mainAgent: { state: 'done' as const, outcome: outcome as never, stateStartedAt: 0 }
+  })
+
+  it('reads a turn a crash cut off as failed, and a user stop or a replaced turn as interrupted', () => {
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
+      'failed'
+    )
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('failure') }), 0)).toBe('failed')
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('cancellation') }), 0)).toBe(
+      'interrupted'
+    )
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('superseded') }), 0)).toBe(
+      'interrupted'
+    )
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('success') }), 0)).toBe('done')
+  })
+
+  it("reads an end the host could not prove as unconfirmed, worded 'Couldn’t confirm'", () => {
+    const unproven = row({ state: 'done', ...mainAgentDone('unconfirmed') })
+    expect(agentDotState(unproven, 0)).toBe('unconfirmed')
+    expect(agentDisplayLabel(unproven, 0)).toBe('Couldn’t confirm')
+    expect(agentDisplayLabel(row({ state: 'done', ...mainAgentDone('interruption') }), 0)).toBe(
+      'Failed'
+    )
+  })
+
+  it('lets a fault outrank live subagent work, but a stop or an unproven end only marks a done row', () => {
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('interruption') }), 0)).toBe(
+      'failed'
+    )
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('cancellation') }), 0)).toBe(
+      'working'
+    )
+    expect(agentDotState(row({ state: 'working', ...mainAgentDone('unconfirmed') }), 0)).toBe(
+      'working'
+    )
+  })
+
+  // Rows arrive unparsed, so an arm a newer host adds must read as the done it always did.
+  it('reads a done row carrying a verdict it cannot name as done', () => {
+    expect(agentDotState(row({ state: 'done', ...mainAgentDone('from-a-newer-host') }), 0)).toBe(
+      'done'
+    )
+    expect(agentRowVerdict(row({ state: 'done', ...mainAgentDone('from-a-newer-host') }))).toBeNull()
+    expect(agentRowVerdictMark(row({ state: 'done' }))).toBeNull()
+  })
+
+  it('ignores a verdict that rides on a main agent that is not itself done', () => {
+    const live = row({
+      state: 'done',
+      mainAgent: { state: 'working', outcome: 'failure', stateStartedAt: 0 }
+    })
+    expect(agentRowVerdict(live)).toBeNull()
   })
 
   it('decays a stale active state to idle, matching desktop', () => {
@@ -53,9 +112,9 @@ describe('agentDotState', () => {
     expect(
       agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
     ).toBe('working')
-    // 'done' never decays; interrupted still wins.
+    // 'done' never decays, and neither does its verdict.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
-    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
+    expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
   })

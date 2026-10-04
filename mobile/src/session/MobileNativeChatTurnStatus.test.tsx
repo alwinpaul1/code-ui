@@ -47,6 +47,7 @@ type Props = {
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
+  verdict?: 'interruption' | 'cancellation' | 'unconfirmed'
   expanded?: boolean
   onToggleExpanded?: () => void
 }
@@ -94,6 +95,32 @@ describe('the per-turn status row', () => {
     }
     return undefined
   }
+
+  it.each(['light', 'dark'] as const)(
+    'heads a turn a crash cut off as failed and a turn the user stopped as interrupted (%s)',
+    (scheme) => {
+      const crashed = render(
+        { startedAt: Date.now(), thinking: false, workedSeconds: 12, verdict: 'interruption' },
+        scheme
+      )
+      expect(labels(crashed.root)).toEqual(['Failed after 12s'])
+      act(() => crashed.unmount())
+      const stopped = render(
+        { startedAt: Date.now(), thinking: false, workedSeconds: 12, verdict: 'cancellation' },
+        scheme
+      )
+      expect(labels(stopped.root)).toEqual(['Interrupted after 12s'])
+      // The label is drawn in the theme's own text colour for each scheme, never a literal.
+      expect(labelColor(stopped)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      act(() => stopped.unmount())
+      // An end the host could not prove still reads as the plain finished label.
+      const unproven = render(
+        { startedAt: Date.now(), thinking: false, workedSeconds: 12, verdict: 'unconfirmed' },
+        scheme
+      )
+      expect(labels(unproven.root)).toEqual(['Worked for 12s'])
+    }
+  )
 
   it('reads "Thinking" before the turn produces output', () => {
     expect(labels(render({ startedAt: Date.now(), thinking: true }).root)).toEqual(['Thinking'])
