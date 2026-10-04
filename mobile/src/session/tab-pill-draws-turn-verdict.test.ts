@@ -72,4 +72,11 @@ describe('the tab pill after a turn ends', () => {
   it('still draws the check for a row that carries only the legacy Stop flag', () => {
     expect(pillDotState(endedRow(null, true), 2_000)).toBe('done')
   })
+
+  // The selected pill is the theme's text colour, light in dark mode and near-black in light mode;
+  // AgentStateDot.verdict-tones.test.tsx measures the tones these two flags pick on it.
+  it("draws its dot in the selected pill's own surface tones in both schemes", () => {
+    expect(headerCode()).toContain('onLightSurface={active && isDark}')
+    expect(headerCode()).toContain('onDarkSurface={active && !isDark}')
+  })
 })

@@ -27,7 +27,8 @@ const DONE_COLOR = '#10b981'
 const QUESTION_COLOR = '#f97316'
 // On a light surface (the selected tab pill in dark mode is the theme's text
 // colour, #ECE9E2) the desktop tones fall to 1.8–2.6:1; these are the same
-// hues two Tailwind steps darker. Reviewed 2026-09-11.
+// hues two Tailwind steps darker. Reviewed 2026-09-11; the last two added
+// 2026-10-04 (6.3:1 and 4.1:1 there).
 const ON_LIGHT = {
   working: '#a16207',
   done: '#047857',
@@ -35,16 +36,26 @@ const ON_LIGHT = {
   interrupted: '#57534e',
   unconfirmed: '#b45309'
 }
+// On a dark surface (the selected tab pill in light mode is the theme's text
+// colour, #1E1C19) the desktop tones and the light theme's amber read 4.5:1 or
+// better, but its muted tone (#67625A) drew a Stop's dot at 2.81:1. This is the
+// dark theme's muted tone, made for that near-black (5.8:1). 2026-10-04.
+const ON_DARK = {
+  interrupted: '#9A968D'
+}
 
 export function AgentStateDot({
   state,
   size = 10,
-  onLightSurface = false
+  onLightSurface = false,
+  onDarkSurface = false
 }: {
   state: AgentDotState
   size?: number
   /** Drawn on a light background (the selected pill in dark mode): darker tones. */
   onLightSurface?: boolean
+  /** Drawn on a dark background (the selected pill in light mode): a lighter muted tone. */
+  onDarkSurface?: boolean
 }) {
   const spinValue = useRef(new Animated.Value(0)).current
   const { colors } = useTheme()
@@ -113,7 +124,9 @@ export function AgentStateDot({
     state === 'interrupted'
       ? onLightSurface
         ? ON_LIGHT.interrupted
-        : colors.textMuted
+        : onDarkSurface
+          ? ON_DARK.interrupted
+          : colors.textMuted
       : state === 'unconfirmed'
         ? onLightSurface
           ? ON_LIGHT.unconfirmed

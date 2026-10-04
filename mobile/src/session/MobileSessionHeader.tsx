@@ -407,5 +407,12 @@ function TabActivityBadge({
   if (state === 'idle' || (state === 'monitoring' && activity === null)) {
     return null
   }
-  return <AgentStateDot state={state} size={12} onLightSurface={active && isDark} />
+  return (
+    <AgentStateDot
+      state={state}
+      size={12}
+      onLightSurface={active && isDark}
+      onDarkSurface={active && !isDark}
+    />
+  )
 }
