@@ -1,4 +1,5 @@
 import { elementInRoot } from './document-host-seams'
+import { MEDIA_CONTROL_GLYPHS_FONT_FAMILY } from '../terminal-media-control-glyphs'
 import { TERMINAL_TEXT_SCALES } from '../terminal-text-scales'
 import type { TerminalDocumentScope } from './document-scope'
 import { scheduleDocumentFrame } from './document-frame-registry'
@@ -49,8 +50,13 @@ export function isIOSWebView() {
 }
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
+// Code UI: the media-control face sits just before the generic. Its unicode-range
+// lets it supply U+23F4..U+23FA alone (Claude Code's `⏵⏵`, boxes on a Galaxy S23);
+// every other character falls through it. Only the WebView declares the face.
 const TERMINAL_FONT_FALLBACKS =
-  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", monospace'
+  '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "' +
+  MEDIA_CONTROL_GLYPHS_FONT_FAMILY +
+  '", monospace'
 
 // Why: change the real font size, then resize the grid to fit the viewport at
 // the new cell metrics so the text shows at its true size immediately. RN's

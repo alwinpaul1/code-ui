@@ -1,3 +1,7 @@
+import {
+  MEDIA_CONTROL_GLYPHS_FONT_FAMILY,
+  MEDIA_CONTROL_GLYPHS_SAMPLE
+} from '../terminal-media-control-glyphs'
 import { flog } from './viewport-transform'
 import { applyTerminalTheme } from './terminal-theme'
 import type { TerminalDocumentScope, TerminalDocumentWebglAddon } from './document-scope'
@@ -100,12 +104,45 @@ function onDocumentVisibilityChange(scope: TerminalDocumentScope) {
   refreshTerminalSurface(scope)
 }
 
+/**
+ * Code UI: rebuild the atlas once the media-control face has loaded.
+ *
+ * The WebGL renderer rasterises a glyph once and keeps it in its atlas. The face is behind a
+ * unicode-range and a data URI, both of which load asynchronously, so Claude Code's first `⏵`
+ * would be drawn from the fallback (a box on a Galaxy S23) and kept. Asking for the face here
+ * starts the load before the first snapshot paints, and the atlas is rebuilt when it lands. On the
+ * page, which declares no such face, the load answers no faces and nothing is redrawn.
+ */
+function redrawWhenMediaControlFaceLoads(scope: TerminalDocumentScope, isStopped: () => boolean) {
+  const fonts = typeof document === 'undefined' ? undefined : document.fonts
+  if (!fonts || typeof fonts.load !== 'function') {
+    return
+  }
+  fonts.load('13px "' + MEDIA_CONTROL_GLYPHS_FONT_FAMILY + '"', MEDIA_CONTROL_GLYPHS_SAMPLE).then(
+    function (faces) {
+      if (isStopped() || faces.length === 0) {
+        return
+      }
+      try {
+        if (scope.webglAddon && scope.webglAddon.clearTextureAtlas) {
+          scope.webglAddon.clearTextureAtlas()
+        }
+      } catch {}
+      refreshTerminalSurface(scope)
+    },
+    function () {}
+  )
+}
+
 export function startWebglRecovery(scope: TerminalDocumentScope) {
   const onVisibilityChange = () => onDocumentVisibilityChange(scope)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  let stopped = false
   scope.removeWebglRecovery = () => {
+    stopped = true
     document.removeEventListener('visibilitychange', onVisibilityChange)
   }
+  redrawWhenMediaControlFaceLoads(scope, () => stopped)
 }
 
 export function stopWebglRecovery(scope: TerminalDocumentScope) {

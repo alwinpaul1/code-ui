@@ -1,5 +1,6 @@
 import { TERMINAL_DOCUMENT_MARKUP } from './document-markup'
 import { TERMINAL_DOCUMENT_STYLE } from './document-style'
+import { MEDIA_CONTROL_GLYPHS_FONT_FACE } from './media-control-glyphs-font-face'
 import { XTERM_ENGINE_CSS } from '../terminal-webview-engine-css.generated'
 import { XTERM_ENGINE_JS } from '../terminal-webview-engine.generated'
 
@@ -19,6 +20,9 @@ window.onerror = function(msg, src, line, col) {
 };
 </script>
 <style>${XTERM_ENGINE_CSS}</style>
+<style>
+${MEDIA_CONTROL_GLYPHS_FONT_FACE}
+</style>
 <style>
 ${TERMINAL_DOCUMENT_STYLE}
 </style>
