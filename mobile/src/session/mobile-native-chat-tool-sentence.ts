@@ -182,7 +182,12 @@ function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
       entry.pairs.push(pair)
       pending.push({ entry, pair })
     } else if (isToolResultBlock(block)) {
-      // FIFO by ordinal, the pairing rule the fold itself uses.
+      // By position, oldest unanswered call first: the fold's own rule
+      // (`pairToolBlocks`) for a result that names no call. Since Orca #22619
+      // the fold gives a result that names its call (`callId`, which a
+      // structured chat's results carry) to that call; this does not, so a
+      // failed result of that kind arriving out of order could be counted
+      // against another kind than the rows show. No captured run shows it.
       const slot = pending.shift()
       if (!slot) {
         continue

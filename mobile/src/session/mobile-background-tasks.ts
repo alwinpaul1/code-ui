@@ -221,9 +221,16 @@ export function deriveBackgroundTasks(
         pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at: position })
         trackCall(sends, block.name, block.input)
       } else if (isToolResultBlock(block)) {
-        // FIFO by ordinal: transcript blocks carry no tool ids (the same rule
-        // `pairToolBlocks` uses in src/shared/native-chat-tool-fold.ts), save
-        // that an Agent call waits for an Agent-shaped result.
+        // By position, oldest unanswered call first, save that an Agent call
+        // waits for an Agent-shaped result. A transcript's results name no
+        // call (Orca 1.4.212 keeps the call's id and drops the result's:
+        // fixtures/claude-agent-message-read-image-2.1.283.ts), and for those
+        // `pairToolBlocks` (src/shared/native-chat-tool-fold.ts) pairs by
+        // position too. Since Orca #22619 it gives a result that names its call
+        // (`callId`) to that call; this reader does not read `callId`, so
+        // beyond the Agent rule the two differ only on such a result arriving
+        // out of order, which no captured input shows reaching here (this
+        // runs when the host sends no task roster).
         const call = takeAnsweredCall(pending, block.output)
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
