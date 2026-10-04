@@ -418,3 +418,9 @@ modules are not taken at all (see the port rows).
   `CODE UI LOCAL HUNK`; a re-vendor of the normalization file makes it redundant. Only the type
   `AgentProcessPresence` is reached (from `listener-event.ts` and `agent-hook-relay.ts`); the probe,
   transition and listener halves of #23947 are desktop/host code and are not taken.
+  #22614 (0b79720c2e): `AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY` (new one-constant module,
+  taken whole; the import and host list entry here). The phone does not advertise it, so a host keeps
+  sending the legacy `tasks` / `settledTasks` roster. The rest of #22614 (the child-work view codec,
+  `children` on the background-task state and the status summary, the reducer's admission step) is
+  not taken: nothing on the phone would read a `children` field without a roster UI for it, and
+  upstream's mobile app is unchanged by that PR.
