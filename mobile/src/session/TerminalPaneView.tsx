@@ -1,5 +1,3 @@
-import { TerminalGhosttyView } from '../terminal/TerminalGhosttyView'
-import type { TerminalEngine } from '../terminal/terminal-engine-preference'
 import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { TerminalWebView } from '../terminal/TerminalWebView'
@@ -12,8 +10,6 @@ import type {
 
 type TerminalPaneViewProps = {
   handle: string
-  /** Which engine draws this pane; both implement the same handle. */
-  engine: TerminalEngine
   active: boolean
   keyboardLift: number
   terminalTheme?: MobileTerminalTheme
@@ -35,7 +31,6 @@ type TerminalPaneViewProps = {
 }
 
 export function TerminalPaneView({
-  engine,
   handle,
   active,
   keyboardLift,
@@ -63,7 +58,6 @@ export function TerminalPaneView({
     [handle, onRef]
   )
 
-  const TerminalEngineView = engine === 'ghostty' ? TerminalGhosttyView : TerminalWebView
   return (
     <View
       // Why: inactive terminal WebViews stay mounted to preserve xterm state,
@@ -75,7 +69,7 @@ export function TerminalPaneView({
         !active && styles.terminalPaneHidden
       ]}
     >
-      <TerminalEngineView
+      <TerminalWebView
         ref={setRef}
         style={styles.terminalWebView}
         terminalTheme={terminalTheme}

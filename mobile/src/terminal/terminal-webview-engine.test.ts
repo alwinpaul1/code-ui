@@ -100,6 +100,38 @@ describe('terminal WebView bundled engine', () => {
     expect(() => parse(XTERM_ENGINE_JS, { ecmaVersion: 2019 })).not.toThrow()
   })
 
+  // Orca #24626: esbuild 0.25's syntax folding drops xterm's local DECRQM enum declaration, so the
+  // bundled engine threw a ReferenceError the moment an agent asked "CSI ? 1004 $ p" and the
+  // pane's engine died with OpenCode's startup mode query.
+  it('answers the mode query OpenCode sends during startup', async () => {
+    vi.useFakeTimers()
+    const reply = vi.fn()
+    const window = {}
+    try {
+      new Script(
+        `${XTERM_ENGINE_JS}; const terminal = new window.Terminal();
+        terminal.onData(reply); terminal.write('\\x1b[?1004$p');`
+      ).runInNewContext({
+        window,
+        self: window,
+        document: {},
+        navigator: { platform: 'Linux', userAgent: 'Chrome/74' },
+        structuredClone,
+        performance,
+        setTimeout,
+        clearTimeout,
+        queueMicrotask,
+        console,
+        URL,
+        reply
+      })
+      await vi.runAllTimersAsync()
+      expect(reply).toHaveBeenCalledWith('\x1b[?1004;2$y')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   // Why: the context deliberately omits WeakRef (Chrome 84+) / structuredClone
   // (Chrome 98+) and supplies an Element without replaceChildren (Chrome 86+) —
   // the engine must evaluate on older WebViews via its own guarded runtime shims,

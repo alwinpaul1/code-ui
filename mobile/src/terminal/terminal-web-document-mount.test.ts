@@ -103,7 +103,9 @@ describe('a stopped document takes its engines with it', () => {
     // is the committed terminal. Without this the second init would replace an uncommitted one
     // and there would be a single engine to dispose for the wrong reason.
     await settle()
-    started.send({ ...INIT })
+    // A snapshot with content: an empty one keeps the committed terminal and opens no second one
+    // (terminal-webview-empty-snapshot.test.ts).
+    started.send({ ...INIT, initialData: 'second snapshot' })
     expect(engines).toHaveLength(2)
     expect(engines.map((engine) => engine.disposals())).toEqual([0, 0])
 

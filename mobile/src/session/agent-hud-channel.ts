@@ -29,7 +29,9 @@
  *    (`ESC[?2026l`) is dropped. Nothing is drawn; a dropped ESU holds the
  *    desktop renderer until the next frame's ESU or 1 s. The OSC dropped it
  *    too, and drew the rest. Pinned in `agent-hud-beacon-splice.test.ts`.
- *  - Ghostty (libghostty-vt b0947378, the phone's engine; `parse_table.zig`,
+ *  - Ghostty (libghostty-vt b0947378, checked while it was the phone's engine, which
+ *    it no longer is: the phone draws panes with xterm.js; kept as a second
+ *    parser the bytes were verified against; `parse_table.zig`,
  *    `stream.zig`): the same in ground, ESC, CSI and OSC, and `execute`
  *    ignores SOH and STX explicitly and ETX and ACK in its default branch.
  *    Only 0x00-0x0F are executed there: the ground fast path PRINTS
@@ -45,7 +47,7 @@
  * Two places still take the bytes as data: a DCS passthrough, where both
  * parsers hand C0 to the DCS handler, and Ghostty's SOS/PM/APC string, which
  * keeps C0 as payload. Claude Code and Codex paint no DCS in their frames,
- * and the phone strips these bytes before its own engine sees them. Two
+ * and the phone strips these bytes before its terminal sees them. Two
  * splices still show, as they would for any second writer and for the OSC: one
  * between the bytes of a UTF-8 character (the host's decoder makes it U+FFFD),
  * and one between a base character and its combining mark or variation

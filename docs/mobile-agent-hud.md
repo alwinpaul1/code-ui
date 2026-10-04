@@ -120,7 +120,9 @@ memory:
   1 s. It happens only when the splice lands at exactly that byte, and only
   when xterm.js has two more bytes of the same write in hand. The OSC dropped
   the sequence there too, and drew the rest of it.
-- **Ghostty** (libghostty-vt `b0947378`, the phone's engine; `parse_table.zig`,
+- **Ghostty** (libghostty-vt `b0947378`, checked while it was the phone's engine;
+  the phone now draws its panes with xterm.js only, and this stays as the
+  second parser the bytes were verified against; `parse_table.zig`,
   `stream.zig`, `Terminal.zig`): the same actions in ground, ESC, CSI and OSC;
   its SOS/PM/APC string keeps C0 as payload. `execute` ignores
   SOH and STX explicitly, and ETX and ACK in its default branch. It executes
@@ -178,7 +180,7 @@ characters with the OSC writer and 4-8 with the channel, whose frames are
 larger. At the real cadence (one status-line beacon every 5 s) it has not been
 observed. Inside a DCS passthrough both parsers hand C0 to the DCS handler as
 data, and Ghostty keeps it as payload inside SOS/PM/APC; neither agent paints
-those in its frames, and the phone strips the bytes before Ghostty sees them.
+those in its frames, and the phone strips the bytes before its terminal sees them.
 
 `sid` names the session the beacon speaks for: Claude Code's `session_id`
 (the same field its hooks report, and the same id `--resume`/`-c` keep —

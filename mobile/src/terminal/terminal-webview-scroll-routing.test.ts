@@ -421,7 +421,7 @@ describe('TerminalWebView scroll routing', () => {
       '\nfunction onDocumentTouchCancel('
     )
     expect(touchEndBlock).toContain(
-      'notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)'
+      'notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, false)'
     )
 
     // The handler's own body, past its import block: the imports name these in a different order

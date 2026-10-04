@@ -1,7 +1,5 @@
 allowBuilds:
   esbuild: true
-  # Fetches the checksum-pinned libghostty binaries in postinstall.
-  expo-libghostty: true
 
 minimumReleaseAge: 4320
 
@@ -24,5 +22,4 @@ patchedDependencies:
   query-string@9.5.1: patches/query-string@9.5.1.patch
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.86.3: patches/react-native@0.86.3.patch
-  expo-libghostty@0.8.1: patches/expo-libghostty@0.8.1.patch
   expo-notifications@57.0.17: patches/expo-notifications@57.0.17.patch

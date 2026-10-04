@@ -58,7 +58,8 @@ export function notifyTerminalSurfaceTap(
   if (clickInput) {
     notify(scope, { type: 'terminal-input', bytes: clickInput })
   }
-  // Touch still needs native input focus after the TUI consumes its mouse click.
+  // Upstream focuses native input after a touch click too (`focusKeyboard`). Code UI's touch path
+  // passes false (cc4dfe216), so only a program that does not track the mouse opens the keyboard.
   if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode(scope))) {
     notify(scope, { type: 'terminal-tap' })
   }

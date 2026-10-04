@@ -273,9 +273,11 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     boot()
     dispatchWheel(CELL_HEIGHT - 1)
 
+    // A snapshot with content recreates the terminal; an empty one keeps it
+    // (terminal-webview-empty-snapshot.test.ts).
     window.dispatchEvent(
       new MessageEvent('message', {
-        data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: '' })
+        data: JSON.stringify({ type: 'init', cols: 40, rows: 24, initialData: 'fresh snapshot' })
       })
     )
     flushFrames()

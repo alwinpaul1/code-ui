@@ -143,6 +143,11 @@ export function extractMouseModeScanTail(input: string) {
  *
  * Nothing is dropped. The bytes stay queued and land the moment the gesture
  * settles, and the cap below means a long scroll cannot freeze the view.
+ *
+ * Only a swipe over local scrollback starts the hold (surface-touch-gestures.ts).
+ * A swipe a program takes as input (wheel rows for Claude Code, arrows for a
+ * pager) is scrolled by that program's own repaint, so holding it would hold
+ * the scroll itself.
  */
 export function writesHeldForScrollGesture(scope: TerminalDocumentScope) {
   if (!scope.scrollGestureActive) {

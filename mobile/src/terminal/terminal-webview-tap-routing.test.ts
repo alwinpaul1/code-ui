@@ -145,18 +145,53 @@ describe('terminal WebView tap routing', () => {
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
   })
 
-  it('focuses native input after reporting a touch tap to a mouse-tracking TUI', async () => {
-    const { posted } = boot('interactive prompt', undefined, 'drag')
+  // Code UI, deliberately not upstream's: upstream Orca sends the click AND focuses the native
+  // input here. The user reported that on the phone (cc4dfe216, 2026-09-11): tapping Claude Code's
+  // own "Jump to bottom (click)" opened the keyboard. While a program tracks the mouse the tap is a
+  // click for that program and nothing else; the composer bar still opens the keyboard, and a
+  // program that does not track the mouse still gets it from a tap (the case below).
+  it.each(['x10', 'vt200', 'drag', 'any'])(
+    'sends a tap on a mouse-tracking program (%s) as a click and does not open the keyboard',
+    async (mode) => {
+      const { posted } = boot('Jump to bottom (click)', undefined, mode)
+      await settle()
+
+      fireTouch('touchstart', [{ x: 20, y: tapY }])
+      fireTouch('touchend', [])
+
+      expect(
+        posted
+          .filter((message) => message.type === 'terminal-input' || message.type === 'terminal-tap')
+          .map((message) => message.type)
+      ).toEqual(['terminal-input'])
+    }
+  )
+
+  it('still opens a URL tapped on a mouse-tracking program instead of clicking it', async () => {
+    const { posted } = boot(URL_LINE, undefined, 'any')
     await settle()
 
-    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchstart', [{ x: tapX, y: tapY }])
     fireTouch('touchend', [])
 
-    expect(
-      posted
-        .filter((message) => message.type === 'terminal-input' || message.type === 'terminal-tap')
-        .map((message) => message.type)
-    ).toEqual(['terminal-input', 'terminal-tap'])
+    expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
+    expect(posted.find((m) => m.type === 'terminal-input')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
+  })
+
+  it('still opens a file path tapped on a mouse-tracking program instead of clicking it', async () => {
+    const line = 'open file:///tmp/result.json#L12C3 now'
+    const { posted } = boot(line, undefined, 'any')
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(line.indexOf('result')), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toMatchObject({
+      pathText: '/tmp/result.json'
+    })
+    expect(posted.find((m) => m.type === 'terminal-input')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-tap')).toBeUndefined()
   })
 
   it('reports a non-mouse touch tap without terminal mouse bytes', async () => {

@@ -524,7 +524,9 @@ const HEAD_HOST_JSX_SHA256 = '4553739f7c7aa13a4d322a342929ba66eaf4c8a5b85facea30
 // tab's hook-stamped turn end) and `watching`, so the header keeps the lead's
 // session while its background work runs and a nested Claude posts as the
 // pane (native-chat-kept-session.ts). Same 73 records; only that record moved.
-const HEAD_LEAF_JSX_SHA256 = '36cc22a4b1530e0582abce7935da96f72243fc5356755bbc612bf48ad8fdd360'
+// 2026-10-04 (xterm only): <TerminalPaneView> loses its `engine` prop, the phone draws every pane
+// with the WebView now. Same 73 records; only that record moved.
+const HEAD_LEAF_JSX_SHA256 = 'b66d13b81b0f8bea994b46aca2e938aef716d5c7f05b964ae6993a5f9cb8f738'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).

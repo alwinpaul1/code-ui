@@ -1,4 +1,3 @@
-import { useTerminalEngine } from '../terminal/use-terminal-engine'
 import { useMemo, useRef } from 'react'
 import { shownPermissionMode, stepTerminalMode } from './terminal-mode-stepper'
 import { Animated, View, Text, ActivityIndicator } from 'react-native'
@@ -27,7 +26,6 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
-  const terminalEngine = useTerminalEngine()
   const { colors, space } = useTheme()
   const styles = useThemedStyles(sessionStyles)
   // The host's mobile-scope RPC gate, probed once per connection: "Rewind to
@@ -308,7 +306,6 @@ export function MobileSessionActiveContent({
       {terminals.map((terminal) => (
         <TerminalPaneView
           key={terminal.handle}
-          engine={terminalEngine}
           handle={terminal.handle}
           active={terminal.handle === activeHandle}
           keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}

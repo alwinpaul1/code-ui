@@ -311,9 +311,11 @@ describe('the bundled native document', () => {
     // that ships rather than about a bundle this case built for itself.
     const { script, inputs } = await terminalDocumentBundle()
     expect(inputs.filter((input) => input.includes('node_modules'))).toEqual([])
-    // Code UI: 48, not upstream's 47 — the one extra input is `document/overscroll-bend.ts`, the
-    // scrollback bend this fork carries (9a6507b6). Measured against upstream's own build of e6de7a4bb.
-    expect(inputs).toHaveLength(48)
+    // Code UI: 49, not upstream's 47 — the extra inputs are `document/overscroll-bend.ts`, the
+    // scrollback bend this fork carries (9a6507b6; measured against upstream's own build of
+    // e6de7a4bb), and `terminal-media-control-glyphs.ts`, the family name of the face the WebView
+    // carries for Claude Code's `⏵⏵` (three string constants; the font's bytes stay in the shell).
+    expect(inputs).toHaveLength(49)
     expect(script).not.toContain('__commonJS')
     // `__esm` wrappers are esbuild's answer to a cycle, and a cycle would make a module's top level
     // run at first import rather than where the bundle places it.

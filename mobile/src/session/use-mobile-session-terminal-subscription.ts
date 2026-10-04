@@ -260,7 +260,7 @@ export function useMobileSessionTerminalSubscription(
             )
             // Why: an empty string is what a host mid-reflow sends; treating it as
             // a snapshot reset the grid to nothing, and an agent that repaints
-            // only changed rows never filled it back in (2026-09-11, ghostty).
+            // only changed rows never filled it back in (2026-09-11, seen on the engine the phone then used; the rule is the host's, not an engine's).
             const serialized =
               typeof data.serialized === 'string' && data.serialized.length > 0
                 ? data.serialized

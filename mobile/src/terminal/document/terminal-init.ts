@@ -31,6 +31,33 @@ export function init(
   preserveScroll: boolean,
   nextOscLinks: unknown
 ) {
+  const replayData = normalizeInitialData(initialData)
+  // Code UI: an empty snapshot keeps the screen this document already has and applies only its
+  // geometry; `resize` also answers the `ready` the handle's init() is waiting for. Orca v1.4.220
+  // publishes `data: serialized?.data ?? ''` on a subscribe snapshot, so a resubscribe of a drawn
+  // pane (return from chat, reconnect, the one e2d7a75e6 makes after an empty `resized`) can bring
+  // nothing, and a fresh terminal for it was a blank pane that Claude Code, repainting only the rows
+  // it thinks changed, never filled back in. The Ghostty pane's init('') was a no-op for the same
+  // reason. Keyed to this document's own terminal (on screen, or still being drawn), not to the
+  // handle: a remounted document is fresh, and its first init, empty or not, still opens one. The
+  // price: a host screen that really is empty shows the previous screen until the program next
+  // writes. A swap is still drawing while its init is live; a `clear` that bumped the generation
+  // under it abandoned it, and its hidden terminal is not a screen worth keeping.
+  const drawing =
+    scope.pendingTerm !== null && scope.pendingInitGeneration === scope.terminalGeneration
+  const empty = !(typeof replayData === 'string' && replayData.length > 0)
+  if (empty && drawing) {
+    // A snapshot with content is still being drawn (two inits flushed back to back). Resizing
+    // under its replay would wrap it, and its own `ready` would follow with the old geometry, so
+    // the geometry waits for that init to commit and goes out with the one `ready` it posts.
+    scope.emptyInitGeometry = { cols: cols, rows: rows }
+    return
+  }
+  if (empty && scope.term && scope.term === scope.committedTerm) {
+    resize(scope, cols, rows)
+    return
+  }
+  scope.emptyInitGeometry = null
   if (typeof nextFontScale === 'number' && nextFontScale > 0) {
     scope.currentTextScale = nextFontScale
   }
@@ -76,7 +103,6 @@ export function init(
     sgrMouseMode: false,
     sgrMousePixelsMode: false
   }
-  const replayData = normalizeInitialData(initialData)
   // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
   // mirrored modes aligned with exactly what this mobile xterm replays.
   updateMouseModeFromData(scope, replayData)
@@ -113,6 +139,7 @@ export function init(
   })
   const nextTerm = scope.term
   scope.pendingTerm = nextTerm
+  scope.pendingInitGeneration = gen
   scope.term.open(scope.surface!)
   attachWebglAddon(scope, true)
   try {
@@ -156,6 +183,13 @@ export function init(
       captureInitialOscLinkTexts(scope)
       scope.initialOscLinkRowOffset = 0
       scope.initialOscLinkEvictionReady = true
+      const laterGeometry = scope.emptyInitGeometry
+      if (laterGeometry) {
+        // Code UI: an empty snapshot arrived while this one was drawing; its geometry is the newer.
+        scope.emptyInitGeometry = null
+        resize(scope, laterGeometry.cols, laterGeometry.rows)
+        return
+      }
       applyFitScale(scope, 'init-replay')
       notify(scope, { type: 'ready', cols: cols, rows: rows })
     })
@@ -207,6 +241,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
  */
 export function stopTerminalInit(scope: TerminalDocumentScope) {
   scope.terminalGeneration++
+  scope.emptyInitGeometry = null
   for (const terminal of new Set([scope.term, scope.committedTerm])) {
     try {
       terminal?.dispose()

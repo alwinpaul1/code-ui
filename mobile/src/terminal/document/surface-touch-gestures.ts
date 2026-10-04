@@ -158,7 +158,12 @@ export function attachSurfaceEventHandlers(
       } else if (touches.length === 1) {
         scope.touchGesture.isPinching = false
         scope.touchGesture.dragging = true
-        beginScrollGestureWriteHold(scope)
+        // Code UI: only a swipe that moves the content itself holds the program's output back. On
+        // a program that takes the swipe as input (Claude Code's wheel rows, a pager's arrows) the
+        // repaint it sends back IS the scroll, and holding it froze the pane under the finger.
+        if (!shouldRouteScrollToTerminalInput(scope)) {
+          beginScrollGestureWriteHold(scope)
+        }
         scope.touchGesture.lastX = touches[0].clientX
         scope.touchGesture.lastY = touches[0].clientY
         scope.touchGesture.lastTime = nowMs()
