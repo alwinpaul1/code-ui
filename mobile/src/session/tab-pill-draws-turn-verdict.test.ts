@@ -2,8 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { agentDotState } from '../worktree/agent-row-display'
-import { tabDotStateAfterLeadTurn } from './session-tab-activity'
+import { tabPillDotState } from './session-tab-activity'
 
 // The tab pill (TabActivityBadge in MobileSessionHeader.tsx) draws the desktop tab's verdict marks
 // once a turn ends: the muted dot after the user's Stop, red for a failure, amber for an end the
@@ -12,11 +11,12 @@ import { tabDotStateAfterLeadTurn } from './session-tab-activity'
 // failed/interrupted/unconfirmed), fed by `resolveWorktreeStatus` (worktree-status.ts:216-237) from
 // `applyAgentPaneActivityFlags` (agent-pane-activity-flags.ts:20-35, `agentVerdictDisplayMark`).
 //
-// The pill still strips the legacy `interrupted` flag (since 41060f849, 2026-09-11), so a row that
-// carries only that flag, with no `mainAgent`, still draws the check. The desktop tab reads that
-// flag too (agentMainAgentVerdict), so that one case is not parity: a 1.4.220 host sends it for an
-// OpenCode run a SIGINT ended (opencode-run-lifetime-status.ts:86), and hosts before `mainAgent`
-// send it for every Stop.
+// The pill reads a row that carries only the legacy `interrupted` flag, with no `mainAgent`, as the
+// desktop tab does: through the verdict (agentMainAgentVerdict, mirrored by agent-row-display.ts and
+// pinned to it by its parity test), which takes the flag on a done row as a user's Stop. A 1.4.220
+// host sends such a row for an OpenCode run a SIGINT ended (opencode-run-lifetime-status.ts:86), and
+// hosts before `mainAgent` send one for every Stop. From 2026-09-11 (41060f849) to 2026-10-04 the
+// pill stripped the flag and drew the check there.
 
 const HEADER = readFileSync(join(__dirname, 'MobileSessionHeader.tsx'), 'utf8')
 
@@ -25,15 +25,10 @@ function headerCode(): string {
   return HEADER.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 }
 
-const PILL_EXPRESSION =
-  "tabDotStateAfterLeadTurn(status ? agentDotState({ ...status, interrupted: false }, now) : 'idle', leadTurnEnded)"
+const PILL_EXPRESSION = 'tabPillDotState(status, now, leadTurnEnded)'
 
-/** The pill's own expression, as PILL_EXPRESSION spells it in MobileSessionHeader.tsx. */
 function pillDotState(status: AgentStatusEntry | null, now: number, leadTurnEnded = false) {
-  return tabDotStateAfterLeadTurn(
-    status ? agentDotState({ ...status, interrupted: false }, now) : 'idle',
-    leadTurnEnded
-  )
+  return tabPillDotState(status, now, leadTurnEnded)
 }
 
 // The settled row a 1.4.217..1.4.220 host publishes after a Claude terminal turn ends
@@ -57,7 +52,7 @@ function endedRow(
 }
 
 describe('the tab pill after a turn ends', () => {
-  it('is drawn by the expression this test mirrors', () => {
+  it('is drawn by the function this test calls', () => {
     expect(headerCode()).toContain(PILL_EXPRESSION)
   })
 
@@ -69,8 +64,11 @@ describe('the tab pill after a turn ends', () => {
     expect(pillDotState(endedRow('failure'), 2_000, true)).toBe('failed')
   })
 
-  it('still draws the check for a row that carries only the legacy Stop flag', () => {
-    expect(pillDotState(endedRow(null, true), 2_000)).toBe('done')
+  it('draws a row that carries only the legacy Stop flag interrupted, as the desktop tab does', () => {
+    expect(pillDotState(endedRow(null, true), 2_000)).toBe('interrupted')
+    // The flag marks only a row that is itself done: live subagents after the Stop still read working.
+    expect(pillDotState({ ...endedRow(null, true), state: 'working' }, 2_000)).toBe('working')
+    expect(pillDotState(null, 2_000)).toBe('idle')
   })
 
   // The selected pill is the theme's text colour, light in dark mode and near-black in light mode;

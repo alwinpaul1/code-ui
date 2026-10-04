@@ -499,3 +499,5 @@ src/shared/agent-session-wire-refusals.test.ts: a68d62911e (new)
 src/shared/agent-session-rewind.ts: 134a22077d (new, at v1.4.220; reads AgentJournalTurnScopeSchema, hand-applied to journal-schemas)
 src/shared/structured-agent-session-status-block.ts: a68d62911e (#23116, new; v1.4.220 equals it)
 src/shared/native-chat-provider-retry-runs.ts: b4b708c2c4 (#23684, new). Its test is not vendored: it imports native-chat-transcript-projection.ts, which this fork does not have; mobile/src/session/use-mobile-structured-agent-session-retry-rows.test.tsx pins the behaviour on the phone
+src/shared/agent-main-agent-verdict.ts: 24edf0f64b (new; #22944 85067494a1, then #23467; v1.4.217..v1.4.219 chat chain)
+src/shared/agent-main-agent-verdict.test.ts: 24edf0f64b (new)

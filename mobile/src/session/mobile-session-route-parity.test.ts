@@ -398,8 +398,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // `target.typed = ''`) moved into live-terminal-dictation.ts, outside this family:
 // one 'pty' and three '' leave. Checked by diffing the reader's output against
 // 0bf636a3; no other literal moved.
+// 670 since 2026-10-04: TabActivityBadge's dot moved into session-tab-activity.ts's
+// tabPillDotState, outside this family, so the expression's `: 'idle'` leaves with it. The header
+// now calls `tabPillDotState(status, now, leadTurnEnded)` and holds no other literal of it.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'f293dbb461a9c036c16df89414ac34578e56940df7405e57bb5c31c456a84b46'
+  'bcceda597e4b5955e32fcd3ef50e8a3ecb20ae3923341eba3f88c06cf0112c61'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1085,7 +1088,8 @@ describe('mobile session route extraction parity', () => {
     // 675 since 2026-09-30: 'default' and 'manual' moved to shownPermissionMode.
     // 671 since 2026-09-30 (later): the live terminal dictation's 'pty' and three '' moved to
     // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
-    expect(strings).toHaveLength(671)
+    // 670 since 2026-10-04: the tab pill's 'idle' moved to session-tab-activity.ts.
+    expect(strings).toHaveLength(670)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

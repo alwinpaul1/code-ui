@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { styleText } from '../notifications/notification-plain-text'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import {
+  agentMainAgentVerdict,
+  agentVerdictDisplayMark
+} from '../../../src/shared/agent-main-agent-verdict'
+import { AGENT_TURN_OUTCOMES } from '../../../src/shared/agent-turn-outcome'
+import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentDisplayLabel,
   agentDotState,
@@ -127,6 +132,39 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
+  })
+})
+
+// Orca #22944 (85067494a1): upstream's parity test, taken now that `agent-main-agent-verdict.ts`
+// is vendored. The phone reads the verdict through its own mirror (agent-row-display.ts), as
+// upstream's phone does, so this pins the mirror to the desktop's accessor on every row the wire
+// can carry: the tab pill and the worktree rows then draw what the desktop's tab and rows draw.
+describe('the verdict mirror', () => {
+  it('agrees with the desktop verdict accessor on every row', () => {
+    const states = ['working', 'blocked', 'waiting', 'done'] as const
+    const mainAgents = [
+      undefined,
+      ...states.flatMap((state) =>
+        [undefined, ...AGENT_TURN_OUTCOMES].map((outcome) => ({
+          state,
+          ...(outcome ? { outcome } : {}),
+          stateStartedAt: 0
+        }))
+      )
+    ]
+    for (const state of states) {
+      for (const mainAgent of mainAgents) {
+        for (const interrupted of [false, true]) {
+          const agentRow = { state, interrupted, ...(mainAgent ? { mainAgent } : {}) }
+          expect(agentRowVerdict(agentRow), JSON.stringify(agentRow)).toBe(
+            agentMainAgentVerdict(agentRow)
+          )
+          expect(agentRowVerdictMark(agentRow), JSON.stringify(agentRow)).toBe(
+            agentVerdictDisplayMark(agentRow)
+          )
+        }
+      }
+    }
   })
 })
 

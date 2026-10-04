@@ -416,7 +416,9 @@ work (the failure-fact family `agent-session-failure*.ts` and `agent-session-ref
 queue delivery and `structured-agent-session-draft-hand-off.ts`, `agent-main-agent-verdict.ts`,
 `structured-agent-session-latest-request.ts`) was never taken. The v1.4.220 changes are therefore
 taken as hunks on the older base, not by re-vendoring, and the ones that build on those missing
-modules are not taken at all (see the port rows).
+modules are not taken at all (see the port rows). The failure-fact family and
+`agent-main-agent-verdict.ts` were taken afterwards, in the v1.4.217..v1.4.219 chat chain at the
+end of this file; queue delivery and `structured-agent-session-latest-request.ts` are still not.
 
 - `agent-turn-outcome.ts`, `main-agent-status.ts`, `agent-hook-listener/main-agent-turn-state.ts`,
   `plugins/plugin-events.ts`, `notification-settings-types.ts`, `runtime-worktree-contracts.ts` —
@@ -426,8 +428,9 @@ modules are not taken at all (see the port rows).
   reads, and `agentInterrupted` → `agentTurnOutcome` on `NotificationDispatchRequest`, which
   nothing on the phone reads. #22944's mobile half reads `mainAgent`: the verdict, mark and dot
   in `agent-row-display.ts` and the `failed` dot (with #23467), `agentRowTimeAt` and its use in
-  `WorktreeAgentRow.tsx`, and `areMainAgentsEqual` in `worktree-list-snapshot.ts`. Not taken: its
-  parity test against `agentMainAgentVerdict` (`agent-main-agent-verdict.ts` is not vendored).
+  `WorktreeAgentRow.tsx`, and `areMainAgentsEqual` in `worktree-list-snapshot.ts`. Its parity
+  test against `agentMainAgentVerdict` came with the chat chain, once `agent-main-agent-verdict.ts`
+  was vendored.
 - `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts`,
   `agent-session-turn-record.ts` — `outcome` on a turn lifecycle row (open string in the schema,
   both carriers) and `readAgentJournalTurnOutcome`, by hand from v1.4.217. #23467's
@@ -519,3 +522,8 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   agent's row between two attempts does not split the run, and two agents retrying at once each
   keep their latest row. Not taken from #23605: `native-chat-subagent-attribution.ts`, the
   tool-fold and turn-fold hunks, and how a subagent's words are drawn.
+- `agent-main-agent-verdict.ts` and its test, taken whole at 24edf0f64b (#22944, then #23467). The
+  phone keeps reading the verdict through its own mirror in `mobile/src/worktree/agent-row-display.ts`,
+  as upstream's phone does; #22944's parity test (in `agent-row-display.test.ts`) pins the mirror to
+  this module over every row. The tab pill (`tabPillDotState`, `mobile/src/session/session-tab-activity.ts`)
+  no longer strips the legacy `interrupted` flag, so it draws the verdict the desktop tab draws.

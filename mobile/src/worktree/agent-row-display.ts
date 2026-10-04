@@ -36,9 +36,10 @@ const AGENT_TURN_OUTCOMES: readonly AgentTurnOutcome[] = [
   'unconfirmed'
 ]
 
-// Mirrors desktop agentMainAgentVerdict (src/shared/agent-main-agent-verdict.ts). `mainAgent` is
-// the main agent's own status, sent also while subagents hold the row working; an old host sends
-// none, and its legacy `interrupted` flag is read as a user's Stop.
+// Mirrors desktop agentMainAgentVerdict (src/shared/agent-main-agent-verdict.ts, vendored; the
+// parity test in agent-row-display.test.ts runs both over every row). `mainAgent` is the main
+// agent's own status, sent also while subagents hold the row working; an old host sends none, and
+// its legacy `interrupted` flag is read as a user's Stop.
 export function agentRowVerdict(row: AgentRowVerdictSource): AgentTurnOutcome | null {
   if (row.mainAgent && row.mainAgent.state !== 'done') {
     return null
