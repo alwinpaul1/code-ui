@@ -12,8 +12,21 @@
 //
 // Verified against @xterm/xterm 6.1.0-beta.303 (terminal-webview-engine.generated.ts).
 import { runInThisContext } from 'node:vm'
+import { createElement } from 'react'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalWebViewHandle } from './terminal-webview-contract'
 import { XTERM_HTML } from './terminal-webview-html'
+import { useTerminalWebViewController } from './use-terminal-webview-controller'
+
+// The controller carries the engine-error overlay, a react-native component; nothing here draws it.
+vi.mock('react-native', () => ({
+  Pressable: 'Pressable',
+  StyleSheet: { absoluteFill: {}, create: (styles: unknown) => styles },
+  Text: 'Text',
+  View: 'View'
+}))
+vi.mock('lucide-react-native', () => ({ RefreshCw: 'RefreshCw' }))
 
 type Posted = Record<string, unknown>
 
@@ -40,6 +53,8 @@ function bodyMarkup(): string {
 }
 
 let posted: Posted[] = []
+/** Where the document's notifies also go, when a real controller is mounted in front of it. */
+let forwardToController: ((message: Posted) => void) | null = null
 // Keyed by id so cancelAnimationFrame is honoured: a terminal disposed by a newer init cancels the
 // repaint it had booked, and running it anyway reads a renderer that is gone.
 let frames = new Map<number, FrameRequestCallback>()
@@ -148,7 +163,11 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
     }) as never)
     Object.assign(window, {
       ReactNativeWebView: {
-        postMessage: (data: string) => posted.push(JSON.parse(data) as Posted)
+        postMessage: (data: string) => {
+          const message = JSON.parse(data) as Posted
+          posted.push(message)
+          forwardToController?.(message)
+        }
       }
     })
     document.body.innerHTML = bodyMarkup()
@@ -295,5 +314,114 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
     expect(readyNotices()).toEqual([expect.objectContaining({ cols: 80, rows: 24 })])
     expect(visibleRowCount()).toBe(24)
     expect(visibleText().trim()).toBe('')
+  })
+
+  // The handle in front of the document batches live output: the first chunk after a quiet spell
+  // goes at once, the rest wait up to 48 ms (terminal-write-coalescer.ts). Its init() dropped what
+  // was waiting, because a snapshot replaces the screen and those bytes are older than it. An empty
+  // snapshot replaces nothing (the document keeps the drawn grid), so that output was simply lost:
+  // the tail of whatever the program had just painted never reached the screen. Here the real
+  // controller, with its real coalescer, posts to the real document.
+  describe('with live output still waiting in the handle (real controller and coalescer)', () => {
+    let renderer: ReactTestRenderer | null = null
+
+    afterEach(() => {
+      act(() => {
+        renderer?.unmount()
+      })
+      renderer = null
+      forwardToController = null
+    })
+
+    function mountHandle(): TerminalWebViewHandle {
+      let controller: ReturnType<typeof useTerminalWebViewController> | null = null
+      function Harness() {
+        controller = useTerminalWebViewController(
+          {},
+          {
+            post: (command) =>
+              window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(command) })),
+            pingsOnForegroundRecovery: () => false
+          }
+        )
+        return null
+      }
+      act(() => {
+        renderer = create(createElement(Harness))
+      })
+      const mounted = controller!
+      forwardToController = (message) => mounted.receive(message)
+      act(() => {
+        mounted.receive({ type: 'web-ready' })
+      })
+      return mounted.handle
+    }
+
+    function waitingOutputBeforeEmptySnapshot(pane: TerminalWebViewHandle): void {
+      pane.write('LIVE-FIRST ')
+      // Inside the same 48 ms window: held by the coalescer, not yet posted.
+      pane.write('LIVE-WAITING')
+      pane.init(80, 24, '')
+    }
+
+    it('draws live output that was still waiting when an empty snapshot arrived', async () => {
+      const pane = mountHandle()
+      pane.init(80, 24, 'CLAUDE-SCREEN ')
+      await settle()
+
+      waitingOutputBeforeEmptySnapshot(pane)
+      await settle()
+
+      const text = visibleText()
+      expect(text).toContain('CLAUDE-SCREEN')
+      expect(text).toContain('LIVE-FIRST')
+      expect(text).toContain('LIVE-WAITING')
+      expect(text.indexOf('LIVE-FIRST')).toBeLessThan(text.indexOf('LIVE-WAITING'))
+    })
+
+    // The same, while the snapshot before it is still being drawn: the waiting output belongs after
+    // that replay, and the empty snapshot's geometry still goes out with the one `ready`.
+    it('draws waiting output after a snapshot still being drawn, in order', async () => {
+      const pane = mountHandle()
+      // Short enough that all three still fit one row at the 40 columns it ends at.
+      pane.init(80, 24, 'DRAWING ')
+      pane.write('LIVE-FIRST ')
+      pane.write('LIVE-WAITING')
+      pane.init(40, 30, '')
+      await settle()
+
+      const text = visibleText()
+      expect(text.indexOf('DRAWING')).toBeGreaterThanOrEqual(0)
+      expect(text.indexOf('LIVE-FIRST')).toBeGreaterThan(text.indexOf('DRAWING'))
+      expect(text.indexOf('LIVE-WAITING')).toBeGreaterThan(text.indexOf('LIVE-FIRST'))
+      expect(readyNotices()).toEqual([expect.objectContaining({ type: 'ready', cols: 40, rows: 30 })])
+    })
+
+    it('still drops waiting output under a snapshot with content, which replaces the screen', async () => {
+      const pane = mountHandle()
+      pane.init(80, 24, 'OLD-SCREEN ')
+      await settle()
+
+      pane.write('LIVE-FIRST ')
+      pane.write('STALE-WAITING')
+      pane.init(80, 24, 'NEW-SCREEN')
+      await settle()
+
+      expect(visibleText()).toContain('NEW-SCREEN')
+      expect(visibleText()).not.toContain('STALE-WAITING')
+    })
+
+    // The degenerate end: nothing drawn yet. Output that came before the first snapshot has no
+    // screen to land on; the document opens a blank terminal and the bytes go, as they always did.
+    it('opens a blank terminal when output waited before an empty first snapshot', async () => {
+      const pane = mountHandle()
+
+      waitingOutputBeforeEmptySnapshot(pane)
+      await settle()
+
+      expect(readyNotices()).toEqual([expect.objectContaining({ cols: 80, rows: 24 })])
+      expect(visibleRowCount()).toBe(24)
+      expect(visibleText().trim()).toBe('')
+    })
   })
 })
