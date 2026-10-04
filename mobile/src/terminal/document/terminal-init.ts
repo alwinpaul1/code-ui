@@ -31,6 +31,20 @@ export function init(
   preserveScroll: boolean,
   nextOscLinks: unknown
 ) {
+  const replayData = normalizeInitialData(initialData)
+  // Code UI: an empty snapshot keeps the screen this document already has and applies only its
+  // geometry; `resize` also answers the `ready` the handle's init() is waiting for. Orca v1.4.220
+  // publishes `data: serialized?.data ?? ''` on a subscribe snapshot, so a resubscribe of a drawn
+  // pane (return from chat, reconnect, the one e2d7a75e6 makes after an empty `resized`) can bring
+  // nothing, and a fresh terminal for it was a blank pane that Claude Code, repainting only the rows
+  // it thinks changed, never filled back in. The Ghostty pane's init('') was a no-op for the same
+  // reason. Keyed to this document having a terminal at all, not to the handle: a remounted
+  // document is fresh, and its first init, empty or not, still opens one. The price: a host screen
+  // that really is empty shows the previous screen until the program next writes.
+  if (scope.term && !(typeof replayData === 'string' && replayData.length > 0)) {
+    resize(scope, cols, rows)
+    return
+  }
   if (typeof nextFontScale === 'number' && nextFontScale > 0) {
     scope.currentTextScale = nextFontScale
   }
@@ -76,7 +90,6 @@ export function init(
     sgrMouseMode: false,
     sgrMousePixelsMode: false
   }
-  const replayData = normalizeInitialData(initialData)
   // Why: normalizeInitialData can discard pre-alt-screen bytes. Keep the
   // mirrored modes aligned with exactly what this mobile xterm replays.
   updateMouseModeFromData(scope, replayData)

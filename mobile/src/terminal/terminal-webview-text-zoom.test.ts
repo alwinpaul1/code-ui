@@ -124,9 +124,8 @@ describe('TerminalWebView text zoom', () => {
 
   it('resets pending Claude status dot selector state when the terminal lifecycle resets', () => {
     const initStart = terminalHtmlSource.indexOf('export function init(')
-    const initReplay = terminalHtmlSource.indexOf(
-      'const replayData = normalizeInitialData(initialData)'
-    )
+    // The reset has to land before the snapshot is queued for xterm.
+    const initReplay = terminalHtmlSource.indexOf("enqueueWrite(scope, ESC + '[0m' + replayData)")
     const clearStart = terminalHtmlSource.indexOf("} else if (msg.type === 'clear') {")
     const clearEnd = terminalHtmlSource.indexOf("} else if (msg.type === 'measure')", clearStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
