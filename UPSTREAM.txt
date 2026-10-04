@@ -72,7 +72,7 @@ src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02; plus #23467 (24edf0f64b) verdict hunks merged by hand (the fork keeps its `thinking` row; no queue-until hunk)
 src/shared/native-chat-turn-status.test.ts: 533b0bd02; plus #23467 (24edf0f64b) tests merged by hand
-src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
+src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves); plus #24218 (3ab3c9239f) comment hunk merged by 3-way; the behaviour hunk lives in the fork's own mobile/src/session/mobile-native-chat-turn-activity.ts
 src/shared/structured-agent-session-live-turn.test.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299, #22349)
 src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400

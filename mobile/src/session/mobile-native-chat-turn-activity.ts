@@ -69,13 +69,20 @@ function repeatsRecentToolLabel(text: string, labels: ReadonlySet<string>): bool
   return false
 }
 
-/** Prefer provider-authored activity copy; callers provide the broad fallback. */
+/** The live provider activity for this turn; callers provide the broad fallback.
+ *  Journal rows are history, not the present, so none of them ever becomes this line (Orca
+ *  #24218): a retry warning or "Context compacted" left in the turn would otherwise read as
+ *  what the agent is doing long after it moved on. */
 export function selectStructuredAgentTurnActivity(
   items: readonly AgentJournalRenderItem[],
   turnId: string | null,
   providerActivity?: AgentSessionTurnActivity | null
 ): NativeChatTurnActivity | null {
-  if (!turnId) {
+  if (!turnId || providerActivity?.turnId !== turnId) {
+    return null
+  }
+  const text = activityLine(providerActivity.text)
+  if (!text) {
     return null
   }
   let turnStartIndex = -1
@@ -89,22 +96,7 @@ export function selectStructuredAgentTurnActivity(
     }
   }
   const turnItems = items.slice(Math.max(0, turnStartIndex))
-  const toolLabels = recentToolActivityLabels(turnItems)
-  if (providerActivity?.turnId === turnId) {
-    const text = activityLine(providerActivity.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  for (let index = turnItems.length - 1; index >= 0; index -= 1) {
-    const body = turnItems[index]?.body
-    if (body?.kind !== 'status' || body.turnLifecycle || body.providerFrame) {
-      continue
-    }
-    const text = activityLine(body.text)
-    if (text && !repeatsRecentToolLabel(text, toolLabels)) {
-      return { kind: 'description', text }
-    }
-  }
-  return null
+  return repeatsRecentToolLabel(text, recentToolActivityLabels(turnItems))
+    ? null
+    : { kind: 'description', text }
 }
