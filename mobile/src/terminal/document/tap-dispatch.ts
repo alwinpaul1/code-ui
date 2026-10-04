@@ -236,13 +236,17 @@ function onDocumentTouchEnd(scope: TerminalDocumentScope, e: TouchEvent) {
     // Why: fire the tap from the tap-candidate origin (survives jitter under
     // TAP_SLOP) rather than longPressOrigin, which the press-to-select slop
     // can null mid-tap — that was dropping URL/file taps that moved a few px.
+    // Code UI: `false`, where upstream passes `true`. A program that tracks the
+    // mouse gets the tap as a click and the keyboard stays shut (cc4dfe216: a
+    // tap on Claude Code's "Jump to bottom (click)" opened it); any other
+    // program still opens the keyboard from a tap (surface-tap.ts).
     if (
       touches.length === 0 &&
       scope.tapCandidate &&
       scope.selMode !== 'select' &&
       Date.now() - scope.tapCandidate.t <= TAP_MAX_MS
     ) {
-      notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, true)
+      notifyTerminalSurfaceTap(scope, scope.tapCandidate.x, scope.tapCandidate.y, false)
     }
     clearLongPress(scope)
     scope.tapCandidate = null
