@@ -112,7 +112,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // 304 since 2026-09-30: useClipboardWriter in the dictation hook, for desktop dictation that no
 // field on screen can take (the live terminal refused it, or the command box is not drawn). The
 // hook and binding pins moved, and only those.
-const HEAD_MAIN_HOOK_SHA256 = 'c77536152d714ea9944233d310dd4b375e569b0ca90800a125226709a50025c3'
+// 305 since 2026-10-04 (Orca #24301): the useState for agent-session.repeated-stop.v1 beside the
+// prompt-cancel one in the feedback capabilities, which the status probe sets.
+const HEAD_MAIN_HOOK_SHA256 = 'f95af0afe44b1b35c9b2388822bf2bd619751456a59aa8bb4a9848066035dfe9'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -122,7 +124,8 @@ const HEAD_MAIN_HOOK_SHA256 = 'c77536152d714ea9944233d310dd4b375e569b0ca90800a12
 // useMobileFileTapHandlers, the drawer for a bare chat name found in several folders.
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
-const HEAD_HOOK_BINDING_SHA256 = '4ffe099f8704d04ceaadfb99834c58c9844eb3c05e9f8d52f1c4d71c3926a675'
+// 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
+const HEAD_HOOK_BINDING_SHA256 = '156e5d25021e48ce06fe8262855d1d47c68dd496882acb26ae655d884f396352'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -233,7 +236,9 @@ const HEAD_CALLBACK_BODY_SHA256 = '5dc1e6de0a5e831d3f6e75e7abfa934350bdfbf0442b8
 // an unhandled rejection on every mount. Only that effect's body moved; still 25.
 // 2026-09-24 (Orca #22252): the Keyboard listener effect became two effects off
 // useSoftKeyboard, visibility and height (26).
-const HEAD_EFFECT_SHA256 = '45fd88101543aa8e804103aafbb6bd7c1cedffbcfc9f3676e087dcc2394769a4'
+// 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
+// agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
+const HEAD_EFFECT_SHA256 = '7ad40b8775166bc422cebc64ab7269166028d3499b1c48588a62a50b98dbd1f8'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -543,7 +548,8 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // navigators for the new project-config screens (MCP servers, permission
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
-const HEAD_CAPABILITY_SHA256 = '0522812c020ba11508726574cf1ef08fb39343af167959360191fb0f27c7db69'
+// 2026-10-04 (Orca #24301): agent-session.repeated-stop.v1 joins prompt-cancel in the probe.
+const HEAD_CAPABILITY_SHA256 = 'f383f0560334f563fb3c2be792c1c68c166dd4735885d8962705d729901f5a11'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -956,7 +962,9 @@ describe('mobile session route extraction parity', () => {
     // 303 since 2026-09-26: useMobileSessionSaveToPhonePresence (the tab menu's Save to Phone).
     // 304 since 2026-09-30: useClipboardWriter in the dictation hook, where desktop dictation goes
     // when no field on screen can take it.
-    expect(main.hooks).toHaveLength(304)
+    // 305 since 2026-10-04: the repeated-stop capability's useState beside the prompt-cancel one
+    // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
+    expect(main.hooks).toHaveLength(305)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1020,7 +1028,9 @@ describe('mobile session route extraction parity', () => {
     expect(compatibility.navigation).toHaveLength(9)
     expect(hash(compatibility.navigation)).toBe(HEAD_NAVIGATION_SHA256)
     // 6 since 2026-09-19: agent-session.prompt-cancel.v1 (Orca #20601).
-    expect(compatibility.capabilities).toHaveLength(6)
+    // 7 since 2026-10-04: agent-session.repeated-stop.v1 (Orca #24301), which tells the chat a
+    // /clear, /compact, rewind or Stop press is its own action on this host.
+    expect(compatibility.capabilities).toHaveLength(7)
     expect(hash(compatibility.capabilities)).toBe(HEAD_CAPABILITY_SHA256)
   })
 

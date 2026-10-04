@@ -112,7 +112,10 @@ function setup(reply: unknown = hostAccepts()) {
     sessionKey: 'key-1',
     itemId: 'user-2',
     state: { fence: 3, epoch: 'epoch-1', items: conversation() },
-    operationIds
+    operationIds,
+    // A host the probe has not answered for keeps the replay these cases pin; the 1.4.220 host's
+    // fresh id per press is in mobile-structured-press-own-action.test.ts.
+    hostAnswersRepeats: null
   }
   return { args, sendRequest, operationIds }
 }

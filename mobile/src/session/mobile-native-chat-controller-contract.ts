@@ -281,6 +281,9 @@ export type MobileNativeChatControllerArgs = {
   tabsLive: boolean
   /** Host capability fact from the shared runtime status probe (Orca #20601). */
   agentSessionPromptCancelSupported?: boolean | null
+  /** `agent-session.repeated-stop.v1` from the same probe: a 1.4.220 host, which takes every
+   *  chat action press as its own action (Orca #24301). */
+  agentSessionRepeatedStopSupported?: boolean | null
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */

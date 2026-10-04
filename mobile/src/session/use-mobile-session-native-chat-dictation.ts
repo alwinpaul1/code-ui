@@ -35,6 +35,7 @@ export function useMobileSessionNativeChatDictation(
     client,
     connState,
     agentSessionPromptCancelSupported,
+    agentSessionRepeatedStopSupported,
     setInput,
     liveInputTerminalHandles,
     activeHandle,
@@ -84,6 +85,7 @@ export function useMobileSessionNativeChatDictation(
     // the tabs the last visit cached (use-mobile-session-tab-application.ts).
     tabsLive: scope.terminalsLoaded,
     agentSessionPromptCancelSupported,
+    agentSessionRepeatedStopSupported,
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })

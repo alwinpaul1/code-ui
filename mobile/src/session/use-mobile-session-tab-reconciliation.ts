@@ -5,6 +5,7 @@ import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
@@ -36,6 +37,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setBrowserScreencastSupported,
     setAgentSessionHistorySupported,
     setAgentSessionPromptCancelSupported,
+    setAgentSessionRepeatedStopSupported,
     setQuickCommandsSupported,
     nativeChatStream,
     fetchTerminals,
@@ -158,6 +160,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setBrowserScreencastSupported(null)
       setAgentSessionHistorySupported(null)
       setAgentSessionPromptCancelSupported(null)
+      setAgentSessionRepeatedStopSupported(null)
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
@@ -169,6 +172,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setBrowserScreencastSupported(null)
     setAgentSessionHistorySupported(null)
     setAgentSessionPromptCancelSupported(null)
+    setAgentSessionRepeatedStopSupported(null)
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
@@ -181,6 +185,11 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionPromptCancelSupported(
         capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
+      )
+      // Why: only an Orca #24301 host advertises this, and that host also answers a repeated
+      // /clear from its record, so a /clear, /compact or rewind press goes out as its own.
+      setAgentSessionRepeatedStopSupported(
+        capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY)
       )
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       // Why: hosts without this capability strip inputKind from terminal.send,

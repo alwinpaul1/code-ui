@@ -468,7 +468,12 @@ modules are not taken at all (see the port rows).
   (taken whole; `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` is no longer defined inline,
   `export *` re-exports it with `AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY` and
   `AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY`, and `RUNTIME_CAPABILITIES` spreads the set).
-  The phone does not read the two new constants: it joins an in-flight Stop itself, whatever the host.
+  The phone did not read the two new constants at first (it joined an in-flight Stop itself,
+  whatever the host). Since the v1.4.217..v1.4.219 chat chain it reads
+  `AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY` from the status probe: against a host advertising
+  it, each Stop press is its own and /clear, /compact and rewind mint a fresh id per press; against
+  any other host the join and the id replay stay. `AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY`
+  is still not read.
 
 ## The v1.4.217..v1.4.219 chat chain (taken for #23674, #23684 and the #24301 remainder)
 
