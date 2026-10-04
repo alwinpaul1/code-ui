@@ -458,9 +458,9 @@ src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves 
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
-src/shared/native-chat-tool-fold.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/native-chat-types.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/structured-agent-session-projection.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
 src/shared/agent-session-next-fence.ts: vendor base; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe

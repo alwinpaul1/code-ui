@@ -112,6 +112,15 @@ describe('agentDotState', () => {
     expect(
       agentDotState(row({ state: 'working', updatedAt: 0 }), AGENT_STATUS_STALE_AFTER_MS)
     ).toBe('working')
+    // The legacy `interrupted` flag marks only a row that is itself done (Orca #22944/#23467): a
+    // working row keeps its working state, or decays to idle, whatever the flag says. Before
+    // #23467 the fork drew it interrupted regardless of state.
+    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), 0)).toBe(
+      'working'
+    )
+    expect(agentDotState(row({ state: 'working', updatedAt: 0, interrupted: true }), stale)).toBe(
+      'idle'
+    )
     // 'done' never decays, and neither does its verdict.
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), stale)).toBe('done')
     expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
