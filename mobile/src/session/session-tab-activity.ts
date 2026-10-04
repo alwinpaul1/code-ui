@@ -1,7 +1,7 @@
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { AgentHudBeacon } from './agent-hud-beacon'
 import { agentHudBeaconSpeaksFor } from './hud-beacon-fields'
-import type { AgentDotState } from '../worktree/agent-row-display'
+import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
 
 /**
  * What a tab pill says about its agent's work, for every tab in the strip,
@@ -71,3 +71,19 @@ export function tabDotStateAfterLeadTurn(state: AgentDotState, leadTurnEnded: bo
   return leadTurnEnded && state === 'working' ? 'monitoring' : state
 }
 
+/** The tab pill's dot: the agent's own status as the worktree row draws it, verdict and all, then
+ *  the lead-turn rule above. The desktop's tab reads the same verdict (`agentVerdictDisplayMark`,
+ *  src/shared/agent-main-agent-verdict.ts, which `agentDotState` mirrors), legacy `interrupted`
+ *  flag included: a row a pre-`mainAgent` host or an OpenCode SIGINT ends with only that flag reads
+ *  interrupted there, so it does here. The pill stripped the flag from 2026-09-11 to 2026-10-04. */
+export function tabPillDotState(
+  status: AgentStatusEntry | null,
+  now: number,
+  leadTurnEnded: boolean
+): AgentDotState {
+  return tabDotStateAfterLeadTurn(
+    // A hook row leaves the flag out when it is not set; the worktree row says false.
+    status ? agentDotState({ ...status, interrupted: status.interrupted === true }, now) : 'idle',
+    leadTurnEnded
+  )
+}

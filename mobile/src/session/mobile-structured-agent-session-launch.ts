@@ -4,6 +4,7 @@ import type {
   AgentSessionMutationResult
 } from '../../../src/shared/agent-session-wire'
 import { isDefinitiveAgentSessionCreateRefusal } from '../../../src/shared/agent-session-definitive-refusal'
+import { readAgentSessionErrorRefusal } from '../../../src/shared/agent-session-write-failure'
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
@@ -158,6 +159,12 @@ export async function createMobileStructuredAgentSession(
       typeof error.message !== 'string'
     ) {
       return unknownCreateResult(agent, new Error(unconfirmedMessage(agent)))
+    }
+    // A refusal the host threw (Orca #23674) is classified by its own code, as a returned one is,
+    // and its message, the bare code, is not words for a person: the launch's own copy stands.
+    const thrown = readAgentSessionErrorRefusal(error)
+    if (thrown) {
+      return classifyCreateRefusal(agent, thrown.code, '')
     }
     return classifyCreateRefusal(agent, error.code, error.message)
   }

@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionWireRefusal } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
 import type { RpcClient } from '../transport/rpc-client'
@@ -19,8 +20,10 @@ import {
  * so in plain words, and nothing here may imply otherwise.
  *
  * The reply type and the refusal reasons live in upstream's
- * `agent-session-rewind.ts`, which is not vendored (LOCAL-FILES.md); the
- * shapes here are copied from it and pinned by the test beside this file.
+ * `agent-session-rewind.ts`. It was not vendored when this file was written,
+ * so the shapes here are copied from it and pinned by the test beside this
+ * file; it is vendored since the v1.4.217..v1.4.219 chat chain, and the copies
+ * still agree with it.
  */
 
 /** The host's reply: which item it rewound to, and the journal epoch that replaced the old one. */
@@ -74,8 +77,14 @@ export function parseStructuredRewindSupport(options: unknown): StructuredRewind
     : null
 }
 
-function rewindRefusalReason(message: string): string | null {
-  return message.startsWith(REFUSAL_PREFIX) ? message.slice(REFUSAL_PREFIX.length) : null
+/** The reason rides the host's own refusal message, `agent_session_rewind:<reason>`, on every
+ *  host from 1.4.205 to 1.4.220 (`structured-rewind-refusal.ts`). Read from the refusal the host
+ *  sent: the result's `message` is the notice table's wording (Orca #22999), not the host's. */
+function rewindRefusalReason(
+  refusal: Pick<AgentSessionWireRefusal, 'message'> | undefined
+): string | null {
+  const message = refusal?.message
+  return message?.startsWith(REFUSAL_PREFIX) ? message.slice(REFUSAL_PREFIX.length) : null
 }
 
 function isRewindTarget(items: readonly AgentJournalRenderItem[], itemId: string): boolean {
@@ -100,6 +109,9 @@ export async function dispatchStructuredRewind(args: {
   /** Read at call time: the fence and epoch the subscription last delivered, and the items. */
   state: { fence: number | null; epoch: string | null; items: readonly AgentJournalRenderItem[] }
   operationIds: Map<string, string>
+  /** Whether the host takes every press as its own action (Orca #24301, a 1.4.220 host; read off
+   *  `agent-session.repeated-stop.v1`). Null until the status probe answers. */
+  hostAnswersRepeats: boolean | null
 }): Promise<StructuredRewindOutcome> {
   const { client, sessionId, enabled, sessionKey, itemId, state, operationIds } = args
   if (!client || !sessionId || !enabled || state.fence === null || state.epoch === null) {
@@ -117,12 +129,14 @@ export async function dispatchStructuredRewind(args: {
     return { status: 'rejected', message: INVALID_TARGET }
   }
   const fields = { itemId, expectedEpoch: state.epoch }
+  // Orca #24301: a 1.4.220 host takes every press as its own, so each gets a fresh id; a repeat of
+  // a rewind that landed names the old epoch and is refused as stale, never applied twice. An older
+  // host replays the outcome it recorded for the same id, so the retry keeps it (below).
+  const everyPressItsOwn = args.hostAnswersRepeats === true
   const key = `${sessionKey}:agentSession.rewind:${JSON.stringify(fields)}`
-  const clientOperationId = retainStructuredSessionOperationId(
-    operationIds,
-    key,
-    operationIds.get(key)
-  )
+  const clientOperationId = everyPressItsOwn
+    ? undefined
+    : retainStructuredSessionOperationId(operationIds, key, operationIds.get(key))
   const result = await requestStructuredAgentSessionMutation<StructuredRewindResult>({
     client,
     method: 'agentSession.rewind',
@@ -133,12 +147,12 @@ export async function dispatchStructuredRewind(args: {
     clientOperationId,
     timeoutMs: REWIND_TIMEOUT_MS
   })
-  // The host keeps a durable record of a rewind it may have applied and replays
-  // its outcome for the same operation id, so an unknown outcome keeps the id:
-  // the retry asks about THIS rewind instead of running a second one.
+  // An older host keeps a durable record of a rewind it may have applied and
+  // replays its outcome for the same operation id, so an unknown outcome keeps
+  // the id there: the retry asks about THIS rewind instead of running a second.
   if (
     result.status === 'unknown' ||
-    (result.status === 'refused' && rewindRefusalReason(result.message) === 'outcome-unknown')
+    (result.status === 'refused' && rewindRefusalReason(result.refusal) === 'outcome-unknown')
   ) {
     return { status: 'unknown', message: UNCONFIRMED }
   }
@@ -147,7 +161,7 @@ export async function dispatchStructuredRewind(args: {
     return { status: 'accepted', epoch: result.value.epoch }
   }
   if (result.status === 'refused') {
-    const reason = rewindRefusalReason(result.message)
+    const reason = rewindRefusalReason(result.refusal)
     return {
       status: 'rejected',
       message: (reason !== null ? REFUSAL_COPY[reason] : undefined) ?? result.message
@@ -174,9 +188,11 @@ export function useMobileStructuredRewind(args: {
     }
   }
   operationIds: Map<string, string>
+  hostAnswersRepeats: boolean | null
   onError: (message: string) => void
 }): (itemId: string) => Promise<boolean> {
   const { client, sessionId, enabled, sessionKey, stateRef, operationIds, onError } = args
+  const { hostAnswersRepeats } = args
   return useCallback(
     async (itemId: string) => {
       const { fence, epoch, items } = stateRef.current
@@ -187,14 +203,15 @@ export function useMobileStructuredRewind(args: {
         sessionKey,
         itemId,
         state: { fence, epoch, items },
-        operationIds
+        operationIds,
+        hostAnswersRepeats
       })
       if (outcome.status !== 'accepted') {
         onError(outcome.message)
       }
       return outcome.status === 'accepted'
     },
-    [client, enabled, onError, operationIds, sessionId, sessionKey, stateRef]
+    [client, enabled, hostAnswersRepeats, onError, operationIds, sessionId, sessionKey, stateRef]
   )
 }
 

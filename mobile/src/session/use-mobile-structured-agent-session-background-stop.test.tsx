@@ -141,7 +141,9 @@ describe('a background task Stop that may not have landed says so', () => {
 
     expect(await stopTask()).toBe(false)
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith('That task has ended')
+    // Worded from the refusal's code, never its message (Orca #22999); a code this build does not
+    // know says only that the task was not stopped.
+    expect(onSendError).toHaveBeenCalledWith("The background task wasn't stopped.")
   })
 
   it('stays quiet when the host takes the Stop', async () => {

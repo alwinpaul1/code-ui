@@ -16,6 +16,9 @@ function setup() {
     sessionKey: 'session:1',
     pending: { current: false },
     operationIds: new Map(),
+    // A host the probe has not answered for keeps the replay these cases pin; the 1.4.220 host's
+    // fresh id per press is in mobile-structured-press-own-action.test.ts.
+    hostAnswersRepeats: null,
     controller: {
       agent: 'codex',
       snapshot: [],

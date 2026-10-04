@@ -29,7 +29,11 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   stateRef: { readonly current: StructuredAgentSessionState }
   promptCancelSupported: boolean | null
   prompt?: PromptIdentity
-  /** Stops still on their way, by what they stop: a press for the same one joins it. */
+  /** Whether the host answers a repeated Stop of a turn quietly (`agent-session.repeated-stop.v1`,
+   *  a 1.4.220 host); null until the status probe answers. */
+  hostAnswersRepeatedStops: boolean | null
+  /** Stops still on their way, by what they stop; against a host that does not answer a repeat
+   *  quietly, a press for the same one joins it here. */
   inFlight: Map<string, Promise<boolean>>
   onSendError: (message: string) => void
 }): Promise<boolean> {
@@ -46,14 +50,24 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
     ...(args.prompt && args.promptCancelSupported === true ? { prompt: args.prompt } : {})
   }
   // Orca #24301: every press is its own Stop. A kept id is answered from the last press, so after
-  // a Stop whose answer was lost, the next press stopped nothing. A press while an earlier Stop of
-  // the same thing is still on its way joins it instead, so a double tap is one request.
+  // a Stop whose answer was lost, the next press stopped nothing. Read the fence at the press.
+  const fence = current.fence
+  const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })
+  if (args.hostAnswersRepeatedStops === true) {
+    // The host joins a second Stop of a turn it is still stopping, and one that stopped nothing
+    // writes no row, so a press while an earlier Stop is stuck is a Stop of its own.
+    return stop()
+  }
+  // Against a host older than that (or before the probe answers), a second Stop runs again and
+  // writes a false "already finished" row, so a press while an earlier Stop of the same thing is
+  // still on its way joins it: a double tap is one request. Upstream calls this temporary, until
+  // no supported host lacks the capability.
   const key = `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`
   const joined = inFlight.get(key)
   if (joined) {
     return joined
   }
-  const stopping = sendStop({ client, sessionId, fence: current.fence, fields, onSendError })
+  const stopping = stop()
   inFlight.set(key, stopping)
   // Gone once it settles, so the next press is a new Stop.
   void stopping.finally(() => {

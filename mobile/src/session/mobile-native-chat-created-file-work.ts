@@ -286,7 +286,7 @@ export function backgroundWorkRunningAt(
           endings.push(stop)
           batch.stops.push(stop)
         }
-        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at })
+        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at, callId: block.callId })
         batch.mayQuote ||= !OWN_WORDS.has(block.name)
         // A message wakes an agent that had finished, or reaches a teammate.
         if (toolCallKind(block.name) === 'message') {
@@ -296,14 +296,15 @@ export function backgroundWorkRunningAt(
           })
         }
       } else if (isToolResultBlock(block)) {
-        // Named as the pairing names it: `takeAnsweredCall` holds only an Agent call apart.
+        // Named as the pairing names it: for a result that names no call, `takeAnsweredCall`
+        // holds only an Agent call apart (one that names its call takes exactly that call).
         const onlyAgentsWaited = pending.every((waiting) => waiting.name === 'Agent')
         // TaskStop answers a task already done with a `<tool_use_error>`, and
         // that says its stop holds.
         const stopHolds = batch.stops.some((stop) => saysStopped(block.output, stop.id))
         batch.failed ||= isFailedAnswer(block) && !stopHolds
         batch.answers.push(block.output)
-        const call = takeAnsweredCall(pending, block.output)
+        const call = takeAnsweredCall(pending, block)
         if (call) {
           const launch = launchOf(call, block.output)
           // A background call answered in words the phone does not know may

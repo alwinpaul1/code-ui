@@ -46,7 +46,9 @@ const NOTIFICATION_STATUS = /<status>\s*([^<]+?)\s*<\/status>/
 const NOTIFICATION_SUMMARY = /<summary>\s*([\S\s]*?)\s*<\/summary>/
 const INTERRUPTED = /^\s*\[request interrupted/i
 
-export type PendingCall = { name: string; input: unknown; startedAt: number | null }
+/** `callId` is the provider's id for the call when the block carries one (a structured chat's,
+ *  since Orca #22619); transcript blocks carry none. */
+export type PendingCall = { name: string; input: unknown; startedAt: number | null; callId?: string }
 export type Launch = {
   id: string
   kind: BackgroundTaskKind
@@ -270,22 +272,38 @@ export function saysStopped(output: string, id: string): boolean {
  *  that the task had already ended. Null for any other call and for a stop
  *  that names no task. Only an answer ends a task, so a stop still waiting on
  *  its permission prompt ends nothing yet: the row lags the stop by a moment
- *  rather than guess it went through. The pairing is first in, first out, as
- *  for every call, so a stop beside another call whose answers landed out of
- *  call order can be handed the other's answer. */
+ *  rather than guess it went through. The pairing is `takeAnsweredCall`'s: an
+ *  answer that names its call is that call's; on a transcript, whose answers
+ *  name none, it is first in, first out, so a stop beside another call whose
+ *  answers landed out of call order can be handed the other's answer. */
 export function stoppedTaskId(call: PendingCall, answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>): string | null {
   const id = call.name === 'TaskStop' ? readString(call.input, 'task_id') : null
   return id !== null && (!isFailedAnswer(answer) || saysStopped(answer.output, id)) ? id : null
 }
 
-/** The call a result answers. First in, first out — transcript blocks carry
- *  no tool ids — except that an Agent call is taken only by a result shaped
- *  like an Agent result, and such a result goes to the first Agent call. A
- *  turn's quick call (a Read beside a foreground Agent) can answer first, and
+/** The call a result answers. A result that names its call (`callId`) answers
+ *  that call and no other, and one naming a call that is not waiting answers
+ *  none: the fold's own rule (`pairToolBlocks`, src/shared/native-chat-tool-fold.ts,
+ *  Orca #22619), so these readers and the run's rows agree on who owns an output
+ *  that landed out of call order. A structured chat's results name their call.
+ *
+ *  A result that names none (a transcript's: Orca keeps the call's id and drops
+ *  the result's, fixtures/claude-agent-message-read-image-2.1.283.ts) is paired
+ *  first in, first out, except that an Agent call is taken only by a result
+ *  shaped like an Agent result, and such a result goes to the first Agent call.
+ *  A turn's quick call (a Read beside a foreground Agent) can answer first, and
  *  handing its result to the Agent call would leave the agent still running
  *  with no call, and read any id the Read printed as a launch. A failure is
  *  plain first in, first out. */
-export function takeAnsweredCall<Call extends PendingCall>(pending: Call[], output: string): Call | undefined {
+export function takeAnsweredCall<Call extends PendingCall>(
+  pending: Call[],
+  result: Pick<NativeChatToolResultBlock, 'output' | 'callId'>
+): Call | undefined {
+  if (result.callId !== undefined) {
+    const named = pending.findIndex((call) => call.callId === result.callId)
+    return named === -1 ? undefined : pending.splice(named, 1)[0]
+  }
+  const output = result.output
   if (ANY_TOOL_FAILURE.test(output)) {
     return pending.shift()
   }

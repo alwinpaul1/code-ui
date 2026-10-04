@@ -112,7 +112,10 @@ function setup(reply: unknown = hostAccepts()) {
     sessionKey: 'key-1',
     itemId: 'user-2',
     state: { fence: 3, epoch: 'epoch-1', items: conversation() },
-    operationIds
+    operationIds,
+    // A host the probe has not answered for keeps the replay these cases pin; the 1.4.220 host's
+    // fresh id per press is in mobile-structured-press-own-action.test.ts.
+    hostAnswersRepeats: null
   }
   return { args, sendRequest, operationIds }
 }
@@ -195,7 +198,10 @@ describe('rewinding the conversation to an earlier message', () => {
     await expect(dispatchStructuredRewind(args)).resolves.toEqual({ status: 'rejected', message })
   })
 
-  it('passes an unfamiliar refusal through verbatim rather than inventing a reason', async () => {
+  // Orca #22999: a refusal's own message is never shown, because every code has a host path that
+  // writes it for a log ("Runtime fence 3 is stale."). A reason rewind has no words for gets the
+  // shared notice table's words for its code instead, which invent no reason either.
+  it("words an unfamiliar refusal from its code, never the host's own text", async () => {
     const { args } = setup({
       ok: true,
       result: {
@@ -206,7 +212,7 @@ describe('rewinding the conversation to an earlier message', () => {
     })
     await expect(dispatchStructuredRewind(args)).resolves.toEqual({
       status: 'rejected',
-      message: 'Runtime fence 3 is stale.'
+      message: "The command didn't run."
     })
   })
 

@@ -1,4 +1,5 @@
-import { isToolCallBlock, isToolResultBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { isToolCallBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { createCodexPollFolder } from './codex-stdin-poll'
 import { editedFileCount, soleCallCreatedFile, type ToolRunPair } from './mobile-native-chat-edited-files'
 import { toolCallKind, type ToolRunKind as Kind } from './mobile-native-chat-tool-kind'
@@ -158,44 +159,30 @@ type Group = {
 function runGroups(blocks: readonly NativeChatBlock[]): Group[] {
   const groups: Group[] = []
   const indexByKind = new Map<Kind, number>()
-  // Null for a call that counts as none: a Codex poll of a command already
-  // counted, whose result is then no group's (codex-stdin-poll.ts). A poll's
-  // error is left to the run header's own "N failed" label: given the run's
-  // count, a sentence that counts fewer states none (buildSentence).
-  const pending: ({ entry: Group; pair: ToolRunPair } | null)[] = []
+  // A Codex poll of a command already counted counts as no call, and its result is then no
+  // group's (codex-stdin-poll.ts). A poll's error is left to the run header's own "N failed"
+  // label: given the run's count, a sentence that counts fewer states none (buildSentence).
   const foldsIntoCommand = createCodexPollFolder()
-  for (const block of blocks) {
-    if (isToolCallBlock(block)) {
-      if (foldsIntoCommand(block.name, block.input)) {
-        pending.push(null)
-        continue
-      }
-      const kind = toolCallKind(block.name)
-      let index = indexByKind.get(kind)
-      if (index === undefined) {
-        index = groups.length
-        indexByKind.set(kind, index)
-        groups.push({ kind, failed: 0, pairs: [] })
-      }
-      const entry = groups[index]!
-      const pair: ToolRunPair = { call: block, result: null }
-      entry.pairs.push(pair)
-      pending.push({ entry, pair })
-    } else if (isToolResultBlock(block)) {
-      // By position, oldest unanswered call first: the fold's own rule
-      // (`pairToolBlocks`) for a result that names no call. Since Orca #22619
-      // the fold gives a result that names its call (`callId`, which a
-      // structured chat's results carry) to that call; this does not, so a
-      // failed result of that kind arriving out of order could be counted
-      // against another kind than the rows show. No captured run shows it.
-      const slot = pending.shift()
-      if (!slot) {
-        continue
-      }
-      if (block.isError) {
-        slot.entry.failed += 1
-      }
-      slot.pair.result = block
+  // Results pair with calls by the fold's own rule (`pairToolBlocks`), so the sentence counts a
+  // failure against the call the rows draw it on: a result that names its call (`callId`, which a
+  // structured chat's results carry since Orca #22619) answers that call, and one that names none
+  // the oldest call not yet answered. First-in-first-out here gave a fast-failing call's result
+  // to an earlier call still running ("Ran a command (1 failed), edited a file").
+  for (const { call, result } of pairToolBlocks(blocks)) {
+    if (!call || foldsIntoCommand(call.name, call.input)) {
+      continue
+    }
+    const kind = toolCallKind(call.name)
+    let index = indexByKind.get(kind)
+    if (index === undefined) {
+      index = groups.length
+      indexByKind.set(kind, index)
+      groups.push({ kind, failed: 0, pairs: [] })
+    }
+    const entry = groups[index]!
+    entry.pairs.push({ call, result: result ?? null })
+    if (result?.isError) {
+      entry.failed += 1
     }
   }
   return groups

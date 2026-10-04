@@ -261,9 +261,9 @@ export function subagentNames(messages: readonly NativeChatMessage[]): Map<strin
   for (const message of messages) {
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        pending.push({ name: block.name === 'Task' ? 'Agent' : block.name, input: block.input, startedAt: null })
+        pending.push({ name: block.name === 'Task' ? 'Agent' : block.name, input: block.input, startedAt: null, callId: block.callId })
       } else if (isToolResultBlock(block)) {
-        const call = takeAnsweredCall(pending, block.output)
+        const call = takeAnsweredCall(pending, block)
         const id = call?.name === 'Agent' ? readLaunch(call, block.output)?.id : undefined
         const name = call ? (readString(call.input, 'name') ?? readString(call.input, 'subagent_type')) : null
         if (id && name) {

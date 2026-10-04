@@ -57,6 +57,8 @@ function cancelArgs(client: RpcClient, inFlight = new Map<string, Promise<boolea
     stateRef: { current: runningState() },
     inFlight,
     promptCancelSupported: null,
+    // An older host, or one the probe has not answered for: a press joins a Stop on its way.
+    hostAnswersRepeatedStops: null,
     onSendError: vi.fn()
   }
 }

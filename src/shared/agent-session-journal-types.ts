@@ -15,6 +15,8 @@ import type { AgentJournalTurnOutcome } from './agent-turn-outcome'
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
 import type { AgentSessionContextUsage } from './agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from './native-chat-types'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23116, a68d62911e) — see below.
+import type { UnreadAgentSessionFailureFact } from './agent-session-failure'
 
 export { type AgentType }
 
@@ -282,6 +284,13 @@ export type AgentJournalStatusItem = {
   }
   /** Present on thread-goal transitions; absent on rows from older hosts. */
   threadGoal?: AgentJournalThreadGoalState
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23116, a68d62911e): the failure fact only, as one
+  // optional member. Upstream splits this type into a plain row and a failure row typed by
+  // `AgentSessionFailureRowWords` (only `agentSessionFailureWords` writes the second); this
+  // client never writes a row, it reads what a host sent. See LOCAL-FILES.md.
+  /** A row that reports a failure: what failed, typed, beside the sentence older clients print.
+   *  Absent on rows from older hosts; read through `readAgentSessionFailureFact`. */
+  failure?: UnreadAgentSessionFailureFact
 }
 
 /** The durable record of one root turn. `running` exposes cancellation while

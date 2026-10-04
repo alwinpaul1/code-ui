@@ -45,9 +45,13 @@ const HOST_SAYS_TOO_BIG = /too (?:big|large|long)|expected string to have <=\s*\
 export function explainLongAnswerFailure(failure: {
   code: string | null
   message: string
+  /** The host's own text for a refusal at the schema; `message` is the notice the phone shows. */
+  hostMessage?: string
 }): string {
   if (failure.code !== 'invalid_argument') {
     return failure.message
   }
-  return HOST_SAYS_TOO_BIG.test(failure.message) ? ANSWER_TOO_LONG : ANSWER_TOO_LONG_FOR_HOST
+  return HOST_SAYS_TOO_BIG.test(failure.hostMessage ?? failure.message)
+    ? ANSWER_TOO_LONG
+    : ANSWER_TOO_LONG_FOR_HOST
 }

@@ -4,7 +4,7 @@ import { useMobileStructuredRewind } from './mobile-structured-agent-rewind'
 import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { mobileStructuredTranscript } from './mobile-structured-transcript'
 import { isStructuredAgentSessionThinking } from '../../../src/shared/structured-agent-session-live-turn'
 import {
   activeStructuredAgentSessionTurnId,
@@ -54,6 +54,8 @@ export function useMobileStructuredAgentSession(args: {
   connected: boolean
   /** Capability fact from the shared runtime status probe; null follows legacy cancellation. */
   promptCancelSupported?: boolean | null
+  /** `agent-session.repeated-stop.v1`: a 1.4.220 host takes every press as its own (Orca #24301). */
+  repeatedStopSupported?: boolean | null
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
@@ -66,12 +68,12 @@ export function useMobileStructuredAgentSession(args: {
     sourceIdentity = '',
     enabled,
     onSendError,
-    promptCancelSupported = null
+    promptCancelSupported = null, repeatedStopSupported = null
   } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
-  // A Stop of a turn still being stopped is joined by the next press (Orca #24301).
+  // Against a pre-#24301 host, a Stop of a turn still being stopped joins it (Orca #24301).
   const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   useEffect(() => () => operationIdsRef.current.clear(), [])
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
@@ -179,6 +181,7 @@ export function useMobileStructuredAgentSession(args: {
         sessionKey,
         pending: commandPendingRef,
         operationIds: operationIdsRef.current,
+        hostAnswersRepeats: repeatedStopSupported,
         controller: {
           agent: agent === 'claude' ? 'claude' : 'codex',
           snapshot: optionSnapshot,
@@ -221,7 +224,7 @@ export function useMobileStructuredAgentSession(args: {
       enabled,
       invokeStructuredOption,
       onSendError,
-      optionSnapshot,
+      optionSnapshot, repeatedStopSupported,
       sessionId,
       sessionKey,
       setStructuredOption
@@ -238,7 +241,7 @@ export function useMobileStructuredAgentSession(args: {
     (prompt?: { itemId: string; expectedRevision: number }): Promise<boolean> =>
       requestMobileStructuredAgentSessionCancel({
         client,
-        enabled,
+        enabled, hostAnswersRepeatedStops: repeatedStopSupported,
         inFlight: inFlightStopsRef.current,
         onSendError,
         prompt,
@@ -246,13 +249,13 @@ export function useMobileStructuredAgentSession(args: {
         sessionId,
         stateRef
       }),
-    [client, enabled, onSendError, promptCancelSupported, sessionId, stateRef]
+    [client, enabled, onSendError, promptCancelSupported, repeatedStopSupported, sessionId, stateRef]
   )
 
   // Conversation only: the host wraps no file restore (see the dispatcher's header).
   const rewindToItem = useMobileStructuredRewind({
     client, sessionId, enabled, sessionKey, stateRef,
-    operationIds: operationIdsRef.current, onError: onSendError
+    operationIds: operationIdsRef.current, hostAnswersRepeats: repeatedStopSupported, onError: onSendError
   })
 
   const stopBackgroundTask = useCallback(
@@ -262,7 +265,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   const messages = useMemo(
-    () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
+    () => mobileStructuredTranscript(state.items, state.submissions),
     [state.items, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)

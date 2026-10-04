@@ -14,6 +14,10 @@ import {
 } from './structured-agent-session-tool-call-block'
 import type { NativeChatBlock, NativeChatMessage } from './native-chat-types'
 import { sha256 } from './sha256'
+// CODE UI HAND-APPLIED UPSTREAM HUNKS (Orca #23116, a68d62911e; #23605, e8e144bf3c): a status
+// row's block carries its failure fact, and a projected row its producer. See LOCAL-FILES.md.
+import { agentJournalLinkageFields } from './agent-session-journal-producer'
+import { structuredAgentSessionStatusBlock } from './structured-agent-session-status-block'
 
 // Re-exported so the live-turn readers' existing consumers keep one import site.
 export { activeStructuredAgentSessionTurnId } from './structured-agent-session-live-turn'
@@ -109,18 +113,7 @@ function itemBlocks(item: AgentJournalRenderItem): {
   if (body.kind !== 'status' || body.turnLifecycle) {
     return null
   }
-  return {
-    role: 'system',
-    blocks: [
-      {
-        type: 'text',
-        text: body.text,
-        ...(body.presentation !== undefined ? { presentation: body.presentation } : {}),
-        ...(body.tone !== undefined ? { tone: body.tone } : {}),
-        ...(body.providerFrame ? { providerFrame: body.providerFrame } : {})
-      }
-    ]
-  }
+  return { role: 'system', blocks: [structuredAgentSessionStatusBlock(body)] }
 }
 
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19229, e80fae0c4): the per-item
@@ -164,6 +157,7 @@ export function projectStructuredItemToNativeChat(
   const sentAs = item.body.kind === 'message' ? item.body.sentAs : undefined
   const message: NativeChatMessage | null = projected
     ? {
+        ...agentJournalLinkageFields(item),
         id: item.itemId,
         role: projected.role,
         blocks: projected.blocks,

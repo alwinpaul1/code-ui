@@ -18,10 +18,9 @@ import { triggerMediumImpact } from '../platform/haptics'
 import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
-import { sessionTabActivity, tabDotStateAfterLeadTurn } from './session-tab-activity'
+import { sessionTabActivity, tabPillDotState } from './session-tab-activity'
 import { AgentStateDot } from '../components/AgentStateDot'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import { agentDotState } from '../worktree/agent-row-display'
 import { useNow } from '../hooks/use-now'
 import {
   getMobileSessionTabTitle,
@@ -359,9 +358,10 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
  *  spinner while its turn runs, the heartbeat once the turn is done and
  *  background shells remain, the emerald check when done, the question
  *  bubble when it waits for input, red when blocked. Once a turn ends, the
- *  verdict the host sends in `mainAgent` marks it as the desktop's tab does:
- *  red for a failure, the muted dot after a Stop, amber when the host could
- *  not confirm the end (tab-pill-draws-turn-verdict.test.ts). No number: the
+ *  verdict the host sends in `mainAgent`, or an older row's legacy
+ *  `interrupted` flag, marks it as the desktop's tab does: red for a failure,
+ *  the muted dot after a Stop, amber when the host could not confirm the end
+ *  (tab-pill-draws-turn-verdict.test.ts). No number: the
  *  chat view's row carries the count. Live for every tab from the host's
  *  pushed status; see session-tab-activity.ts. */
 function TabActivityBadge({
@@ -401,9 +401,7 @@ function TabActivityBadge({
   // Why: the desktop decays a stale 'working' to idle after 30 min; a minute
   // clock is enough for that and keeps the render pure.
   const now = useNow(60_000)
-  // Strips only the legacy `interrupted` flag (since 2026-09-11); a verdict in
-  // `mainAgent` still draws, as on the desktop's tab.
-  const state = tabDotStateAfterLeadTurn(status ? agentDotState({ ...status, interrupted: false }, now) : 'idle', leadTurnEnded)
+  const state = tabPillDotState(status, now, leadTurnEnded)
   if (state === 'idle' || (state === 'monitoring' && activity === null)) {
     return null
   }

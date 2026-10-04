@@ -64,7 +64,7 @@ export function useMobileNativeChatController(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
-    agentSessionPromptCancelSupported = null,
+    agentSessionPromptCancelSupported = null, agentSessionRepeatedStopSupported = null,
     onSendError,
     onSendResolved
   } = args
@@ -109,7 +109,7 @@ export function useMobileNativeChatController(
       callerIdentity: deviceTokenRef.current ?? '',
       enabled: showNativeChat,
       connState,
-      promptCancelSupported: agentSessionPromptCancelSupported,
+      promptCancelSupported: agentSessionPromptCancelSupported, repeatedStopSupported: agentSessionRepeatedStopSupported,
       onSendError
     })
   const handleBeacon = useAgentHudBeacon(activeHandle)

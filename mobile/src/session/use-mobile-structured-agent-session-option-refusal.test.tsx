@@ -47,6 +47,9 @@ const MODELS = {
 }
 
 const REFUSAL = 'Another client holds this session'
+// What the phone says for it: the refusal's code worded through the shared notice table, never
+// the host's own message (Orca #22999). `agent_session_conflict` names no cause of its own.
+const SAID = "The setting wasn't changed."
 
 /**
  * The session-option drawer draws in its own native window, over the chat's
@@ -124,7 +127,7 @@ describe('a structured option change the host refuses', () => {
     expect(await pick(say)).toBe(false)
 
     expect(say).toHaveBeenCalledTimes(1)
-    expect(say).toHaveBeenCalledWith(REFUSAL)
+    expect(say).toHaveBeenCalledWith(SAID)
     expect(onSendError).not.toHaveBeenCalled()
   })
 
@@ -134,6 +137,6 @@ describe('a structured option change the host refuses', () => {
     expect(await pick()).toBe(false)
 
     expect(onSendError).toHaveBeenCalledTimes(1)
-    expect(onSendError).toHaveBeenCalledWith(REFUSAL)
+    expect(onSendError).toHaveBeenCalledWith(SAID)
   })
 })
