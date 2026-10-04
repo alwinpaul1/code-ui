@@ -374,3 +374,29 @@ desktop settings, catalog or rewind code in behind them and nothing on the phone
 fixtures), `agent-status-types.test.ts` and
 `agent-hook-listener-extraction-characterization.test.ts`. None of them is imported by production code under
 `mobile/`.
+
+## The v1.4.219..v1.4.220 shared halves, mobile shell and contracts (Orca v1.4.220, 7e66229dfd)
+
+Twelve files taken whole and byte-equal to v1.4.220 (two new: `orchestration-caller-status.ts`
+and `telemetry-ssh-runtime-event-schemas.ts`). Eight merged 3-way (this copy, upstream v1.4.219,
+upstream v1.4.220) because their older pins lag v1.4.219 in unrelated fields, so each carries only
+the range's change on top of everything the entries above record. Nothing on the phone sends or
+reads any of it:
+
+- `rpc-contract/files-params.ts` — `FileOpenTab` with the optional `navigation` target (#24244);
+  `FileOpenDiff` now extends it. The phone's `files.open` calls send no `navigation`, which the
+  host treats as the original behaviour.
+- `rpc-contract/rpc-params-catalog.generated.ts` — `files.open` is `FileOpenTab` (#24244);
+  `orchestration.callerShow` and `orchestration.sessionAddress` are new rows (#22636, CLI methods,
+  not on the mobile allowlist). The rows the entries above leave out are still left out.
+- `runtime-session-contracts.ts` — the optional `caller` (`CliStatusCaller`, #22636).
+- `runtime-terminal-contracts.ts` — `recordedPaneKey` on orphaned terminal rows (#24458).
+- `ssh-types.ts` — the net of #24129, #24133 and #24147 after #24559 reverted #24453 and #24463:
+  `SshRemoteRuntime`, `SshRemoteRuntimeRung`, `SshRemoteRuntimeResolution`, `SshPlainSshMode` and
+  their constants. The v1.4.219 `SshTargetSummary` additions are still not taken.
+- `telemetry-event-registry.ts` — the `ssh_remote_runtime_resolved` row and its import (#24133).
+- `persisted-ui-state-types.ts`, `ui-chrome-types.ts` — the `'host'` worktree-card property and its
+  one-shot backfill flag (#24299).
+
+`tui-agent-config.ts` is NOT taken (#24589): its only change edits the `dsh` entry, and this copy
+never vendored `dsh` (#22468).

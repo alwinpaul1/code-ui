@@ -6,6 +6,11 @@ allowBuilds:
 minimumReleaseAge: 4320
 
 overrides:
+  # Orca #24561: the lock resolved brace-expansion 1.1.18 and 5.0.9 and dompurify 3.4.13, each
+  # inside the range upstream pins past.
+  brace-expansion@>=1.0.0 <1.1.21: 1.1.21
+  brace-expansion@>=5.0.0 <5.0.12: 5.0.12
+  dompurify@>=3.4.13 <3.4.16: 3.4.16
   xcode>uuid: 11.1.1
   '@xmldom/xmldom': 0.9.12
   '@expo/plist': 0.8.1

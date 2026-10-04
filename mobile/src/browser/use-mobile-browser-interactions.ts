@@ -19,6 +19,7 @@ import {
   type BrowserTouchLayout,
   type BrowserZoomState
 } from './browser-touch-geometry'
+import { mayTerminateBrowserPan } from './browser-pan-termination'
 import type { BrowserPointerModifier } from './MobileBrowserPointerModifiers'
 import type { BrowserDialogState } from './mobile-browser-stream-events'
 import type { BrowserPageCommandSend, BrowserPageParams } from './use-mobile-browser-request'
@@ -281,7 +282,8 @@ export function useMobileBrowserInteractions(args: MobileBrowserInteractionArgs)
           scrollingRef.current = false
           startPointRef.current = null
         },
-        onPanResponderTerminationRequest: () => true
+        // The long-press right-click outlives the WebView's own long-press contextmenu at ~500 ms.
+        onPanResponderTerminationRequest: mayTerminateBrowserPan
       }),
     [clearLongPressTimer, handleResponderGrant, handleResponderMove, handleResponderRelease]
   )

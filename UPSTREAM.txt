@@ -115,7 +115,7 @@ src/shared/daemon-adoption-telemetry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared h
 src/shared/daemon-adoption-telemetry.test.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
 src/shared/developer-permissions-types.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
 src/shared/telemetry-daemon-event-schemas.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves)
-src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves)
+src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24133 ssh_remote_runtime_resolved row and its import)
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -146,7 +146,7 @@ src/shared/rpc-contract/computer-params.ts: c84007c54
 src/shared/rpc-contract/computer-schemas-params.ts: c84007c54
 src/shared/rpc-contract/emulator-params.ts: c84007c54
 src/shared/rpc-contract/files-mutation-params.ts: c84007c54
-src/shared/rpc-contract/files-params.ts: c84007c54
+src/shared/rpc-contract/files-params.ts: c84007c54; plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24244 FileOpenTab)
 src/shared/rpc-contract/files-target-params.ts: c84007c54
 src/shared/rpc-contract/files-terminal-artifact-params.ts: c84007c54
 src/shared/rpc-contract/folder-workspace-params.ts: c84007c54
@@ -173,7 +173,7 @@ src/shared/rpc-contract/orchestration-federation-control-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-federation-relay-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-federation-start-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-gates-params.ts: c84007c54
-src/shared/rpc-contract/orchestration-params.ts: c84007c54
+src/shared/rpc-contract/orchestration-params.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; was at c84007c54)
 src/shared/rpc-contract/orchestration-runs-mutation-request-show-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-runs-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-worker-control-params.ts: c84007c54
@@ -187,7 +187,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24244 FileOpenTab, #22636 orchestration.callerShow and orchestration.sessionAddress)
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
@@ -281,7 +281,7 @@ src/shared/tui-agent.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/constants.ts: c62eca398
 src/shared/pairing-local-ui-fields.ts: c62eca398
 src/shared/pairing-local-ui-fields.test.ts: c62eca398
-src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves)
+src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24299 _hostWorktreeCardPropertyDefaulted)
 src/shared/agent-hook-listener/listener-event.ts: c62eca398
 src/shared/agent-status-ipc-payload.ts: c62eca398
 src/shared/agent-status-observation.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves)
@@ -401,7 +401,7 @@ src/shared/codex-subagent-roster.ts: b4d732685c (v1.4.211..v1.4.217 shared halve
 src/shared/codex-subagent-transcript.ts: 66e0847398 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/command-environment.ts: f6eab381ce (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
 src/shared/commit-message-plan.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/commit-message-prompt.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/commit-message-prompt.ts: 15baf86660 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24005 stripPrefilledReasoningPreamble re-export)
 src/shared/draft-paste-ready-scanner.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/feature-tips.test.ts: 64704daac5 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/feature-tips.ts: 64704daac5 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -430,8 +430,8 @@ src/shared/remote-runtime-subscription-frame-router.test.ts: 841503152c (v1.4.21
 src/shared/remote-runtime-subscription-frame-router.ts: 841503152c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/remote-runtime-subscription-request.test.ts: 841503152c (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/ripgrep-process-availability.ts: be5d10c830 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/runtime-session-contracts.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/runtime-terminal-contracts.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/runtime-session-contracts.ts: 800d33e5c9 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #22636 caller on the status result)
+src/shared/runtime-terminal-contracts.ts: d443320af2 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24458 recordedPaneKey)
 src/shared/setup-agent-sequencing.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/setup-agent-sequencing.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/setup-agent-sequencing.windows.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
@@ -449,7 +449,7 @@ src/shared/terminal-startup-cwd.ts: 1069bb053f (v1.4.211..v1.4.217 shared halves
 src/shared/terminal-tab-types.ts: ff74506c0b (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/tui-agent-startup-shell.test.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/tui-agent-startup-shell.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
-src/shared/ui-chrome-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
+src/shared/ui-chrome-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24299 the host card property)
 src/shared/window-shortcut-policy.test.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/windows-cmd-runner-delayed-launch.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/zcode-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
@@ -458,3 +458,14 @@ src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves 
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
+src/shared/app-version.ts: b45f403eda (#24593; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/app-version.test.ts: b45f403eda (#24593; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/worktree/card-properties.ts: b245b3e019 (#24299; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/keybindings/definitions-core-3.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/keybindings/types.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/keybindings-default-bindings.test.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/commit-message-agent-output.ts: 2caa79e097 (#24005; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/commit-message-prompt.test.ts: 2caa79e097 (#24005; v1.4.219..v1.4.220 shared halves; was at vendor base)
+src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; new, pulled in because runtime-session-contracts.ts imports it)
+src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
+src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
