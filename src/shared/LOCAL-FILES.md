@@ -405,3 +405,10 @@ modules are not taken at all (see the port rows).
   the phone, so a host answers its `worktree.rm` on acceptance and leaves a `removing` row out of its
   listings. `worktree/types.ts` and `worktree/create-types.ts` carry the matching `removing?: true`;
   `create-types.ts` does not take the neighbouring `archiveHookOverride` (#19334 is not ported).
+  #24203 (757736628f): `STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY` (constant and host
+  list entry), not advertised by the phone, which keeps asking `agentSession.createSupport` to pick
+  a launch's mode, as a phone released before `agent.launch` does. `ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES`
+  moves to `electron-remote-runtime-client-capabilities.ts`; this copy of that file lists only the
+  four entries the fork's old list had (v1.4.220 also lists accepted-send and retirement-proof-delta
+  constants this protocol-version does not define), marked `CODE UI LOCAL HUNK`. Nothing on the phone
+  reads the list.
