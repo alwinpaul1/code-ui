@@ -285,7 +285,7 @@ src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared ha
 src/shared/agent-hook-listener/listener-event.ts: c62eca398; plus #23947 (24540300f0) `agentPresence` type hunk merged by 3-way
 src/shared/agent-status-ipc-payload.ts: c62eca398
 src/shared/agent-status-observation.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves)
-src/shared/runtime-worktree-contracts.ts: c62eca398; plus v1.4.220 whole (#23467 24edf0f64b adds the `mainAgent` row field the phone reads; #23837 6f2a7d05c9 adds `removing`); the fork's copy equalled v1.4.217
+src/shared/runtime-worktree-contracts.ts: c62eca398; plus v1.4.220 whole (#22944 85067494a1 adds the `mainAgent` row field the phone reads; #23837 6f2a7d05c9 adds `removing`; #23467 does not touch this file); the fork's copy equalled v1.4.217 (and v1.4.216), not v1.4.219
 src/shared/agent-status-run.ts: c62eca398
 
 v1.4.209 shared halves (#21734, #21665, #21577, #21606, #21925, #21891, #21863, #22073), and the
@@ -332,7 +332,7 @@ src/shared/claude-background-task-status.test.ts: a0e24905f6 (v1.4.211..v1.4.217
 src/shared/agent-hook-listener/providers/claude-roster-state.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
 src/shared/draft-paste-ready-scanner.test.ts: fe51c804b8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base)
 src/shared/agent-interrupt-intent.ts: a7a3c021d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20149's change)
-src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment); plus #23467 (24edf0f64b) taken whole at v1.4.220 (the fork's copy equalled v1.4.219 byte for byte)
+src/shared/notification-settings-types.ts: 1b85be67d8 (v1.4.210..v1.4.211 shared halves; first pin recorded here, was at vendor base; also brings #20931's comment); plus v1.4.220 whole for #23467 (24edf0f64b). The fork's copy equalled v1.4.217 (and v1.4.216), not v1.4.219, so taking v1.4.220 whole also took #22944 (85067494a1): `agentInterrupted?: boolean` on NotificationDispatchRequest became `agentTurnOutcome`, which #23467 then retyped to AgentTurnOutcome. Nothing on the phone reads either field.
 src/shared/agent-hook-listener/providers/muse-events.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because provider-dispatch.ts imports it)
 src/shared/agent-hook-listener/providers/muse-events.test.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new)
 src/shared/muse-session-log.ts: ebed0964a2 (v1.4.210..v1.4.211 shared halves; new, pulled in because listener-state.ts and muse-events.ts import it)

@@ -142,7 +142,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
   #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695),
   `AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY` (027acb4ef, #19863) and
-  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601) and
+  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601; no longer defined in this
+  file: since #24301 it lives in `agent-session-stop-capabilities.ts`, which this file re-exports
+  and spreads into `RUNTIME_CAPABILITIES`, see the #24301 entry below) and
   `AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY` (ee354a35d, #21418) and
   `ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY` (253f0e394, #21606; its entry only,
   not the `'files.pathsExist'` beside it upstream, which this copy never took), all in
@@ -163,10 +165,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `RUNTIME_CAPABILITIES` entry) from 2739246058 (#21924, v1.4.209..v1.4.210 shared
   halves) — its entry only; the wire types it gates
   (`AgentSessionTurnCompletion`/`AgentSessionTurnCompletionEvent`/`agentSessionTurnCompletionKey`
-  in `agent-session-wire.ts`) are NOT taken, because they need `AgentJournalTurnOutcome`,
-  which predates v1.4.209 and was never forward-ported into this fork's
-  `agent-session-journal-types.ts` (itself already six hand-applied hunks deep, see
-  below); nothing on the phone reads this stream either way. The file
+  in `agent-session-wire.ts`) are NOT taken. They needed `AgentJournalTurnOutcome`, which
+  predates v1.4.209 and which this fork's `agent-session-journal-types.ts` lacked when this was
+  written; it has it now (the v1.4.211..v1.4.217 and #23467 entries below), but nothing on the
+  phone reads this stream either way. The file
   otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
@@ -386,8 +388,14 @@ modules are not taken at all (see the port rows).
 
 - `agent-turn-outcome.ts`, `main-agent-status.ts`, `agent-hook-listener/main-agent-turn-state.ts`,
   `plugins/plugin-events.ts`, `notification-settings-types.ts`, `runtime-worktree-contracts.ts` —
-  taken whole at v1.4.220 (#23467, #23837); the fork's copies equalled v1.4.219 (v1.4.217 for
-  the last one).
+  taken whole at v1.4.220 (#23467, #23837). The fork's copies of the first four equalled v1.4.219;
+  the last two equalled v1.4.217, so v1.4.220 also brought #22944's (85067494a1) hunks in them:
+  `mainAgent` on `RuntimeWorktreeAgentRow` (#23467 does not touch that file), which the phone
+  reads, and `agentInterrupted` → `agentTurnOutcome` on `NotificationDispatchRequest`, which
+  nothing on the phone reads. #22944's mobile half reads `mainAgent`: the verdict, mark and dot
+  in `agent-row-display.ts` and the `failed` dot (with #23467), `agentRowTimeAt` and its use in
+  `WorktreeAgentRow.tsx`, and `areMainAgentsEqual` in `worktree-list-snapshot.ts`. Not taken: its
+  parity test against `agentMainAgentVerdict` (`agent-main-agent-verdict.ts` is not vendored).
 - `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts`,
   `agent-session-turn-record.ts` — `outcome` on a turn lifecycle row (open string in the schema,
   both carriers) and `readAgentJournalTurnOutcome`, by hand from v1.4.217. #23467's
