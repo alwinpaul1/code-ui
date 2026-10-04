@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { QUICK_OPEN_REMOTE_QUERY_MAX_CODE_UNITS } from '../quick-open-path-search'
+import { RUNTIME_NAVIGATION_TARGETS } from '../runtime-navigation'
 import { FileOpen, WorktreeSelector } from './files-target-params'
 
 export const FilePathSearch = WorktreeSelector.extend({
@@ -36,7 +37,12 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-export const FileOpenDiff = FileOpen.extend({
+// Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
+export const FileOpenTab = FileOpen.extend({
+  navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
+})
+
+export const FileOpenDiff = FileOpenTab.extend({
   staged: z.boolean().optional()
 })
 
