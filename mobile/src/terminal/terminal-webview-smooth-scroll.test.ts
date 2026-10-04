@@ -34,6 +34,8 @@ type LayoutReads = {
 }
 
 let buffer: BufferState
+// The mouse mode the stub terminal reports: `any` is Claude Code's (DECSET 1003).
+let trackingMode = 'none'
 let clock = 0
 let layoutReads: LayoutReads
 let nextFrameId = 1
@@ -62,7 +64,7 @@ function makeTerminal() {
     cols: 40,
     rows: 24,
     options: { fontSize: 13 },
-    modes: { mouseTrackingMode: 'none' as string },
+    modes: { mouseTrackingMode: trackingMode },
     element: null as HTMLElement | null,
     _core: {
       _renderService: {
@@ -302,6 +304,7 @@ function boot(state: Partial<BufferState> = {}): void {
 
 describe('terminal WebView touch scrolling', () => {
   beforeEach(() => {
+    trackingMode = 'none'
     clock = 0
     nextFrameId = 1
     paintFramePending = false
@@ -621,6 +624,48 @@ describe('terminal WebView touch scrolling', () => {
     runFrames(4, FRAME_120HZ_MS)
 
     expect(parsedWrites).toEqual(['late output'])
+  })
+
+  // 6aafcdb65, measured on the S23: 23-27 painted frames/s during each swipe over Claude Code, the
+  // host's repaints landing while the finger moved. On a program that tracks the mouse the finger
+  // moves no pixels of its own: the wheel rows go to the program and its repaint IS the scroll. The
+  // hold above (2a1d1dece) is for local scrollback; begun on every touchdown it held Claude Code's
+  // repaint too, so the pane stood still under the finger until it lifted.
+  it("draws Claude Code's repaints while the finger is still scrolling it", () => {
+    trackingMode = 'any'
+    boot({ type: 'alternate', baseY: 0, viewportY: 0 })
+    parsedWrites.length = 0
+
+    dragUp({ frameMs: FRAME_120HZ_MS, moves: 12, pxPerMs: 0.5 })
+    expect(posted.filter((message) => message.type === 'terminal-input').length).toBeGreaterThan(0)
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: 'claude repaint after the wheel rows' })
+      })
+    )
+    runFrames(4, FRAME_120HZ_MS)
+
+    expect(parsedWrites).toEqual(['claude repaint after the wheel rows'])
+  })
+
+  // The same for a full-screen program that does not track the mouse (less, vim): the swipe is sent
+  // as arrow keys and the pager's repaint is the scroll.
+  it("draws a pager's repaints while the finger is still scrolling it", () => {
+    boot({ type: 'alternate', baseY: 0, viewportY: 0 })
+    parsedWrites.length = 0
+
+    dragUp({ frameMs: FRAME_120HZ_MS, moves: 12, pxPerMs: 0.5 })
+    expect(posted.filter((message) => message.type === 'terminal-input').length).toBeGreaterThan(0)
+
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'write', data: 'pager repaint after the arrows' })
+      })
+    )
+    runFrames(4, FRAME_120HZ_MS)
+
+    expect(parsedWrites).toEqual(['pager repaint after the arrows'])
   })
 
   it('does not read layout on every touchmove', () => {

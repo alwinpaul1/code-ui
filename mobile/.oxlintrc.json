@@ -92,7 +92,9 @@
             // gestures carry the per-millisecond fling and the once-per-gesture layout read
             // (7097feea), the write hold (2a1d1dec) and the scrollback bend (9a6507b6), and
             // threading the scope through them cost the last few lines: 303.
-            "max": 303,
+            // 2026-10-04: 305. The write hold now starts only for a swipe over local
+            // scrollback, not one a program takes as input (an `if` around the call).
+            "max": 305,
             "skipBlankLines": true,
             "skipComments": true
           }
