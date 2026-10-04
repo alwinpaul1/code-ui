@@ -6,6 +6,7 @@ import {
   agentDisplayLabel,
   agentDotState,
   agentIdentityLabel,
+  agentRowTimeAt,
   agentRowVerdict,
   agentRowVerdictMark,
   formatTimeAgo,
@@ -126,6 +127,35 @@ describe('agentDotState', () => {
     expect(agentDotState(row({ state: 'done', updatedAt: 0, interrupted: true }), stale)).toBe(
       'interrupted'
     )
+  })
+})
+
+// Orca #22944 (85067494a1): upstream's own cases, plus the fork's `interruption` arm, which
+// reads failed here as it does upstream at v1.4.220.
+describe('agentRowTimeAt', () => {
+  const mainAgentDone = (outcome: 'success' | 'failure' | 'interruption', stateStartedAt: number) => ({
+    mainAgent: { state: 'done' as const, outcome, stateStartedAt }
+  })
+
+  it('dates a main agent that failed while its subagents run by its own failure', () => {
+    expect(
+      agentRowTimeAt(row({ state: 'working', stateStartedAt: 100, ...mainAgentDone('failure', 900) }))
+    ).toBe(900)
+    expect(
+      agentRowTimeAt(
+        row({ state: 'working', stateStartedAt: 100, ...mainAgentDone('interruption', 900) })
+      )
+    ).toBe(900)
+  })
+
+  it('dates every other row by when its state began', () => {
+    expect(
+      agentRowTimeAt(row({ state: 'working', stateStartedAt: 100, ...mainAgentDone('success', 900) }))
+    ).toBe(100)
+    expect(
+      agentRowTimeAt(row({ state: 'done', stateStartedAt: 100, ...mainAgentDone('failure', 900) }))
+    ).toBe(100)
+    expect(agentRowTimeAt(row({ state: 'working', stateStartedAt: 100 }))).toBe(100)
   })
 })
 

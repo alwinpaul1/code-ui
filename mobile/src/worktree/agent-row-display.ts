@@ -175,6 +175,17 @@ export function agentIdentityLabel(agentType: string | null): string {
   return known[normalized] ?? normalized.slice(0, 2).toUpperCase()
 }
 
+// When the row's state began, except that a main agent that failed while its subagents run is
+// dated by its own failure. Mirrors desktop lastEnteredDoneAt (agent-finished-timestamp.ts).
+export function agentRowTimeAt(
+  row: Pick<RuntimeWorktreeAgentRow, 'state' | 'interrupted' | 'mainAgent' | 'stateStartedAt'>
+): number {
+  if (row.state !== 'done' && row.mainAgent && agentRowVerdictMark(row) === 'failed') {
+    return row.mainAgent.stateStartedAt
+  }
+  return row.stateStartedAt
+}
+
 // Relative time, matching desktop formatTimeAgo thresholds (just now / Xm / Xh / Xd).
 export function formatTimeAgo(ts: number, now: number): string {
   const delta = now - ts

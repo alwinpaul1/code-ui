@@ -3,7 +3,12 @@ import { View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { agentDisplayLabel, agentDotState, formatTimeAgo } from '../worktree/agent-row-display'
+import {
+  agentDisplayLabel,
+  agentDotState,
+  agentRowTimeAt,
+  formatTimeAgo
+} from '../worktree/agent-row-display'
 import { AgentStateDot } from './AgentStateDot'
 import { MobileAgentIcon } from './MobileAgentIcon'
 
@@ -24,7 +29,7 @@ function WorktreeAgentRowComponent({ agent, depth, now, unvisited }: Props) {
   const { space } = useTheme()
   const dotState = agentDotState(agent, now)
   const label = agentDisplayLabel(agent, now)
-  const ts = formatTimeAgo(agent.stateStartedAt, now)
+  const ts = formatTimeAgo(agentRowTimeAt(agent), now)
 
   return (
     <View
