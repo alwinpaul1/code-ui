@@ -68,7 +68,8 @@ const ASYNC_AGENT_LAUNCHED = /^\s*Async agent launched successfully\.[\s\S]*?\ba
 type Pending = PendingCall & { key: string }
 
 /** Launches and endings in one loaded window, paired the way
- *  `deriveBackgroundTasks` pairs them: first in, first out, with an
+ *  `deriveBackgroundTasks` pairs them (`takeAnsweredCall`: a result that names
+ *  its call is that call's, one that names none first in, first out), with an
  *  interrupted turn's unanswered calls dropped. */
 export function readTaskEvidence(messages: readonly NativeChatMessage[]): WindowTaskEvidence {
   const pending: Pending[] = []
@@ -83,13 +84,13 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
     let text = ''
     message.blocks.forEach((block, index) => {
       if (isToolCallBlock(block)) {
-        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, key: `${message.id}#${index}` })
+        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, key: `${message.id}#${index}`, callId: block.callId })
         const target = block.name === 'SendMessage' ? readString(block.input, 'to') : null
         if (target && TARGET.test(target)) {
           ownAgentIds.push(target)
         }
       } else if (isToolResultBlock(block)) {
-        const call = takeAnsweredCall(pending, block.output)
+        const call = takeAnsweredCall(pending, block)
         // A stop ends its task once its answer says it went through, as in
         // `deriveBackgroundTasks`: the memory keeps a retired id for good.
         const stopped = call ? stoppedTaskId(call, block) : null

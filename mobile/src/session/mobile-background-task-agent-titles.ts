@@ -16,8 +16,9 @@ import {
 
 // ─── Which agent id is which ─────────────────────────────────────────────────
 //
-// The phone pairs a tool call with its result first-in-first-out, because
-// Orca's reader drops the tool_use ids. For agents launched side by side that
+// On a transcript the phone pairs a tool call with its result first-in-first-out,
+// because Orca's reader drops the tool_use ids (a structured chat's results name
+// their call, and pair by it: `takeAnsweredCall`). For agents launched side by side that
 // pairing is wrong: Claude Code writes each launch result when the launch is
 // acknowledged, not in the order it made the calls. Five agents launched on
 // 2026-09-23 (Claude Code 2.1.281, fixtures/claude-parallel-agents-2.1.281.ts)

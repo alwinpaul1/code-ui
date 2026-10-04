@@ -218,20 +218,17 @@ export function deriveBackgroundTasks(
     trackMessage(sends, message)
     for (const block of message.blocks) {
       if (isToolCallBlock(block)) {
-        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at: position })
+        pending.push({ name: block.name, input: block.input, startedAt: message.timestamp, at: position, callId: block.callId })
         trackCall(sends, block.name, block.input)
       } else if (isToolResultBlock(block)) {
-        // By position, oldest unanswered call first, save that an Agent call
-        // waits for an Agent-shaped result. A transcript's results name no
-        // call (Orca 1.4.212 keeps the call's id and drops the result's:
-        // fixtures/claude-agent-message-read-image-2.1.283.ts), and for those
-        // `pairToolBlocks` (src/shared/native-chat-tool-fold.ts) pairs by
-        // position too. Since Orca #22619 it gives a result that names its call
-        // (`callId`) to that call; this reader does not read `callId`, so
-        // beyond the Agent rule the two differ only on such a result arriving
-        // out of order, which no captured input shows reaching here (this
-        // runs when the host sends no task roster).
-        const call = takeAnsweredCall(pending, block.output)
+        // A result that names its call (`callId`, a structured chat's) is that
+        // call's, as `pairToolBlocks` (src/shared/native-chat-tool-fold.ts)
+        // pairs it: a fast-failing call's result no longer takes an earlier
+        // call still running, which then took the next launch's result and
+        // lost that background task. One that names none (a transcript's) is
+        // paired by position, oldest unanswered call first, save that an
+        // Agent call waits for an Agent-shaped result (`takeAnsweredCall`).
+        const call = takeAnsweredCall(pending, block)
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
           launches.set(launch.id, launch)
