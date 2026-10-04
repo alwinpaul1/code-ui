@@ -50,7 +50,10 @@ describe('a refusal the host threw', () => {
     )
   })
 
-  it("fails a Stop with the refusal's words, not as unconfirmed", async () => {
+  // Upstream's phone calls this `failed`; this one reads a thrown refusal exactly as a returned
+  // one (`refused`), so its operation id follows its code as a returned refusal's does
+  // (thrown-refusal-reads-as-returned.test.tsx).
+  it("refuses a Stop with the refusal's words, not as unconfirmed", async () => {
     const result = await requestStructuredAgentSessionMutation({
       client: refusingClient(),
       method: 'agentSession.cancel',
@@ -62,7 +65,8 @@ describe('a refusal the host threw', () => {
     })
 
     expect(result).toMatchObject({
-      status: 'failed',
+      status: 'refused',
+      code: 'agent_session_journal_unreadable',
       message: "Unable to load this chat. The agent wasn't stopped."
     })
   })
