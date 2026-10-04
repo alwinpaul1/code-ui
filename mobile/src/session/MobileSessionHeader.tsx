@@ -358,7 +358,9 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
  *  verdict the host sends in `mainAgent`, or an older row's legacy
  *  `interrupted` flag, marks it as the desktop's tab does: red for a failure,
  *  the muted dot after a Stop, amber when the host could not confirm the end
- *  (tab-pill-draws-turn-verdict.test.ts). No number: the
+ *  (tab-pill-draws-turn-verdict.test.ts). Not after Claude repaints its title:
+ *  the host's title-only status carries no verdict, and the pill draws the
+ *  check (tabPillDotState says why the phone cannot fill it in). No number: the
  *  chat view's row carries the count. Live for every tab from the host's
  *  pushed status; see session-tab-activity.ts. */
 function TabActivityBadge({
