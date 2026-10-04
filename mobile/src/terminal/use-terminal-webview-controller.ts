@@ -259,6 +259,9 @@ export function useTerminalWebViewController(
           // `?1049h` onwards, so it never turns one empty. On a document with no terminal yet the
           // init opens a blank one and drops these bytes there, as clearing them here used to.
           writeCoalescer.flushNow()
+          // Then restart the window, as at any snapshot: with nothing left to drop, clear() only
+          // lets the first write after this init (a keystroke's echo) take the leading edge.
+          writeCoalescer.clear()
         }
         postMessage({
           type: 'init',

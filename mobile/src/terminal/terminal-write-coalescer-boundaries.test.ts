@@ -142,7 +142,9 @@ describe('terminal write coalescer boundaries', () => {
     expect(initClear).toBeGreaterThan(contentBranch)
     expect(initClear).toBeLessThan(emptyBranch)
     expect(initFlush).toBeGreaterThan(emptyBranch)
-    expect(initBody.indexOf('writeCoalescer.clear()', emptyBranch)).toBe(-1)
+    // The empty branch may restart the window only after the flush, never instead of it.
+    const emptyBranchClear = initBody.indexOf('writeCoalescer.clear()', emptyBranch)
+    expect(emptyBranchClear === -1 || emptyBranchClear > initFlush).toBe(true)
 
     const clearStart = controllerSource.indexOf('clear() {', initPost)
     const clearBody = controllerSource.slice(clearStart, clearStart + 160)

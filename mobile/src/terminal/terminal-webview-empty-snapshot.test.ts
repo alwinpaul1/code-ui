@@ -324,6 +324,8 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
   // controller, with its real coalescer, posts to the real document.
   describe('with live output still waiting in the handle (real controller and coalescer)', () => {
     let renderer: ReactTestRenderer | null = null
+    /** Every command the controller posted to the document, in order. */
+    let sent: Posted[] = []
 
     afterEach(() => {
       act(() => {
@@ -331,6 +333,7 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
       })
       renderer = null
       forwardToController = null
+      sent = []
     })
 
     function mountHandle(): TerminalWebViewHandle {
@@ -339,8 +342,10 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
         controller = useTerminalWebViewController(
           {},
           {
-            post: (command) =>
-              window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(command) })),
+            post: (command) => {
+              sent.push(command)
+              window.dispatchEvent(new MessageEvent('message', { data: JSON.stringify(command) }))
+            },
             pingsOnForegroundRecovery: () => false
           }
         )
@@ -395,6 +400,30 @@ describe('a drawn pane that the host sends an empty snapshot (real xterm engine)
       expect(text.indexOf('LIVE-FIRST')).toBeGreaterThan(text.indexOf('DRAWING'))
       expect(text.indexOf('LIVE-WAITING')).toBeGreaterThan(text.indexOf('LIVE-FIRST'))
       expect(readyNotices()).toEqual([expect.objectContaining({ type: 'ready', cols: 40, rows: 30 })])
+    })
+
+    // The window starts over at a snapshot, empty or not: the first output after it (a keystroke's
+    // echo, typically) goes to the document at once instead of waiting out the rest of 48 ms.
+    // Found by the review of the flush above, which had left the window running.
+    it.each([
+      ['with output waiting', waitingOutputBeforeEmptySnapshot],
+      [
+        'with nothing waiting',
+        (pane: TerminalWebViewHandle) => {
+          pane.write('LIVE-FIRST ')
+          pane.init(80, 24, '')
+        }
+      ]
+    ])('sends the first output after an empty snapshot at once (%s)', async (_case, before) => {
+      const pane = mountHandle()
+      pane.init(80, 24, 'CLAUDE-SCREEN ')
+      await settle()
+
+      before(pane)
+      const sentBefore = sent.length
+      pane.write('ECHO')
+
+      expect(sent.slice(sentBefore)).toEqual([expect.objectContaining({ type: 'write', data: 'ECHO' })])
     })
 
     it('still drops waiting output under a snapshot with content, which replaces the screen', async () => {
