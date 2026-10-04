@@ -4,7 +4,7 @@ Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way
 src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
@@ -53,7 +53,7 @@ src/shared/structured-agent-session-message-projection.ts: 434365d2d
 src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
 src/shared/structured-agent-session-send-disposition.test.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
-src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
+src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
 src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
 src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode)
@@ -458,8 +458,9 @@ src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves 
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
-src/shared/native-chat-tool-fold.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/native-chat-types.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/structured-agent-session-projection.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/structured-agent-session-projection.test.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-tool-fold.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-types.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/structured-agent-session-projection.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
+src/shared/agent-session-next-fence.ts: vendor base; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
