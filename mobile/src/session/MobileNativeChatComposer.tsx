@@ -21,6 +21,7 @@ import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
 import { PressScale } from '../ui/PressScale'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
   composerSuggestionInsertText,
@@ -464,12 +465,15 @@ export function MobileNativeChatComposer({
                 onPress={dictationMode === 'hold' ? undefined : onMicPress}
                 onPressIn={dictationMode === 'hold' ? onMicPressIn : undefined}
                 onPressOut={dictationMode === 'hold' ? onMicPressOut : undefined}
+                onLongPress={dictationMode === 'hold' ? keepHeldPressThroughLongPress : undefined}
                 disabled={disabled}
               >
+                {/* The icon swaps on press; as the page's touch target, its removal would send
+                    touchend to a detached node and lose the release. */}
                 {micActive ? (
-                  <Square size={16} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
+                  <Square pointerEvents="none" size={16} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
                 ) : (
-                  <Mic size={19} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
                 )}
               </Pressable>
             ) : null}

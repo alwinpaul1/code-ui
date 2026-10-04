@@ -4,6 +4,7 @@ import { Image as ImageIcon, Mic, Paperclip, Plus } from 'lucide-react-native'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { useTheme } from '../theme/theme-context'
+import { keepHeldPressThroughLongPress } from './held-press-long-press'
 
 type DictationState = {
   readonly isStarting: boolean
@@ -104,7 +105,7 @@ export function MobileTerminalInputActions({
                   onDictationCancel()
                 }
               }
-            : undefined
+            : keepHeldPressThroughLongPress
         }
         accessibilityLabel={
           dictation.isRecording
