@@ -104,10 +104,27 @@ function liveField(): ReactTestInstance | undefined {
     .find((node) => node.props.accessibilityLabel === 'Live terminal input')
 }
 
-/** Whether anything around the node stops a touch from reaching it. */
-function touchBlockedAbove(node: ReactTestInstance): boolean {
+/** A view's pointerEvents, from the prop or (RN 0.86 honours both) from its style. */
+function pointerEventsOf(node: ReactTestInstance): unknown {
+  const styles: unknown[] = [node.props.style].flat(Infinity)
+  let fromStyle: unknown
+  for (const style of styles) {
+    if (style && typeof style === 'object' && 'pointerEvents' in style) {
+      fromStyle = (style as { pointerEvents?: unknown }).pointerEvents
+    }
+  }
+  return node.props.pointerEvents ?? fromStyle
+}
+
+/** Whether the node, or anything it sits in, stops a touch from reaching it. */
+function touchBlocked(node: ReactTestInstance): boolean {
+  const own = pointerEventsOf(node)
+  if (own === 'none' || own === 'box-none') {
+    return true
+  }
   for (let at: ReactTestInstance | null = node.parent; at; at = at.parent) {
-    if (at.props.pointerEvents === 'none' || at.props.pointerEvents === 'box-only') {
+    const around = pointerEventsOf(at)
+    if (around === 'none' || around === 'box-only') {
       return true
     }
   }
@@ -124,7 +141,7 @@ describe('a dismissed keyboard with live input on', () => {
     expect(field!.props.editable).toBe(true)
     expect(field!.props.showSoftInputOnFocus).toBe(true)
     expect(field!.props.placeholder).toBe('Tap to type')
-    expect(touchBlockedAbove(field!)).toBe(false)
+    expect(touchBlocked(field!)).toBe(false)
     // The field on screen is the one the dismissal blurred, so the tap is a fresh focus.
     expect(bindLiveInputField).toHaveBeenLastCalledWith(NATIVE_LIVE_FIELD)
   })
