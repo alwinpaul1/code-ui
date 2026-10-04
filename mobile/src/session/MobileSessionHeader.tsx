@@ -19,6 +19,7 @@ import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { sessionTabActivity, tabPillDotState } from './session-tab-activity'
+import { tabPillBackground, tabPillDotSurface } from './tab-pill-surface'
 import { AgentStateDot } from '../components/AgentStateDot'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { useNow } from '../hooks/use-now'
@@ -261,11 +262,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     gap: 6,
                     paddingHorizontal: space.md,
                     borderRadius: radius.pill,
-                    backgroundColor: active
-                      ? colors.text
-                      : pressed
-                        ? colors.bgRaised
-                        : colors.bgPanel,
+                    backgroundColor: tabPillBackground(colors, active, pressed),
                     borderWidth: active ? 0 : 1,
                     borderColor: colors.border
                   })}
@@ -361,7 +358,9 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
  *  verdict the host sends in `mainAgent`, or an older row's legacy
  *  `interrupted` flag, marks it as the desktop's tab does: red for a failure,
  *  the muted dot after a Stop, amber when the host could not confirm the end
- *  (tab-pill-draws-turn-verdict.test.ts). No number: the
+ *  (tab-pill-draws-turn-verdict.test.ts). Not after Claude repaints its title:
+ *  the host's title-only status carries no verdict, and the pill draws the
+ *  check (tabPillDotState says why the phone cannot fill it in). No number: the
  *  chat view's row carries the count. Live for every tab from the host's
  *  pushed status; see session-tab-activity.ts. */
 function TabActivityBadge({
@@ -406,11 +405,6 @@ function TabActivityBadge({
     return null
   }
   return (
-    <AgentStateDot
-      state={state}
-      size={12}
-      onLightSurface={active && isDark}
-      onDarkSurface={active && !isDark}
-    />
+    <AgentStateDot state={state} size={12} {...tabPillDotSurface(active, isDark)} />
   )
 }

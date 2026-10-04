@@ -71,10 +71,11 @@ describe('the tab pill after a turn ends', () => {
     expect(pillDotState(null, 2_000)).toBe('idle')
   })
 
-  // The selected pill is the theme's text colour, light in dark mode and near-black in light mode;
-  // AgentStateDot.verdict-tones.test.tsx measures the tones these two flags pick on it.
-  it("draws its dot in the selected pill's own surface tones in both schemes", () => {
-    expect(headerCode()).toContain('onLightSurface={active && isDark}')
-    expect(headerCode()).toContain('onDarkSurface={active && !isDark}')
+  // The pill's fill and its dot's tone table come from tab-pill-surface.ts, and
+  // AgentStateDot.verdict-tones.test.tsx measures every dot through those two functions on every
+  // fill the pill has. This pins that the header draws through them and not a copy of them.
+  it("draws its fill and its dot's tones through the functions the contrast test measures", () => {
+    expect(headerCode()).toContain('backgroundColor: tabPillBackground(colors, active, pressed)')
+    expect(headerCode()).toContain('{...tabPillDotSurface(active, isDark)}')
   })
 })

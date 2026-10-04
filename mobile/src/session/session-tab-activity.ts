@@ -75,7 +75,17 @@ export function tabDotStateAfterLeadTurn(state: AgentDotState, leadTurnEnded: bo
  *  the lead-turn rule above. The desktop's tab reads the same verdict (`agentVerdictDisplayMark`,
  *  src/shared/agent-main-agent-verdict.ts, which `agentDotState` mirrors), legacy `interrupted`
  *  flag included: a row a pre-`mainAgent` host or an OpenCode SIGINT ends with only that flag reads
- *  interrupted there, so it does here. The pill stripped the flag from 2026-09-11 to 2026-10-04. */
+ *  interrupted there, so it does here. The pill stripped the flag from 2026-09-11 to 2026-10-04.
+ *
+ *  Parity holds only while the tab's status is the hook row. Once the pane's title is newer, an
+ *  Orca 1.4.220 host sends the tab a title-only status instead (`buildTitleOnlyStatus`,
+ *  runtime-mobile-agent-status-projection.ts:44-61, and the last-resort branch of
+ *  runtime-mobile-agent-status-builder.ts), with neither `mainAgent` nor `interrupted`. So a Stop's
+ *  muted dot can turn into the check at Claude's next title repaint, while the desktop tab, which
+ *  reads the hook row, keeps it. The phone holds no current copy of that row here: the worktree
+ *  catalog carries it under the same paneKey, but `worktree.ps` is polled only while the host list
+ *  is on screen. Carrying the last verdict forward would be reconstruction. Closing this needs the
+ *  host's title-only status to keep `mainAgent` (v1.4.220 source, read 2026-10-04). */
 export function tabPillDotState(
   status: AgentStatusEntry | null,
   now: number,
