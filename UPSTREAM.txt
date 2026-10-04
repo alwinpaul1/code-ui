@@ -457,4 +457,6 @@ src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 sha
 src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
-src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
+src/shared/rpc-contract/terminal-viewport-schemas-params.ts: de8bffe240 (#24687 wide panes: cols max is TERMINAL_VIEWPORT_MAX_COLS, was 240; v1.4.220 content, before that 0b2dd0a99b #23006 terminal.unsubscribe requestId)
+src/shared/terminal-viewport.ts: de8bffe240 (#24687 new, pulled in because terminal-viewport-schemas-params.ts imports it)
+src/shared/terminal-viewport.test.ts: de8bffe240 (#24687 new; vendored for parity, mobile vitest roots at mobile/ and does not collect it, the phone-side pin is mobile/src/terminal/terminal-viewport-wide-panes.test.ts)
