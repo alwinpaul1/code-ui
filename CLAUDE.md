@@ -79,7 +79,7 @@ Before calling any change done: **diff it against the current code** (`git
 diff`, and for a port, upstream's parent against this fork's file) and read
 what actually changed, not what you meant to change. Then **run the
 regression suite** (`cd mobile && npx tsc --noEmit && npx vitest run && npx
-oxlint`) and, for anything that touched ordering, parsing, or a pinned
+oxlint && node scripts/check-tests-typecheck-ratchet.mjs`) and, for anything that touched ordering, parsing, or a pinned
 contract, have a second reviewer (an Opus or Sonnet agent) hunt the diff for
 regressions. **A reported regression is confirmed or disproved with a test,
 never by re-reading the diff**: reproduce it, and if it is real, fix it with
@@ -250,5 +250,10 @@ to the next version instead.
 ## Checks before calling work done
 
 ```
-cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint
+cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs
 ```
+
+The last step is the tests-typecheck ratchet: a test file must typecheck under
+`tsconfig.test.json`, because a type-level pin in an unchecked test proves nothing.
+On 2026-10-04 two new test files passed tsc, vitest and oxlint and still failed
+it; CI runs it too (`pnpm check:tests-typecheck`).
