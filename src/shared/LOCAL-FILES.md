@@ -69,13 +69,13 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
   and #22029 left that form alone. It is not taken: nothing in `mobile/` or
   `src/shared/` calls `countToolCalls`, and both forms return the same count. Recorded here 2026-09-24; before
   that the exception was only in UPSTREAM.txt.
-- `structured-agent-session-tool-call-block.ts` — new at 8757e40063 (#22349, v1.4.210..v1.4.211
-  shared halves) and copied from it minus one line: upstream's block builder also copies
-  `callId` onto the tool-call block. This fork's journal item and block have no `callId`
-  (it arrived with #19869, which is not ported), so the line cannot compile here and is
-  left out, marked `CODE UI LOCAL HUNK` in the source. Unlike the entries above it fixes
-  nothing; the fork's projection never carried `callId` either, so what the phone draws is
-  unchanged. Porting #19869 makes the hunk redundant.
+- `structured-agent-session-tool-call-block.ts` — copied from 8757e40063 (#22349). It once lacked
+  upstream's `callId` line because this fork's journal item and block had no `callId` (it arrived
+  with #19869, not ported). Orca #22619 (cb363444f3) pairs a tool result with the call it names,
+  so the field is needed: `callId?` is back on `AgentJournalToolCallItem`, on
+  `NativeChatToolCallBlock`, and in `agent-session-journal-schemas.ts` (`ProviderCallId`, on the
+  block and on the journal body), hand-applied from v1.4.217, and the line here is upstream's.
+  The block is now byte-equal to v1.4.220's; the three other files keep their older base.
 
 ## Vendored files carrying a hand-applied upstream hunk
 

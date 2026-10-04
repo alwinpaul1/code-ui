@@ -44,6 +44,11 @@ const ToolMetadata = {
   webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
 }
 
+/** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
+const ProviderCallId = z
+  .string()
+  .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
+
 const KNOWN_BLOCK_TYPES = new Set(['text', 'tool-call', 'tool-result', 'image-ref'])
 
 /** Renderers select blocks by `type` equality and skip what they cannot draw,
@@ -64,6 +69,7 @@ const Block = z.union([
       type: z.literal('tool-call'),
       name: z.string(),
       input: z.unknown().optional(),
+      callId: ProviderCallId.optional(),
       ...ToolMetadata
     }),
     z.object({
@@ -148,6 +154,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     name: z.string(),
     // See the tool-call block: the key itself is lost when `input` is undefined.
     input: z.unknown().optional(),
+    callId: ProviderCallId.optional(),
     state: z.string().min(1),
     output: BoundedPayload.optional()
   }),

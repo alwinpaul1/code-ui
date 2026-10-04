@@ -4,7 +4,7 @@ Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md
 src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
@@ -58,8 +58,8 @@ src/shared/agent-session-conversation-command.ts: f1d854502
 src/shared/agent-session-operation-ledger.ts: f1d854502; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
 src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode)
 src/shared/native-chat-diff.ts: 0d4d059ae
-src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
-src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
+src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/native-chat-task-list.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-task-list.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388
 src/shared/native-chat-tool-identity.ts: d0506bf5de0da490025d94c6507378be75194a60
@@ -88,7 +88,7 @@ src/shared/native-chat-edit-patch-files.ts: e80fae0c4d4d70424d52eebe383c57b2291b
 src/shared/native-chat-edit-normalize.test.ts: 172aa1ac35f61d080af6a12ff568bfa58933770a
 src/shared/native-chat-ask.ts: 231e805b1
 src/shared/native-chat-ask-fifo.test.ts: 6a9c5d8ce3836865c8fba9461b699e03fb4639be
-src/shared/native-chat-tool-pair-limit.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
+src/shared/native-chat-tool-pair-limit.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/native-chat-tool-attribution-allocation.test.ts: 44eb95fc6bb96fbb32bb2ebda59b8c1f908e1a71
 src/shared/ai-vault-session-depth.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
 src/shared/ai-vault-session-depth.test.ts: 063c1caa6fbc8545e9c446e1ae32a684d1d92a95
@@ -351,7 +351,7 @@ src/shared/claude-background-task-kind.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared
 src/shared/claude-background-task-kind.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
 src/shared/agent-session-journal-producer.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-journal-producer.test.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new)
-src/shared/structured-agent-session-tool-call-block.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts and the projection import it; minus the `callId` line, a local hunk, see LOCAL-FILES.md)
+src/shared/structured-agent-session-tool-call-block.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts and the projection import it; the `callId` line it once lacked is back, with #19869's callId hunks, see LOCAL-FILES.md)
 src/shared/agent-hook-listener/listener-limits.ts: 2ce252f47 (#20523's shared half, which the later re-vendors took only in part; first pin recorded here, was at vendor base; agent-hook-listener.ts at 646fa3645 imports its `normalizeGrokPromptId`; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
 src/shared/agent-hook-listener/providers/grok-events.ts: a0e24905f6 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/providers/grok-tool-fields.ts: 2ce252f47 (#20523's shared half; first pin recorded here, was at vendor base; its one `stop_cancelled` line belongs with grok-events.ts; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
@@ -453,8 +453,13 @@ src/shared/ui-chrome-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves; fir
 src/shared/window-shortcut-policy.test.ts: 0a5e73e3bb (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/windows-cmd-runner-delayed-launch.ts: 4cafa50ec0 (v1.4.211..v1.4.217 shared halves; first pin recorded here, was at vendor base)
 src/shared/zcode-headless-command.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves; new, pulled in because a file above imports it, or a test or asset that goes with one)
-src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/agent-session-journal-schemas.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md
 src/shared/agent-status-types.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change 5e6fcca0b3), see LOCAL-FILES.md
 src/shared/structured-agent-session-reducer.ts: hand-merged, v1.4.211..v1.4.217 shared halves (last upstream change d443320af2), see LOCAL-FILES.md
 src/shared/native-chat-stream-unsubscribe.ts: 2a001b43e5 (#22939 per-subscription chat token; first pin recorded here, was at vendor base)
 src/shared/rpc-contract/terminal-viewport-schemas-params.ts: 0b2dd0a99b (#23006 terminal.unsubscribe requestId; was at v1.4.217 content)
+src/shared/native-chat-tool-fold.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-types.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/structured-agent-session-projection.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/structured-agent-session-projection.test.ts: #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
