@@ -3,7 +3,7 @@ orca upstream commit: ef428d879e09a02daa3bb9ed977a7802d89da289
 Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
-src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md
+src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #23837 (6f2a7d05c9) WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY (constant and the Electron client list entry), hand-applied, see LOCAL-FILES.md
 src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md
 src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
@@ -120,7 +120,7 @@ src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared ha
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
 src/shared/github/project-group-sort.ts: fb9d08f5f
-src/shared/worktree/types.ts: d3501f7ad
+src/shared/worktree/types.ts: d3501f7ad; plus #23837 (6f2a7d05c9) `removing?` merged by 3-way (its archiveHookOverride sibling is not taken: #19334 is not ported)
 
 The RPC params contract, vendored whole for the typed-RPC chain (#19961, #20018).
 mobile/src/transport/rpc-params-contract.ts is the phone's only, type-only, door to it.
@@ -465,3 +465,4 @@ src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
 src/shared/agent-session-next-fence.ts: vendor base; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
 src/shared/agent-status-types.test.ts: vendor base; plus a verdict test appended (the fork's file lacks upstream's surrounding describe), #23467
+src/shared/worktree/create-types.ts: vendor base; plus #23837 (6f2a7d05c9) `removing?` merged by 3-way (its archiveHookOverride sibling is not taken: #19334 is not ported)

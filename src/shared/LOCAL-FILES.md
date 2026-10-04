@@ -398,3 +398,10 @@ modules are not taken at all (see the port rows).
 - `native-chat-turn-status.ts`, `structured-agent-session-turn-timing.ts` — the verdict hunks of
   #23467 on top of the fork's `thinking` row; upstream's queue-until hunk in the timing file is
   not taken (no queue delivery here).
+- `protocol-version.ts` — hand-applied, never re-vendored whole: this copy is what the phone
+  advertises and compares, and a whole v1.4.220 file would also list capabilities the phone does not
+  implement (accepted send, queued messages, keyboard, rewind, ...). The net v1.4.219..v1.4.220 diff,
+  taken a PR at a time: `WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY` (#23837), not advertised by
+  the phone, so a host answers its `worktree.rm` on acceptance and leaves a `removing` row out of its
+  listings. `worktree/types.ts` and `worktree/create-types.ts` carry the matching `removing?: true`;
+  `create-types.ts` does not take the neighbouring `archiveHookOverride` (#19334 is not ported).
