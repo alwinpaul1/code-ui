@@ -247,9 +247,22 @@ export function useTerminalWebViewController(
         // Why: arm a fresh ready promise BEFORE posting init. The document resolves it via the
         // 'ready' notify at the end of its rAF chain.
         promises.armReady()
-        // Why: pending chunks are pre-snapshot data; the init snapshot supersedes
-        // them, and writing them after init would corrupt the fresh buffer.
-        writeCoalescer.clear()
+        if (typeof initialData === 'string' && initialData.length > 0) {
+          // Why: pending chunks are pre-snapshot data; the init snapshot supersedes
+          // them, and writing them after init would corrupt the fresh buffer.
+          writeCoalescer.clear()
+        } else {
+          // Code UI: an empty snapshot supersedes nothing. The document keeps the grid it has
+          // drawn and applies only the geometry (terminal-init.ts), so output still waiting here
+          // is the newest part of that grid: flushed ahead of the init, never dropped. Same test
+          // as the document's: its normalizeInitialData only trims a non-empty string from a
+          // `?1049h` onwards, so it never turns one empty. On a document with no terminal yet the
+          // init opens a blank one and drops these bytes there, as clearing them here used to.
+          writeCoalescer.flushNow()
+          // Then restart the window, as at any snapshot: with nothing left to drop, clear() only
+          // lets the first write after this init (a keystroke's echo) take the leading edge.
+          writeCoalescer.clear()
+        }
         postMessage({
           type: 'init',
           cols,

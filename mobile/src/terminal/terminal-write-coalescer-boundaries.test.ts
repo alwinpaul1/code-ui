@@ -48,7 +48,8 @@ describe('terminal write coalescer boundaries', () => {
 
     view.coalescer.write('a')
     view.coalescer.write('stale-pre-snapshot')
-    // init() boundary as wired in TerminalWebView: clear the coalescer, then post init.
+    // init() boundary for a snapshot with content, as the controller wires it: clear the
+    // coalescer, then post init. (An empty snapshot flushes instead; see the source pin below.)
     view.coalescer.clear()
     view.postMessage({ type: 'init', cols: 80, rows: 24, initialData: 'snapshot' })
     vi.runOnlyPendingTimers()
@@ -122,14 +123,28 @@ describe('terminal write coalescer boundaries', () => {
     expect(writeBody).not.toContain('postMessage')
   })
 
-  it('clears the coalescer before posting init and clear (snapshot supersession)', () => {
+  // A snapshot with content replaces the screen, so what waited is older than it and goes. An empty
+  // one keeps the drawn grid (the document only resizes), so what waited is flushed ahead of it;
+  // terminal-webview-empty-snapshot.test.ts drives both through the real document.
+  it('clears the coalescer before a snapshot with content, flushes it before an empty one, and clears it on clear', () => {
     // Anchor on the init() signature (unique) — 'init(' alone also matches comments.
     const initStart = controllerSource.indexOf('initialData?: string,')
-    const initClear = controllerSource.indexOf('writeCoalescer.clear()', initStart)
     const initPost = controllerSource.indexOf("type: 'init'", initStart)
     expect(initStart).toBeGreaterThanOrEqual(0)
-    expect(initClear).toBeGreaterThan(initStart)
-    expect(initClear).toBeLessThan(initPost)
+    const initBody = controllerSource.slice(initStart, initPost)
+    const contentBranch = initBody.indexOf(
+      "if (typeof initialData === 'string' && initialData.length > 0) {"
+    )
+    const emptyBranch = initBody.indexOf('} else {', contentBranch)
+    const initClear = initBody.indexOf('writeCoalescer.clear()', contentBranch)
+    const initFlush = initBody.indexOf('writeCoalescer.flushNow()', emptyBranch)
+    expect(contentBranch).toBeGreaterThanOrEqual(0)
+    expect(initClear).toBeGreaterThan(contentBranch)
+    expect(initClear).toBeLessThan(emptyBranch)
+    expect(initFlush).toBeGreaterThan(emptyBranch)
+    // The empty branch may restart the window only after the flush, never instead of it.
+    const emptyBranchClear = initBody.indexOf('writeCoalescer.clear()', emptyBranch)
+    expect(emptyBranchClear === -1 || emptyBranchClear > initFlush).toBe(true)
 
     const clearStart = controllerSource.indexOf('clear() {', initPost)
     const clearBody = controllerSource.slice(clearStart, clearStart + 160)

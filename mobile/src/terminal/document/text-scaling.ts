@@ -51,7 +51,7 @@ export function isIOSWebView() {
 // Why: iOS WebKit does not reliably resolve "SF Mono" by CSS family name and can
 // fall to a non-monospace face; lead with the ui-monospace generic to avoid that.
 // Code UI: the media-control face sits just before the generic. Its unicode-range
-// lets it supply U+23F4..U+23FA alone (Claude Code's `⏵⏵`, boxes on a Galaxy S23);
+// lets it supply U+23F4..U+23F7 alone (Claude Code's `⏵⏵`, boxes on a Galaxy S23);
 // every other character falls through it. Only the WebView declares the face.
 const TERMINAL_FONT_FALLBACKS =
   '"Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "' +
