@@ -383,5 +383,69 @@ describe('an Android terminal whose renderer is gone', () => {
 
     expect(webViewMounts.count).toBe(2)
     expect(renderedText(renderer)).toContain('Terminal failed to load')
+    // The overlay says why it did not come back by itself.
+    expect(renderedText(renderer)).toContain('before the terminal came up')
+  })
+
+  /** The remounted WebView loads its document and reports it ready. */
+  function documentComesUp(renderer: ReactTestRenderer) {
+    act(() => {
+      renderer.root.findByType('WebView').props.onLoadStart()
+    })
+    postWebViewMessage(renderer, { type: 'web-ready' })
+  }
+
+  // Found by the second review: a renderer killed again and again after each document came up
+  // remounted forever (25 kills, 26 WebViews, no overlay).
+  it('stops remounting on its own when the renderer keeps dying in front of the user', () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { renderer } = renderReady()
+
+    renderProcessGone(renderer, false)
+    expect(webViewMounts.count).toBe(2)
+    documentComesUp(renderer)
+    now += 5_000
+    renderProcessGone(renderer, false)
+
+    expect(webViewMounts.count).toBe(2)
+    expect(renderedText(renderer)).toContain('Terminal failed to load')
+    expect(renderedText(renderer)).toContain('again within a minute')
+  })
+
+  it('remounts again on its own for a kill well after the last remount', () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { renderer } = renderReady()
+
+    renderProcessGone(renderer, false)
+    documentComesUp(renderer)
+    now += 61_000
+    renderProcessGone(renderer, false)
+
+    expect(webViewMounts.count).toBe(3)
+    expect(renderedText(renderer)).not.toContain('Terminal failed to load')
+  })
+
+  it('remounts on every return to the app, however soon the renderer is killed in the background', () => {
+    let now = 1_000_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const { renderer } = renderReady()
+
+    appState.currentState = 'background'
+    renderProcessGone(renderer, false)
+    act(() => {
+      appState.emit('active')
+    })
+    documentComesUp(renderer)
+    now += 10_000
+    appState.currentState = 'background'
+    renderProcessGone(renderer, false)
+    act(() => {
+      appState.emit('active')
+    })
+
+    expect(webViewMounts.count).toBe(3)
+    expect(renderedText(renderer)).not.toContain('Terminal failed to load')
   })
 })

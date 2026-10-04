@@ -15,6 +15,13 @@ type Props = TerminalWebViewProps
 
 type RenderProcessGoneEvent = Parameters<NonNullable<WebViewProps['onRenderProcessGone']>>[0]
 
+/**
+ * How soon after an automatic remount a renderer may die in the foreground before the pane stops
+ * remounting by itself and shows Reload instead. A foreground renderer runs at the app's priority,
+ * so dying twice in a minute there is a renderer that cannot stay up, not memory pressure.
+ */
+const AUTO_REMOUNT_COOLDOWN_MS = 60_000
+
 export type { TerminalWebViewHandle } from './terminal-webview-contract'
 
 export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
@@ -43,10 +50,12 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
     // WebView with a new renderer; the controller, the handle and the session's ref stay the same.
     const [webViewKey, setWebViewKey] = useState(0)
     // Whether the mounted WebView's document has reported itself ready. A renderer that dies before
-    // that is not remounted on its own again, so a renderer that cannot stay up cannot loop.
+    // that is not remounted on its own again; one that dies after it is bounded by the cooldown.
     const documentCameUpRef = useRef(false)
     // A renderer the system killed while the app was in the background, remounted on return.
     const remountWhenActiveRef = useRef(false)
+    // When the last automatic remount happened, so a foreground loop stops at the overlay.
+    const lastAutoRemountAtRef = useRef<number | null>(null)
 
     useImperativeHandle(ref, () => handle, [handle])
 
@@ -58,14 +67,19 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
       setWebViewKey((key) => key + 1)
     }, [clearEngineError, resetReadiness])
 
+    const remountWebViewOnItsOwn = useCallback(() => {
+      lastAutoRemountAtRef.current = Date.now()
+      remountWebView()
+    }, [remountWebView])
+
     useEffect(() => {
       const subscription = AppState.addEventListener('change', (state) => {
         if (state === 'active' && remountWhenActiveRef.current) {
-          remountWebView()
+          remountWebViewOnItsOwn()
         }
       })
       return () => subscription.remove()
-    }, [remountWebView])
+    }, [remountWebViewOnItsOwn])
 
     const handleMessage = useCallback(
       (event: WebViewMessageEvent) => {
@@ -92,28 +106,43 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(
      * crashed. react-native-webview 13.16.2 only reports it, and "the given WebView can't be used,
      * and should be removed from the view hierarchy" (WebViewClient#onRenderProcessGone), so the
      * recovery is a new WebView. Its document reports web-ready and the session re-subscribes the
-     * pane for a fresh snapshot. A kill is remounted on its own once the app is in front; a crash,
-     * or a second loss before the new document came up, shows the overlay and its Reload instead.
+     * pane for a fresh snapshot. A kill is remounted on its own once the app is in front. A crash,
+     * a loss before the new document came up, or a second foreground loss within a minute of the
+     * last automatic remount shows the overlay and its Reload instead, saying which it was.
      */
     const handleRenderProcessGone = useCallback(
       (event: RenderProcessGoneEvent) => {
         // Nothing may be posted to the dead view, and nothing queued for it is the next one's.
         resetReadiness()
-        if (event.nativeEvent?.didCrash === true || !documentCameUpRef.current) {
-          reportNativeEngineError('Terminal WebView render process ended', event)
+        const appActive = AppState.currentState === 'active'
+        const lastAutoRemountAt = lastAutoRemountAtRef.current
+        let withheld: string | null = null
+        if (event.nativeEvent?.didCrash === true) {
+          withheld = 'Terminal WebView render process ended'
+        } else if (!documentCameUpRef.current) {
+          withheld = 'Terminal WebView render process ended before the terminal came up'
+        } else if (
+          appActive &&
+          lastAutoRemountAt !== null &&
+          Date.now() - lastAutoRemountAt < AUTO_REMOUNT_COOLDOWN_MS
+        ) {
+          withheld = 'Terminal WebView render process ended again within a minute of its remount'
+        }
+        if (withheld !== null) {
+          reportNativeEngineError(withheld, event)
           return
         }
         reportEngineError(
           `${describeNativeWebViewEngineError('Terminal WebView render process ended', event)} - remounting`,
           false
         )
-        if (AppState.currentState === 'active') {
-          remountWebView()
+        if (appActive) {
+          remountWebViewOnItsOwn()
         } else {
           remountWhenActiveRef.current = true
         }
       },
-      [remountWebView, reportEngineError, reportNativeEngineError, resetReadiness]
+      [remountWebViewOnItsOwn, reportEngineError, reportNativeEngineError, resetReadiness]
     )
 
     const handleContentProcessDidTerminate = useCallback(() => {
