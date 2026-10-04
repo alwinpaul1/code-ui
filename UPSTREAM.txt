@@ -115,7 +115,7 @@ src/shared/daemon-adoption-telemetry.ts: 7c46a69049 (v1.4.210..v1.4.211 shared h
 src/shared/daemon-adoption-telemetry.test.ts: 7c46a69049 (v1.4.210..v1.4.211 shared halves; #22171)
 src/shared/developer-permissions-types.ts: 7650abe224 (v1.4.209..v1.4.210 shared halves; first pin recorded here, was at vendor base)
 src/shared/telemetry-daemon-event-schemas.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves)
-src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24129 ssh_remote_runtime_resolved row and its import)
+src/shared/telemetry-event-registry.ts: 82412dab8b (v1.4.211..v1.4.217 shared halves); plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24133 ssh_remote_runtime_resolved row and its import)
 
 src/shared/worktree/host-context-labels.ts: 1b4159a31
 src/shared/worktree/host-context-labels.test.ts: 1b4159a31
@@ -173,7 +173,7 @@ src/shared/rpc-contract/orchestration-federation-control-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-federation-relay-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-federation-start-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-gates-params.ts: c84007c54
-src/shared/rpc-contract/orchestration-params.ts: c84007c54
+src/shared/rpc-contract/orchestration-params.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; was at c84007c54)
 src/shared/rpc-contract/orchestration-runs-mutation-request-show-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-runs-params.ts: c84007c54
 src/shared/rpc-contract/orchestration-worker-control-params.ts: c84007c54
@@ -464,9 +464,8 @@ src/shared/worktree/card-properties.ts: b245b3e019 (#24299; v1.4.219..v1.4.220 s
 src/shared/keybindings/definitions-core-3.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
 src/shared/keybindings/types.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
 src/shared/keybindings-default-bindings.test.ts: c0ac2b1fcc (#23879; v1.4.219..v1.4.220 shared halves; was at vendor base)
-src/shared/rpc-contract/orchestration-params.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; was at c84007c54)
 src/shared/commit-message-agent-output.ts: 2caa79e097 (#24005; v1.4.219..v1.4.220 shared halves; was at vendor base)
 src/shared/commit-message-prompt.test.ts: 2caa79e097 (#24005; v1.4.219..v1.4.220 shared halves; was at vendor base)
 src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; new, pulled in because runtime-session-contracts.ts imports it)
-src/shared/telemetry-ssh-runtime-event-schemas.ts: a5601375d4 (#24129; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
+src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
 src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
