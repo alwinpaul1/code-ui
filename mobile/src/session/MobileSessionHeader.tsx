@@ -19,6 +19,7 @@ import { StatusDot } from '../components/StatusDot'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { useAgentHudBeacon } from './agent-hud-beacon'
 import { sessionTabActivity, tabPillDotState } from './session-tab-activity'
+import { tabPillBackground, tabPillDotSurface } from './tab-pill-surface'
 import { AgentStateDot } from '../components/AgentStateDot'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { useNow } from '../hooks/use-now'
@@ -261,11 +262,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
                     gap: 6,
                     paddingHorizontal: space.md,
                     borderRadius: radius.pill,
-                    backgroundColor: active
-                      ? colors.text
-                      : pressed
-                        ? colors.bgRaised
-                        : colors.bgPanel,
+                    backgroundColor: tabPillBackground(colors, active, pressed),
                     borderWidth: active ? 0 : 1,
                     borderColor: colors.border
                   })}
@@ -406,11 +403,6 @@ function TabActivityBadge({
     return null
   }
   return (
-    <AgentStateDot
-      state={state}
-      size={12}
-      onLightSurface={active && isDark}
-      onDarkSurface={active && !isDark}
-    />
+    <AgentStateDot state={state} size={12} {...tabPillDotSurface(active, isDark)} />
   )
 }

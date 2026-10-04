@@ -33,6 +33,7 @@ vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 import { contrastRatio } from '../test/contrast'
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
+import { tabPillBackground, tabPillDotSurface } from '../session/tab-pill-surface'
 import { AgentStateDot } from './AgentStateDot'
 
 // Claude Code 2.1.x / Orca 1.4.220 host: the row verdicts a done turn can carry.
@@ -46,11 +47,14 @@ describe('the agent dot for a turn that did not simply finish', () => {
 
   type Surface = { onLightSurface?: boolean; onDarkSurface?: boolean }
 
+  /** The colour the dot is drawn in: the icon's stroke (done, question, monitoring), the spinner's
+   *  arc (working), or the dot's fill (every verdict). */
   function dotColor(
     state: Parameters<typeof AgentStateDot>[0]['state'],
     scheme: 'light' | 'dark',
     surface: Surface = {}
   ): unknown {
+    act(() => renderer?.unmount())
     act(() => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
@@ -58,14 +62,24 @@ describe('the agent dot for a turn that did not simply finish', () => {
         </ThemeProvider>
       )
     })
+    for (const icon of ['Activity', 'CircleCheck', 'MessageCircleQuestionMark']) {
+      const [drawn] = renderer!.root.findAllByType(icon as never)
+      if (drawn) {
+        return drawn.props.color
+      }
+    }
     for (const view of renderer!.root.findAllByType('View' as never)) {
       const style = view.props.style
       if (!Array.isArray(style)) {
         continue
       }
-      const tone = style.find((entry) => entry && typeof entry === 'object' && 'backgroundColor' in entry)
-      if (tone) {
-        return (tone as { backgroundColor: unknown }).backgroundColor
+      for (const entry of style) {
+        if (entry && typeof entry === 'object' && 'borderColor' in entry) {
+          return (entry as { borderColor: unknown }).borderColor
+        }
+        if (entry && typeof entry === 'object' && 'backgroundColor' in entry) {
+          return (entry as { backgroundColor: unknown }).backgroundColor
+        }
       }
     }
     return undefined
@@ -85,27 +99,54 @@ describe('the agent dot for a turn that did not simply finish', () => {
     expect(dotColor('failed', 'dark')).toBe('#ef4444')
   })
 
-  it('uses darker tones when the dot sits on the light selected pill', () => {
+  it('uses darker tones when the dot sits on a light pill', () => {
     expect(dotColor('interrupted', 'dark', { onLightSurface: true })).toBe('#57534e')
     expect(dotColor('unconfirmed', 'dark', { onLightSurface: true })).toBe('#b45309')
+    // The desktop's red-500 was 3.04:1 on the light scheme's pressed pill: past the floor, and
+    // still the faintest mark there. Red-600 on a light pill, as the other hues step down.
+    expect(dotColor('failed', 'light', { onLightSurface: true })).toBe('#dc2626')
+    expect(dotColor('blocked', 'light', { onLightSurface: true })).toBe('#dc2626')
   })
 
-  // The selected tab pill is the theme's text colour: light in the dark scheme, near-black in the
-  // light one. A Stop's muted dot was the light scheme's own muted tone there, 2.81:1 on the
-  // near-black pill. The flags are the ones MobileSessionHeader passes for the selected pill
-  // (pinned in tab-pill-draws-turn-verdict.test.ts). WCAG 1.4.11 asks 3:1 of a graphic.
+  // Every fill the tab pill has (tabPillBackground): the selected pill is the theme's text colour,
+  // light in the dark scheme and near-black in the light one; an unselected pill is the panel, and
+  // bgRaised while a finger is on it. Each dot is drawn with the flags the header passes for that
+  // pill (tabPillDotSurface; tab-pill-draws-turn-verdict.test.ts pins the header to both) and must
+  // clear 3:1 there, the floor WCAG 1.4.11 sets for a graphic. Until 2026-10-04 the light scheme's
+  // unselected pill drew the desktop tones: working 1.84:1, done 2.43:1, question 2.68:1, and
+  // amber 2.94:1 while pressed.
+  const PILL_DOTS = [
+    'working',
+    'monitoring',
+    'done',
+    'waiting',
+    'failed',
+    'blocked',
+    'interrupted',
+    'unconfirmed'
+  ] as const
+
   it.each([
-    ['light', lightColors],
-    ['dark', darkColors]
-  ] as const)("keeps every verdict dot readable on the %s scheme's selected pill", (scheme, palette) => {
-    const surface = { onLightSurface: scheme === 'dark', onDarkSurface: scheme === 'light' }
-    for (const state of ['interrupted', 'unconfirmed', 'failed', 'blocked'] as const) {
-      const tone = dotColor(state, scheme, surface)
-      expect({ state, tone, readable: contrastRatio(String(tone), palette.text) >= 3 }).toEqual({
-        state,
-        tone,
-        readable: true
-      })
+    ['light', 'selected', lightColors, true, false],
+    ['light', 'unselected', lightColors, false, false],
+    ['light', 'pressed unselected', lightColors, false, true],
+    ['dark', 'selected', darkColors, true, false],
+    ['dark', 'unselected', darkColors, false, false],
+    ['dark', 'pressed unselected', darkColors, false, true]
+  ] as const)(
+    "keeps every dot readable on the %s scheme's %s pill",
+    (scheme, _pill, palette, active, pressed) => {
+      const fill = tabPillBackground(palette, active, pressed)
+      const surface = tabPillDotSurface(active, scheme === 'dark')
+      const faint: string[] = []
+      for (const state of PILL_DOTS) {
+        const tone = String(dotColor(state, scheme, surface))
+        const ratio = contrastRatio(tone, fill)
+        if (!(ratio >= 3)) {
+          faint.push(`${state} ${tone} on ${fill}: ${ratio.toFixed(2)}:1`)
+        }
+      }
+      expect(faint).toEqual([])
     }
-  })
+  )
 })

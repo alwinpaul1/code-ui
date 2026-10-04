@@ -441,7 +441,10 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // containers now carry their background straight off `styles.markdownState`/`styles.markdownEditor`
 // (both themed in mobile-session-frame-styles.ts) instead of an array merged with a local
 // `modeStyles.surface` override — those two Views' captured style expressions moved.
-const HEAD_HOST_JSX_SHA256 = '4553739f7c7aa13a4d322a342929ba66eaf4c8a5b85facea309f5a58de3e5de3'
+// 2026-10-04: the header's tab Pressable takes its fill from tabPillBackground (tab-pill-surface.ts),
+// the same three theme tokens it chose inline, so the contrast test can measure the dot on each.
+// Same host record COUNT (97); that one Pressable's captured style moved.
+const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4156eca9e069751'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
