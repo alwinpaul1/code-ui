@@ -26,6 +26,13 @@ import type {
 } from './agent-session-record'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { StructuredAgentSessionProjectedStatus } from './structured-agent-session-projection'
+import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19695, 2626e2eca; at its v1.4.220 form): the refusal
+// code list, its guard and the refusal body live in agent-session-wire-refusals.ts, re-exported
+// here as upstream does. This file kept them inline while that module could not be vendored (it
+// imports agent-session-rewind.ts); both are vendored now. See LOCAL-FILES.md.
+export * from './agent-session-wire-refusals'
 
 /** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
  *  still read `owner`. Clients parse the reply as unknown, since older hosts sent more fields. */
@@ -220,58 +227,6 @@ export type AgentSessionMutationEnvelope = {
   /** Client-declared; the host recomputes it and compares. */
   payloadFingerprint: string
 }
-
-export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
-  'structured_agent_session_unsupported',
-  'agent_session_checkpoint_stale',
-  'agent_session_conflict',
-  'agent_session_ownership_unknown',
-  'agent_session_operation_conflict',
-  'agent_session_operation_expired',
-  'agent_session_operation_capacity',
-  'agent_session_operation_invalid',
-  'agent_session_operation_unknown',
-  'agent_session_item_revision_stale',
-  'agent_session_already_resolved',
-  'agent_session_identity_required',
-  'agent_session_journal_unreadable',
-  'execution_owner_reconciling',
-  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22364, 6ae6ed08bb, v1.4.211..v1.4.217): upstream keeps the
-  // code list in agent-session-wire-refusals.ts, which this fork does not vendor. See LOCAL-FILES.md.
-  // Older clients hold an unknown code as a blocked send with the host's message shown.
-  'agent_session_owner_restart_failed'
-] as const
-export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
-
-/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
- *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
-export function isAgentSessionWireRefusalCode(
-  value: unknown
-): value is AgentSessionWireRefusalCode {
-  return (
-    typeof value === 'string' &&
-    (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(value)
-  )
-}
-
-export type AgentSessionWireRefusal = {
-  code: AgentSessionWireRefusalCode
-  message: string
-  /** On a stale fence, so the client can retry without another round trip. */
-  currentFence?: number
-  /** On a lost compare-and-set: the winning answer and who gave it. */
-  resolution?: AgentJournalResolution
-  /** On a lost compare-and-set: the revision the host actually holds. */
-  currentRevision?: number
-  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22364, 6ae6ed08bb): upstream keeps this type in
-  // agent-session-wire-refusals.ts, which this fork does not vendor. See LOCAL-FILES.md.
-  /** On a durably failed create: `exited` proves nothing runs for the session, so a new
-   *  operation cannot collide with this one. Absent (older hosts) reads as unverifiable. */
-  ownerVerdict?: AgentSessionOwnerVerdict
-}
-
-/** What the host last proved about a session's provider process; see the SSH execution boundary. */
-export type AgentSessionOwnerVerdict = 'live' | 'unverifiable' | 'exited'
 
 export type AgentSessionMutationResult<TValue> =
   | {

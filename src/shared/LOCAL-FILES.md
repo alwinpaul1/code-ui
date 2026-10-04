@@ -105,15 +105,18 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   which IS vendored whole (it adds `stoppable` on a task), and this file carries
   #19705's re-export hunk instead of the inline block. A whole-file
   re-vendor at 2bf298d1d would drag in the rewind surface (ce4a3a418, #19235 —
-  it imports `agent-session-rewind.ts`, not vendored here) and
+  it imports `agent-session-rewind.ts`, vendored only since the v1.4.217..v1.4.219
+  chat chain below) and
   `hostExecutionOwned` from 1c1cb7115, which is the orchestration-worker feature
   this fork does not implement. `AgentSessionStatusSummary.backgroundTasks` from
   2bf298d1d is deliberately NOT taken: it feeds a session list this app has no
   surface for. Orca #19695 (2626e2eca) added `hostNow` on the history page and
   on every subscribe frame, hand-applied here; the same commit moved the
-  refusal codes into `agent-session-wire-refusals.ts`, which is NOT vendored
-  because it imports `agent-session-rewind.ts` — the codes stay inline in this
-  file, and every importer reads them from here as before.
+  refusal codes into `agent-session-wire-refusals.ts`. That module was not
+  vendored while `agent-session-rewind.ts` was not, so the codes stayed inline
+  here. Both are vendored now (the v1.4.217..v1.4.219 chat chain below), and this
+  file carries upstream's `export * from './agent-session-wire-refusals'` in place
+  of the inline block; every importer still reads the codes from here.
 - `native-chat-slash-commands.ts` — `sessionSlashCommandSuggestions` and
   `sessionReportedSkillNames` from bf4e27050, on top of the local catalogs above;
   and from Orca #19928 (9b83f976f) the `argumentHint` field plus a reported
@@ -328,13 +331,16 @@ of everything the entries above already record:
   `agent-turn-outcome.ts`). NOT taken, for the reasons the entries above give:
   `hostExecutionOwned` / `hostExecutionPhase`, `backgroundTasks` on the status summary, and the
   turn-completion feed types (`AgentSessionTurnCompletion*`, `agentSessionTurnCompletionKey`),
-  which nothing on the phone reads. The refusal code list is still inline: upstream moved it to
-  `agent-session-wire-refusals.ts` (imports `agent-session-rewind.ts`, not vendored), and the new
+  which nothing on the phone reads. The refusal code list was still inline then (upstream had moved
+  it to `agent-session-wire-refusals.ts`, which imports `agent-session-rewind.ts`; both are vendored
+  since the v1.4.217..v1.4.219 chat chain, and the inline block is gone), and the new
   `agent_session_owner_restart_failed` code (#22364, 6ae6ed08bb) is added to the inline list by
   hand, marked `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source.
   The same file's inline `AgentSessionWireRefusal` also takes `ownerVerdict?: AgentSessionOwnerVerdict`
   (`'live' | 'unverifiable' | 'exited'`, #22364) by hand: on a durably failed create, `exited`
   proves nothing runs. `classifyCreateRefusal` in `mobile-structured-agent-session-launch.ts` reads it.
+  (Both hand-applied pieces now come from the vendored `agent-session-wire-refusals.ts`, whose
+  v1.4.220 copy has the code and the verdict, so neither is a local hunk any more.)
 - `agent-session-record.ts` — the launch-args check moves to `agent-session-launch-args.ts` and
   the lease decode goes through `agent-session-legacy-handoff-lease.ts` (`isPersistedAgentSessionRecord`
   replaces `isAgentSessionRecord`; both new files are vendored whole). This copy's own
@@ -463,3 +469,35 @@ modules are not taken at all (see the port rows).
   `export *` re-exports it with `AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY` and
   `AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY`, and `RUNTIME_CAPABILITIES` spreads the set).
   The phone does not read the two new constants: it joins an in-flight Stop itself, whatever the host.
+
+## The v1.4.217..v1.4.219 chat chain (taken for #23674, #23684 and the #24301 remainder)
+
+The three v1.4.220 chat fixes the port above left blocked need modules the v1.4.217..v1.4.219
+range introduced. Only what they need is taken; queue delivery (#23726, #23731, #23736) and the
+rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
+
+- The failure-fact family, new files taken whole at their v1.4.220 state (`UPSTREAM.txt` names
+  each pin): `agent-session-failure.ts`, `-failure-words.ts`, `-failure-copy.ts`,
+  `-refusal-details.ts`, `-refusal-notice.ts`, `-write-notice-copy.ts`, `-write-failure.ts`,
+  `-wire-refusals.ts`, `-rewind.ts`, `sentence-joining.ts`, with the upstream tests of
+  `agent-session-failure`, `-write-failure` and `-wire-refusals`. The v1.4.220 state also carries
+  #24333's host wording (the stop-unconfirmed sentences), which nothing on the phone reads. Two
+  upstream tests are left out because they import v1.4.219 APIs this fork's older copies lack:
+  `agent-session-failure-words.test.ts` (`classifyDispatchRejection`) and
+  `agent-session-refusal-notice.test.ts` (`structuredAgentSessionRejectionParts`,
+  `DISPATCH_REJECTED_NOT_DELIVERED`).
+- `structured-agent-session-dispatch-rejection.ts` is NOT re-vendored: its v1.4.220 copy drops
+  `dispatchRejectionWasTransportWriteFailure` and `dispatchRejectionReasonIsInternal`, which this
+  fork's v1.4.217-based `structured-agent-session-send-disposition.ts` still calls.
+  `agent-session-failure-words.ts` imports only the four `DISPATCH_REJECTED_*` constants, which
+  this copy has.
+- `agent-session-wire.ts` — the inline refusal block is replaced by upstream's
+  `export * from './agent-session-wire-refusals'` (see the entry for this file above).
+  `AgentSessionWireRefusal` is upstream's per-code union with optional `details` now.
+- `agent-session-journal-schemas.ts` — hand-applied from v1.4.220, each marked in the source:
+  `FailureFact` and `failure` on a status row, `isAgentJournalResolution` (#23116), and the
+  `AgentJournalTurnScopeSchema` export the vendored `agent-session-rewind.ts` reads (#23059). The
+  render item's `turnScope` and the submission's `rejection` beside them are not taken.
+- `agent-session-journal-types.ts` — `failure?: UnreadAgentSessionFailureFact` on
+  `AgentJournalStatusItem`, one optional member. Upstream splits the type into a plain row and a
+  failure row typed by `AgentSessionFailureRowWords`; this client reads rows, it never writes one.

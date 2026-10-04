@@ -19,8 +19,10 @@ import {
  * so in plain words, and nothing here may imply otherwise.
  *
  * The reply type and the refusal reasons live in upstream's
- * `agent-session-rewind.ts`, which is not vendored (LOCAL-FILES.md); the
- * shapes here are copied from it and pinned by the test beside this file.
+ * `agent-session-rewind.ts`. It was not vendored when this file was written,
+ * so the shapes here are copied from it and pinned by the test beside this
+ * file; it is vendored since the v1.4.217..v1.4.219 chat chain, and the copies
+ * still agree with it.
  */
 
 /** The host's reply: which item it rewound to, and the journal epoch that replaced the old one. */
