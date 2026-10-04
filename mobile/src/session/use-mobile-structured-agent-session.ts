@@ -4,7 +4,7 @@ import { useMobileStructuredRewind } from './mobile-structured-agent-rewind'
 import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
+import { mobileStructuredTranscript } from './mobile-structured-transcript'
 import { isStructuredAgentSessionThinking } from '../../../src/shared/structured-agent-session-live-turn'
 import {
   activeStructuredAgentSessionTurnId,
@@ -265,7 +265,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   const messages = useMemo(
-    () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
+    () => mobileStructuredTranscript(state.items, state.submissions),
     [state.items, state.submissions]
   )
   const turnId = activeStructuredAgentSessionTurnId(state.items)

@@ -143,10 +143,12 @@ describe('a Codex stream retry on the phone', () => {
     ).toEqual([RETRY_LINE(2), RETRY_LINE(2)])
   })
 
+  // The phone draws every agent in one list, so the run's row stays where its first attempt was
+  // and shows the latest (mobile-structured-transcript.ts).
   it("does not let another agent's row split a run (the phone draws every agent in one list)", async () => {
     expect(await drawn([retry(1, 1), said(2, 'Subagent output', 'sub-1'), retry(3, 2)])).toEqual([
-      'Subagent output',
-      RETRY_LINE(2)
+      RETRY_LINE(2),
+      'Subagent output'
     ])
   })
 

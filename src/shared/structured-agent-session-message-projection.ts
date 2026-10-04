@@ -1,10 +1,6 @@
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
 import type { NativeChatMessage } from './native-chat-types'
-// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23684, b4b708c2c4): a provider retry run draws only
-// its latest row. This copy has no held sends (queue delivery is not ported), so the collapse wraps
-// the journal's own rows. See src/shared/LOCAL-FILES.md.
-import { collapseProviderRetryRuns } from './native-chat-provider-retry-runs'
 import {
   reconcileStructuredAgentSessionOutbox,
   type StructuredAgentSessionOutboxEntry
@@ -27,7 +23,7 @@ export function projectStructuredAgentSessionMessages(
   const visibleItems = items.filter((item) => !rejected.has(item.itemId))
   const journalled = new Set(visibleItems.map((item) => item.itemId))
   return [
-    ...collapseProviderRetryRuns(projectItems(visibleItems)),
+    ...projectItems(visibleItems),
     ...optimistic
       .filter((entry) => !journalled.has(agentJournalSubmissionKey(entry.clientMessageId)))
       .map((entry): NativeChatMessage => ({

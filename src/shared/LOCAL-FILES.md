@@ -515,13 +515,18 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   source: `failure?` on `NativeChatTextBlock` and `AgentJournalProducerLinkage` on
   `NativeChatMessage` (`native-chat-types.ts`); in `structured-agent-session-projection.ts` the
   status row goes through `structuredAgentSessionStatusBlock` and a projected row carries its
-  producer linkage (#23605's projection hunk); in `structured-agent-session-message-projection.ts`
-  `collapseProviderRetryRuns` wraps the journal's projected rows (upstream wraps the delivered rows
-  before its held sends; this copy has none). A retry run is per agent, as upstream's: the phone
-  draws every agent's rows in one list (#23752's subagent sections are not ported), so another
-  agent's row between two attempts does not split the run, and two agents retrying at once each
-  keep their latest row. Not taken from #23605: `native-chat-subagent-attribution.ts`, the
-  tool-fold and turn-fold hunks, and how a subagent's words are drawn.
+  producer linkage (#23605's projection hunk). #23684's hunk in
+  `structured-agent-session-message-projection.ts` (`collapseProviderRetryRuns` over the delivered
+  rows) is NOT taken: upstream keeps a run's latest row, which drops the id of every earlier
+  attempt, and the phone anchors a send on the last row's id (`captureSendBoundary` and the echo
+  readers), so a send made on a retry row never landed. The phone collapses each agent's run in
+  place instead (`mobile/src/session/mobile-structured-transcript.ts`: the first attempt's id and
+  place, the latest attempt's words), pinned to the vendored rule by
+  `mobile-structured-transcript.test.ts`. A retry run is per agent, as upstream's: the phone draws
+  every agent's rows in one list (#23752's subagent sections are not ported), so another agent's
+  row between two attempts does not split the run, and two agents retrying at once each keep one
+  row. Not taken from #23605: `native-chat-subagent-attribution.ts`, the tool-fold and turn-fold
+  hunks, and how a subagent's words are drawn.
 - `agent-main-agent-verdict.ts` and its test, taken whole at 24edf0f64b (#22944, then #23467). The
   phone keeps reading the verdict through its own mirror in `mobile/src/worktree/agent-row-display.ts`,
   as upstream's phone does; #22944's parity test (in `agent-row-display.test.ts`) pins the mirror to
