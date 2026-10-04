@@ -86,9 +86,7 @@ const idleDictation = {
 
 async function mount(element: ReactNode, scheme: 'light' | 'dark'): Promise<void> {
   await act(async () => {
-    renderer = create(
-      createElement(ThemeProvider, { initialPreference: scheme, children: element })
-    )
+    renderer = create(<ThemeProvider initialPreference={scheme}>{element}</ThemeProvider>)
   })
 }
 

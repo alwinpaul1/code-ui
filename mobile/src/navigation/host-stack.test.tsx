@@ -42,10 +42,9 @@ describe('the native host stack', () => {
     async (scheme) => {
       await act(async () => {
         renderer = create(
-          createElement(ThemeProvider, {
-            initialPreference: scheme,
-            children: createElement(HostStack, { animation: 'default' })
-          })
+          <ThemeProvider initialPreference={scheme}>
+            <HostStack animation="default" />
+          </ThemeProvider>
         )
       })
       const stack = renderer!.root.find((n) => (n.type as unknown) === 'Stack')
@@ -63,10 +62,9 @@ describe('the native host stack', () => {
   it('hands the tablet split view no animation', async () => {
     await act(async () => {
       renderer = create(
-        createElement(ThemeProvider, {
-          initialPreference: 'light',
-          children: createElement(HostStack, { animation: 'none' })
-        })
+        <ThemeProvider initialPreference="light">
+          <HostStack animation="none" />
+        </ThemeProvider>
       )
     })
     expect(
@@ -79,10 +77,9 @@ describe('the native host stack', () => {
     for (const scheme of ['light', 'dark'] as const) {
       await act(async () => {
         renderer = create(
-          createElement(ThemeProvider, {
-            initialPreference: scheme,
-            children: createElement(HostStack, { animation: 'default' })
-          })
+          <ThemeProvider initialPreference={scheme}>
+            <HostStack animation="default" />
+          </ThemeProvider>
         )
       })
       surfaces.push(
