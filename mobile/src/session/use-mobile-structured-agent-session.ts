@@ -71,6 +71,8 @@ export function useMobileStructuredAgentSession(args: {
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
+  // A Stop of a turn still being stopped is joined by the next press (Orca #24301).
+  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
   useEffect(() => () => operationIdsRef.current.clear(), [])
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
@@ -237,15 +239,14 @@ export function useMobileStructuredAgentSession(args: {
       requestMobileStructuredAgentSessionCancel({
         client,
         enabled,
+        inFlight: inFlightStopsRef.current,
         onSendError,
-        operationIds: operationIdsRef.current,
         prompt,
         promptCancelSupported,
         sessionId,
-        sessionKey,
         stateRef
       }),
-    [client, enabled, onSendError, promptCancelSupported, sessionId, sessionKey, stateRef]
+    [client, enabled, onSendError, promptCancelSupported, sessionId, stateRef]
   )
 
   // Conversation only: the host wraps no file restore (see the dispatcher's header).

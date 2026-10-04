@@ -207,6 +207,9 @@ export type PreservedWorktreeBranch = {
 
 export type RemoveWorktreeResult = {
   preservedBranch?: PreservedWorktreeBranch
+  /** The host accepted the removal and is still deleting the checkout. Sent only to clients that
+   *  cannot show a removal in progress; the others get the reply when the delete has finished. */
+  removing?: true
 }
 
 export type ForceDeleteWorktreeBranchResult = {

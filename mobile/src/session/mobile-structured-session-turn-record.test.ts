@@ -162,8 +162,35 @@ describe('host-recorded turn durations', () => {
     ]
     expect([...selectStructuredAgentSettledTurns(items)]).toEqual([
       ['u1', { startedAt: 1_000, workedSeconds: 61 }],
-      ['u2', { startedAt: 70_000, workedSeconds: 12 }],
+      // `interrupted` with no recorded verdict is a turn something cut short: it carries the
+      // host-observed end, which the bar words as a failure (Orca #23467).
+      ['u2', { startedAt: 70_000, workedSeconds: 12, verdict: 'interruption' }],
       ['u3', null]
+    ])
+  })
+
+  it("keeps a user's Stop a Stop and an arm it cannot name unknown, so only a real crash reads failed", () => {
+    const items = [
+      user('u1', 1),
+      turn('t1', 2, {
+        state: 'interrupted',
+        outcome: 'cancellation',
+        startedAt: 1_000,
+        completedAt: 4_000
+      }),
+      user('u2', 3),
+      // A verdict from a newer host's vocabulary reads as no verdict, never as an arm acted on.
+      turn('t2', 4, {
+        state: 'completed',
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a newer host's arm, which the unparsed wire row can carry.
+        outcome: 'from-a-newer-host' as never,
+        startedAt: 10_000,
+        completedAt: 13_000
+      })
+    ]
+    expect([...selectStructuredAgentSettledTurns(items)]).toEqual([
+      ['u1', { startedAt: 1_000, workedSeconds: 3, verdict: 'cancellation' }],
+      ['u2', { startedAt: 10_000, workedSeconds: 3 }]
     ])
   })
 

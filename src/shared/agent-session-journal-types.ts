@@ -4,8 +4,9 @@
 // so no class instances, Maps, or Dates.
 //
 // Rows are append-only. `schemaVersion` is upcast at read time and never
-// rewritten in place, so a host that cannot read a row refuses to write the
-// journal rather than skipping or compacting past it.
+// rewritten in place, so a host that cannot read a row (a newer version, or a
+// newer kind) refuses to write the journal rather than skipping or compacting
+// past it.
 
 import type { AgentType } from './agent-status-types'
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
@@ -114,6 +115,8 @@ export type AgentJournalToolCallItem = NativeChatToolMetadata & {
   kind: 'tool-call'
   name: string
   input: unknown
+  /** Provider-supplied identity within this item stream; optional for mixed-version peers. */
+  callId?: string
   state: AgentJournalToolCallState
   output?: AgentJournalBoundedPayload
 }
@@ -209,6 +212,12 @@ export { AGENT_JOURNAL_TURN_OUTCOMES, type AgentJournalTurnOutcome } from './age
 export type AgentJournalTurnLifecycle = {
   turnId: string
   state: AgentJournalTurnLifecycleState
+  /** The provider's own verdict, when it gave one. ABSENT MEANS UNKNOWN and must
+   *  never be read as success: a row from a host that predates the field, an end
+   *  the host inferred rather than heard, and a verdict vocabulary this build
+   *  cannot place all land here. `completed` alone proves nothing — the provider
+   *  reports an API error as a finished turn. */
+  outcome?: AgentJournalTurnOutcome
   /** Journal key of the user item that opened the turn. A lifecycle row may key
    *  itself when provider output opened a turn with no user item; absent means
    *  an older host. */

@@ -28,7 +28,7 @@ function fakeClient(
   return { sendRequest } as unknown as RpcClient
 }
 
-function runningState(): StructuredAgentSessionState {
+function runningState(turnId = 'turn-1'): StructuredAgentSessionState {
   const state = {
     fence: 3,
     items: [
@@ -40,7 +40,7 @@ function runningState(): StructuredAgentSessionState {
         body: {
           kind: 'status',
           text: 'Working',
-          turnLifecycle: { turnId: 'turn-1', state: 'running' }
+          turnLifecycle: { turnId, state: 'running' }
         }
       }
     ]
@@ -49,14 +49,13 @@ function runningState(): StructuredAgentSessionState {
   return state as unknown as StructuredAgentSessionState
 }
 
-function cancelArgs(client: RpcClient, operationIds: Map<string, string>) {
+function cancelArgs(client: RpcClient, inFlight = new Map<string, Promise<boolean>>()) {
   return {
     client,
     sessionId: 'session-1',
     enabled: true,
     stateRef: { current: runningState() },
-    sessionKey: 'key-1',
-    operationIds,
+    inFlight,
     promptCancelSupported: null,
     onSendError: vi.fn()
   }
@@ -94,40 +93,84 @@ describe('structured mutation id retirement', () => {
   })
 })
 
-describe('structured Stop after an unknown outcome', () => {
-  it('retries under a fresh id once the host has answered about the previous one', async () => {
+describe('structured Stop: every press is its own Stop (Orca #24301)', () => {
+  it('sends the next press under a fresh id after the host answered about the previous one', async () => {
     const sent: string[] = []
     const client = fakeClient(async (_method, params) => {
       sent.push(params.envelope.clientOperationId)
       return operationRefusedAsUnknown()
     })
-    const operationIds = new Map<string, string>()
-    const args = cancelArgs(client, operationIds)
+    const inFlight = new Map<string, Promise<boolean>>()
+    const args = cancelArgs(client, inFlight)
 
     await requestMobileStructuredAgentSessionCancel(args)
     await requestMobileStructuredAgentSessionCancel(args)
 
     expect(sent).toHaveLength(2)
-    // Reusing it earns the same refusal until the row expires, leaving Stop unusable.
     expect(sent[1]).not.toBe(sent[0])
-    expect(operationIds.size).toBe(0)
+    expect(inFlight.size).toBe(0)
   })
 
-  it('replays the same id when the host never answered', async () => {
+  // The symptom: the first Stop's answer was lost and the turn kept running, so the second press
+  // replayed the first id and the host answered it from the ledger instead of stopping anything.
+  it('sends the next press under a fresh id even when the first one never got an answer', async () => {
     const sent: string[] = []
     const client = fakeClient(async (_method, params) => {
       sent.push(params.envelope.clientOperationId)
       throw markRpcDeliveryUnknown(new Error('Connection closed'))
     })
-    const operationIds = new Map<string, string>()
-    const args = cancelArgs(client, operationIds)
+    const args = cancelArgs(client)
 
     await requestMobileStructuredAgentSessionCancel(args)
     await requestMobileStructuredAgentSessionCancel(args)
 
     expect(sent).toHaveLength(2)
-    // Nothing proves the first Stop missed, so the retry must stay a replay.
-    expect(sent[1]).toBe(sent[0])
-    expect(operationIds.size).toBe(1)
+    expect(sent[1]).not.toBe(sent[0])
+  })
+
+  it('joins a second press while the first Stop is still on its way, then stops again after it settles', async () => {
+    const sent: string[] = []
+    let answer: (value: unknown) => void = () => undefined
+    const client = fakeClient((_method, params) => {
+      sent.push(params.envelope.clientOperationId)
+      return new Promise((resolve) => {
+        answer = resolve
+      })
+    })
+    const args = cancelArgs(client)
+
+    const first = requestMobileStructuredAgentSessionCancel(args)
+    const second = requestMobileStructuredAgentSessionCancel(args)
+    await vi.waitFor(() => expect(sent).toHaveLength(1))
+    answer({ ok: true, result: { ok: true, value: { turnId: 'turn-1' } }, _meta: { runtimeId: 'runtime-1' } })
+
+    expect(await first).toBe(true)
+    expect(await second).toBe(true)
+    expect(sent).toHaveLength(1)
+
+    // Settled: the next press is a new Stop, with an id of its own.
+    const third = requestMobileStructuredAgentSessionCancel(args)
+    await vi.waitFor(() => expect(sent).toHaveLength(2))
+    answer({ ok: true, result: { ok: true, value: { turnId: 'turn-1' } }, _meta: { runtimeId: 'runtime-1' } })
+    await third
+    expect(sent[1]).not.toBe(sent[0])
+  })
+
+  it('does not join a Stop of a different turn', async () => {
+    const sent: string[] = []
+    const client = fakeClient(async (_method, params) => {
+      sent.push(params.envelope.clientOperationId)
+      return operationRefusedAsUnknown()
+    })
+    const inFlight = new Map<string, Promise<boolean>>()
+    const args = cancelArgs(client, inFlight)
+    const other = { ...cancelArgs(client, inFlight), stateRef: { current: runningState('turn-2') } }
+
+    await Promise.all([
+      requestMobileStructuredAgentSessionCancel(args),
+      requestMobileStructuredAgentSessionCancel(other)
+    ])
+
+    expect(sent).toHaveLength(2)
   })
 })

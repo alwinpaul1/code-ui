@@ -49,6 +49,21 @@ describe('describeNativeChatTurnStatus', () => {
       describeNativeChatTurnStatus({ thinking: false, workedSeconds: null, elapsedSeconds: 12 })
     ).toEqual({ key: 'workingFor', duration: '12s' })
   })
+
+  it.each([
+    ['cancellation', 'interruptedAfter'],
+    ['superseded', 'interruptedAfter'],
+    // A turn anything but the user cut short reads as a failure does.
+    ['interruption', 'failedAfter'],
+    ['failure', 'failedAfter'],
+    ['success', 'workedFor'],
+    ['unconfirmed', 'workedFor'],
+    [undefined, 'workedFor']
+  ] as const)('heads a settled %s turn with %s', (verdict, key) => {
+    expect(
+      describeNativeChatTurnStatus({ thinking: false, workedSeconds: 12, elapsedSeconds: 0, verdict })
+    ).toEqual({ key, duration: '12s' })
+  })
 })
 
 describe('describeNativeChatActiveTurnLabel', () => {

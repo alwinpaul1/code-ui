@@ -69,13 +69,13 @@ re-apply the hunk, not drop it. Both fix behaviour upstream does not have.
   and #22029 left that form alone. It is not taken: nothing in `mobile/` or
   `src/shared/` calls `countToolCalls`, and both forms return the same count. Recorded here 2026-09-24; before
   that the exception was only in UPSTREAM.txt.
-- `structured-agent-session-tool-call-block.ts` — new at 8757e40063 (#22349, v1.4.210..v1.4.211
-  shared halves) and copied from it minus one line: upstream's block builder also copies
-  `callId` onto the tool-call block. This fork's journal item and block have no `callId`
-  (it arrived with #19869, which is not ported), so the line cannot compile here and is
-  left out, marked `CODE UI LOCAL HUNK` in the source. Unlike the entries above it fixes
-  nothing; the fork's projection never carried `callId` either, so what the phone draws is
-  unchanged. Porting #19869 makes the hunk redundant.
+- `structured-agent-session-tool-call-block.ts` — copied from 8757e40063 (#22349). It once lacked
+  upstream's `callId` line because this fork's journal item and block had no `callId` (it arrived
+  with #19869, not ported). Orca #22619 (cb363444f3) pairs a tool result with the call it names,
+  so the field is needed: `callId?` is back on `AgentJournalToolCallItem`, on
+  `NativeChatToolCallBlock`, and in `agent-session-journal-schemas.ts` (`ProviderCallId`, on the
+  block and on the journal body), hand-applied from v1.4.217, and the line here is upstream's.
+  The block is now byte-equal to v1.4.220's; the three other files keep their older base.
 
 ## Vendored files carrying a hand-applied upstream hunk
 
@@ -142,7 +142,9 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   #19346), `AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY` (f2af92b2f,
   #19705), `AGENT_SESSION_TURN_ITEM_CAPABILITY` (2626e2eca, #19695),
   `AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY` (027acb4ef, #19863) and
-  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601) and
+  `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` (f55b7ba68, #20601; no longer defined in this
+  file: since #24301 it lives in `agent-session-stop-capabilities.ts`, which this file re-exports
+  and spreads into `RUNTIME_CAPABILITIES`, see the #24301 entry below) and
   `AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY` (ee354a35d, #21418) and
   `ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY` (253f0e394, #21606; its entry only,
   not the `'files.pathsExist'` beside it upstream, which this copy never took), all in
@@ -163,10 +165,10 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
   `RUNTIME_CAPABILITIES` entry) from 2739246058 (#21924, v1.4.209..v1.4.210 shared
   halves) — its entry only; the wire types it gates
   (`AgentSessionTurnCompletion`/`AgentSessionTurnCompletionEvent`/`agentSessionTurnCompletionKey`
-  in `agent-session-wire.ts`) are NOT taken, because they need `AgentJournalTurnOutcome`,
-  which predates v1.4.209 and was never forward-ported into this fork's
-  `agent-session-journal-types.ts` (itself already six hand-applied hunks deep, see
-  below); nothing on the phone reads this stream either way. The file
+  in `agent-session-wire.ts`) are NOT taken. They needed `AgentJournalTurnOutcome`, which
+  predates v1.4.209 and which this fork's `agent-session-journal-types.ts` lacked when this was
+  written; it has it now (the v1.4.211..v1.4.217 and #23467 entries below), but nothing on the
+  phone reads this stream either way. The file
   otherwise sits at its d07c47593 pin: upstream later added
   `NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY`,
   `NOTIFICATION_DELIVERY_PREFERENCES_CAPABILITY` and the rewind and status-feed
@@ -400,3 +402,64 @@ reads any of it:
 
 `tui-agent-config.ts` is NOT taken (#24589): its only change edits the `dsh` entry, and this copy
 never vendored `dsh` (#22468).
+
+## The v1.4.219..v1.4.220 chat-lane shared halves (Orca v1.4.220)
+
+This fork's chat-lane shared files sit at v1.4.217 plus local hunks; the v1.4.217..v1.4.219 chat
+work (the failure-fact family `agent-session-failure*.ts` and `agent-session-refusal-notice.ts`,
+queue delivery and `structured-agent-session-draft-hand-off.ts`, `agent-main-agent-verdict.ts`,
+`structured-agent-session-latest-request.ts`) was never taken. The v1.4.220 changes are therefore
+taken as hunks on the older base, not by re-vendoring, and the ones that build on those missing
+modules are not taken at all (see the port rows).
+
+- `agent-turn-outcome.ts`, `main-agent-status.ts`, `agent-hook-listener/main-agent-turn-state.ts`,
+  `plugins/plugin-events.ts`, `notification-settings-types.ts`, `runtime-worktree-contracts.ts` —
+  taken whole at v1.4.220 (#23467, #23837). The fork's copies of the first four equalled v1.4.219;
+  the last two equalled v1.4.217, so v1.4.220 also brought #22944's (85067494a1) hunks in them:
+  `mainAgent` on `RuntimeWorktreeAgentRow` (#23467 does not touch that file), which the phone
+  reads, and `agentInterrupted` → `agentTurnOutcome` on `NotificationDispatchRequest`, which
+  nothing on the phone reads. #22944's mobile half reads `mainAgent`: the verdict, mark and dot
+  in `agent-row-display.ts` and the `failed` dot (with #23467), `agentRowTimeAt` and its use in
+  `WorktreeAgentRow.tsx`, and `areMainAgentsEqual` in `worktree-list-snapshot.ts`. Not taken: its
+  parity test against `agentMainAgentVerdict` (`agent-main-agent-verdict.ts` is not vendored).
+- `agent-session-journal-types.ts`, `agent-session-journal-schemas.ts`,
+  `agent-session-turn-record.ts` — `outcome` on a turn lifecycle row (open string in the schema,
+  both carriers) and `readAgentJournalTurnOutcome`, by hand from v1.4.217. #23467's
+  `agentTurnVerdict` reads it: without it a user's Stop (state `interrupted`, outcome
+  `cancellation`) would read as a crash.
+- `agent-status-types.ts`, `agent-session-wire.ts` — `AgentTurnOutcome` / `isAgentTurnOutcome`
+  in place of the journal-only type (#23467), by hand.
+- `native-chat-turn-status.ts`, `structured-agent-session-turn-timing.ts` — the verdict hunks of
+  #23467 on top of the fork's `thinking` row; upstream's queue-until hunk in the timing file is
+  not taken (no queue delivery here).
+- `protocol-version.ts` — hand-applied, never re-vendored whole: this copy is what the phone
+  advertises and compares, and a whole v1.4.220 file would also list capabilities the phone does not
+  implement (accepted send, queued messages, keyboard, rewind, ...). The net v1.4.219..v1.4.220 diff,
+  taken a PR at a time: `WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY` (#23837), not advertised by
+  the phone, so a host answers its `worktree.rm` on acceptance and leaves a `removing` row out of its
+  listings. `worktree/types.ts` and `worktree/create-types.ts` carry the matching `removing?: true`;
+  `create-types.ts` does not take the neighbouring `archiveHookOverride` (#19334 is not ported).
+  #24203 (757736628f): `STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY` (constant and host
+  list entry), not advertised by the phone, which keeps asking `agentSession.createSupport` to pick
+  a launch's mode, as a phone released before `agent.launch` does. `ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES`
+  moves to `electron-remote-runtime-client-capabilities.ts`; this copy of that file lists only the
+  four entries the fork's old list had (v1.4.220 also lists accepted-send and retirement-proof-delta
+  constants this protocol-version does not define), marked `CODE UI LOCAL HUNK`. Nothing on the phone
+  reads the list.
+- `agent-process-presence.ts` — new at 24540300f0 (#23947) and copied from it, except that
+  `AGENT_TYPE_MAX_LENGTH` is imported from `agent-status-types.ts`: v1.4.218..v1.4.219 moved the
+  constant to `agent-status-field-normalization.ts`, which this fork's copy does not carry. Marked
+  `CODE UI LOCAL HUNK`; a re-vendor of the normalization file makes it redundant. Only the type
+  `AgentProcessPresence` is reached (from `listener-event.ts` and `agent-hook-relay.ts`); the probe,
+  transition and listener halves of #23947 are desktop/host code and are not taken.
+  #22614 (0b79720c2e): `AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY` (new one-constant module,
+  taken whole; the import and host list entry here). The phone does not advertise it, so a host keeps
+  sending the legacy `tasks` / `settledTasks` roster. The rest of #22614 (the child-work view codec,
+  `children` on the background-task state and the status summary, the reducer's admission step) is
+  not taken: nothing on the phone would read a `children` field without a roster UI for it, and
+  upstream's mobile app is unchanged by that PR.
+  #24301 (7176648759): the stop capabilities move to `agent-session-stop-capabilities.ts`
+  (taken whole; `AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY` is no longer defined inline,
+  `export *` re-exports it with `AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY` and
+  `AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY`, and `RUNTIME_CAPABILITIES` spreads the set).
+  The phone does not read the two new constants: it joins an in-flight Stop itself, whatever the host.

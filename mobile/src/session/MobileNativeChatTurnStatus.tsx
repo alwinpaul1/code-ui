@@ -7,6 +7,7 @@ import {
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
 } from '../../../src/shared/native-chat-turn-status'
+import type { AgentTurnOutcome } from '../../../src/shared/agent-turn-outcome'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
 
@@ -28,12 +29,14 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
 }
 
 /** The per-turn status row — "Thinking", then "Working for 12s" while the turn
- *  runs, settling to a tappable "Worked for 3m 4s" that discloses the turn's
- *  tool activity. Desktop parity: `NativeChatWorkingStatus`. */
+ *  runs, settling to a tappable "Worked for 3m 4s" ("Interrupted after" for a
+ *  Stop, "Failed after" for a fault) that discloses the turn's tool activity.
+ *  Desktop parity: `NativeChatWorkingStatus`. */
 export function MobileNativeChatTurnStatus({
   startedAt,
   thinking,
   workedSeconds,
+  verdict,
   expanded = false,
   onToggleExpanded,
   activityText
@@ -41,6 +44,8 @@ export function MobileNativeChatTurnStatus({
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
+  /** How a settled turn ended; it picks the settled label. */
+  verdict?: AgentTurnOutcome
   expanded?: boolean
   onToggleExpanded?: () => void
   /** Provider-authored tail copy while the turn is live (Orca #19055). */
@@ -55,7 +60,7 @@ export function MobileNativeChatTurnStatus({
   // then "Thinking" while the turn is reasoning, then the running clock — so the
   // phone and the desktop cannot disagree about the one live row (Orca #19977).
   const label = settled
-    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds, verdict })
     : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
 
   const pulse = useRef(new Animated.Value(1)).current

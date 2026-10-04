@@ -32,14 +32,12 @@ export function structuredAgentSessionToolCallBlock(
   if (action.kind === 'diff') {
     return { type: 'tool-call', name: 'Diff', input: { path: action.path } }
   }
-  // CODE UI LOCAL HUNK: upstream also copies `callId` here. This fork's journal
-  // item and block have no `callId` (it arrived with #19869, which is not
-  // ported), so the line is left out. See src/shared/LOCAL-FILES.md.
   return {
     type: 'tool-call',
     name: action.name,
     input: action.input,
     state: action.state,
+    ...(action.callId !== undefined ? { callId: action.callId } : {}),
     ...(action.mcpIdentity !== undefined ? { mcpIdentity: action.mcpIdentity } : {}),
     ...(action.exitCode !== undefined ? { exitCode: action.exitCode } : {}),
     ...(action.durationMs !== undefined ? { durationMs: action.durationMs } : {}),

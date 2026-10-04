@@ -44,6 +44,11 @@ const ToolMetadata = {
   webSearchResults: z.array(z.object({ title: z.string(), url: z.string() })).optional()
 }
 
+/** Provider IDs are opaque; reject all-whitespace values without rewriting valid IDs. */
+const ProviderCallId = z
+  .string()
+  .refine((value) => value.trim().length > 0, 'callId must contain a non-whitespace character')
+
 const KNOWN_BLOCK_TYPES = new Set(['text', 'tool-call', 'tool-result', 'image-ref'])
 
 /** Renderers select blocks by `type` equality and skip what they cannot draw,
@@ -64,6 +69,7 @@ const Block = z.union([
       type: z.literal('tool-call'),
       name: z.string(),
       input: z.unknown().optional(),
+      callId: ProviderCallId.optional(),
       ...ToolMetadata
     }),
     z.object({
@@ -148,6 +154,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     name: z.string(),
     // See the tool-call block: the key itself is lost when `input` is undefined.
     input: z.unknown().optional(),
+    callId: ProviderCallId.optional(),
     state: z.string().min(1),
     output: BoundedPayload.optional()
   }),
@@ -181,6 +188,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
       .object({
         turnId: z.string(),
         state: z.string().min(1),
+        outcome: z.string().min(1).optional(),
         userItemId: z.string().min(1).optional(),
         startedAt: z.number().finite().positive().optional(),
         requestedAt: z.number().finite().positive().optional(),
@@ -195,6 +203,10 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     kind: z.literal('turn'),
     turnId: z.string(),
     state: z.string().min(1),
+    // Open like `state`: a verdict a newer build writes must not turn the row
+    // malformed. `readAgentJournalTurnOutcome` is where an unplaceable one
+    // becomes unknown rather than an arm a caller would act on.
+    outcome: z.string().min(1).optional(),
     userItemId: z.string().min(1).optional(),
     startedAt: z.number().finite().positive().optional(),
     requestedAt: z.number().finite().positive().optional(),

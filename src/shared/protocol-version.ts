@@ -1,3 +1,5 @@
+import { AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY } from './agent-session-background-task-child-views-capability'
+import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './agent-session-stop-capabilities'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
@@ -129,6 +131,7 @@ export const SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
+export * from './agent-session-stop-capabilities'
 export const AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY =
   'agent-session.host-authority.v1' as const
 export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
@@ -137,6 +140,13 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // receive their journal or drive their lifecycle. Mobile may receive a metadata-only placeholder;
 // the host still refuses agentSession.* methods and destructive tab mutations without capability.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: hosts before this gated `agentSession.*` on their own chat setting while still advertising
+// agent-session.structured.v1, so that capability alone cannot tell a client its chat will be
+// admitted. A host advertising this admits by client capability alone; a client advertising it
+// picks each launch's mode itself. A client without it asks `agentSession.createSupport` to pick
+// for it (released phones), so the host keeps answering that with its own setting.
+export const STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY =
+  'agent-session.structured.client-launch-mode.v1' as const
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19863, 027acb4ef); see LOCAL-FILES.md.
 // Why: older structured clients render durable pending replies as uncertain delivery. Capable
 // clients skip the host's bounded best-effort settlement observation.
@@ -190,11 +200,6 @@ export const AGENT_SESSION_TURN_ITEM_CAPABILITY = 'agent-session.turn-item.v1' a
 // Readers must understand a monitoring roster with no available stop control.
 export const AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY =
   'agent-session.background-task-stop.v1' as const
-// Why: agentSession.cancel has a strict schema, so clients must not send prompt identity to an
-// older host that would reject the whole cancellation instead of falling back to turn stop.
-// (Orca #20601, f55b7ba68, hand-applied.)
-export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
-  'agent-session.prompt-cancel.v1' as const
 // Why: agentSession.respondToQuestion has a strict schema, so clients must not send structured
 // `answers` to an older host; they fall back to the answer packed into `optionId`.
 export const AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY =
@@ -232,6 +237,11 @@ export const WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-defaults.v1' as const
 export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
   'worktree.visibility-source-defaults.v1' as const
+// Why: Git's checkout delete outlives worktree.rm's older client timeouts. A client with this waits
+// for the reply and shows `removing` rows as Deleting; one without it is answered on acceptance and
+// would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
+export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
+  'worktree.background-removal.v1' as const
 // Why: older hosts drop automation.list's selector and answer with the whole authority, so a scoped client must not read that as one host's rows.
 export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
   'automation.list-host-scope.v1' as const
@@ -281,15 +291,6 @@ export const NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 ] as const
 
-// Electron clients can decode client-hosted page placement; becoming a page
-// host still requires the separate authenticated browser-client lease.
-export const ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES = [
-  ...NATIVE_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
-  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
-  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-] as const
-
 export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
@@ -299,6 +300,7 @@ export const AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY =
   'agentSession.create.tab-id.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
   AGENT_SESSION_CREATE_TAB_ID_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   'runtime.status.compat.v1',
@@ -349,6 +351,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
@@ -357,10 +360,10 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY,
   AGENT_SESSION_CONVERSATION_OUTLINE_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,
+  AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OPENCODE2_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY,
