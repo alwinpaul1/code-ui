@@ -8,7 +8,13 @@
 
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #22377, 563dd5487f): the import and the
 // `sentAs` field on NativeChatMessage. See src/shared/LOCAL-FILES.md.
-import type { AgentJournalMessageSendMode } from './agent-session-journal-types'
+import type {
+  AgentJournalMessageSendMode,
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23605, e8e144bf3c) — see NativeChatMessage below.
+  AgentJournalProducerLinkage
+} from './agent-session-journal-types'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23116, a68d62911e) — see NativeChatTextBlock below.
+import type { AgentSessionFailureFact } from './agent-session-failure'
 import type { AgentType } from './agent-status-types'
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19226, d0506bf5d) — see below.
 import type { NativeChatToolMetadata } from './native-chat-tool-identity'
@@ -50,6 +56,11 @@ export type NativeChatTextBlock = {
       truncated: boolean
     }
   }
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23116, a68d62911e): set by the structured
+  // projection from a status row's fact (`structured-agent-session-status-block.ts`); a Codex
+  // retry run collapses on it (#23684). See src/shared/LOCAL-FILES.md.
+  /** On a status line that reports a failure: what failed, typed. */
+  failure?: AgentSessionFailureFact
 }
 
 /** A tool invocation by the agent. `input` is the (already-serialized) tool
@@ -115,7 +126,11 @@ export type NativeChatBlock =
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
 
-export type NativeChatMessage = {
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23605, e8e144bf3c): which agent produced a projected
+// row, as the journal row says. Only the structured projection sets it; the phone draws every
+// agent in one list and reads it only to keep each agent's provider-retry run apart (#23684).
+// See src/shared/LOCAL-FILES.md.
+export type NativeChatMessage = AgentJournalProducerLinkage & {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
   id: string

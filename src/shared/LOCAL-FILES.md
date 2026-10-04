@@ -501,3 +501,16 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
 - `agent-session-journal-types.ts` — `failure?: UnreadAgentSessionFailureFact` on
   `AgentJournalStatusItem`, one optional member. Upstream splits the type into a plain row and a
   failure row typed by `AgentSessionFailureRowWords`; this client reads rows, it never writes one.
+- Codex retry rows (#23684): `structured-agent-session-status-block.ts` (#23116) and
+  `native-chat-provider-retry-runs.ts` (#23684) taken whole; `agent-session-journal-producer.ts`
+  whole at e8e144bf3c (#23605's `agentJournalItemSubagentId`). Hand-applied, each marked in the
+  source: `failure?` on `NativeChatTextBlock` and `AgentJournalProducerLinkage` on
+  `NativeChatMessage` (`native-chat-types.ts`); in `structured-agent-session-projection.ts` the
+  status row goes through `structuredAgentSessionStatusBlock` and a projected row carries its
+  producer linkage (#23605's projection hunk); in `structured-agent-session-message-projection.ts`
+  `collapseProviderRetryRuns` wraps the journal's projected rows (upstream wraps the delivered rows
+  before its held sends; this copy has none). A retry run is per agent, as upstream's: the phone
+  draws every agent's rows in one list (#23752's subagent sections are not ported), so another
+  agent's row between two attempts does not split the run, and two agents retrying at once each
+  keep their latest row. Not taken from #23605: `native-chat-subagent-attribution.ts`, the
+  tool-fold and turn-fold hunks, and how a subagent's words are drawn.

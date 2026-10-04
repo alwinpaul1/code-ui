@@ -49,7 +49,7 @@ src/shared/structured-agent-turn-clock-anchor.test.ts: 533b0bd02
 src/shared/structured-agent-session-turn-timing-retention.test.ts: 2626e2eca
 src/shared/native-chat-unverifiable-turn-status.test.ts: 2626e2eca
 src/shared/structured-agent-session-outbox.ts: f55b7ba68; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change d443320af2), see LOCAL-FILES.md
-src/shared/structured-agent-session-message-projection.ts: 434365d2d
+src/shared/structured-agent-session-message-projection.ts: 434365d2d; plus #23684's (b4b708c2c4) collapseProviderRetryRuns over the journal's rows, hand-applied (this copy has no held sends), v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
 src/shared/structured-agent-session-send-disposition.test.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
@@ -349,7 +349,7 @@ src/shared/agent-status-child-work.ts: 58ba75b5a5 (v1.4.211..v1.4.217 shared hal
 src/shared/agent-status-subject.ts: acf8e679ea (v1.4.211..v1.4.217 shared halves)
 src/shared/claude-background-task-kind.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new, pulled in because claude-background-task-inventory.ts imports it)
 src/shared/claude-background-task-kind.test.ts: 4c696a1e2a (v1.4.210..v1.4.211 shared halves; new)
-src/shared/agent-session-journal-producer.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-journal-producer.ts: e8e144bf3c (#23605's agentJournalItemSubagentId; v1.4.220 equals it; v1.4.217..v1.4.219 chat chain)
 src/shared/agent-session-journal-producer.test.ts: 9ece273056 (v1.4.210..v1.4.211 shared halves; new)
 src/shared/structured-agent-session-tool-call-block.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; new, pulled in because structured-agent-session-live-turn.ts and the projection import it; the `callId` line it once lacked is back, with #19869's callId hunks, see LOCAL-FILES.md)
 src/shared/agent-hook-listener/listener-limits.ts: 2ce252f47 (#20523's shared half, which the later re-vendors took only in part; first pin recorded here, was at vendor base; agent-hook-listener.ts at 646fa3645 imports its `normalizeGrokPromptId`; unchanged through 646fa3645, ebed0964a2 and origin/main 8d6fec597)
@@ -472,8 +472,8 @@ src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.22
 src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
 src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
 src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
+src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus the status row through structuredAgentSessionStatusBlock (#23116) and producer linkage on a projected row (#23605), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
 src/shared/agent-session-next-fence.ts: vendor base; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
@@ -497,3 +497,5 @@ src/shared/agent-session-write-failure.test.ts: 59b746ff3c (new)
 src/shared/agent-session-wire-refusals.ts: a68d62911e (new; the module #19695 moved the refusal codes into, at v1.4.220)
 src/shared/agent-session-wire-refusals.test.ts: a68d62911e (new)
 src/shared/agent-session-rewind.ts: 134a22077d (new, at v1.4.220; reads AgentJournalTurnScopeSchema, hand-applied to journal-schemas)
+src/shared/structured-agent-session-status-block.ts: a68d62911e (#23116, new; v1.4.220 equals it)
+src/shared/native-chat-provider-retry-runs.ts: b4b708c2c4 (#23684, new). Its test is not vendored: it imports native-chat-transcript-projection.ts, which this fork does not have; mobile/src/session/use-mobile-structured-agent-session-retry-rows.test.tsx pins the behaviour on the phone
