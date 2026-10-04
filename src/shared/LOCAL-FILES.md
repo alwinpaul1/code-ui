@@ -412,3 +412,9 @@ modules are not taken at all (see the port rows).
   four entries the fork's old list had (v1.4.220 also lists accepted-send and retirement-proof-delta
   constants this protocol-version does not define), marked `CODE UI LOCAL HUNK`. Nothing on the phone
   reads the list.
+- `agent-process-presence.ts` — new at 24540300f0 (#23947) and copied from it, except that
+  `AGENT_TYPE_MAX_LENGTH` is imported from `agent-status-types.ts`: v1.4.218..v1.4.219 moved the
+  constant to `agent-status-field-normalization.ts`, which this fork's copy does not carry. Marked
+  `CODE UI LOCAL HUNK`; a re-vendor of the normalization file makes it redundant. Only the type
+  `AgentProcessPresence` is reached (from `listener-event.ts` and `agent-hook-relay.ts`); the probe,
+  transition and listener halves of #23947 are desktop/host code and are not taken.

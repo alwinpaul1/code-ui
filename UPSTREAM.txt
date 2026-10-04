@@ -258,7 +258,7 @@ src/shared/agent-hook-listener/provider-dispatch.ts: 90801e2deb (v1.4.211..v1.4.
 src/shared/agent-hook-listener/provider-event-routing.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-hook-listener/providers/opencode-family-events.ts: c62eca398
 src/shared/agent-hook-listener/source-routing.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
-src/shared/agent-hook-relay.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-hook-relay.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves); plus #23947 (24540300f0) `agentPresence` type hunk merged by 3-way
 src/shared/agent-kind.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-name-token-match.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-type-label.ts: 90801e2deb (v1.4.211..v1.4.217 shared halves)
@@ -282,7 +282,7 @@ src/shared/constants.ts: c62eca398
 src/shared/pairing-local-ui-fields.ts: c62eca398
 src/shared/pairing-local-ui-fields.test.ts: c62eca398
 src/shared/persisted-ui-state-types.ts: 8846987c99 (v1.4.211..v1.4.217 shared halves)
-src/shared/agent-hook-listener/listener-event.ts: c62eca398
+src/shared/agent-hook-listener/listener-event.ts: c62eca398; plus #23947 (24540300f0) `agentPresence` type hunk merged by 3-way
 src/shared/agent-status-ipc-payload.ts: c62eca398
 src/shared/agent-status-observation.ts: 7d2c399329 (v1.4.211..v1.4.217 shared halves)
 src/shared/runtime-worktree-contracts.ts: c62eca398; plus v1.4.220 whole (#23467 24edf0f64b adds the `mainAgent` row field the phone reads; #23837 6f2a7d05c9 adds `removing`); the fork's copy equalled v1.4.217
@@ -468,3 +468,4 @@ src/shared/agent-status-types.test.ts: vendor base; plus a verdict test appended
 src/shared/worktree/create-types.ts: vendor base; plus #23837 (6f2a7d05c9) `removing?` merged by 3-way (its archiveHookOverride sibling is not taken: #19334 is not ported)
 src/shared/electron-remote-runtime-client-capabilities.ts: 757736628f (#24203, new; the fork's list is shorter, see LOCAL-FILES.md)
 src/shared/remote-runtime-client.test.ts: v1.4.220 whole (#24203): the import of the moved list
+src/shared/agent-process-presence.ts: 24540300f0 (#23947, new; imports AGENT_TYPE_MAX_LENGTH from agent-status-types.ts, a local hunk, see LOCAL-FILES.md)
