@@ -202,7 +202,7 @@ export function useMobileNativeChatController(
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeReported = reportedModelPair(liveHud, activeChatAgentStatus)
   // No beacon and no badge (a Windows host, a tab launched before the flag): what the transcript last answered with.
-  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeReported.model, beacon: hudBeacon !== null, agentWorking: nativeChatAgentWorking })
+  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeReported.model, beacon: hudBeacon !== null, agentWorking: nativeChatAgentWorking, messages: nativeChatSession.messages })
   const isCodexChat = activeChatResolution?.agent === 'codex'
   const isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has

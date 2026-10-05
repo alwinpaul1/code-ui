@@ -20,6 +20,7 @@
  * `listAiVaultSubagentSessionsInBackground`), so the session's row reads its
  * main file. The clean fix is upstream: see docs/mobile-model-from-transcript.md.
  */
+import type { SessionCommandPair } from './claude-session-command-pair'
 export type TranscriptModel = {
   /** The id the record carries, e.g. `claude-opus-5-5`. */
   model: string
@@ -37,7 +38,16 @@ export type ScannedTranscriptModel = TranscriptModel & { freshAsOf: number }
 export type ModelPillPair = { model: string | null; label: string | null; effort: string | null }
 
 /** The model the pills fall back to when the agent itself says nothing. */
-export type ClaudeModelFallback = { kind: 'none' } | { kind: 'transcript'; model: TranscriptModel }
+export type ClaudeModelFallback =
+  | { kind: 'none' }
+  | {
+      kind: 'transcript'
+      model: TranscriptModel
+      /** The effort the session itself stated through `/model` or `/effort`
+       *  (claude-session-command-pair.ts); absent: nobody has said. The
+       *  transcript's own reading records none. */
+      effort?: string | null
+    }
 
 // Claude Code's ids put the family first (`claude-opus-5-5`, with a date or a
 // region around it on some routes); the 3.x line put the version first
@@ -155,5 +165,41 @@ export function claudeModelPillPair(
   if (live.model || fallback.kind === 'none') {
     return live
   }
-  return { model: fallback.model.model, label: fallback.model.label, effort: null }
+  return { model: fallback.model.model, label: fallback.model.label, effort: fallback.effort ?? null }
+}
+
+/**
+ * The fallback with what the session itself said through `/model` and
+ * `/effort` laid over it. Used only when there is no live pair: the beacon and
+ * the badge are applied by the caller first and always win.
+ *
+ * - A `/model` switch names the model: its own word beats the transcript's
+ *   reading, which may predate the switch. The effort is the one its output
+ *   stated, or null; never the effort of the model before it.
+ * - An effort-only command belongs to the model the transcript reads. With no
+ *   model at all there is nothing to attach it to, so it is dropped.
+ * - A label this cannot map to an id (`Opus 4.8.5`) is not guessed at.
+ */
+export function withSessionCommandPair(
+  fallback: ClaudeModelFallback,
+  command: SessionCommandPair | null
+): ClaudeModelFallback {
+  if (!command) {
+    return fallback
+  }
+  const id = command.label === null ? null : claudeIdFromLabel(command.label)
+  if (command.label !== null && id !== null) {
+    return { kind: 'transcript', model: { model: id, label: command.label }, effort: command.effort }
+  }
+  if (fallback.kind === 'transcript' && command.label === null) {
+    return { ...fallback, effort: command.effort }
+  }
+  return fallback
+}
+
+/** `Opus 5.5` back to `claude-opus-5-5`, the id the host lists; null for a
+ *  label that is not `<Family> <major>[.<minor>]`. */
+export function claudeIdFromLabel(label: string): string | null {
+  const match = /^(fable|mythos|opus|sonnet|haiku) (\d+)(?:\.(\d{1,2}))?$/i.exec(label.trim())
+  return match ? `claude-${match[1]!.toLowerCase()}-${match[2]}${match[3] === undefined ? '' : `-${match[3]}`}` : null
 }

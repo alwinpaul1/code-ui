@@ -999,3 +999,80 @@ tmux at 120x40. **Not run against a live Codex 0.158 tab.**
   continue`). The phone has no card for it; it is neither an approval nor an idle prompt to the readers,
   so nothing is typed into it.
 
+
+## Model and effort without a beacon (2026-10-05)
+
+Reported on 0.9.115 / Claude Code 2.1.289: one tab drew "Opus 5.5" with no
+effort, another drew no model at all ("Model" in the composer). Neither is a
+regression from the xterm.js switch (beacon stripping sits above the WebView and
+its files changed only in comments between 0.9.114 and 0.9.115) and neither is a
+2.1.289 change (the status-line payload builder is the same as 2.1.288's,
+compared by minified-name-blind diff). The cause is which sources a tab with no
+beacon and no badge has left.
+
+### The order, and why it extends the rule
+
+1. The live beacon, or the badge on the user's own status line. Authoritative
+   whenever present, including when it states a model with no effort: Claude
+   omits `effort` from its status-line payload for a model that takes none, and
+   after an API 400 on `output_config.effort` latches "effort unsupported" for
+   the session (`sw()` / `$Pn` in the 2.1.289 binary).
+2. The session's own last `/model` or `/effort` output, read from the
+   `<local-command-stdout>` rows the transcript already holds
+   (`claude-session-command-pair.ts`).
+3. The model the host's transcript scan last read for this session
+   (`claude-transcript-model.ts`), which carries no effort.
+4. Nothing.
+
+`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Step 2
+is a deliberate, narrow extension of it: a line the agent printed about itself,
+in answer to the user's command, in the session's own record. It is not a
+tracked record, not the launch record, not a setting, and not a guess. The
+rule's reason (a figure the agent did not state about THIS session) still holds,
+and the extension stays inside it.
+
+### What is NOT a source, and why
+
+- **Claude's settings file** (`modelSettings[<id>].effortLevel ?? effortLevel`,
+  which the `usage-band` mod reads through `$.settings.read()`). Not reachable
+  with nothing installed: `files.read` takes a worktree-relative path (no
+  absolute path, no `..`), `files.readTerminalArtifact` needs a grant for a path
+  that appeared in a terminal's output and only allows temp directories, and the
+  one route left (a background terminal running a reader, above) was removed on
+  2026-09-09 and is forbidden by CLAUDE.md. A default is also not the session's
+  effort: a pick made for the session only is recorded nowhere else. Showing it
+  as fact would be wrong exactly when the user changed it.
+- **The launch argv or env** (`--model`, `--effort`, `CLAUDE_CODE_EFFORT_LEVEL`).
+  The tab snapshot (`RuntimeMobileSessionTerminalTab`) carries `launchAgent`,
+  `startupCwd` and `launchDraft`, no argv and no env. The phone passes neither
+  flag itself. Only the env override announces itself, and only when the user
+  runs `/effort` ("CLAUDE_CODE_EFFORT_LEVEL=… overrides this session").
+- **`effort.level` in hook payloads.** Every Claude hook input carries it (the
+  mod's `reportEffort` uses it), but Orca 1.4.220 forwards neither it nor the
+  model to `agentStatus` for Claude. Needs an upstream Orca change.
+- **The request's `"effort":"…"` in the transcript JSONL** (the mod greps it for
+  subagents). Orca's reader publishes `{id, role, blocks, timestamp, source}`
+  only, so it never reaches the phone.
+
+### Ways the effort changes for one session, and what the phone sees
+
+See the table in the change's report; in short, only `/model` (picker or typed)
+and `/effort` write an output row. The `--effort` flag, the env var set before
+launch, the effort-step keybinding, `ultrathink` and the unsupported latch leave
+nothing the phone can read, so with no beacon the pill shows no effort. It never
+shows a default in their place.
+
+### Wordings
+
+Read from the 2.1.289 binary (modelled, not captured from a live session):
+`Set model to \`X\`` + ` and saved as your default for new sessions` |
+` for this session only` + optional ` with <level> effort`; `Set effort level to
+<level> (<where>): …`; `Current effort level: <level> (…)`; `Effort level: auto
+(currently <level>)`; `Effort level set to auto …`; `CLAUDE_CODE_EFFORT_LEVEL=<level>
+overrides this session …`; `… Effort stays <level>.`. Captured from 2.1.278
+rows: the first two shapes only.
+
+### Codex
+
+Not applied. Codex states model and effort in its own footer and rollout, which
+the beacon and screen readers already take.
