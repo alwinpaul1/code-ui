@@ -269,7 +269,7 @@ export function commandOverBeacon(
   liveEffort: string | null
 ): ClaudeModelFallback {
   const none: ClaudeModelFallback = { kind: 'none' }
-  if (!command || command.seenAt === undefined || heardAt === null || liveModel === null || command.seenAt <= heardAt) {
+  if (!command || typeof command.seenAt !== 'number' || heardAt === null || liveModel === null || command.seenAt <= heardAt) {
     return none
   }
   const id = command.label === null ? liveModel : claudeIdFromLabel(command.label)

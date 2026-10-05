@@ -1241,8 +1241,21 @@ scan's phone clock (`freshAsOf`); that is a skew it accepts and this does not.
 The next arrival ends the override, so it lasts until the beacon's next repaint,
 normally 5 s. The hook listens for arrivals only while a command is waiting on
 one (`subscribeAgentHudBeaconArrivals`), so a quiet tab is not re-rendered on
-every repeat. The race it leaves: a beacon that arrives before the rows load,
-with an old command in them, lets that command show for one repaint.
+every repeat.
+
+The race, and its closure (review R1): "first seen after the beacon" is only
+evidence of a switch when the phone saw the command APPEAR, that is, when it
+already held a pair for the session and this one differs. With nothing held for
+the session (first view on this device, the 32-entry eviction, a failed hydrate)
+a command's first sighting says nothing about when it was written, and an OLD row
+loaded after a fresh beacon read as newer than it. So a pair first seen with
+nothing held is stored with `seenAt = -Infinity` and can never outrank a beacon;
+a record kept before the field existed, or whose `-Infinity` came back from JSON
+as null, stays "never" too. An old row seen for the first time therefore no
+longer outranks a live beacon. The cost: in a session never viewed on this device,
+a switch made while away shows only from the beacon's next frame (at most 5 s
+after resubscribing), not from the rows. A late pair is acceptable; a wrong one
+is not.
 
 A command must also add something: a row that states less than the beacon (the
 same model with no effort, "Kept model as" after Esc in the picker, `/effort

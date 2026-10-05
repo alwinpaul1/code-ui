@@ -7,7 +7,7 @@ vi.mock('../transport/client-context-connection-metrics', () => ({ useLastConnec
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { encodeAgentHudChannelFrame } from './agent-hud-channel'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { resetSessionCommandPairCacheForTests, sessionCommandPair, type SessionCommandPair } from './claude-session-command-pair'
+import { resetSessionCommandPairCacheForTests, sessionCommandPair, sessionCommandPairFor, type SessionCommandPair } from './claude-session-command-pair'
 import { claudeReportedOverLive, commandOverBeacon, type ClaudeModelFallback } from './claude-transcript-model'
 import { clearPendingModelPicksForTests } from './mobile-native-chat-model-report-authority'
 import { resetClaudeTranscriptModelPicksForTests, useClaudeTranscriptModel } from './use-claude-transcript-model'
@@ -161,16 +161,74 @@ describe('the hook: a switch made while the phone was away, then a beacon', () =
       }
     })
 
-  it('shows the model typed on the desktop while away, then yields to the first beacon after it', () => {
-    frame(`CUIHUD1 agent=claude hk=1 hb=5 sid=${SID} model=claude-opus-5-5 name=Opus%205.5 effort=high`)
+  const SWITCH = 'Set model to `Fable 5.1` for this session only with `high` effort'
+  const BEACON = `CUIHUD1 agent=claude hk=1 hb=5 sid=${SID} model=claude-opus-5-5 name=Opus%205.5 effort=high`
+
+  it('shows the model typed on the desktop while away on a session already held, then yields to the first beacon after it', () => {
+    // The session was viewed before: an earlier command is held, seen at 5_000.
+    vi.setSystemTime(5_000)
+    sessionCommandPairFor(SID, ran('effort', 'Set effort level to high (this session only): Deep', 4_000))
+    vi.setSystemTime(10_000)
+    frame(BEACON)
     vi.setSystemTime(20_000)
-    render({ messages: ran('model', 'Set model to `Fable 5.1` for this session only with `high` effort', 15_000) })
+    render({ messages: ran('model', SWITCH, 15_000) })
     expect(latest).toMatchObject({ outranksLive: true, model: { model: 'claude-fable-5-1' } })
-    // An UNCHANGED beacon repeats: it is still the last word, so the override ends with no render of the page's own.
+    // An UNCHANGED beacon repeats: it is still the last word, so the override ends.
     vi.setSystemTime(25_000)
     act(() => {
-      frame(`CUIHUD1 agent=claude hk=1 hb=5 sid=${SID} model=claude-opus-5-5 name=Opus%205.5 effort=high`)
+      frame(BEACON)
     })
     expect(latest).toEqual({ kind: 'none' })
+  })
+
+  // Review R1 (2026-10-05): with no pair held for the session (first view on
+  // this device, evicted, a failed hydrate) a command's first sighting says
+  // nothing about when it was written, so an OLD row loaded after a fresh
+  // beacon read as newer than it. A late pair is acceptable, a wrong one is not.
+  it('R1: an old row first loaded for a session with no held pair never outranks a fresh beacon', () => {
+    frame(BEACON)
+    vi.setSystemTime(20_000)
+    render({ messages: ran('effort', 'Set effort level to low (this session only): Quick', 1_000) })
+    expect(latest).toEqual({ kind: 'none' })
+  })
+
+  it('R1: the same for a model row, and it stays so after the beacon repeats', () => {
+    frame(BEACON)
+    vi.setSystemTime(20_000)
+    render({ messages: ran('model', SWITCH, 1_000) })
+    expect(latest).toEqual({ kind: 'none' })
+    vi.setSystemTime(25_000)
+    act(() => {
+      frame(BEACON)
+    })
+    expect(latest).toEqual({ kind: 'none' })
+  })
+})
+
+describe('what is stored for a pair first seen with nothing held', () => {
+  it('can never be seen after a beacon, and survives the JSON a relaunch round-trips it through', () => {
+    resetSessionCommandPairCacheForTests()
+    const first = sessionCommandPairFor('s-new', ran('effort', 'Set effort level to low (this session only): Quick', 1_000))
+    expect(first?.seenAt).toBe(Number.NEGATIVE_INFINITY)
+    const roundTripped = JSON.parse(JSON.stringify(first)) as SessionCommandPair
+    expect(commandOverBeacon(roundTripped, 'claude-opus-5-5', 1, 'high')).toEqual({ kind: 'none' })
+    expect(commandOverBeacon(first, 'claude-opus-5-5', 1, 'high')).toEqual({ kind: 'none' })
+  })
+
+  it('a record kept before seenAt existed is never newer than a beacon either', () => {
+    const old = { ...sessionCommandPair(ran('effort', 'Set effort level to low (this session only): Quick', 1_000))! }
+    expect(commandOverBeacon(old, 'claude-opus-5-5', 1, 'high')).toEqual({ kind: 'none' })
+  })
+
+  it('a command seen after the beacon on a held session still wins', () => {
+    resetSessionCommandPairCacheForTests()
+    vi.useFakeTimers()
+    vi.setSystemTime(5_000)
+    sessionCommandPairFor('s-held', ran('effort', 'Set effort level to high (this session only): Deep', 4_000))
+    vi.setSystemTime(30_000)
+    const next = sessionCommandPairFor('s-held', ran('effort', 'Set effort level to low (this session only): Quick', 20_000), 'claude-opus-5-5')
+    vi.useRealTimers()
+    expect(next?.seenAt).toBe(30_000)
+    expect(commandOverBeacon(next, 'claude-opus-5-5', 10_000, 'high')).toMatchObject({ outranksLive: true, effort: 'low' })
   })
 })

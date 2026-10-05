@@ -62,7 +62,8 @@ export type SessionCommandPair = {
   boundModel?: string | null
   /** When the PHONE first saw this command's row (its own clock), set by
    *  `sessionCommandPairFor`. The host's row time is never compared with the
-   *  phone's clock; this is what orders a command against a beacon. */
+   *  phone's clock; this is what orders a command against a beacon.
+   *  -Infinity: nothing was held when it was first seen, so it is never newer. */
   seenAt?: number
 }
 
@@ -208,9 +209,16 @@ export function sessionCommandPairFor(
   const held = lastPairBySession.get(sessionId)
   let pair = fresh
   if (pair !== null) {
-    // First seen now unless it is the same command already held.
+    // A command is "newer than the beacon" only when the phone SAW it appear:
+    // it was held before, and this one differs. With nothing held (first view
+    // on this device, evicted, a failed hydrate) its first sighting says
+    // nothing about when it was written, so it can never outrank a beacon: a
+    // late pair is acceptable, a wrong one is not (review R1, 2026-10-05). A
+    // stored `seenAt` of -Infinity comes back from JSON as null, and a record
+    // from before the field has none; both stay "never".
     const sameAsHeld = held !== undefined && held.at === pair.at && held.label === pair.label && held.effort === pair.effort
-    pair = { ...pair, seenAt: sameAsHeld ? (held.seenAt ?? Date.now()) : Date.now() }
+    const heldSeen = typeof held?.seenAt === 'number' ? held.seenAt : Number.NEGATIVE_INFINITY
+    pair = { ...pair, seenAt: held === undefined ? Number.NEGATIVE_INFINITY : sameAsHeld ? heldSeen : Date.now() }
   }
   if (pair !== null && held && held.at !== null && pair.at !== null && held.at > pair.at) {
     // Rows older than the pair already kept (a cached page shown first).
