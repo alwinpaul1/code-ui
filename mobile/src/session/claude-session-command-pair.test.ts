@@ -114,7 +114,7 @@ describe("a session's own /model and /effort output", () => {
   // happens to open the same way is prose, and was persisted and won.
   it('does not read an assistant reply that opens like the overload notice', () => {
     expect(
-      pair(ran('model', 'Set model to `Opus 5.5` for this session only with `high` effort')).label
+      pair(ran('model', 'Set model to `Opus 5.5` for this session only with `high` effort'))?.label
     ).toBe('Opus 5.5')
     expect(
       sessionCommandPair([
