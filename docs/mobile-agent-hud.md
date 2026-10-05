@@ -1284,3 +1284,22 @@ while mounted (`refreshInterval`); read from the binary, not timed on a device.
 | any switch | app backgrounded | as other project | as above |
 | any switch | app killed | warm-start beacon and the persisted command pair, then rows, then the first beacon | rows on open; beacon at most 5 s after |
 | any switch | no flag (typed-in, untrusted workspace, Windows) | command rows only | when the chat loads or the row arrives |
+
+### Tests must never reach a real terminal (2026-10-06)
+
+The tty writer walks up to six parents with `ps -o tty=` when `CUIHUD_TTY` is unset
+or empty. A test runs under vitest, under the tool's shell, under the agent, which
+sits on the user's real PTY, so a test that ran the status-line script with
+`CUIHUD_TTY: ''` wrote a beacon for the synthetic session `00000000-…` into the
+live terminal of the Orca tab running the tests. The phone then drew "Another
+agent started in this tab reported session …; the chat stays on Claude's own
+session 00000000". The phone recovers by itself (the leaked beacon holds the chat
+only while it is fresh, about 30 s, and the next real frame replaces it:
+`native-chat-beacon-leak-recovery.test.ts`), so each further test run re-armed it.
+
+Every test that runs one of our scripts must now pin `CUIHUD_TTY` to a temp file
+or run with `noTerminalPath()` (`agent-hud-script-runner.test-support.ts`), a PATH
+whose `ps` sees no process. `agent-hud-tests-reach-no-real-tty.test.ts` is a
+source-reading ratchet that fails any test that does neither. Do not run these
+scripts from a test with a real `ps` and no override, and do not point
+`CUIHUD_TTY` at a real device.

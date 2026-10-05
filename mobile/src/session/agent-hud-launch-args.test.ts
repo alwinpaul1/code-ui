@@ -21,6 +21,7 @@ import {
   encodePowerShellCommand,
   CLAUDE_HUD_STOP_HOOK_POWERSHELL
 } from './agent-hud-launch-args'
+import { noTerminalPath } from './agent-hud-script-runner.test-support'
 import { decodeAgentHudChannelText, encodeAgentHudChannelFrame } from './agent-hud-channel'
 
 // Captured 2026-09-09 from Claude Code 2.1.266 on macOS: the JSON it pipes to a
@@ -267,7 +268,9 @@ describe("the phone reads Claude Code's own state without drawing a row", () => 
       input: statusJson,
       encoding: 'utf8',
       // No CUIHUD_TTY and no reachable parent tty: the Windows/Git Bash case.
-      env: { PATH: process.env.PATH ?? '', HOME: home, CUIHUD_TTY: '' }
+      // The `ps` is faked: with the real one the walk finds the REAL terminal
+      // this test runs under and writes a beacon into it (2026-10-06).
+      env: { PATH: noTerminalPath(), HOME: home, CUIHUD_TTY: '' }
     })
     expect(stdout).toBe('')
   })
