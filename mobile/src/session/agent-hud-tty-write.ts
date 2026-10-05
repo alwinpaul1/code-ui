@@ -39,7 +39,7 @@
  * override the two Windows ones. Tests point them at temp files.
  * Quoted case patterns: an unquoted `?` would glob-match any single char.
  */
-export const AGENT_HUD_TTY_WRITE = [
+const TTY_WRITE_STEPS = [
   // `2>/dev/null` FIRST: a failing `>>` is reported by the shell on fd 2, and
   // that must already be /dev/null or a Windows host with no console would
   // print an error into the terminal this exists to leave alone.
@@ -51,6 +51,18 @@ export const AGENT_HUD_TTY_WRITE = [
   'if [ -z "$tt" ] && [ "$wn" = 0 ]; then pw=$PPID; nw=0; while [ -n "$pw" ] && [ "$pw" != 1 ] && [ $nw -lt 6 ]; do dv=$(ps -o tty= -p "$pw" 2>/dev/null | tr -d " " || true); case "$dv" in ""|"?"|"??") pw=$(ps -o ppid= -p "$pw" 2>/dev/null | tr -d " " || true);; *) tt="/dev/$dv"; break;; esac; nw=$((nw+1)); done; fi',
   'if [ -n "$tt" ] && [ "$wn" = 0 ]; then v "$tt"; elif [ -n "$tt" ]; then w "$tt"; elif [ "$wn" = 1 ]; then w "${CUIHUD_WIN_TTY:-/dev/tty}" || w "${CUIHUD_WIN_CONOUT:-/dev/conout}"; fi'
 ]
+
+/**
+ * The writer, run in a subshell with stderr silenced.
+ *
+ * A failed write (a tty that is gone, a path that cannot be opened) must change
+ * nothing for the agent: dash exits the shell on a failed redirect, and the last
+ * command's non-zero status became the hook's exit code, which Claude Code reads
+ * as a hook error (exit 2 is a BLOCKING error, fed back to the model on Stop;
+ * review, 2026-10-05). The subshell contains the exit and the noise; every hook
+ * command still ends in its own `exit 0` (the status line delegates after it).
+ */
+export const AGENT_HUD_TTY_WRITE = [`( ${TTY_WRITE_STEPS.join('; ')} ) 2>/dev/null`]
 
 /** Percent-encodes what would otherwise break the `key=value` grammar:
  *  `%` first (or it would double-encode), then space and `;`. */

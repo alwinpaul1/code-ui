@@ -20,6 +20,7 @@
  * `listAiVaultSubagentSessionsInBackground`), so the session's row reads its
  * main file. The clean fix is upstream: see docs/mobile-model-from-transcript.md.
  */
+import type { SessionCommandPair } from './claude-session-command-pair'
 export type TranscriptModel = {
   /** The id the record carries, e.g. `claude-opus-5-5`. */
   model: string
@@ -37,7 +38,21 @@ export type ScannedTranscriptModel = TranscriptModel & { freshAsOf: number }
 export type ModelPillPair = { model: string | null; label: string | null; effort: string | null }
 
 /** The model the pills fall back to when the agent itself says nothing. */
-export type ClaudeModelFallback = { kind: 'none' } | { kind: 'transcript'; model: TranscriptModel }
+export type ClaudeModelFallback =
+  | { kind: 'none' }
+  | {
+      kind: 'transcript'
+      model: TranscriptModel
+      /** The effort the session itself stated through `/model` or `/effort`
+       *  (claude-session-command-pair.ts); absent: nobody has said. The
+       *  transcript's own reading records none. */
+      effort?: string | null
+      /** How recent a transcript the model was read from (the phone's clock). */
+      freshAsOf?: number
+      /** Set when a model command newer than the live beacon was read: this
+       *  pair replaces the beacon's, which the phone last heard before it. */
+      outranksLive?: true
+    }
 
 // Claude Code's ids put the family first (`claude-opus-5-5`, with a date or a
 // region around it on some routes); the 3.x line put the version first
@@ -140,7 +155,11 @@ export function resolveClaudeModelFallback(input: {
   if (pick && (pick.settledAt === null || transcript.freshAsOf < pick.settledAt)) {
     return { kind: 'none' }
   }
-  return { kind: 'transcript', model: { model: transcript.model, label: transcript.label } }
+  return {
+    kind: 'transcript',
+    model: { model: transcript.model, label: transcript.label },
+    freshAsOf: transcript.freshAsOf
+  }
 }
 
 /**
@@ -155,5 +174,134 @@ export function claudeModelPillPair(
   if (live.model || fallback.kind === 'none') {
     return live
   }
-  return { model: fallback.model.model, label: fallback.model.label, effort: null }
+  return { model: fallback.model.model, label: fallback.model.label, effort: fallback.effort ?? null }
+}
+
+/**
+ * The fallback with what the session itself said through `/model`, `/effort`,
+ * `/fast` and the harness's fallback notice laid over it. Used only when there
+ * is no live pair: the beacon and the badge are applied by the caller first and
+ * always win.
+ *
+ * - A model command names the model: its own word beats a scan that predates
+ *   it. The effort is the one its output stated, or null; never the effort of
+ *   the model before it.
+ * - An effort-only command belongs to the model it was read under
+ *   (`boundModel`), else to the model the scan reads.
+ * - SUPERSEDED: a model can change with no row the phone parses (the alt+p
+ *   picker, the effort-step keys, a resume into a new process). When a reply
+ *   came after the command (`answeredAt`), the scan was taken after that reply
+ *   (`freshAsOf`) and it names another model, the scan is newer and the command
+ *   is dropped, effort included. Without a reply after it, nothing could have
+ *   changed the model and the command stands. Row times are the host's clock and
+ *   `freshAsOf` the phone's, the same skew `resolveClaudeModelFallback` accepts.
+ * - A label this cannot map to an id (`Opus 4.8.5`) is not guessed at.
+ */
+export function withSessionCommandPair(
+  fallback: ClaudeModelFallback,
+  command: SessionCommandPair | null
+): ClaudeModelFallback {
+  if (!command) {
+    return fallback
+  }
+  const commandId = command.label === null ? (command.boundModel ?? null) : claudeIdFromLabel(command.label)
+  if (command.label !== null && commandId === null) {
+    return fallback
+  }
+  if (
+    fallback.kind === 'transcript' &&
+    commandId !== null &&
+    modelsDiffer(fallback.model.model, commandId) &&
+    command.answeredAt !== null &&
+    fallback.freshAsOf !== undefined &&
+    command.answeredAt <= fallback.freshAsOf
+  ) {
+    return fallback
+  }
+  if (command.label !== null && commandId !== null) {
+    return {
+      kind: 'transcript',
+      model: { model: commandId, label: claudeTranscriptModelName(commandId) ?? command.label },
+      effort: command.effort
+    }
+  }
+  if (fallback.kind === 'transcript') {
+    return { ...fallback, effort: command.effort }
+  }
+  return fallback
+}
+
+function modelsDiffer(a: string, b: string): boolean {
+  return (claudeTranscriptModelName(a) ?? a) !== (claudeTranscriptModelName(b) ?? b)
+}
+
+/** `Opus 5.5` back to `claude-opus-5-5`, the id the host lists; a Claude id is
+ *  its own. A trailing note the CLI adds (`(1M context)`, `(default)`) is not
+ *  part of the model. Null for anything else. */
+export function claudeIdFromLabel(label: string): string | null {
+  const bare = label.trim().replace(/\s*\([^)]*\)\s*$/, '')
+  if (/^claude-[a-z0-9]/i.test(bare)) {
+    return bare.replace(/\[.*\]$/, '')
+  }
+  const match = /^(fable|mythos|opus|sonnet|haiku) (\d+)(?:\.(\d{1,2}))?$/i.exec(bare)
+  return match ? `claude-${match[1]!.toLowerCase()}-${match[2]}${match[3] === undefined ? '' : `-${match[3]}`}` : null
+}
+
+/**
+ * The fallback that outranks a live beacon, or none.
+ *
+ * A model command outranks the beacon only when the phone first saw its row
+ * (`seenAt`) AFTER it last heard that beacon (`heardAt`, the last arrival,
+ * repeats included, or for a warm-start record its stored time): both are the
+ * phone's own clock, so host clock skew cannot order them (review N2,
+ * 2026-10-05), and a beacon that has not CHANGED but is still speaking has
+ * still been heard (review N3). The next arrival ends the override, so it never
+ * outlives the beacon's next repaint, normally within 5 s.
+ *
+ * It must also add something. A row that states less than the beacon (the same
+ * model with no effort, "Kept model as" after Esc in the picker, `/effort
+ * auto`, the same effort) never erases what the live beacon states.
+ */
+export function commandOverBeacon(
+  command: SessionCommandPair | null,
+  liveModel: string | null,
+  heardAt: number | null,
+  liveEffort: string | null
+): ClaudeModelFallback {
+  const none: ClaudeModelFallback = { kind: 'none' }
+  if (!command || typeof command.seenAt !== 'number' || heardAt === null || liveModel === null || command.seenAt <= heardAt) {
+    return none
+  }
+  const id = command.label === null ? liveModel : claudeIdFromLabel(command.label)
+  if (id === null) {
+    return none
+  }
+  if (command.label === null && command.boundModel != null && modelsDiffer(command.boundModel, liveModel)) {
+    return none
+  }
+  const sameModel = !modelsDiffer(id, liveModel)
+  if (sameModel && (command.effort === null || command.effort === liveEffort)) {
+    return none
+  }
+  return {
+    kind: 'transcript',
+    model: { model: id, label: command.label === null || sameModel ? '' : (claudeTranscriptModelName(id) ?? command.label) },
+    effort: command.effort,
+    outranksLive: true
+  }
+}
+
+/**
+ * The live pair, unless a model command was written after the beacon that
+ * stated it (`outranksLive`): then that command is newer truth, and the pair
+ * the beacon states is the last one the phone heard before a switch it missed
+ * (another project, a killed app: the beacon is a stream event and nothing
+ * replays it). The next beacon, normally within a repaint, ends the override
+ * by being newer. An effort-only command keeps the live model and its name.
+ */
+export function claudeReportedOverLive<T extends ModelPillPair>(live: T, fallback: ClaudeModelFallback): T {
+  if (fallback.kind !== 'transcript' || fallback.outranksLive !== true) {
+    return live
+  }
+  return { ...live, model: fallback.model.model, label: fallback.model.label || live.label, effort: fallback.effort ?? null }
 }

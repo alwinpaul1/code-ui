@@ -999,3 +999,288 @@ tmux at 120x40. **Not run against a live Codex 0.158 tab.**
   continue`). The phone has no card for it; it is neither an approval nor an idle prompt to the readers,
   so nothing is typed into it.
 
+
+## Model and effort without a beacon (2026-10-05)
+
+Reported on 0.9.115 / Claude Code 2.1.289: one tab drew "Opus 5.5" with no
+effort, another drew no model at all ("Model" in the composer). Neither is a
+regression from the xterm.js switch (beacon stripping sits above the WebView and
+its files changed only in comments between 0.9.114 and 0.9.115) and neither is a
+2.1.289 change (the status-line payload builder is the same as 2.1.288's,
+compared by minified-name-blind diff). The cause is which sources a tab with no
+beacon and no badge has left. The user had also just removed the
+`claude-hud-enhanced` plugin, whose `[Model effort | Auth]` badge had been the
+live pair for every tab that carried no beacon.
+
+### The order, and why it extends the rule
+
+1. The live beacon, or the badge on the user's own status line. Authoritative
+   whenever present, including when it states a model with no effort: Claude
+   omits `effort` from its status-line payload for a model that takes none, and
+   after an API 400 on `output_config.effort` latches "effort unsupported" for
+   the session (`sw()` / `$Pn` in the 2.1.289 binary). The hook frames below are
+   beacon-tier too; the newest frame wins.
+2. The session's own last answer to `/model`, `/effort` or `/fast`, or the
+   harness's fallback notice, read from rows the transcript already holds
+   (`claude-session-command-pair.ts`).
+3. The model the host's transcript scan last read for this session
+   (`claude-transcript-model.ts`), which carries no effort.
+4. Nothing.
+
+`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tiers 2
+and 3 are a deliberate, narrow extension of it: a line the agent printed about
+itself, in answer to the user's command, in the session's own record. It is not a
+tracked record, not the launch record, not a setting, and not a guess. The
+rule's reason (a figure the agent did not state about THIS session) still holds,
+and the extension stays inside it.
+
+### The hook beacon (POSIX hosts)
+
+The launch flag already installs `UserPromptSubmit` and `Stop` hooks that write
+a beacon frame to the agent's own tty. Two facts about what Claude Code 2.1.289
+puts in a hook's input decide what they can carry (the builder `rd(session, cwd,
+permissionMode, toolUseContext)`; read from the binary, not captured live):
+
+- `effort:{level}` is added only when `rd` is handed a tool context and the model
+  takes effort (`sw(model)`). `Stop`, `PreToolUse` and `PostToolUse` are built
+  with one; `SessionStart` and `UserPromptSubmit` are not.
+- `model` is a field of `SessionStart` alone.
+
+So `SessionStart` beacons `model=` (`agent-hud-session-start-hook-script.ts`) and
+`Stop` adds `effort=` to its existing frame (`CLAUDE_HUD_STOP_HOOK_SCRIPT`).
+`PostModelSwitch` (2.1.289, `GHr`; also in the hook-event list the settings
+schema accepts) fires after ANY change of the effective model, with `from_model`,
+`to_model`, `requested_model` and `source` (`command`, `picker`, `sdk`, `auto`,
+`resume`) but no effort. It beacons `model=<to_model>` when that is a Claude id
+(an alias is skipped; the status line names it within a beat). No hook fires for
+an effort-only change. Tool
+hooks also carry effort but fire on every tool call, one `sh` each, so they are
+not used. A pick made for one session only is reported at that session's next
+Stop, which the settings file never records.
+
+On the phone (`pairFromHookFrame` in `agent-hud-beacon.ts`): a model frame with
+no `name=` and no `effort=` is a SessionStart. For the model already held it
+keeps the status line's name and effort; for another model the old effort goes.
+An effort frame with no model lands on the held pair, or is kept until a model
+arrives and drawn by nobody alone. A status-line frame always carries `name=` and
+replaces the pair, as before. A frame that names only an id is named the way the
+transcript names an id ("Opus 5.5"), not shown raw.
+
+Hooks are skipped under the same conditions as the status line: `disableAllHooks`
+("Disable all hooks and statusLine execution") and an untrusted workspace ("hook
+execution - workspace trust not accepted" beside "Status line command skipped:
+workspace trust not accepted"). They add coverage where the status line is not
+mounted yet or has not ticked, never where it is switched off.
+
+### Hooks always exit 0
+
+Claude Code reads a non-zero exit from a hook as a hook error, and exit 2 from a
+`Stop` hook as a BLOCKING error fed back to the model; a hook's stdout is added
+to the model's context (`PostModelSwitch` adds `hook_success` content to the next
+request). So every command we install prints nothing and ends in an
+unconditional `exit 0`: the tty writer runs in a subshell with stderr silenced
+(`AGENT_HUD_TTY_WRITE`), because under dash a failed `>>` redirect exited the
+shell with status 2 and the last command's failure became the hook's status
+(review H3, 2026-10-05). This covered the `Stop` hook already on main.
+`agent-hud-hooks-exit-zero.test.ts` runs every installed command (the status line
+included) under sh, dash, bash and zsh against a tty that cannot be written.
+
+### Which tabs carry the flag
+
+| Tab | Flag | Proof |
+|---|---|---|
+| Launched from the phone | Yes | `agentHudLaunchFlag` on every phone launch |
+| Orca's desktop "new agent" UI | Yes, once the phone has connected, with the Chat UI switch on and no `--settings` of the user's own | The phone writes the flag into Orca's per-agent `agentDefaultArgs` over `settings.update` (`agent-hud-desktop-launch-args.ts`); Orca appends them to every agent it launches |
+| `claude` typed by hand into a shell | No | Nothing the phone can set reaches a terminal it did not create. Claude takes settings from `--settings <file-or-json>` and from files; the only env vars are `CLAUDE_CODE_MANAGED_SETTINGS_PATH` and `CLAUDE_CODE_REMOTE_SETTINGS_PATH`, both paths to a file we would have to write |
+| Windows host | No | See below |
+
+### Windows
+
+No encoding was found that is safe, so `hostTakesAgentHudFlag` stays as it is.
+
+- Claude parses `--settings` with a JSONC parser (comments and trailing commas,
+  double-quoted strings only), so the JSON needs raw double quotes; there is no
+  quote-free form.
+- Windows PowerShell 5.1 drops unescaped inner double quotes when it builds argv
+  for a native program. Escaping them as `\"` fixes 5.1 and breaks PowerShell
+  7.3+, whose native-argument passing escapes them itself, so a `\"` arrives as
+  a literal backslash. One literal cannot be right for both, and the phone cannot
+  know which PowerShell Orca runs.
+- Orca quotes agent arguments for PowerShell with `quotePowerShellLiteral`
+  (single quotes, inner text verbatim). It ships `quotePowerShellNativeArgument`
+  (the `\"` escaping) but uses it for `wsl.exe` only.
+- `--settings` takes a file, but only one that already exists with our content;
+  we may not write one.
+- No `pwsh` is installed on the development machine, so the existing PowerShell
+  harness could not run here. A real Windows machine, with the PowerShell Orca
+  actually uses, is needed to prove any encoding.
+
+### What is NOT a source, and why
+
+- **Claude's settings file** (`modelSettings[<id>].effortLevel ?? effortLevel`,
+  which the `usage-band` mod reads through `$.settings.read()`). Not reachable
+  with nothing installed: `files.read` takes a worktree-relative path (no
+  absolute path, no `..`), `files.readTerminalArtifact` needs a grant for a path
+  that appeared in a terminal's output and only allows temp directories, and the
+  one route left (a background terminal running a reader, above) was removed on
+  2026-09-09 and is forbidden by CLAUDE.md. A default is also not the session's
+  effort: a pick made for the session only is recorded nowhere else. Showing it
+  as fact would be wrong exactly when the user changed it.
+- **The launch argv or env** (`--model`, `--effort`, `CLAUDE_CODE_EFFORT_LEVEL`).
+  The tab snapshot (`RuntimeMobileSessionTerminalTab`) carries `launchAgent`,
+  `startupCwd` and `launchDraft`, no argv and no env.
+- **`effort.level` in hook payloads through Orca.** Orca 1.4.220 forwards neither
+  it nor the model to `agentStatus` for Claude. Our own hooks above read the same
+  input instead.
+- **The request's `"effort":"…"` in the transcript JSONL** (the mod greps it for
+  subagents). Orca's reader publishes `{id, role, blocks, timestamp, source}`
+  only, so it never reaches the phone.
+
+### Wordings read from the transcript rows
+
+Read from the 2.1.289 binary (modelled, not captured from a live session) except
+where marked. A command's output counts only as the row right after its own
+`<command-name>/model|effort|fast</command-name>` envelope; the fallback notice
+has no envelope and is read from `system` rows only: an assistant reply that
+opens with "Switched to X because" is prose, not the harness (review, 2026-10-05).
+
+| Row | Model | Effort |
+|---|---|---|
+| `Set model to \`X\` and saved as your default for new sessions` / `… for this session only` (captured on 2.1.278) | X | null |
+| `… with \`high\` effort` after either (level in backticks, `Jb`; an unwrapped level is read too) | X | the level |
+| `Kept model as \`X\`` | X | kept if it was X's, or set before any model was named |
+| `Current model: \`X\`` [`(this session only)`] [`(effort: high)`] | X | the level, else null |
+| `↯ Fast mode ON · model set to \`X\``, only when `/fast` promoted the model | X | null |
+| `Switched to X due to high demand for Y` / `… because Y is not available` / `… returned an error …` | X | null |
+| `Set effort level to high (…)` (captured on 2.1.278), `Current effort level: high`, `Effort level: auto (currently high)`, `Effort 'max' exceeds the cap …; set to 'high' instead`, `CLAUDE_CODE_EFFORT_LEVEL=high overrides this session`, `… Effort stays high` | unchanged | the level |
+| `Effort level set to auto …` | unchanged | null |
+
+The levels are `low`, `medium`, `high`, `xhigh`, `max`; `auto` is no level.
+
+### Superseded and unseen changes
+
+A model can change with no row the phone parses: the alt+p inline picker, the
+effort-step keys, a resume into a new process. When a reply came after the
+command (`answeredAt`), the scan was taken after that reply (`freshAsOf`) and
+names another model, the scan is newer and the command is dropped, effort
+included (`withSessionCommandPair`). An effort-only command is bound to the model
+the scan read when the phone first saw it (`boundModel`). Row times are the
+host's clock and `freshAsOf` the phone's; the skew is the one
+`resolveClaudeModelFallback` already accepts. The last pair read for a session is
+kept in memory so a reconnect that replaces the ~40 loaded rows does not lose a
+command typed further back. A phone pick not yet confirmed by a scan shows
+nothing, and an older command row does not bring a figure back (2026-09-18).
+
+### Ways the effort changes for one session
+
+| Case | Written where the phone can read it | Source | Status |
+|---|---|---|---|
+| `/model` picker slider, or typed `/model` | stdout row | command row, then the next Stop frame | wording modelled, row shape captured |
+| `/effort <level>` | stdout row | command row, then the next Stop frame | wording modelled, row shape captured |
+| `/effort auto` | stdout row, no level | effort unknown until the next Stop frame | modelled |
+| bare `/effort`, bare `/model` | stdout row | command row | modelled |
+| Ultracode on or off | stdout row (`Effort stays X`) | command row | modelled |
+| `CLAUDE_CODE_EFFORT_LEVEL` set before launch | nothing until the user runs `/effort` | the next Stop frame (the hook input carries the level the session sends) | modelled |
+| `--effort` flag | nothing on the tab snapshot | the next Stop frame | modelled |
+| effort-step keybinding, `ultrathink` | not found writing a row | the next Stop frame | modelled |
+| "Effort unsupported" latch | `effort` leaves the status line and the hook input | a beacon states the model alone | read from the binary |
+| `/fast` promotion, overload fallback | `Fast mode ON · model set to`, `Switched to …` | command row | modelled |
+| alt+p picker, resume into a new process | nothing parsed | the scan, ordered against the command | modelled |
+
+A resume in a new process keeps the SAME session id (verified on 2.1.276 for
+`-c` and `--resume`, `agent-hud-beacon-liveness.ts`), and the model and effort
+can revert to defaults with it. On a tab with the flag the new process's
+`SessionStart` frame names the model and a different one drops the old effort;
+on a tab without it nothing visible marks the resume (no row of its own has been
+seen), so the remembered effort stands until a newer row or beacon. This is a
+known limit, not a proven bug: whether the transcript carries a resume marker
+the phone could read is not established.
+
+A tab with no beacon at all (typed-in, or an untrusted workspace) has only the
+rows. For a case none of them records, the pill shows the model with no effort,
+or nothing; it can still show a stale figure when the change left no row and no
+reply followed the old command (the command stands until a reply and a fresh scan
+say otherwise).
+
+### New sessions
+
+| Session | Before its first prompt | After it |
+|---|---|---|
+| Phone-launched (flag) | `SessionStart` frame: the model; then the status line's pair at its first tick | status line, `Stop` effort |
+| Orca desktop UI (flag, if the phone has synced) | same | same |
+| Typed-in `claude`, no flag | nothing | the scan's model, any command rows |
+| Windows | nothing | the scan's model, any command rows |
+
+### Codex
+
+Not applied. Codex states model and effort in its own footer and rollout, which
+the beacon and screen readers already take.
+
+### A switch while the phone is away, and what survives
+
+The beacon is a stream event: nothing replays it. The phone unsubscribes a tab's
+terminal stream whenever it leaves it (another project, another tab, a
+foreground recovery, a reconnect: `noteAgentHudBeaconListening`), the host's
+snapshot is a rendering of the screen and holds none of the invisible C0 bytes,
+and a frame written meanwhile is lost. What it keeps instead:
+
+- the last beacon per terminal, in memory and, for a relaunch, in the warm-start
+  store (`agent-hud-beacon-warm-start.ts`);
+- the last pair read from the session's own command rows, per session id, in a
+  persisted store (`claude-session-command-pair.ts`, `createPersistedMap`, fail
+  open both ways).
+
+Everything is ordered by the PHONE's clock. A model command outranks the beacon
+only when the phone first saw its row (`seenAt`, set by `sessionCommandPairFor`
+and persisted with the pair) after it last HEARD that beacon (the last arrival,
+repeats included: `getAgentHudBeaconArrivedAt`; for a warm-start record only its
+stored time). The host's row time is never compared with the phone's clock: that
+comparison let an old `/effort` outrank a newer beacon with the phone an hour
+behind (review N2). The scan ordering does compare host row times with the
+scan's phone clock (`freshAsOf`); that is a skew it accepts and this does not.
+The next arrival ends the override, so it lasts until the beacon's next repaint,
+normally 5 s. The hook listens for arrivals only while a command is waiting on
+one (`subscribeAgentHudBeaconArrivals`), so a quiet tab is not re-rendered on
+every repeat.
+
+The race, and its closure (review R1): "first seen after the beacon" is only
+evidence of a switch when the phone saw the command APPEAR, that is, when it
+already held a pair for the session and this one differs. With nothing held for
+the session (first view on this device, the 32-entry eviction, a failed hydrate)
+a command's first sighting says nothing about when it was written, and an OLD row
+loaded after a fresh beacon read as newer than it. So a pair first seen with
+nothing held is stored with `seenAt = -Infinity` and can never outrank a beacon;
+a record kept before the field existed, or whose `-Infinity` came back from JSON
+as null, stays "never" too. An old row seen for the first time therefore no
+longer outranks a live beacon. The cost: in a session never viewed on this device,
+a switch made while away shows only from the beacon's next frame (at most 5 s
+after resubscribing), not from the rows. A late pair is acceptable; a wrong one
+is not.
+
+A command must also add something: a row that states less than the beacon (the
+same model with no effort, "Kept model as" after Esc in the picker, `/effort
+auto`, the same effort) never erases what the live beacon states (review N3). A
+beacon heard after the command wins; a badge on the screen is the present and is
+never outranked. Any
+pair older than a confirmed switch is dropped; one that is merely old, with no
+conflicting evidence, is shown as it was left. It is NOT marked "last seen": the
+same pair is already shown for an idle tab that has not repainted, a mark would
+read as a warning on every healthy idle tab, and the first beacon, normally
+within one repaint, replaces it anyway.
+
+### Switch scenarios
+
+Delays are worst cases. "Status line" is Claude's own refresh: it re-runs on a
+change of `mainLoopModel`, `effortValue` and the other inputs, and on a 5 s timer
+while mounted (`refreshInterval`); read from the binary, not timed on a device.
+
+| Switch | User's state | Source that shows the pair | When |
+|---|---|---|---|
+| desktop `/model`, picker, `/fast`, overload fallback | on the tab | `PostModelSwitch` frame (model), then status line (effort) | model at once; effort within the status line's repaint, at most 5 s |
+| desktop `/effort`, effort keys | on the tab | status line, else the command row, else the next Stop frame | repaint, at most 5 s; with no status line, the row at once, else the next turn end |
+| phone picker | on the tab | same as the desktop, plus the phone's own pick rule (nothing shown until a scan confirms) | as above |
+| any switch | other project / other tab | frames are lost; on return the command row (newer than the held beacon) | when the chat loads; then the first beacon, at most 5 s after resubscribing |
+| any switch, no row (alt+p picker, effort keys, resume) | other project | the first beacon after return | at most 5 s after resubscribing; until then the last pair is shown |
+| any switch | app backgrounded | as other project | as above |
+| any switch | app killed | warm-start beacon and the persisted command pair, then rows, then the first beacon | rows on open; beacon at most 5 s after |
+| any switch | no flag (typed-in, untrusted workspace, Windows) | command rows only | when the chat loads or the row arrives |

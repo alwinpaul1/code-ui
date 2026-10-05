@@ -5,6 +5,7 @@ import { hydrateNativeChatImagePreviewCache } from './mobile-native-chat-image-p
 import { hydrateWaitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 import { hydrateSessionTabsCache } from './mobile-session-tabs-cache'
 import { hydrateNativeChatKeptSessions } from './native-chat-kept-session-store'
+import { hydrateSessionCommandPairs } from './claude-session-command-pair'
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 
 /** Load the persisted project caches once at app start, before any project opens. */
@@ -26,6 +27,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateNativeChatKeptSessions(),
     // Why: the loop prompts a session showed, so a tick whose loop call is
     // not on the first page loaded draws no bubble (scheduled-prompt-memory).
-    hydrateScheduledPromptMemory()
+    hydrateScheduledPromptMemory(),
+    // Why: the model and effort a session last said through /model and /effort,
+    // so a project left or an app killed shows them on return (claude-session-command-pair).
+    hydrateSessionCommandPairs()
   ]).then(() => undefined)
 }

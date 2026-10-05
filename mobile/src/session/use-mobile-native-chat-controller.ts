@@ -31,7 +31,7 @@ import { useMobileNativeChatDraftMirror } from './use-mobile-native-chat-draft-m
 import { nativeChatHudPhase, useMobileNativeChatHud } from './use-mobile-native-chat-hud'
 import { reportedModelPair } from './mobile-chat-reported-model'
 import { useClaudeTranscriptModel } from './use-claude-transcript-model'
-import { claudeModelPillPair } from './claude-transcript-model'
+import { claudeModelPillPair, claudeReportedOverLive } from './claude-transcript-model'
 import { useMobilePermissionRefresh } from './use-mobile-permission-refresh'
 import { resolveObservedPermission, terminalPromptWait, withTerminalDialogOptions } from './mobile-terminal-permission-options-merge'
 import { useActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
@@ -200,11 +200,12 @@ export function useMobileNativeChatController(
     agentStatus: activeChatAgentStatus
   })
   // Model and effort as one pair, from one source; see the module's comment.
-  const claudeReported = reportedModelPair(liveHud, activeChatAgentStatus)
+  const claudeLive = reportedModelPair(liveHud, activeChatAgentStatus)
   // No beacon and no badge (a Windows host, a tab launched before the flag): what the transcript last answered with.
-  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeReported.model, beacon: hudBeacon !== null, agentWorking: nativeChatAgentWorking })
-  const isCodexChat = activeChatResolution?.agent === 'codex'
-  const isOmpChat = activeChatResolution?.agent === 'omp'
+  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeLive.model, beacon: hudBeacon !== null, beaconHandle: activeHandle, beaconStoredAt: hudObservation?.modelId && hudObservation.modelId !== hudBeacon?.modelId ? null : (hudBeacon?.receivedAt ?? null), liveEffort: claudeLive.effort, agentWorking: nativeChatAgentWorking, messages: nativeChatSession.messages })
+  // A model command written after the beacon last heard is newer than it (a switch made while the phone was away).
+  const claudeReported = claudeReportedOverLive(claudeLive, transcriptModel.fallback)
+  const isCodexChat = activeChatResolution?.agent === 'codex', isOmpChat = activeChatResolution?.agent === 'omp'
   // The agent's footer counts its shells live, and the completions it has
   // stated there name WHICH shell ended (the only source of that on a
   // hand-started tab, 2026-09-20). Folded into the beacon-built report with

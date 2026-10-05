@@ -3,7 +3,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { getPendingModelPick } from './mobile-native-chat-model-report-authority'
-import { resolveClaudeModelFallback, type ClaudeModelFallback } from './claude-transcript-model'
+import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
+import { getAgentHudBeaconArrivedAt, subscribeAgentHudBeaconArrivals } from './agent-hud-beacon'
+import { sessionCommandPairFor } from './claude-session-command-pair'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   peekClaudeTranscriptModel,
   requestClaudeTranscriptModelScan,
@@ -70,9 +73,22 @@ export function useClaudeTranscriptModel(args: {
   liveModel: string | null
   /** This session's beacon has been heard. */
   beacon: boolean
+  /** The terminal whose beacon states the live pair; its last ARRIVAL is read
+   *  here (repeats included), and the hook listens for arrivals only while a
+   *  model command is waiting to be outranked by one. */
+  beaconHandle?: string | null
+  /** When the live pair was last stored (the phone's clock): a warm-start
+   *  record has no arrival this run. Null when a badge on the screen speaks,
+   *  which is the present and is never outranked. */
+  beaconStoredAt?: number | null
+  /** The effort the live pair states. */
+  liveEffort?: string | null
   agentWorking: boolean
+  /** The session's rows: its own /model and /effort output lies over the scan
+   *  (claude-session-command-pair.ts). Absent: none. */
+  messages?: readonly NativeChatMessage[]
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, agentWorking } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
@@ -142,7 +158,33 @@ export function useClaudeTranscriptModel(args: {
     : null
 
   const transcript = quiet && sessionId ? peekClaudeTranscriptModel(hostId, sessionId) : null
-  const next = quiet ? resolveClaudeModelFallback({ liveModel, transcript, pick }) : NONE
+  const base = quiet ? resolveClaudeModelFallback({ liveModel, transcript, pick }) : NONE
+  // Read whenever the chat is a Claude one, beacon or not: the pair is kept for
+  // the session, so it is there once the beacon has gone.
+  const command = useMemo(
+    () => (enabled && sessionId && messages ? sessionCommandPairFor(sessionId, messages, liveModel ?? transcript?.model ?? null) : null),
+    [enabled, messages, sessionId, transcript, liveModel]
+  )
+  // The last time the beacon was heard. Listened to only while a command is
+  // waiting on the next arrival (it ends the override), so a quiet tab is not
+  // re-rendered on every repeat.
+  const [arrivedAt, setArrivedAt] = useState<number | null>(() => getAgentHudBeaconArrivedAt(beaconHandle ?? null))
+  const heardAt = beaconStoredAt === null || beaconStoredAt === undefined ? null : (arrivedAt ?? beaconStoredAt)
+  const waiting = command?.seenAt !== undefined && heardAt !== null && command.seenAt > heardAt
+  useEffect(() => {
+    setArrivedAt(getAgentHudBeaconArrivedAt(beaconHandle ?? null))
+    if (!waiting) {
+      return undefined
+    }
+    return subscribeAgentHudBeaconArrivals(() => setArrivedAt(getAgentHudBeaconArrivedAt(beaconHandle ?? null)))
+  }, [waiting, beaconHandle])
+  // A pick of the phone's own that no scan has confirmed yet shows nothing, and
+  // an older command row must not bring a figure back (2026-09-18's rule).
+  const next = quiet
+    ? pick && base.kind === 'none'
+      ? base
+      : withSessionCommandPair(base, command)
+    : commandOverBeacon(command, liveModel, heardAt, liveEffort ?? null)
   // The same answer keeps the same object: the option controller memoizes the
   // pickers' props on it, and a fresh object every render would rebuild them.
   const key = JSON.stringify(next)

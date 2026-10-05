@@ -3,6 +3,7 @@
 import { Buffer } from 'buffer'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { readHudLaunchFlags, withOurFlagLast } from './agent-hud-launch-flag-owner'
+import { CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, CLAUDE_HUD_SESSION_START_HOOK_SCRIPT } from './agent-hud-session-start-hook-script'
 import { AGENT_HUD_TTY_WRITE, ENCODE_FN } from './agent-hud-tty-write'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-prompt-hook-script'
 
@@ -543,8 +544,18 @@ export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   // `sid`: the session this list belongs to; see the status line. Only an id's
   // own characters, so a stray quote or space can never break the grammar.
   'si=$(printf %s "$i" | sed -nE "s/.*\\"session_id\\"[[:space:]]*:[[:space:]]*\\"([A-Za-z0-9._-]+)\\".*/\\\\1/p" | head -n 1)',
-  'o="CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}"',
-  ...AGENT_HUD_TTY_WRITE
+  // `effort`: Stop's input is built with a tool context, which is what makes
+  // Claude Code add `effort:{level}` to it (2.1.289, function `rd`; absent for
+  // a model that takes none, and no `effort` key means no `effort=` field, never
+  // a guess). A quoted copy inside `last_assistant_message` is JSON-escaped
+  // (`\"effort\"`) and cannot match. This is how a pick made for the session
+  // only, which no settings file records, reaches the phone without a status
+  // line: the next Stop says what the session now sends.
+  'ef=$(printf %s "$i" | LC_ALL=C sed -nE "s/.*\\"effort\\":\\{\\"level\\":\\"([a-z]+)\\"\\}.*/\\1/p" | head -n 1)',
+  'o="CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}${ef:+ effort=$ef}"',
+  ...AGENT_HUD_TTY_WRITE,
+  // Exit 2 from a Stop hook is a blocking error fed back to the model.
+  'exit 0'
 ].join('; ')
 
 /**
@@ -623,6 +634,20 @@ export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null 
     // agent IS, the Stop hook says what it still has running. Both ride the
     // same --settings flag, so the host still gains no file and no config.
     hooks: {
+      // The model a session starts on, before any prompt or status-line tick.
+      // POSIX hosts only: it is an sh script, and a Windows host takes no
+      // flag at all (hostTakesAgentHudFlag).
+      ...(hostPlatform === 'win32'
+        ? {}
+        : {
+            SessionStart: [
+              { hooks: [{ type: 'command', command: CLAUDE_HUD_SESSION_START_HOOK_SCRIPT }] }
+            ],
+            // A switch made mid-session, from the desktop or the phone.
+            PostModelSwitch: [
+              { hooks: [{ type: 'command', command: CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT }] }
+            ]
+          }),
       Stop: [
         {
           hooks: [

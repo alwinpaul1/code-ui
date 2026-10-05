@@ -289,6 +289,39 @@ function sessionChanged(previous: AgentHudBeacon, next: AgentHudBeacon): boolean
   return next.sessionId !== null && previous.sessionId !== null && next.sessionId !== previous.sessionId
 }
 
+/**
+ * What the two hook frames add to the pair the status line states.
+ *
+ * Claude Code's `SessionStart` input names the model and carries no effort;
+ * `Stop` carries the effort and no model (agent-hud-session-start-hook-script.ts
+ * says where each fact was read). Neither frame carries the agent's own name
+ * for the model, which only the status line sends (`name=`, always beside a
+ * model). So:
+ *  - a frame naming a model with no `name=` and no `effort=` is a SessionStart.
+ *    For the SAME model it must not blank the name and effort the status line
+ *    stated; for another model the old effort is that model's, so it goes.
+ *  - a frame with an `effort=` and no model is a Stop. The effort is the
+ *    session's now, whichever model is held, so it lands on the held pair. With
+ *    no pair held it is kept without a model, and drawn by nobody until a
+ *    model arrives: an effort alone says nothing about a model.
+ * A status-line frame (it always carries `name=` with its model) is the whole
+ * pair and replaces both, as before. The newest frame wins in every case.
+ */
+function pairFromHookFrame(
+  previous: AgentHudBeacon,
+  beacon: AgentHudBeacon
+): Partial<AgentHudBeacon> {
+  const namesModel = beacon.modelId !== null || beacon.modelLabel !== null
+  if (!namesModel) {
+    return beacon.effort === null ? {} : { effort: beacon.effort }
+  }
+  const sessionStart = beacon.modelLabel === null && beacon.effort === null
+  if (sessionStart && (previous.modelId === beacon.modelId || previous.modelId === null)) {
+    return { modelLabel: previous.modelLabel, effort: previous.effort }
+  }
+  return {}
+}
+
 function publish(handle: string, payload: string): void {
   const beacon = parseAgentHudBeaconPayload(payload)
   if (!beacon) {
@@ -296,6 +329,9 @@ function publish(handle: string, payload: string): void {
   }
   // Every arrival, repeats included: the process is painting.
   arrivals.set(handle, beacon.receivedAt)
+  for (const listener of arrivalListeners) {
+    listener()
+  }
   // Why merge: two beacons describe one tab. The status line says what the
   // agent IS (model, effort, context) on every repaint; the Stop hook says
   // what it still has RUNNING, and carries none of the rest. Replacing
@@ -309,6 +345,7 @@ function publish(handle: string, payload: string): void {
     ? {
         ...previous,
         ...(beacon.modelId !== null || beacon.modelLabel !== null ? beacon : {}),
+        ...pairFromHookFrame(previous, beacon),
         sessionId: beacon.sessionId ?? previous.sessionId,
         heartbeatSeconds: beacon.heartbeatSeconds ?? previous.heartbeatSeconds,
         runningTaskIds: beacon.runningTaskIds ?? previous.runningTaskIds,
@@ -432,6 +469,18 @@ export function getAgentHudBeacon(handle: string | null): AgentHudBeacon | null 
  *  Read from a timer or effect, never subscribed to — it moves on every
  *  repaint, and waking every reader for a repeat is the cost `unchangedBeacon`
  *  exists to avoid. */
+const arrivalListeners = new Set<() => void>()
+
+/** Calls `listener` on EVERY arrival, repeats included. Only for a reader that
+ *  is waiting on one specific arrival and unsubscribes at once: waking every
+ *  reader on every repeat is the cost `unchangedBeacon` exists to avoid. */
+export function subscribeAgentHudBeaconArrivals(listener: () => void): () => void {
+  arrivalListeners.add(listener)
+  return () => {
+    arrivalListeners.delete(listener)
+  }
+}
+
 export function getAgentHudBeaconArrivedAt(handle: string | null): number | null {
   return handle ? (arrivals.get(handle) ?? null) : null
 }

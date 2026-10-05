@@ -209,7 +209,7 @@ export function useMobileNativeChatSessionOptionController(args: {
               modelsPending: codex.modelsPending,
               liveModel:
                 !reportedModel && transcriptModel?.kind === 'transcript'
-                  ? { model: transcriptModel.model.model, label: transcriptModel.model.label, effort: null }
+                  ? { model: transcriptModel.model.model, label: transcriptModel.model.label, effort: transcriptModel.effort ?? null }
                   : { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null },
               onOpen: onModelSheetOpen
             }
