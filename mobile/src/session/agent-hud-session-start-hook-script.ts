@@ -33,7 +33,9 @@ function modelFrameHook(key: string): string {
     '[ -n "$md" ] || exit 0',
     'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
     'o="CUIHUD1 agent=claude${si:+ sid=$si} model=$md"',
-    ...AGENT_HUD_TTY_WRITE
+    ...AGENT_HUD_TTY_WRITE,
+    // Whatever the write did: a hook that exits non-zero is a hook error.
+    'exit 0'
   ].join('; ')
 }
 

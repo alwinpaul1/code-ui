@@ -553,7 +553,9 @@ export const CLAUDE_HUD_STOP_HOOK_SCRIPT = [
   // line: the next Stop says what the session now sends.
   'ef=$(printf %s "$i" | LC_ALL=C sed -nE "s/.*\\"effort\\":\\{\\"level\\":\\"([a-z]+)\\"\\}.*/\\1/p" | head -n 1)',
   'o="CUIHUD1 agent=claude${si:+ sid=$si} run=${rn%,}${ef:+ effort=$ef}"',
-  ...AGENT_HUD_TTY_WRITE
+  ...AGENT_HUD_TTY_WRITE,
+  // Exit 2 from a Stop hook is a blocking error fed back to the model.
+  'exit 0'
 ].join('; ')
 
 /**
