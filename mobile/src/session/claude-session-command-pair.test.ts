@@ -110,6 +110,20 @@ describe("a session's own /model and /effort output", () => {
     ).toMatchObject({ label: 'Sonnet 5', effort: null })
   })
 
+  // Review N1: the harness's notice is a `system` row. An assistant reply that
+  // happens to open the same way is prose, and was persisted and won.
+  it('does not read an assistant reply that opens like the overload notice', () => {
+    expect(
+      pair(ran('model', 'Set model to `Opus 5.5` for this session only with `high` effort')).label
+    ).toBe('Opus 5.5')
+    expect(
+      sessionCommandPair([
+        ...ran('model', 'Set model to `Opus 5.5` for this session only with `high` effort'),
+        row('assistant', 'assistant', 'Switched to Sonnet 5 because the config pins it; see settings.json.')
+      ])
+    ).toMatchObject({ label: 'Opus 5.5', effort: 'high' })
+  })
+
   it('does not read a user turn that quotes the overload wording', () => {
     expect(sessionCommandPair([row('u', 'user', 'Switched to Sonnet 5 due to high demand for Opus 5.5')])).toBeNull()
   })

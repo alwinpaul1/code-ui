@@ -12,7 +12,8 @@ describe('the model pills read the fallback with the session command pair laid o
   it('feeds the chat rows and the beacon time to the fallback hook, which every pill reads', () => {
     const controller = code('./use-mobile-native-chat-controller.ts')
     expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*messages: nativeChatSession\.messages \}\)/)
-    expect(controller).toMatch(/beaconReceivedAt: [^,]*hudBeacon\?\.receivedAt/)
+    expect(controller).toMatch(/beaconHandle: activeHandle, beaconStoredAt: [^,]*hudBeacon\?\.receivedAt/)
+    expect(controller).toMatch(/liveEffort: claudeLive\.effort/)
     expect(controller).toMatch(/liveModel: claudeLive\.model/)
   })
   it('reads the pill from the live pair with a newer model command laid over it', () => {
@@ -25,7 +26,7 @@ describe('the model pills read the fallback with the session command pair laid o
     expect(hook).toMatch(/withSessionCommandPair\(base, command\)/)
     expect(hook).toMatch(/enabled && sessionId && messages \? sessionCommandPairFor\(/)
     expect(hook).toMatch(/pick && base\.kind === 'none'/)
-    expect(hook).toMatch(/: commandOverBeacon\(command, liveModel, beaconReceivedAt \?\? null\)/)
+    expect(hook).toMatch(/: commandOverBeacon\(command, liveModel, heardAt, liveEffort \?\? null\)/)
   })
   it('lets the composer sheet draw the effort the fallback carries', () => {
     expect(code('./use-mobile-native-chat-session-option-controller.ts')).toMatch(

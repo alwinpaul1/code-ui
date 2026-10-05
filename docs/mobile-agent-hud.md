@@ -1072,6 +1072,19 @@ execution - workspace trust not accepted" beside "Status line command skipped:
 workspace trust not accepted"). They add coverage where the status line is not
 mounted yet or has not ticked, never where it is switched off.
 
+### Hooks always exit 0
+
+Claude Code reads a non-zero exit from a hook as a hook error, and exit 2 from a
+`Stop` hook as a BLOCKING error fed back to the model; a hook's stdout is added
+to the model's context (`PostModelSwitch` adds `hook_success` content to the next
+request). So every command we install prints nothing and ends in an
+unconditional `exit 0`: the tty writer runs in a subshell with stderr silenced
+(`AGENT_HUD_TTY_WRITE`), because under dash a failed `>>` redirect exited the
+shell with status 2 and the last command's failure became the hook's status
+(review H3, 2026-10-05). This covered the `Stop` hook already on main.
+`agent-hud-hooks-exit-zero.test.ts` runs every installed command (the status line
+included) under sh, dash, bash and zsh against a tty that cannot be written.
+
 ### Which tabs carry the flag
 
 | Tab | Flag | Proof |
@@ -1128,7 +1141,8 @@ No encoding was found that is safe, so `hostTakesAgentHudFlag` stays as it is.
 Read from the 2.1.289 binary (modelled, not captured from a live session) except
 where marked. A command's output counts only as the row right after its own
 `<command-name>/model|effort|fast</command-name>` envelope; the fallback notice
-has no envelope and is read from `system` and `assistant` rows only.
+has no envelope and is read from `system` rows only: an assistant reply that
+opens with "Switched to X because" is prose, not the harness (review, 2026-10-05).
 
 | Row | Model | Effort |
 |---|---|---|
@@ -1173,6 +1187,15 @@ nothing, and an older command row does not bring a figure back (2026-09-18).
 | `/fast` promotion, overload fallback | `Fast mode ON · model set to`, `Switched to …` | command row | modelled |
 | alt+p picker, resume into a new process | nothing parsed | the scan, ordered against the command | modelled |
 
+A resume in a new process keeps the SAME session id (verified on 2.1.276 for
+`-c` and `--resume`, `agent-hud-beacon-liveness.ts`), and the model and effort
+can revert to defaults with it. On a tab with the flag the new process's
+`SessionStart` frame names the model and a different one drops the old effort;
+on a tab without it nothing visible marks the resume (no row of its own has been
+seen), so the remembered effort stands until a newer row or beacon. This is a
+known limit, not a proven bug: whether the transcript carries a resume marker
+the phone could read is not established.
+
 A tab with no beacon at all (typed-in, or an untrusted workspace) has only the
 rows. For a case none of them records, the pill shows the model with no effort,
 or nothing; it can still show a stale figure when the change left no row and no
@@ -1207,12 +1230,25 @@ and a frame written meanwhile is lost. What it keeps instead:
   persisted store (`claude-session-command-pair.ts`, `createPersistedMap`, fail
   open both ways).
 
-Everything is ordered by time. A model command written after the beacon last
-heard (`command.at > beacon.receivedAt`; the host's clock against the phone's,
-the skew the scan ordering already accepts) outranks it (`commandOverBeacon`,
-`claudeReportedOverLive`), so a switch made on the desktop while the phone was
-elsewhere shows from the rows the moment the chat loads. A beacon newer than the
-command wins; a badge on the screen is the present and is never outranked. Any
+Everything is ordered by the PHONE's clock. A model command outranks the beacon
+only when the phone first saw its row (`seenAt`, set by `sessionCommandPairFor`
+and persisted with the pair) after it last HEARD that beacon (the last arrival,
+repeats included: `getAgentHudBeaconArrivedAt`; for a warm-start record only its
+stored time). The host's row time is never compared with the phone's clock: that
+comparison let an old `/effort` outrank a newer beacon with the phone an hour
+behind (review N2). The scan ordering does compare host row times with the
+scan's phone clock (`freshAsOf`); that is a skew it accepts and this does not.
+The next arrival ends the override, so it lasts until the beacon's next repaint,
+normally 5 s. The hook listens for arrivals only while a command is waiting on
+one (`subscribeAgentHudBeaconArrivals`), so a quiet tab is not re-rendered on
+every repeat. The race it leaves: a beacon that arrives before the rows load,
+with an old command in them, lets that command show for one repaint.
+
+A command must also add something: a row that states less than the beacon (the
+same model with no effort, "Kept model as" after Esc in the picker, `/effort
+auto`, the same effort) never erases what the live beacon states (review N3). A
+beacon heard after the command wins; a badge on the screen is the present and is
+never outranked. Any
 pair older than a confirmed switch is dropped; one that is merely old, with no
 conflicting evidence, is shown as it was left. It is NOT marked "last seen": the
 same pair is already shown for an idle tab that has not repainted, a mark would

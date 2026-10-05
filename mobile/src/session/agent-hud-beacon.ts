@@ -329,6 +329,9 @@ function publish(handle: string, payload: string): void {
   }
   // Every arrival, repeats included: the process is painting.
   arrivals.set(handle, beacon.receivedAt)
+  for (const listener of arrivalListeners) {
+    listener()
+  }
   // Why merge: two beacons describe one tab. The status line says what the
   // agent IS (model, effort, context) on every repaint; the Stop hook says
   // what it still has RUNNING, and carries none of the rest. Replacing
@@ -466,6 +469,18 @@ export function getAgentHudBeacon(handle: string | null): AgentHudBeacon | null 
  *  Read from a timer or effect, never subscribed to — it moves on every
  *  repaint, and waking every reader for a repeat is the cost `unchangedBeacon`
  *  exists to avoid. */
+const arrivalListeners = new Set<() => void>()
+
+/** Calls `listener` on EVERY arrival, repeats included. Only for a reader that
+ *  is waiting on one specific arrival and unsubscribes at once: waking every
+ *  reader on every repeat is the cost `unchangedBeacon` exists to avoid. */
+export function subscribeAgentHudBeaconArrivals(listener: () => void): () => void {
+  arrivalListeners.add(listener)
+  return () => {
+    arrivalListeners.delete(listener)
+  }
+}
+
 export function getAgentHudBeaconArrivedAt(handle: string | null): number | null {
   return handle ? (arrivals.get(handle) ?? null) : null
 }

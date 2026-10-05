@@ -60,6 +60,10 @@ export type SessionCommandPair = {
   /** The model id an effort-only command was read under (the scan's model at
    *  the time), so a later scan naming another model can drop it. */
   boundModel?: string | null
+  /** When the PHONE first saw this command's row (its own clock), set by
+   *  `sessionCommandPairFor`. The host's row time is never compared with the
+   *  phone's clock; this is what orders a command against a beacon. */
+  seenAt?: number
 }
 
 const LEVEL = '(low|medium|high|xhigh|max)'
@@ -139,9 +143,10 @@ export function sessionCommandPair(messages: readonly NativeChatMessage[]): Sess
         change = readOutput(body, pair)
       }
     }
-    if (change === null && message.role !== 'user') {
-      // The harness's own notice of a fallback: not a command's output, and
-      // never a user's word, so a user turn quoting it is skipped above.
+    if (change === null && message.role === 'system') {
+      // The harness's own notice of a fallback: a `system` row only. Assistant
+      // text that happens to open with "Switched to X because" is the model's
+      // prose, never the harness's (review N1, 2026-10-05).
       const fallback = FALLBACK.exec(textOf(message).replace(ANSI, '').trim())?.[1]?.trim()
       change = fallback ? { label: fallback, effort: null } : null
     }
@@ -202,6 +207,11 @@ export function sessionCommandPairFor(
   }
   const held = lastPairBySession.get(sessionId)
   let pair = fresh
+  if (pair !== null) {
+    // First seen now unless it is the same command already held.
+    const sameAsHeld = held !== undefined && held.at === pair.at && held.label === pair.label && held.effort === pair.effort
+    pair = { ...pair, seenAt: sameAsHeld ? (held.seenAt ?? Date.now()) : Date.now() }
+  }
   if (pair !== null && held && held.at !== null && pair.at !== null && held.at > pair.at) {
     // Rows older than the pair already kept (a cached page shown first).
     pair = held

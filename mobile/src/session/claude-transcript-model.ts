@@ -247,24 +247,45 @@ export function claudeIdFromLabel(label: string): string | null {
   return match ? `claude-${match[1]!.toLowerCase()}-${match[2]}${match[3] === undefined ? '' : `-${match[3]}`}` : null
 }
 
-/** The fallback that outranks a live beacon, or none: the latest model command
- *  when it was written after the beacon, and applies to the model that beacon
- *  names (an effort-only command read under another model does not). */
+/**
+ * The fallback that outranks a live beacon, or none.
+ *
+ * A model command outranks the beacon only when the phone first saw its row
+ * (`seenAt`) AFTER it last heard that beacon (`heardAt`, the last arrival,
+ * repeats included, or for a warm-start record its stored time): both are the
+ * phone's own clock, so host clock skew cannot order them (review N2,
+ * 2026-10-05), and a beacon that has not CHANGED but is still speaking has
+ * still been heard (review N3). The next arrival ends the override, so it never
+ * outlives the beacon's next repaint, normally within 5 s.
+ *
+ * It must also add something. A row that states less than the beacon (the same
+ * model with no effort, "Kept model as" after Esc in the picker, `/effort
+ * auto`, the same effort) never erases what the live beacon states.
+ */
 export function commandOverBeacon(
   command: SessionCommandPair | null,
   liveModel: string | null,
-  beaconReceivedAt: number | null
+  heardAt: number | null,
+  liveEffort: string | null
 ): ClaudeModelFallback {
-  if (!command || command.at === null || beaconReceivedAt === null || liveModel === null || command.at <= beaconReceivedAt) {
-    return { kind: 'none' }
+  const none: ClaudeModelFallback = { kind: 'none' }
+  if (!command || command.seenAt === undefined || heardAt === null || liveModel === null || command.seenAt <= heardAt) {
+    return none
   }
   const id = command.label === null ? liveModel : claudeIdFromLabel(command.label)
-  if (id === null || (command.label === null && command.boundModel != null && modelsDiffer(command.boundModel, liveModel))) {
-    return { kind: 'none' }
+  if (id === null) {
+    return none
+  }
+  if (command.label === null && command.boundModel != null && modelsDiffer(command.boundModel, liveModel)) {
+    return none
+  }
+  const sameModel = !modelsDiffer(id, liveModel)
+  if (sameModel && (command.effort === null || command.effort === liveEffort)) {
+    return none
   }
   return {
     kind: 'transcript',
-    model: { model: id, label: command.label === null ? '' : (claudeTranscriptModelName(id) ?? command.label) },
+    model: { model: id, label: command.label === null || sameModel ? '' : (claudeTranscriptModelName(id) ?? command.label) },
     effort: command.effort,
     outranksLive: true
   }
