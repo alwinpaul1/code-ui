@@ -1,4 +1,5 @@
 import type { AgentHudBeacon } from './agent-hud-beacon'
+import { claudeTranscriptModelName } from './claude-transcript-model'
 import { NO_SCREEN_HUD_OBSERVATION, shortTokenLabel } from './hud-agent-status-fields'
 import type { TerminalHudObservation } from './mobile-terminal-hud-parse'
 
@@ -74,7 +75,7 @@ export function applyAgentHudBeaconFields(
     // — the same defect as "Opus Medium" on an Opus xhigh session, one field
     // over. A beacon that names a model either way owns both halves.
     ...(beaconNamesModel
-      ? { modelLabel: beacon.modelLabel ?? beacon.modelId ?? '', modelId: beacon.modelId }
+      ? { modelLabel: beacon.modelLabel ?? beaconModelName(beacon), modelId: beacon.modelId }
       : { modelLabel: base.modelLabel, modelId: base.modelId }),
     // A beacon that NAMES a model speaks for the effort beside it too, null
     // included. Falling back to the base was how a launch-time effort got
@@ -126,4 +127,10 @@ export function agentHudBeaconSpeaksFor(
   sessionId: string | null
 ): boolean {
   return sessionId !== null && beacon.sessionId === sessionId
+}
+
+/** A frame that names only the id (a SessionStart hook) is named the way the
+ *  transcript's id is: "Opus 5.5" for `claude-opus-5-5`, never the raw id. */
+function beaconModelName(beacon: AgentHudBeacon): string {
+  return beacon.modelId === null ? '' : (claudeTranscriptModelName(beacon.modelId) ?? beacon.modelId)
 }

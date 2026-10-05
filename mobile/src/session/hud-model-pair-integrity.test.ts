@@ -71,7 +71,9 @@ describe('the model id and the name it is shown under', () => {
       beacon({ modelId: 'claude-sonnet-5', effort: 'high' })
     )
     expect(merged?.modelId).toBe('claude-sonnet-5')
-    expect(merged?.modelLabel).toBe('claude-sonnet-5')
+    // A frame that names only the id (a SessionStart hook) is named as the
+    // transcript names an id, never the raw id and never the previous name.
+    expect(merged?.modelLabel).toBe('Sonnet 5')
   })
 
   it('takes both from the beacon when it states both', () => {
