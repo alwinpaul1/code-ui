@@ -133,7 +133,8 @@ describe('which model the pill states when there is no live pair', () => {
   it('states the transcript model when nothing else speaks', () => {
     expect(resolveClaudeModelFallback({ liveModel: null, transcript, pick: null })).toEqual({
       kind: 'transcript',
-      model: { model: 'claude-opus-5-5', label: 'Opus 5.5' }
+      model: { model: 'claude-opus-5-5', label: 'Opus 5.5' },
+      freshAsOf: transcript.freshAsOf
     })
   })
 
@@ -155,7 +156,7 @@ describe('which model the pill states when there is no live pair', () => {
         transcript: { ...transcript, freshAsOf: 2_000 },
         pick: { settledAt: 2_000 }
       })
-    ).toEqual({ kind: 'transcript', model: { model: 'claude-opus-5-5', label: 'Opus 5.5' } })
+    ).toEqual({ kind: 'transcript', model: { model: 'claude-opus-5-5', label: 'Opus 5.5' }, freshAsOf: 2_000 })
   })
 
   it('shows nothing when the scan after a pick does not list the session', () => {

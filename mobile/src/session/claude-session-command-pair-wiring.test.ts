@@ -14,8 +14,9 @@ describe('the model pills read the fallback with the session command pair laid o
   })
   it('lays the pair over the resolved fallback and never over a live pair or a bare chat', () => {
     const hook = code('./use-claude-transcript-model.ts')
-    expect(hook).toMatch(/quiet \? withSessionCommandPair\(resolveClaudeModelFallback\(/)
-    expect(hook).toMatch(/quiet && messages \? sessionCommandPair\(messages\) : null/)
+    expect(hook).toMatch(/withSessionCommandPair\(base, command\)/)
+    expect(hook).toMatch(/quiet && messages \? sessionCommandPairFor\(/)
+    expect(hook).toMatch(/!\(pick && base\.kind === 'none'\)/)
   })
   it('lets the composer sheet draw the effort the fallback carries', () => {
     expect(code('./use-mobile-native-chat-session-option-controller.ts')).toMatch(

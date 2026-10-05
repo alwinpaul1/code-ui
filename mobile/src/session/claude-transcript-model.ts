@@ -47,6 +47,8 @@ export type ClaudeModelFallback =
        *  (claude-session-command-pair.ts); absent: nobody has said. The
        *  transcript's own reading records none. */
       effort?: string | null
+      /** How recent a transcript the model was read from (the phone's clock). */
+      freshAsOf?: number
     }
 
 // Claude Code's ids put the family first (`claude-opus-5-5`, with a date or a
@@ -150,7 +152,11 @@ export function resolveClaudeModelFallback(input: {
   if (pick && (pick.settledAt === null || transcript.freshAsOf < pick.settledAt)) {
     return { kind: 'none' }
   }
-  return { kind: 'transcript', model: { model: transcript.model, label: transcript.label } }
+  return {
+    kind: 'transcript',
+    model: { model: transcript.model, label: transcript.label },
+    freshAsOf: transcript.freshAsOf
+  }
 }
 
 /**
@@ -169,15 +175,23 @@ export function claudeModelPillPair(
 }
 
 /**
- * The fallback with what the session itself said through `/model` and
- * `/effort` laid over it. Used only when there is no live pair: the beacon and
- * the badge are applied by the caller first and always win.
+ * The fallback with what the session itself said through `/model`, `/effort`,
+ * `/fast` and the harness's fallback notice laid over it. Used only when there
+ * is no live pair: the beacon and the badge are applied by the caller first and
+ * always win.
  *
- * - A `/model` switch names the model: its own word beats the transcript's
- *   reading, which may predate the switch. The effort is the one its output
- *   stated, or null; never the effort of the model before it.
- * - An effort-only command belongs to the model the transcript reads. With no
- *   model at all there is nothing to attach it to, so it is dropped.
+ * - A model command names the model: its own word beats a scan that predates
+ *   it. The effort is the one its output stated, or null; never the effort of
+ *   the model before it.
+ * - An effort-only command belongs to the model it was read under
+ *   (`boundModel`), else to the model the scan reads.
+ * - SUPERSEDED: a model can change with no row the phone parses (the alt+p
+ *   picker, the effort-step keys, a resume into a new process). When a reply
+ *   came after the command (`answeredAt`), the scan was taken after that reply
+ *   (`freshAsOf`) and it names another model, the scan is newer and the command
+ *   is dropped, effort included. Without a reply after it, nothing could have
+ *   changed the model and the command stands. Row times are the host's clock and
+ *   `freshAsOf` the phone's, the same skew `resolveClaudeModelFallback` accepts.
  * - A label this cannot map to an id (`Opus 4.8.5`) is not guessed at.
  */
 export function withSessionCommandPair(
@@ -187,19 +201,45 @@ export function withSessionCommandPair(
   if (!command) {
     return fallback
   }
-  const id = command.label === null ? null : claudeIdFromLabel(command.label)
-  if (command.label !== null && id !== null) {
-    return { kind: 'transcript', model: { model: id, label: command.label }, effort: command.effort }
+  const commandId = command.label === null ? (command.boundModel ?? null) : claudeIdFromLabel(command.label)
+  if (command.label !== null && commandId === null) {
+    return fallback
   }
-  if (fallback.kind === 'transcript' && command.label === null) {
+  if (
+    fallback.kind === 'transcript' &&
+    commandId !== null &&
+    modelsDiffer(fallback.model.model, commandId) &&
+    command.answeredAt !== null &&
+    fallback.freshAsOf !== undefined &&
+    command.answeredAt <= fallback.freshAsOf
+  ) {
+    return fallback
+  }
+  if (command.label !== null && commandId !== null) {
+    return {
+      kind: 'transcript',
+      model: { model: commandId, label: claudeTranscriptModelName(commandId) ?? command.label },
+      effort: command.effort
+    }
+  }
+  if (fallback.kind === 'transcript') {
     return { ...fallback, effort: command.effort }
   }
   return fallback
 }
 
-/** `Opus 5.5` back to `claude-opus-5-5`, the id the host lists; null for a
- *  label that is not `<Family> <major>[.<minor>]`. */
+function modelsDiffer(a: string, b: string): boolean {
+  return (claudeTranscriptModelName(a) ?? a) !== (claudeTranscriptModelName(b) ?? b)
+}
+
+/** `Opus 5.5` back to `claude-opus-5-5`, the id the host lists; a Claude id is
+ *  its own. A trailing note the CLI adds (`(1M context)`, `(default)`) is not
+ *  part of the model. Null for anything else. */
 export function claudeIdFromLabel(label: string): string | null {
-  const match = /^(fable|mythos|opus|sonnet|haiku) (\d+)(?:\.(\d{1,2}))?$/i.exec(label.trim())
+  const bare = label.trim().replace(/\s*\([^)]*\)\s*$/, '')
+  if (/^claude-[a-z0-9]/i.test(bare)) {
+    return bare.replace(/\[.*\]$/, '')
+  }
+  const match = /^(fable|mythos|opus|sonnet|haiku) (\d+)(?:\.(\d{1,2}))?$/i.exec(bare)
   return match ? `claude-${match[1]!.toLowerCase()}-${match[2]}${match[3] === undefined ? '' : `-${match[3]}`}` : null
 }

@@ -181,7 +181,8 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(scans()).toBe(2)
     expect(latest?.fallback).toEqual({
       kind: 'transcript',
-      model: { model: 'claude-sonnet-5', label: 'Sonnet 5' }
+      model: { model: 'claude-sonnet-5', label: 'Sonnet 5' },
+      freshAsOf: expect.any(Number)
     })
 
     // Later turns ask nothing more.

@@ -1,22 +1,29 @@
+import { parseNativeChatCommandEnvelope } from '../../../src/shared/native-chat-command-envelope'
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 /**
- * What a Claude session itself said about its model and effort through `/model`
- * and `/effort`: the latest of each, read from the `<local-command-stdout>`
- * rows the transcript already holds (Orca's reader publishes them).
+ * What a Claude session itself said about its model and effort: the latest of
+ * its own answers to `/model`, `/effort` and `/fast`, and the harness's notice
+ * of a fallback, read from rows the transcript already holds (Orca's reader
+ * publishes them).
  *
  * This is the SESSION'S OWN word, not the settings file's and not a guess:
  * Claude Code prints what it set, "for this session only" included, which no
  * settings file records. It sits below the live beacon and the on-screen
- * badge, which state the pair on every repaint, and above nothing else. See
+ * badge, which state the pair on every repaint. See
  * `docs/mobile-agent-hud.md` ("Model and effort without a beacon").
  *
- * Wordings were read from the Claude Code 2.1.289 binary (strings, 2026-10-05)
- * and the `Set model to` / `Set effort level to` shapes from rows captured on
- * 2.1.278; the rest are MODELLED, not captured from a live session:
+ * Wordings were read from the Claude Code 2.1.289 binary (strings and template
+ * literals, 2026-10-05); only `Set model to` and `Set effort level to` without
+ * a backticked level were seen in rows captured from a live session (2.1.278).
+ * Everything else is MODELLED, not captured:
  *  - `Set model to \`X\`` + (` and saved as your default for new sessions` |
- *    ` for this session only`) + optional ` with <level> effort`
+ *    ` for this session only`) + optional ` with \`<level>\` effort` (the level
+ *    is wrapped in backticks, `Jb` in the binary; an unwrapped one is read too)
  *  - `Kept model as \`X\``
+ *  - `Current model: \`X\`` + optional ` (this session only)` + optional
+ *    ` (effort: <level>)`, from a bare `/model`
+ *  - `<mode> Fast mode ON · model set to \`X\``, when `/fast` promoted the model
  *  - `Set effort level to <level> (<where saved>): <description>`
  *  - `Effort '<asked>' exceeds the cap for <model> …; set to '<level>' instead`
  *  - `Current effort level: <level> (<description>)`
@@ -24,25 +31,48 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  *  - `Effort level set to auto …`: the level is not stated, so effort is null
  *  - `CLAUDE_CODE_EFFORT_LEVEL=<level> overrides this session …`
  *  - `… Effort stays <level>.` (Ultracode)
+ *  - `Switched to X due to high demand for Y` / `… because Y is not available`
+ *    / `… because Y returned an error …`: the harness's own notice, no envelope
  *
- * A `/model` switch resets the effort to what its own output states, or to
- * null: the effort belongs to the model before it, and carrying it over is how
- * "Opus Medium" came to be drawn on an Opus xhigh session (2026-09-15).
+ * A command's output counts only as the row right after its own envelope
+ * (`<command-name>/model|effort|fast</command-name>`): a prompt that merely
+ * quotes the wording is the user's word, not the CLI's.
+ *
+ * A model change resets the effort to what its own output states, or to null:
+ * the effort belongs to the model before it, and carrying it over is how "Opus
+ * Medium" came to be drawn on an Opus xhigh session (2026-09-15).
+ *
+ * What it cannot see: a model change that writes no parsed row (the alt+p
+ * picker, the effort-step keys, a resume into a new process). The caller orders
+ * the pair against the transcript scan with `at` and `answeredAt`
+ * (`withSessionCommandPair`).
  */
 export type SessionCommandPair = {
-  /** The model the latest `/model` named, as Claude spells it ("Opus 5.5"). */
+  /** The model the latest model command named, as Claude spells it. */
   label: string | null
   effort: string | null
+  /** When the row that set this pair was written (the host's clock). */
+  at: number | null
+  /** When the first assistant row after it was written, or null while none has
+   *  come: a reply the model change could already show in the transcript. */
+  answeredAt: number | null
+  /** The model id an effort-only command was read under (the scan's model at
+   *  the time), so a later scan naming another model can drop it. */
+  boundModel?: string | null
 }
 
 const LEVEL = '(low|medium|high|xhigh|max)'
 const STDOUT = /^\s*<local-command-stdout>([\s\S]*?)<\/local-command-stdout>\s*$/
 // eslint-disable-next-line no-control-regex
 const ANSI = /\u001b\[[0-9;]*m/g
+const COMMANDS = new Set(['model', 'effort', 'fast'])
 
 const SET_MODEL = /^Set model to `([^`]+)`/
 const KEPT_MODEL = /^Kept model as `([^`]+)`/
-const WITH_EFFORT = new RegExp(`\\bwith ${LEVEL} effort\\b`)
+const CURRENT_MODEL = /^Current model: (?:`([^`]+)`|([^\n(]+?))(?= \(|\n|$)/
+const FAST_PROMOTED = /^.{0,4}?Fast mode ON · model set to `([^`]+)`/
+const WITH_EFFORT = new RegExp(`\\bwith \`?${LEVEL}\`? effort\\b`)
+const CURRENT_EFFORT = new RegExp(`\\(effort: ${LEVEL}\\)`)
 const EFFORT_RULES: readonly RegExp[] = [
   new RegExp(`^Set effort level to ${LEVEL}\\b`),
   new RegExp(`^Effort '[^']*' exceeds the cap[^;]*; set to '${LEVEL}' instead`),
@@ -52,31 +82,135 @@ const EFFORT_RULES: readonly RegExp[] = [
   new RegExp(`\\bEffort stays ${LEVEL}\\b`)
 ]
 const EFFORT_AUTO = /^Effort level set to auto\b/
+const FALLBACK = /^Switched to `?([^`\n]+?)`? (?:due to high demand for|because) /
+
+function textOf(message: NativeChatMessage): string {
+  return message.blocks.filter(isTextBlock).map((block) => block.text).join('')
+}
+
+/** True when `message` is the user's envelope for /model, /effort or /fast. */
+function isModelCommandEnvelope(message: NativeChatMessage | undefined): boolean {
+  if (!message || message.role !== 'user') {
+    return false
+  }
+  const envelope = parseNativeChatCommandEnvelope(textOf(message))
+  return envelope !== null && COMMANDS.has(envelope.name.replace(/^\//, ''))
+}
+
+type Change = { label: string | null; effort: string | null; keepEffortOf?: 'same-or-none' } | { effortOnly: string | null }
+
+function readOutput(body: string, held: { label: string | null; effort: string | null } | null): Change | null {
+  const kept = KEPT_MODEL.exec(body)?.[1]?.trim()
+  if (kept) {
+    // "Kept" changes nothing: the effort stands when it was this model's, or
+    // was set before any model was named (an /effort-only row).
+    const same = held !== null && (held.label === null || held.label === kept)
+    return { label: kept, effort: same ? held.effort : null }
+  }
+  const set = SET_MODEL.exec(body)?.[1]?.trim()
+  if (set) {
+    return { label: set, effort: WITH_EFFORT.exec(body)?.[1] ?? null }
+  }
+  const current = CURRENT_MODEL.exec(body)
+  const currentName = (current?.[1] ?? current?.[2])?.trim()
+  if (currentName) {
+    return { label: currentName, effort: CURRENT_EFFORT.exec(body)?.[1] ?? null }
+  }
+  const promoted = FAST_PROMOTED.exec(body)?.[1]?.trim()
+  if (promoted) {
+    return { label: promoted, effort: null }
+  }
+  const effort = EFFORT_RULES.map((rule) => rule.exec(body)?.[1]).find((level) => level !== undefined)
+  if (effort) {
+    return { effortOnly: effort }
+  }
+  return EFFORT_AUTO.test(body) ? { effortOnly: null } : null
+}
 
 export function sessionCommandPair(messages: readonly NativeChatMessage[]): SessionCommandPair | null {
   let pair = null as SessionCommandPair | null
-  for (const message of messages) {
-    if (message.role !== 'user' && message.role !== 'system') {
-      continue
+  let pairIndex = -1
+  messages.forEach((message, index) => {
+    let change: Change | null = null
+    if (message.role === 'user' || message.role === 'system') {
+      const body = STDOUT.exec(textOf(message))?.[1]?.replace(ANSI, '').trim()
+      if (body && isModelCommandEnvelope(messages[index - 1])) {
+        change = readOutput(body, pair)
+      }
     }
-    const raw = message.blocks.filter(isTextBlock).map((block) => block.text).join('')
-    const body = STDOUT.exec(raw)?.[1]?.replace(ANSI, '').trim()
-    if (!body) {
-      continue
+    if (change === null && message.role !== 'user') {
+      // The harness's own notice of a fallback: not a command's output, and
+      // never a user's word, so a user turn quoting it is skipped above.
+      const fallback = FALLBACK.exec(textOf(message).replace(ANSI, '').trim())?.[1]?.trim()
+      change = fallback ? { label: fallback, effort: null } : null
     }
-    const model = SET_MODEL.exec(body)?.[1] ?? KEPT_MODEL.exec(body)?.[1]
-    if (model) {
-      const named = model.trim()
-      // "Kept model as" changes nothing, so the effort stands with the model.
-      const kept: boolean = KEPT_MODEL.test(body) && pair?.label === named
-      pair = { label: named, effort: WITH_EFFORT.exec(body)?.[1] ?? (kept ? pair!.effort : null) }
-      continue
+    if (change === null) {
+      return
     }
-    const effort = EFFORT_RULES.map((rule) => rule.exec(body)?.[1]).find((level) => level !== undefined)
-    if (effort) {
-      pair = { label: pair?.label ?? null, effort }
-    } else if (EFFORT_AUTO.test(body)) {
-      pair = { label: pair?.label ?? null, effort: null }
+    pairIndex = index
+    pair =
+      'effortOnly' in change
+        ? { label: pair?.label ?? null, effort: change.effortOnly, at: message.timestamp, answeredAt: null }
+        : { label: change.label, effort: change.effort, at: message.timestamp, answeredAt: null }
+  })
+  if (pair === null) {
+    return null
+  }
+  const answer = messages.slice(pairIndex + 1).find((message) => message.role === 'assistant')
+  return { ...(pair as SessionCommandPair), answeredAt: answer?.timestamp ?? null }
+}
+
+const CACHE_CAP = 32
+const lastPairBySession = new Map<string, SessionCommandPair>()
+
+export function resetSessionCommandPairCacheForTests(): void {
+  lastPairBySession.clear()
+}
+
+/**
+ * `sessionCommandPair` over the loaded rows, with the last pair read for that
+ * session kept in memory. The chat loads about 40 rows and a reconnect
+ * replaces them, so a `/model` typed further back would otherwise vanish and
+ * the pill with it. In memory only: a restart reads the loaded rows again and
+ * a missing cache costs a pill, never a wrong one.
+ */
+export function sessionCommandPairFor(
+  sessionId: string | null,
+  messages: readonly NativeChatMessage[],
+  scanModelId: string | null = null
+): SessionCommandPair | null {
+  let fresh = sessionCommandPair(messages)
+  if (fresh !== null && fresh.label === null) {
+    // An effort-only command is bound to the model the scan read when it was
+    // first seen, and keeps that binding while it stays in the rows.
+    const held = sessionId === null ? undefined : lastPairBySession.get(sessionId)
+    fresh = { ...fresh, boundModel: held && held.at === fresh.at ? held.boundModel : scanModelId }
+  }
+  if (sessionId === null) {
+    return fresh
+  }
+  const held = lastPairBySession.get(sessionId)
+  let pair = fresh
+  if (pair === null && held) {
+    // The command is no longer in the rows; later rows may still tell when it
+    // was answered.
+    const answer =
+      held.answeredAt === null && held.at !== null
+        ? messages.find(
+            (message) => message.role === 'assistant' && message.timestamp !== null && message.timestamp > held.at!
+          )
+        : undefined
+    pair = answer?.timestamp != null ? { ...held, answeredAt: answer.timestamp } : held
+  }
+  if (pair !== null) {
+    lastPairBySession.delete(sessionId)
+    lastPairBySession.set(sessionId, pair)
+    while (lastPairBySession.size > CACHE_CAP) {
+      const oldest = lastPairBySession.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      lastPairBySession.delete(oldest)
     }
   }
   return pair

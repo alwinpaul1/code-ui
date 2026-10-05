@@ -4,7 +4,7 @@ import { useLastConnectedAt } from '../transport/client-context-connection-metri
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { getPendingModelPick } from './mobile-native-chat-model-report-authority'
 import { resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
-import { sessionCommandPair } from './claude-session-command-pair'
+import { sessionCommandPairFor } from './claude-session-command-pair'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   peekClaudeTranscriptModel,
@@ -147,8 +147,14 @@ export function useClaudeTranscriptModel(args: {
     : null
 
   const transcript = quiet && sessionId ? peekClaudeTranscriptModel(hostId, sessionId) : null
-  const command = useMemo(() => (quiet && messages ? sessionCommandPair(messages) : null), [quiet, messages])
-  const next = quiet ? withSessionCommandPair(resolveClaudeModelFallback({ liveModel, transcript, pick }), command) : NONE
+  const base = quiet ? resolveClaudeModelFallback({ liveModel, transcript, pick }) : NONE
+  const command = useMemo(
+    () => (quiet && messages ? sessionCommandPairFor(sessionId, messages, transcript?.model ?? null) : null),
+    [quiet, messages, sessionId, transcript]
+  )
+  // A pick of the phone's own that no scan has confirmed yet shows nothing, and
+  // an older command row must not bring a figure back (2026-09-18's rule).
+  const next = quiet && !(pick && base.kind === 'none') ? withSessionCommandPair(base, command) : base
   // The same answer keeps the same object: the option controller memoizes the
   // pickers' props on it, and a fresh object every render would rebuild them.
   const key = JSON.stringify(next)

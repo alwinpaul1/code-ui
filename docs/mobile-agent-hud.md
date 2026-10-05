@@ -1008,7 +1008,9 @@ regression from the xterm.js switch (beacon stripping sits above the WebView and
 its files changed only in comments between 0.9.114 and 0.9.115) and neither is a
 2.1.289 change (the status-line payload builder is the same as 2.1.288's,
 compared by minified-name-blind diff). The cause is which sources a tab with no
-beacon and no badge has left.
+beacon and no badge has left. The user had also just removed the
+`claude-hud-enhanced` plugin, whose `[Model effort | Auth]` badge had been the
+live pair for every tab that carried no beacon.
 
 ### The order, and why it extends the rule
 
@@ -1016,20 +1018,83 @@ beacon and no badge has left.
    whenever present, including when it states a model with no effort: Claude
    omits `effort` from its status-line payload for a model that takes none, and
    after an API 400 on `output_config.effort` latches "effort unsupported" for
-   the session (`sw()` / `$Pn` in the 2.1.289 binary).
-2. The session's own last `/model` or `/effort` output, read from the
-   `<local-command-stdout>` rows the transcript already holds
+   the session (`sw()` / `$Pn` in the 2.1.289 binary). The hook frames below are
+   beacon-tier too; the newest frame wins.
+2. The session's own last answer to `/model`, `/effort` or `/fast`, or the
+   harness's fallback notice, read from rows the transcript already holds
    (`claude-session-command-pair.ts`).
 3. The model the host's transcript scan last read for this session
    (`claude-transcript-model.ts`), which carries no effort.
 4. Nothing.
 
-`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Step 2
-is a deliberate, narrow extension of it: a line the agent printed about itself,
-in answer to the user's command, in the session's own record. It is not a
+`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tiers 2
+and 3 are a deliberate, narrow extension of it: a line the agent printed about
+itself, in answer to the user's command, in the session's own record. It is not a
 tracked record, not the launch record, not a setting, and not a guess. The
 rule's reason (a figure the agent did not state about THIS session) still holds,
 and the extension stays inside it.
+
+### The hook beacon (POSIX hosts)
+
+The launch flag already installs `UserPromptSubmit` and `Stop` hooks that write
+a beacon frame to the agent's own tty. Two facts about what Claude Code 2.1.289
+puts in a hook's input decide what they can carry (the builder `rd(session, cwd,
+permissionMode, toolUseContext)`; read from the binary, not captured live):
+
+- `effort:{level}` is added only when `rd` is handed a tool context and the model
+  takes effort (`sw(model)`). `Stop`, `PreToolUse` and `PostToolUse` are built
+  with one; `SessionStart` and `UserPromptSubmit` are not.
+- `model` is a field of `SessionStart` alone.
+
+So `SessionStart` beacons `model=` (`agent-hud-session-start-hook-script.ts`) and
+`Stop` adds `effort=` to its existing frame (`CLAUDE_HUD_STOP_HOOK_SCRIPT`). Tool
+hooks also carry effort but fire on every tool call, one `sh` each, so they are
+not used. A pick made for one session only is reported at that session's next
+Stop, which the settings file never records.
+
+On the phone (`pairFromHookFrame` in `agent-hud-beacon.ts`): a model frame with
+no `name=` and no `effort=` is a SessionStart. For the model already held it
+keeps the status line's name and effort; for another model the old effort goes.
+An effort frame with no model lands on the held pair, or is kept until a model
+arrives and drawn by nobody alone. A status-line frame always carries `name=` and
+replaces the pair, as before. A frame that names only an id is named the way the
+transcript names an id ("Opus 5.5"), not shown raw.
+
+Hooks are skipped under the same conditions as the status line: `disableAllHooks`
+("Disable all hooks and statusLine execution") and an untrusted workspace ("hook
+execution - workspace trust not accepted" beside "Status line command skipped:
+workspace trust not accepted"). They add coverage where the status line is not
+mounted yet or has not ticked, never where it is switched off.
+
+### Which tabs carry the flag
+
+| Tab | Flag | Proof |
+|---|---|---|
+| Launched from the phone | Yes | `agentHudLaunchFlag` on every phone launch |
+| Orca's desktop "new agent" UI | Yes, once the phone has connected, with the Chat UI switch on and no `--settings` of the user's own | The phone writes the flag into Orca's per-agent `agentDefaultArgs` over `settings.update` (`agent-hud-desktop-launch-args.ts`); Orca appends them to every agent it launches |
+| `claude` typed by hand into a shell | No | Nothing the phone can set reaches a terminal it did not create. Claude takes settings from `--settings <file-or-json>` and from files; the only env vars are `CLAUDE_CODE_MANAGED_SETTINGS_PATH` and `CLAUDE_CODE_REMOTE_SETTINGS_PATH`, both paths to a file we would have to write |
+| Windows host | No | See below |
+
+### Windows
+
+No encoding was found that is safe, so `hostTakesAgentHudFlag` stays as it is.
+
+- Claude parses `--settings` with a JSONC parser (comments and trailing commas,
+  double-quoted strings only), so the JSON needs raw double quotes; there is no
+  quote-free form.
+- Windows PowerShell 5.1 drops unescaped inner double quotes when it builds argv
+  for a native program. Escaping them as `\"` fixes 5.1 and breaks PowerShell
+  7.3+, whose native-argument passing escapes them itself, so a `\"` arrives as
+  a literal backslash. One literal cannot be right for both, and the phone cannot
+  know which PowerShell Orca runs.
+- Orca quotes agent arguments for PowerShell with `quotePowerShellLiteral`
+  (single quotes, inner text verbatim). It ships `quotePowerShellNativeArgument`
+  (the `\"` escaping) but uses it for `wsl.exe` only.
+- `--settings` takes a file, but only one that already exists with our content;
+  we may not write one.
+- No `pwsh` is installed on the development machine, so the existing PowerShell
+  harness could not run here. A real Windows machine, with the PowerShell Orca
+  actually uses, is needed to prove any encoding.
 
 ### What is NOT a source, and why
 
@@ -1044,33 +1109,78 @@ and the extension stays inside it.
   as fact would be wrong exactly when the user changed it.
 - **The launch argv or env** (`--model`, `--effort`, `CLAUDE_CODE_EFFORT_LEVEL`).
   The tab snapshot (`RuntimeMobileSessionTerminalTab`) carries `launchAgent`,
-  `startupCwd` and `launchDraft`, no argv and no env. The phone passes neither
-  flag itself. Only the env override announces itself, and only when the user
-  runs `/effort` ("CLAUDE_CODE_EFFORT_LEVEL=… overrides this session").
-- **`effort.level` in hook payloads.** Every Claude hook input carries it (the
-  mod's `reportEffort` uses it), but Orca 1.4.220 forwards neither it nor the
-  model to `agentStatus` for Claude. Needs an upstream Orca change.
+  `startupCwd` and `launchDraft`, no argv and no env.
+- **`effort.level` in hook payloads through Orca.** Orca 1.4.220 forwards neither
+  it nor the model to `agentStatus` for Claude. Our own hooks above read the same
+  input instead.
 - **The request's `"effort":"…"` in the transcript JSONL** (the mod greps it for
   subagents). Orca's reader publishes `{id, role, blocks, timestamp, source}`
   only, so it never reaches the phone.
 
-### Ways the effort changes for one session, and what the phone sees
+### Wordings read from the transcript rows
 
-See the table in the change's report; in short, only `/model` (picker or typed)
-and `/effort` write an output row. The `--effort` flag, the env var set before
-launch, the effort-step keybinding, `ultrathink` and the unsupported latch leave
-nothing the phone can read, so with no beacon the pill shows no effort. It never
-shows a default in their place.
+Read from the 2.1.289 binary (modelled, not captured from a live session) except
+where marked. A command's output counts only as the row right after its own
+`<command-name>/model|effort|fast</command-name>` envelope; the fallback notice
+has no envelope and is read from `system` and `assistant` rows only.
 
-### Wordings
+| Row | Model | Effort |
+|---|---|---|
+| `Set model to \`X\` and saved as your default for new sessions` / `… for this session only` (captured on 2.1.278) | X | null |
+| `… with \`high\` effort` after either (level in backticks, `Jb`; an unwrapped level is read too) | X | the level |
+| `Kept model as \`X\`` | X | kept if it was X's, or set before any model was named |
+| `Current model: \`X\`` [`(this session only)`] [`(effort: high)`] | X | the level, else null |
+| `↯ Fast mode ON · model set to \`X\``, only when `/fast` promoted the model | X | null |
+| `Switched to X due to high demand for Y` / `… because Y is not available` / `… returned an error …` | X | null |
+| `Set effort level to high (…)` (captured on 2.1.278), `Current effort level: high`, `Effort level: auto (currently high)`, `Effort 'max' exceeds the cap …; set to 'high' instead`, `CLAUDE_CODE_EFFORT_LEVEL=high overrides this session`, `… Effort stays high` | unchanged | the level |
+| `Effort level set to auto …` | unchanged | null |
 
-Read from the 2.1.289 binary (modelled, not captured from a live session):
-`Set model to \`X\`` + ` and saved as your default for new sessions` |
-` for this session only` + optional ` with <level> effort`; `Set effort level to
-<level> (<where>): …`; `Current effort level: <level> (…)`; `Effort level: auto
-(currently <level>)`; `Effort level set to auto …`; `CLAUDE_CODE_EFFORT_LEVEL=<level>
-overrides this session …`; `… Effort stays <level>.`. Captured from 2.1.278
-rows: the first two shapes only.
+The levels are `low`, `medium`, `high`, `xhigh`, `max`; `auto` is no level.
+
+### Superseded and unseen changes
+
+A model can change with no row the phone parses: the alt+p inline picker, the
+effort-step keys, a resume into a new process. When a reply came after the
+command (`answeredAt`), the scan was taken after that reply (`freshAsOf`) and
+names another model, the scan is newer and the command is dropped, effort
+included (`withSessionCommandPair`). An effort-only command is bound to the model
+the scan read when the phone first saw it (`boundModel`). Row times are the
+host's clock and `freshAsOf` the phone's; the skew is the one
+`resolveClaudeModelFallback` already accepts. The last pair read for a session is
+kept in memory so a reconnect that replaces the ~40 loaded rows does not lose a
+command typed further back. A phone pick not yet confirmed by a scan shows
+nothing, and an older command row does not bring a figure back (2026-09-18).
+
+### Ways the effort changes for one session
+
+| Case | Written where the phone can read it | Source | Status |
+|---|---|---|---|
+| `/model` picker slider, or typed `/model` | stdout row | command row, then the next Stop frame | wording modelled, row shape captured |
+| `/effort <level>` | stdout row | command row, then the next Stop frame | wording modelled, row shape captured |
+| `/effort auto` | stdout row, no level | effort unknown until the next Stop frame | modelled |
+| bare `/effort`, bare `/model` | stdout row | command row | modelled |
+| Ultracode on or off | stdout row (`Effort stays X`) | command row | modelled |
+| `CLAUDE_CODE_EFFORT_LEVEL` set before launch | nothing until the user runs `/effort` | the next Stop frame (the hook input carries the level the session sends) | modelled |
+| `--effort` flag | nothing on the tab snapshot | the next Stop frame | modelled |
+| effort-step keybinding, `ultrathink` | not found writing a row | the next Stop frame | modelled |
+| "Effort unsupported" latch | `effort` leaves the status line and the hook input | a beacon states the model alone | read from the binary |
+| `/fast` promotion, overload fallback | `Fast mode ON · model set to`, `Switched to …` | command row | modelled |
+| alt+p picker, resume into a new process | nothing parsed | the scan, ordered against the command | modelled |
+
+A tab with no beacon at all (typed-in, or an untrusted workspace) has only the
+rows. For a case none of them records, the pill shows the model with no effort,
+or nothing; it can still show a stale figure when the change left no row and no
+reply followed the old command (the command stands until a reply and a fresh scan
+say otherwise).
+
+### New sessions
+
+| Session | Before its first prompt | After it |
+|---|---|---|
+| Phone-launched (flag) | `SessionStart` frame: the model; then the status line's pair at its first tick | status line, `Stop` effort |
+| Orca desktop UI (flag, if the phone has synced) | same | same |
+| Typed-in `claude`, no flag | nothing | the scan's model, any command rows |
+| Windows | nothing | the scan's model, any command rows |
 
 ### Codex
 
