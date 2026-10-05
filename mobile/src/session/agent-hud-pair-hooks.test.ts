@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { consumeAgentHudBeacons, getAgentHudBeacon, resetAgentHudBeacons } from './agent-hud-beacon'
 import { decodeAgentHudChannelText, encodeAgentHudChannelFrame } from './agent-hud-channel'
 import { buildClaudeHudSettingsJson, CLAUDE_HUD_STOP_HOOK_SCRIPT } from './agent-hud-launch-args'
-import { CLAUDE_HUD_SESSION_START_HOOK_SCRIPT } from './agent-hud-session-start-hook-script'
+import { CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, CLAUDE_HUD_SESSION_START_HOOK_SCRIPT } from './agent-hud-session-start-hook-script'
 import { applyAgentHudBeaconFields } from './hud-beacon-fields'
 
 // Hook inputs are SYNTHETIC: their field names and gating are read from the
@@ -37,7 +37,38 @@ function run(shell: 'sh' | 'dash', script: string, payload: string): string[] {
   return decodeAgentHudChannelText(readFileSync(tty, 'latin1'))
 }
 
+// Claude Code 2.1.289 fires PostModelSwitch after ANY change of the effective
+// model: a typed /model, the picker, the SDK, a /fast promotion or overload
+// fallback ('auto'), a resume. Its input is {...rd(session, cwd),
+// hook_event_name, from_model, to_model, requested_model, source, ...}. Read
+// from the binary (GHr and the `lK` schema), not captured from a live session.
+const modelSwitch = (to: string, source = 'command') =>
+  JSON.stringify({ session_id: SID, transcript_path: '/p/x.jsonl', cwd: '/p', hook_event_name: 'PostModelSwitch', from_model: 'claude-opus-5-5', to_model: to, requested_model: to, source, context_tokens: 1200 })
+
 describe.each(['sh', 'dash'] as const)('the pair hooks under %s', (shell) => {
+  it('beacons the model a mid-session switch landed on, whatever made it', () => {
+    for (const source of ['command', 'picker', 'sdk', 'auto', 'resume']) {
+      expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, modelSwitch('claude-fable-5-1', source))).toEqual([
+        `CUIHUD1 agent=claude sid=${SID} model=claude-fable-5-1`
+      ])
+    }
+  })
+
+  it('reads to_model, never from_model or requested_model', () => {
+    const payload = JSON.stringify({ session_id: SID, hook_event_name: 'PostModelSwitch', from_model: 'claude-opus-5-5', to_model: 'claude-sonnet-5', requested_model: 'claude-haiku-4-5', source: 'auto' })
+    expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, payload).join('')).toContain('model=claude-sonnet-5')
+    expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, payload).join('')).not.toContain('haiku')
+  })
+
+  it('says nothing when the switch lands on an alias rather than a Claude id: the status line names it within a beat', () => {
+    expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, modelSwitch('opus'))).toEqual([])
+  })
+
+  it('says nothing for garbage and for empty input', () => {
+    expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, 'nope')).toEqual([])
+    expect(run(shell, CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, '')).toEqual([])
+  })
+
   it('beacons the model a new session starts on, before any prompt or status-line tick', () => {
     expect(run(shell, CLAUDE_HUD_SESSION_START_HOOK_SCRIPT, sessionStart())).toEqual([
       `CUIHUD1 agent=claude sid=${SID} model=claude-opus-5-5`
@@ -83,7 +114,8 @@ describe.each(['sh', 'dash'] as const)('the pair hooks under %s', (shell) => {
 describe('what the launch flag carries', () => {
   it('registers the SessionStart hook beside the Stop and prompt hooks on a POSIX host', () => {
     const hooks = JSON.parse(buildClaudeHudSettingsJson('darwin')).hooks
-    expect(Object.keys(hooks).sort()).toEqual(['SessionStart', 'Stop', 'UserPromptSubmit'])
+    expect(Object.keys(hooks).sort()).toEqual(['PostModelSwitch', 'SessionStart', 'Stop', 'UserPromptSubmit'])
+    expect(hooks.PostModelSwitch[0].hooks[0]).toMatchObject({ type: 'command', command: CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT })
     expect(hooks.SessionStart[0].hooks[0]).toMatchObject({ type: 'command', command: CLAUDE_HUD_SESSION_START_HOOK_SCRIPT })
   })
 
@@ -94,6 +126,7 @@ describe('what the launch flag carries', () => {
 
   it('uses no single quote, which would end the shell token the flag travels in', () => {
     expect(CLAUDE_HUD_SESSION_START_HOOK_SCRIPT).not.toContain("'")
+    expect(CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT).not.toContain("'")
     expect(CLAUDE_HUD_STOP_HOOK_SCRIPT).not.toContain("'")
   })
 })
@@ -151,6 +184,14 @@ describe('the phone reading the hook frames as beacon-tier', () => {
   it('holds an effort that arrives with no model to attach to, and does not draw it alone', () => {
     feed(`CUIHUD1 agent=claude sid=${SID} run= effort=high`)
     expect(pill()).toEqual({ id: null, label: '', effort: null })
+  })
+
+  it('follows a /model made on the desktop with no tap: the new model at once, the old effort gone', () => {
+    feed(`CUIHUD1 agent=claude hk=1 hb=5 sid=${SID} model=claude-opus-5-5 name=Opus%205.5 effort=high`)
+    feed(`CUIHUD1 agent=claude sid=${SID} model=claude-fable-5-1`)
+    expect(pill()).toEqual({ id: 'claude-fable-5-1', label: 'Fable 5.1', effort: null })
+    feed(`CUIHUD1 agent=claude hk=1 hb=5 sid=${SID} model=claude-fable-5-1 name=Fable%205.1 effort=medium`)
+    expect(pill()).toEqual({ id: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' })
   })
 
   it('does not carry the effort of one session into another session in the same terminal', () => {

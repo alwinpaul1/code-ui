@@ -49,6 +49,9 @@ export type ClaudeModelFallback =
       effort?: string | null
       /** How recent a transcript the model was read from (the phone's clock). */
       freshAsOf?: number
+      /** Set when a model command newer than the live beacon was read: this
+       *  pair replaces the beacon's, which the phone last heard before it. */
+      outranksLive?: true
     }
 
 // Claude Code's ids put the family first (`claude-opus-5-5`, with a date or a
@@ -242,4 +245,42 @@ export function claudeIdFromLabel(label: string): string | null {
   }
   const match = /^(fable|mythos|opus|sonnet|haiku) (\d+)(?:\.(\d{1,2}))?$/i.exec(bare)
   return match ? `claude-${match[1]!.toLowerCase()}-${match[2]}${match[3] === undefined ? '' : `-${match[3]}`}` : null
+}
+
+/** The fallback that outranks a live beacon, or none: the latest model command
+ *  when it was written after the beacon, and applies to the model that beacon
+ *  names (an effort-only command read under another model does not). */
+export function commandOverBeacon(
+  command: SessionCommandPair | null,
+  liveModel: string | null,
+  beaconReceivedAt: number | null
+): ClaudeModelFallback {
+  if (!command || command.at === null || beaconReceivedAt === null || liveModel === null || command.at <= beaconReceivedAt) {
+    return { kind: 'none' }
+  }
+  const id = command.label === null ? liveModel : claudeIdFromLabel(command.label)
+  if (id === null || (command.label === null && command.boundModel != null && modelsDiffer(command.boundModel, liveModel))) {
+    return { kind: 'none' }
+  }
+  return {
+    kind: 'transcript',
+    model: { model: id, label: command.label === null ? '' : (claudeTranscriptModelName(id) ?? command.label) },
+    effort: command.effort,
+    outranksLive: true
+  }
+}
+
+/**
+ * The live pair, unless a model command was written after the beacon that
+ * stated it (`outranksLive`): then that command is newer truth, and the pair
+ * the beacon states is the last one the phone heard before a switch it missed
+ * (another project, a killed app: the beacon is a stream event and nothing
+ * replays it). The next beacon, normally within a repaint, ends the override
+ * by being newer. An effort-only command keeps the live model and its name.
+ */
+export function claudeReportedOverLive<T extends ModelPillPair>(live: T, fallback: ClaudeModelFallback): T {
+  if (fallback.kind !== 'transcript' || fallback.outranksLive !== true) {
+    return live
+  }
+  return { ...live, model: fallback.model.model, label: fallback.model.label || live.label, effort: fallback.effort ?? null }
 }

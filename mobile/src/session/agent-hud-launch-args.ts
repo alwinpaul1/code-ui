@@ -3,7 +3,7 @@
 import { Buffer } from 'buffer'
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { readHudLaunchFlags, withOurFlagLast } from './agent-hud-launch-flag-owner'
-import { CLAUDE_HUD_SESSION_START_HOOK_SCRIPT } from './agent-hud-session-start-hook-script'
+import { CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT, CLAUDE_HUD_SESSION_START_HOOK_SCRIPT } from './agent-hud-session-start-hook-script'
 import { AGENT_HUD_TTY_WRITE, ENCODE_FN } from './agent-hud-tty-write'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-prompt-hook-script'
 
@@ -640,6 +640,10 @@ export function buildClaudeHudSettingsJson(hostPlatform: NodeJS.Platform | null 
         : {
             SessionStart: [
               { hooks: [{ type: 'command', command: CLAUDE_HUD_SESSION_START_HOOK_SCRIPT }] }
+            ],
+            // A switch made mid-session, from the desktop or the phone.
+            PostModelSwitch: [
+              { hooks: [{ type: 'command', command: CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT }] }
             ]
           }),
       Stop: [

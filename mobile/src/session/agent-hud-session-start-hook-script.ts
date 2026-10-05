@@ -22,13 +22,39 @@ import { AGENT_HUD_TTY_WRITE, ENCODE_FN } from './agent-hud-tty-write'
  * Prints NOTHING on stdout: a SessionStart hook's stdout is added to the
  * model's context. Says nothing when the input names no model.
  */
-export const CLAUDE_HUD_SESSION_START_HOOK_SCRIPT = [
-  'i=$(cat 2>/dev/null || true)',
-  'g(){ printf %s "$i" | LC_ALL=C sed -nE "s/.*$1.*/\\1/p" | head -n 1; }',
-  ENCODE_FN,
-  'md=$(g "\\"model\\":\\"([A-Za-z0-9._-]+)")',
-  '[ -n "$md" ] || exit 0',
-  'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
-  'o="CUIHUD1 agent=claude${si:+ sid=$si} model=$md"',
-  ...AGENT_HUD_TTY_WRITE
-].join('; ')
+function modelFrameHook(key: string): string {
+  return [
+    'i=$(cat 2>/dev/null || true)',
+    'g(){ printf %s "$i" | LC_ALL=C sed -nE "s/.*$1.*/\\1/p" | head -n 1; }',
+    ENCODE_FN,
+    // Only a Claude id: an alias ("opus") is not an id the phone can match, and
+    // the status line names the model within a beat.
+    `md=$(g "\\"${key}\\":\\"(claude-[A-Za-z0-9._-]+)")`,
+    '[ -n "$md" ] || exit 0',
+    'si=$(g "\\"session_id\\":\\"([A-Za-z0-9._-]+)\\"")',
+    'o="CUIHUD1 agent=claude${si:+ sid=$si} model=$md"',
+    ...AGENT_HUD_TTY_WRITE
+  ].join('; ')
+}
+
+export const CLAUDE_HUD_SESSION_START_HOOK_SCRIPT = modelFrameHook('model')
+
+/**
+ * The model a session switched to, beaconed at `PostModelSwitch`.
+ *
+ * Claude Code 2.1.289 fires it after ANY change of the effective model (it
+ * compares the model before and after every state update): a typed `/model`,
+ * the picker, the SDK, a `/fast` promotion or an overload fallback (`source:
+ * "auto"`), a resume. Its input is `{...rd(session, cwd), hook_event_name,
+ * from_model, to_model, requested_model, source, context_tokens, …}`, with no
+ * `effort` (`rd` is given no tool context). So a switch reaches the phone as
+ * soon as it lands, without waiting for the next prompt or the status line's
+ * next repaint, and the effort of the model before it is dropped at once
+ * (`pairFromHookFrame`), to be re-learned from the status line or the next Stop.
+ * Read from the binary (`GHr`, schema `lK`), not captured from a live session.
+ * No hook fires for an effort-only change: the status line repaints on it
+ * (`effortValue` is one of its inputs), and the next Stop reports it.
+ *
+ * Prints nothing on stdout, for the same reason as the SessionStart hook.
+ */
+export const CLAUDE_HUD_MODEL_SWITCH_HOOK_SCRIPT = modelFrameHook('to_model')

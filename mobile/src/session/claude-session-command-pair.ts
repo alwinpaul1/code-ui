@@ -1,4 +1,5 @@
 import { parseNativeChatCommandEnvelope } from '../../../src/shared/native-chat-command-envelope'
+import { createPersistedMap } from './session-cache-persistence'
 import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 /**
@@ -160,19 +161,29 @@ export function sessionCommandPair(messages: readonly NativeChatMessage[]): Sess
   return { ...(pair as SessionCommandPair), answeredAt: answer?.timestamp ?? null }
 }
 
-const CACHE_CAP = 32
-const lastPairBySession = new Map<string, SessionCommandPair>()
+const lastPairBySession = createPersistedMap<SessionCommandPair>({
+  storageKey: 'codeui:chat-model-command-pairs',
+  maxEntries: 32
+})
 
+/** Read at app start with the other session caches; never rejects. */
+export function hydrateSessionCommandPairs(): Promise<void> {
+  return lastPairBySession.hydrate()
+}
+
+/** Test-only: a fresh process, with storage left as it is. */
 export function resetSessionCommandPairCacheForTests(): void {
-  lastPairBySession.clear()
+  lastPairBySession.reset()
 }
 
 /**
  * `sessionCommandPair` over the loaded rows, with the last pair read for that
  * session kept in memory. The chat loads about 40 rows and a reconnect
  * replaces them, so a `/model` typed further back would otherwise vanish and
- * the pill with it. In memory only: a restart reads the loaded rows again and
- * a missing cache costs a pill, never a wrong one.
+ * the pill with it. Kept across a relaunch too, as the other session caches are
+ * (session-cache-persistence.ts: one blob, fail-open both ways), so a session
+ * left for another project or a killed app shows its last pair on return until
+ * a newer source replaces it. A missing cache costs a pill, never a wrong one.
  */
 export function sessionCommandPairFor(
   sessionId: string | null,
@@ -191,6 +202,10 @@ export function sessionCommandPairFor(
   }
   const held = lastPairBySession.get(sessionId)
   let pair = fresh
+  if (pair !== null && held && held.at !== null && pair.at !== null && held.at > pair.at) {
+    // Rows older than the pair already kept (a cached page shown first).
+    pair = held
+  }
   if (pair === null && held) {
     // The command is no longer in the rows; later rows may still tell when it
     // was answered.
@@ -202,16 +217,8 @@ export function sessionCommandPairFor(
         : undefined
     pair = answer?.timestamp != null ? { ...held, answeredAt: answer.timestamp } : held
   }
-  if (pair !== null) {
-    lastPairBySession.delete(sessionId)
+  if (pair !== null && JSON.stringify(pair) !== JSON.stringify(held)) {
     lastPairBySession.set(sessionId, pair)
-    while (lastPairBySession.size > CACHE_CAP) {
-      const oldest = lastPairBySession.keys().next().value
-      if (oldest === undefined) {
-        break
-      }
-      lastPairBySession.delete(oldest)
-    }
   }
   return pair
 }

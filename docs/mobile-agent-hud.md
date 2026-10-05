@@ -1047,7 +1047,13 @@ permissionMode, toolUseContext)`; read from the binary, not captured live):
 - `model` is a field of `SessionStart` alone.
 
 So `SessionStart` beacons `model=` (`agent-hud-session-start-hook-script.ts`) and
-`Stop` adds `effort=` to its existing frame (`CLAUDE_HUD_STOP_HOOK_SCRIPT`). Tool
+`Stop` adds `effort=` to its existing frame (`CLAUDE_HUD_STOP_HOOK_SCRIPT`).
+`PostModelSwitch` (2.1.289, `GHr`; also in the hook-event list the settings
+schema accepts) fires after ANY change of the effective model, with `from_model`,
+`to_model`, `requested_model` and `source` (`command`, `picker`, `sdk`, `auto`,
+`resume`) but no effort. It beacons `model=<to_model>` when that is a Claude id
+(an alias is skipped; the status line names it within a beat). No hook fires for
+an effort-only change. Tool
 hooks also carry effort but fire on every tool call, one `sh` each, so they are
 not used. A pick made for one session only is reported at that session's next
 Stop, which the settings file never records.
@@ -1186,3 +1192,46 @@ say otherwise).
 
 Not applied. Codex states model and effort in its own footer and rollout, which
 the beacon and screen readers already take.
+
+### A switch while the phone is away, and what survives
+
+The beacon is a stream event: nothing replays it. The phone unsubscribes a tab's
+terminal stream whenever it leaves it (another project, another tab, a
+foreground recovery, a reconnect: `noteAgentHudBeaconListening`), the host's
+snapshot is a rendering of the screen and holds none of the invisible C0 bytes,
+and a frame written meanwhile is lost. What it keeps instead:
+
+- the last beacon per terminal, in memory and, for a relaunch, in the warm-start
+  store (`agent-hud-beacon-warm-start.ts`);
+- the last pair read from the session's own command rows, per session id, in a
+  persisted store (`claude-session-command-pair.ts`, `createPersistedMap`, fail
+  open both ways).
+
+Everything is ordered by time. A model command written after the beacon last
+heard (`command.at > beacon.receivedAt`; the host's clock against the phone's,
+the skew the scan ordering already accepts) outranks it (`commandOverBeacon`,
+`claudeReportedOverLive`), so a switch made on the desktop while the phone was
+elsewhere shows from the rows the moment the chat loads. A beacon newer than the
+command wins; a badge on the screen is the present and is never outranked. Any
+pair older than a confirmed switch is dropped; one that is merely old, with no
+conflicting evidence, is shown as it was left. It is NOT marked "last seen": the
+same pair is already shown for an idle tab that has not repainted, a mark would
+read as a warning on every healthy idle tab, and the first beacon, normally
+within one repaint, replaces it anyway.
+
+### Switch scenarios
+
+Delays are worst cases. "Status line" is Claude's own refresh: it re-runs on a
+change of `mainLoopModel`, `effortValue` and the other inputs, and on a 5 s timer
+while mounted (`refreshInterval`); read from the binary, not timed on a device.
+
+| Switch | User's state | Source that shows the pair | When |
+|---|---|---|---|
+| desktop `/model`, picker, `/fast`, overload fallback | on the tab | `PostModelSwitch` frame (model), then status line (effort) | model at once; effort within the status line's repaint, at most 5 s |
+| desktop `/effort`, effort keys | on the tab | status line, else the command row, else the next Stop frame | repaint, at most 5 s; with no status line, the row at once, else the next turn end |
+| phone picker | on the tab | same as the desktop, plus the phone's own pick rule (nothing shown until a scan confirms) | as above |
+| any switch | other project / other tab | frames are lost; on return the command row (newer than the held beacon) | when the chat loads; then the first beacon, at most 5 s after resubscribing |
+| any switch, no row (alt+p picker, effort keys, resume) | other project | the first beacon after return | at most 5 s after resubscribing; until then the last pair is shown |
+| any switch | app backgrounded | as other project | as above |
+| any switch | app killed | warm-start beacon and the persisted command pair, then rows, then the first beacon | rows on open; beacon at most 5 s after |
+| any switch | no flag (typed-in, untrusted workspace, Windows) | command rows only | when the chat loads or the row arrives |

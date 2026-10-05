@@ -9,14 +9,23 @@ const code = (file: string) =>
   readFileSync(new URL(file, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
 
 describe('the model pills read the fallback with the session command pair laid over it', () => {
-  it('feeds the chat rows to the fallback hook, which every pill reads', () => {
-    expect(code('./use-mobile-native-chat-controller.ts')).toMatch(/useClaudeTranscriptModel\(\{[^}]*messages: nativeChatSession\.messages \}\)/)
+  it('feeds the chat rows and the beacon time to the fallback hook, which every pill reads', () => {
+    const controller = code('./use-mobile-native-chat-controller.ts')
+    expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*messages: nativeChatSession\.messages \}\)/)
+    expect(controller).toMatch(/beaconReceivedAt: [^,]*hudBeacon\?\.receivedAt/)
+    expect(controller).toMatch(/liveModel: claudeLive\.model/)
   })
-  it('lays the pair over the resolved fallback and never over a live pair or a bare chat', () => {
+  it('reads the pill from the live pair with a newer model command laid over it', () => {
+    const controller = code('./use-mobile-native-chat-controller.ts')
+    expect(controller).toMatch(/const claudeReported = claudeReportedOverLive\(claudeLive, transcriptModel\.fallback\)/)
+    expect(controller).not.toMatch(/const claudeReported = reportedModelPair/)
+  })
+  it('lays the pair over the resolved fallback, and a newer command over a beacon, never over a live pair otherwise', () => {
     const hook = code('./use-claude-transcript-model.ts')
     expect(hook).toMatch(/withSessionCommandPair\(base, command\)/)
-    expect(hook).toMatch(/quiet && messages \? sessionCommandPairFor\(/)
-    expect(hook).toMatch(/!\(pick && base\.kind === 'none'\)/)
+    expect(hook).toMatch(/enabled && sessionId && messages \? sessionCommandPairFor\(/)
+    expect(hook).toMatch(/pick && base\.kind === 'none'/)
+    expect(hook).toMatch(/: commandOverBeacon\(command, liveModel, beaconReceivedAt \?\? null\)/)
   })
   it('lets the composer sheet draw the effort the fallback carries', () => {
     expect(code('./use-mobile-native-chat-session-option-controller.ts')).toMatch(
