@@ -293,7 +293,8 @@ describe('a Windows host has no PTY device, so the script writes to the console'
       input: statusJson,
       pathShim: msysShim(),
       noTtyOverride: true,
-      env: { CUIHUD_WIN_TTY: console_ }
+      // Both console seams pinned: unset, the script writes to /dev/tty.
+      env: { CUIHUD_WIN_TTY: console_, CUIHUD_WIN_CONOUT: join(mkdtempSync(join(tmpdir(), 'cuihud-con-')), 'conout') }
     })
     expect(run.stdout).toBe('')
     expect(readFileSync(console_, 'utf8')).toBe(
