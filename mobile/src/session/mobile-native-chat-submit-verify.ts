@@ -2,8 +2,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import {
-  claudeSentBashRows,
-  claudeSentPromptRows,
+  claudeSentBashTexts,
+  claudeSentPromptTexts,
   claudeSubmitNotice,
   readClaudeInput
 } from './claude-composer-screen'
@@ -132,7 +132,7 @@ export async function verifyClaudeSubmit(args: {
   )
   // A confirmed `!` message is a shell command: while it is in the input the box shows the
   // command with the `!` taken off (bash mode), and once it is submitted Claude draws it as a
-  // `! cmd` row, not a `❯` row, and fires no prompt hook (claudeSentBashRows). Both the command
+  // `! cmd` row, not a `❯` row, and fires no prompt hook (claudeSentBashTexts). Both the command
   // and the full text count as "the words", so a message that went as a plain prompt is seen too.
   const shell = shellCommandOfSend(args.text, 'claude')
   const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
@@ -198,14 +198,14 @@ export async function verifyClaudeSubmit(args: {
     // message.
     if (
       sawWords ||
-      claudeSentPromptRows(screen.lines).some((row) =>
+      claudeSentPromptTexts(screen.lines).some((row) =>
         photos
           ? words !== '' && heard(row)
           : words !== '' && dense(row).startsWith(words)
       ) ||
       (shell !== null &&
         args.priorBashRows !== null &&
-        claudeSentBashRows(screen.lines).filter(heard).length >
+        claudeSentBashTexts(screen.lines).filter(heard).length >
           (args.priorBashRows ?? []).filter(heard).length)
     ) {
       return { kind: 'sent' }
