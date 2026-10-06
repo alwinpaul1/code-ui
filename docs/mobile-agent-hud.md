@@ -1439,3 +1439,72 @@ console, which is where the frame belongs, and a fallback to nothing would only
 drop the Windows beacon. A whole-suite run in a new session with no controlling
 tty, stdin from `/dev/null`, a `ps` that prints nothing and every override on a
 temp file is the belt that catches what a source-reading test cannot.
+
+### Three lines against a test reaching a real terminal (2026-10-06)
+
+The tty writer walks ANCESTORS, so the only structural fix is that no ancestor of
+the tests, within six steps, holds a terminal. Source-shape ratchets kept missing
+shapes (Opus, three rounds), and a PATH-shadowed `ps` does not cover a spawn with
+its own PATH: macOS's `/bin/ps` cannot be shadowed, and a reviewer's scratch spawn
+with `PATH: '/usr/bin:/bin'` used it, walked to the agent on `ttys010` at depth 5
+and wrote one frame into the real terminal. `setsid` alone does not help either: it
+drops the process's controlling terminal, not its ancestors'.
+
+1. **Primary: `mobile/scripts/run-detached.mjs`, which `pnpm test` runs vitest
+   through** (and so does the release workflow's `pnpm test` step). It double-forks:
+   it starts `sh` in a new session, `sh` starts the command in a background subshell
+   and exits, so the subshell is reparented to pid 1 and the command's chain is
+   command, subshell, pid 1, with no terminal in it. stdout and stderr are pipes the
+   subshell inherits, relayed until the last writer closes them; stdin is `/dev/null`;
+   the exit status travels through a file; SIGINT, SIGTERM and SIGHUP are forwarded to
+   the process group. `scripts/run-detached.test.ts` runs the real runner and has the
+   command READ its own ancestry (real `ps`, no write): it ends at pid 1 with no
+   terminal. `src/test/vitest-runs-detached.test.ts` fails hard when vitest runs with a
+   terminal among its ancestors, on a developer machine: run `pnpm test`, not `vitest`
+   from a terminal. The same read-only walk (`mobile/vitest.ancestors.ts`) also runs in
+   the globalSetup BEFORE any worker starts, so a direct `npx vitest run` from a
+   terminal throws at setup with zero tests executed ("A terminal is among this test
+   run's ancestors … run `pnpm test`, which detaches it"); the guard test stays for a
+   run whose setup was skipped. In CI there is no terminal anywhere, so both pass.
+   The runner escalates an interrupt: a command started from a background list has
+   SIGINT ignored, so after forwarding it sends SIGTERM and then SIGKILL to the group
+   (2 s, 4 s) and exits 130.
+2. **Second: vitest's `globalSetup`** (`mobile/vitest.global-setup.ts`): a `ps` that
+   prints nothing, and logs each call with a `CUIHUD_PROBE` token, first on PATH, and
+   `CUIHUD_TTY`, `CUIHUD_WIN_TTY`, `CUIHUD_WIN_CONOUT` on temp files, with
+   `CUIHUD_TEST_SANDBOX` naming the directory. It covers a spawn that inherits or
+   spreads `process.env` under the forks, threads and vmThreads pools and for
+   `scripts/**/*.test.ts` (same config). It does NOT cover a spawn with its own PATH.
+   `agent-hud-test-sandbox.test.ts` resolves `ps` under the exact environment it will
+   pass and requires the sandbox shim, spawns the original leak shape
+   (`{ ...process.env, CUIHUD_TTY: '' }`), requires a shim call carrying this spawn's
+   probe token with `-o tty=`, and compares each sink's size before and after instead
+   of requiring zero. The probe shows the call came from an environment that test
+   built, not which process called. With the shim missing it fails before spawning.
+3. **Third: the source ratchet** (`agent-hud-tests-reach-no-real-tty.test.ts`), for a
+   spawn that builds its environment from nothing. A spawn in a file that names a
+   script or builder must keep PATH (spread `process.env`, or build `PATH` from it),
+   pin `CUIHUD_TTY` to a temp path (every assignment of the name), or use
+   `noTerminalPath()`; a `pathShim` counts only when its variable is named `psShim`
+   or `fakePs` or it is an MSYS shim with both console overrides (a naming
+   convention, not a check of what the shim does); `CUIHUD_WIN_CONOUT` exempts only a
+   PowerShell spawn. The environment rule runs BEFORE the harmless exemption, so
+   `execSync('uname; ' + s, { env: … })` and its template form are judged as spawns of
+   a script, and a hand-built PATH is accepted only with a pinned temp `CUIHUD_TTY`
+   (no walk is made then). Its one exemption is the sandbox guard's call, by repo-relative
+   path and only a call that carries `CUIHUD_PROBE`. Not chased: a string-form
+   `execSync`, a script piped on stdin, wrappers in helpers, import aliases,
+   `promisify`.
+
+**Residual routes, stated plainly.** A process already orphaned under something that
+holds a terminal, or a host whose init holds one, is not helped by the runner (the
+guard test checks the chain it actually got). A test that spawns with its own PATH
+and runs a script written in a shape the ratchet does not read still reaches the real
+`ps` unless the runner is in use. Running vitest from a terminal without the runner
+fails the guard test, and the other tests of that run are protected only by the
+sandbox and the ratchet.
+
+**Decision: the script does not refuse to walk when `VITEST` is set.** It would add
+test-runner knowledge to a script that ships to users, a user with `VITEST` exported
+in a shell profile would silently lose the beacon, and it would not help the case that
+matters (a spawn with a hand-built environment has no `VITEST` either).

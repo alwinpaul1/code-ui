@@ -1,6 +1,6 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 // 2026-10-06: a test that ran the status-line script with `CUIHUD_TTY: ''` let
@@ -22,7 +22,20 @@ import { describe, expect, it } from 'vitest'
 // `/dev/tty` is the console Claude is attached to, which is exactly what the
 // frame is for, and the fallback is reachable only on the MSYS branch. A script
 // that wrote nothing without `CUIHUD_WIN_TTY` would write nothing there either.
-// The ratchet and the belt are what hold the tests off it.
+// What holds the tests off it is a test pinning both console overrides (checked
+// below), the sandbox that sets them for every spawn that inherits the
+// environment, and a run with no terminal in its ancestors (run-detached.mjs).
+//
+// THE PRIMARY GUARD IS NOT THIS FILE. It is `scripts/run-detached.mjs`, which
+// `pnpm test` goes through: it double-forks so no ancestor of the tests holds a
+// terminal, and src/test/vitest-runs-detached.test.ts fails hard when one does.
+// The SECOND line is vitest's globalSetup (vitest.global-setup.ts, checked by
+// agent-hud-test-sandbox.test.ts): a `ps` that sees nothing first on PATH and
+// every tty override on a temp file, which covers a spawn that inherits or
+// spreads `process.env` and NOT one with its own PATH (it finds the real
+// `/bin/ps`, which macOS will not let us shadow). This ratchet is the THIRD line; it is not exhaustive and chasing every source
+// shape (a string-form execSync, a script piped on stdin, wrappers in helpers,
+// import aliases, promisify) is not its job.
 //
 // A STRUCTURE ratchet: a source-reading test is the only instrument that sees a
 // spawn nobody pinned. It reads code, not comments, and every file that imports
@@ -71,7 +84,16 @@ function runsNoScript(call: string): boolean {
   if (/^\(\s*['"`]cat['"`]/.test(call)) {
     return true
   }
-  return HARMLESS.some((pattern) => pattern.test(call)) && !argumentIdentifiers(call)
+  if (!HARMLESS.some((pattern) => pattern.test(call))) {
+    return false
+  }
+  // `execFileSync('sh', [args])`: the array holds no variable. String form,
+  // `execSync('uname; ' + s)` or a template with `${s}`: the first argument must
+  // be one plain literal (review).
+  if (/^\(\s*['"`][^'"`]*['"`]\s*,\s*\[/.test(call)) {
+    return !argumentIdentifiers(call)
+  }
+  return /^\(\s*(?:'[^'\\]*'|"[^"\\]*"|`[^`$\\]*`)\s*(?:,|\))/.test(call)
 }
 
 function sourceFiles(dir: string): string[] {
@@ -88,16 +110,37 @@ function sourceFiles(dir: string): string[] {
  *  template or regex literal left alone (review: a `://` swallowed the rest of
  *  the line). A small scanner, not a parser. */
 function withoutComments(source: string): string {
-  let out = ''
+  const out: string[] = []
   let i = 0
   let quote: string | null = null
+  // The last significant character and word, tracked as the scan goes (a lookback
+  // through the output per slash was quadratic). A `/` starts a regex literal after
+  // an operator, an opening bracket, a keyword or at the start; it is a division
+  // after an identifier, a number or a closing bracket.
+  let last = ''
+  let word = ''
+  const note = (c: string) => {
+    if (/\s/.test(c)) {
+      return
+    }
+    last = c
+    word = /[\w$]/.test(c) ? word + c : ''
+  }
+  const regexAllowed = () =>
+    last === '' || /[(,=:[!&|?{};+\-*%<>~^]/.test(last) || /^(?:return|typeof|case|in|of)$/.test(word)
+  const emit = (text: string) => {
+    out.push(text)
+    for (const c of text) {
+      note(c)
+    }
+  }
   while (i < source.length) {
     const c = source[i]!
     const next = source[i + 1]
     if (quote !== null) {
-      out += c
+      emit(c)
       if (c === '\\') {
-        out += next ?? ''
+        emit(next ?? '')
         i += 2
         continue
       }
@@ -107,7 +150,7 @@ function withoutComments(source: string): string {
       i += 1
     } else if (c === '"' || c === "'" || c === '`') {
       quote = c
-      out += c
+      emit(c)
       i += 1
     } else if (c === '/' && next === '/') {
       while (i < source.length && source[i] !== '\n') {
@@ -116,12 +159,42 @@ function withoutComments(source: string): string {
     } else if (c === '/' && next === '*') {
       const end = source.indexOf('*/', i + 2)
       i = end === -1 ? source.length : end + 2
+    } else if (c === '/' && regexAllowed()) {
+      // A regex literal: to the closing `/`, honouring escapes and `[...]`.
+      let inClass = false
+      emit(c)
+      i += 1
+      while (i < source.length && source[i] !== '\n') {
+        const r = source[i]!
+        emit(r)
+        i += 1
+        if (r === '\\') {
+          emit(source[i] ?? '')
+          i += 1
+        } else if (r === '[') {
+          inClass = true
+        } else if (r === ']') {
+          inClass = false
+        } else if (r === '/' && !inClass) {
+          break
+        }
+      }
     } else {
-      out += c
+      emit(c)
       i += 1
     }
   }
-  return out
+  return out.join('')
+}
+
+/** `PATH: name` where `name` is assigned from `process.env.PATH`. */
+function pathFromEnv(call: string, code: string): boolean {
+  const named = /PATH\s*:\s*([A-Za-z_$][\w$]*)\s*[,}]/.exec(call)
+  if (!named) {
+    return false
+  }
+  const assignment = new RegExp(String.raw`(?:const|let|var)\s+${named[1]!.replace(/\$/g, String.raw`\$`)}\s*=\s*([^;]+)`).exec(code)
+  return assignment !== null && /process\.env\.PATH|noTerminalPath/.test(assignment[1]!)
 }
 
 /** The text of the call opening at `open` (the index of its `(`): to the matching `)`. */
@@ -154,21 +227,26 @@ function pinnedValue(expression: string, code: string, depth = 0): boolean {
     return false
   }
   const name = expression.replace(/\$/g, String.raw`\$`)
-  // `const tty = …`, or a default parameter `(…, tty = …)`.
-  const assigned = new RegExp(String.raw`(?:(?:const|let|var)\s+|[(,]\s*)${name}\s*(?::[^=\n]+)?=\s*([^\n;]+(?:\n[^\n;]*)?)`).exec(code)
-  if (assigned === null || /process\.env\.CUIHUD/.test(assigned[1]!)) {
+  // Every `const tty = …` and default parameter `(…, tty = …)` of the name in the
+  // file: scopes are not told apart, so one that is not a temp path fails them
+  // all, which is the safe side.
+  const assignments = [
+    ...code.matchAll(new RegExp(String.raw`(?:(?:const|let|var)\s+|[(,]\s*)${name}\s*(?::[^=\n]+)?=\s*([^\n;]+(?:\n[^\n;]*)?)`, 'g'))
+  ].map((m) => m[1]!)
+  if (assignments.length === 0 || assignments.some((rhs) => /process\.env\.CUIHUD/.test(rhs))) {
     return false
   }
-  if (TEMP_ORIGIN.test(assigned[1]!)) {
-    return true
-  }
-  // `join(dir, 'pty')`: pinned when a name it is built from is.
-  return [...assigned[1]!.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].some(
-    (m) => m[1] !== expression && !/^(?:join|resolve|path|const|let|process|env|cwd)$/.test(m[1]!) && pinnedValue(m[1]!, code, depth + 1)
+  return assignments.every(
+    (rhs) =>
+      TEMP_ORIGIN.test(rhs) ||
+      // `join(dir, 'pty')`: pinned when a name it is built from is.
+      [...rhs.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].some(
+        (m) => m[1] !== expression && !/^(?:join|resolve|path|const|let|process|env|cwd)$/.test(m[1]!) && pinnedValue(m[1]!, code, depth + 1)
+      )
   )
 }
 
-export function unpinnedSpawns(source: string): string[] {
+export function unpinnedSpawns(source: string, allowCall?: (call: string) => boolean): string[] {
   const code = withoutComments(source)
   if (!SCRIPT_REFERENCE.test(code)) {
     return []
@@ -176,15 +254,30 @@ export function unpinnedSpawns(source: string): string[] {
   const found: string[] = []
   for (const match of code.matchAll(SPAWN)) {
     const call = callText(code, match.index! + match[0].length - 1)
-    if (runsNoScript(call)) {
+    if (allowCall?.(call)) {
       continue
     }
     const values = [...call.matchAll(/CUIHUD_TTY\s*:\s*([^,}\n]+)/g)].map((m) => m[1]!.trim())
+    const pinned = values.length > 0 && values.every((value) => pinnedValue(value, code))
+    // An environment built without PATH from process.env leaves the sandbox's `ps`
+    // out of reach: the walk then finds the real one (a reviewer's scratch spawn
+    // wrote a frame into the real terminal that way). Safe only when CUIHUD_TTY is
+    // pinned to a temp path, which skips the walk. A spawn with no `env` option
+    // inherits ours. Checked BEFORE the harmless exemption: `uname; ` in front of a
+    // script does not make a spawn harmless (review).
+    const envOption = /\benv\s*:/.test(call)
+    const keepsPath = /\.\.\.process\.env|PATH\s*:\s*(?:[^,}\n]*process\.env\.PATH|noTerminalPath)/.test(call) || pathFromEnv(call, code)
+    if (envOption && !keepsPath && !pinned) {
+      found.push(`${match[0]}…  builds env without PATH from process.env: the walk finds the real ps`)
+      continue
+    }
+    if (runsNoScript(call)) {
+      continue
+    }
     const noTerminal = /noTerminalPath|psShim|fakePs/.test(call)
     // The PowerShell writers have no tty to walk to: they write to the console
     // seam `CUIHUD_WIN_CONOUT`, which a test points at a temp file.
-    const conout = /CUIHUD_WIN_CONOUT\s*:/.test(call)
-    const pinned = values.length > 0 && values.every((value) => pinnedValue(value, code))
+    const conout = /CUIHUD_WIN_CONOUT\s*:/.test(call) && /\b(?:pwsh|powershell)\b/i.test(call)
     if (noTerminal || conout || pinned) {
       if (/\b(?:MINGW|MSYS|msys)/.test(call) && !(/CUIHUD_WIN_TTY\s*:/.test(call) && /CUIHUD_WIN_CONOUT\s*:/.test(call))) {
         found.push(`${match[0]}…  fakes MSYS without pinning CUIHUD_WIN_TTY and CUIHUD_WIN_CONOUT: it writes to /dev/tty`)
@@ -212,23 +305,34 @@ export function unpinnedSpawns(source: string): string[] {
       }
     }
     const around = callText(code, start)
-    if (!/pathShim/.test(around)) {
-      found.push('noTtyOverride: true without a pathShim beside it: the walk reaches a real terminal')
-    } else if (/msysShim|MINGW|MSYS/i.test(around) && !(/CUIHUD_WIN_TTY\s*:/.test(around) && /CUIHUD_WIN_CONOUT\s*:/.test(around))) {
+    // A shim counts when it is a `ps` that sees nothing, or an MSYS `uname`
+    // with BOTH console overrides; any other path shim leaves the walk alone.
+    const psShim = /noTerminalPath|psShim|fakePs/.test(around)
+    const msys = /msysShim|MINGW|MSYS/i.test(around)
+    if (!/pathShim/.test(around) || !(psShim || msys)) {
+      found.push('noTtyOverride: true without a ps shim or an MSYS shim beside it: the walk reaches a real terminal')
+    } else if (!psShim && !(/CUIHUD_WIN_TTY\s*:/.test(around) && /CUIHUD_WIN_CONOUT\s*:/.test(around))) {
       found.push('noTtyOverride with an MSYS shim and no CUIHUD_WIN_TTY and CUIHUD_WIN_CONOUT beside it: it writes to /dev/tty')
     }
   }
   return found
 }
 
+/** The one intended spawn of a leak shape: the sandbox guard's, by repo-relative path. */
+const ALLOWED = new Map<string, (call: string) => boolean>([
+  [join('src', 'session', 'agent-hud-test-sandbox.test.ts'), (call) => /CUIHUD_PROBE/.test(call)]
+])
+
 /** `file: why` for every unpinned spawn in the files under `roots` that import `child_process`. */
-function offendersIn(roots: string[]): string[] {
+function offendersIn(roots: string[], base = MOBILE): string[] {
   return roots.flatMap((root) =>
     sourceFiles(root)
       .filter((file) => file !== __filename)
       .flatMap((file) => {
         const source = readFileSync(file, 'utf8')
-        return /child_process/.test(source) ? unpinnedSpawns(source).map((why) => `${basename(file)}: ${why}`) : []
+        return /child_process/.test(source)
+          ? unpinnedSpawns(source, ALLOWED.get(relative(base, file))).map((why) => `${basename(file)}: ${why}`)
+          : []
       })
   )
 }
@@ -273,24 +377,24 @@ describe('no test can reach a real terminal through a beacon script', () => {
     it('R4: CUIHUD_TTY: tty is pinned only when tty comes from a temp directory or is a literal path', () => {
       const empty = `const tty = ''
         const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: tty } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: tty } })`
       expect(unpinnedSpawns(empty)).toHaveLength(1)
       const param = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: whoKnows } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: whoKnows } })`
       expect(unpinnedSpawns(param)).toHaveLength(1)
       const real = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: '/dev/ttys003' } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: '/dev/ttys003' } })`
       expect(unpinnedSpawns(real)).toHaveLength(1)
       const envTty = `const tty = process.env.CUIHUD_TTY
         const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: tty } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: tty } })`
       expect(unpinnedSpawns(envTty)).toHaveLength(1)
       const literal = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: '/nonexistent-dir/tty' } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: '/nonexistent-dir/tty' } })`
       expect(unpinnedSpawns(literal)).toEqual([])
       const viaTmpdir = `const tty = join(process.env.TMPDIR ?? '/tmp', 'x.txt')
         const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
-        execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: tty } })`
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: tty } })`
       expect(unpinnedSpawns(viaTmpdir)).toEqual([])
     })
 
@@ -327,7 +431,7 @@ describe('no test can reach a real terminal through a beacon script', () => {
       mkdirSync(join(root, 'src', 'x'), { recursive: true })
       mkdirSync(join(root, 'scripts'), { recursive: true })
       const offender = `import { execFileSync } from 'node:child_process'
-        execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { CUIHUD_TTY: '' } })`
+        execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { ...process.env, CUIHUD_TTY: '' } })`
       writeFileSync(join(root, 'src', 'x', 'runner.test-support.ts'), offender)
       writeFileSync(join(root, 'scripts', 'thing.test.ts'), offender)
       writeFileSync(join(root, 'src', 'x', 'fine.test.ts'), "const a = 1")
@@ -336,10 +440,125 @@ describe('no test can reach a real terminal through a beacon script', () => {
     })
 
     it('a // inside a string is not a comment, so what follows it is still read', () => {
-      const src = `const url = 'http://x'; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: '' } })`
+      const src = `const url = 'http://x'; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: '' } })`
       expect(unpinnedSpawns(src)).toHaveLength(1)
       const template = "const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; run(`a // b`); execFileSync('sh', ['-c', s], {})"
       expect(unpinnedSpawns(template)).toHaveLength(1)
+    })
+  })
+
+  // Opus's second round (2026-10-06). The cheap ones are fixed; the shapes
+  // below (a string-form execSync, a script piped on stdin, wrappers in
+  // helpers, aliases and promisify) are NOT chased: the global sandbox
+  // (vitest.global-setup.ts, proved by agent-hud-test-sandbox.test.ts) is the
+  // primary guard, and this ratchet is the second line for a spawn that builds
+  // its environment from nothing.
+  describe('the second round', () => {
+    it('F3: a pathShim counts only when it is a ps shim, or an MSYS shim with both console overrides', () => {
+      const anyShim = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: someDir, noTtyOverride: true })`
+      expect(unpinnedSpawns(anyShim)).toHaveLength(1)
+      const unameShim = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: unameOnly(), noTtyOverride: true })`
+      expect(unpinnedSpawns(unameShim)).toHaveLength(1)
+      const psShimmed = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: psShimDir, noTtyOverride: true })`
+      expect(unpinnedSpawns(psShimmed)).toEqual([])
+    })
+
+    it('F4: CUIHUD_WIN_CONOUT exempts only a PowerShell spawn, never the POSIX walk', () => {
+      const posix = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_WIN_CONOUT: c, CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(posix)).toHaveLength(1)
+      const bare = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
+        execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_WIN_CONOUT: c } })`
+      expect(unpinnedSpawns(bare)).toHaveLength(1)
+      const pwsh = `const s = CLAUDE_HUD_STOP_HOOK_POWERSHELL
+        execFileSync(pwsh ?? 'pwsh', ['-Command', s], { env: { ...process.env, CUIHUD_WIN_CONOUT: c } })`
+      expect(unpinnedSpawns(pwsh)).toEqual([])
+    })
+
+    it('F5: a name counts as a temp path only when EVERY assignment of it is one', () => {
+      const second = `function a() { const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty'); return tty }
+        function b() { const tty = ''; execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { ...process.env, CUIHUD_TTY: tty } }) }`
+      expect(unpinnedSpawns(second)).toHaveLength(1)
+      const both = `function a() { const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty'); return tty }
+        function b() { const tty = join(tmpdir(), 'y'); execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { ...process.env, CUIHUD_TTY: tty } }) }`
+      expect(unpinnedSpawns(both)).toEqual([])
+    })
+
+    it('a // inside a regex literal is not a comment either', () => {
+      const src = `const re = /\\/\\//; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(src)).toHaveLength(1)
+      const division = `const half = a / b; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { ...process.env, CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(division)).toHaveLength(1)
+    })
+  })
+
+  // Third round (2026-10-06): the sandbox's `ps` shadows only a spawn that keeps
+  // PATH. A spawn with its own PATH finds the real `/bin/ps`, which macOS will not
+  // let us shadow, walks to the real terminal and writes (a reviewer's scratch
+  // spawn did exactly that). The primary guard is now scripts/run-detached.mjs
+  // (src/test/vitest-runs-detached.test.ts); the sandbox is the second line; this
+  // is the third.
+  describe('the third round', () => {
+    const head = `const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty')\nconst s = CLAUDE_HUD_STOP_HOOK_SCRIPT\n`
+    it('flags a spawn whose environment is built without PATH from process.env, unless CUIHUD_TTY is pinned', () => {
+      for (const env of [
+        "{ PATH: '/usr/bin:/bin', CUIHUD_TTY: '' }",
+        '{ HOME: h }',
+        "{ PATH: '', CUIHUD_TTY: '' }"
+      ]) {
+        expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { env: ${env} })`), env).toHaveLength(1)
+      }
+      // A hand-built PATH is safe with a pinned temp CUIHUD_TTY: no walk is made.
+      for (const env of ["{ PATH: '/usr/bin:/bin', CUIHUD_TTY: tty }", '{ HOME: h, CUIHUD_TTY: tty }']) {
+        expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { env: ${env} })`), env).toEqual([])
+      }
+    })
+
+    it('a harmless-looking prefix does not exempt a string-form spawn, plain or template', () => {
+      const env = "{ env: { PATH: '/usr/bin:/bin', CUIHUD_TTY: '' } }"
+      expect(unpinnedSpawns(`const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname; ' + s, ${env})`)).toHaveLength(1)
+      expect(unpinnedSpawns("const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync(`uname; ${s}`, " + env + ')')).toHaveLength(1)
+      const inherited = '{ env: { ...process.env, CUIHUD_TTY: \'\' } }'
+      expect(unpinnedSpawns(`const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname; ' + s, ${inherited})`)).toHaveLength(1)
+      // A literal snippet that runs no variable stays harmless.
+      expect(unpinnedSpawns("const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname -s')")).toEqual([])
+    })
+
+    it('accepts one that spreads process.env or builds PATH from it, and one with no env at all', () => {
+      for (const env of [
+        '{ ...process.env, CUIHUD_TTY: tty }',
+        "{ PATH: process.env.PATH ?? '', HOME: h, CUIHUD_TTY: tty }",
+        '{ PATH: noTerminalPath(), CUIHUD_TTY: tty }'
+      ]) {
+        expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { env: ${env} })`), env).toEqual([])
+      }
+      expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { input: 'x' })`)).toHaveLength(1)
+      const viaName = `${head}const path = \`${'${shim}'}:${'${process.env.PATH}'}\`\nexecFileSync('sh', ['-c', s], { env: { PATH: path, CUIHUD_TTY: tty } })`
+      expect(unpinnedSpawns(viaName)).toEqual([])
+    })
+
+    it('the allow-list is the one file by its repo-relative path, and the one call that carries the probe', () => {
+      const root = mkdtempSync(join(tmpdir(), 'tty-ratchet-allow-'))
+      mkdirSync(join(root, 'src', 'session'), { recursive: true })
+      const leak = `import { spawnSync } from 'node:child_process'
+        spawnSync('sh', ['-c', CLAUDE_HUD_STATUSLINE_SCRIPT], { env: { ...process.env, CUIHUD_TTY: '' } })`
+      // Same basename as the guard, another path: no longer exempt.
+      writeFileSync(join(root, 'src', 'session', 'agent-hud-test-sandbox.test.ts'), leak)
+      expect(offendersIn([join(root, 'src')])).toHaveLength(1)
+      // Inside the allowed file only a call that names the probe is exempt.
+      const guard = "spawnSync('sh', ['-c', CLAUDE_HUD_STATUSLINE_SCRIPT], { env: { ...process.env, CUIHUD_TTY: '', CUIHUD_PROBE: probe } })"
+      expect(unpinnedSpawns(guard, (call) => /CUIHUD_PROBE/.test(call))).toEqual([])
+      expect(unpinnedSpawns(leak, (call) => /CUIHUD_PROBE/.test(call))).toHaveLength(1)
+    })
+
+    it('reads a large source in linear time (a regex per slash over a growing prefix was quadratic)', () => {
+      const body = Array.from({ length: 30_000 }, (_, i) => `const q${i} = a${i} / b${i}`).join('\n')
+      const started = performance.now()
+      expect(unpinnedSpawns(`${body}\nconst s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecFileSync('sh', ['-c', s], {})`)).toHaveLength(1)
+      expect(performance.now() - started).toBeLessThan(600)
     })
   })
 })

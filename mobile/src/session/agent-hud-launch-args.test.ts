@@ -334,13 +334,13 @@ describe('a Windows host has no PTY device, so the script writes to the console'
     // MSYS ships its own `ps`; the walk must never error out on it. Faked here
     // by a shim that fails the way that one does, with uname left as the Mac's
     // so the POSIX walk is the branch under test.
-    const dir = mkdtempSync(join(tmpdir(), 'cuihud-shim-'))
-    writeFileSync(join(dir, 'ps'), '#!/bin/sh\necho "ps: unknown option" >&2\nexit 1\n', {
+    const psShimDir = mkdtempSync(join(tmpdir(), 'cuihud-shim-'))
+    writeFileSync(join(psShimDir, 'ps'), '#!/bin/sh\necho "ps: unknown option" >&2\nexit 1\n', {
       mode: 0o755
     })
     const run = runScript(CLAUDE_HUD_STATUSLINE_SCRIPT, {
       input: statusJson,
-      pathShim: dir,
+      pathShim: psShimDir,
       noTtyOverride: true
     })
     expect(run.stdout).toBe('')
