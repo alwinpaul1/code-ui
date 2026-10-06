@@ -41,7 +41,6 @@ import {
 
 type SubscribeResult = {
   type: 'ready'
-  subscriptionId: string
   // Desktop counter lifetime (#8591); absent from runtimes that predate it.
   epoch?: string
 }
@@ -75,7 +74,6 @@ function appIsOpen(): boolean {
 export function subscribeToDesktopNotifications(client: RpcClient, hostId: string): () => void {
   configureNotificationChannel()
 
-  let subscriptionId: string | null = null
   let disposed = false
   // Why (#8591): survives the unsubscribe/resubscribe the app performs on every
   // socket drop, so a reconnect still knows its watermark and that it reconnected.
@@ -303,12 +301,8 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
   // Warmed here, well before the first 'ready', so the catch-up never waits on it.
   void seedDeliveredPushes(hostId)
 
-  function unsubscribeServer(id: string) {
-    if (client.getState() === 'connected') {
-      client.sendRequest('notifications.unsubscribe', { subscriptionId: id }).catch(() => {})
-    }
-  }
-
+  // The transport releases the host registration with the id from the current `ready`
+  // (READY_STREAM_RELEASE_METHODS); this module keeps no copy of it.
   const unsubscribeStream = client.subscribe('notifications.subscribe', {}, (data: unknown) => {
     const event = data as
       | NotificationEvent
@@ -318,7 +312,6 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     // No dispose-before-ready arm: every transport detaches this listener inside
     // `unsubscribeStream()`, so a callback that runs at all runs before disposal.
     if (event.type === 'ready') {
-      subscriptionId = (event as SubscribeResult).subscriptionId
       const isReconnect = session.connectedBefore
       session.connectedBefore = true
       const readyEpoch = (event as SubscribeResult).epoch
@@ -380,8 +373,5 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     disposed = true
     // Why: drop the local stream first — readiness can race unmount; don't hold the callback while a subscription id is pending.
     unsubscribeStream()
-    if (subscriptionId) {
-      unsubscribeServer(subscriptionId)
-    }
   }
 }
