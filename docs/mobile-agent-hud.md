@@ -1303,3 +1303,21 @@ whose `ps` sees no process. `agent-hud-tests-reach-no-real-tty.test.ts` is a
 source-reading ratchet that fails any test that does neither. Do not run these
 scripts from a test with a real `ps` and no override, and do not point
 `CUIHUD_TTY` at a real device.
+
+The ratchet was hardened after review (2026-10-06): a harmless-looking word in a
+call (`uname`, `command -v`) exempts it only when the call runs no variable;
+`CUIHUD_TTY: tty` counts as pinned only when `tty` is a literal path that is not a
+real device or is assigned, directly or through `join(dir, …)`, from a temp
+directory (`mkdtemp`, `tmpdir`, `TMPDIR`); a file is scanned when it names a
+script constant, a builder (`buildClaudeHudSettingsJson`, `agentHudLaunchFlag`,
+`buildCodexHudNotifyOverride`) or imports one of the modules that define them;
+a test that fakes MSYS (`uname`) or uses `noTtyOverride` must pin both
+`CUIHUD_WIN_TTY` and `CUIHUD_WIN_CONOUT`, because the Windows branch writes to
+`${CUIHUD_WIN_TTY:-/dev/tty}`; every file that imports `child_process` under
+`src/` and `scripts/` is scanned, helpers and `*.test-support.ts` included; and a
+`//` inside a string no longer hides the rest of the line. The script's own
+`/dev/tty` fallback stays: on a real Windows host `/dev/tty` is the attached
+console, which is where the frame belongs, and a fallback to nothing would only
+drop the Windows beacon. A whole-suite run in a new session with no controlling
+tty, stdin from `/dev/null`, a `ps` that prints nothing and every override on a
+temp file is the belt that catches what a source-reading test cannot.
