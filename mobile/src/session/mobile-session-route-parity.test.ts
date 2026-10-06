@@ -218,7 +218,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // startDictation, and cancelDictation erases through eraseLiveTranscript instead of
 // sending its own delta (live-terminal-dictation.ts, which counts only the bytes the
 // terminal took). Only those two bodies moved. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '5dc1e6de0a5e831d3f6e75e7abfa934350bdfbf0442b849d9a8ab8fa50593852'
+// 2026-10-06 (Orca #24655 ported): readFileTab's two writes land only while their own loading record
+// is the tab's current one, and an accepted file-tab close deletes the tab's cached document. Same
+// callbacks; the bodies of readFileTab and handleCloseSessionTab moved.
+const HEAD_CALLBACK_BODY_SHA256 = '6d14b44124ce41f100860060e395ace3b32d6392e443560730a1d7f91e90c123'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -303,8 +306,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // screen (forkClaudeSessionUnlessDialog) and toasts the refusal when there is
 // one; its two toast strings stay in the handler. Same one function; count
 // still 13.
+// 2026-10-06 (Orca #24655 ported): handleCloseSessionTab's body gains the file-tab document release.
+// Same 13 functions.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '811906ba34788b33676546fede7b621fbe4a40beff9747e89d23f97c8206adb7'
+  'af8c4b72bf8c7c507c31beeeb26905202a052fa5012c0ed73bf62593b49b67a5'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -401,8 +406,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 670 since 2026-10-04: TabActivityBadge's dot moved into session-tab-activity.ts's
 // tabPillDotState, outside this family, so the expression's `: 'idle'` leaves with it. The header
 // now calls `tabPillDotState(status, now, leadTurnEnded)` and holds no other literal of it.
+// 671 since 2026-10-06 (Orca #24655 ported): the `'file'` check before an accepted file-tab close
+// releases that tab's document; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'bcceda597e4b5955e32fcd3ef50e8a3ecb20ae3923341eba3f88c06cf0112c61'
+  '1b367405f456cd52d5285cb36a3484b6e23e4d26bd22b5e0b79c8e7187336db1'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1092,7 +1099,8 @@ describe('mobile session route extraction parity', () => {
     // 671 since 2026-09-30 (later): the live terminal dictation's 'pty' and three '' moved to
     // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
     // 670 since 2026-10-04: the tab pill's 'idle' moved to session-tab-activity.ts.
-    expect(strings).toHaveLength(670)
+    // 671 since 2026-10-06: the 'file' check before a closed file tab's document is released (Orca #24655).
+    expect(strings).toHaveLength(671)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
