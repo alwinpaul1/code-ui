@@ -777,3 +777,30 @@ The reported bug — the model's summarized thoughts drawn as its reply — is
   cannot deliver reasoning as reasoning until the desktop is updated past
   fab78c766 (2026-09-11). No Orca tag contains that commit yet; `package.json`
   reads 1.4.197 both at fab78c766 and at `origin/main`.
+
+## v1.4.221 mobile and paired clients (2026-10-06)
+
+Branch `port/orca-1.4.221`. Nothing under `src/shared/` changed in these PRs, so nothing was re-vendored
+and UPSTREAM.txt is unchanged. Each row is one commit with a failing-first test (red on the unfixed code).
+
+| PR | Class | Status / note |
+|---|---|---|
+| #23032 | phone | **done** (22328e68b). One `READY_STREAM_RELEASE_METHODS` table for both transports; notifications and accounts released once with the current ready id; `mobile-notifications.ts` sends no unsubscribe of its own. Also takes #22945's one-line `markForReplay` reset the fork lacked. Goldens, pilot scenarios and closures not carried: the fork records no notifications stream. |
+| #24547 | phone | **done** (7e8d4f8e7). |
+| #24625 | phone | **done** (f1738ca18). Matrix omits `session.tabs.subscribe` (#22943's direct hold is not carried). |
+| #24655 | phone | **done** (9be51286b). The fork's prefetch cache (`rememberFileTabDoc`, up to 12 docs, module scope) still keeps a closed tab's last read; not touched. |
+| #24653 | host | desktop clipboard upload decoding (`src/main`). Free with the Orca update. |
+| #24665 | phone | **done** (75a43c16d). New `base64-byte-codec.ts`; the fork's `base64-bytes.ts` delegates to it. |
+| #24680 | phone | **done** (8d685f9c5), verbatim. |
+| #24694 | host | desktop path-inventory expiry (`src/main`). Free with the Orca update. |
+| #24778 | phone | **done** (46e51c151), verbatim. |
+| #24599 | phone | **done** (be8d1109a), verbatim. |
+| #24567, #24568 | phone | **done** (388bfdb25). |
+| #24759 | phone | **done** (29141874f); route parity pins in a follow-up commit. |
+| #24792 | phone | **done** (141444cc9), goldens re-recorded. Recorder `derived-goldens.ts` change moves `recorderSha256` everywhere; only `lifecycle-inventory-lifecycle` moves in body. |
+| #24941 | phone | **done** (5d3a2a170), verbatim. |
+| #24539, #24540 | phone | **done** (95e83a053, a0e3bf5d8), verbatim. |
+| #25107 | docs | not applicable: upstream README APK links. Code UI points at its own releases. |
+
+Not carried: upstream's comment-only edits to `rpc-recording/README.md`, `run-recording.ts` and an adapter
+(they sit in the recorder directory and would move `recorderSha256` for no behaviour).
