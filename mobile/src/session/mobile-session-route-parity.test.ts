@@ -114,7 +114,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // hook and binding pins moved, and only those.
 // 305 since 2026-10-04 (Orca #24301): the useState for agent-session.repeated-stop.v1 beside the
 // prompt-cancel one in the feedback capabilities, which the status probe sets.
-const HEAD_MAIN_HOOK_SHA256 = 'f95af0afe44b1b35c9b2388822bf2bd619751456a59aa8bb4a9848066035dfe9'
+// 307 since 2026-10-06 (Orca #24759 ported): the feedback hook's mountedRef (useRef) and its
+// effect (useEffect) join the family.
+const HEAD_MAIN_HOOK_SHA256 = '090cc40fd4a219699215880baf1f967aa90b41f99e0c877afda4d45c5cfc417a'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -125,7 +127,7 @@ const HEAD_MAIN_HOOK_SHA256 = 'f95af0afe44b1b35c9b2388822bf2bd619751456a59aa8bb4
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
-const HEAD_HOOK_BINDING_SHA256 = '156e5d25021e48ce06fe8262855d1d47c68dd496882acb26ae655d884f396352'
+const HEAD_HOOK_BINDING_SHA256 = '43e1a34ae749466e370fd4aa37a730e337427be6022ae23ce95607daca520f05'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -220,8 +222,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // terminal took). Only those two bodies moved. Same callbacks.
 // 2026-10-06 (Orca #24655 ported): readFileTab's two writes land only while their own loading record
 // is the tab's current one, and an accepted file-tab close deletes the tab's cached document. Same
-// callbacks; the bodies of readFileTab and handleCloseSessionTab moved.
-const HEAD_CALLBACK_BODY_SHA256 = '6d14b44124ce41f100860060e395ace3b32d6392e443560730a1d7f91e90c123'
+// callbacks; the bodies of readFileTab and handleCloseSessionTab moved. And (#24759) showToast skips a
+// disposed owner.
+const HEAD_CALLBACK_BODY_SHA256 = 'c125df2c01207fcd85b59c0eb6ec867f8c65ffb49f2d63e8b415a12d5980c6da'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -241,7 +244,7 @@ const HEAD_CALLBACK_BODY_SHA256 = '6d14b44124ce41f100860060e395ace3b32d6392e4435
 // useSoftKeyboard, visibility and height (26).
 // 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
-const HEAD_EFFECT_SHA256 = '7ad40b8775166bc422cebc64ab7269166028d3499b1c48588a62a50b98dbd1f8'
+const HEAD_EFFECT_SHA256 = 'f17512e385d4cd804c40f8876c03e40215c4f75fc85999371880e02ae9826faa'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -977,7 +980,7 @@ describe('mobile session route extraction parity', () => {
     // when no field on screen can take it.
     // 305 since 2026-10-04: the repeated-stop capability's useState beside the prompt-cancel one
     // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
-    expect(main.hooks).toHaveLength(305)
+    expect(main.hooks).toHaveLength(307)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -990,7 +993,8 @@ describe('mobile session route extraction parity', () => {
     // 25 since 2026-09-22: the dictation take stops when a call backgrounds the app.
     // 26 since 2026-09-24: the keyboard's visibility and height each own their own effect off
     // useSoftKeyboard, where one effect drove both off the raw Keyboard events (Orca #22252).
-    expect(main.effects).toHaveLength(26)
+    // 27 since 2026-10-06: the feedback hook's mountedRef effect (Orca #24759).
+    expect(main.effects).toHaveLength(27)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
