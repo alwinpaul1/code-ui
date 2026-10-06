@@ -135,4 +135,19 @@ describe.each(
       expect.objectContaining({ method: release, params: { subscriptionId: 'host-id-2' } })
     ])
   })
+
+  // Orca #22945's case, on both routes: three disposes around one ready make one release.
+  it('sends one release however often the stream is disposed', async () => {
+    const wire = transport()
+    const dispose = wire.subscribe(method)
+    await Promise.resolve()
+    dispose()
+    dispose()
+    wire.reply(readyReply(wire.sent[0]!.id, 'host-id-3'))
+    dispose()
+
+    expect(wire.sent.slice(1)).toEqual([
+      expect.objectContaining({ method: release, params: { subscriptionId: 'host-id-3' } })
+    ])
+  })
 })
