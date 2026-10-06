@@ -1,6 +1,7 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { delimiter, join } from 'node:path'
+import { assertNoTerminalAncestors } from './vitest.ancestors'
 
 /**
  * The sandbox every test runs in, set up once before any worker starts.
@@ -31,6 +32,9 @@ import { delimiter, join } from 'node:path'
  * `agent-hud-test-sandbox.test.ts` checks the sandbox is in place and used.
  */
 export default function setup(): () => void {
+  // First, before any worker or file: fail here, with zero tests run, when a
+  // terminal is among this process's ancestors (see vitest.ancestors.ts).
+  assertNoTerminalAncestors()
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-test-sandbox-'))
   const bin = join(dir, 'bin')
   mkdirSync(bin)

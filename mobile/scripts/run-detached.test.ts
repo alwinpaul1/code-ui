@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -48,4 +48,22 @@ describe('the detached runner', () => {
     const workflow = readFileSync(join(__dirname, '..', '..', '.github', 'workflows', 'mobile-android-release.yml'), 'utf8')
     expect(workflow.split('\n').filter((line) => !line.trimStart().startsWith('#')).some((line) => /^\s*(?:-\s*)?(?:run:\s*)?pnpm test\s*$/.test(line))).toBe(true)
   })
+
+  // A command in a background list of `sh -c` starts with SIGINT ignored, and the
+  // runner used to swallow its own: Ctrl-C hung on a child like `sleep`.
+  it('escalates an interrupt a non-node child ignores: SIGTERM, then SIGKILL, and exits 130', async () => {
+    const started = Date.now()
+    const child = spawn('node', [RUNNER, 'sleep', '60'], { stdio: 'ignore' })
+    const exit = new Promise<number | null>((resolve) => child.on('exit', (code) => resolve(code)))
+    await new Promise((resolve) => setTimeout(resolve, 800))
+    child.kill('SIGINT')
+    const code = await Promise.race([exit, new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 15_000))])
+    if (code === 'hung') {
+      child.kill('SIGKILL')
+    }
+    expect(code).toBe(130)
+    expect(Date.now() - started).toBeLessThan(12_000)
+    // Nothing is left sleeping.
+    expect(spawnSync('sh', ['-c', 'pgrep -f "sleep 60" >/dev/null && echo alive || echo gone'], { encoding: 'utf8' }).stdout.trim()).toBe('gone')
+  }, 30_000)
 })

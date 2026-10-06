@@ -44,14 +44,32 @@ const middle = spawn(
 middle.stdout.pipe(process.stdout)
 middle.stderr.pipe(process.stderr)
 
-// The command is in the middle's process group (no job control in `sh -c`).
+// The command is in the middle's process group (no job control in `sh -c`). A command
+// started from a background list has SIGINT ignored, so a forwarded interrupt can be a
+// no-op (`sleep` hung on Ctrl-C): after forwarding, escalate to SIGTERM and then
+// SIGKILL on the group if it has not gone, and exit 130.
+let interrupted = false
+const killGroup = (signal) => {
+  try {
+    process.kill(-middle.pid, signal)
+  } catch {
+    // Already gone.
+  }
+}
 for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(signal, () => {
-    try {
-      process.kill(-middle.pid, signal)
-    } catch {
-      // Already gone.
+    if (interrupted) {
+      return
     }
+    interrupted = true
+    killGroup(signal)
+    setTimeout(() => killGroup('SIGTERM'), 2000).unref()
+    setTimeout(() => killGroup('SIGKILL'), 4000).unref()
+    // Whatever the pipes do, do not outlive the kill by long.
+    setTimeout(() => {
+      rmSync(dir, { recursive: true, force: true })
+      process.exit(130)
+    }, 4500)
   })
 }
 
@@ -60,6 +78,10 @@ const done = () => {
   open -= 1
   if (open > 0) {
     return
+  }
+  if (interrupted) {
+    rmSync(dir, { recursive: true, force: true })
+    process.exit(130)
   }
   let status = 1
   try {

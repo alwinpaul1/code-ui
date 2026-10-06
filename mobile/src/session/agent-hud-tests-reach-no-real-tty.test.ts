@@ -84,7 +84,16 @@ function runsNoScript(call: string): boolean {
   if (/^\(\s*['"`]cat['"`]/.test(call)) {
     return true
   }
-  return HARMLESS.some((pattern) => pattern.test(call)) && !argumentIdentifiers(call)
+  if (!HARMLESS.some((pattern) => pattern.test(call))) {
+    return false
+  }
+  // `execFileSync('sh', [args])`: the array holds no variable. String form,
+  // `execSync('uname; ' + s)` or a template with `${s}`: the first argument must
+  // be one plain literal (review).
+  if (/^\(\s*['"`][^'"`]*['"`]\s*,\s*\[/.test(call)) {
+    return !argumentIdentifiers(call)
+  }
+  return /^\(\s*(?:'[^'\\]*'|"[^"\\]*"|`[^`$\\]*`)\s*(?:,|\))/.test(call)
 }
 
 function sourceFiles(dir: string): string[] {
@@ -245,25 +254,30 @@ export function unpinnedSpawns(source: string, allowCall?: (call: string) => boo
   const found: string[] = []
   for (const match of code.matchAll(SPAWN)) {
     const call = callText(code, match.index! + match[0].length - 1)
-    if (runsNoScript(call) || allowCall?.(call)) {
-      continue
-    }
-    // An environment built without PATH from process.env leaves the sandbox's `ps`
-    // out of reach: the walk then finds the real one (a reviewer's scratch spawn
-    // wrote a frame into the real terminal that way). A spawn with no `env` option
-    // inherits ours.
-    const envOption = /\benv\s*:/.test(call)
-    const keepsPath = /\.\.\.process\.env|PATH\s*:\s*(?:[^,}\n]*process\.env\.PATH|noTerminalPath)/.test(call) || pathFromEnv(call, code)
-    if (envOption && !keepsPath) {
-      found.push(`${match[0]}…  builds env without PATH from process.env: the walk finds the real ps`)
+    if (allowCall?.(call)) {
       continue
     }
     const values = [...call.matchAll(/CUIHUD_TTY\s*:\s*([^,}\n]+)/g)].map((m) => m[1]!.trim())
+    const pinned = values.length > 0 && values.every((value) => pinnedValue(value, code))
+    // An environment built without PATH from process.env leaves the sandbox's `ps`
+    // out of reach: the walk then finds the real one (a reviewer's scratch spawn
+    // wrote a frame into the real terminal that way). Safe only when CUIHUD_TTY is
+    // pinned to a temp path, which skips the walk. A spawn with no `env` option
+    // inherits ours. Checked BEFORE the harmless exemption: `uname; ` in front of a
+    // script does not make a spawn harmless (review).
+    const envOption = /\benv\s*:/.test(call)
+    const keepsPath = /\.\.\.process\.env|PATH\s*:\s*(?:[^,}\n]*process\.env\.PATH|noTerminalPath)/.test(call) || pathFromEnv(call, code)
+    if (envOption && !keepsPath && !pinned) {
+      found.push(`${match[0]}…  builds env without PATH from process.env: the walk finds the real ps`)
+      continue
+    }
+    if (runsNoScript(call)) {
+      continue
+    }
     const noTerminal = /noTerminalPath|psShim|fakePs/.test(call)
     // The PowerShell writers have no tty to walk to: they write to the console
     // seam `CUIHUD_WIN_CONOUT`, which a test points at a temp file.
     const conout = /CUIHUD_WIN_CONOUT\s*:/.test(call) && /\b(?:pwsh|powershell)\b/i.test(call)
-    const pinned = values.length > 0 && values.every((value) => pinnedValue(value, code))
     if (noTerminal || conout || pinned) {
       if (/\b(?:MINGW|MSYS|msys)/.test(call) && !(/CUIHUD_WIN_TTY\s*:/.test(call) && /CUIHUD_WIN_CONOUT\s*:/.test(call))) {
         found.push(`${match[0]}…  fakes MSYS without pinning CUIHUD_WIN_TTY and CUIHUD_WIN_CONOUT: it writes to /dev/tty`)
@@ -489,14 +503,28 @@ describe('no test can reach a real terminal through a beacon script', () => {
   // is the third.
   describe('the third round', () => {
     const head = `const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty')\nconst s = CLAUDE_HUD_STOP_HOOK_SCRIPT\n`
-    it('flags a spawn whose environment is built without PATH from process.env', () => {
+    it('flags a spawn whose environment is built without PATH from process.env, unless CUIHUD_TTY is pinned', () => {
       for (const env of [
-        "{ PATH: '/usr/bin:/bin', CUIHUD_TTY: tty }",
-        '{ HOME: h, CUIHUD_TTY: tty }',
-        "{ PATH: '', CUIHUD_TTY: tty }"
+        "{ PATH: '/usr/bin:/bin', CUIHUD_TTY: '' }",
+        '{ HOME: h }',
+        "{ PATH: '', CUIHUD_TTY: '' }"
       ]) {
         expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { env: ${env} })`), env).toHaveLength(1)
       }
+      // A hand-built PATH is safe with a pinned temp CUIHUD_TTY: no walk is made.
+      for (const env of ["{ PATH: '/usr/bin:/bin', CUIHUD_TTY: tty }", '{ HOME: h, CUIHUD_TTY: tty }']) {
+        expect(unpinnedSpawns(`${head}execFileSync('sh', ['-c', s], { env: ${env} })`), env).toEqual([])
+      }
+    })
+
+    it('a harmless-looking prefix does not exempt a string-form spawn, plain or template', () => {
+      const env = "{ env: { PATH: '/usr/bin:/bin', CUIHUD_TTY: '' } }"
+      expect(unpinnedSpawns(`const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname; ' + s, ${env})`)).toHaveLength(1)
+      expect(unpinnedSpawns("const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync(`uname; ${s}`, " + env + ')')).toHaveLength(1)
+      const inherited = '{ env: { ...process.env, CUIHUD_TTY: \'\' } }'
+      expect(unpinnedSpawns(`const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname; ' + s, ${inherited})`)).toHaveLength(1)
+      // A literal snippet that runs no variable stays harmless.
+      expect(unpinnedSpawns("const s = CLAUDE_HUD_STOP_HOOK_SCRIPT\nexecSync('uname -s')")).toEqual([])
     })
 
     it('accepts one that spreads process.env or builds PATH from it, and one with no env at all', () => {

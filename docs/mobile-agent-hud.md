@@ -1343,7 +1343,14 @@ drops the process's controlling terminal, not its ancestors'.
    command READ its own ancestry (real `ps`, no write): it ends at pid 1 with no
    terminal. `src/test/vitest-runs-detached.test.ts` fails hard when vitest runs with a
    terminal among its ancestors, on a developer machine: run `pnpm test`, not `vitest`
-   from a terminal. In CI there is no terminal anywhere, so it passes without a skip.
+   from a terminal. The same read-only walk (`mobile/vitest.ancestors.ts`) also runs in
+   the globalSetup BEFORE any worker starts, so a direct `npx vitest run` from a
+   terminal throws at setup with zero tests executed ("A terminal is among this test
+   run's ancestors … run `pnpm test`, which detaches it"); the guard test stays for a
+   run whose setup was skipped. In CI there is no terminal anywhere, so both pass.
+   The runner escalates an interrupt: a command started from a background list has
+   SIGINT ignored, so after forwarding it sends SIGTERM and then SIGKILL to the group
+   (2 s, 4 s) and exits 130.
 2. **Second: vitest's `globalSetup`** (`mobile/vitest.global-setup.ts`): a `ps` that
    prints nothing, and logs each call with a `CUIHUD_PROBE` token, first on PATH, and
    `CUIHUD_TTY`, `CUIHUD_WIN_TTY`, `CUIHUD_WIN_CONOUT` on temp files, with
@@ -1363,7 +1370,10 @@ drops the process's controlling terminal, not its ancestors'.
    `noTerminalPath()`; a `pathShim` counts only when its variable is named `psShim`
    or `fakePs` or it is an MSYS shim with both console overrides (a naming
    convention, not a check of what the shim does); `CUIHUD_WIN_CONOUT` exempts only a
-   PowerShell spawn. Its one exemption is the sandbox guard's call, by repo-relative
+   PowerShell spawn. The environment rule runs BEFORE the harmless exemption, so
+   `execSync('uname; ' + s, { env: … })` and its template form are judged as spawns of
+   a script, and a hand-built PATH is accepted only with a pinned temp `CUIHUD_TTY`
+   (no walk is made then). Its one exemption is the sandbox guard's call, by repo-relative
    path and only a call that carries `CUIHUD_PROBE`. Not chased: a string-form
    `execSync`, a script piped on stdin, wrappers in helpers, import aliases,
    `promisify`.
