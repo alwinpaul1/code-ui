@@ -22,6 +22,13 @@ const pairs = createPersistedMap<StartupFramePair>({
   maxEntries: 32
 })
 const listeners = new Set<() => void>()
+/** Per terminal scope, the frame last filed and the session it was filed under
+ *  (null: it is waiting for the id of the process painting it). Module-level on
+ *  purpose: a remount, an `enabled` toggle or a reconnect re-reads the frame still
+ *  on the screen, and only a record that outlives the hook can tell that frame is
+ *  the OLD session's. Memory only: after a relaunch a first sight files normally. */
+const filed = new Map<string, { frame: StartupFrameRead; sessionId: string | null }>()
+const FILED_SCOPES = 64
 
 /** Read at app start with the other session caches; never rejects. */
 export function hydrateStartupFramePairs(): Promise<void> {
@@ -32,6 +39,7 @@ export function hydrateStartupFramePairs(): Promise<void> {
 export function resetStartupFramePairsForTests(): void {
   pairs.reset()
   listeners.clear()
+  filed.clear()
 }
 
 export function peekStartupFramePair(sessionId: string | null): StartupFramePair | null {
@@ -61,6 +69,51 @@ export function rememberStartupFramePair(sessionId: string | null, read: Startup
   }
   pairs.set(sessionId, { model: read.model, label: read.label, effort, readAt: held?.model === read.model ? held.readAt : Date.now() })
   listeners.forEach((listener) => listener())
+}
+
+/** The same frame as read by a wide or a narrow pane: one model, and efforts that agree or one that was cut. */
+function sameFrame(a: StartupFrameRead, b: StartupFrameRead): boolean {
+  return a.model === b.model && (a.effort === b.effort || a.effort === null || b.effort === null)
+}
+
+/**
+ * File what the screen shows under the session the tab had WHEN THE FRAME APPEARED,
+ * and under no other.
+ *
+ * `frame` is what the latest screen read of this terminal scope shows, null when it
+ * shows none. A frame first seen with the session known is filed under it. One first
+ * seen with none waits, and is filed under the id that arrives while it is still on
+ * screen; if it leaves the screen first it is dropped. The SAME frame under a
+ * DIFFERENT id is refused every time: it is still on screen from the session before
+ * (a `/clear`, a `/resume`, a second `claude` that has not painted yet, or the same
+ * frame re-read after a remount or reconnect). A different frame is a new process's
+ * and is filed under the current id. The cost: a second `claude` with the same model
+ * and effort paints a frame equal to the first and gets no figure from this tier.
+ * Late is acceptable; wrong is not.
+ */
+export function fileStartupFrame(scopeKey: string, sessionId: string | null, frame: StartupFrameRead | null): void {
+  const record = filed.get(scopeKey)
+  if (frame === null) {
+    if (record !== undefined && record.sessionId === null) {
+      filed.delete(scopeKey)
+    }
+    return
+  }
+  if (record !== undefined && sameFrame(record.frame, frame)) {
+    if (record.sessionId === null && sessionId !== null) {
+      record.sessionId = sessionId
+      rememberStartupFramePair(sessionId, frame)
+    } else if (record.sessionId === sessionId) {
+      rememberStartupFramePair(sessionId, frame)
+    }
+    return
+  }
+  filed.delete(scopeKey)
+  filed.set(scopeKey, { frame, sessionId })
+  while (filed.size > FILED_SCOPES) {
+    filed.delete(filed.keys().next().value as string)
+  }
+  rememberStartupFramePair(sessionId, frame)
 }
 
 /**

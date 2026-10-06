@@ -104,6 +104,38 @@ describe("the chat HUD files the startup frame the screen showed under the sessi
     expect(peekStartupFramePair('s-9')).toBeNull()
   })
 
+  // The reviewer's R1: the observation resets on an `enabled` toggle or a reconnect and re-reads the frame
+  // still on screen, which is the OLD session's.
+  it("does not file the old session's frame, re-read after the observation reset, under the new session", () => {
+    fakes.startupFrame = OPUS
+    render({ sessionId: 's-1' })
+    render({ sessionId: 's-2' })
+    fakes.startupFrame = null
+    render({ sessionId: 's-2' })
+    fakes.startupFrame = { ...OPUS }
+    render({ sessionId: 's-2' })
+    expect(peekStartupFramePair('s-2')).toBeNull()
+    expect(peekStartupFramePair('s-1')).toMatchObject(OPUS)
+  })
+
+  // The reviewer's R2: the same, after the chat is left and reopened.
+  it("does not file the old session's frame under the new session after a remount of the chat", () => {
+    fakes.startupFrame = OPUS
+    render({ sessionId: 's-1' })
+    render({ sessionId: 's-2' })
+    act(() => renderer?.unmount())
+    renderer = null
+    fakes.startupFrame = { ...OPUS }
+    render({ sessionId: 's-2' })
+    expect(peekStartupFramePair('s-2')).toBeNull()
+  })
+
+  it('still files the frame of a tab attached while its frame is on screen (first sight, session known)', () => {
+    fakes.startupFrame = OPUS
+    render({ sessionId: 's-3' })
+    expect(peekStartupFramePair('s-3')).toMatchObject(OPUS)
+  })
+
   it('keeps the pair when later reads show no frame', () => {
     fakes.startupFrame = OPUS
     render({ sessionId: 's-1' })

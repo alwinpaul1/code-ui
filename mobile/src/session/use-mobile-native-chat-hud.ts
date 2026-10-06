@@ -1,4 +1,4 @@
-import { useEffect, useRef, type MutableRefObject } from 'react'
+import { useEffect, type MutableRefObject } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useAgentHudBeacon, type AgentHudBeacon } from './agent-hud-beacon'
@@ -15,8 +15,7 @@ import { useAgentHudBeaconLiveness } from './use-agent-hud-beacon-liveness'
 import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
 import { useStickyLiveHud } from './use-sticky-live-hud'
-import type { StartupFrameRead } from './claude-startup-frame'
-import { rememberStartupFramePair } from './claude-startup-frame-pair'
+import { fileStartupFrame } from './claude-startup-frame-pair'
 
 export type NativeChatHudPhase = BeaconPhase
 
@@ -100,31 +99,13 @@ export function useMobileNativeChatHud(args: {
     agent: args.agent,
     active: args.phase === 'working' || args.phase === 'paused'
   })
-  // The startup frame the screen showed, filed under the session the tab had
-  // WHEN IT APPEARED, and by nothing else (claude-startup-frame-pair.ts). A frame
-  // that appears while the tab knows no session waits for the id that arrives
-  // with the process painting it. A session that changes with no new frame on
-  // screen (`/clear`, `/resume`, a second `claude` that has not painted yet)
-  // inherits nothing: the frame object on screen is the old one's. A frame that
-  // leaves the screen, or a terminal change, drops any frame still waiting.
-  const frameFiling = useRef<{ seen: unknown; waiting: StartupFrameRead | null }>({ seen: null, waiting: null })
+  // The startup frame the screen shows, filed under the session the tab had when it
+  // appeared and by nothing else (fileStartupFrame says how, and why).
   useEffect(() => {
-    if (args.agent !== 'claude') {
-      return
+    if (args.agent === 'claude') {
+      fileStartupFrame(args.scopeKey ?? 'no-scope', args.sessionId, screen.startupFrame ?? null)
     }
-    const filing = frameFiling.current
-    const frame = screen.startupFrame ?? null
-    if (frame === null) {
-      frameFiling.current = { seen: null, waiting: null }
-    } else if (frame !== filing.seen) {
-      filing.seen = frame
-      filing.waiting = args.sessionId === null ? frame : null
-      rememberStartupFramePair(args.sessionId, frame)
-    } else if (args.sessionId !== null && filing.waiting !== null) {
-      rememberStartupFramePair(args.sessionId, filing.waiting)
-      filing.waiting = null
-    }
-  }, [args.agent, args.sessionId, screen.startupFrame])
+  }, [args.agent, args.scopeKey, args.sessionId, screen.startupFrame])
   const accounts = useHostAccountsSnapshot(args.client, args.enabled)
   // Read at render: a new beacon re-renders through the store, and a handle
   // swap re-renders through `scopeKey`, so the ref is never read stale here.

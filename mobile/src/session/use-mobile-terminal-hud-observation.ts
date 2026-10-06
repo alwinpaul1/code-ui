@@ -75,9 +75,9 @@ export function useMobileTerminalHudObservation(args: {
   peerNotices: ScreenPeerRow[] | null
   /** Claude Code's spinner line as this read saw it, or null when none is up. */
   spinner: ClaudeSpinner | null
-  /** The startup frame the latest read that held one stated, kept across reads
-   *  that did not (the frame scrolls off); null until one is read from this
-   *  terminal (claude-startup-frame.ts). */
+  /** The startup frame the latest screen read shows, or null when it shows none (it has
+   *  scrolled off, or this terminal was not read yet). The pair kept for the session is the
+   *  store's, not this (claude-startup-frame-pair.ts). */
   startupFrame: StartupFrameRead | null
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
@@ -218,12 +218,15 @@ export function useMobileTerminalHudObservation(args: {
         setSentPhotos((current) => (JSON.stringify(current) === JSON.stringify(photos) ? current : photos))
         const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines, terminal.terminal?.draft) : []
         setPeerNotices((current) => (current !== null && JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
+        // What the screen shows NOW: a read that finds no frame reports none (the pair is kept
+        // by the store), so a frame waiting for a session id can be dropped when it leaves.
         const frame = agent === 'claude' || agent === 'openclaude' ? readClaudeStartupFrame(lines) : null
-        if (frame) {
-          setStartupFrame((current) =>
-            current?.handleKey === handleKey && JSON.stringify(current.read) === JSON.stringify(frame) ? current : { handleKey, read: frame }
-          )
-        }
+        setStartupFrame((current) => {
+          if (frame === null) {
+            return current === null ? current : null
+          }
+          return current?.handleKey === handleKey && JSON.stringify(current.read) === JSON.stringify(frame) ? current : { handleKey, read: frame }
+        })
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
         setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)

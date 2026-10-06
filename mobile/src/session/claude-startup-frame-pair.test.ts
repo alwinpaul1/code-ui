@@ -4,6 +4,7 @@ import {
   peekStartupFramePair,
   rememberStartupFramePair,
   resetStartupFramePairsForTests,
+  fileStartupFrame,
   subscribeStartupFramePairs,
   withStartupFramePair
 } from './claude-startup-frame-pair'
@@ -119,5 +120,69 @@ describe('the startup frame laid under what the transcript scan says', () => {
 
   it('states the model with no effort when the frame stated none', () => {
     expect(withStartupFramePair(none, frame({ effort: null }))).toMatchObject({ effort: null })
+  })
+})
+
+describe('filing a frame under the session it appeared with', () => {
+  beforeEach(async () => {
+    vi.useFakeTimers()
+    disk.clear()
+    resetStartupFramePairsForTests()
+    await hydrateStartupFramePairs()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('files a frame seen first with the session known', () => {
+    fileStartupFrame('scope', 's-1', OPUS)
+    expect(peekStartupFramePair('s-1')).toMatchObject(OPUS)
+  })
+
+  it('refuses the same frame under another session, however often it is read again', () => {
+    fileStartupFrame('scope', 's-1', OPUS)
+    fileStartupFrame('scope', 's-2', OPUS)
+    fileStartupFrame('scope', 's-2', null)
+    fileStartupFrame('scope', 's-2', { ...OPUS })
+    expect(peekStartupFramePair('s-2')).toBeNull()
+  })
+
+  it('refuses a narrow read of the same frame under another session (the same model, the effort cut)', () => {
+    fileStartupFrame('scope', 's-1', OPUS)
+    fileStartupFrame('scope', 's-2', { ...OPUS, effort: null })
+    expect(peekStartupFramePair('s-2')).toBeNull()
+  })
+
+  it('files a different frame under the new session (a second claude with another model)', () => {
+    fileStartupFrame('scope', 's-1', OPUS)
+    fileStartupFrame('scope', 's-2', { model: 'claude-sonnet-5', label: 'Sonnet 5', effort: 'low' })
+    expect(peekStartupFramePair('s-2')).toMatchObject({ model: 'claude-sonnet-5' })
+  })
+
+  it('keeps scopes apart: the same frame in another terminal is its own', () => {
+    fileStartupFrame('scope-a', 's-1', OPUS)
+    fileStartupFrame('scope-b', 's-2', OPUS)
+    expect(peekStartupFramePair('s-2')).toMatchObject(OPUS)
+  })
+
+  it('files a frame that waited for its session id under the id that arrived', () => {
+    fileStartupFrame('scope', null, OPUS)
+    expect(peekStartupFramePair('s-1')).toBeNull()
+    fileStartupFrame('scope', 's-1', OPUS)
+    expect(peekStartupFramePair('s-1')).toMatchObject(OPUS)
+  })
+
+  it('drops a waiting frame that left the screen, so a later id inherits nothing', () => {
+    fileStartupFrame('scope', null, OPUS)
+    fileStartupFrame('scope', null, null)
+    fileStartupFrame('scope', 's-9', null)
+    expect(peekStartupFramePair('s-9')).toBeNull()
+    fileStartupFrame('scope', 's-9', OPUS)
+    expect(peekStartupFramePair('s-9')).toMatchObject(OPUS)
+  })
+
+  it('does not drop a filed frame when it leaves the screen: the record that refuses its re-read stays', () => {
+    fileStartupFrame('scope', 's-1', OPUS)
+    fileStartupFrame('scope', 's-1', null)
+    fileStartupFrame('scope', 's-2', OPUS)
+    expect(peekStartupFramePair('s-2')).toBeNull()
   })
 })

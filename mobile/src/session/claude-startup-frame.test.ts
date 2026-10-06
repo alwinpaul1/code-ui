@@ -7,7 +7,9 @@ import {
   LOGO_FRAME_WITH_CONTEXT_NOTE,
   OLDER_LOGO_FRAME,
   SCROLLED_PAST,
-  SECOND_RUN_FRAME
+  SECOND_RUN_FRAME,
+  SPLIT_FRAME_CENTERED,
+  SPLIT_FRAME_TOP
 } from './fixtures/claude-startup-frame-2.1.290-modelled'
 
 const OPUS_XHIGH = { model: 'claude-opus-5', label: 'Opus 5', effort: 'xhigh' }
@@ -48,11 +50,12 @@ describe("a hand-typed Claude tab's startup frame states the model and effort it
     })
   })
 
-  it('reads a model name that wrapped onto its own row, with the billing on the next (a narrow pane splits them)', () => {
-    expect(readClaudeStartupFrame([HEADER, '▝▜██████▀  Opus 5 with high effort', ' ▝▝   ▝▝   Claude Max', '            ~/p'])).toMatchObject({
-      model: 'claude-opus-5',
-      effort: 'high'
-    })
+  it('reads a phone-width frame whose billing wrapped onto its own row, with the mascot at the top of the four text rows', () => {
+    expect(readClaudeStartupFrame(SPLIT_FRAME_TOP)).toEqual(OPUS_XHIGH)
+  })
+
+  it('reads the same frame with the mascot centred one row down (the 0.5 offset rounded up)', () => {
+    expect(readClaudeStartupFrame(SPLIT_FRAME_CENTERED)).toEqual(OPUS_XHIGH)
   })
 })
 
@@ -117,6 +120,35 @@ describe('a frame QUOTED or CAPTURED in the conversation is not the session\'s o
   it('does read a column-0 frame once a prompt closes the conversation above it (the second claude of a terminal)', () => {
     const screen = [...SCROLLED_PAST, '$ claude --model sonnet --effort low', ...SECOND_RUN_FRAME]
     expect(readClaudeStartupFrame(screen)).toMatchObject({ model: 'claude-sonnet-5', effort: 'low' })
+  })
+
+  // The reviewer's P5: a copy indented by 1 or 2 columns passed because the text was trimmed, and when a long
+  // reply's ⏺ has scrolled off the top nothing above it says it is a block.
+  it('does not read a frame quoted two columns in, in a reply whose ⏺ has scrolled off', () => {
+    const screen = [
+      '  that the parser now requires. The fixture reads:',
+      '',
+      '   ▐▛███▛█   Claude Code v2.1.290',
+      '  ▝▜██████▀  Sonnet 5 with low effort · Claude Max',
+      '   ▝▝   ▝▝   ~/projects/example-app',
+      '',
+      '  which is the shape 2.1.290 paints.',
+      '',
+      '────────────────────────────────',
+      '❯ ',
+      '────────────────────────────────'
+    ]
+    expect(readClaudeStartupFrame(screen)).toBeNull()
+  })
+
+  it('does not read the same quote indented one column', () => {
+    expect(
+      readClaudeStartupFrame(['  text', '  ▐▛███▛█   Claude Code v2.1.290', ' ▝▜██████▀  Sonnet 5 with low effort · Claude Max', '  ▝▝   ▝▝   ~/x'])
+    ).toBeNull()
+  })
+
+  it('does not read a frame whose model row does not start with art in column 0 or 1', () => {
+    expect(readClaudeStartupFrame([HEADER, '   ▝▜██████▀Sonnet 5 with low effort · Claude Max', LOGO_FRAME[2]!])).toBeNull()
   })
 
   it('does not take a header quoted behind a ⏺ for the frame', () => {

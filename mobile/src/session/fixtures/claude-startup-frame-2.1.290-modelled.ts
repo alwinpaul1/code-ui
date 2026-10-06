@@ -46,6 +46,25 @@ export const FULLSCREEN_STATUS_FRAME = [
   ' ▝▝   ▝▝   ~/projects/example-app · Using flicker-free rendering'
 ]
 
+/**
+ * A phone-width pane: `nEr` splits the model and the billing onto two rows below
+ * about 52 columns, so the text column is four rows against a three-row mascot
+ * that `alignItems: "center"` offsets by 0.5. Whether Yoga rounds that to 0 or 1
+ * was not provable from the minified bundle, so both are modelled.
+ */
+export const SPLIT_FRAME_TOP = [
+  ' ▐▛███▛█   Claude Code v2.1.290',
+  '▝▜██████▀  Opus 5 with xhigh effort',
+  ' ▝▝   ▝▝   Claude Max',
+  '           ~/projects/example-app'
+]
+export const SPLIT_FRAME_CENTERED = [
+  '           Claude Code v2.1.290',
+  ' ▐▛███▛█   Opus 5 with xhigh effort',
+  '▝▜██████▀  Claude Max',
+  ' ▝▝   ▝▝   ~/projects/example-app'
+]
+
 /** The older mascot (Claude Code 2.1.2xx), as Orca's own tests pin it. */
 export const OLDER_LOGO_FRAME = [
   ' ▐▛███▜▌   Claude Code v2.1.211',

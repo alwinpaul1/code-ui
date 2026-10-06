@@ -18,8 +18,11 @@ import { claudeIdFromLabel, claudeTranscriptModelName } from './claude-transcrip
  *    row of [mascot, text column] with `gap: 2`; the mascot's glyphs span
  *    columns 0 to 8, so on each of the three rows the first eleven columns hold
  *    only mascot art and spaces and the text begins at column 11: `Claude Code
- *    vX`, then the model row, then the working-directory row. A quoted or
- *    indented copy has its art somewhere else and is not read;
+ *    vX`, then the model row, then the working-directory row. The text must
+ *    begin EXACTLY at column 11 (no trimming) and the model row must carry art in
+ *    column 0 or 1, so a quoted copy indented by one or two columns is not read.
+ *    A phone-width pane splits the billing onto its own row and the mascot may sit
+ *    one row down (a blank header prefix); both offsets are read;
  *  - a header that sits inside a reply or tool block (a `⏺` or `⎿` row reachable
  *    upward before a `❯` prompt or the top of the screen) is not read, which is
  *    what a column-0 `cat` of a banner would otherwise pass;
@@ -94,17 +97,50 @@ function drawn(line: string): string {
   return line.replace(ESCAPES, '').replace(/\r/g, '').replace(/\s+$/, '')
 }
 
-/** The text a mascot row carries, or null when its first eleven columns are
- *  not mascot art and spaces with some art in them. */
-function textBesideArt(row: string): string | null {
+type MascotRow = { text: string; art: boolean; edge: boolean }
+
+/**
+ * A row of the frame as [mascot, text column]: the first eleven columns hold
+ * only mascot art and spaces, and any text starts EXACTLY at column 11, with no
+ * trimming that would let an indented copy through. `art` says the prefix holds
+ * a glyph; `edge` that one sits in column 0 or 1, where the mascot's first two rows
+ * have one (` ▐`, `▝▜`; its feet start a column later). A row with no art is a
+ * blank prefix, which is the text row the mascot does not reach (the split
+ * layout's header). Null when it is neither.
+ */
+function mascotRow(row: string): MascotRow | null {
   const padded = row.padEnd(TEXT_COLUMN)
   const prefix = padded.slice(0, TEXT_COLUMN)
-  return ART_COLUMNS.test(prefix) && HAS_ART.test(prefix) ? padded.slice(TEXT_COLUMN).trim() : null
+  const text = padded.slice(TEXT_COLUMN)
+  if (!ART_COLUMNS.test(prefix) || (text.trim() !== '' && text[0] === ' ')) {
+    return null
+  }
+  return { text: text.trim(), art: HAS_ART.test(prefix), edge: HAS_ART.test(prefix.slice(0, 2)) }
 }
 
-/** A header row of the frame's real shape, and not inside a reply or tool block. */
+/** The text beside art, or null (a blank prefix has no art to be beside). */
+function textBesideArt(row: string): string | null {
+  const parsed = mascotRow(row)
+  return parsed?.edge === true ? parsed.text : null
+}
+
+/**
+ * A header row of the frame's real shape, and not inside a reply or tool block.
+ * The three-row mascot sits on the header, the model row and the row below
+ * (`alignItems: "center"` leaves it at the top of a three-row text column); in
+ * the phone-width split layout the text column is four rows and the mascot may
+ * be centred one row down, so the header's own prefix is blank and the mascot
+ * sits on the three rows below it. Either way the model row is the next one.
+ */
 function isFrameHeader(rows: readonly string[], index: number): boolean {
-  if (!HEADER_TEXT.test(textBesideArt(rows[index]!) ?? '') || textBesideArt(rows[index + 1] ?? '') === null || textBesideArt(rows[index + 2] ?? '') === null) {
+  const header = mascotRow(rows[index]!)
+  if (header === null || !HEADER_TEXT.test(header.text)) {
+    return false
+  }
+  const [model, row3, row4] = [1, 2, 3].map((offset) => mascotRow(rows[index + offset] ?? ''))
+  const mascotAtTop = header.edge && model?.edge === true && row3?.art === true
+  const mascotOneDown = !header.art && model?.edge === true && row3?.edge === true && row4?.art === true
+  if (!mascotAtTop && !mascotOneDown) {
     return false
   }
   for (let above = index - 1; above >= 0; above -= 1) {

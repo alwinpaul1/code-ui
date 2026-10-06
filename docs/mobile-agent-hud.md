@@ -1070,8 +1070,17 @@ columns hold only mascot art and spaces, and the text starts at column 11:
 `[@<agent> · ]<cwd>` (` · <status>` follows the cwd in fullscreen). Only the model
 row is read, so an agent name or a fullscreen status on the third row changes
 nothing.
-- A header that is not of that shape (indented, quoted, a `tmux capture-pane` of
-  a nested claude in a tool result, a joined one-liner) is not a frame.
+- A header that is not of that shape is not a frame: indented or quoted (the
+  text must begin EXACTLY at column 11, with no trimming, and the model row must
+  have art in column 0 or 1), a `tmux capture-pane` of a nested claude in a tool
+  result, a joined one-liner. A copy indented by one or two columns fails the
+  column test even when its `⏺` has scrolled off.
+- Phone-width panes: `nEr` splits the model and the billing onto separate rows
+  below about 52 columns, so the text column is four rows against the three-row
+  mascot, which `alignItems: "center"` offsets by 0.5. How Yoga rounds that was
+  not provable from the minified bundle, so both are read: the mascot on the
+  header, model and next row (offset 0), or a blank header prefix with the mascot
+  on the three rows below it (offset 1). The column-11 and art rules hold in both.
 - A header with a `⏺` or `⎿` row reachable upward before a `❯` prompt or the top
   of the screen sits in a reply or tool block and is not read: a column-0 `cat`
   of a banner would otherwise pass the shape test.
@@ -1095,14 +1104,22 @@ so the frame is on it only until the conversation outgrows one screen.
 - The pair is kept per session id and persisted with the other session caches
   (`claude-startup-frame-pair.ts`, `codeui:chat-startup-frame-pairs`, 32
   sessions), so a frame that scrolled off, a reconnect or a relaunch keep it.
-- A frame is filed under the session the tab had WHEN IT APPEARED
-  (`use-mobile-native-chat-hud.ts`). One that appears while no session is known
-  waits for the id that arrives with the process painting it, and is dropped if
-  it leaves the screen first. A session that changes with no new frame on screen
+- A frame is filed under the session the tab had WHEN IT APPEARED, and under no
+  other (`fileStartupFrame`, `claude-startup-frame-pair.ts`). The record of what
+  was filed is per terminal scope and module-level, because a remount, an
+  `enabled` toggle or a reconnect resets the screen read and re-reads the frame
+  still on screen, which is the OLD session's. The same frame (same model, efforts
+  that agree or one cut by a narrow pane) under a different session id is refused
+  every time; a different frame is a new process's and is filed. A frame first
+  seen while no session is known waits for the id that arrives while it is still
+  on screen, and is dropped when a screen read no longer finds it (the
+  observation reports `null` then). A session that changes with no new frame
   (`/clear`, `/resume`, a second `claude` that has not painted yet) inherits
-  nothing, because the frame on screen is the old session's. A new frame under the
-  same id (`claude -c`) replaces the pair; a narrow read of the same model never
-  erases an effort a wide read stated.
+  nothing. The cost: a second `claude` with the SAME model and effort paints an
+  equal frame and gets no figure from this tier; late is acceptable, wrong is
+  not. The filing record is memory only, so after a relaunch a first sight files
+  normally. A narrow read of the same model never erases an effort a wide read
+  stated.
 - **Deleted: the oldest-stream read.** An earlier version of this branch also
   read `terminal.read {cursor: 0}` once per terminal. Orca's tail buffer is per
   PTY from spawn, so cursor 0 answers the first frame that PTY EVER painted: a

@@ -36,14 +36,25 @@ describe("the screen poll reads a Claude tab's startup frame", () => {
     expect(seen?.startupFrame).toEqual({ model: 'claude-opus-5', label: 'Opus 5', effort: 'xhigh' })
   })
 
-  it('holds it when a later read has scrolled past the frame', async () => {
+  it('reports no frame once a later read has scrolled past it (the pair is kept by the store, not here)', async () => {
     vi.useFakeTimers()
     const { sendRequest } = await mount('claude', LOGO_FRAME)
+    expect(seen?.startupFrame).not.toBeNull()
     sendRequest.mockResolvedValue({ ok: true, result: { terminal: { lines: SCROLLED_PAST, source: 'screen' } } })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
     })
     expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(seen?.startupFrame).toBeNull()
+  })
+
+  it('keeps the last frame through a read that is not the screen (a stream fallback says nothing about it)', async () => {
+    vi.useFakeTimers()
+    const { sendRequest } = await mount('claude', LOGO_FRAME)
+    sendRequest.mockResolvedValue({ ok: true, result: { terminal: { lines: SCROLLED_PAST, source: 'stream' } } })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
     expect(seen?.startupFrame).toEqual({ model: 'claude-opus-5', label: 'Opus 5', effort: 'xhigh' })
   })
 
