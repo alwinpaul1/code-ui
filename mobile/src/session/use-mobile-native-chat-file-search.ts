@@ -76,6 +76,14 @@ export function useMobileNativeChatFileSearch(args: {
     new GenerationScopedRequestOwner<WorkspaceInventoryParameters, string[]>()
   ).current
 
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   useEffect(() => {
     sequenceRef.current++
     queryCacheRef.current.clear()
@@ -158,6 +166,9 @@ export function useMobileNativeChatFileSearch(args: {
           setNativeChatFileSearchPending(false)
         }
         const loadLegacyPaths = async (): Promise<void> => {
+          if (!mountedRef.current) {
+            return
+          }
           // What retires the inventory: this host, this workspace, this logical authority. The
           // physical session epoch is not in it; a reconnect or FILE_SEARCH_CACHE_TTL_MS only
           // makes the held list stale, so it still shows while it is read again. Read once, so a
@@ -221,7 +232,8 @@ export function useMobileNativeChatFileSearch(args: {
           })
           .finally(() => {
             // Why: a rejected or unsupported search must not read as "still searching".
-            if (sequenceRef.current === sequence) {
+            // A closed owner has no screen left to say it to, and its search was not refused.
+            if (sequenceRef.current === sequence && mountedRef.current) {
               setNativeChatFileSearchPending(false)
               // Nor as "nothing matched": say it failed, and why, once.
               if (!answered) {
