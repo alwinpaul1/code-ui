@@ -1,5 +1,5 @@
 import { forgetSessionTab, pickNextSessionTabAfterClose } from './mobile-session-tab-history'
-import { forgetFileTabDoc } from '../files/mobile-file-tab-prefetch'
+import { forgetFileTabDoc } from '../files/mobile-file-tab-read-cache'
 import { planSessionTabClose } from './mobile-session-tab-close-plan'
 import {
   sessionTabClose,
