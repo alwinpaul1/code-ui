@@ -1321,3 +1321,39 @@ console, which is where the frame belongs, and a fallback to nothing would only
 drop the Windows beacon. A whole-suite run in a new session with no controlling
 tty, stdin from `/dev/null`, a `ps` that prints nothing and every override on a
 temp file is the belt that catches what a source-reading test cannot.
+
+### The primary guard is a sandbox, not the ratchet (2026-10-06)
+
+Source-shape ratchets are whack-a-mole: a string-form `execSync`, a script piped on
+stdin, a wrapper in a helper, an import alias or `promisify` all got past the first
+two versions. So the structural guard is vitest's `globalSetup`
+(`mobile/vitest.global-setup.ts`), run once before any worker starts:
+
+- a `ps` that prints nothing, and logs each call to `ps.log`, is put first on PATH,
+  so the tty writer's walk finds no ancestor terminal;
+- `CUIHUD_TTY`, `CUIHUD_WIN_TTY` and `CUIHUD_WIN_CONOUT` point at temp files, so the
+  MSYS branch's `/dev/tty` fallback is never reached either;
+- `CUIHUD_TEST_SANDBOX` names the directory.
+
+Workers inherit `process.env` from the main process (checked for the forks, threads
+and vmThreads pools; `scripts/**/*.test.ts` run under the same config), so any spawn
+that inherits or spreads it is covered whatever its source looks like. Only a spawn
+that builds an environment from nothing, with its own PATH, escapes, and the ratchet
+is the second line there. `agent-hud-test-sandbox.test.ts` proves it: it spawns the
+original leak shape, the status-line script with `{ ...process.env, CUIHUD_TTY: '' }`,
+and asserts the sandbox's `ps` was the one the walk asked and every sink stayed
+empty. It checks the sandbox is in place BEFORE spawning, so with the global setup
+missing it fails without running the script (a safe red; observed with a config that
+drops the setup, inside the belt).
+
+**Decision: the script does not refuse to walk when `VITEST` is set.** It would add
+test-runner knowledge to a script that ships to users, a user with `VITEST` exported
+in a shell profile would silently lose the beacon, and it would not help the case the
+sandbox leaves open: a spawn with a hand-built environment has no `VITEST` either.
+A real Claude hook run never sets it and a user running Claude inside vitest is not a
+real case, but the sandbox does the same job with no production code.
+
+The ratchet's cheap fixes from the same review: a `pathShim` counts only when it is a
+`ps` shim or an MSYS shim with both console overrides; `CUIHUD_WIN_CONOUT` exempts only
+a PowerShell spawn, never the POSIX walk; a name is a temp path only when every
+assignment of it in the file is; and `withoutComments` knows regex literals.

@@ -44,6 +44,9 @@ export default defineConfig({
   oxc: vitestOxcConfig,
   test: {
     environment: 'node',
+    // Why: the tty sandbox (a ps that sees nothing, every tty override on a temp
+    // file) is set before any worker starts; see vitest.global-setup.ts.
+    globalSetup: ['./vitest.global-setup.ts'],
     setupFiles: ['./vitest.setup.ts'],
     onConsoleLog: (log) => !log.includes('react-test-renderer is deprecated'),
     // .tsx too: component tests exist (react-test-renderer + mocked react-native) and were

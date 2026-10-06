@@ -24,6 +24,15 @@ import { describe, expect, it } from 'vitest'
 // that wrote nothing without `CUIHUD_WIN_TTY` would write nothing there either.
 // The ratchet and the belt are what hold the tests off it.
 //
+// THE PRIMARY GUARD IS NOT THIS FILE. vitest's globalSetup (vitest.global-setup.ts,
+// proved by agent-hud-test-sandbox.test.ts) puts a `ps` that sees nothing first
+// on PATH and every tty override on a temp file before any worker starts, so a
+// spawn that inherits or spreads `process.env` cannot reach a real tty whatever
+// its source looks like. This ratchet is the SECOND line, for a spawn that builds
+// its environment from nothing; it is not exhaustive and chasing every source
+// shape (a string-form execSync, a script piped on stdin, wrappers in helpers,
+// import aliases, promisify) is not its job.
+//
 // A STRUCTURE ratchet: a source-reading test is the only instrument that sees a
 // spawn nobody pinned. It reads code, not comments, and every file that imports
 // `child_process`, helpers and `scripts/` included (review R7, 2026-10-06).
@@ -91,6 +100,12 @@ function withoutComments(source: string): string {
   let out = ''
   let i = 0
   let quote: string | null = null
+  // A `/` starts a regex literal after one of these (or at the start), and is a
+  // division after an identifier, a number or a closing bracket.
+  const regexAllowed = () => {
+    const before = out.trimEnd()
+    return before === '' || /[(,=:[!&|?{};+\-*%<>~^]$/.test(before) || /\b(?:return|typeof|case|in|of)$/.test(before)
+  }
   while (i < source.length) {
     const c = source[i]!
     const next = source[i + 1]
@@ -116,6 +131,26 @@ function withoutComments(source: string): string {
     } else if (c === '/' && next === '*') {
       const end = source.indexOf('*/', i + 2)
       i = end === -1 ? source.length : end + 2
+    } else if (c === '/' && regexAllowed()) {
+      // A regex literal: to the closing `/`, honouring escapes and `[...]`.
+      let inClass = false
+      out += c
+      i += 1
+      while (i < source.length && source[i] !== '\n') {
+        const r = source[i]!
+        out += r
+        i += 1
+        if (r === '\\') {
+          out += source[i] ?? ''
+          i += 1
+        } else if (r === '[') {
+          inClass = true
+        } else if (r === ']') {
+          inClass = false
+        } else if (r === '/' && !inClass) {
+          break
+        }
+      }
     } else {
       out += c
       i += 1
@@ -154,17 +189,22 @@ function pinnedValue(expression: string, code: string, depth = 0): boolean {
     return false
   }
   const name = expression.replace(/\$/g, String.raw`\$`)
-  // `const tty = …`, or a default parameter `(…, tty = …)`.
-  const assigned = new RegExp(String.raw`(?:(?:const|let|var)\s+|[(,]\s*)${name}\s*(?::[^=\n]+)?=\s*([^\n;]+(?:\n[^\n;]*)?)`).exec(code)
-  if (assigned === null || /process\.env\.CUIHUD/.test(assigned[1]!)) {
+  // Every `const tty = …` and default parameter `(…, tty = …)` of the name in the
+  // file: scopes are not told apart, so one that is not a temp path fails them
+  // all, which is the safe side.
+  const assignments = [
+    ...code.matchAll(new RegExp(String.raw`(?:(?:const|let|var)\s+|[(,]\s*)${name}\s*(?::[^=\n]+)?=\s*([^\n;]+(?:\n[^\n;]*)?)`, 'g'))
+  ].map((m) => m[1]!)
+  if (assignments.length === 0 || assignments.some((rhs) => /process\.env\.CUIHUD/.test(rhs))) {
     return false
   }
-  if (TEMP_ORIGIN.test(assigned[1]!)) {
-    return true
-  }
-  // `join(dir, 'pty')`: pinned when a name it is built from is.
-  return [...assigned[1]!.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].some(
-    (m) => m[1] !== expression && !/^(?:join|resolve|path|const|let|process|env|cwd)$/.test(m[1]!) && pinnedValue(m[1]!, code, depth + 1)
+  return assignments.every(
+    (rhs) =>
+      TEMP_ORIGIN.test(rhs) ||
+      // `join(dir, 'pty')`: pinned when a name it is built from is.
+      [...rhs.matchAll(/\b([A-Za-z_$][\w$]*)\b/g)].some(
+        (m) => m[1] !== expression && !/^(?:join|resolve|path|const|let|process|env|cwd)$/.test(m[1]!) && pinnedValue(m[1]!, code, depth + 1)
+      )
   )
 }
 
@@ -183,7 +223,7 @@ export function unpinnedSpawns(source: string): string[] {
     const noTerminal = /noTerminalPath|psShim|fakePs/.test(call)
     // The PowerShell writers have no tty to walk to: they write to the console
     // seam `CUIHUD_WIN_CONOUT`, which a test points at a temp file.
-    const conout = /CUIHUD_WIN_CONOUT\s*:/.test(call)
+    const conout = /CUIHUD_WIN_CONOUT\s*:/.test(call) && /\b(?:pwsh|powershell)\b/i.test(call)
     const pinned = values.length > 0 && values.every((value) => pinnedValue(value, code))
     if (noTerminal || conout || pinned) {
       if (/\b(?:MINGW|MSYS|msys)/.test(call) && !(/CUIHUD_WIN_TTY\s*:/.test(call) && /CUIHUD_WIN_CONOUT\s*:/.test(call))) {
@@ -212,9 +252,13 @@ export function unpinnedSpawns(source: string): string[] {
       }
     }
     const around = callText(code, start)
-    if (!/pathShim/.test(around)) {
-      found.push('noTtyOverride: true without a pathShim beside it: the walk reaches a real terminal')
-    } else if (/msysShim|MINGW|MSYS/i.test(around) && !(/CUIHUD_WIN_TTY\s*:/.test(around) && /CUIHUD_WIN_CONOUT\s*:/.test(around))) {
+    // A shim counts when it is a `ps` that sees nothing, or an MSYS `uname`
+    // with BOTH console overrides; any other path shim leaves the walk alone.
+    const psShim = /noTerminalPath|psShim|fakePs/.test(around)
+    const msys = /msysShim|MINGW|MSYS/i.test(around)
+    if (!/pathShim/.test(around) || !(psShim || msys)) {
+      found.push('noTtyOverride: true without a ps shim or an MSYS shim beside it: the walk reaches a real terminal')
+    } else if (!psShim && !(/CUIHUD_WIN_TTY\s*:/.test(around) && /CUIHUD_WIN_CONOUT\s*:/.test(around))) {
       found.push('noTtyOverride with an MSYS shim and no CUIHUD_WIN_TTY and CUIHUD_WIN_CONOUT beside it: it writes to /dev/tty')
     }
   }
@@ -225,7 +269,9 @@ export function unpinnedSpawns(source: string): string[] {
 function offendersIn(roots: string[]): string[] {
   return roots.flatMap((root) =>
     sourceFiles(root)
-      .filter((file) => file !== __filename)
+      // The sandbox guard spawns the leak shape ON PURPOSE, to prove the global
+      // sandbox holds, and refuses to spawn without it.
+      .filter((file) => file !== __filename && basename(file) !== 'agent-hud-test-sandbox.test.ts')
       .flatMap((file) => {
         const source = readFileSync(file, 'utf8')
         return /child_process/.test(source) ? unpinnedSpawns(source).map((why) => `${basename(file)}: ${why}`) : []
@@ -340,6 +386,54 @@ describe('no test can reach a real terminal through a beacon script', () => {
       expect(unpinnedSpawns(src)).toHaveLength(1)
       const template = "const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; run(`a // b`); execFileSync('sh', ['-c', s], {})"
       expect(unpinnedSpawns(template)).toHaveLength(1)
+    })
+  })
+
+  // Opus's second round (2026-10-06). The cheap ones are fixed; the shapes
+  // below (a string-form execSync, a script piped on stdin, wrappers in
+  // helpers, aliases and promisify) are NOT chased: the global sandbox
+  // (vitest.global-setup.ts, proved by agent-hud-test-sandbox.test.ts) is the
+  // primary guard, and this ratchet is the second line for a spawn that builds
+  // its environment from nothing.
+  describe('the second round', () => {
+    it('F3: a pathShim counts only when it is a ps shim, or an MSYS shim with both console overrides', () => {
+      const anyShim = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: someDir, noTtyOverride: true })`
+      expect(unpinnedSpawns(anyShim)).toHaveLength(1)
+      const unameShim = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: unameOnly(), noTtyOverride: true })`
+      expect(unpinnedSpawns(unameShim)).toHaveLength(1)
+      const psShimmed = `const s = CLAUDE_HUD_STATUSLINE_SCRIPT
+        run(s, { pathShim: psShimDir, noTtyOverride: true })`
+      expect(unpinnedSpawns(psShimmed)).toEqual([])
+    })
+
+    it('F4: CUIHUD_WIN_CONOUT exempts only a PowerShell spawn, never the POSIX walk', () => {
+      const posix = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
+        execFileSync('sh', ['-c', s], { env: { CUIHUD_WIN_CONOUT: c, CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(posix)).toHaveLength(1)
+      const bare = `const s = CLAUDE_HUD_STOP_HOOK_SCRIPT
+        execFileSync('sh', ['-c', s], { env: { CUIHUD_WIN_CONOUT: c } })`
+      expect(unpinnedSpawns(bare)).toHaveLength(1)
+      const pwsh = `const s = CLAUDE_HUD_STOP_HOOK_POWERSHELL
+        execFileSync(pwsh ?? 'pwsh', ['-Command', s], { env: { CUIHUD_WIN_CONOUT: c } })`
+      expect(unpinnedSpawns(pwsh)).toEqual([])
+    })
+
+    it('F5: a name counts as a temp path only when EVERY assignment of it is one', () => {
+      const second = `function a() { const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty'); return tty }
+        function b() { const tty = ''; execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { CUIHUD_TTY: tty } }) }`
+      expect(unpinnedSpawns(second)).toHaveLength(1)
+      const both = `function a() { const tty = join(mkdtempSync(join(tmpdir(), 'x-')), 'pty'); return tty }
+        function b() { const tty = join(tmpdir(), 'y'); execFileSync('sh', ['-c', CLAUDE_HUD_STOP_HOOK_SCRIPT], { env: { CUIHUD_TTY: tty } }) }`
+      expect(unpinnedSpawns(both)).toEqual([])
+    })
+
+    it('a // inside a regex literal is not a comment either', () => {
+      const src = `const re = /\\/\\//; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(src)).toHaveLength(1)
+      const division = `const half = a / b; const s = CLAUDE_HUD_STOP_HOOK_SCRIPT; execFileSync('sh', ['-c', s], { env: { CUIHUD_TTY: '' } })`
+      expect(unpinnedSpawns(division)).toHaveLength(1)
     })
   })
 })
