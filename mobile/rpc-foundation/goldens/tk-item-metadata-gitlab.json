@@ -3,7 +3,7 @@
   "family": "tasks.item-metadata-gitlab",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "bca30d435b4dd3bbc0073411c0e09492849ebf01",
+  "baseline": "3eeb51d109d927a10c5e545fa055cc65f4fbed85",
   "lockfileSha256": "ca49ba3338ae11c3f14d944e614df5727b95c69a6522c6a846228408143c2478",
   "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
   "adapterSha256": "97cfbcd82778ed6517ca2d10b2f3ad5a8d366e380d7846c1e89d5a5baf17e739",
