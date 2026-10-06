@@ -1023,9 +1023,17 @@ live pair for every tab that carried no beacon.
 2. The session's own last answer to `/model`, `/effort` or `/fast`, or the
    harness's fallback notice, read from rows the transcript already holds
    (`claude-session-command-pair.ts`).
-3. The model the host's transcript scan last read for this session
+3. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
+   under tier 2 and under the scan whenever the scan names another model.
+4. The model the host's transcript scan last read for this session
    (`claude-transcript-model.ts`), which carries no effort.
-4. Nothing.
+5. Nothing.
+
+Tiers 3 and 4 are ordered by what each statement is about, not by rank: the frame
+was printed at launch, so a reply written later under a different model (an alt+p
+picker switch writes no row) is the newer statement and the scan wins, effort
+dropped. When the scan names the same model it records no effort, so the frame
+supplies the one it stated.
 
 `CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tiers 2
 and 3 are a deliberate, narrow extension of it: a line the agent printed about
@@ -1033,6 +1041,116 @@ itself, in answer to the user's command, in the session's own record. It is not 
 tracked record, not the launch record, not a setting, and not a guess. The
 rule's reason (a figure the agent did not state about THIS session) still holds,
 and the extension stays inside it.
+
+### The startup frame (2026-10-06)
+
+A `claude` typed by hand into a shell has no launch flag, so no beacon and no
+badge, and before this tier it showed nothing past `/model` and `/effort` output
+(Claude Code 2.1.290: no status-line, hook, window-title or OSC channel was added
+that names the model or effort; the title is `sessionTitle ?? aiSessionTitle ??
+agentTitle ?? haikuTitle ?? "Claude Code"`, identical in 2.1.289).
+
+**What Orca does, exactly.** Orca's desktop renderer reads the same frame to fill
+its own model and effort pills (`claude-terminal-session-options.ts`,
+stablyai/orca @ 13d94acd, since #12860, 2026-08-06). Its read is loose: the FIRST
+row containing `Claude Code vX` anywhere in the buffer; the lowest row with a `·`
+or a `with <level> effort` in the frame's bottom-up window (two rows below the
+header when the frame has no bottom edge); and an effort whose word was elided to
+`…` is accepted. It does not send the result to mobile: Orca mobile shows the
+model only from `agentStatus.model`, which its Claude hook normalizer never sets,
+and no effort for a terminal Claude tab at all. That looseness suits a pane Orca
+spawned and watched from the start, and not a phone attaching to any tab, so this
+reader differs on purpose (`claude-startup-frame.ts`).
+
+**What it reads.** 2.1.290's header component lays out a row of [mascot, text
+column] with `gap: 2`; the mascot's glyphs span columns 0 to 8 (the binary's
+`Ke`, `Ue` and `Ge` glyph tables), so on each of the three rows the first eleven
+columns hold only mascot art and spaces, and the text starts at column 11:
+`Claude Code vX`, then `<Model> with <level> effort · <plan>`, then
+`[@<agent> · ]<cwd>` (` · <status>` follows the cwd in fullscreen). Only the model
+row is read, so an agent name or a fullscreen status on the third row changes
+nothing.
+- A header that is not of that shape is not a frame: indented or quoted (the
+  text must begin EXACTLY at column 11, with no trimming, and the model row must
+  have art in column 0 or 1), a `tmux capture-pane` of a nested claude in a tool
+  result, a joined one-liner. A copy indented by one or two columns fails the
+  column test even when its `⏺` has scrolled off.
+- Phone-width panes: `nEr` splits the model and the billing onto separate rows
+  below about 52 columns, so the text column is four rows against the three-row
+  mascot, which `alignItems: "center"` offsets by 0.5. How Yoga rounds that was
+  not provable from the minified bundle, so both are read: the mascot on the
+  header, model and next row (offset 0), or a blank header prefix with the mascot
+  on the three rows below it (offset 1). The column-11 and art rules hold in both.
+- A header with a `⏺` or `⎿` row reachable upward before a `❯` prompt or the top
+  of the screen sits in a reply or tool block and is not read: a column-0 `cat`
+  of a banner would otherwise pass the shape test.
+- Only the NEWEST frame is read, and a newest frame that cannot be read gives
+  nothing rather than the one before it.
+- The model is mapped by family tokens (`claudeIdFromLabel`), so the
+  `(1M context)` note, which 2.1.290 still appends to a 1M id's name
+  (`supports_1m_suffix`), changes nothing. A family or version it cannot map is
+  refused whole.
+- A pane too narrow for the word "effort" (`with high…`) keeps the model and
+  drops the effort (Orca keeps the level; this repo refuses rather than guesses).
+- Not handled, so refused: a screen reader's mascot-less header, Apple
+  Terminal's smaller fallback mascot (its text column is not verified), and a
+  fullscreen animation frame whose mascot is not the same nine columns.
+
+**Where it comes from.** One source, and one only: the screen poll that already
+runs while chat covers a terminal (`terminal.read --screen`,
+`use-mobile-terminal-hud-observation.ts`, `startupFrame`). It is the host's
+VISIBLE rows (`buildVisibleSnapshotReadFallback`, Orca `terminal-tail-read.ts`),
+so the frame is on it only until the conversation outgrows one screen.
+- The pair is kept per session id and persisted with the other session caches
+  (`claude-startup-frame-pair.ts`, `codeui:chat-startup-frame-pairs`, 32
+  sessions), so a frame that scrolled off, a reconnect or a relaunch keep it.
+- A frame is filed under the session the tab had WHEN IT APPEARED, and under no
+  other (`fileStartupFrame`, `claude-startup-frame-pair.ts`). The record of what
+  was filed is per terminal scope and module-level, because a remount, an
+  `enabled` toggle or a reconnect resets the screen read and re-reads the frame
+  still on screen, which is the OLD session's. The same frame (same model, efforts
+  that agree or one cut by a narrow pane) under a different session id is refused
+  every time; a different frame is a new process's and is filed. A frame first
+  seen while no session is known waits for the id that arrives while it is still
+  on screen, and is dropped when a screen read no longer finds it (the
+  observation reports `null` then). A session that changes with no new frame
+  (`/clear`, `/resume`, a second `claude` that has not painted yet) inherits
+  nothing. The cost: a second `claude` with the SAME model and effort paints an
+  equal frame and gets no figure from this tier; late is acceptable, wrong is
+  not. The filing record is memory only, so after a relaunch a first sight files
+  normally. A narrow read of the same model never erases an effort a wide read
+  stated.
+- **Deleted: the oldest-stream read.** An earlier version of this branch also
+  read `terminal.read {cursor: 0}` once per terminal. Orca's tail buffer is per
+  PTY from spawn, so cursor 0 answers the first frame that PTY EVER painted: a
+  second `claude` in the same terminal, `/clear`, `/resume` and `claude -c` all
+  got the first run's pair filed under the new session id, and a correct pair
+  could be overwritten and persisted. Nothing binds that buffer to a session, so
+  the read is gone and `use-claude-transcript-model.ts` reads the host for
+  nothing here. The cost is that a tab first attached after its frame scrolled
+  off shows no figure from this tier.
+- The phone's own xterm buffer is not a source either: it holds the host's
+  snapshot at attach, which has not been measured, and chat pauses the stream.
+
+**What it is not.** It is the session's statement AT LAUNCH. A later `/model`,
+`/effort` or `/fast` row overrides it (tier 2), and a live beacon or badge
+overrides everything. The effort-step keys and the `/effort` slider write
+nothing the phone can read, so until the next status line or command the effort
+here can be stale; it is never drawn as anything fresher. It does not fill a
+missing field of a beacon (a beacon that states a model and no effort yet keeps
+no effort): mixing a launch statement into a live pair is the "Opus Medium" bug.
+
+**Proven and modelled.** Proven from the binary: the header component's layout
+(`gap: 2`, the mascot's glyph spans, the three text rows), and that the effort
+suffix (` with ${level} effort`) is the same builder in 2.1.289 and 2.1.290.
+Proven from Orca's source: what Orca reads and what it sends to mobile. MODELLED,
+not captured: every frame in the tests
+(`fixtures/claude-startup-frame-2.1.290-modelled.ts`). No live 2.1.290 frame has
+been captured; the text column (11) is derived from the glyph spans and the gap,
+and the mascot's width constant was not readable in the minified bundle. Not
+proven: ConPTY redraws, the fullscreen layout, and the exact row wording on a
+real screen. Codex has no counterpart (its startup box is a different frame and
+its model comes from the footer and rollout), so nothing here reads it.
 
 ### The hook beacon (POSIX hosts)
 

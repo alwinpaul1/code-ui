@@ -231,7 +231,7 @@ export function withSessionCommandPair(
   return fallback
 }
 
-function modelsDiffer(a: string, b: string): boolean {
+export function modelsDiffer(a: string, b: string): boolean {
   return (claudeTranscriptModelName(a) ?? a) !== (claudeTranscriptModelName(b) ?? b)
 }
 

@@ -1,4 +1,4 @@
-import type { MutableRefObject } from 'react'
+import { useEffect, type MutableRefObject } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useAgentHudBeacon, type AgentHudBeacon } from './agent-hud-beacon'
@@ -15,6 +15,7 @@ import { useAgentHudBeaconLiveness } from './use-agent-hud-beacon-liveness'
 import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
 import { useStickyLiveHud } from './use-sticky-live-hud'
+import { fileStartupFrame } from './claude-startup-frame-pair'
 
 export type NativeChatHudPhase = BeaconPhase
 
@@ -98,6 +99,13 @@ export function useMobileNativeChatHud(args: {
     agent: args.agent,
     active: args.phase === 'working' || args.phase === 'paused'
   })
+  // The startup frame the screen shows, filed under the session the tab had when it
+  // appeared and by nothing else (fileStartupFrame says how, and why).
+  useEffect(() => {
+    if (args.agent === 'claude') {
+      fileStartupFrame(args.scopeKey ?? 'no-scope', args.sessionId, screen.startupFrame ?? null)
+    }
+  }, [args.agent, args.scopeKey, args.sessionId, screen.startupFrame])
   const accounts = useHostAccountsSnapshot(args.client, args.enabled)
   // Read at render: a new beacon re-renders through the store, and a handle
   // swap re-renders through `scopeKey`, so the ref is never read stale here.

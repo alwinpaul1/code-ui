@@ -6,6 +6,7 @@ import { hydrateWaitingPhotoSends } from './mobile-native-chat-waiting-photo-sen
 import { hydrateSessionTabsCache } from './mobile-session-tabs-cache'
 import { hydrateNativeChatKeptSessions } from './native-chat-kept-session-store'
 import { hydrateSessionCommandPairs } from './claude-session-command-pair'
+import { hydrateStartupFramePairs } from './claude-startup-frame-pair'
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 
 /** Load the persisted project caches once at app start, before any project opens. */
@@ -30,6 +31,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateScheduledPromptMemory(),
     // Why: the model and effort a session last said through /model and /effort,
     // so a project left or an app killed shows them on return (claude-session-command-pair).
-    hydrateSessionCommandPairs()
+    hydrateSessionCommandPairs(),
+    // Why: the model and effort a session's own startup frame stated, which has
+    // scrolled off by the time a late attach or a relaunch looks (claude-startup-frame-pair).
+    hydrateStartupFramePairs()
   ]).then(() => undefined)
 }

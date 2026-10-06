@@ -6,6 +6,7 @@ import { getPendingModelPick } from './mobile-native-chat-model-report-authority
 import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
 import { getAgentHudBeaconArrivedAt, subscribeAgentHudBeaconArrivals } from './agent-hud-beacon'
 import { sessionCommandPairFor } from './claude-session-command-pair'
+import { peekStartupFramePair, subscribeStartupFramePairs, withStartupFramePair } from './claude-startup-frame-pair'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   peekClaudeTranscriptModel,
@@ -93,6 +94,7 @@ export function useClaudeTranscriptModel(args: {
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
   useEffect(() => subscribeClaudeTranscriptModelScans(() => setVersion((value) => value + 1)), [])
+  useEffect(() => subscribeStartupFramePairs(() => setVersion((value) => value + 1)), [])
 
   useEffect(() => (quiet ? watchClaudeTranscriptModelHost(hostId) : undefined), [hostId, quiet])
 
@@ -158,7 +160,11 @@ export function useClaudeTranscriptModel(args: {
     : null
 
   const transcript = quiet && sessionId ? peekClaudeTranscriptModel(hostId, sessionId) : null
-  const base = quiet ? resolveClaudeModelFallback({ liveModel, transcript, pick }) : NONE
+  const scanned = quiet ? resolveClaudeModelFallback({ liveModel, transcript, pick }) : NONE
+  // The session's own startup frame under the scan: below the live pair and
+  // below any /model or /effort row, above nothing (claude-startup-frame-pair.ts).
+  // The pair is filed by the HUD from the screen only; nothing here reads the host.
+  const base = quiet && !pick ? withStartupFramePair(scanned, peekStartupFramePair(sessionId)) : scanned
   // Read whenever the chat is a Claude one, beacon or not: the pair is kept for
   // the session, so it is there once the beacon has gone.
   const command = useMemo(
