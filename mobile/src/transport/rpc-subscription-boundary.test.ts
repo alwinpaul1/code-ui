@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 import { readScenarios } from '../test-support/rpc-recording/scenario-input'
 import { READY_STREAM_RELEASE_METHODS } from './rpc-client-server-subscription'
+import { buildRequestStreamUnsubscribe } from './rpc-client-terminal-subscription'
 import { RPC_SUBSCRIPTION_SITES, type RpcSubscriptionSite } from './rpc-subscription-inventory'
 
 /**
@@ -191,6 +192,31 @@ describe('RPC subscription boundary', () => {
       declared,
       'A stream whose host id arrives in `ready` is released only through READY_STREAM_RELEASE_METHODS.'
     ).toEqual([...READY_STREAM_RELEASE_METHODS.keys()].sort())
+  })
+
+  // The mirror of the test above: a `params` entry claims the transport can build the unsubscribe
+  // from the subscribe params and request id, and a method with no arm in the builder is never
+  // released at all (`agentSession.subscribe` was labelled `params` for a release nothing sent).
+  it('builds an unsubscribe for every stream released by its params', () => {
+    const SAMPLE_PARAMS: Record<string, unknown> = {
+      'terminal.subscribe': { terminal: 'terminal-1' },
+      'nativeChat.subscribe': { subscriptionId: 'chat-1' },
+      'agentSession.subscribe': { sessionId: 'session-1' },
+      'session.tabs.subscribe': { worktree: 'wt-1' }
+    }
+    const methods = [
+      ...new Set(
+        RPC_SUBSCRIPTION_SITES.filter((site) => site.release === 'params').map((site) => site.method)
+      )
+    ]
+    const unbuilt = methods.filter((method) => {
+      const params = SAMPLE_PARAMS[method]
+      return params === undefined || buildRequestStreamUnsubscribe(method, params, 'req-1') === null
+    })
+    expect(
+      unbuilt,
+      'A stream released by its params needs sample params above and an arm in buildStreamUnsubscribe.'
+    ).toEqual([])
   })
 
   it('names the wall on every walled entry', () => {
