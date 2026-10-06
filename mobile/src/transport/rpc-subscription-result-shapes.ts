@@ -23,3 +23,7 @@ export function isStreamingSubscriptionReadyResult(
     typeof (value as { subscriptionId?: unknown }).subscriptionId === 'string'
   )
 }
+
+export function isSnapshotResult(value: unknown): value is { type: 'snapshot' } {
+  return typeof value === 'object' && value !== null && 'type' in value && value.type === 'snapshot'
+}

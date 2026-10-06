@@ -82,6 +82,104 @@ describe('RpcClientStreamRegistry', () => {
     ])
   })
 
+  it('unsubscribes a session tabs stream by its own request id', () => {
+    const { registry, sent } = createRegistry()
+    const disposeOlder = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-1' },
+      () => {}
+    )
+    registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, () => {})
+    const [older, newer] = sent
+    registry.handleResponse(streamingResponse(older!.id, { type: 'snapshot', tabs: [] }))
+
+    disposeOlder()
+
+    // Without the request id the host sweeps every stream for the worktree, including the newer one.
+    expect(sent[2]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: older!.id }
+    })
+    expect(newer!.id).not.toBe(older!.id)
+    expect(sent).toHaveLength(3)
+  })
+
+  it('holds a session tabs unsubscribe until the host registers the stream', () => {
+    const { registry, sent } = createRegistry()
+    const events: unknown[] = []
+    const dispose = registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, (event) =>
+      events.push(event)
+    )
+    const subscribe = sent[0]!
+
+    dispose()
+    // Older hosts register only as they emit the first snapshot, so an earlier unsubscribe finds nothing.
+    expect(sent).toHaveLength(1)
+
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+
+    expect(sent[1]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: subscribe.id }
+    })
+    // A host that registered on arrival ends the stream; that end must not unsubscribe again.
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'end' }))
+    expect(sent).toHaveLength(2)
+    expect(events).toEqual([])
+    expect(registry.size()).toBe(0)
+  })
+
+  it('holds a session tabs unsubscribe again after a reconnect replays the stream', () => {
+    const { registry, sent } = createRegistry()
+    const dispose = registry.subscribe('session.tabs.subscribe', { worktree: 'wt-1' }, () => {})
+    const subscribe = sent[0]!
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+    dispose()
+
+    expect(sent.map((request) => request.method)).toEqual([
+      'session.tabs.subscribe',
+      'session.tabs.subscribe'
+    ])
+    registry.handleResponse(streamingResponse(subscribe.id, { type: 'snapshot', tabs: [] }))
+    expect(sent[2]).toMatchObject({
+      method: 'session.tabs.unsubscribe',
+      params: { worktree: 'wt-1', subscriptionId: subscribe.id }
+    })
+  })
+
+  it('drops a held session tabs unsubscribe when the subscribe fails or reconnects first', () => {
+    const { registry, sent } = createRegistry()
+    const events: unknown[] = []
+    const disposeFailed = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-1' },
+      (event) => events.push(event)
+    )
+    const disposeReplayed = registry.subscribe(
+      'session.tabs.subscribe',
+      { worktree: 'wt-2' },
+      () => {}
+    )
+    const failed = sent[0]!
+    disposeFailed()
+    disposeReplayed()
+
+    registry.handleResponse({
+      id: failed.id,
+      ok: false,
+      error: { code: 'worktree_not_found', message: 'Worktree not found' }
+    })
+    registry.markForReplay()
+    registry.replayAfterAuthentication()
+
+    expect(sent).toHaveLength(2)
+    expect(events).toEqual([])
+    expect(registry.size()).toBe(0)
+  })
+
   it('keeps a disposed browser tombstone until ready can be unsubscribed', () => {
     const { registry, sent } = createRegistry()
     const dispose = registry.subscribe('browser.screencast', { page: 'page-1' }, () => {})
@@ -106,7 +204,8 @@ describe('RpcClientStreamRegistry', () => {
     ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }],
     ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
     ['notifications.subscribe', 'notifications.unsubscribe', null],
-    ['accounts.subscribe', 'accounts.unsubscribe', null]
+    ['accounts.subscribe', 'accounts.unsubscribe', null],
+    ['session.tabs.subscribe', 'session.tabs.unsubscribe', { worktree: 'wt-1' }]
   ])(
     'releases canceled %s callbacks while preserving late host cleanup',
     (method, cleanup, params) => {
@@ -151,7 +250,12 @@ describe('RpcClientStreamRegistry', () => {
       const requests = [...sent]
       for (const request of requests) {
         registry.handleResponse(
-          streamingResponse(request.id, { type: 'ready', subscriptionId: `host:${request.id}` })
+          streamingResponse(
+            request.id,
+            method === 'session.tabs.subscribe'
+              ? { type: 'snapshot', tabs: [] }
+              : { type: 'ready', subscriptionId: `host:${request.id}` }
+          )
         )
       }
 
@@ -159,7 +263,13 @@ describe('RpcClientStreamRegistry', () => {
       expect(registry.size()).toBe(0)
       expect(
         sent.filter((request) => request.method === cleanup).map((request) => request.params)
-      ).toEqual(requests.map((request) => ({ subscriptionId: `host:${request.id}` })))
+      ).toEqual(
+        requests.map((request) =>
+          method === 'session.tabs.subscribe'
+            ? { worktree: 'wt-1', subscriptionId: request.id }
+            : { subscriptionId: `host:${request.id}` }
+        )
+      )
     }
   )
 
@@ -167,7 +277,8 @@ describe('RpcClientStreamRegistry', () => {
     ['browser.screencast', 'browser.screencast.unsubscribe', { page: 'page-1' }],
     ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe', null],
     ['notifications.subscribe', 'notifications.unsubscribe', null],
-    ['accounts.subscribe', 'accounts.unsubscribe', null]
+    ['accounts.subscribe', 'accounts.unsubscribe', null],
+    ['session.tabs.subscribe', 'session.tabs.unsubscribe', { worktree: 'wt-1' }]
   ])('canceled %s delivery', (method, cleanup, params) => {
     it('ignores late scrollback and terminal registration while waiting for host cleanup', () => {
       const { registry, sent } = createRegistry()
@@ -189,11 +300,19 @@ describe('RpcClientStreamRegistry', () => {
       expect(sent).toHaveLength(1)
 
       registry.handleResponse(
-        streamingResponse(request.id, { type: 'ready', subscriptionId: 'late-host-id' })
+        streamingResponse(
+          request.id,
+          method === 'session.tabs.subscribe'
+            ? { type: 'snapshot', tabs: [] }
+            : { type: 'ready', subscriptionId: 'late-host-id' }
+        )
       )
       expect(sent[1]).toMatchObject({
         method: cleanup,
-        params: { subscriptionId: 'late-host-id' }
+        params:
+          method === 'session.tabs.subscribe'
+            ? { worktree: 'wt-1', subscriptionId: request.id }
+            : { subscriptionId: 'late-host-id' }
       })
       expect(registry.size()).toBe(0)
       expect(events).toEqual([])
