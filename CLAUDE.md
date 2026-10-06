@@ -78,7 +78,7 @@ So, for every reported bug:
 Before calling any change done: **diff it against the current code** (`git
 diff`, and for a port, upstream's parent against this fork's file) and read
 what actually changed, not what you meant to change. Then **run the
-regression suite** (`cd mobile && npx tsc --noEmit && npx vitest run && npx
+regression suite** (`cd mobile && npx tsc --noEmit && pnpm test && npx
 oxlint && node scripts/check-tests-typecheck-ratchet.mjs`) and, for anything that touched ordering, parsing, or a pinned
 contract, have a second reviewer (an Opus or Sonnet agent) hunt the diff for
 regressions. **A reported regression is confirmed or disproved with a test,
@@ -250,8 +250,17 @@ to the next version instead.
 ## Checks before calling work done
 
 ```
-cd mobile && npx tsc --noEmit && npx vitest run && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs
+cd mobile && npx tsc --noEmit && pnpm test && npx oxlint && node scripts/check-tests-typecheck-ratchet.mjs
 ```
+
+Run the tests with `pnpm test`, never `npx vitest run` from a terminal.
+`pnpm test` goes through `scripts/run-detached.mjs`, which starts vitest with
+no terminal among its ancestors. The beacon's tty writer walks up to six
+ancestors and writes to the first terminal it finds, and on 2026-10-06 tests
+run from inside an agent's terminal wrote beacon frames for a synthetic session
+(`00000000`) into the user's live Claude tab. `vitest.global-setup.ts` now
+refuses a run with a terminal among its ancestors before any test starts. To
+run a few files: `node scripts/run-detached.mjs npx vitest run <files>`.
 
 The last step is the tests-typecheck ratchet: a test file must typecheck under
 `tsconfig.test.json`, because a type-level pin in an unchecked test proves nothing.
