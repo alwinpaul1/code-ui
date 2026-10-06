@@ -788,9 +788,9 @@ and UPSTREAM.txt is unchanged. Each row is one commit with a failing-first test 
 | #23032 | phone | **done** (22328e68b). One `READY_STREAM_RELEASE_METHODS` table for both transports; notifications and accounts released once with the current ready id; `mobile-notifications.ts` sends no unsubscribe of its own. Also takes #22945's one-line `markForReplay` reset the fork lacked. Goldens, pilot scenarios and closures not carried: the fork records no notifications stream. |
 | #24547 | phone | **done** (7e8d4f8e7). |
 | #24625 | phone | **done** (f1738ca18). Matrix omits `session.tabs.subscribe` (#22943's direct hold is not carried). |
-| #24655 | phone | **done** (9be51286b). The fork's prefetch cache (`rememberFileTabDoc`, up to 12 docs, module scope) still keeps a closed tab's last read; not touched. |
+| #24655 | phone | **done** (9be51286b), and the fork's own read cache released with it (bca30d435). The fork keeps each non-diff read in a bounded module cache (`mobile-file-tab-prefetch.ts`, up to 12 docs of 8M characters) that the next open is served from, so deleting only the session map's copy released half the preview. A read now claims its path and caches only while it is the newest claim; closing a file tab forgets the entry and voids reads in flight; a failed close keeps it. A tab the desktop closes (a snapshot, not this phone's close) still leaves its entry until the 12-entry bound evicts it. |
 | #24653 | host | desktop clipboard upload decoding (`src/main`). Free with the Orca update. |
-| #24665 | phone | **done** (75a43c16d). New `base64-byte-codec.ts`; the fork's `base64-bytes.ts` delegates to it. |
+| #24665 | phone | **done** (75a43c16d), then corrected (e7420b262). New `base64-byte-codec.ts`; the fork's `base64-bytes.ts` delegates to it. The first cut built each 8190-byte chunk one byte at a time, which measured 6-7x slower on legacy v1 encode under V8 `--jitless` (1 MB 5.5 ms to 34 ms, 4 MB 17 ms to 126 ms; Hermes has no JIT). Each chunk now goes through one `String.fromCharCode.apply` and its own `btoa`: identical bytes, no payload-sized string, so the v2 `sealText` and heap gains stay. Pinned by a fuzz against `Buffer` and a count of `fromCharCode` calls (not a clock). `bridge-screencast-encoder.ts` takes upstream's comment rewrite. |
 | #24680 | phone | **done** (8d685f9c5), verbatim. |
 | #24694 | host | desktop path-inventory expiry (`src/main`). Free with the Orca update. |
 | #24778 | phone | **done** (46e51c151), verbatim. |
@@ -798,6 +798,7 @@ and UPSTREAM.txt is unchanged. Each row is one commit with a failing-first test 
 | #24567, #24568 | phone | **done** (388bfdb25). |
 | #24759 | phone | **done** (29141874f); route parity pins in a follow-up commit. |
 | #24792 | phone | **done** (141444cc9), goldens re-recorded. Recorder `derived-goldens.ts` change moves `recorderSha256` everywhere; only `lifecycle-inventory-lifecycle` moves in body. |
+| #22835 (arm only) | phone | **done** (09eb33f49). `buildStreamUnsubscribe` gains upstream's `agentSession.subscribe` arm, so closing a structured chat sends `agentSession.unsubscribe` with the session and the opening request id on both transports; before it, the inventory said `params` and nothing was sent. The rest of #22835 is not taken. The subscription boundary test now checks every `params` entry has a builder arm. |
 | #24941 | phone | **done** (5d3a2a170), verbatim. |
 | #24539, #24540 | phone | **done** (95e83a053, a0e3bf5d8), verbatim. |
 | #25107 | docs | not applicable: upstream README APK links. Code UI points at its own releases. |
