@@ -1,4 +1,4 @@
-import type { MutableRefObject } from 'react'
+import { useEffect, useRef, type MutableRefObject } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useAgentHudBeacon, type AgentHudBeacon } from './agent-hud-beacon'
@@ -15,6 +15,7 @@ import { useAgentHudBeaconLiveness } from './use-agent-hud-beacon-liveness'
 import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
 import { useStickyLiveHud } from './use-sticky-live-hud'
+import { rememberStartupFramePair } from './claude-startup-frame-pair'
 
 export type NativeChatHudPhase = BeaconPhase
 
@@ -98,6 +99,27 @@ export function useMobileNativeChatHud(args: {
     agent: args.agent,
     active: args.phase === 'working' || args.phase === 'paused'
   })
+  // The startup frame the screen showed, kept for this session: it scrolls off.
+  // A terminal that moves to ANOTHER session (a `claude -c` after an exit) still
+  // holds the old session's frame object, which must not be filed under the new
+  // id; a session id that only arrives after the first read (null to an id) is
+  // not that, and keeps the frame it was already showing.
+  const frameFiled = useRef<{ sessionId: string | null; seen: unknown }>({ sessionId: null, seen: undefined })
+  useEffect(() => {
+    if (args.agent !== 'claude' || args.sessionId === null) {
+      return
+    }
+    const filed = frameFiled.current
+    frameFiled.current = { sessionId: args.sessionId, seen: screen.startupFrame }
+    if (filed.sessionId === args.sessionId && screen.startupFrame === filed.seen) {
+      return
+    }
+    // Another session on this terminal: its first frame object is the old one's.
+    if (filed.sessionId !== null && filed.sessionId !== args.sessionId && screen.startupFrame === filed.seen) {
+      return
+    }
+    rememberStartupFramePair(args.sessionId, screen.startupFrame)
+  }, [args.agent, args.sessionId, screen.startupFrame])
   const accounts = useHostAccountsSnapshot(args.client, args.enabled)
   // Read at render: a new beacon re-renders through the store, and a handle
   // swap re-renders through `scopeKey`, so the ref is never read stale here.

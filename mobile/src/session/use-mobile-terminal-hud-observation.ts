@@ -8,6 +8,7 @@ import {
   type TerminalHudObservation
 } from './mobile-terminal-hud-parse'
 import { claudePermissionFromScreen } from './claude-terminal-permission'
+import { readClaudeStartupFrame, type StartupFrameRead } from './claude-startup-frame'
 import { isMobileNativeChatTerminalBurstActive } from './mobile-native-chat-terminal-write-lock'
 import { queueBoxReadFromScreen } from './mobile-terminal-queue-read'
 import { codexPermissionFromScreen } from './codex-terminal-permission'
@@ -74,6 +75,10 @@ export function useMobileTerminalHudObservation(args: {
   peerNotices: ScreenPeerRow[] | null
   /** Claude Code's spinner line as this read saw it, or null when none is up. */
   spinner: ClaudeSpinner | null
+  /** The startup frame the latest read that held one stated, kept across reads
+   *  that did not (the frame scrolls off); null until one is read from this
+   *  terminal (claude-startup-frame.ts). */
+  startupFrame: StartupFrameRead | null
   observation: TerminalHudObservation | null
   /** Re-read the screen now; resolves with what it saw (null on failure). */
   refresh: () => Promise<TerminalHudObservation | null>
@@ -106,6 +111,7 @@ export function useMobileTerminalHudObservation(args: {
   const [taskCompletions, setTaskCompletions] = useState<{ handleKey: string; rows: ScreenTaskCompletion[] } | null>(null)
   const [peerNotices, setPeerNotices] = useState<ScreenPeerRow[] | null>(null)
   const [spinner, setSpinner] = useState<ClaudeSpinner | null>(null)
+  const [startupFrame, setStartupFrame] = useState<{ handleKey: string; read: StartupFrameRead } | null>(null)
   const [observation, setObservation] = useState<TerminalHudObservation | null>(null)
   const [dialogOptions, setDialogOptions] = useState<MobileChatPermission['options'] | null>(null)
   const [dialogKind, setDialogKind] = useState<TerminalDialogKind | null>(null)
@@ -211,6 +217,12 @@ export function useMobileTerminalHudObservation(args: {
         setSentPhotos((current) => (JSON.stringify(current) === JSON.stringify(photos) ? current : photos))
         const peers = agent === 'claude' || agent === 'openclaude' ? peerNoticesFromScreen(lines, terminal.terminal?.draft) : []
         setPeerNotices((current) => (current !== null && JSON.stringify(current) === JSON.stringify(peers) ? current : peers))
+        const frame = agent === 'claude' || agent === 'openclaude' ? readClaudeStartupFrame(lines) : null
+        if (frame) {
+          setStartupFrame((current) =>
+            current?.handleKey === handleKey && JSON.stringify(current.read) === JSON.stringify(frame) ? current : { handleKey, read: frame }
+          )
+        }
         const painted = agent === 'claude' || agent === 'openclaude' ? parseClaudeSpinnerLine(lines) : null
         setSpinner((current) => (sameSpinner(current, painted) ? current : painted))
         const dialog = permission?.options ?? permissionOptionsFromScreen(lines)
@@ -304,6 +316,7 @@ export function useMobileTerminalHudObservation(args: {
     taskCompletions: enabled && taskCompletions?.handleKey === handleKey ? taskCompletions.rows : null,
     peerNotices: enabled && queueScopeRef.current === handleKey ? peerNotices : null,
     spinner: enabled && queueScopeRef.current === handleKey ? spinner : null,
+    startupFrame: enabled && startupFrame?.handleKey === handleKey ? startupFrame.read : null,
     permissionDismissed
   }
 }
