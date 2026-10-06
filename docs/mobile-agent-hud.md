@@ -1023,9 +1023,17 @@ live pair for every tab that carried no beacon.
 2. The session's own last answer to `/model`, `/effort` or `/fast`, or the
    harness's fallback notice, read from rows the transcript already holds
    (`claude-session-command-pair.ts`).
-3. The model the host's transcript scan last read for this session
+3. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
+   under tier 2 and under the scan whenever the scan names another model.
+4. The model the host's transcript scan last read for this session
    (`claude-transcript-model.ts`), which carries no effort.
-4. Nothing.
+5. Nothing.
+
+Tiers 3 and 4 are ordered by what each statement is about, not by rank: the frame
+was printed at launch, so a reply written later under a different model (an alt+p
+picker switch writes no row) is the newer statement and the scan wins, effort
+dropped. When the scan names the same model it records no effort, so the frame
+supplies the one it stated.
 
 `CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tiers 2
 and 3 are a deliberate, narrow extension of it: a line the agent printed about
@@ -1033,6 +1041,73 @@ itself, in answer to the user's command, in the session's own record. It is not 
 tracked record, not the launch record, not a setting, and not a guess. The
 rule's reason (a figure the agent did not state about THIS session) still holds,
 and the extension stays inside it.
+
+### The startup frame (2026-10-06)
+
+A `claude` typed by hand into a shell has no launch flag, so no beacon and no
+badge, and before this tier it showed nothing past `/model` and `/effort` output
+(Claude Code 2.1.290: no status-line, hook, window-title or OSC channel was added
+that names the model or effort; the title is `sessionTitle ?? aiSessionTitle ??
+agentTitle ?? haikuTitle ?? "Claude Code"`, identical in 2.1.289). Orca reads the
+same frame in its desktop renderer to fill its own model and effort pills
+(`claude-terminal-session-options.ts`, stablyai/orca @ 13d94acd, since #12860,
+2026-08-06) and does not send it to mobile: its mobile app shows the model only
+from `agentStatus.model`, which its Claude hook normalizer never sets, and no
+effort for a terminal Claude tab at all.
+
+**What it reads.** The `Claude Code vX` header row, then the model row below it,
+searched bottom-up so the release-notes panel never wins: `<Model> with <level>
+effort · <plan>`. The model is mapped by family tokens (`claudeIdFromLabel`), so
+the "(1M context)" note 2.1.290 dropped from the Opus row changes nothing. It
+refuses rather than guesses: an unknown family or a version it cannot map gives
+nothing at all; a pane too narrow for the word "effort" keeps the model and
+drops the effort (Orca keeps the level; this repo does not); only the newest
+header is read; a header quoted in the conversation (behind a `⏺` or `❯`) is not
+a frame.
+
+**Where it comes from, and why.** Three places hold it, in the order tried:
+
+1. `terminal.read --screen`, the poll that already runs while chat covers a
+   terminal (`use-mobile-terminal-hud-observation.ts`, `startupFrame`). It is
+   the host's VISIBLE rows (`buildVisibleSnapshotReadFallback`, Orca
+   `terminal-tail-read.ts`), so the frame is on it only until the conversation
+   outgrows one screen.
+2. One bounded `terminal.read {cursor: 0, limit: 80}` per terminal and
+   connection, only for a quiet session with no pair kept
+   (`claude-startup-frame-read.ts`). A cursor read answers from the OLDEST row
+   the host's stream buffer still keeps (2000 lines or 256 KB, `oldestCursor`);
+   an un-cursored read answers the newest. Whether the frame is still in that
+   buffer is the parser's call, never assumed.
+3. The pair kept per session id and persisted with the other session caches
+   (`claude-startup-frame-pair.ts`, `codeui:chat-startup-frame-pairs`, 32
+   sessions). A frame filed under a session id is never filed under another: a
+   `claude -c` that moves a terminal to a new session keeps the old frame object
+   out of the new id (`use-mobile-native-chat-hud.ts`).
+
+The phone's own xterm buffer is NOT a source. It holds the host's snapshot at
+attach, which this has not measured, and chat pauses the terminal stream, so
+reading it would add a WebView round trip for a frame the host read already
+covers. Not measured either way.
+
+**What it is not.** It is the session's statement AT LAUNCH. A later `/model`,
+`/effort` or `/fast` row overrides it (tier 2), and a live beacon or badge
+overrides everything. The effort-step keys and the `/effort` slider write
+nothing the phone can read, so until the next status line or command the effort
+here can be stale; it is never drawn as anything fresher. It does not fill a
+missing field of a beacon (a beacon that states a model and no effort yet keeps
+no effort): mixing a launch statement into a live pair is the "Opus Medium" bug.
+
+**Proven and modelled.** Proven from source: the builder of the effort suffix
+(` with ${level} effort`) is unchanged between 2.1.289 and 2.1.290; Orca ships
+the same read in 1.4.220; the host's `terminal.read` modes and buffer limits as
+above. MODELLED, not captured: every frame in the tests
+(`fixtures/claude-startup-frame-2.1.290-modelled.ts`) is built from the
+binary's strings and Orca's pinned layouts. No live 2.1.290 frame has been
+captured. Not proven: that the host's stream buffer still holds the frame after
+a late attach on a real session, how ConPTY redraws it, and the exact row
+wording of 2.1.290 on a real screen. Codex has no counterpart (its startup box
+is a different frame and its model comes from the footer and rollout), so
+nothing here reads it.
 
 ### The hook beacon (POSIX hosts)
 
