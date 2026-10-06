@@ -143,6 +143,9 @@ export class BridgeHostSubscriptions {
       )
     } catch (error) {
       this.open.delete(id)
+      // Output the provider emitted before it threw is still held, with its silence timer armed;
+      // the record is gone from the ledger, so nothing else would ever release either.
+      record.backlog?.dispose()
       throw error
     }
     // A stream that emitted and overflowed inside `subscribe` is already retired, and its
