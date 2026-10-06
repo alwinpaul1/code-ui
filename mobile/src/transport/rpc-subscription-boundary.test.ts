@@ -5,15 +5,18 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 import { readScenarios } from '../test-support/rpc-recording/scenario-input'
+import { READY_STREAM_RELEASE_METHODS } from './rpc-client-server-subscription'
+import { buildRequestStreamUnsubscribe } from './rpc-client-terminal-subscription'
 import { RPC_SUBSCRIPTION_SITES, type RpcSubscriptionSite } from './rpc-subscription-inventory'
 
 /**
  * Makes the subscription inventory bind.
  *
- * Four failures, all of which mean "edit the list":
+ * Five failures, all of which mean "edit the list":
  *   - a file opens a stream and is not listed,
  *   - a listed file no longer opens one (stale entry — how allow-lists rot),
  *   - a listed file opens a different method than its entry claims,
+ *   - the `ready-id` entries and the transport's release table name different methods,
  *   - a `recorded` entry names a family the scenario manifest does not have.
  *
  * The last one is what separates this from prose. A comment saying a stream is covered stays true
@@ -174,6 +177,45 @@ describe('RPC subscription boundary', () => {
     expect(
       missing,
       'A recorded entry must name a family in pilot-scenarios.json, or the claim is prose.'
+    ).toEqual([])
+  })
+
+  it('releases by ready id exactly the streams the transport release table names', () => {
+    const declared = [
+      ...new Set(
+        RPC_SUBSCRIPTION_SITES.filter((site) => site.release === 'ready-id').map(
+          (site) => site.method
+        )
+      )
+    ].sort()
+    expect(
+      declared,
+      'A stream whose host id arrives in `ready` is released only through READY_STREAM_RELEASE_METHODS.'
+    ).toEqual([...READY_STREAM_RELEASE_METHODS.keys()].sort())
+  })
+
+  // The mirror of the test above: a `params` entry claims the transport can build the unsubscribe
+  // from the subscribe params and request id, and a method with no arm in the builder is never
+  // released at all (`agentSession.subscribe` was labelled `params` for a release nothing sent).
+  it('builds an unsubscribe for every stream released by its params', () => {
+    const SAMPLE_PARAMS: Record<string, unknown> = {
+      'terminal.subscribe': { terminal: 'terminal-1' },
+      'nativeChat.subscribe': { subscriptionId: 'chat-1' },
+      'agentSession.subscribe': { sessionId: 'session-1' },
+      'session.tabs.subscribe': { worktree: 'wt-1' }
+    }
+    const methods = [
+      ...new Set(
+        RPC_SUBSCRIPTION_SITES.filter((site) => site.release === 'params').map((site) => site.method)
+      )
+    ]
+    const unbuilt = methods.filter((method) => {
+      const params = SAMPLE_PARAMS[method]
+      return params === undefined || buildRequestStreamUnsubscribe(method, params, 'req-1') === null
+    })
+    expect(
+      unbuilt,
+      'A stream released by its params needs sample params above and an arm in buildStreamUnsubscribe.'
     ).toEqual([])
   })
 

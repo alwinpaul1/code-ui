@@ -3,11 +3,11 @@
   "family": "legacy-inventory",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "4074d99e106a15416c00a6c5fc1a3e9782283a98",
+  "baseline": "c3913a60217c3470a2f2d55630772a48d1a7fb14",
   "lockfileSha256": "ca49ba3338ae11c3f14d944e614df5727b95c69a6522c6a846228408143c2478",
-  "recorderSha256": "57acfd7007e993add55b7d22492df09d8cef7626d805f9aeae79ab5bb765deac",
+  "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
   "adapterSha256": "262eaad263a45aa13ec5b27c12b59946b12c202474229fff7a5727dba6d702ca",
-  "scenarioSha256": "46bbafcc57fe2e3aee41a14bc26a0375b7b56e58030705fe4c28841a272b2560",
+  "scenarioSha256": "761facf870f48f8da1a07fcdfeaadbe93c833ec0914c2a885f5d31cfc48bf6ae",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
@@ -307,8 +307,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:settled",
         "observation": {
-          "sender": ["32c9018052ba", "2f1953cc0315"],
-          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
+          "sender": ["32c9018052ba"],
+          "payloads": ["8db0d1234c94"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",
@@ -321,8 +321,8 @@
       {
         "id": "inventory-lifecycle.unmount-before-1:remounted",
         "observation": {
-          "sender": ["32c9018052ba", "2f1953cc0315"],
-          "payloads": ["8db0d1234c94", "c9b9d7a9b388"],
+          "sender": ["32c9018052ba"],
+          "payloads": ["8db0d1234c94"],
           "settlements": {
             "mount": "eb79a9b3682a",
             "old": "eb79a9b3682a",

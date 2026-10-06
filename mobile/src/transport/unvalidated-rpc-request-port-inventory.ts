@@ -140,12 +140,13 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
 
   // src/notifications/ — push registration and delivery. CODE UI's own push registration already
   // sends through push-registration-operations.ts (upstream's push feature is not carried).
-  // Holdout: the unsubscribe is a closure inside a `subscribe` callback, and the reconnect
-  // catch-up read (notifications.getMissedSince) sits beside the same subscription. The recorder
-  // can open a stream since step 6, but this fork's desktop notification stream is its own
-  // (upstream's `notifications.desktop-stream` scenarios do not describe it), so both stay on the
-  // raw port until the fork records its stream; see rpc-subscription-inventory.ts.
-  { file: 'src/notifications/mobile-notifications.ts', references: 2 },
+  // Holdout: the reconnect catch-up read (notifications.getMissedSince) sits beside the
+  // subscription. The recorder can open a stream since step 6, but this fork's desktop
+  // notification stream is its own (upstream's `notifications.desktop-stream` scenarios do not
+  // describe it), so it stays on the raw port until the fork records its stream; see
+  // rpc-subscription-inventory.ts. The stream's `notifications.unsubscribe` is no longer a request
+  // here: the stream transport sends it with the id from the current `ready` (#23032).
+  { file: 'src/notifications/mobile-notifications.ts', references: 1 },
 
   // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
   // the diff-review loaders and the rest of the screen migrated in step 4; see

@@ -114,7 +114,9 @@ const HOST_COMPONENT_NAMES = new Set([
 // hook and binding pins moved, and only those.
 // 305 since 2026-10-04 (Orca #24301): the useState for agent-session.repeated-stop.v1 beside the
 // prompt-cancel one in the feedback capabilities, which the status probe sets.
-const HEAD_MAIN_HOOK_SHA256 = 'f95af0afe44b1b35c9b2388822bf2bd619751456a59aa8bb4a9848066035dfe9'
+// 307 since 2026-10-06 (Orca #24759 ported): the feedback hook's mountedRef (useRef) and its
+// effect (useEffect) join the family.
+const HEAD_MAIN_HOOK_SHA256 = '090cc40fd4a219699215880baf1f967aa90b41f99e0c877afda4d45c5cfc417a'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -125,7 +127,7 @@ const HEAD_MAIN_HOOK_SHA256 = 'f95af0afe44b1b35c9b2388822bf2bd619751456a59aa8bb4
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
-const HEAD_HOOK_BINDING_SHA256 = '156e5d25021e48ce06fe8262855d1d47c68dd496882acb26ae655d884f396352'
+const HEAD_HOOK_BINDING_SHA256 = '43e1a34ae749466e370fd4aa37a730e337427be6022ae23ce95607daca520f05'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -218,7 +220,12 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // startDictation, and cancelDictation erases through eraseLiveTranscript instead of
 // sending its own delta (live-terminal-dictation.ts, which counts only the bytes the
 // terminal took). Only those two bodies moved. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '5dc1e6de0a5e831d3f6e75e7abfa934350bdfbf0442b849d9a8ab8fa50593852'
+// 2026-10-06 (Orca #24655 ported): readFileTab's two writes land only while their own loading record
+// is the tab's current one, and an accepted file-tab close deletes the tab's cached document. Same
+// callbacks; the bodies of readFileTab and handleCloseSessionTab moved. And (#24759) showToast skips a
+// disposed owner. And (#24655 follow-up) a read claims its path in the file-tab read cache, and an
+// accepted file-tab close forgets it.
+const HEAD_CALLBACK_BODY_SHA256 = '88e43e41494f53dd08ae3b61e48409840f3094d6e36b90a817ac75b3816367d2'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -238,7 +245,7 @@ const HEAD_CALLBACK_BODY_SHA256 = '5dc1e6de0a5e831d3f6e75e7abfa934350bdfbf0442b8
 // useSoftKeyboard, visibility and height (26).
 // 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
-const HEAD_EFFECT_SHA256 = '7ad40b8775166bc422cebc64ab7269166028d3499b1c48588a62a50b98dbd1f8'
+const HEAD_EFFECT_SHA256 = 'f17512e385d4cd804c40f8876c03e40215c4f75fc85999371880e02ae9826faa'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -303,8 +310,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // screen (forkClaudeSessionUnlessDialog) and toasts the refusal when there is
 // one; its two toast strings stay in the handler. Same one function; count
 // still 13.
+// 2026-10-06 (Orca #24655 ported): handleCloseSessionTab's body gains the file-tab document release.
+// Same 13 functions. The #24655 follow-up adds the read cache's forget to the same body.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '811906ba34788b33676546fede7b621fbe4a40beff9747e89d23f97c8206adb7'
+  'ad0d59f4f0ef6c7799aa3747176288b01f99d78cde065d3bb0d400044acd1753'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -401,8 +410,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 670 since 2026-10-04: TabActivityBadge's dot moved into session-tab-activity.ts's
 // tabPillDotState, outside this family, so the expression's `: 'idle'` leaves with it. The header
 // now calls `tabPillDotState(status, now, leadTurnEnded)` and holds no other literal of it.
+// 671 since 2026-10-06 (Orca #24655 ported): the `'file'` check before an accepted file-tab close
+// releases that tab's document; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  'bcceda597e4b5955e32fcd3ef50e8a3ecb20ae3923341eba3f88c06cf0112c61'
+  '1b367405f456cd52d5285cb36a3484b6e23e4d26bd22b5e0b79c8e7187336db1'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -970,7 +981,7 @@ describe('mobile session route extraction parity', () => {
     // when no field on screen can take it.
     // 305 since 2026-10-04: the repeated-stop capability's useState beside the prompt-cancel one
     // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
-    expect(main.hooks).toHaveLength(305)
+    expect(main.hooks).toHaveLength(307)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -983,7 +994,8 @@ describe('mobile session route extraction parity', () => {
     // 25 since 2026-09-22: the dictation take stops when a call backgrounds the app.
     // 26 since 2026-09-24: the keyboard's visibility and height each own their own effect off
     // useSoftKeyboard, where one effect drove both off the raw Keyboard events (Orca #22252).
-    expect(main.effects).toHaveLength(26)
+    // 27 since 2026-10-06: the feedback hook's mountedRef effect (Orca #24759).
+    expect(main.effects).toHaveLength(27)
     expect(hash(main.effects)).toBe(HEAD_EFFECT_SHA256)
     // 22 since 2026-09-19: useScrollReadingPosition in MarkdownReader, the
     // .md tab's Preview scroller remembering where the reader was.
@@ -1092,7 +1104,8 @@ describe('mobile session route extraction parity', () => {
     // 671 since 2026-09-30 (later): the live terminal dictation's 'pty' and three '' moved to
     // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
     // 670 since 2026-10-04: the tab pill's 'idle' moved to session-tab-activity.ts.
-    expect(strings).toHaveLength(670)
+    // 671 since 2026-10-06: the 'file' check before a closed file tab's document is released (Orca #24655).
+    expect(strings).toHaveLength(671)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.

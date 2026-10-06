@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcResponse } from '../transport/types'
 import {
+  beginFileTabRead,
   prefetchOutsideWorktreeFileTabs,
   prefetchedFileTabDoc,
   rememberFileTabDoc,
@@ -95,11 +96,11 @@ describe('a desktop-opened file outside the worktree, read while a terminal stil
 
   it('keeps a bounded number of documents and refuses an oversized one', () => {
     for (let i = 0; i < 20; i += 1) {
-      rememberFileTabDoc('wt1', `/tmp/${i}.txt`, { status: 'ready', kind: 'file', content: 'x', truncated: false, byteLength: 1 })
+      rememberFileTabDoc(beginFileTabRead('wt1', `/tmp/${i}.txt`), { status: 'ready', kind: 'file', content: 'x', truncated: false, byteLength: 1 })
     }
     expect(prefetchedFileTabDoc('wt1', '/tmp/0.txt')).toBeNull()
     expect(prefetchedFileTabDoc('wt1', '/tmp/19.txt')).not.toBeNull()
-    rememberFileTabDoc('wt1', '/tmp/huge.png', { status: 'ready', kind: 'image', dataUri: 'x'.repeat(9 * 1024 * 1024) })
+    rememberFileTabDoc(beginFileTabRead('wt1', '/tmp/huge.png'), { status: 'ready', kind: 'image', dataUri: 'x'.repeat(9 * 1024 * 1024) })
     expect(prefetchedFileTabDoc('wt1', '/tmp/huge.png')).toBeNull()
   })
 })

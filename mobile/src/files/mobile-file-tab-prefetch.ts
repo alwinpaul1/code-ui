@@ -1,4 +1,12 @@
-import { isAbsoluteTabPath, resolveMobileFileTabDoc, type MobileFileTabDoc } from './mobile-file-tab-doc'
+import { isAbsoluteTabPath, resolveMobileFileTabDoc } from './mobile-file-tab-doc'
+import {
+  abandonFileTabRead,
+  beginFileTabRead,
+  keyOf,
+  prefetchAttempts as attempts,
+  prefetchedFileTabDoc,
+  rememberFileTabDoc
+} from './mobile-file-tab-read-cache'
 import type { MobileFileTabDocRpcSender } from './mobile-file-tab-doc-operations'
 
 /**
@@ -17,58 +25,18 @@ import type { MobileFileTabDocRpcSender } from './mobile-file-tab-doc-operations
  * URI). Fail-open: a read that fails is tried again a little later, a few
  * times, and then left to the tab's own read to report.
  */
-const MAX_ENTRIES = 12
-const MAX_ENTRY_CHARS = 8 * 1024 * 1024
 const RETRY_MS = 8000
 const MAX_ATTEMPTS = 4
 
-type Entry = { doc: MobileFileTabDoc; at: number }
-const docs = new Map<string, Entry>()
-const attempts = new Map<string, { count: number; nextAt: number; inFlight: boolean }>()
-
-function keyOf(worktreeId: string, path: string): string {
-  return `${worktreeId}\u0000${path}`
-}
-
-function docChars(doc: MobileFileTabDoc): number {
-  switch (doc.kind) {
-    case 'image':
-      return doc.dataUri.length
-    case 'pdf':
-      return doc.uri.length
-    case 'diff':
-      return doc.lines.reduce((sum, line) => sum + line.text.length, 0)
-    case 'file':
-    case 'html':
-    case 'markdown':
-      return doc.content.length
-    default: {
-      const exhaustive: never = doc
-      return exhaustive
-    }
-  }
-}
-
-/** What an earlier prefetch read for this tab's file, if anything. */
-export function prefetchedFileTabDoc(worktreeId: string, path: string): MobileFileTabDoc | null {
-  return docs.get(keyOf(worktreeId, path))?.doc ?? null
-}
-
-export function rememberFileTabDoc(worktreeId: string, path: string, doc: MobileFileTabDoc): void {
-  if (docChars(doc) > MAX_ENTRY_CHARS) {
-    return
-  }
-  const key = keyOf(worktreeId, path)
-  docs.delete(key)
-  docs.set(key, { doc, at: Date.now() })
-  while (docs.size > MAX_ENTRIES) {
-    const oldest = docs.keys().next().value
-    if (oldest === undefined) {
-      break
-    }
-    docs.delete(oldest)
-  }
-}
+export {
+  abandonFileTabRead,
+  beginFileTabRead,
+  forgetFileTabDoc,
+  prefetchedFileTabDoc,
+  rememberFileTabDoc,
+  resetFileTabPrefetchForTests,
+  type FileTabReadToken
+} from './mobile-file-tab-read-cache'
 
 /** Read every outside-the-worktree file tab the phone has not read yet. */
 export function prefetchOutsideWorktreeFileTabs(
@@ -87,7 +55,7 @@ export function prefetchOutsideWorktreeFileTabs(
     }
     const path = tab.relativePath
     const key = keyOf(worktreeId, path)
-    if (docs.has(key)) {
+    if (prefetchedFileTabDoc(worktreeId, path) !== null) {
       continue
     }
     const attempt = attempts.get(key) ?? { count: 0, nextAt: 0, inFlight: false }
@@ -95,18 +63,18 @@ export function prefetchOutsideWorktreeFileTabs(
       continue
     }
     attempts.set(key, { ...attempt, inFlight: true })
+    const token = beginFileTabRead(worktreeId, path)
     void resolveMobileFileTabDoc(client, { worktreeId, relativePath: path, terminalHandles })
       .then((doc) => {
-        rememberFileTabDoc(worktreeId, path, doc)
+        rememberFileTabDoc(token, doc)
         attempts.delete(key)
       })
       .catch(() => {
-        attempts.set(key, { count: attempt.count + 1, nextAt: now + RETRY_MS, inFlight: false })
+        abandonFileTabRead(token)
+        // A tab closed meanwhile forgot its attempts; a retry would only read for nobody.
+        if (attempts.has(key)) {
+          attempts.set(key, { count: attempt.count + 1, nextAt: now + RETRY_MS, inFlight: false })
+        }
       })
   }
-}
-
-export function resetFileTabPrefetchForTests(): void {
-  docs.clear()
-  attempts.clear()
 }

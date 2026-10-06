@@ -117,6 +117,9 @@ export function connectMobileRelayForPairing(args: {
   // WebSocket implementations commonly emit `error` immediately before
   // `close`; the bounded fallback represents an opaque 1006 close.
   socket.onerror = () => {
+    if (closed) {
+      return
+    }
     transportErrorTimer ??= setTimeout(() => {
       transportErrorTimer = null
       fail(new RelayOuterError(1006))

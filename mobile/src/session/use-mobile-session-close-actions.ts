@@ -1,4 +1,5 @@
 import { forgetSessionTab, pickNextSessionTabAfterClose } from './mobile-session-tab-history'
+import { forgetFileTabDoc } from '../files/mobile-file-tab-read-cache'
 import { planSessionTabClose } from './mobile-session-tab-close-plan'
 import {
   sessionTabClose,
@@ -16,6 +17,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     terminals,
     terminalsRef,
     setSessionTabs,
+    setFileDocs,
     sessionTabsRef,
     reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
@@ -140,6 +142,19 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (tab.type === 'file') {
+          // The read cache keeps a copy for the next open of this path; the tab is gone, so it goes too.
+          forgetFileTabDoc(worktreeId, tab.relativePath)
+          // The tab is gone on the host, so its preview (megabytes of base64 for an image) has no owner.
+          setFileDocs((prev) => {
+            if (!prev.has(tab.id)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
         reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {

@@ -6,7 +6,7 @@ import {
   buildRequestStreamUnsubscribe,
   updateTerminalSubscriptionViewport
 } from './rpc-client-terminal-subscription'
-import { buildReadyStreamUnsubscribe } from './rpc-client-server-subscription'
+import { buildReadyStreamUnsubscribe, isReadyIdStream } from './rpc-client-server-subscription'
 import { isStreamingOpenerReply } from './rpc-acceptance-policies'
 import {
   isStreamEndResult,
@@ -14,6 +14,7 @@ import {
   isTerminalSubscribedResult
 } from './rpc-subscription-result-shapes'
 import { RpcClientTerminalStreamRouter } from './rpc-client-terminal-stream-router'
+import * as sessionTabsStream from './rpc-client-session-tabs-stream'
 import type { ConnectionState, RpcResponse, RpcSuccess } from './types'
 
 export type RpcStreamingListener = (result: unknown) => void
@@ -25,11 +26,12 @@ export type RpcStreamSubscribeOptions = {
 type StreamRequest = {
   method: string
   params: unknown
-  listener: RpcStreamingListener
+  listener?: RpcStreamingListener
   onBinaryFrame?: (frame: BrowserScreencastFrame) => void
   subscriptionId?: string
   cancelled?: boolean
   sent?: boolean
+  receivedSnapshot?: boolean
 }
 
 type StreamRegistryOptions = {
@@ -107,6 +109,9 @@ export class RpcClientStreamRegistry {
     this.pendingBrowserRequestId = null
     for (const [id, stream] of this.streams) {
       stream.sent = false
+      stream.receivedSnapshot = false
+      // The id named a registration on the closed socket; the replay's ready brings the new one.
+      stream.subscriptionId = undefined
       this.resetTerminalRouting(id)
     }
   }
@@ -124,7 +129,7 @@ export class RpcClientStreamRegistry {
         return true
       }
       if (stream && result?.type === 'scrollback') {
-        stream.listener(result)
+        stream.listener?.(result)
         return true
       }
     }
@@ -164,6 +169,10 @@ export class RpcClientStreamRegistry {
       return
     }
     const result = response.result
+    if (sessionTabsStream.recordSnapshot(stream, result) && stream.cancelled) {
+      this.dispose(response.id)
+      return
+    }
     if (isStreamEndResult(result)) {
       this.finish(response.id, stream, result)
       return
@@ -188,24 +197,29 @@ export class RpcClientStreamRegistry {
         this.activeBrowserRequestId = response.id
       }
     }
-    if (isTerminalSubscribedResult(result)) {
+    if (isTerminalSubscribedResult(result) && stream.listener) {
       this.terminalRouter.register(response.id, result.streamId, stream.listener)
     }
     if (!stream.cancelled) {
-      stream.listener(result)
+      stream.listener?.(result)
     }
   }
 
   private dispose(id: string): void {
     const stream = this.streams.get(id)
-    if (stream?.method === 'browser.screencast') {
-      stream.cancelled = true
-      this.clearBrowserRequest(id)
+    if (stream) {
+      // A canceled opener may never reply; only its host cleanup route must survive.
+      stream.listener = undefined
+      stream.onBinaryFrame = undefined
+    }
+    if (stream && isReadyIdStream(stream.method)) {
+      if (stream.method === 'browser.screencast') {
+        this.clearBrowserRequest(id)
+      }
       this.disposeServerSubscription(id, stream)
       return
     }
-    if (stream?.method === 'runtime.clientEvents.subscribe') {
-      this.disposeServerSubscription(id, stream)
+    if (stream && sessionTabsStream.holdUnsubscribe(stream)) {
       return
     }
     const unsubscribe = buildRequestStreamUnsubscribe(stream?.method, stream?.params, id)
@@ -306,10 +320,8 @@ export class RpcClientStreamRegistry {
    *  the host already dropped its registration, and the slot's goodbye would end the stream that
    *  replaced it. */
   private finish(id: string, stream: StreamRequest, result: unknown): void {
-    const notify = !stream.cancelled
+    const listener = stream.cancelled ? undefined : stream.listener
     this.remove(id)
-    if (notify) {
-      stream.listener(result)
-    }
+    listener?.(result)
   }
 }
