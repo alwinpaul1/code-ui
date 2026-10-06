@@ -12,18 +12,23 @@ import { delimiter, join } from 'node:path'
  * with `CUIHUD_TTY: ''` wrote a beacon for a synthetic session into the live
  * terminal and the phone drew "the chat stays on Claude's own session
  * 00000000" (2026-10-06). A source-reading ratchet catches the shapes it knows;
- * this makes the leak impossible for the ones it does not:
+ * this closes it for the spawns it does not know about, as long as they keep PATH:
  *
  * - a `ps` that prints nothing (and logs each call to `ps.log`, so a test can
  *   prove it was the one found) goes first on PATH, so no walk sees an ancestor;
  * - `CUIHUD_TTY`, `CUIHUD_WIN_TTY` and `CUIHUD_WIN_CONOUT` point at temp files,
  *   so the MSYS branch's `/dev/tty` fallback is never reached either.
  *
+ * This is the SECOND line. The primary guard is that the tests run with no
+ * terminal among their ancestors (scripts/run-detached.mjs, checked by
+ * src/test/vitest-runs-detached.test.ts), because the walk reads ANCESTORS.
+ *
  * Workers (forks and threads) inherit `process.env` from this process, and a
- * spawn that spreads or inherits it inherits all of it. Only a spawn that
- * builds an environment from nothing, with its own PATH, escapes it, and the
- * ratchet (agent-hud-tests-reach-no-real-tty.test.ts) is the second line there.
- * `agent-hud-test-sandbox.test.ts` proves the sandbox holds.
+ * spawn that spreads or inherits it inherits all of it. A spawn with its OWN
+ * PATH is not covered: it finds the real `/bin/ps`, which macOS will not let a
+ * PATH entry shadow, and walks the real ancestors. The ratchet
+ * (agent-hud-tests-reach-no-real-tty.test.ts) is the third line for that shape.
+ * `agent-hud-test-sandbox.test.ts` checks the sandbox is in place and used.
  */
 export default function setup(): () => void {
   const dir = mkdtempSync(join(tmpdir(), 'cuihud-test-sandbox-'))
@@ -31,7 +36,9 @@ export default function setup(): () => void {
   mkdirSync(bin)
   const log = join(dir, 'ps.log')
   writeFileSync(log, '')
-  writeFileSync(join(bin, 'ps'), `#!/bin/sh\necho "$*" >> '${log}'\nexit 0\n`)
+  // Each call is logged with CUIHUD_PROBE, a token a test may put in the
+  // environment of one spawn, so it can tell its own walk's calls from another's.
+  writeFileSync(join(bin, 'ps'), `#!/bin/sh\necho "\${CUIHUD_PROBE:-}|$*" >> '${log}'\nexit 0\n`)
   chmodSync(join(bin, 'ps'), 0o755)
   for (const sink of ['tty', 'wintty', 'conout']) {
     writeFileSync(join(dir, sink), '')
