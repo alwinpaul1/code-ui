@@ -18,9 +18,11 @@ export const prefetchAttempts = new Map<
 /**
  * Who may write each path's entry: the newest read begun for it, and nobody once the tab is closed.
  * An older read that settles after a newer one, or one that settles after its tab closed, finds a
- * different token (or none) and is dropped. Holds only reads still in flight, so it stays small.
+ * different token (or none) and is dropped. A read that ends without a document gives its claim
+ * back to the newest read still in flight before it, so the claims are a stack per path. Holds
+ * only reads still in flight, so it stays small.
  */
-const latestRead = new Map<string, object>()
+const latestRead = new Map<string, object[]>()
 
 export type FileTabReadToken = { readonly key: string; readonly owner: object }
 
@@ -55,13 +57,26 @@ export function prefetchedFileTabDoc(worktreeId: string, path: string): MobileFi
 /** Starts a read of this path; only the newest read's result may be cached. */
 export function beginFileTabRead(worktreeId: string, path: string): FileTabReadToken {
   const token = { key: keyOf(worktreeId, path), owner: {} }
-  latestRead.set(token.key, token.owner)
+  const claims = latestRead.get(token.key)
+  if (claims) {
+    claims.push(token.owner)
+  } else {
+    latestRead.set(token.key, [token.owner])
+  }
   return token
 }
 
-/** A read that ended without a document gives up its claim, if it still held it. */
+/** A read that ended without a document gives its claim back to the older read now newest, if any. */
 export function abandonFileTabRead(token: FileTabReadToken): void {
-  if (latestRead.get(token.key) === token.owner) {
+  const claims = latestRead.get(token.key)
+  if (!claims) {
+    return
+  }
+  const index = claims.indexOf(token.owner)
+  if (index !== -1) {
+    claims.splice(index, 1)
+  }
+  if (claims.length === 0) {
     latestRead.delete(token.key)
   }
 }
@@ -76,9 +91,11 @@ export function forgetFileTabDoc(worktreeId: string, path: string): void {
 
 /** Caches a finished read, unless a newer read began or the tab was closed since. */
 export function rememberFileTabDoc(token: FileTabReadToken, doc: MobileFileTabDoc): boolean {
-  if (latestRead.get(token.key) !== token.owner) {
+  const claims = latestRead.get(token.key)
+  if (!claims || claims[claims.length - 1] !== token.owner) {
     return false
   }
+  // Whatever began before this read is older than what it just cached.
   latestRead.delete(token.key)
   if (docChars(doc) > MAX_ENTRY_CHARS) {
     return false
