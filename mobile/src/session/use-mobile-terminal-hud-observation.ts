@@ -130,6 +130,7 @@ export function useMobileTerminalHudObservation(args: {
     setTaskCompletions(null)
     setObservation(null)
     setSpinner(null)
+    setStartupFrame(null)
     setDialogOptions(null)
     setDialogKind(null)
     setDialogBeforeAnswer(false)

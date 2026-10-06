@@ -87,6 +87,23 @@ describe("the chat HUD files the startup frame the screen showed under the sessi
     expect(peekStartupFramePair('s-1')).toMatchObject(OPUS)
   })
 
+  it('lets a second claude that resumes the same session id replace its pair with the frame it paints', () => {
+    fakes.startupFrame = OPUS
+    render({ sessionId: 's-1' })
+    fakes.startupFrame = SONNET
+    render({ sessionId: 's-1' })
+    expect(peekStartupFramePair('s-1')).toMatchObject(SONNET)
+  })
+
+  it('drops a frame still waiting for a session id when it leaves the screen, so a later id inherits nothing', () => {
+    fakes.startupFrame = OPUS
+    render({ sessionId: null })
+    fakes.startupFrame = null
+    render({ sessionId: null })
+    render({ sessionId: 's-9' })
+    expect(peekStartupFramePair('s-9')).toBeNull()
+  })
+
   it('keeps the pair when later reads show no frame', () => {
     fakes.startupFrame = OPUS
     render({ sessionId: 's-1' })

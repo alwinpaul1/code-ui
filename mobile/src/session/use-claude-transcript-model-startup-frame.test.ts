@@ -10,11 +10,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 import { createAnsweringClient, historySession, ok, refused, type AnsweringClient } from '../agent-history/agent-history-panel.test-support'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { resetSessionCommandPairCacheForTests } from './claude-session-command-pair'
-import { rememberStartupFramePair, resetStartupFramePairsForTests } from './claude-startup-frame-pair'
+import { peekStartupFramePair, rememberStartupFramePair, resetStartupFramePairsForTests } from './claude-startup-frame-pair'
 import { readClaudeStartupFrame } from './claude-startup-frame'
 import { resetClaudeTranscriptModelScansForTests } from './claude-transcript-model-scan'
 import type { ClaudeModelFallback } from './claude-transcript-model'
-import { LOGO_FRAME, SCROLLED_PAST } from './fixtures/claude-startup-frame-2.1.290-modelled'
+import { LOGO_FRAME, SCROLLED_PAST, SECOND_RUN_FRAME } from './fixtures/claude-startup-frame-2.1.290-modelled'
 import { clearPendingModelPicksForTests, notePendingModelPick } from './mobile-native-chat-model-report-authority'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import {
@@ -119,18 +119,8 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     expect(latest).toEqual(OPUS_XHIGH)
   })
 
-  it('shows the pair the host still holds when the phone attaches after the frame left the screen', async () => {
-    streamRows = [...LOGO_FRAME, ...SCROLLED_PAST]
-    render({ messages: [] })
-    await settle()
-    expect(latest).toEqual(OPUS_XHIGH)
-    // One bounded read from the OLDEST row the host keeps, never a write.
-    expect(streamReads()).toEqual([{ method: 'terminal.read', params: { terminal: HANDLE, cursor: 0, limit: 80 } }])
-  })
-
-  it('keeps the pair when the host buffer has since rolled the frame out, and does not ask again', async () => {
+  it('keeps the pair when the frame has scrolled out of the screen, and asks the host for nothing', async () => {
     rememberStartupFramePair(SESSION, readClaudeStartupFrame(LOGO_FRAME))
-    streamRows = SCROLLED_PAST
     render({ messages: [] })
     await settle()
     render({ messages: [row('assistant', 'a reply, much later')] })
@@ -139,18 +129,27 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     expect(streamReads()).toEqual([])
   })
 
-  it('shows nothing when the host buffer has no frame and none was kept', async () => {
-    streamRows = SCROLLED_PAST
+  it('shows nothing for a late attach whose screen no longer holds the frame, rather than reading the host\'s oldest rows', async () => {
+    streamRows = [...LOGO_FRAME, ...SCROLLED_PAST]
     render({ messages: [] })
-    await settle()
+    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
     expect(latest).toEqual({ kind: 'none' })
+    expect(peekStartupFramePair(SESSION)).toBeNull()
+    expect(streamReads()).toEqual([])
   })
 
-  it('shows nothing, and does not throw, when the host refuses the read', async () => {
-    host = createAnsweringClient((method) => refused('method_not_found', method))
-    render({ messages: [] })
-    await settle()
+  // The reviewer's probe. A terminal ran `claude` (session A, Opus 5 xhigh), exited, then ran
+  // `claude --model sonnet --effort low` (session B). The host's stream buffer is append-only from the
+  // PTY's spawn, so an oldest-first read answers A's frame, and it was filed under B.
+  it("does not file the first claude's launch pair under the second claude's session", async () => {
+    const runA = [...LOGO_FRAME, ...SCROLLED_PAST, '$ ']
+    const runB = ['$ claude --model sonnet --effort low', ...SECOND_RUN_FRAME]
+    streamRows = [...runA, ...runB]
+    render({ sessionId: 'session-B', messages: [] })
+    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
+    expect(peekStartupFramePair('session-B')).toBeNull()
     expect(latest).toEqual({ kind: 'none' })
+    expect(streamReads()).toEqual([])
   })
 
   it('does not read the host before the tab knows its session, or while disconnected', async () => {
@@ -193,13 +192,6 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     render({ beacon: true, messages: [] })
     await settle()
     expect(latest).toEqual({ kind: 'none' })
-  })
-
-  it('asks the host nothing while a beacon speaks', async () => {
-    streamRows = LOGO_FRAME
-    render({ beacon: true, messages: [] })
-    await settle()
-    expect(streamReads()).toEqual([])
   })
 
   it('shows nothing after a model pick the phone made that no scan has confirmed', async () => {
