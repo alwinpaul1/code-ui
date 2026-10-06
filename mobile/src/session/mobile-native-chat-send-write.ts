@@ -10,7 +10,7 @@ import {
 import { releaseMobileNativeChatTerminalWriteForSend } from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
-import { claudeSentBashRows } from './claude-composer-screen'
+import { claudeSentBashTexts } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
 import { shellCommandOfSend } from './mobile-native-chat-shell-command'
@@ -89,7 +89,7 @@ async function readBashRows(
   deadline: number
 ): Promise<string[] | null> {
   const screen = await readMobileNativeChatScreen({ client, terminal, deadline })
-  return screen ? claudeSentBashRows(screen.lines) : null
+  return screen ? claudeSentBashTexts(screen.lines) : null
 }
 
 export async function writeChatSend(args: {

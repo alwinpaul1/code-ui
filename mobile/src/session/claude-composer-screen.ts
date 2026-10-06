@@ -141,9 +141,11 @@ export function claudeRowsUnderBox(lines: readonly string[]): string[] | null {
  * "nothing under the box" is not a shell. A remint follow wants more
  * (claudeLiveFrame requires at least one indented row), because it must also
  * rule out an emulator seeded with an old frame; a send to the terminal the
- * chat has been using does not. Not checked against the 2.1.287 binary for the
- * indent of vim's `-- INSERT --` or of the slash-command popup rows ("below the
- * prompt" is all its settings text says); both are modelled at two columns.
+ * chat has been using does not. The slash-command popup's indent is pinned from
+ * the Claude Code 2.1.290 binary (the prompt footer draws the suggestion list in
+ * a Box with `paddingX: 2`; read with `strings`, not captured live). Vim's
+ * `-- INSERT --` row was not checked against any binary and stays modelled at
+ * two columns.
  */
 export function claudeComposerLive(lines: readonly string[]): boolean {
   const below = claudeRowsUnderBox(lines)
@@ -172,6 +174,89 @@ export function claudeSentPromptRows(lines: readonly string[]): string[] {
       .flatMap((line) => (/^❯ \S/.test(line) && !MENU_ROW.test(line) ? [line.slice(2).trim()] : []))
   }
   return []
+}
+
+/** A row Claude paints under a sent prompt's first row when the prompt wraps: two
+ *  spaces, then text. The agent's own rows under a prompt (`⎿` results, `⏺`
+ *  replies, a tool's dot) take the same indent, so the glyph rows are left out;
+ *  plain prose in the agent's reply is shaped exactly like a wrapped row and is
+ *  NOT told apart (mobile-terminal-sent-prompts.ts says why it never gathers
+ *  these as a message). The only reader of the joined text here is a prefix test
+ *  against words the phone itself sent. That limits the damage but does not rule
+ *  it out: an earlier prompt shorter than 40 dense characters that is a prefix of
+ *  the new message could be completed by a two-space row directly under it (an
+ *  earlier `❯ rotate the blue lantern seven times then` over `  report the count
+ *  of candles left`). No real Claude row is known to sit there: replies open with
+ *  `⏺` and tool rows with `⎿`, both left out above. */
+const WRAPPED_ROW = /^ {2}(?! )(?![⎿⏺●✻✳⏵◯◉]|[0-9]+[.)] )\S/
+/** Rows joined after the first. Enough for 40 dense characters at any width the
+ *  phone drives (about 20 columns and up); a wider prompt needs fewer. */
+const MAX_WRAPPED_ROWS = 6
+
+function withWrappedRows(lines: readonly string[], from: number, end: number, head: string): string {
+  const parts = [head]
+  for (let at = from + 1; at < end && parts.length <= MAX_WRAPPED_ROWS; at++) {
+    if (!WRAPPED_ROW.test(lines[at]!)) {
+      break
+    }
+    parts.push(lines[at]!.trim())
+  }
+  return parts.join(' ')
+}
+
+/**
+ * Like claudeSentPromptRows, but each prompt is its first row joined with the
+ * rows it wrapped onto. A first row is only as long as the terminal is wide: on a
+ * 44-column phone-fit tab it holds about 35 words-characters, so a check that
+ * wants the first 40 never found its own echo and a send that went was held as
+ * "Delivery unconfirmed". The wrap is MODELLED from one real capture of a
+ * wrapped echo on Claude Code 2.1.290 (shape only: `❯ ` at column 0, the
+ * continuation at exactly two spaces) and the shape mobile-terminal-sent-
+ * prompts.ts documents from 2.1.270; the width at which Claude breaks a row was
+ * not captured at 40 to 51 columns.
+ *
+ * KNOWN LIMIT, not fixed here and the same on main: a prompt has no baseline the
+ * way a `!` command has `priorBashRows`, so an EARLIER identical echo still on
+ * screen counts as this send's at any width. Sending the same words twice can be
+ * called `sent` before the second one landed.
+ */
+export function claudeSentPromptTexts(lines: readonly string[]): string[] {
+  const at = composerBoxAt(lines)
+  if (at === null) {
+    return []
+  }
+  const end = at - 1
+  return lines.slice(0, end).flatMap((line, index) =>
+    /^❯ \S/.test(line) && !MENU_ROW.test(line)
+      ? [withWrappedRows(lines, index, end, line.slice(2).trim())]
+      : []
+  )
+}
+
+/** Like claudeSentBashRows, with the rows the command wrapped onto joined the
+ *  same way (MODELLED: the `! ` row's wrap was never captured). */
+export function claudeSentBashTexts(lines: readonly string[]): string[] {
+  const at = composerBoxAt(lines)
+  if (at === null) {
+    return []
+  }
+  const end = at - 1
+  return lines.slice(0, end).flatMap((line, index) =>
+    /^! +\S/.test(line) ? [withWrappedRows(lines, index, end, line.slice(1).trim())] : []
+  )
+}
+
+/** The index of the composer's `❯` row (the last one between two rules), or null. */
+function composerBoxAt(lines: readonly string[]): number | null {
+  for (let at = lines.length - 1; at >= 1; at--) {
+    if (!INPUT_ROW.test(lines[at]!) || MENU_ROW.test(lines[at]!) || !isRule(lines[at - 1]!)) {
+      continue
+    }
+    if (lines.findIndex((line, index) => index > at && isRule(line)) !== -1) {
+      return at
+    }
+  }
+  return null
 }
 
 /**
