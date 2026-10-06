@@ -223,8 +223,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-06 (Orca #24655 ported): readFileTab's two writes land only while their own loading record
 // is the tab's current one, and an accepted file-tab close deletes the tab's cached document. Same
 // callbacks; the bodies of readFileTab and handleCloseSessionTab moved. And (#24759) showToast skips a
-// disposed owner.
-const HEAD_CALLBACK_BODY_SHA256 = 'c125df2c01207fcd85b59c0eb6ec867f8c65ffb49f2d63e8b415a12d5980c6da'
+// disposed owner. And (#24655 follow-up) a read claims its path in the file-tab read cache, and an
+// accepted file-tab close forgets it.
+const HEAD_CALLBACK_BODY_SHA256 = '88e43e41494f53dd08ae3b61e48409840f3094d6e36b90a817ac75b3816367d2'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -310,9 +311,9 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // one; its two toast strings stay in the handler. Same one function; count
 // still 13.
 // 2026-10-06 (Orca #24655 ported): handleCloseSessionTab's body gains the file-tab document release.
-// Same 13 functions.
+// Same 13 functions. The #24655 follow-up adds the read cache's forget to the same body.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'af8c4b72bf8c7c507c31beeeb26905202a052fa5012c0ed73bf62593b49b67a5'
+  'ad0d59f4f0ef6c7799aa3747176288b01f99d78cde065d3bb0d400044acd1753'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.

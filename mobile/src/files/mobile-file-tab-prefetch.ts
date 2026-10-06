@@ -25,6 +25,14 @@ const MAX_ATTEMPTS = 4
 type Entry = { doc: MobileFileTabDoc; at: number }
 const docs = new Map<string, Entry>()
 const attempts = new Map<string, { count: number; nextAt: number; inFlight: boolean }>()
+/**
+ * Who may write each path's entry: the newest read begun for it, and nobody once the tab is closed.
+ * An older read that settles after a newer one, or one that settles after its tab closed, finds a
+ * different token (or none) and is dropped. Holds only reads still in flight, so it stays small.
+ */
+const latestRead = new Map<string, object>()
+
+export type FileTabReadToken = { readonly key: string; readonly owner: object }
 
 function keyOf(worktreeId: string, path: string): string {
   return `${worktreeId}\u0000${path}`
@@ -54,11 +62,38 @@ export function prefetchedFileTabDoc(worktreeId: string, path: string): MobileFi
   return docs.get(keyOf(worktreeId, path))?.doc ?? null
 }
 
-export function rememberFileTabDoc(worktreeId: string, path: string, doc: MobileFileTabDoc): void {
-  if (docChars(doc) > MAX_ENTRY_CHARS) {
-    return
+/** Starts a read of this path; only the newest read's result may be cached. */
+export function beginFileTabRead(worktreeId: string, path: string): FileTabReadToken {
+  const token = { key: keyOf(worktreeId, path), owner: {} }
+  latestRead.set(token.key, token.owner)
+  return token
+}
+
+/** A read that ended without a document gives up its claim, if it still held it. */
+export function abandonFileTabRead(token: FileTabReadToken): void {
+  if (latestRead.get(token.key) === token.owner) {
+    latestRead.delete(token.key)
   }
+}
+
+/** The tab closed: drop what it read and void any read still on its way. */
+export function forgetFileTabDoc(worktreeId: string, path: string): void {
   const key = keyOf(worktreeId, path)
+  docs.delete(key)
+  attempts.delete(key)
+  latestRead.delete(key)
+}
+
+/** Caches a finished read, unless a newer read began or the tab was closed since. */
+export function rememberFileTabDoc(token: FileTabReadToken, doc: MobileFileTabDoc): boolean {
+  if (latestRead.get(token.key) !== token.owner) {
+    return false
+  }
+  latestRead.delete(token.key)
+  if (docChars(doc) > MAX_ENTRY_CHARS) {
+    return false
+  }
+  const key = token.key
   docs.delete(key)
   docs.set(key, { doc, at: Date.now() })
   while (docs.size > MAX_ENTRIES) {
@@ -68,6 +103,7 @@ export function rememberFileTabDoc(worktreeId: string, path: string, doc: Mobile
     }
     docs.delete(oldest)
   }
+  return true
 }
 
 /** Read every outside-the-worktree file tab the phone has not read yet. */
@@ -95,13 +131,18 @@ export function prefetchOutsideWorktreeFileTabs(
       continue
     }
     attempts.set(key, { ...attempt, inFlight: true })
+    const token = beginFileTabRead(worktreeId, path)
     void resolveMobileFileTabDoc(client, { worktreeId, relativePath: path, terminalHandles })
       .then((doc) => {
-        rememberFileTabDoc(worktreeId, path, doc)
+        rememberFileTabDoc(token, doc)
         attempts.delete(key)
       })
       .catch(() => {
-        attempts.set(key, { count: attempt.count + 1, nextAt: now + RETRY_MS, inFlight: false })
+        abandonFileTabRead(token)
+        // A tab closed meanwhile forgot its attempts; a retry would only read for nobody.
+        if (attempts.has(key)) {
+          attempts.set(key, { count: attempt.count + 1, nextAt: now + RETRY_MS, inFlight: false })
+        }
       })
   }
 }
@@ -109,4 +150,5 @@ export function prefetchOutsideWorktreeFileTabs(
 export function resetFileTabPrefetchForTests(): void {
   docs.clear()
   attempts.clear()
+  latestRead.clear()
 }

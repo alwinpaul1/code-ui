@@ -4,6 +4,8 @@ import { resolveMobileFileTabDoc } from '../files/mobile-file-tab-doc'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import {
   prefetchOutsideWorktreeFileTabs,
+  abandonFileTabRead,
+  beginFileTabRead,
   prefetchedFileTabDoc,
   rememberFileTabDoc
 } from '../files/mobile-file-tab-prefetch'
@@ -131,6 +133,11 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         return
       }
       const loading = { status: 'loading' } as const
+      // A diff is never cached, so it claims nothing.
+      const read =
+        tab.diffSource === 'staged' || tab.diffSource === 'unstaged'
+          ? null
+          : beginFileTabRead(worktreeId, tab.relativePath)
       setFileDocs((prev) => new Map(prev).set(tab.id, loading))
       try {
         const doc = await resolveMobileFileTabDoc(client, {
@@ -139,12 +146,15 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           diffSource: tab.diffSource,
           terminalHandles: terminalHandlesFor()
         })
-        if (tab.diffSource !== 'staged' && tab.diffSource !== 'unstaged') {
-          rememberFileTabDoc(worktreeId, tab.relativePath, doc)
+        if (read) {
+          rememberFileTabDoc(read, doc)
         }
         // Closed tabs and newer reads release ownership of this reply.
         setFileDocs((prev) => (prev.get(tab.id) === loading ? new Map(prev).set(tab.id, doc) : prev))
       } catch (err) {
+        if (read) {
+          abandonFileTabRead(read)
+        }
         const message = err instanceof Error ? err.message : ''
         const previewMessage =
           message === 'binary_file'

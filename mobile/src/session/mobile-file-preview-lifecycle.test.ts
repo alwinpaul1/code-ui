@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
-import { resetFileTabPrefetchForTests } from '../files/mobile-file-tab-prefetch'
+import { prefetchedFileTabDoc, resetFileTabPrefetchForTests } from '../files/mobile-file-tab-prefetch'
 import type { RpcResponse } from '../transport/types'
 import type { FileDocState, MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
@@ -236,4 +236,99 @@ describe('mobile file preview lifetime', () => {
       }
     }
   )
+
+  // CODE UI: the fork also keeps each non-diff read in a bounded module cache (up to 12 docs of up
+  // to 8M characters) that the next open of the same path is served from without a read. Releasing
+  // the session map's copy while this one stays means a closed image preview is not released, and a
+  // stale entry is shown on the next open.
+  describe('the file-tab read cache', () => {
+    const cached = (tab: FileTab) => prefetchedFileTabDoc('wt-1', tab.relativePath)
+
+    it('forgets a closed tab\'s read', async () => {
+      const session = previewSession()
+      const tab = fileTab('cached')
+      try {
+        session.open(tab)
+        const reading = session.read(tab)
+        session.reply(0, textReply('Cached content'))
+        await reading
+        expect(cached(tab)).toMatchObject({ content: 'Cached content' })
+        await session.close(tab)
+        expect(cached(tab)).toBeNull()
+      } finally {
+        session.dispose()
+      }
+    })
+
+    it('keeps a tab\'s read when closing it fails', async () => {
+      const session = previewSession()
+      const tab = fileTab('still-cached')
+      try {
+        session.open(tab)
+        const reading = session.read(tab)
+        session.reply(0, textReply('Kept'))
+        await reading
+        session.setCloseReply(refusedReply())
+        await session.close(tab)
+        expect(cached(tab)).toMatchObject({ content: 'Kept' })
+      } finally {
+        session.dispose()
+      }
+    })
+
+    it.each([textReply('Late content'), refusedReply()])(
+      'does not cache a late read for a closed tab: %s',
+      async (reply) => {
+        const session = previewSession()
+        const tab = fileTab('late')
+        try {
+          session.open(tab)
+          const reading = session.read(tab)
+          await session.close(tab)
+          session.reply(0, reply)
+          await reading
+          expect(cached(tab)).toBeNull()
+        } finally {
+          session.dispose()
+        }
+      }
+    )
+
+    it('never lets an older read overwrite a newer one, after a reopen', async () => {
+      const session = previewSession()
+      const tab = fileTab('reopened-cache')
+      try {
+        session.open(tab)
+        const oldReading = session.read(tab)
+        await session.close(tab)
+        session.open(tab)
+        const newReading = session.read(tab)
+        session.reply(1, textReply('New content'))
+        await newReading
+        session.reply(0, textReply('Old content'))
+        await oldReading
+        expect(cached(tab)).toMatchObject({ content: 'New content' })
+      } finally {
+        session.dispose()
+      }
+    })
+
+    it('never lets an older read overwrite a newer one, on the same open tab', async () => {
+      const session = previewSession()
+      const tab = fileTab('refreshed')
+      try {
+        session.open(tab)
+        const oldReading = session.read(tab)
+        const newReading = session.read(tab)
+        session.reply(1, textReply('New content'))
+        await newReading
+        session.reply(0, textReply('Old content'))
+        await oldReading
+        expect(cached(tab)).toMatchObject({ content: 'New content' })
+        expect(session.docs().get(tab.id)).toMatchObject({ content: 'New content' })
+      } finally {
+        session.dispose()
+      }
+    })
+  })
 })
