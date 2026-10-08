@@ -807,3 +807,13 @@ and UPSTREAM.txt is unchanged. Each row is one commit with a failing-first test 
 
 Not carried: upstream's comment-only edits to `rpc-recording/README.md`, `run-recording.ts` and an adapter
 (they sit in the recorder directory and would move `recorderSha256` for no behaviour).
+
+## Host list placement and view-settings note (2026-10-08)
+
+Ported from upstream `origin/main` at 3e27e62f43. Nothing under `src/shared/` changed, so nothing was
+re-vendored and UPSTREAM.txt is unchanged. No golden moved.
+
+| PR | Class | Status / note |
+|---|---|---|
+| e347aa4e67 #25301 | phone | **done** (69909856c). Code UI already honoured `showPinnedWorktreesInGroups` (#15494) through its own `use-host-show-pinned-in-groups.ts`, so the placement half was in. Taken: lineage children follow a pinned parent into Pinned (walked over the unfiltered list, so search hiding a middle row does not strand a grandchild), the Pinned section nests by lineage, and the setting moves into `HostScreenState`, resets on a host switch and is re-read on connect, focus and mount through the typed `showPinnedWorktreesInGroupsRead`. The fork's hook and its port-inventory row are gone. **Stock Orca does not project the key**: `RuntimeClientSettings` (`src/main/runtime/runtime-client-settings.ts`) omits it as of 3e27e62f43, so the phone always reads the desktop default (off) until upstream adds it. Added beyond upstream: degenerate sizes (empty, nothing pinned, one pinned row, a pinned child under an unpinned parent, a lineage cycle) and the refused or rejected read. |
+| 0971479866 #25300 | phone | **done** (a813cbd72). Copy fitted to Code UI: "Synced with your desktop" under Sort By and Group By, and "Synced with your desktop, except Show archived" under Filter (the fork's Show archived row is phone-local). Manual reads "Desktop drag order". Heading `flexShrink: 1` taken. Upstream shipped no test; five cases added to `host-screen-overlays.theme.test.tsx`, run in light and dark. |
