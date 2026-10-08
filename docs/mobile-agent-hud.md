@@ -1020,25 +1020,30 @@ live pair for every tab that carried no beacon.
    after an API 400 on `output_config.effort` latches "effort unsupported" for
    the session (`sw()` / `$Pn` in the 2.1.289 binary). The hook frames below are
    beacon-tier too; the newest frame wins.
-2. The session's own last answer to `/model`, `/effort` or `/fast`, or the
+2. What the session's own screen said since: the effort its working spinner
+   states and the model an alt+p toast names (below, "The spinner's effort and
+   the alt+p toast"), laid over tiers 3 to 5 by when each was said
+   (`claude-screen-model-pair.ts`).
+3. The session's own last answer to `/model`, `/effort` or `/fast`, or the
    harness's fallback notice, read from rows the transcript already holds
    (`claude-session-command-pair.ts`).
-3. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
-   under tier 2 and under the scan whenever the scan names another model.
-4. The model the host's transcript scan last read for this session
+4. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
+   under tier 3 and under the scan whenever the scan names another model.
+5. The model the host's transcript scan last read for this session
    (`claude-transcript-model.ts`), which carries no effort.
-5. Nothing.
+6. Nothing.
 
-Tiers 3 and 4 are ordered by what each statement is about, not by rank: the frame
+Tiers 4 and 5 are ordered by what each statement is about, not by rank: the frame
 was printed at launch, so a reply written later under a different model (an alt+p
 picker switch writes no row) is the newer statement and the scan wins, effort
 dropped. When the scan names the same model it records no effort, so the frame
 supplies the one it stated.
 
-`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tiers 2
-and 3 are a deliberate, narrow extension of it: a line the agent printed about
-itself, in answer to the user's command, in the session's own record. It is not a
-tracked record, not the launch record, not a setting, and not a guess. The
+`CLAUDE.md` says "no figure from anywhere but the beacon or the screen". Tier 2
+is the screen. Tiers 3 and 4 are a deliberate, narrow extension of it: a line
+the agent printed about itself, in answer to the user's command, in the
+session's own record. It is not a tracked record, not the launch record, not a
+setting, and not a guess. The
 rule's reason (a figure the agent did not state about THIS session) still holds,
 and the extension stays inside it.
 
@@ -1188,10 +1193,11 @@ alternate screen and leaves no scrollback at all, so a fullscreen session gets
 nothing from the snapshot; its banner is readable only while it is on screen.
 
 **What it is not.** It is the session's statement AT LAUNCH. A later `/model`,
-`/effort` or `/fast` row overrides it (tier 2), and a live beacon or badge
-overrides everything. The effort-step keys and the `/effort` slider write
-nothing the phone can read, so until the next status line or command the effort
-here can be stale; it is never drawn as anything fresher. It does not fill a
+`/effort` or `/fast` row overrides it (tier 3), so do a later thinking
+spinner's effort and an alt+p toast (tier 2), and a live beacon or badge
+overrides everything. The effort-step keys write nothing the phone can read, so
+until the next status line, command or thinking turn the effort here can be
+stale; it is never drawn as anything fresher. It does not fill a
 missing field of a beacon (a beacon that states a model and no effort yet keeps
 no effort): mixing a launch statement into a live pair is the "Opus Medium" bug.
 
@@ -1212,6 +1218,97 @@ that states no effort at all (`Sonnet 5.5 · Claude Max`). Not
 proven: ConPTY redraws, the fullscreen layout, and the exact row wording on a
 real screen. Codex has no counterpart (its startup box is a different frame and
 its model comes from the footer and rollout), so nothing here reads it.
+
+### The spinner's effort and the alt+p toast (2026-10-08)
+
+The requirement: the pills follow every switch for ANY user with nothing set up
+on the desktop (no beacon, no status line, no plugin), in the default and the
+fullscreen TUI. Two rows Claude Code itself draws make that possible, both
+CAPTURED from a live Claude Code 2.1.294 (`tmux capture-pane -p`, detached pane,
+`--settings '{"tui":"default"}'` and once `"fullscreen"`, at 160 and at 44
+columns; `fixtures/claude-spinner-effort-2.1.294.ts`,
+`claude-model-toast-2.1.294.ts`). Readers:
+`claude-screen-model-statement.ts`; store and order: `claude-screen-model-pair.ts`.
+
+**The spinner states the effort on every thinking turn.**
+`✻ Gallivanting… (2s · thinking with xhigh effort)`,
+`· Inferring… (2s · ↓ 113 tokens · thinking with xhigh effort)`, and with a hook
+running `✻ Burrowing… (Syncing CodeGraph index… 0/3 · 3s · ↓ 163 tokens ·
+thinking with xhigh effort)`. Between thinking phases it says `thought for 2s`,
+and Sonnet 5.5 says only `thinking`: neither states an effort, and a spinner
+with no effort changes nothing. The levels read are `low|medium|high|xhigh|max`.
+- Read only where Claude draws it: the first column-0 row above the input box's
+  top rule. The rows Claude puts between them (a tip's `⎿` rows, a status
+  line) are indented, and so is every reply and tool row (`⏺` opens a reply,
+  its rows continue at two columns), so a spinner quoted in a reply is never
+  that row (captured: a reply repeating two spinner rows).
+- The row must be whole: glyph, verb, `…`, a parenthesis CLOSED on the same
+  row, the effort as its last part. At 44 columns Claude drops the elapsed time
+  (`✢ Mustering… (thinking with high effort)` is read) but a longer one wraps:
+  `· Mustering… (running Stop hooks… 2/3 ·` over `thinking with high effort)`
+  at column 0. That gives no effort rather than a joined guess.
+- It is the effort for the model the session is running, so it is kept with
+  the model the pills showed when it was read and dropped when they show
+  another.
+
+**The alt+p picker writes nothing to the transcript; it shows a toast for
+about two seconds.** `Model set to sonnet (claude-sonnet-5-5) for this session
+only` (or `… and saved as your default for new sessions`, the user's own row;
+not captured, because Enter in the picker saves the global default). The model
+becomes the id in the parenthesis, and the effort is cleared: the toast names
+none, and the effort before it was the old model's (the same reset as a `/model`
+row, `claude-session-command-pair.ts`). Moving the picker's effort slider and
+pressing `s` shows the same toast with no effort, so after it the effort is
+unknown until the next thinking turn states it.
+- The toast is drawn flush with the box's right edge, two columns in (the
+  footer's `paddingX: 2`; 158 of 160 columns, 42 of 44): at the right of the
+  first footer row at desktop width, on a footer row of its own at 44 columns,
+  cut with `…` after the id, and in FULLSCREEN on the row directly above the
+  box's top rule. Only those rows, only flush, so a reply's copy (indented two
+  columns from the left) is not read. A row holding a double-width character is
+  not flush by this count and is refused.
+- A toast is a switch on its first sighting only; it stays up for several polls.
+  If the spinner of a turn begun before it is still up, that spinner is the old
+  model's: no effort is taken until a screen with the input box and no spinner
+  has been seen. A screen with no box (a dialog, a picker) says nothing either
+  way.
+
+**Order.** Tier 2 above. Each statement is kept per session id and persisted
+(`codeui:chat-screen-model-statements`, 32 sessions, fail-open both ways), and
+lies over the lower tiers by when it was said:
+- against a command row, by the command pair the phone HELD when the statement
+  was seen: a command it did not hold then is newer and wins. Keys are compared,
+  never the host's row time against the phone's clock. A toast still stands
+  under a newer `/effort` row (a row that names no model), which supplies the
+  effort; a newer row that names a model, even the same one again, replaces it.
+  A statement is dated when a screen read shows it and never again: a row that
+  reaches the phone before the next poll must not re-date the spinner still on
+  the last read (review, 2026-10-08);
+- against the startup frame, by the phone's clock: a frame read later is a new
+  process's and wins;
+- against the scan, the superseded rule of a `/model` row: a toast stands until
+  a reply newer than the last one the phone held at the toast is in the rows,
+  the scan was taken after it, and it names another model.
+A live beacon or a badge on the user's own status line is above all of it: these
+statements apply only where no live pair speaks, and never fill a field a live
+pair left empty. A phone pick no scan has confirmed still shows nothing.
+
+**Limits.** The effort shows only once the model thinks on a turn: a turn with
+no thinking states none, and a model that never thinks never states it (Sonnet
+5.5 at its defaults, captured). A toast missed while the phone was away is lost
+(the scan replaces it only after a reply and a fresh scan). Known and not fixed
+(review, 2026-10-08): a resume into a new process under the SAME session id
+that paints the same startup frame as before does not outrank an earlier toast,
+because the frame store keeps the first read time for an unchanged model, so
+the toast's model can stand until a reply and a scan; and a toast seen in the
+first moments of opening a chat, before its rows have loaded, loses to an older
+`/model` row those rows then bring. The spinner is read
+off the host's VISIBLE rows on the poll (once a second while the agent works), so
+a thinking phase shorter than a poll can be missed; the next one says the same.
+The `◐ medium · /effort` row some screens show is a user's own mod, not Claude
+Code's, and nothing reads it. Also seen on 2.1.294 and not used: the default
+TUI's startup header repaints its `with <level> effort` after a picker switch
+while it is still on screen.
 
 ### The hook beacon (POSIX hosts)
 
@@ -1364,7 +1461,9 @@ nothing, and an older command row does not bring a figure back (2026-09-18).
 | effort-step keybinding, `ultrathink` | not found writing a row | the next Stop frame | modelled |
 | "Effort unsupported" latch | `effort` leaves the status line and the hook input | a beacon states the model alone | read from the binary |
 | `/fast` promotion, overload fallback | `Fast mode ON · model set to`, `Switched to …` | command row | modelled |
-| alt+p picker, resume into a new process | nothing parsed | the scan, ordered against the command | modelled |
+| alt+p picker | a toast for about 2 s, nothing in the transcript | the toast (model, effort cleared), then the next thinking spinner (effort) | captured on 2.1.294 |
+| any change, on a thinking turn | the spinner's `thinking with <level> effort` | the screen poll | captured on 2.1.294 |
+| resume into a new process | nothing parsed | the scan, ordered against the command | modelled |
 
 A resume in a new process keeps the SAME session id (verified on 2.1.276 for
 `-c` and `--resume`, `agent-hud-beacon-liveness.ts`), and the model and effort
@@ -1462,7 +1561,7 @@ while mounted (`refreshInterval`); read from the binary, not timed on a device.
 | any switch, no row (alt+p picker, effort keys, resume) | other project | the first beacon after return | at most 5 s after resubscribing; until then the last pair is shown |
 | any switch | app backgrounded | as other project | as above |
 | any switch | app killed | warm-start beacon and the persisted command pair, then rows, then the first beacon | rows on open; beacon at most 5 s after |
-| any switch | no flag (typed-in, untrusted workspace, Windows) | command rows only | when the chat loads or the row arrives |
+| any switch | no flag (typed-in, untrusted workspace, Windows) | command rows, the alt+p toast, the next thinking spinner | when the chat loads, the row arrives, or the screen poll sees it (1 s while working) |
 
 ### Tests must never reach a real terminal (2026-10-06)
 

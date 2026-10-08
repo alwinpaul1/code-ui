@@ -246,6 +246,14 @@ export function claudeSentBashTexts(lines: readonly string[]): string[] {
   )
 }
 
+/** The composer's two rules, by the same test as readClaudeInput: the index of
+ *  the rule above the `❯` row and of the first rule under it. Null when no
+ *  composer is located. */
+export function claudeComposerRules(lines: readonly string[]): { top: number; bottom: number } | null {
+  const at = composerBoxAt(lines)
+  return at === null ? null : { top: at - 1, bottom: lines.findIndex((line, index) => index > at && isRule(line)) }
+}
+
 /** The index of the composer's `❯` row (the last one between two rules), or null. */
 function composerBoxAt(lines: readonly string[]): number | null {
   for (let at = lines.length - 1; at >= 1; at--) {
