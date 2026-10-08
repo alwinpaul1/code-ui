@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
 
 // The system interrupting a touch is not what these tests are about; see
-// use-mobile-native-chat-tail-follow.selection.test.ts for that.
+// use-mobile-native-chat-tail-follow.settle.test.ts for that.
 vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
 
 type Api = ReturnType<typeof useMobileChatFollowing>
@@ -14,7 +14,13 @@ function Probe() {
   return null
 }
 
-describe('chat text selection around a scroll', () => {
+// Until 2026-10-08 these pinned chat text turning unselectable while a scroll
+// was in flight (the 2026-09-12 answer to stray selections on Android). Orca
+// #22871 took inline selection off the Android transcript altogether, so that
+// flag is gone; the in-flight window it rode on is not, because a settled
+// list re-pins to the live edge only once the scroll is over. The same
+// sequences now pin that window.
+describe('a scroll in flight', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -22,28 +28,22 @@ describe('chat text selection around a scroll', () => {
     latest = null
   })
 
-  // 2026-09-12: random buzzes while scrolling. Android arms a text-selection
-  // long-press under any selectable Text; a finger put down to stop a fling
-  // and held tripped it. The rows read this flag through a context.
-  it('is off while a scroll is in flight and back on when it settles', () => {
+  it('starts with a drag and ends when the scroll settles', () => {
     act(() => {
       renderer = create(createElement(Probe))
     })
-    expect(latest!.textSelectable).toBe(true)
+    expect(latest!.scrollingRef.current).toBe(false)
     act(() => latest!.beginScroll())
-    expect(latest!.textSelectable).toBe(false)
+    expect(latest!.scrollingRef.current).toBe(true)
     act(() => latest!.endScroll())
-    expect(latest!.textSelectable).toBe(true)
+    expect(latest!.scrollingRef.current).toBe(false)
   })
 
-  // 2026-09-21, phone recording: a hold on the agent's prose, on a list that
-  // had been still for half a second, selected nothing. The flag is turned
-  // off by a drag or a fling and back on only by the END events, and a fling
-  // that a re-anchor or a nested scroll view interrupts never sends one. The
-  // finger lifting and the samples stopping are evidence enough that the
-  // list is at rest; a missed end event must not cost the reader selection
-  // until their next clean scroll.
-  it('comes back on its own once the finger is up and the list has stopped moving, even with no end event', () => {
+  // 2026-09-21, phone recording: a fling that a re-anchor or a nested scroll
+  // view interrupts never sends its END event. The finger lifting and the
+  // samples stopping are evidence enough that the list is at rest; a missed
+  // end event must not leave the scroll in flight until the next clean one.
+  it('ends on its own once the finger is up and the list has stopped moving, even with no end event', () => {
     vi.useFakeTimers()
     act(() => {
       renderer = create(createElement(Probe))
@@ -62,16 +62,16 @@ describe('chat text selection around a scroll', () => {
       vi.advanceTimersByTime(200)
       latest!.scrollSample({ offset: 900, height: 5000 })
     })
-    expect(latest!.textSelectable).toBe(false)
+    expect(latest!.scrollingRef.current).toBe(true)
     // …and no momentum-end ever arrives.
     act(() => {
       vi.advanceTimersByTime(300)
     })
-    expect(latest!.textSelectable).toBe(true)
+    expect(latest!.scrollingRef.current).toBe(false)
     vi.useRealTimers()
   })
 
-  it('stays off while the finger that stopped a fling is still down, the 2026-09-12 rule', () => {
+  it('stays in flight while the finger that stopped a fling is still down', () => {
     vi.useFakeTimers()
     act(() => {
       renderer = create(createElement(Probe))
@@ -83,12 +83,12 @@ describe('chat text selection around a scroll', () => {
     act(() => {
       vi.advanceTimersByTime(2_000)
     })
-    expect(latest!.textSelectable).toBe(false)
+    expect(latest!.scrollingRef.current).toBe(true)
     act(() => {
       latest!.touchEnd()
       vi.advanceTimersByTime(300)
     })
-    expect(latest!.textSelectable).toBe(true)
+    expect(latest!.scrollingRef.current).toBe(false)
     vi.useRealTimers()
   })
 

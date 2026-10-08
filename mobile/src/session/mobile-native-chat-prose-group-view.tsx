@@ -21,6 +21,8 @@ export function renderProseGroup(
     styles: ChatMessageStyles
     /** Which message block this is (MobileMarkdown's `identity`). */
     identity?: string
+    /** Android transcript: the row's long press, for spans that take taps. */
+    onLongPress?: () => void
   }
 ): ReactNode {
   switch (group.type) {
@@ -40,6 +42,7 @@ export function renderProseGroup(
           onOpenFile={options.onOpenFile}
           styles={options.styles}
           identity={options.identity}
+          onLongPress={options.onLongPress}
         />
       )
     default: {

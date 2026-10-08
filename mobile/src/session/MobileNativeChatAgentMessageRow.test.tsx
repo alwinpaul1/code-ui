@@ -11,6 +11,7 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): unknown => React.createElement('Text', props, children)
   return {
+    Platform: { OS: 'android' },
     Animated: {
       View: 'View',
       Text,

@@ -2,10 +2,12 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
-import { ChatTextSelectableContext } from './chat-text-selectable-context'
 
+// Android, the phone this fork ships to: off the chat transcript its prose
+// stays selectable there.
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
+  Platform: { OS: 'android' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
@@ -228,41 +230,13 @@ describe('agent prose the reader wants to copy', () => {
   })
 })
 
-// 2026-09-12: random buzzes while scrolling. Android arms a text-selection
-// long-press under any selectable Text; a finger put down to stop a fling and
-// held tripped it. The chat view turns selection off while a scroll is in
-// flight, through this context, and back on when it settles.
-describe('while the list is scrolling', () => {
-  let renderer: ReactTestRenderer | null = null
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  function selectableTexts(value: boolean): { all: number; selectable: number } {
-    act(() => {
-      renderer = create(
-        createElement(
-          ChatTextSelectableContext.Provider,
-          { value },
-          createElement(MobileMarkdown, { content: DOCUMENT })
-        )
-      )
-    })
-    const texts = renderer!.root.findAllByType('Text' as never)
-    return { all: texts.length, selectable: texts.filter((node) => node.props.selectable === true).length }
-  }
-
-  it('renders no selectable text, so a finger stopping a fling arms no long-press', () => {
-    const { all, selectable } = selectableTexts(false)
-    expect(all).toBeGreaterThan(5)
-    expect(selectable).toBe(0)
-  })
-
-  it('is selectable again once the scroll settles', () => {
-    expect(selectableTexts(true).selectable).toBeGreaterThan(0)
-  })
-})
+// The "while the list is scrolling" cases that stood here (2026-09-12: chat
+// text unselectable while a fling was in flight) were removed on 2026-10-08
+// with the scroll-time gate they pinned. Orca #22871 replaced it: the Android
+// chat transcript has no inline selection at all, which
+// mobile-markdown-android-selection.test.tsx pins. The cases in this file
+// render without `rangeSelectable`, the surfaces (file previews, task
+// comments) that keep Android's own selection.
 
 // A hold on inline code selected nothing, mid-turn or not (2026-09-25: the
 // reader holds prose with a pill in it and wants the Claude app's Copy).
@@ -292,15 +266,10 @@ describe('holding a code pill', () => {
 
   type Pill = { view: ReactTestInstance; text: ReactTestInstance; prose: ReactTestInstance }
 
-  function pills(content: string, selectable: boolean, onOpenFile?: (path: string) => void): Pill[] {
+  /** `transcript`: the Android chat transcript, drawn with no inline selection. */
+  function pills(content: string, transcript: boolean, onOpenFile?: (path: string) => void, onLongPress?: () => void): Pill[] {
     act(() => {
-      renderer = create(
-        createElement(
-          ChatTextSelectableContext.Provider,
-          { value: selectable },
-          createElement(MobileMarkdown, { content, onOpenFile })
-        )
-      )
+      renderer = create(createElement(MobileMarkdown, { content, onOpenFile, rangeSelectable: transcript, onLongPress }))
     })
     // A pill is a View whose nearest host ancestor is a Text; the Text inside
     // it is its own native text view. Components between them are skipped.
@@ -332,7 +301,7 @@ describe('holding a code pill', () => {
   ]
 
   it('lets a hold on a pill reach the paragraph under it, so the selection can run past the pill', () => {
-    const [pill] = pills('Committed (`99e534e`). The results are complete.', true)
+    const [pill] = pills('Committed (`99e534e`). The results are complete.', false)
     expect(pill!.text.children.join('')).toBe('99e534e')
     expect(reachesProse(pill!)).toEqual(['box-none', false, true])
   })
@@ -340,7 +309,7 @@ describe('holding a code pill', () => {
   it('does the same for a pill in a bullet and in a table cell', () => {
     const found = pills(
       ['- run `orca search` on the desktop', '', '| Stage | Resolver |', '| --- | --- |', '| base | `pip` |'].join('\n'),
-      true
+      false
     )
     expect(found.map((pill) => [pill.text.children.join(''), ...reachesProse(pill)])).toEqual([
       ['orca search', 'box-none', false, true],
@@ -350,7 +319,7 @@ describe('holding a code pill', () => {
 
   it('still opens a file named in a pill on a tap, with the hold going to the paragraph', () => {
     const opened: string[] = []
-    const [pill] = pills('See `mobile/src/session/use-mobile-chat-following.ts` for the rule.', true, (path) =>
+    const [pill] = pills('See `mobile/src/session/use-mobile-chat-following.ts` for the rule.', false, (path) =>
       opened.push(path)
     )
     expect(reachesProse(pill!)).toEqual(['box-none', false, true])
@@ -358,9 +327,14 @@ describe('holding a code pill', () => {
     expect(opened).toEqual(['mobile/src/session/use-mobile-chat-following.ts'])
   })
 
-  it('is not selectable while a fling is in flight, the 2026-09-12 rule', () => {
-    const [pill] = pills('Run `pnpm install` from the repo root.', false)
+  // Orca #22871, replacing the 2026-09-12 scroll-time rule that stood here:
+  // on the Android transcript the paragraph under a pill is not selectable at
+  // all, and a hold on a file pill goes to the message's actions sheet.
+  it('is not selectable on the Android chat transcript, and a hold on a file pill goes to the message', () => {
+    const onLongPress = vi.fn()
+    const [pill] = pills('Open `docs/hud.md` first.', true, () => {}, onLongPress)
     expect(reachesProse(pill!)).toEqual(['box-none', false, false])
+    expect(pill!.text.props.onLongPress).toBe(onLongPress)
   })
 })
 

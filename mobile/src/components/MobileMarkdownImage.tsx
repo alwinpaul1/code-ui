@@ -106,6 +106,7 @@ export function MobileMarkdownImage({
   width,
   resolve,
   onOpen,
+  onLongPress,
   styles
 }: {
   alt: string
@@ -114,6 +115,9 @@ export function MobileMarkdownImage({
   width: number
   resolve?: MarkdownImageResolver
   onOpen: () => void
+  /** Android chat transcript only: the message's long press, so a hold on the
+   *  figure or its link opens the message's actions sheet (Orca #22871). */
+  onLongPress?: () => void
   styles: { link: TextStyle; imageCaptionInline: TextStyle }
 }) {
   const [loaded, setLoaded] = useState<Loaded | null | undefined>(() =>
@@ -178,7 +182,7 @@ export function MobileMarkdownImage({
   if (!loaded || !(width > 0)) {
     return (
       <Text testID="markdown-image-link">
-        <Text style={styles.link} onPress={onOpen}>
+        <Text style={styles.link} onPress={onOpen} onLongPress={onLongPress}>
           {alt || 'Open image'}
         </Text>
         {'\n'}
@@ -192,6 +196,7 @@ export function MobileMarkdownImage({
     <View style={{ width, height }}>
       <Pressable
         onPress={() => openImagePreviewSources([source], alt || url)}
+        onLongPress={onLongPress}
         accessibilityRole="imagebutton"
         accessibilityLabel={alt || url}
         accessibilityHint="Opens the image full screen, where it can be zoomed"

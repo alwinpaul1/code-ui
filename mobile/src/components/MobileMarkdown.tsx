@@ -28,7 +28,7 @@ import { parseMobileMarkdown } from './mobile-markdown-parser'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
 import { listMarker } from './mobile-markdown-list-marker'
-import { useChatTextSelectable } from './chat-text-selectable-context'
+import { INLINE_TEXT_SELECTION } from './inline-text-selection'
 import { MobileMarkdownImage } from './MobileMarkdownImage'
 import { isRemoteImageUrl, type MarkdownImageResolver } from './markdown-image-source'
 import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
@@ -69,7 +69,22 @@ type Props = {
    *  code pills learnt about one message is not used for another, and is
    *  kept while the same one streams in (use-markdown-code-pill-runs.ts). */
   identity?: string
+  /** The chat transcript. On Android it draws with no inline selection (Orca
+   *  #22871): two flicks in one spot while the list scrolls read as a double
+   *  tap and selected a word. A long press on the message opens its actions
+   *  sheet instead. Other surfaces (task comments, file previews) keep their
+   *  selectable text on every platform. */
+  rangeSelectable?: boolean
+  /** Android transcript only: a long press on a span that takes taps (a link,
+   *  a named file, a file pill, an image) goes to the message, so the thing
+   *  under the finger does not swallow the actions sheet. */
+  onLongPress?: () => void
 }
+
+/** What a tappable span does on a hold: nothing, so the release does not open
+ *  it (markdown-link-hold.ts), or, on the Android transcript, the row's long
+ *  press. */
+type SpanHold = { onLongPress: () => void } | typeof HOLD_DOES_NOT_OPEN
 
 const MAX_TABLE_ROWS = 40
 /** A `---` drawn as text so it can sit inside a selectable run. Copies as a
@@ -112,7 +127,8 @@ function renderTextRun(
   styles: MarkdownStyles,
   text: string,
   keyPrefix: string,
-  onOpenFile?: (pathText: string) => void
+  onOpenFile: ((pathText: string) => void) | undefined,
+  hold: SpanHold
 ): ReactNode {
   if (!onOpenFile) {
     return text
@@ -128,7 +144,7 @@ function renderTextRun(
           key={`${keyPrefix}:${segmentIndex}`}
           style={styles.link}
           onPress={() => onOpenFile(segment.path)}
-          {...HOLD_DOES_NOT_OPEN}
+          {...hold}
         >
           {segment.value}
         </Text>
@@ -144,7 +160,8 @@ function renderInline(
   onOpenFile: ((pathText: string) => void) | undefined,
   /** How the Text this lands in cuts its code spans into pills, from its own
    *  measured lines (use-markdown-code-pill-runs.ts). */
-  pills: CodePillRun
+  pills: CodePillRun,
+  hold: SpanHold
 ): ReactNode[] {
   const parts: ReactNode[] = []
   pills.noteSource(text)
@@ -166,7 +183,7 @@ function renderInline(
     }
     if (match.index > pendingStart) {
       parts.push(
-        renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart, match.index)), `t${pendingStart}`, onOpenFile)
+        renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart, match.index)), `t${pendingStart}`, onOpenFile, hold)
       )
     }
     pendingStart = pattern.lastIndex
@@ -174,14 +191,14 @@ function renderInline(
     const link = match.link
     if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link.href, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link.href, onOpenFile)} {...hold}>
           {link.image ? markdownInlinePlainText(link.label) || 'image' : renderLinkLabel(styles, link.label)}
         </Text>
       )
     } else if (match.group === ADDRESS_TOKEN_GROUP) {
       const { url, words, trailing } = autolinkParts(token)
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...HOLD_DOES_NOT_OPEN}>
+        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)} {...hold}>
           {words}
         </Text>
       )
@@ -220,6 +237,7 @@ function renderInline(
               chipScale={pills.chipScale}
               table={pills.table}
               onPress={openFile}
+              hold={hold}
             />
           )
         })
@@ -229,7 +247,7 @@ function renderInline(
             key={key}
             style={[styles.inlineCode, openFile ? styles.inlineCodeLink : null]}
             onPress={openFile}
-            {...(openFile ? HOLD_DOES_NOT_OPEN : null)}
+            {...(openFile ? hold : null)}
           >
             {code}
           </Text>
@@ -238,19 +256,19 @@ function renderInline(
     } else if (token.startsWith('~~')) {
       parts.push(
         <Text key={key} style={styles.strike}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, hold)}
         </Text>
       )
     } else if (match.group === BOLD_TOKEN_GROUP) {
       parts.push(
         <Text key={key} style={styles.bold}>
-          {renderInline(styles, token.slice(2, -2), onOpenFile, pills)}
+          {renderInline(styles, token.slice(2, -2), onOpenFile, pills, hold)}
         </Text>
       )
     } else {
       parts.push(
         <Text key={key} style={styles.italic}>
-          {renderInline(styles, token.slice(1, -1), onOpenFile, pills)}
+          {renderInline(styles, token.slice(1, -1), onOpenFile, pills, hold)}
         </Text>
       )
     }
@@ -258,7 +276,7 @@ function renderInline(
 
   if (pendingStart < text.length) {
     // An escape's backslash is not drawn (markdown-inline-escapes.ts).
-    parts.push(renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart)), `t${pendingStart}`, onOpenFile))
+    parts.push(renderTextRun(styles, unescapeMarkdownText(text.slice(pendingStart)), `t${pendingStart}`, onOpenFile, hold))
   }
   return parts
 }
@@ -269,9 +287,16 @@ function MobileMarkdownInner({
   textScale = 1,
   onOpenFile,
   resolveImage,
-  identity
+  identity,
+  rangeSelectable = false,
+  onLongPress
 }: Props) {
-  const selectable = useChatTextSelectable()
+  // Other Markdown surfaces retain their existing selection behavior.
+  const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION
+  const selectable = !androidTranscript
+  // Interactive children own their touches and must forward the row action.
+  const rowLongPress = androidTranscript ? onLongPress : undefined
+  const hold: SpanHold = rowLongPress ? { onLongPress: rowLongPress } : HOLD_DOES_NOT_OPEN
   const styles = useMarkdownStyles()
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
@@ -332,7 +357,7 @@ function MobileMarkdownInner({
                 {memberIndex > 0 ? '\n' : null}
                 {member.type === 'heading' ? (
                   <Text style={headingStyle(styles, member.level, textScale)}>
-                    {renderInline(styles, member.text, onOpenFile, pills)}
+                    {renderInline(styles, member.text, onOpenFile, pills, hold)}
                     {end}
                   </Text>
                 ) : member.type === 'rule' ? (
@@ -347,7 +372,7 @@ function MobileMarkdownInner({
                         {marker ? (
                           <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
                         ) : null}
-                        {renderInline(styles, item.text, onOpenFile, pills)}
+                        {renderInline(styles, item.text, onOpenFile, pills, hold)}
                       </Fragment>
                     )
                   })
@@ -358,6 +383,7 @@ function MobileMarkdownInner({
                     width={contentWidth}
                     resolve={resolveImage}
                     onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+                    onLongPress={rowLongPress}
                     styles={styles}
                   />
                 ) : (
@@ -366,7 +392,7 @@ function MobileMarkdownInner({
                   // next as literal asterisks on the phone (reported from the
                   // device); the parser has already reflowed soft wraps, so
                   // any newline left here is a deliberate hard break.
-                  renderInline(styles, member.text, onOpenFile, pills)
+                  renderInline(styles, member.text, onOpenFile, pills, hold)
                 )}
                 {member.type === 'heading' ? null : end}
               </Fragment>
@@ -398,6 +424,7 @@ function MobileMarkdownInner({
                 width={contentWidth}
                 resolve={resolveImage}
                 onOpen={() => openMarkdownHref(block.url, onOpenFile)}
+                onLongPress={rowLongPress}
                 styles={styles}
               />
             </View>
@@ -410,7 +437,7 @@ function MobileMarkdownInner({
           // (mobile-markdown-quote-blocks.ts).
           const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
           const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
-          const quoted = renderInline(styles, block.text, onOpenFile, pills)
+          const quoted = renderInline(styles, block.text, onOpenFile, pills, hold)
           return (
             <View key={index} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
               <Text
@@ -456,7 +483,7 @@ function MobileMarkdownInner({
             const width = columnWidths[cellIndex] ?? 0
             const inner = width - 2 * styles.tableCell.paddingHorizontal - styles.tableCell.borderRightWidth
             const pills = pillRuns(`table:${index}:${rowKey}:${cellIndex}`, inner, true)
-            const children = renderInline(styles, source, onOpenFile, pills)
+            const children = renderInline(styles, source, onOpenFile, pills, hold)
             return (
               // No width in a cell's key: its width moves only with the zoom,
               // which changes its pills' style too, so Fabric lays it out

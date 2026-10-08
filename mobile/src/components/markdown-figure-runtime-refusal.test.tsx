@@ -10,6 +10,7 @@ vi.mock('react-native', async () => {
     getSize: vi.fn()
   })
   return {
+    Platform: { OS: 'android' },
     Image: ImageMock,
     Linking: { openURL: vi.fn() },
     Pressable: 'Pressable',

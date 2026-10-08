@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useCallback, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
@@ -26,6 +26,9 @@ import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
+import { INLINE_TEXT_SELECTION } from '../components/inline-text-selection'
+import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
+import { MobileNativeChatLongPressRow } from './MobileNativeChatLongPressRow'
 import {
   isRenderableNativeChatNotice,
   MobileNativeChatNoticeRow
@@ -38,12 +41,15 @@ const HOLD_TO_COPY_MS = 400
 
 /** The message container: a sent prompt is tappable (it discloses its
  *  controls) and copies itself on a hold (2026-09-21: "automatic copy on
- *  long hold instead of long hold and copy button"); everything else is a
- *  plain view so nothing steals its touches. */
+ *  long hold instead of long hold and copy button"). Anything else opens its
+ *  actions sheet on a hold on Android, where the transcript has no inline
+ *  selection (Orca #22871), and is a plain view elsewhere so nothing steals
+ *  its touches. */
 function Bubble({
   user,
   onToggle,
   onCopy,
+  onLongPress,
   style,
   children
 }: {
@@ -51,11 +57,17 @@ function Bubble({
   onToggle: () => void
   /** Absent when the prompt holds no text: a hold would copy nothing. */
   onCopy?: () => void
+  /** Not a sent prompt, Android only: opens the actions sheet. */
+  onLongPress?: () => void
   style: StyleProp<ViewStyle>
   children: ReactNode
 }) {
   if (!user) {
-    return <View style={style}>{children}</View>
+    return (
+      <MobileNativeChatLongPressRow onLongPress={onLongPress} style={style}>
+        {children}
+      </MobileNativeChatLongPressRow>
+    )
   }
   return (
     <Pressable
@@ -181,9 +193,30 @@ function MobileNativeChatMessageImpl({
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
+  // Mount selection UI only for the message being copied.
+  const [actionsOpen, setActionsOpen] = useState(false)
+  // Keep the memoized Markdown context stable as the message streams.
+  const openActions = useCallback(() => setActionsOpen(true), [])
+  // Android only (Orca #22871): the transcript there has no inline selection,
+  // so a hold on a message offers Copy message / Select text instead.
+  const rowLongPress = INLINE_TEXT_SELECTION ? undefined : openActions
+  const actionsSheet = actionsOpen ? (
+    <MobileNativeChatMessageActionsSheet message={message} onClose={() => setActionsOpen(false)} />
+  ) : null
 
   if (isReasoning) {
-    return <MobileNativeChatReasoningNote message={message} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
+    return (
+      <>
+        <MobileNativeChatReasoningNote
+          message={message}
+          fontScale={fontScale}
+          onOpenFile={onOpenFile}
+          onLongPress={rowLongPress}
+          styles={styles}
+        />
+        {actionsSheet}
+      </>
+    )
   }
 
   // The harness's words around a peer message, as the Claude app draws them.
@@ -194,7 +227,18 @@ function MobileNativeChatMessageImpl({
   // A subagent's message to this session, folded as the desktop TUI folds it.
   const agentMessage = agentMessageOf(message)
   if (agentMessage) {
-    return <MobileNativeChatAgentMessageRow {...agentMessage} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
+    return (
+      <>
+        <MobileNativeChatAgentMessageRow
+          {...agentMessage}
+          fontScale={fontScale}
+          onOpenFile={onOpenFile}
+          onLongPress={rowLongPress}
+          styles={styles}
+        />
+        {actionsSheet}
+      </>
+    )
   }
 
   // A host-authored notice — a compaction boundary, a plan document, a toned
@@ -206,9 +250,17 @@ function MobileNativeChatMessageImpl({
       : undefined
   if (notice !== undefined && isTextBlock(notice)) {
     return (
-      <View style={styles.row}>
-        <MobileNativeChatNoticeRow block={notice} fontScale={fontScale} onOpenFile={onOpenFile} />
-      </View>
+      <>
+        <View style={styles.row}>
+          <MobileNativeChatNoticeRow
+            block={notice}
+            fontScale={fontScale}
+            onOpenFile={onOpenFile}
+            onLongPress={rowLongPress}
+          />
+        </View>
+        {actionsSheet}
+      </>
     )
   }
 
@@ -294,6 +346,7 @@ function MobileNativeChatMessageImpl({
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           onCopy={hasProse ? handleCopy : undefined}
+          onLongPress={rowLongPress}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           {segments.map((segment, segmentIndex) =>
@@ -313,6 +366,9 @@ function MobileNativeChatMessageImpl({
                       fontScale,
                       onOpenFile,
                       styles,
+                      // A link or image under the finger hands the hold on: a
+                      // sent prompt copies, anything else opens the sheet.
+                      onLongPress: isUser && !onCancelQueued ? (hasProse ? handleCopy : undefined) : rowLongPress,
                       // The list recycles a row's cell for other messages;
                       // this names the block for its markdown.
                       identity: `${message.id}:${segmentIndex}:${index}`
@@ -374,6 +430,7 @@ function MobileNativeChatMessageImpl({
           </Txt>
         ) : null}
       </View>
+      {actionsSheet}
       {turnStatus ? (
         <MobileNativeChatTurnStatus
           startedAt={turnStatus.startedAt}

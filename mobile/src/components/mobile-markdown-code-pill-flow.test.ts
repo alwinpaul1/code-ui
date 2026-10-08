@@ -14,6 +14,7 @@ import {
 import { resetRememberedPillCutsForTests, rememberedPillTextCount } from './use-markdown-code-pill-runs'
 
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   Linking: { openURL: vi.fn() },
   // A 1080-wide phone at 411 dp (the Galaxy S23 at FHD+).
   PixelRatio: { getFontScale: () => 1, get: () => 2.625 },

@@ -39,7 +39,8 @@ export function MobileMarkdownCodeChip({
   styles,
   chipScale,
   table,
-  onPress
+  onPress,
+  hold = HOLD_DOES_NOT_OPEN
 }: {
   piece: string
   /** The whole code span `piece` was cut from, which a Copy puts in place of the pill. */
@@ -53,6 +54,9 @@ export function MobileMarkdownCodeChip({
   table: boolean
   /** Opens the file a path pill names; a tap, never a hold (markdown-link-hold.ts). */
   onPress?: () => void
+  /** What a hold on a file pill does: nothing by default, or, on the Android
+   *  chat transcript, the message's long press (MobileMarkdown's `onLongPress`). */
+  hold?: { onLongPress: () => void } | typeof HOLD_DOES_NOT_OPEN
 }) {
   // The room for ink grows with the type, in whole pixels (see the style).
   const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
@@ -100,7 +104,7 @@ export function MobileMarkdownCodeChip({
           onPress ? styles.inlineCodeLink : null
         ]}
         onPress={onPress}
-        {...(onPress ? HOLD_DOES_NOT_OPEN : null)}
+        {...(onPress ? hold : null)}
       >
         {piece}
       </Text>
