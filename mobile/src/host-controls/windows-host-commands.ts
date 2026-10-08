@@ -66,10 +66,11 @@ export const WINDOWS_AUDIO_TYPE = [
 
 // SC_MONITORPOWER over WM_SYSCOMMAND to every top-level window: 2 is off, -1 is on.
 // PostMessage rather than SendMessage, which waits on every window and can hang on one
-// that never answers.
+// that never answers. GetPwrCapabilities is for Sleep display's Modern Standby check.
 const DISPLAY_TYPE =
   'Add-Type -IgnoreWarnings -Namespace CodeUI -Name Display -MemberDefinition ' +
   "'[DllImport(\"user32.dll\")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);" +
+  ' [DllImport("powrprof.dll")] public static extern byte GetPwrCapabilities(byte[] c);' +
   ' [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);' +
   " [DllImport(\"user32.dll\")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e);'"
 
@@ -79,8 +80,19 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
       "'[DllImport(\"user32.dll\")] public static extern bool LockWorkStation();'",
     "if(-not [CodeUI.Session]::LockWorkStation()){throw 'LockWorkStation refused'}"
   ],
+  // Why the check (2026-10-08, Danny): on a PC with Modern Standby (S0 Low Power
+  // Idle, most laptops since about 2019) the display going off IS the start of
+  // standby, so this put his whole laptop to sleep and the phone lost it. AoAc is
+  // byte 20 of SYSTEM_POWER_CAPABILITIES (76 bytes; the buffer is larger to spare).
+  // The probe already hides the row on such a PC (windows-host-state.ts); this
+  // covers a probe that could not tell. A call that returns 0 falls through to the
+  // post, as before; one that throws stops the script ('Stop'), which reads as "did
+  // not finish" rather than sleeping a PC nobody asked about. The refusal is printed
+  // instead of the done marker, built from two strings so the script's own text
+  // never matches it. The refusal branch has not run yet: off Windows the call throws.
   'sleep-display': [
     DISPLAY_TYPE,
+    "$c=New-Object byte[] 128;if([CodeUI.Display]::GetPwrCapabilities($c) -and $c[20]){'CUIREF'+'USED standby';exit}",
     "if(-not [CodeUI.Display]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr]2)){throw 'PostMessage refused'}"
   ],
   // Monitor power on alone is unreliable since Windows 8, so the script also resets the

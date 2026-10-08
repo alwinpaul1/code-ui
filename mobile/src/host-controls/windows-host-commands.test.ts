@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MAC_HOST_COMMAND_DONE_PATTERN } from './mac-host-commands'
+import { MAC_HOST_COMMAND_DONE_PATTERN, readMacHostRefusal } from './mac-host-commands'
 import {
   WINDOWS_AUDIO_TYPE,
   WINDOWS_HOST_ACTION_LABELS,
@@ -58,6 +58,22 @@ describe('the Windows host commands', () => {
     expect(windowsHostScript('wake-display')).toContain('SetThreadExecutionState(2)')
     expect(windowsHostScript('mute')).toContain('SetMute($true)')
     expect(windowsHostScript('unmute')).toContain('SetMute($false)')
+  })
+
+  // 2026-10-08, Danny: Sleep display put his whole laptop to sleep. On Modern
+  // Standby (SYSTEM_POWER_CAPABILITIES.AoAc, byte 20) the display going off starts
+  // standby, so the script asks first and refuses, and nothing is posted.
+  it('asks whether the PC sleeps with its display before turning the display off, and refuses if it does', () => {
+    const script = windowsHostScript('sleep-display')
+    const ask = script.indexOf('GetPwrCapabilities($c)')
+    const refuse = script.indexOf("'CUIREF'+'USED standby'")
+    const post = script.indexOf('[IntPtr]0xF170,[IntPtr]2')
+    expect(ask).toBeGreaterThan(-1)
+    expect(script).toContain('$c[20]')
+    expect(refuse).toBeGreaterThan(ask)
+    expect(post).toBeGreaterThan(refuse)
+    expect(readMacHostRefusal(script.split('\n'))).toBeNull()
+    expect(readMacHostRefusal(['CUIREFUSED standby'])).toBe('standby')
   })
 
   // 2026-09-24 review: adding the display read took the probe to 8,438
@@ -118,7 +134,7 @@ describe('what the Windows probe spends its time on', () => {
 
 describe('reading what a Windows PC says about itself', () => {
   it('reads a muted PC whose display is on, and leaves its lock unknown', () => {
-    expect(parseWindowsHostState(['CUIWIN mute=true display=on'])).toEqual({
+    expect(parseWindowsHostState(['CUIWIN mute=true display=on standby=classic'])).toEqual({
       lock: 'unknown',
       display: 'on',
       mute: 'muted'
@@ -128,7 +144,7 @@ describe('reading what a Windows PC says about itself', () => {
   // 2026-09-23, from the phone: both Sleep display and Wake display showed on
   // a PC whose display was on, because the probe never asked.
   it('reads the display as on, off, or dimmed (which is on), and unknown when Windows would not say', () => {
-    const display = (value: string) => parseWindowsHostState([`CUIWIN mute=false display=${value}`]).display
+    const display = (value: string) => parseWindowsHostState([`CUIWIN mute=false display=${value} standby=classic`]).display
     expect(display('on')).toBe('on')
     expect(display('off')).toBe('off')
     expect(display('dimmed')).toBe('on')
@@ -140,8 +156,37 @@ describe('reading what a Windows PC says about itself', () => {
     expect(WINDOWS_HOST_STATE_SCRIPT).toContain('PowerSettingRegisterNotification')
   })
 
+  // 2026-10-08, Danny: Sleep display slept his whole laptop. The probe asks whether
+  // the PC has Modern Standby, where the display going off starts standby.
+  it('reads a PC that goes to sleep with its display (Modern Standby), and only that one', () => {
+    expect(parseWindowsHostState(['CUIWIN mute=false display=on standby=modern'])).toEqual({
+      lock: 'unknown',
+      display: 'on',
+      mute: 'unmuted',
+      sleepsWithDisplay: true
+    })
+    expect(parseWindowsHostState(['CUIWIN mute=false display=on standby=classic'])).not.toHaveProperty(
+      'sleepsWithDisplay'
+    )
+    expect(parseWindowsHostState(['CUIWIN mute=false display=on standby=unknown'])).not.toHaveProperty(
+      'sleepsWithDisplay'
+    )
+  })
+
+  it('asks the power capability that owns the answer: AoAc, byte 20 of SYSTEM_POWER_CAPABILITIES', () => {
+    expect(WINDOWS_DISPLAY_NAMESPACE).toContain('GetPwrCapabilities(b)')
+    expect(WINDOWS_DISPLAY_NAMESPACE).toContain('b[20]')
+    expect(WINDOWS_HOST_STATE_SCRIPT).toContain('[CodeUI.DisplayPower]::AoAc()')
+  })
+
+  it('does not take a marker whose standby field has not painted yet for an answer', () => {
+    expect(readWindowsHostStateMarker(['CUIWIN mute=true display=on'])).toBeNull()
+    expect(readWindowsHostStateMarker(['CUIWIN mute=true display=on standby='])).toBeNull()
+    expect(readWindowsHostStateMarker(['CUIWIN mute=true display=on standby=mod'])).toBeNull()
+  })
+
   it('reads a PC whose output device would not say', () => {
-    expect(parseWindowsHostState(['CUIWIN mute=unknown display=off'])).toEqual({
+    expect(parseWindowsHostState(['CUIWIN mute=unknown display=off standby=classic'])).toEqual({
       lock: 'unknown',
       display: 'off',
       mute: 'unknown'
@@ -150,7 +195,7 @@ describe('reading what a Windows PC says about itself', () => {
 
   it('takes the last marker on the screen', () => {
     expect(
-      parseWindowsHostState(['CUIWIN mute=true display=off', 'PS C:\\>', 'CUIWIN mute=false display=on'])
+      parseWindowsHostState(['CUIWIN mute=true display=off standby=classic', 'PS C:\\>', 'CUIWIN mute=false display=on standby=classic'])
     ).toEqual({ lock: 'unknown', display: 'on', mute: 'unmuted' })
   })
 
@@ -225,7 +270,7 @@ describe('the Windows scripts under a real PowerShell', () => {
     // No Core Audio and no console display state here: the probe must still end
     // with a marker, so the phone stops waiting.
     const out = powershell(WINDOWS_HOST_STATE_SCRIPT)
-    expect(out.trim().split('\n').at(-1)).toBe('CUIWIN mute=unknown display=unknown')
+    expect(out.trim().split('\n').at(-1)).toBe('CUIWIN mute=unknown display=unknown standby=unknown')
     expect(readWindowsHostStateMarker(out.split('\n'))).toEqual({
       lock: 'unknown',
       display: 'unknown',

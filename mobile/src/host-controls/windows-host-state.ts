@@ -20,6 +20,12 @@ const MARKER = 'CUIWIN'
  * WINDOWS MACHINE: PowerShell 7 on macOS parses the script and compiles the
  * type, and the call itself fails there, which reads as unknown.
  *
+ * Standby: whether the PC has Modern Standby (S0 Low Power Idle), from
+ * GetPwrCapabilities' AoAc flag. There the display going off IS the start of
+ * standby: Sleep display put Danny's whole laptop to sleep on 2026-10-08, and the
+ * phone lost it. `modern` hides the row (mac-host-sheet-actions.ts). Same caveat as
+ * the display read: not yet run on a Windows machine.
+ *
  * Lock is not asked (2026-09-26). The sheet offers Lock PC whatever the PC says,
  * since Windows has no Unlock to offer instead, so reading LogonUI only held up
  * the two rows that do depend on an answer.
@@ -32,24 +38,29 @@ const MARKER = 'CUIWIN'
  *
  *  Terse on purpose: the probe must fit cmd.exe's 8,191-character command line
  *  after base64 of UTF-16LE, which costs about 2.7 characters per character
- *  here. C is DEVICE_NOTIFY_CALLBACK_ROUTINE, P is DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS
+ *  here; it is also why `powrprof` has no `.dll` (Windows adds it). C is
+ *  DEVICE_NOTIFY_CALLBACK_ROUTINE, P is DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS
  *  (a struct is sequential by default, and a zero context needs no assignment),
  *  and O takes PBT_POWERSETTINGCHANGE (0x8013), whose POWERBROADCAST_SETTING
  *  is a GUID and a DWORD length, so the value sits at offset 20. The flag 2 is
  *  DEVICE_NOTIFY_CALLBACK. k keeps the delegate alive while Windows holds it.
+ *  AoAc is SYSTEM_POWER_CAPABILITIES.AoAc, byte 20 of a 76-byte struct, read into
+ *  a larger buffer to spare: modern, classic, or unknown when Windows would not say.
  *
  *  A namespace block with no `using` lines of its own, so the probe can compile it
  *  in the same unit as the Core Audio type (WINDOWS_HOST_STATE_SCRIPT). */
 export const WINDOWS_DISPLAY_NAMESPACE = [
   'namespace CodeUI{public static class DisplayPower{',
   'public delegate uint C(IntPtr c,uint t,IntPtr s);struct P{public C c;public IntPtr x;}',
-  '[DllImport("powrprof.dll")]static extern uint PowerSettingRegisterNotification(ref Guid g,uint f,ref P p,out IntPtr h);',
-  '[DllImport("powrprof.dll")]static extern uint PowerSettingUnregisterNotification(IntPtr h);',
+  '[DllImport("powrprof")]static extern uint PowerSettingRegisterNotification(ref Guid g,uint f,ref P p,out IntPtr h);',
+  '[DllImport("powrprof")]static extern uint PowerSettingUnregisterNotification(IntPtr h);',
   'static int v=-1;static ManualResetEvent e=new ManualResetEvent(false);static C k;',
   'static uint O(IntPtr c,uint t,IntPtr s){if(t==0x8013&&s!=IntPtr.Zero){v=Marshal.ReadInt32(s,20);e.Set();}return 0;}',
   'public static int Read(int ms){Guid g=new Guid("6FE69556-704A-47A0-8F24-C28D936FDA47");k=O;P p=new P();p.c=k;IntPtr h;',
   'if(PowerSettingRegisterNotification(ref g,2,ref p,out h)!=0){return -1;}',
-  'try{e.WaitOne(ms);return v;}finally{PowerSettingUnregisterNotification(h);}}}}'
+  'try{e.WaitOne(ms);return v;}finally{PowerSettingUnregisterNotification(h);}}',
+  '[DllImport("powrprof")]static extern byte GetPwrCapabilities(byte[] b);',
+  'public static string AoAc(){var b=new byte[99];return GetPwrCapabilities(b)<1?"unknown":b[20]>0?"modern":"classic";}}}'
 ].join('')
 
 /** The display type standing alone, as the probe compiles it when the shared unit fails. */
@@ -77,11 +88,11 @@ export function windowsHostStateScript(displayNamespace: string = WINDOWS_DISPLA
     `$p='${displayNamespace}'`,
     "$u='using System.Threading;'",
     "try{Add-Type -IgnoreWarnings -TypeDefinition ($u+$a+$p)}catch{try{Add-Type -IgnoreWarnings -TypeDefinition $a}catch{};try{Add-Type -IgnoreWarnings -TypeDefinition ('using System;using System.Runtime.InteropServices;'+$u+$p)}catch{}}",
-    "$m='unknown'",
+    "$m=$d=$s='unknown'",
     "try{$m=if([CodeUI.Audio]::GetMute()){'true'}else{'false'}}catch{}",
-    "$d='unknown'",
-    "try{$d=@{0='off';1='on';2='dimmed'}[[CodeUI.DisplayPower]::Read(1000)];if(-not $d){$d='unknown'}}catch{}",
-    `'${MARKER.slice(0, 3)}'+'${MARKER.slice(3)} mute='+$m+' display='+$d`
+    "try{$d=@{0='off';1='on';2='dimmed'}[[CodeUI.DisplayPower]::Read(1000)];if(!$d){$d='unknown'}}catch{}",
+    'try{$s=[CodeUI.DisplayPower]::AoAc()}catch{}',
+    `'${MARKER.slice(0, 3)}'+"${MARKER.slice(3)} mute=$m display=$d standby=$s"`
   ].join('\n')
 }
 
@@ -89,9 +100,11 @@ export const WINDOWS_HOST_STATE_SCRIPT = windowsHostStateScript()
 
 export const WINDOWS_HOST_STATE_PROBE_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(WINDOWS_HOST_STATE_SCRIPT)}`
 
-// Both fields required: the script prints them in one string, so a line with
-// only the first is a line still being painted.
-const MARKER_PATTERN = new RegExp(`${MARKER} mute=(true|false|unknown) display=(on|off|dimmed|unknown)\\b`)
+// Every field required: the script prints them in one string, so a line without
+// the last is a line still being painted.
+const MARKER_PATTERN = new RegExp(
+  `${MARKER} mute=(true|false|unknown) display=(on|off|dimmed|unknown) standby=(modern|classic|unknown)\\b`
+)
 
 /** The last marker painted on the screen, or null while there is none. Lock is
  *  always unknown: the probe does not ask it. */
@@ -103,7 +116,8 @@ export function readWindowsHostStateMarker(lines: string[]): MacHostState | null
         lock: 'unknown',
         // Dimmed is on: the idle dim before sleep, where Sleep is the row that acts.
         display: match[2] === 'off' ? 'off' : match[2] === 'on' || match[2] === 'dimmed' ? 'on' : 'unknown',
-        mute: match[1] === 'true' ? 'muted' : match[1] === 'false' ? 'unmuted' : 'unknown'
+        mute: match[1] === 'true' ? 'muted' : match[1] === 'false' ? 'unmuted' : 'unknown',
+        ...(match[3] === 'modern' ? { sleepsWithDisplay: true as const } : {})
       }
     }
   }

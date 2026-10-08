@@ -4,7 +4,14 @@ export type MacMuteState = 'muted' | 'unmuted' | 'unknown'
 
 /** What the Mac says about itself right now. Never persisted: a stale answer would
  *  offer Lock to a Mac that is already locked. */
-export type MacHostState = { lock: MacLockState; display: MacDisplayState; mute: MacMuteState }
+export type MacHostState = {
+  lock: MacLockState
+  display: MacDisplayState
+  mute: MacMuteState
+  /** Set only when the host said its display going off puts it to sleep: a Windows
+   *  PC with Modern Standby (windows-host-state.ts). Sleep display is not offered there. */
+  sleepsWithDisplay?: true
+}
 
 export const UNKNOWN_MAC_HOST_STATE: MacHostState = {
   lock: 'unknown',

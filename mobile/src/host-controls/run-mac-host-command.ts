@@ -1,8 +1,8 @@
 import {
   MAC_HOST_COMMAND_DONE_PATTERN,
-  MAC_UNLOCK_REFUSAL_REASONS,
-  readMacUnlockRefusal,
-  type MacUnlockRefusal
+  MAC_HOST_REFUSAL_REASONS,
+  readMacHostRefusal,
+  type MacHostRefusal
 } from './mac-host-commands'
 import { watchThrowawayTerminal, type ThrowawayTerminalClient } from './throwaway-terminal'
 
@@ -29,17 +29,17 @@ export async function runMacHostCommand(args: {
   /** How the host is named in the one failure this can report. */
   hostNoun?: string
 }): Promise<MacHostCommandOutcome> {
-  const outcome = await watchThrowawayTerminal<MacUnlockRefusal | 'done'>({
+  const outcome = await watchThrowawayTerminal<MacHostRefusal | 'done'>({
     client: args.client,
     worktreeId: args.worktreeId,
     command: args.command,
     timeoutMs: args.timeoutMs ?? MAC_HOST_COMMAND_TIMEOUT_MS,
     secret: args.secret,
     ...(args.hostNoun ? { hostNoun: args.hostNoun } : {}),
-    // A refusal is the unlock saying it typed nothing (mac-host-commands.ts); it
+    // A refusal is the command saying it did nothing (mac-host-commands.ts); it
     // ends the watch as the done marker does.
     read: (lines) =>
-      readMacUnlockRefusal(lines) ?? (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? 'done' : null)
+      readMacHostRefusal(lines) ?? (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? 'done' : null)
   })
   if (!outcome.ok) {
     return outcome
@@ -47,7 +47,7 @@ export async function runMacHostCommand(args: {
   if (outcome.answer !== null && outcome.answer !== 'done') {
     // A fixed line chosen by the marker, never the host's text: the unlock's screen
     // carries the password.
-    return { ok: false, reason: MAC_UNLOCK_REFUSAL_REASONS[outcome.answer] }
+    return { ok: false, reason: MAC_HOST_REFUSAL_REASONS[outcome.answer] }
   }
   // The shell prints the marker once the command is through, whether or not
   // osascript succeeded. Never seeing it inside the budget means the command did

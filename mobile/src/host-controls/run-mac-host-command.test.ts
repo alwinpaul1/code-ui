@@ -193,6 +193,16 @@ describe('running a Mac control on the host', () => {
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
+  // 2026-10-08, Danny: Sleep display put a Modern Standby laptop to sleep. The
+  // script now refuses on such a PC, and the toast must say why, not "did not finish".
+  it('says the PC would sleep with its display, when the Windows script refuses for that', async () => {
+    const fake = fakeClient([['PS C:\\>', 'CUIREFUSED standby']])
+    expect(await run(fake)).toEqual({
+      ok: false,
+      reason: 'This PC goes to sleep when its display turns off, so the display was left on.'
+    })
+  })
+
   it("does not take the unlock's own echo of its refusal for a refusal", async () => {
     const fake = fakeClient([[`${SECRET} (unlocked) printf 'CUIREFUSED %s\\n' unlocked ;;`]])
     const outcome = await run(fake, SECRET, { secret: true })
