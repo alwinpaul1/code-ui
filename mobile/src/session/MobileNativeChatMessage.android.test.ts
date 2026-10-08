@@ -148,6 +148,60 @@ describe('MobileNativeChatMessage on Android', () => {
     expect(byType('MessageActionsSheet')).toHaveLength(0)
   })
 
+  // Review of the port, 2026-10-08: the whole bubble was the long-press row,
+  // and a tool's detail sheet (a Modal) mounts inside the bubble. RN's
+  // responder walks the React tree, not the native one, so a hold on the
+  // sheet's Markdown reached the bubble and stacked the actions sheet over
+  // it. Only the message's prose takes the hold.
+  it('keeps the tool detail sheet and the tool rows out of the message’s long press', () => {
+    render({
+      ...message,
+      blocks: [
+        { type: 'text', text: 'Running the suite.' },
+        { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, toolUseId: 't1' },
+        { type: 'tool-result', toolUseId: 't1', content: 'ok' }
+      ]
+    } as NativeChatMessage)
+    const [detail] = byType('MobileNativeChatToolDetailSheet')
+    expect(detail).toBeDefined()
+    const holds: string[] = []
+    for (let node = detail!.parent; node; node = node.parent) {
+      if (typeof node.props.onLongPress === 'function') {
+        holds.push(String(node.type))
+      }
+    }
+    expect(holds).toEqual([])
+    // The prose still takes it.
+    const [markdown] = byType('MobileMarkdown')
+    expect(typeof markdown!.props.onLongPress).toBe('function')
+  })
+
+  // A queued echo was a plain View before the port and its text was never
+  // selectable; it stays out of the sheet, as a sent prompt does.
+  it('gives a queued echo no long press, so it opens no sheet', () => {
+    act(() => {
+      renderer = create(
+        createElement(MobileNativeChatMessage, {
+          message: { ...message, id: 'q1', role: 'user', blocks: [{ type: 'text', text: 'next' }] },
+          onCancelQueued: () => {}
+        })
+      )
+    })
+    expect(byType('Pressable').filter((node) => typeof node.props.onLongPress === 'function')).toEqual([])
+    expect(byType('MessageActionsSheet')).toHaveLength(0)
+  })
+
+  // A Pressable is accessible by default, which would fold a whole reply into
+  // one TalkBack node. The long-press row keeps the tree the plain View had.
+  it('leaves the message’s text readable piece by piece under TalkBack', () => {
+    render(message)
+    const rows = byType('Pressable').filter((node) => node.props.onLongPress === byType('MobileMarkdown')[0]!.props.onLongPress)
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      expect(row.props.accessible).toBe(false)
+    }
+  })
+
   it('keeps the agent message’s Copy control copying the reply', () => {
     render(message)
     const copy = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Copy message')

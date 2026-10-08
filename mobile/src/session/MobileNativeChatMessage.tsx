@@ -36,20 +36,21 @@ import {
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 
 /** A finger held this long is a copy, not a tap: Android's own long-press
- *  timeout, the one the chat's scroll gate already keys on. */
+ *  timeout, the one the chat's long-press follow hand-over keys on. */
 const HOLD_TO_COPY_MS = 400
 
 /** The message container: a sent prompt is tappable (it discloses its
  *  controls) and copies itself on a hold (2026-09-21: "automatic copy on
- *  long hold instead of long hold and copy button"). Anything else opens its
- *  actions sheet on a hold on Android, where the transcript has no inline
- *  selection (Orca #22871), and is a plain view elsewhere so nothing steals
- *  its touches. */
+ *  long hold instead of long hold and copy button"); everything else is a
+ *  plain view so nothing steals its touches. On Android a reply's prose
+ *  segments take a hold for the actions sheet (Orca #22871), each on its
+ *  own, never the whole bubble: a tool's detail sheet is a Modal mounted
+ *  inside it, and the responder walks the React tree, so a hold on that
+ *  sheet would have reached the bubble (review, 2026-10-08). */
 function Bubble({
   user,
   onToggle,
   onCopy,
-  onLongPress,
   style,
   children
 }: {
@@ -57,17 +58,11 @@ function Bubble({
   onToggle: () => void
   /** Absent when the prompt holds no text: a hold would copy nothing. */
   onCopy?: () => void
-  /** Not a sent prompt, Android only: opens the actions sheet. */
-  onLongPress?: () => void
   style: StyleProp<ViewStyle>
   children: ReactNode
 }) {
   if (!user) {
-    return (
-      <MobileNativeChatLongPressRow onLongPress={onLongPress} style={style}>
-        {children}
-      </MobileNativeChatLongPressRow>
-    )
+    return <View style={style}>{children}</View>
   }
   return (
     <Pressable
@@ -346,14 +341,13 @@ function MobileNativeChatMessageImpl({
           user={isUser && !onCancelQueued}
           onToggle={() => setPromptControlsShown((shown) => !shown)}
           onCopy={hasProse ? handleCopy : undefined}
-          onLongPress={rowLongPress}
           style={[styles.content, isUser && styles.userBubble, copied && styles.copied]}
         >
           {segments.map((segment, segmentIndex) =>
             segment.kind === 'prose' ? (
               // No line beside the agent's own words, interim or final: the
               // Claude app draws one only beside a thought (2026-09-25).
-              <View key={`p${segmentIndex}`}>
+              <MobileNativeChatLongPressRow key={`p${segmentIndex}`} onLongPress={isUser ? undefined : rowLongPress}>
                 {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
                   // Air between a picture and the caption under it.
                   <View
@@ -367,15 +361,16 @@ function MobileNativeChatMessageImpl({
                       onOpenFile,
                       styles,
                       // A link or image under the finger hands the hold on: a
-                      // sent prompt copies, anything else opens the sheet.
-                      onLongPress: isUser && !onCancelQueued ? (hasProse ? handleCopy : undefined) : rowLongPress,
+                      // sent prompt copies, a reply opens the sheet, and a
+                      // queued echo (no hold before the port) takes none.
+                      onLongPress: isUser ? (onCancelQueued || !hasProse ? undefined : handleCopy) : rowLongPress,
                       // The list recycles a row's cell for other messages;
                       // this names the block for its markdown.
                       identity: `${message.id}:${segmentIndex}:${index}`
                     })}
                   </View>
                 ))}
-              </View>
+              </MobileNativeChatLongPressRow>
             ) : showToolRun ? (
               <MobileNativeChatToolSegment
                 // Why: a global toggle intentionally resets all per-run/per-line

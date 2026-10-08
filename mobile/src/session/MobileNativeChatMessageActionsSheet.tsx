@@ -84,7 +84,9 @@ function SelectTextScreen({
   // The live theme, not a fixed palette: this screen is a whole canvas.
   const styles = useMemo(() => makeStyles(theme), [theme])
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    // Translucent like the fork's other full-screen modals, so the insets
+    // padded below are the only top gap.
+    <Modal visible animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={[styles.screen, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         <View style={styles.header}>
           <Text style={styles.title}>Select text</Text>

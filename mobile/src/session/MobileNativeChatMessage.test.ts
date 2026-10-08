@@ -221,11 +221,12 @@ describe('MobileNativeChatMessage', () => {
   // took a touch, so Android's inline selection got the hold. Orca #22871
   // replaced inline selection on the Android transcript with a long press
   // that opens the message's actions sheet, so exactly one thing above the
-  // prose now takes a touch: the bubble's long press, the same function the
-  // markdown hands its links. Still no press, no responder and no second
-  // Pressable, in a settled reply, an interim note, or a reply in a turn that
-  // is still working with a live tool row beside it (this suite runs as
-  // Android).
+  // prose now takes a touch: the prose segment's long press (not the whole
+  // bubble, see the Android suite), the same function the markdown hands its
+  // links. No press handler and no second Pressable, in a settled reply, an
+  // interim note, or a reply in a turn that is still working with a live
+  // tool row beside it (this suite runs as Android). Pressable is a string
+  // here, so whether the real one claims the responder is not visible.
   it('puts nothing but the actions sheet’s long press above the agent reply’s prose, working or settled', () => {
     const TOUCH_PROPS = [
       'onPress',

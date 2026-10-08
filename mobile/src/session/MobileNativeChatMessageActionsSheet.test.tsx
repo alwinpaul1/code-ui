@@ -137,10 +137,9 @@ describe('message selection actions', () => {
   ] as const)('draws the select screen in the %s theme', (preference, own, other) => {
     act(() => {
       renderer = create(
-        createElement(ThemeProvider, {
-          initialPreference: preference,
-          children: createElement(MobileNativeChatMessageActionsSheet, { message, onClose })
-        })
+        <ThemeProvider initialPreference={preference}>
+          <MobileNativeChatMessageActionsSheet message={message} onClose={onClose} />
+        </ThemeProvider>
       )
     })
     pressAction(1)

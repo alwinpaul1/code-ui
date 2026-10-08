@@ -17,7 +17,10 @@ export function MobileNativeChatLongPressRow({
   children: ReactNode
 }): React.JSX.Element {
   return onLongPress ? (
-    <Pressable onLongPress={onLongPress} style={style} testID={testID}>
+    // Not accessible: a Pressable is by default, which would fold the whole
+    // row into one TalkBack node; the plain View it replaces was not (review,
+    // 2026-10-08).
+    <Pressable onLongPress={onLongPress} style={style} testID={testID} accessible={false}>
       {children}
     </Pressable>
   ) : (
