@@ -21,6 +21,7 @@ const { animationLoop, animationTiming, setValue } = vi.hoisted(() => ({
 }))
 
 const motion = vi.hoisted(() => ({ reduced: false }))
+const platform = vi.hoisted(() => ({ OS: 'ios' }))
 
 vi.mock('lucide-react-native', () => ({
   Activity: 'Activity',
@@ -41,6 +42,7 @@ vi.mock('react-native', () => ({
     timing: animationTiming
   },
   Easing: { linear: 'linear' },
+  Platform: platform,
   StyleSheet: { create: <T>(styles: T) => styles },
   View: 'View'
 }))
@@ -53,6 +55,7 @@ describe('mobile monitoring indicators', () => {
     animationTiming.mockClear()
     setValue.mockClear()
     motion.reduced = false
+    platform.OS = 'ios'
     resetReducedMotionForTests()
   })
 
@@ -96,6 +99,44 @@ describe('mobile monitoring indicators', () => {
 
     expect(animationTiming).toHaveBeenCalledOnce()
     expect(animationLoop).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the native driver for both working rings on native', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement('View', null, [
+          createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+          createElement(AgentStateDot, { key: 'dot', state: 'working' })
+        ])
+      )
+    })
+
+    expect(animationTiming).toHaveBeenCalledTimes(2)
+    for (const call of animationTiming.mock.calls) {
+      expect(call).toEqual([expect.anything(), expect.objectContaining({ useNativeDriver: true })])
+    }
+  })
+
+  // Orca #25299: the web has no native driver, so Animated.loop over a
+  // native-driver timing ran one turn on the page and froze at 360deg.
+  // Upstream proves the turning in a browser render check this fork does not
+  // carry (config/scripts); this pins the cause, the driver it asks for.
+  it('keeps both working rings turning on the web by not asking for the native driver', async () => {
+    platform.OS = 'web'
+    await act(async () => {
+      renderer = create(
+        createElement('View', null, [
+          createElement(AgentSpinner, { key: 'spinner', status: 'working' }),
+          createElement(AgentStateDot, { key: 'dot', state: 'working' })
+        ])
+      )
+    })
+
+    expect(animationTiming).toHaveBeenCalledTimes(2)
+    for (const call of animationTiming.mock.calls) {
+      expect(call).toEqual([expect.anything(), expect.objectContaining({ useNativeDriver: false })])
+    }
+    expect(animationLoop).toHaveBeenCalledTimes(2)
   })
 
   // "Remove animations" on, and the worktree list's spinners kept turning
