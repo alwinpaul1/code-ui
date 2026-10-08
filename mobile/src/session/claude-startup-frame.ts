@@ -183,7 +183,8 @@ function readDescriptor(cell: string): StartupFrameRead | null {
 /**
  * The pair the NEWEST startup frame on these rows states, or null.
  *
- * Rows are the host's screen (`terminal.read --screen`). Only the newest header
+ * Rows are the host's screen (`terminal.read --screen`), or the rows of an attach
+ * snapshot that can hold a frame (claude-startup-frame-snapshot.ts). Only the newest header
  * of the frame's real shape is read (a `/clear`-less resume or a second `claude`
  * paints a new one under the old), and a newest frame that cannot be read gives
  * null rather than the older one.

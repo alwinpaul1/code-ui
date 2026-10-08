@@ -32,7 +32,10 @@
             // also tells the wheel-row window that the program painted
             // (terminal-gesture-output-window.ts), which is an import, a typed
             // local for the stripped chunk and the call.
-            "max": 302,
+            // 2026-10-08: 304. The handler holds each attach snapshot for the
+            // startup-frame reader above its covered return (an import and the call;
+            // claude-startup-frame-snapshot.ts).
+            "max": 304,
             "skipBlankLines": true,
             "skipComments": true
           }
