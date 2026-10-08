@@ -5,7 +5,10 @@ import {
   getMobileWorkspaceStatus,
   getMobileWorkspaceStatusGroupKey
 } from './mobile-workspace-statuses'
-import { applyMobileWorkspaceLineage } from './mobile-workspace-lineage'
+import {
+  applyMobileWorkspaceLineage,
+  getMobileWorkspaceLineageChildren
+} from './mobile-workspace-lineage'
 import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-status-groups'
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
@@ -19,10 +22,10 @@ function makeSection(
   key: string,
   title: string,
   data: Worktree[],
-  icon?: 'pin',
-  collapsedGroups?: ReadonlySet<string>
+  collapsedGroups: ReadonlySet<string>,
+  icon?: 'pin'
 ): Section {
-  const rows = collapsedGroups ? applyMobileWorkspaceLineage(data, collapsedGroups) : data
+  const rows = applyMobileWorkspaceLineage(data, collapsedGroups)
   return {
     key,
     title,
@@ -130,6 +133,25 @@ export function shouldClearUnreadOnOpen(w: Pick<Worktree, 'unread'>): boolean {
   return w.unread === true
 }
 
+// Visible pinned rows plus their lineage descendants, walking through filtered-out rows as desktop does.
+function getPinnedSectionIdentities(
+  worktrees: readonly Worktree[],
+  visible: readonly Worktree[],
+  pinnedIds: Set<string>
+): Set<string> {
+  const childrenByParentId = getMobileWorkspaceLineageChildren(worktrees)
+  const identities = new Set(
+    visible.filter((w) => isWorktreePinned(w, pinnedIds)).map((w) => getWorktreeRowIdentity(w))
+  )
+  // A Set iterates entries added mid-loop and ignores repeats, so this walks descendants and stops on cycles.
+  for (const identity of identities) {
+    for (const child of childrenByParentId.get(identity) ?? []) {
+      identities.add(getWorktreeRowIdentity(child))
+    }
+  }
+  return identities
+}
+
 export function buildSections(
   worktrees: Worktree[],
   sortMode: MobileSortMode,
@@ -140,28 +162,29 @@ export function buildSections(
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
   collapsedGroups: ReadonlySet<string> = new Set(),
-  /** Desktop `showPinnedWorktreesInGroups`. Off (the desktop default, and what
-   *  older hosts imply by omitting it) shows a pinned row only under Pinned. */
+  /** Desktop `showPinnedWorktreesInGroups`. Off (the desktop default, and what a
+   *  host that omits the key implies) shows a pinned row only under Pinned. */
   showPinnedInGroups = false
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
 
-  const pinned = sorted.filter((w) => isWorktreePinned(w, pinnedIds))
+  const pinnedIdentities = getPinnedSectionIdentities(worktrees, sorted, pinnedIds)
+  const isInPinned = (w: Worktree) => pinnedIdentities.has(getWorktreeRowIdentity(w))
+  const pinned = sorted.filter(isInPinned)
   // Why (#15494): follow the desktop policy. Pinned is an overlay only when the
-  // desktop says so; otherwise a pinned row would appear twice in the list.
-  const canonicalGroupWorktrees = showPinnedInGroups
-    ? sorted
-    : sorted.filter((w) => !isWorktreePinned(w, pinnedIds))
+  // desktop says so; otherwise a pinned row (and the lineage under it) would
+  // appear twice in the list.
+  const canonicalGroupWorktrees = showPinnedInGroups ? sorted : sorted.filter((w) => !isInPinned(w))
 
   const sections: Section[] = []
   if (pinned.length > 0) {
-    sections.push(makeSection('pinned', 'Pinned', pinned, 'pin'))
+    sections.push(makeSection('pinned', 'Pinned', pinned, collapsedGroups, 'pin'))
   }
 
   if (groupMode === 'none') {
     if (canonicalGroupWorktrees.length > 0) {
-      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, undefined, collapsedGroups))
+      sections.push(makeSection('all', 'All', canonicalGroupWorktrees, collapsedGroups))
     }
   } else if (groupMode === 'repo') {
     const byRepo = new Map<string, Worktree[]>()
@@ -192,9 +215,7 @@ export function buildSections(
     }
     for (const [repo, items] of byRepo) {
       const key = `repo:${repoIdsByName.get(repo) ?? repo}`
-      sections.push(
-        makeSection(key, repo, orderMainWorktreeFirst(items), undefined, collapsedGroups)
-      )
+      sections.push(makeSection(key, repo, orderMainWorktreeFirst(items), collapsedGroups))
     }
   } else if (groupMode === 'workspaceStatus') {
     const renderableWorkspaceStatuses = coerceMobileWorkspaceStatuses(workspaceStatuses)
@@ -216,7 +237,6 @@ export function buildSections(
             getMobileWorkspaceStatusGroupKey(status.id),
             status.label,
             items,
-            undefined,
             collapsedGroups
           )
         )
@@ -237,13 +257,7 @@ export function buildSections(
       const items = byGroup.get(groupKey)
       if (items && items.length > 0) {
         sections.push(
-          makeSection(
-            `pr:${groupKey}`,
-            PR_GROUP_LABELS[groupKey],
-            items,
-            undefined,
-            collapsedGroups
-          )
+          makeSection(`pr:${groupKey}`, PR_GROUP_LABELS[groupKey], items, collapsedGroups)
         )
       }
     }
