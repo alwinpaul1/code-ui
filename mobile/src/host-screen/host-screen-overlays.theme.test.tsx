@@ -55,6 +55,7 @@ const WORKTREE = {
 
 type OverlayState = {
   showSortPicker?: boolean
+  showGroupPicker?: boolean
   showFilterModal?: boolean
   actionTarget?: typeof WORKTREE | null
   confirmDelete?: typeof WORKTREE | null
@@ -98,7 +99,7 @@ function controllerFor(open: OverlayState): HostScreenController {
     },
     state: {
       showSortPicker: open.showSortPicker ?? false,
-      showGroupPicker: false,
+      showGroupPicker: open.showGroupPicker ?? false,
       sortMode: 'recent',
       groupMode: 'none',
       setShowSortPicker: noop,
@@ -177,6 +178,42 @@ describe.each([
     expect(flat(hideSleeping.parent!.parent!.props.style).backgroundColor).toBe(palette.bgPanel)
     // The one active filter's check mark.
     expect(root.find((node) => String(node.type) === 'Check').props.color).toBe(palette.text)
+  })
+
+  // #25300: the list's view settings are the desktop's own, so each sheet says so under its title.
+  it('says under the Filter title that the filters sync with the desktop, except Show archived', () => {
+    const root = render(mode, { showFilterModal: true })
+    const note = text(root, 'Synced with your desktop, except Show archived')
+    expect(note).toBeDefined()
+    expect(flat(note.props.style).color).toBe(palette.textMuted)
+    // The title and note share one heading that sits beside Clear filters.
+    const heading = text(root, 'Filter').parent!
+    expect(note.parent).toBe(heading)
+    expect(heading.parent).toBe(text(root, 'Clear filters').parent!.parent)
+  })
+
+  it('lets the Filter heading shrink so the note cannot push Clear filters off the sheet', () => {
+    const root = render(mode, { showFilterModal: true })
+    expect(flat(text(root, 'Filter').parent!.props.style).flexShrink).toBe(1)
+  })
+
+  it('says under the Sort By title that the choice syncs with the desktop', () => {
+    const root = render(mode, { showSortPicker: true })
+    const note = text(root, 'Synced with your desktop')
+    expect(note).toBeDefined()
+    expect(flat(note.props.style).color).toBe(palette.textMuted)
+  })
+
+  it('says under the Group By title that the choice syncs with the desktop', () => {
+    const root = render(mode, { showGroupPicker: true })
+    expect(text(root, 'Group By')).toBeDefined()
+    expect(flat(text(root, 'Synced with your desktop').props.style).color).toBe(palette.textMuted)
+  })
+
+  it('names the Manual sort by the desktop drag order it follows', () => {
+    const root = render(mode, { showSortPicker: true })
+    expect(text(root, 'Desktop drag order')).toBeDefined()
+    expect(text(root, 'Server order')).toBeUndefined()
   })
 
   it('draws the Sort By picker from the theme', () => {

@@ -49,10 +49,20 @@ export function hostScreenSecondaryStyles({ colors }: Theme) {
       paddingHorizontal: spacing.xs,
       marginBottom: spacing.md
     },
+    // Why flexShrink: the note under the title would otherwise widen the heading and push Clear
+    // filters off the row (#25300).
+    filterModalHeading: {
+      flexShrink: 1
+    },
     filterModalTitle: {
       fontSize: 15,
       fontWeight: '600',
       color: colors.text
+    },
+    filterModalSubtitle: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginTop: 2
     },
     clearFiltersText: {
       fontSize: 13,
