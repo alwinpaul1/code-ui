@@ -26,6 +26,8 @@ const SCROLLED_OFF = fixture('claude-attach-snapshot-2.1.294-scrolled-off.ansi')
 const SECOND_CLAUDE = fixture('claude-attach-snapshot-2.1.294-second-claude.ansi')
 // The same bytes, then the emulator resized to 44 columns, as a phone-fitted host reflows it.
 const REFLOWED = fixture('claude-attach-snapshot-2.1.294-reflowed-44-cols.ansi')
+const REFLOWED_30 = fixture('claude-attach-snapshot-2.1.294-reflowed-30-cols.ansi')
+const REFLOWED_16 = fixture('claude-attach-snapshot-2.1.294-reflowed-16-cols.ansi')
 const AFTER_RESUME = fixture('claude-attach-snapshot-2.1.294-after-resume.ansi')
 
 const OPUS_HIGH = { model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'high' }
@@ -73,6 +75,25 @@ describe('the attach snapshot gives a hand-typed Claude tab the effort its banne
     expect(startupFrameFromAttachSnapshot(REFLOWED)).toEqual(OPUS_HIGH)
   })
 
+  // Found by the Opus review, 2026-10-08: where a reflow wraps the model row on a blank
+  // cell, the serializer writes `-` over the blanks plus one, then `ESC[1D ESC[1X` and
+  // (for blanks) `ESC[A ESC[<col>C ESC[<n>X ESC[<col>D ESC[B` to erase them again. Read as
+  // text that was `with high--<29 spaces>effort` at 30 columns and `Opus--<15 spaces>5.5`
+  // at 16. Same capture, resized to those widths in Orca's emulator.
+  it('reads the effort from a banner row the reflow wrapped on a blank cell', () => {
+    expect(startupFrameFromAttachSnapshot(REFLOWED_30)).toEqual(OPUS_HIGH)
+  })
+
+  it('reads the model from a banner row the reflow wrapped inside it', () => {
+    expect(startupFrameFromAttachSnapshot(REFLOWED_16)).toEqual(OPUS_HIGH)
+  })
+
+  it('keeps real dashes that end a row the serializer wrapped', () => {
+    // The n=0 form takes exactly one `-`; dashes before it are the row's own.
+    expect(snapshotRows('a---\u001b[1D\u001b[1Xb')).toEqual(['a--b'])
+    expect(snapshotRows('x--\u001b[1D\u001b[1X\u001b[A\u001b[3C\u001b[1X\u001b[3D\u001b[By')).toEqual(['x y'])
+  })
+
   it('finds no banner in a snapshot that has none', () => {
     const tail = SCROLLED_OFF.split('\r\n').slice(-SCREEN_ROWS).join('\r\n')
     expect(startupFrameFromAttachSnapshot(tail)).toBeNull()
@@ -109,7 +130,7 @@ describe('the attach snapshot gives a hand-typed Claude tab the effort its banne
   })
 
   it('reads the same frame from its header-only scan as from every row', () => {
-    for (const snapshot of [SCROLLED_OFF, SECOND_CLAUDE, REFLOWED, AFTER_RESUME]) {
+    for (const snapshot of [SCROLLED_OFF, SECOND_CLAUDE, REFLOWED, REFLOWED_30, REFLOWED_16, AFTER_RESUME]) {
       expect(startupFrameFromAttachSnapshot(snapshot)).toEqual(readClaudeStartupFrame(snapshotRows(snapshot)))
     }
   })

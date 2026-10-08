@@ -1156,7 +1156,11 @@ nothing.
   serialized with `scrollback: 1000`, retried with 500, 250, 100, 25 and 0 rows
   until it fits the 512 KiB budget. Rows are joined by `\r\n`; a soft-wrapped row
   is joined to the next with nothing, so a row a phone-fitted host reflowed reads
-  whole again; a run of blank cells is `ESC[nC`, which the reader expands to spaces
+  whole again. Where the wrap falls on blank cells the serializer writes `-` over
+  them and erases them again (`ESC[1D ESC[1X`, then `ESC[A … ESC[<n>X … ESC[B`);
+  the reader draws that as the n blanks (found by review: unhandled, it lost the
+  effort at 15, 25 and 30 columns and the whole frame at 16, 18, 20 and 23; all
+  of 12 to 90 now read). A run of blank cells is `ESC[nC`, which the reader expands to spaces
   so the column-11 rule still holds; SGR, OSC 8 links and the trailing cursor and
   mode restores take no columns.
 - Only the rows that can matter are converted: rows that name `Claude` and read

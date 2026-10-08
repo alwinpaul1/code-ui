@@ -14,7 +14,7 @@ import { readClaudeStartupFrame, type StartupFrameRead } from './claude-startup-
  *    budget. So at most the screen plus 1000 rows above it, fewer for a heavy one;
  *  - rows joined by `\r\n`, except a soft-wrapped row, which is joined to the next
  *    with nothing (so a row a phone-fitted host reflowed reads whole again). At a wrap
- *    edge it can also write `-` cells and erase them with `ESC[1D ESC[1X`;
+ *    edge on blank cells it writes `-` cells and erases them again (WRAP_EDGE below);
  *  - a run of blank cells inside a row written as `ESC[nC` (cursor forward), with
  *    `ESC[nX` before it when the blanks carry a background; SGR, OSC 8 links, and at the
  *    end cursor and mode restores (`ESC[r`, `ESC[?6l`, `ESC[y;xH`, `ESC7`, `ESC[?2004h`);
@@ -43,9 +43,20 @@ const BOUNDARY_GLYPHS = ['❯', '⏺', '⎿']
 // The reader's frame spans the header and the three rows under it.
 const FRAME_ROWS_BELOW = 3
 
+// The serializer's wrap edge (Orca 1.4.222's patched addon-serialize, `_rowEnd`): for a
+// soft-wrapped row that ends in n blank cells it writes n+1 `-`, `ESC[1D ESC[1X`, and for
+// n > 0 `ESC[A ESC[<col>C ESC[<n>X ESC[<col>D ESC[B`, so the blanks are erased again and
+// the last `-` sits at the start of the next row, erased too. Drawn, that is n blanks.
+// eslint-disable-next-line no-control-regex
+const WRAP_EDGE = /(-+)\u001b\[1D\u001b\[1X(?:\u001b\[A(?:\u001b\[\d+C)?\u001b\[(\d+)X(?:\u001b\[\d+D)?\u001b\[B)?/g
+
 /** A serialized row as drawn: escapes take no columns, a cursor-forward takes its count. */
 function drawnRow(raw: string): string {
-  return raw.replace(SEQUENCE, (_match, params: string | undefined, final: string | undefined) => {
+  return raw.replace(WRAP_EDGE, (_match, dashes: string, erased: string | undefined) => {
+    const blanks = Math.min(erased === undefined ? 0 : Number.parseInt(erased, 10), MAX_FORWARD)
+    // Dashes before the serializer's own n+1 are the row's text.
+    return dashes.slice(0, Math.max(0, dashes.length - blanks - 1)) + ' '.repeat(blanks)
+  }).replace(SEQUENCE, (_match, params: string | undefined, final: string | undefined) => {
     if (final !== 'C') {
       return ''
     }
