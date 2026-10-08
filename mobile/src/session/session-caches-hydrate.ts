@@ -7,6 +7,7 @@ import { hydrateSessionTabsCache } from './mobile-session-tabs-cache'
 import { hydrateNativeChatKeptSessions } from './native-chat-kept-session-store'
 import { hydrateSessionCommandPairs } from './claude-session-command-pair'
 import { hydrateStartupFramePairs } from './claude-startup-frame-pair'
+import { hydrateScreenModelRecords } from './claude-screen-model-pair'
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 
 /** Load the persisted project caches once at app start, before any project opens. */
@@ -34,6 +35,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateSessionCommandPairs(),
     // Why: the model and effort a session's own startup frame stated, which has
     // scrolled off by the time a late attach or a relaunch looks (claude-startup-frame-pair).
-    hydrateStartupFramePairs()
+    hydrateStartupFramePairs(),
+    // Why: what the spinner and an alt+p toast last said about the model and
+    // effort, which are on screen for seconds at a time (claude-screen-model-pair).
+    hydrateScreenModelRecords()
   ]).then(() => undefined)
 }

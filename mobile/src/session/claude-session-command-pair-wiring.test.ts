@@ -11,7 +11,11 @@ const code = (file: string) =>
 describe('the model pills read the fallback with the session command pair laid over it', () => {
   it('feeds the chat rows and the beacon time to the fallback hook, which every pill reads', () => {
     const controller = code('./use-mobile-native-chat-controller.ts')
-    expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*messages: nativeChatSession\.messages \}\)/)
+    expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*messages: nativeChatSession\.messages[,} ]/)
+    // And what the screen poll read of the spinner's effort and an alt+p toast
+    // (claude-screen-model-pair.ts), from the same HUD the pills read.
+    expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*screenStatement: screenModelStatement \}\)/)
+    expect(controller).toMatch(/modelStatement: screenModelStatement\s*\} = useMobileNativeChatHud\(/)
     expect(controller).toMatch(/beaconHandle: activeHandle, beaconStoredAt: [^,]*hudBeacon\?\.receivedAt/)
     expect(controller).toMatch(/liveEffort: claudeLive\.effort/)
     expect(controller).toMatch(/liveModel: claudeLive\.model/)

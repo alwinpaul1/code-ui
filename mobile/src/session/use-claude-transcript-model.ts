@@ -7,6 +7,15 @@ import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, 
 import { getAgentHudBeaconArrivedAt, subscribeAgentHudBeaconArrivals } from './agent-hud-beacon'
 import { sessionCommandPairFor } from './claude-session-command-pair'
 import { peekStartupFramePair, subscribeStartupFramePairs, withStartupFramePair } from './claude-startup-frame-pair'
+import type { ClaudeScreenModelStatement } from './claude-screen-model-statement'
+import {
+  lastReplyAt,
+  noteScreenModelStatement,
+  peekScreenModelRecord,
+  sessionCommandPairKey,
+  subscribeScreenModelRecords,
+  withScreenModelStatements
+} from './claude-screen-model-pair'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   peekClaudeTranscriptModel,
@@ -88,13 +97,19 @@ export function useClaudeTranscriptModel(args: {
   /** The session's rows: its own /model and /effort output lies over the scan
    *  (claude-session-command-pair.ts). Absent: none. */
   messages?: readonly NativeChatMessage[]
+  /** What the latest screen read showed of the spinner's effort and an alt+p
+   *  toast (claude-screen-model-statement.ts); null while the screen is not
+   *  read. Kept per session and laid over every tier below the live pair
+   *  (claude-screen-model-pair.ts). */
+  screenStatement?: ClaudeScreenModelStatement | null
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
   useEffect(() => subscribeClaudeTranscriptModelScans(() => setVersion((value) => value + 1)), [])
   useEffect(() => subscribeStartupFramePairs(() => setVersion((value) => value + 1)), [])
+  useEffect(() => subscribeScreenModelRecords(() => setVersion((value) => value + 1)), [])
 
   useEffect(() => (quiet ? watchClaudeTranscriptModelHost(hostId) : undefined), [hostId, quiet])
 
@@ -186,11 +201,28 @@ export function useClaudeTranscriptModel(args: {
   }, [waiting, beaconHandle])
   // A pick of the phone's own that no scan has confirmed yet shows nothing, and
   // an older command row must not bring a figure back (2026-09-18's rule).
+  // Then what the screen said since (the spinner's effort, an alt+p toast),
+  // ordered against those rows, the frame and the scan by when each was said.
+  const commandKey = sessionCommandPairKey(command)
   const next = quiet
     ? pick && base.kind === 'none'
       ? base
-      : withSessionCommandPair(base, command)
+      : withScreenModelStatements(withSessionCommandPair(base, command), peekScreenModelRecord(sessionId), {
+          commandKey,
+          frame: peekStartupFramePair(sessionId),
+          transcript,
+          messages
+        })
     : commandOverBeacon(command, liveModel, heardAt, liveEffort ?? null)
+  // What the pills show now is the model a spinner's effort is read under: the
+  // live pair's while one speaks, else this answer's. Its effort plays no part.
+  const shownModel = quiet ? (next.kind === 'transcript' ? next.model.model : null) : liveModel
+  const replyAt = lastReplyAt(messages)
+  useEffect(() => {
+    if (enabled) {
+      noteScreenModelStatement(sessionId, screenStatement, { commandKey, model: shownModel, replyAt })
+    }
+  }, [enabled, sessionId, screenStatement, commandKey, shownModel, replyAt])
   // The same answer keeps the same object: the option controller memoizes the
   // pickers' props on it, and a fresh object every render would rebuild them.
   const key = JSON.stringify(next)

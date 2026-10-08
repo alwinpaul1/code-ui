@@ -119,8 +119,9 @@ export function fileStartupFrame(scopeKey: string, sessionId: string | null, fra
 /**
  * The fallback with the startup frame laid under it, for a session no beacon or
  * badge speaks for. Order, newest statement first (the caller lays the
- * session's own `/model` and `/effort` rows over the result, and a live beacon
- * over all of it):
+ * session's own `/model` and `/effort` rows over the result, then what the
+ * screen said since (claude-screen-model-pair.ts), and a live beacon over all
+ * of it):
  *
  * - The transcript scan names a DIFFERENT model: the scan wins and the frame is
  *   dropped, effort included. The frame is a statement from the launch; a
