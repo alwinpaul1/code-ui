@@ -56,7 +56,7 @@ describe("the screen poll's model statement", () => {
   it("hands a Claude tab's spinner effort and toast to the pills", async () => {
     screen(WIDE_SPINNER_XHIGH)
     await render('claude')
-    expect(latest).toEqual({ spinner: true, effort: 'xhigh', toast: null })
+    expect(latest).toEqual({ composer: true, spinner: true, effort: 'xhigh', toast: null })
     screen(WIDE_TOAST_SONNET)
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)

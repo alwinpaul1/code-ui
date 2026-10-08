@@ -94,6 +94,11 @@ describe('the model and effort a Claude tab with nothing set up states on its ow
       await vi.advanceTimersByTimeAsync(1000)
     })
   }
+  /** Effects and re-renders only: no new screen read. */
+  const flushEffects = () =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
   const pair = () =>
     latest?.kind === 'transcript' ? { model: latest.model.model, effort: latest.effort ?? null } : { model: null, effort: null }
 
@@ -241,6 +246,58 @@ describe('the model and effort a Claude tab with nothing set up states on its ow
     await poll(NARROW_SPINNER_WRAPPED)
     expect(pair()).toEqual({ model: 'claude-opus-5-5', effort: null })
     await poll(NARROW_SPINNER_HIGH)
+    expect(pair()).toEqual({ model: 'claude-opus-5-5', effort: 'high' })
+  })
+
+  // Review of 2026-10-08: a row that reached the phone before the next screen poll
+  // re-dated the spinner still on the last read, and its old effort beat the row.
+  it('lets a /effort row that arrives while the last read still shows the spinner win over it', async () => {
+    rememberStartupFramePair(SESSION, readClaudeStartupFrame(LOGO_FRAME))
+    await poll(WIDE_SPINNER_XHIGH)
+    render({ messages: ran('effort', 'Set effort level to low (this session only): Quick') })
+    await flushEffects()
+    expect(pair()).toEqual({ model: 'claude-opus-5', effort: 'low' })
+    await poll(WIDE_IDLE_AFTER_TURN)
+    expect(pair()).toEqual({ model: 'claude-opus-5', effort: 'low' })
+  })
+
+  it("does not carry the old model's spinner effort onto a /model switch that arrives before the next poll", async () => {
+    await opusXhigh()
+    render({ messages: ran('model', 'Set model to `Sonnet 5.5` for this session only') })
+    await flushEffects()
+    expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: null })
+    await poll(WIDE_IDLE_AFTER_TURN)
+    await poll(WIDE_SONNET_THINKING_NO_EFFORT)
+    await poll(WIDE_IDLE_AFTER_TURN)
+    expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: null })
+  })
+
+  it("does not take a dialog's screen for the end of the old model's turn after a toast", async () => {
+    await opusXhigh()
+    const toastRow = WIDE_TOAST_SONNET.find((line) => line.includes('Model set to'))!
+    await poll(WIDE_SPINNER_XHIGH.map((line) => (line.startsWith('  ⏵⏵') ? toastRow : line)))
+    // A dialog in the box's place: no composer, so nothing about the spinner is known.
+    await poll(WIDE_SPINNER_XHIGH.filter((line) => !line.startsWith('─') && !line.startsWith('❯ ')))
+    await poll(WIDE_SPINNER_XHIGH)
+    expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: null })
+  })
+
+  it('keeps the toast model under an /effort row written after it', async () => {
+    rememberStartupFramePair(SESSION, readClaudeStartupFrame(LOGO_FRAME))
+    await poll(WIDE_IDLE_AFTER_TURN)
+    await poll(WIDE_TOAST_SONNET)
+    expect(pair().model).toBe('claude-sonnet-5-5')
+    await poll(WIDE_IDLE_AFTER_TURN, { messages: ran('effort', 'Set effort level to low (this session only): Quick') })
+    expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: 'low' })
+  })
+
+  it('lets a /model row naming the earlier model again replace a toast seen after the first one', async () => {
+    const first = ran('model', 'Set model to `Opus 5.5` for this session only with `xhigh` effort')
+    render({ messages: first })
+    await poll(WIDE_IDLE_AFTER_TURN)
+    await poll(WIDE_TOAST_SONNET)
+    expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: null })
+    await poll(WIDE_IDLE_AFTER_TURN, { messages: [...first, ...ran('model', 'Set model to `Opus 5.5` for this session only with `high` effort')] })
     expect(pair()).toEqual({ model: 'claude-opus-5-5', effort: 'high' })
   })
 

@@ -22,11 +22,11 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
 }))
 
 // Claude Code 2.1.294 captures (fixtures/claude-spinner-effort-2.1.294.ts, claude-model-toast-2.1.294.ts).
-const NOTHING = { commandKey: null, frame: null, transcript: null, messages: [] }
+const NOTHING = { command: null, frame: null, transcript: null, messages: [] }
 const seeOpusXhigh = (sessionId: string) => {
-  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_TOAST_OPUS), { commandKey: null, model: null, replyAt: null }, 1)
-  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_IDLE_AFTER_TURN), { commandKey: null, model: 'claude-opus-5-5', replyAt: null }, 2)
-  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_SPINNER_XHIGH), { commandKey: null, model: 'claude-opus-5-5', replyAt: null }, 3)
+  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_TOAST_OPUS), { commandKey: null, commandModelAt: null, model: null, replyAt: null }, 1)
+  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_IDLE_AFTER_TURN), { commandKey: null, commandModelAt: null, model: 'claude-opus-5-5', replyAt: null }, 2)
+  noteScreenModelStatement(sessionId, readClaudeScreenModelStatement(WIDE_SPINNER_XHIGH), { commandKey: null, commandModelAt: null, model: 'claude-opus-5-5', replyAt: null }, 3)
 }
 
 describe('what the screen said about the model and effort, across a leave and a relaunch', () => {

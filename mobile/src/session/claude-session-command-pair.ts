@@ -60,6 +60,11 @@ export type SessionCommandPair = {
   /** The model id an effort-only command was read under (the scan's model at
    *  the time), so a later scan naming another model can drop it. */
   boundModel?: string | null
+  /** When the row that last NAMED a model was written (the host's clock); an
+   *  effort-only row after it keeps it. Null when no row in the pair named one.
+   *  Lets a later effort-only row be told from a new model command
+   *  (claude-screen-model-pair.ts: a toast stands under the former only). */
+  modelAt?: number | null
   /** When the PHONE first saw this command's row (its own clock), set by
    *  `sessionCommandPairFor`. The host's row time is never compared with the
    *  phone's clock; this is what orders a command against a beacon.
@@ -157,8 +162,8 @@ export function sessionCommandPair(messages: readonly NativeChatMessage[]): Sess
     pairIndex = index
     pair =
       'effortOnly' in change
-        ? { label: pair?.label ?? null, effort: change.effortOnly, at: message.timestamp, answeredAt: null }
-        : { label: change.label, effort: change.effort, at: message.timestamp, answeredAt: null }
+        ? { label: pair?.label ?? null, effort: change.effortOnly, at: message.timestamp, answeredAt: null, modelAt: pair?.modelAt ?? null }
+        : { label: change.label, effort: change.effort, at: message.timestamp, answeredAt: null, modelAt: message.timestamp }
   })
   if (pair === null) {
     return null

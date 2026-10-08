@@ -22,7 +22,16 @@ import { createPersistedMap } from './session-cache-persistence'
  * - Against a command row: each statement carries the key of the command pair
  *   the phone held when it was seen (`commandKey`). A command the phone did not
  *   hold then is newer, and wins. The key is compared, not the clocks: a row's
- *   time is the host's and a sighting is the phone's.
+ *   time is the host's and a sighting is the phone's. One exception: a toast
+ *   stands under a newer row that names no model (`/effort`), which takes the
+ *   effort and leaves the toast's model; a row that names one (`modelAt`
+ *   moved) replaces it.
+ * - A statement is dated when a screen read SHOWS it, never when the pills'
+ *   context changes: a `/effort` row that reaches the phone before the next
+ *   poll must not re-date the spinner still on the last read (the caller notes
+ *   each read once).
+ * - A screen with no input box (a dialog, a picker) says nothing about the
+ *   spinner, so it does not end the wait for the old turn after a toast.
  * - Against the startup frame: a frame read later (`readAt`, the phone's clock,
  *   like `seenAt`) is newer and wins: a new process painted it.
  * - Against the scan: a toast stands until a reply written after it (a row
@@ -47,6 +56,8 @@ export type ScreenModelRecord = {
     /** When the phone first saw it (its own clock). */
     seenAt: number
     commandKey: string | null
+    /** The command pair's `modelAt` when it was seen (null: none named one). */
+    commandModelAt: number | null
     /** The newest assistant row's time (the host's clock) the phone held when it
      *  saw the toast; null when it held none. */
     replyAt: number | null
@@ -118,7 +129,7 @@ export function lastReplyAt(messages: readonly NativeChatMessage[] | undefined):
 export function noteScreenModelStatement(
   sessionId: string | null,
   statement: ClaudeScreenModelStatement | null,
-  context: { commandKey: string | null; model: string | null; replyAt: number | null },
+  context: { commandKey: string | null; commandModelAt: number | null; model: string | null; replyAt: number | null },
   now: number = Date.now()
 ): void {
   if (sessionId === null || statement === null) {
@@ -130,12 +141,18 @@ export function noteScreenModelStatement(
   toastShown.set(sessionId, statement.toast !== null)
   if (statement.toast !== null && !shownBefore) {
     next = {
-      toast: { ...statement.toast, seenAt: now, commandKey: context.commandKey, replyAt: context.replyAt },
+      toast: {
+        ...statement.toast,
+        seenAt: now,
+        commandKey: context.commandKey,
+        commandModelAt: context.commandModelAt,
+        replyAt: context.replyAt
+      },
       effort: null,
       awaitingTurnEnd: true
     }
   }
-  if (!statement.spinner && next.awaitingTurnEnd) {
+  if (statement.composer && !statement.spinner && next.awaitingTurnEnd) {
     next = { ...next, awaitingTurnEnd: false }
   }
   if (statement.effort !== null && statement.toast === null && !next.awaitingTurnEnd) {
@@ -159,7 +176,7 @@ export function withScreenModelStatements(
   fallback: ClaudeModelFallback,
   record: ScreenModelRecord | null,
   context: {
-    commandKey: string | null
+    command: SessionCommandPair | null
     frame: StartupFramePair | null
     transcript: ScannedTranscriptModel | null
     messages: readonly NativeChatMessage[] | undefined
@@ -168,14 +185,20 @@ export function withScreenModelStatements(
   if (record === null) {
     return fallback
   }
+  const { command } = context
+  const commandKey = sessionCommandPairKey(command)
   const frameAt = context.frame?.readAt ?? null
+  const afterFrame = (statement: { seenAt: number }) => frameAt === null || frameAt <= statement.seenAt
   const stands = (statement: { seenAt: number; commandKey: string | null }) =>
-    statement.commandKey === context.commandKey && (frameAt === null || frameAt <= statement.seenAt)
+    statement.commandKey === commandKey && afterFrame(statement)
   let result = fallback
   let toastAt: number | null = null
   const toast = record.toast
-  if (toast !== null && stands(toast) && !toastSuperseded(toast, context.transcript, context.messages)) {
-    result = { kind: 'transcript', model: { model: toast.model, label: toast.label }, effort: null }
+  // A newer command that names no model: the toast's model stands, the row's effort with it.
+  const effortRowSince =
+    toast !== null && command !== null && toast.commandKey !== commandKey && (command.modelAt ?? null) === (toast.commandModelAt ?? null)
+  if (toast !== null && (stands(toast) || (effortRowSince && afterFrame(toast))) && !toastSuperseded(toast, context.transcript, context.messages)) {
+    result = { kind: 'transcript', model: { model: toast.model, label: toast.label }, effort: effortRowSince ? command.effort : null }
     toastAt = toast.seenAt
   }
   const effort = record.effort

@@ -208,7 +208,7 @@ export function useClaudeTranscriptModel(args: {
     ? pick && base.kind === 'none'
       ? base
       : withScreenModelStatements(withSessionCommandPair(base, command), peekScreenModelRecord(sessionId), {
-          commandKey,
+          command,
           frame: peekStartupFramePair(sessionId),
           transcript,
           messages
@@ -218,11 +218,20 @@ export function useClaudeTranscriptModel(args: {
   // live pair's while one speaks, else this answer's. Its effort plays no part.
   const shownModel = quiet ? (next.kind === 'transcript' ? next.model.model : null) : liveModel
   const replyAt = lastReplyAt(messages)
+  const commandModelAt = command?.modelAt ?? null
+  // Each screen read is noted ONCE, with what the phone held when it arrived. A
+  // later change of the rows or of the shown model is not a new sighting: noted
+  // again, the spinner still on the last read was dated after a row that came in
+  // before the next poll, and its old effort beat that row (review, 2026-10-08).
+  const notedRef = useRef<{ sessionId: string | null; statement: ClaudeScreenModelStatement | null } | null>(null)
   useEffect(() => {
-    if (enabled) {
-      noteScreenModelStatement(sessionId, screenStatement, { commandKey, model: shownModel, replyAt })
+    const noted = notedRef.current
+    if (!enabled || (noted !== null && noted.sessionId === sessionId && noted.statement === screenStatement)) {
+      return
     }
-  }, [enabled, sessionId, screenStatement, commandKey, shownModel, replyAt])
+    notedRef.current = { sessionId, statement: screenStatement }
+    noteScreenModelStatement(sessionId, screenStatement, { commandKey, commandModelAt, model: shownModel, replyAt })
+  }, [enabled, sessionId, screenStatement, commandKey, commandModelAt, shownModel, replyAt])
   // The same answer keeps the same object: the option controller memoizes the
   // pickers' props on it, and a fresh object every render would rebuild them.
   const key = JSON.stringify(next)

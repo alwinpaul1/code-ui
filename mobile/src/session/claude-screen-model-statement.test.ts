@@ -112,7 +112,7 @@ describe('the alt+p model toast of Claude Code 2.1.294', () => {
 describe('Codex screens', () => {
   it('state no spinner, effort or toast', () => {
     for (const screen of [IDLE_AFTER_TURN_0158, WORKING_0158, QUOTED_IN_ANSWER_0158, APPROVAL_0158]) {
-      expect(readClaudeScreenModelStatement(screen)).toEqual({ spinner: false, effort: null, toast: null })
+      expect(readClaudeScreenModelStatement(screen)).toEqual({ composer: false, spinner: false, effort: null, toast: null })
     }
   })
 })

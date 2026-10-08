@@ -37,6 +37,9 @@ import { claudeIdFromLabel, claudeTranscriptModelName, type TranscriptModel } fr
  *   copy is indented two columns from the left and is not flush.
  */
 export type ClaudeScreenModelStatement = {
+  /** The input box was located. Without it (a dialog, a picker, a cut read)
+   *  the screen says nothing about the spinner either way. */
+  composer: boolean
   /** A live spinner row was found where Claude draws one. */
   spinner: boolean
   /** The effort that spinner states, or null when it states none (or was cut). */
@@ -117,5 +120,5 @@ export function readClaudeModelToast(lines: readonly string[]): TranscriptModel 
 }
 
 export function readClaudeScreenModelStatement(lines: readonly string[]): ClaudeScreenModelStatement {
-  return { ...readClaudeSpinnerEffort(lines), toast: readClaudeModelToast(lines) }
+  return { composer: claudeComposerRules(lines) !== null, ...readClaudeSpinnerEffort(lines), toast: readClaudeModelToast(lines) }
 }

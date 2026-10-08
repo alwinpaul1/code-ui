@@ -1208,14 +1208,21 @@ unknown until the next thinking turn states it.
   not flush by this count and is refused.
 - A toast is a switch on its first sighting only; it stays up for several polls.
   If the spinner of a turn begun before it is still up, that spinner is the old
-  model's: no effort is taken until a screen with no spinner has been seen.
+  model's: no effort is taken until a screen with the input box and no spinner
+  has been seen. A screen with no box (a dialog, a picker) says nothing either
+  way.
 
 **Order.** Tier 2 above. Each statement is kept per session id and persisted
 (`codeui:chat-screen-model-statements`, 32 sessions, fail-open both ways), and
 lies over the lower tiers by when it was said:
 - against a command row, by the command pair the phone HELD when the statement
   was seen: a command it did not hold then is newer and wins. Keys are compared,
-  never the host's row time against the phone's clock;
+  never the host's row time against the phone's clock. A toast still stands
+  under a newer `/effort` row (a row that names no model), which supplies the
+  effort; a newer row that names a model, even the same one again, replaces it.
+  A statement is dated when a screen read shows it and never again: a row that
+  reaches the phone before the next poll must not re-date the spinner still on
+  the last read (review, 2026-10-08);
 - against the startup frame, by the phone's clock: a frame read later is a new
   process's and wins;
 - against the scan, the superseded rule of a `/model` row: a toast stands until
@@ -1228,7 +1235,13 @@ pair left empty. A phone pick no scan has confirmed still shows nothing.
 **Limits.** The effort shows only once the model thinks on a turn: a turn with
 no thinking states none, and a model that never thinks never states it (Sonnet
 5.5 at its defaults, captured). A toast missed while the phone was away is lost
-(the scan replaces it only after a reply and a fresh scan). The spinner is read
+(the scan replaces it only after a reply and a fresh scan). Known and not fixed
+(review, 2026-10-08): a resume into a new process under the SAME session id
+that paints the same startup frame as before does not outrank an earlier toast,
+because the frame store keeps the first read time for an unchanged model, so
+the toast's model can stand until a reply and a scan; and a toast seen in the
+first moments of opening a chat, before its rows have loaded, loses to an older
+`/model` row those rows then bring. The spinner is read
 off the host's VISIBLE rows on the poll (once a second while the agent works), so
 a thinking phase shorter than a poll can be missed; the next one says the same.
 The `◐ medium · /effort` row some screens show is a user's own mod, not Claude
