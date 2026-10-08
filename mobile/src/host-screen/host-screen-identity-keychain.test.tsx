@@ -101,6 +101,7 @@ function Probe({
     setRepoColorsByName: noop,
     setRepoHostIdByRepoId: noop,
     setRepoIconsByName: noop,
+    setShowPinnedInGroups: noop,
     setWorktrees: noop,
     setWorktreesLoaded: noop
   } as unknown as HostScreenState

@@ -26,7 +26,7 @@ export function useWorkspaceSections(args: {
   repoColorsByName: Map<string, string>
   collapsedGroups: Set<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
-  showPinnedInGroups?: boolean
+  showPinnedInGroups: boolean
 }): {
   sections: Section[]
   rawSections: Section[]
@@ -44,7 +44,7 @@ export function useWorkspaceSections(args: {
     repoColorsByName,
     collapsedGroups,
     workspaceStatuses,
-    showPinnedInGroups = false
+    showPinnedInGroups
   } = args
 
   const uniqueRepos = useMemo(() => {

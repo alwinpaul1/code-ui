@@ -112,6 +112,34 @@ export const terminalCopyTrimsGutterRead = bindDeferredRpcOperation(
   })
 )
 
+const showPinnedInGroupsReader: RpcCompatibleReader<unknown, 'show-pinned-in-groups', boolean> = (
+  raw
+) => {
+  const settings = raw == null ? undefined : settingsMember(raw)
+  const show: unknown =
+    settings == null ? undefined : settingsField(settings, 'showPinnedWorktreesInGroups')
+  return {
+    compatible: true,
+    variant: 'show-pinned-in-groups',
+    // Why `=== true`: a host that does not project the key sends none, and desktop's default is
+    // off. CODE UI: stock Orca's settings.get projection (RuntimeClientSettings) does not carry
+    // showPinnedWorktreesInGroups as of upstream 3e27e62f43 (2026-10-08), so today this always
+    // reads off; it starts mirroring the desktop the day the host projects the key.
+    value: show === true,
+    salvage: { droppedPaths: [], droppedCount: 0 }
+  }
+}
+
+export const showPinnedWorktreesInGroupsRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'settings.show-pinned-worktrees-in-groups-or-skip',
+    method: 'settings.get',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: showPinnedInGroupsReader
+  })
+)
+
 export const botOverridesRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'settings.bot-logins-or-skip',

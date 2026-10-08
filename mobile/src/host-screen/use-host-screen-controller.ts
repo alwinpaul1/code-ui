@@ -22,7 +22,6 @@ import { useHostScreenIdentity } from './use-host-screen-identity'
 import { useHostScreenState } from './use-host-screen-state'
 import { useHostViewSettings } from './use-host-view-settings'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
-import { useHostShowPinnedInGroups } from './use-host-show-pinned-in-groups'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
 
 export type HostScreenProps = {
@@ -66,7 +65,6 @@ export function useHostScreenController({
   const { hostCapabilities, floatingWorkspaceEnabled } = useHostProtocolGates()
   const state = useHostScreenState(hostId, action)
   const settings = useHostViewSettings({ client, connState, hostId, state })
-  const showPinnedInGroups = useHostShowPinnedInGroups(client, connState)
 
   useHostScreenIdentity({ client, hostId, lastConnectedAt, state })
   const fetchRepoMetadata = useHostRepoMetadata({ client, connState, hostId, state })
@@ -127,11 +125,11 @@ export function useHostScreenController({
     search: state.search,
     groupMode: state.groupMode,
     pinnedIds: state.pinnedIds,
+    showPinnedInGroups: state.showPinnedInGroups,
     repoIdsByName: state.repoIdsByName,
     repoColorsByName: state.repoColorsByName,
     collapsedGroups: state.collapsedGroups,
-    workspaceStatuses: state.workspaceStatuses,
-    showPinnedInGroups
+    workspaceStatuses: state.workspaceStatuses
   })
   const existingWorktreePaths = useMemo(() => state.worktrees.map((w) => w.path), [state.worktrees])
   const activeWorktreeScroll = useActiveWorktreeScroll(sectionsResult.sections)

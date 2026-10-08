@@ -17,6 +17,8 @@ export type PickerOption<T extends string = string> = {
 type Props<T extends string = string> = {
   visible: boolean
   title: string
+  /** A quiet line under the title, e.g. that the choice is shared with the desktop. */
+  subtitle?: string
   options: PickerOption<T>[]
   selected: T
   onSelect: (value: T) => void
@@ -43,6 +45,7 @@ type PickerModalContentProps<T extends string = string> = Pick<
 export function PickerModal<T extends string = string>({
   visible,
   title,
+  subtitle,
   options,
   selected,
   onSelect,
@@ -72,6 +75,11 @@ export function PickerModal<T extends string = string>({
         <Txt variant="label" weight="medium" tone="muted">
           {title}
         </Txt>
+        {subtitle ? (
+          <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+            {subtitle}
+          </Txt>
+        ) : null}
       </View>
 
       {notice ?? (
