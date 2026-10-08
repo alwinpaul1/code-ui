@@ -33,9 +33,10 @@ export type MobileNativeChatTailFollow<TItem> = {
   listRef: RefObject<FlashListRef<TItem> | null>
   /** Render flag for the jump-to-latest control, and for history anchoring. */
   showJumpToLatest: boolean
-  /** Off while a scroll is in flight, so Android cannot arm a text-selection
-   *  long-press under the moving rows. */
-  textSelectable: boolean
+  /** True while a scroll is in flight (a drag, or a fling until the list has
+   *  gone quiet); a settled list re-pins to the live edge only once it is
+   *  false. Read it, never write it: `use-mobile-chat-following.ts` owns it. */
+  scrollingRef: RefObject<boolean>
   touchStart: () => void
   touchEnd: () => void
   /** Every scroll sample: records geometry, pages history at the far end. */
@@ -82,8 +83,7 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  leaves us, and whether a settled list sits at the live edge.
  *
  *  What this fork keeps that upstream has no counterpart for: the reader's hold
- *  and long-press ownership and the text-selection flag that rides with it (see
- *  `use-mobile-chat-following.ts`), the new-data-only follow gate (see
+ *  and long-press ownership (see `use-mobile-chat-following.ts`), the new-data-only follow gate (see
  *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises the
  *  instant a drag starts rather than waiting for the list to leave the tail,
  *  and putting the view back where FlashList drew once a pushed route stops
@@ -117,7 +117,6 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     touchStart,
     touchEnd,
     followGate,
-    textSelectable,
     showJumpToLatest,
     setFollowing,
     beginScroll,
@@ -318,7 +317,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // Not while a finger drags. An animated scroll runs on a ValueAnimator, and
   // a finger that grabs it is taken by the scroll view, which cancels the
   // animator, whose listener sends this end. Settling on it finished the
-  // scroll under the dragging finger: the text went selectable, and near the
+  // scroll under the dragging finger, and near the
   // live edge the stream pinned the list to the newest message while the
   // reader dragged away (third review, 2026-09-25). That drag's own end
   // settles the list.
@@ -407,7 +406,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   return {
     listRef,
     showJumpToLatest,
-    textSelectable,
+    scrollingRef,
     touchStart,
     touchEnd,
     evaluateEdge,

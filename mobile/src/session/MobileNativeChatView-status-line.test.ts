@@ -8,7 +8,7 @@ vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => nul
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 // The system interrupting a touch is not what these tests are about; see
-// use-mobile-native-chat-tail-follow.selection.test.ts for that.
+// use-mobile-native-chat-tail-follow.settle.test.ts for that.
 vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
 vi.mock('react-native', () => ({
   Platform: { OS: 'android' },

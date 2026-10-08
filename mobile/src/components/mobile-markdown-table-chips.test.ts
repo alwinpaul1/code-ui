@@ -6,6 +6,7 @@ import { codePillWidth, cutCodePills } from './mobile-markdown-code-chip-split'
 import { computeTableColumnWidths } from './mobile-markdown-table-layout'
 
 vi.mock('react-native', () => ({
+  Platform: { OS: 'android' },
   Linking: { openURL: vi.fn() },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

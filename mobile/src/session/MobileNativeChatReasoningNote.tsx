@@ -6,6 +6,7 @@ import { cutWholeCharacters } from '../text/whole-character-cut'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText } from './mobile-native-chat-message-text'
+import { MobileNativeChatLongPressRow } from './MobileNativeChatLongPressRow'
 
 /** A thought longer than this shows its opening and a Show more. On this
  *  machine 201 of the 1,245 thinking blocks in Claude Code 2.1.282
@@ -39,11 +40,14 @@ export function MobileNativeChatReasoningNote({
   message,
   fontScale,
   onOpenFile,
+  onLongPress,
   styles
 }: {
   message: NativeChatMessage
   fontScale: number
   onOpenFile?: (relativePath: string) => void
+  /** Android only: the message's actions sheet (Orca #22871). */
+  onLongPress?: () => void
   styles: ChatMessageStyles
 }) {
   const [open, setOpen] = useState(false)
@@ -53,10 +57,16 @@ export function MobileNativeChatReasoningNote({
   }
   const opening = reasoningOpening(text)
   return (
-    <View style={styles.row}>
+    <MobileNativeChatLongPressRow onLongPress={onLongPress} style={styles.row}>
       <View style={styles.reasoning}>
         <View style={styles.reasoningBody}>
-          <MobileMarkdown content={opening && !open ? opening : text} textScale={fontScale * 0.93} onOpenFile={onOpenFile} />
+          <MobileMarkdown
+            content={opening && !open ? opening : text}
+            textScale={fontScale * 0.93}
+            onOpenFile={onOpenFile}
+            rangeSelectable
+            onLongPress={onLongPress}
+          />
         </View>
         {opening ? (
           <Pressable
@@ -72,6 +82,6 @@ export function MobileNativeChatReasoningNote({
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </MobileNativeChatLongPressRow>
   )
 }

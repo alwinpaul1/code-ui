@@ -1,9 +1,9 @@
-import { useEffect, useRef } from 'react'
 import { Activity, CircleCheck, MessageCircleQuestionMark } from 'lucide-react-native'
-import { Animated, Easing, StyleSheet, View } from 'react-native'
+import { Animated, StyleSheet, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { useTheme } from '../theme/theme-context'
 import { useReducedMotion } from '../ui/use-reduced-motion'
+import { useWorkingRingRotation } from './use-working-ring-rotation'
 
 // Per-agent state indicator, 1:1 with desktop AgentStateDot (Orca 1.4.200,
 // out/renderer/assets/AgentStateDot-*.js): yellow spinner for 'working', the
@@ -67,7 +67,6 @@ export function AgentStateDot({
    *  lighter muted tone. */
   onDarkSurface?: boolean
 }) {
-  const spinValue = useRef(new Animated.Value(0)).current
   const { colors } = useTheme()
   const working = onLightSurface ? ON_LIGHT.working : WORKING_COLOR
   const done = onLightSurface ? ON_LIGHT.done : DONE_COLOR
@@ -76,27 +75,10 @@ export function AgentStateDot({
   const icon = size
   const dot = { width: size * 0.6, height: size * 0.6, borderRadius: size * 0.3 }
   const reducedMotion = useReducedMotion()
-
-  useEffect(() => {
-    // Unknown (null) holds too; see AgentSpinner. The arc still draws.
-    if (state === 'working' && reducedMotion === false) {
-      const animation = Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1000,
-          easing: Easing.linear,
-          useNativeDriver: true
-        })
-      )
-      animation.start()
-      return () => animation.stop()
-    }
-    spinValue.setValue(0)
-    return undefined
-  }, [reducedMotion, state, spinValue])
+  // Unknown (null) holds too; see AgentSpinner. The arc still draws.
+  const rotate = useWorkingRingRotation(state === 'working' && reducedMotion === false)
 
   if (state === 'working') {
-    const rotate = spinValue.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] })
     return (
       <View style={[styles.wrapper, box]} accessibilityLabel="Working">
         <Animated.View

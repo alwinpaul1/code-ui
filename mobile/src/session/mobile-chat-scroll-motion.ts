@@ -18,14 +18,16 @@ const ANCHOR_SLOP_DP = 1
  * by exactly that growth, and the scroll view reports it like any other
  * scroll. A streaming reply grows as often as the controller's stream
  * throttle lets it (`NATIVE_CHAT_STREAM_THROTTLE_MS`, 50 ms), so those
- * corrections arrive all turn long, and counting them as movement kept chat
- * text unselectable for as long as the agent wrote (2026-09-25, phone
- * recording: a hold on a paragraph and a bullet mid-turn selected nothing).
+ * corrections arrive all turn long, and counting them as movement kept the
+ * scroll in flight for as long as the agent wrote (2026-09-25, phone
+ * recording; chat text was then unselectable while a scroll was in flight,
+ * a gate Orca #22871 replaced on 2026-10-08).
  *
  * A correction moves the offset by what the content height moved. A drag or
  * a fling moves the offset with no change in height, or by more than it.
  * With nothing to compare against, or a number that is not one, count it as
- * movement: that errs toward the 2026-09-12 rule, never away from it.
+ * movement: that errs toward keeping the scroll in flight (no re-pin under
+ * the reader), never away from it.
  */
 export function isReaderScrollMotion(
   previous: ChatScrollGeometry | null,

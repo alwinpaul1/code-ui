@@ -16,11 +16,12 @@ const LONG_PRESS_MS = 400
 const QUIET_MS = 250
 
 /** A drag owns scrolling until it settles, even inside the live-edge threshold.
- *  While it does, chat text is not selectable: Android arms a text-selection
- *  long-press under any selectable Text, and a finger put down to stop a fling
- *  and held tripped it — a buzz from nowhere and a stray selection
- *  (2026-09-12). Only new data may pull the list to the live edge; see
- *  `mobile-chat-follow-gate.ts` for the press-and-hold jump that rule ends. */
+ *  (Until 2026-10-08 chat text was also unselectable while a scroll was in
+ *  flight, the 2026-09-12 answer to stray selections on Android. Orca #22871
+ *  replaced that: the Android transcript has no inline selection at all, and a
+ *  long press opens the message's actions sheet.) Only new data may pull the
+ *  list to the live edge; see `mobile-chat-follow-gate.ts` for the
+ *  press-and-hold jump that rule ends. */
 export function useMobileChatFollowing() {
   const followingRef = useRef(true)
   const scrollingRef = useRef(false)
@@ -28,19 +29,18 @@ export function useMobileChatFollowing() {
   const holdingRef = useRef(false)
   const touchStartedAt = useRef(0)
   const [showJumpToLatest, setShowJumpToLatest] = useState(false)
-  const [textSelectable, setTextSelectable] = useState(true)
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next
     setShowJumpToLatest((visible) => (visible === !next ? visible : !next))
   }, [])
-  // The END events are not enough to bring selection back. A fling that a
+  // The END events are not enough to say the scroll is over. A fling that a
   // re-anchor or a nested scroll view interrupts sends no momentum-end, and
-  // the flag then sat false until the reader's next clean scroll: a hold on
-  // a list that had been still for half a second selected nothing (phone
-  // recording, 2026-09-21). The finger lifting and the list no longer moving
-  // are the evidence that it is at rest, so those restore it too. A finger
-  // still down after beginning a drag, or put down to stop a fling, keeps
-  // selection off until it lifts: the 2026-09-12 rule.
+  // the scroll then counted as in flight until the reader's next clean
+  // scroll (phone recording, 2026-09-21, when this flag also kept chat text
+  // unselectable). The finger lifting and the list no longer moving are the
+  // evidence that it is at rest, so those end it too. A finger still down
+  // after beginning a drag, or put down to stop a fling, keeps it in flight
+  // until it lifts.
   const quietTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // A finger dragging the list, from the drag's begin to its end. `holding`
   // cannot say so on Android: when the scroll view takes a gesture, JS gets a
@@ -65,13 +65,11 @@ export function useMobileChatFollowing() {
       quietTimer.current = null
       if (scrollingRef.current && !holdingRef.current && !draggingRef.current) {
         scrollingRef.current = false
-        setTextSelectable(true)
       }
     }, QUIET_MS)
   }, [cancelQuiet])
   const startScroll = useCallback(() => {
     scrollingRef.current = true
-    setTextSelectable(false)
     setFollowing(false)
   }, [setFollowing])
   /** A drag: a finger on the list, so the window waits for it to lift. */
@@ -87,8 +85,8 @@ export function useMobileChatFollowing() {
   }, [armQuiet])
   // A fling begins with the finger already up and is only presumed to move:
   // the window opens at once and each sample of it moving starts it over.
-  // Waiting instead for the momentum end left text unselectable for a whole
-  // turn, because Android sends that end only after three quiet checks with
+  // Waiting instead for the momentum end left the scroll in flight for a
+  // whole turn, because Android sends that end only after three quiet checks with
   // no scroll at all, and a streaming reply scrolls the list every time it
   // grows (`NATIVE_CHAT_STREAM_THROTTLE_MS`, 50 ms) while it holds the
   // reader's place (2026-09-25).
@@ -100,7 +98,6 @@ export function useMobileChatFollowing() {
   const endScroll = useCallback(() => {
     scrollingRef.current = false
     cancelQuiet()
-    setTextSelectable(true)
   }, [cancelQuiet])
   const lastSample = useRef<ChatScrollGeometry | null>(null)
   /** A scroll sample while a scroll is in flight. If the list moved under the
@@ -162,13 +159,13 @@ export function useMobileChatFollowing() {
     if (Date.now() - touchStartedAt.current >= LONG_PRESS_MS) {
       setFollowing(false)
     }
-    // The finger is up; if the list is not moving either, selection returns.
+    // The finger is up; if the list is not moving either, the scroll is over.
     armQuiet()
   }, [armQuiet, disarmLongPress, setFollowing])
   // The system took the touch: a home swipe, a call, the screen locking. A
-  // drag it cancels sends no end event, so without this the text stayed
-  // unselectable and the first hold back in the app selected nothing (third
-  // review, 2026-09-25). A blur ends the drag only: a hold is not a drag, JS
+  // drag it cancels sends no end event, so without this the scroll stayed in
+  // flight (third review, 2026-09-25, when that also left the text
+  // unselectable). A blur ends the drag only: a hold is not a drag, JS
   // still owns that touch and will see it end, and ending it early dropped
   // the long-press hand-over, so the stream re-pinned the list under the
   // held finger (fourth review). Leaving the foreground ends both.
@@ -200,7 +197,6 @@ export function useMobileChatFollowing() {
     touchEnd,
     scrollSample,
     followGate,
-    textSelectable,
     showJumpToLatest,
     setFollowing,
     beginScroll,
