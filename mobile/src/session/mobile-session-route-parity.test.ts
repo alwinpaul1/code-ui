@@ -225,7 +225,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // callbacks; the bodies of readFileTab and handleCloseSessionTab moved. And (#24759) showToast skips a
 // disposed owner. And (#24655 follow-up) a read claims its path in the file-tab read cache, and an
 // accepted file-tab close forgets it.
-const HEAD_CALLBACK_BODY_SHA256 = '88e43e41494f53dd08ae3b61e48409840f3094d6e36b90a817ac75b3816367d2'
+// 2026-10-08: the terminal subscribe's stream handler holds each attach snapshot for the
+// startup-frame reader (noteAttachSnapshot), above its return for a covered handle. Only
+// that body moved. Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '5e5e0f9f137c307f2d7cf3b70d7e818b2eca78585d78b8451fba27f356889a5f'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23

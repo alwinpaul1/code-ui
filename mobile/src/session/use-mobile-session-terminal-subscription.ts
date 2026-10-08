@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { isTerminalOscLinkRanges } from '../../../src/shared/terminal-osc-link-ranges'
 import { consumeAgentHudBeacons } from './agent-hud-beacon'
+import { noteAttachSnapshot } from './claude-startup-frame-snapshot'
 import { noteAgentHudBeaconListening } from './agent-hud-beacon-liveness'
 import * as nativeChatTerminalStream from './mobile-native-chat-terminal-stream'
 import { subscribeMobileTerminalSafely } from './mobile-terminal-stream-subscribe'
@@ -139,6 +140,8 @@ export function useMobileSessionTerminalSubscription(
             // The program painted, so it is reading: wheel rows may follow.
             noteTerminalOutput(handle, chunk)
           }
+          // Why above the covered return: chat is when the pill reads a scrolled-off banner from it.
+          noteAttachSnapshot(handle, data)
           // Why: keep the subscription as the input-floor lease but don't mutate covered xterm state; return-to-terminal resubscribes.
           if (
             nativeChatTerminalStream.isTerminalCoveredByNativeChat(

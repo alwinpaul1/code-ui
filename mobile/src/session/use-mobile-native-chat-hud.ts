@@ -1,4 +1,4 @@
-import { useEffect, type MutableRefObject } from 'react'
+import { useEffect, useSyncExternalStore, type MutableRefObject } from 'react'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { useAgentHudBeacon, type AgentHudBeacon } from './agent-hud-beacon'
@@ -16,6 +16,12 @@ import { useHostAccountsSnapshot } from './use-host-rate-limits'
 import { useMobileTerminalHudObservation } from './use-mobile-terminal-hud-observation'
 import { useStickyLiveHud } from './use-sticky-live-hud'
 import { fileStartupFrame } from './claude-startup-frame-pair'
+import {
+  attachSnapshotVersion,
+  startupFrameFromAttachSnapshot,
+  subscribeAttachSnapshots,
+  takeAttachSnapshot
+} from './claude-startup-frame-snapshot'
 
 export type NativeChatHudPhase = BeaconPhase
 
@@ -110,6 +116,21 @@ export function useMobileNativeChatHud(args: {
   // Read at render: a new beacon re-renders through the store, and a handle
   // swap re-renders through `scopeKey`, so the ref is never read stale here.
   const handle = args.handleRef.current
+  // The attach snapshot carries rows the screen no longer shows, the banner among them once
+  // the conversation has outgrown one screen. Read once a Claude tab's session is known, and
+  // filed by the same rule as a frame on screen (claude-startup-frame-snapshot.ts). A
+  // snapshot with no frame files nothing, so it never erases a pair.
+  const snapshotVersion = useSyncExternalStore(subscribeAttachSnapshots, attachSnapshotVersion)
+  useEffect(() => {
+    if (!args.enabled || args.agent !== 'claude' || args.sessionId === null || handle === null) {
+      return
+    }
+    const serialized = takeAttachSnapshot(handle)
+    const frame = serialized === null ? null : startupFrameFromAttachSnapshot(serialized)
+    if (frame !== null) {
+      fileStartupFrame(args.scopeKey ?? 'no-scope', args.sessionId, frame)
+    }
+  }, [args.enabled, args.agent, args.scopeKey, args.sessionId, handle, snapshotVersion])
   const beacon = useAgentHudBeacon(handle)
   const painting = useAgentHudBeaconLiveness({ handle, listening: args.enabled, phase: args.phase, beacon })
   const liveBeacon =

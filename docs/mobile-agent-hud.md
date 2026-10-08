@@ -1096,11 +1096,15 @@ nothing.
   Terminal's smaller fallback mascot (its text column is not verified), and a
   fullscreen animation frame whose mascot is not the same nine columns.
 
-**Where it comes from.** One source, and one only: the screen poll that already
-runs while chat covers a terminal (`terminal.read --screen`,
-`use-mobile-terminal-hud-observation.ts`, `startupFrame`). It is the host's
-VISIBLE rows (`buildVisibleSnapshotReadFallback`, Orca `terminal-tail-read.ts`),
-so the frame is on it only until the conversation outgrows one screen.
+**Where it comes from.** Two reads of the same terminal, filed by one rule:
+- The screen poll that already runs while chat covers a terminal (`terminal.read
+  --screen`, `use-mobile-terminal-hud-observation.ts`, `startupFrame`). It is the
+  host's VISIBLE rows (`buildVisibleSnapshotReadFallback`, Orca
+  `terminal-tail-read.ts`), so the frame is on it only until the conversation
+  outgrows one screen.
+- The scrollback snapshot the phone receives when it attaches (2026-10-08,
+  `claude-startup-frame-snapshot.ts`), which still holds a banner that has
+  scrolled off. Below.
 - The pair is kept per session id and persisted with the other session caches
   (`claude-startup-frame-pair.ts`, `codeui:chat-startup-frame-pairs`, 32
   sessions), so a frame that scrolled off, a reconnect or a relaunch keep it.
@@ -1127,10 +1131,61 @@ so the frame is on it only until the conversation outgrows one screen.
   got the first run's pair filed under the new session id, and a correct pair
   could be overwritten and persisted. Nothing binds that buffer to a session, so
   the read is gone and `use-claude-transcript-model.ts` reads the host for
-  nothing here. The cost is that a tab first attached after its frame scrolled
-  off shows no figure from this tier.
-- The phone's own xterm buffer is not a source either: it holds the host's
-  snapshot at attach, which has not been measured, and chat pauses the stream.
+  nothing here. A tab first attached after its frame scrolled off gets it from
+  the attach snapshot instead, which is the buffer as drawn, newest frame read,
+  and filed by the same rule as the screen.
+- The phone's own xterm buffer is not a source: chat pauses the stream and a
+  covered tab has no pane. The snapshot it is built from is, below.
+
+**The attach snapshot (2026-10-08).** Every `terminal.subscribe` opens with
+`{ type: 'scrollback', serialized }` (and a phone-fit can send a `resized` that
+carries the full buffer again). The session's stream handler holds the newest one
+per terminal handle (`noteAttachSnapshot`), ABOVE its early return for a tab chat
+covers, because chat is when the pill matters. It holds it without reading it; the
+chat HUD (`use-mobile-native-chat-hud.ts`) reads it once, when the tab is `claude`
+(the same gate as the screen filing; openclaude is filed by neither) and its session
+id is known, then lets it go. A frame found is filed through `fileStartupFrame`, the
+same call the screen uses, so every rule above holds: the same frame under another
+session id is refused, a reconnect that resends the same snapshot files nothing new,
+and after a relaunch a first sight files normally. A snapshot with no frame files
+nothing, so it never erases a pair. An empty snapshot (a host mid-reflow) changes
+nothing.
+- What the snapshot is, read from Orca 1.4.222's bundle (`yj` in
+  `out/main/index.js`, `getSnapshot` in `out/main/chunks/daemon-cgroup-scope-*.js`,
+  the bundled and patched `@xterm/addon-serialize`): the host's headless xterm
+  serialized with `scrollback: 1000`, retried with 500, 250, 100, 25 and 0 rows
+  until it fits the 512 KiB budget. Rows are joined by `\r\n`; a soft-wrapped row
+  is joined to the next with nothing, so a row a phone-fitted host reflowed reads
+  whole again. Where the wrap falls on blank cells the serializer writes `-` over
+  them and erases them again (`ESC[1D ESC[1X`, then `ESC[A … ESC[<n>X … ESC[B`);
+  the reader draws that as the n blanks (found by review: unhandled, it lost the
+  effort at 15, 25 and 30 columns and the whole frame at 16, 18, 20 and 23; all
+  of 12 to 90 now read). A run of blank cells is `ESC[nC`, which the reader expands to spaces
+  so the column-11 rule still holds; SGR, OSC 8 links and the trailing cursor and
+  mode restores take no columns.
+- Only the rows that can matter are converted: rows that name `Claude` and read
+  `Claude Code v<digit>`, the rows from the oldest of those up to the `❯`, `⏺` or
+  `⎿` row above it (where the reader's upward walk stops, so a frame inside a reply
+  is still refused), and the three rows under the newest. A snapshot with no
+  `Claude` in it costs one substring search. Measured in Node on a 450 K-character
+  snapshot where 1000 rows name Claude: 2.6 ms; on 500 K characters with none:
+  0.01 ms. Not measured on Hermes.
+- A snapshot taken on the alternate screen is not read: Orca strips the
+  `ESC[?1049h` between the normal rows and the fullscreen ones and sends them run
+  together, so nothing marks where one ends. It also drops one held before it.
+- Claude Code 2.1.294 repaints its banner on `/clear` and on `/resume` (captured),
+  with the running process's model and effort, so the newest frame is the current
+  session's statement; the resumed conversation drawn under it, quotes and all, is
+  not read.
+
+**Its limit.** The headless emulator keeps 5000 rows, but the attach snapshot
+carries at most 1000 rows above the screen, and fewer when 1000 rows of a heavy
+conversation exceed 512 KiB. A banner older than that is not in the snapshot, and
+the pill then shows no effort from this tier. A banner older than the desktop's
+5000-row scrollback is gone from the desktop too. And Claude Code's fullscreen
+renderer (`"tui": "fullscreen"` in `~/.claude/settings.json`) paints into the
+alternate screen and leaves no scrollback at all, so a fullscreen session gets
+nothing from the snapshot; its banner is readable only while it is on screen.
 
 **What it is not.** It is the session's statement AT LAUNCH. A later `/model`,
 `/effort` or `/fast` row overrides it (tier 2), and a live beacon or badge
@@ -1144,10 +1199,16 @@ no effort): mixing a launch statement into a live pair is the "Opus Medium" bug.
 (`gap: 2`, the mascot's glyph spans, the three text rows), and that the effort
 suffix (` with ${level} effort`) is the same builder in 2.1.289 and 2.1.290.
 Proven from Orca's source: what Orca reads and what it sends to mobile. MODELLED,
-not captured: every frame in the tests
+not captured: every frame in the screen tests
 (`fixtures/claude-startup-frame-2.1.290-modelled.ts`). No live 2.1.290 frame has
 been captured; the text column (11) is derived from the glyph spans and the gap,
-and the mascot's width constant was not readable in the minified bundle. Not
+and the mascot's width constant was not readable in the minified bundle.
+CAPTURED (2026-10-08, Claude Code 2.1.294, classic renderer, 140x40 tmux pane):
+the attach-snapshot fixtures (`fixtures/claude-attach-snapshot-2.1.294-*.ansi`),
+the pane's raw bytes fed through Orca 1.4.222's own headless emulator and
+serializer. They confirm the text at column 11 on all three rows (` ▐▛███▛█   `,
+`▝▜██████▀  `, ` ▝▝   ▝▝   `), the ` with <level> effort` suffix, and a frame
+that states no effort at all (`Sonnet 5.5 · Claude Max`). Not
 proven: ConPTY redraws, the fullscreen layout, and the exact row wording on a
 real screen. Codex has no counterpart (its startup box is a different frame and
 its model comes from the footer and rollout), so nothing here reads it.
