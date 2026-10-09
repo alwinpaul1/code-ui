@@ -237,7 +237,7 @@ class NativeProseTextView(context: Context) : TextView(context) {
             !hasSelection() &&
             linkAt(event.x, event.y) == link
         if (tapped) {
-          onLinkPress(mapOf("link" to link))
+          pressLink(link)
           super.onTouchEvent(event)
           return true
         }
@@ -248,6 +248,11 @@ class NativeProseTextView(context: Context) : TextView(context) {
     // Not selectable, a TextView turns the down away, and the up of a tap on a link would never
     // come here.
     return handled || (event.actionMasked == MotionEvent.ACTION_DOWN && downLink >= 0)
+  }
+
+  /** Opens link [link] in the JavaScript: from a tap, or from TalkBack through ProseLinkSpan. */
+  fun pressLink(link: Int) {
+    onLinkPress(mapOf("link" to link))
   }
 
   private fun linkAt(x: Float, y: Float): Int {

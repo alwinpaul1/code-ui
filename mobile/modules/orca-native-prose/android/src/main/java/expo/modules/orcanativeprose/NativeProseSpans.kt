@@ -5,11 +5,11 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.text.Spanned
 import android.text.TextPaint
-import android.text.style.CharacterStyle
+import android.view.View
+import android.text.style.ClickableSpan
 import android.text.style.LineHeightSpan
 import android.text.style.MetricAffectingSpan
 import android.text.style.ReplacementSpan
-import android.text.style.UpdateAppearance
 import kotlin.math.ceil
 
 /**
@@ -113,8 +113,18 @@ internal class PillEdgeSpan(private val before: Float, private val after: Float)
   }
 }
 
-/** A link's words in the link colour, underlined, and which link they open. */
-internal class ProseLinkSpan(val link: Int, private val color: Int) : CharacterStyle(), UpdateAppearance {
+/**
+ * A link's words in the link colour, underlined, and which link they open.
+ *
+ * A ClickableSpan so TalkBack offers it: Android copies a TextView's ClickableSpans into its
+ * accessibility node, and TalkBack's Links menu opens one by calling [onClick]. A touch never
+ * reaches it (the view sets no LinkMovementMethod); NativeProseTextView finds a tap itself.
+ */
+internal class ProseLinkSpan(val link: Int, private val color: Int) : ClickableSpan() {
+  override fun onClick(widget: View) {
+    (widget as? NativeProseTextView)?.pressLink(link)
+  }
+
   override fun updateDrawState(paint: TextPaint) {
     paint.color = color
     paint.isUnderlineText = true
