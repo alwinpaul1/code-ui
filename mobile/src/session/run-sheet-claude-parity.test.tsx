@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
-import { darkColors, fontFamily, lightColors, type, type ThemeColors } from '../theme/tokens'
+import { darkColors, fontFamily, lightColors, space, type, type ThemeColors } from '../theme/tokens'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 
@@ -158,13 +159,78 @@ describe('the run sheet, the Claude app way', () => {
         expect((styleOf(row).minHeight as number) + slop.top + slop.bottom).toBeGreaterThanOrEqual(44)
       }
     })
+  })
 
-    it('sets the row text in the label size, a step under the body size it had', () => {
-      const tree = render()
-      const row = rowNodes(tree)[3]!
-      const label = textNodes(row).find((node) => node.props.numberOfLines === 1)!
-      expect(styleOf(label).fontSize).toBe(type.label.size)
-      expect(type.label.size).toBeLessThan(type.body.size)
+  // Measured on claude-sheet3.png at 2.57 px/dp (2026-10-09): the icon 27 dp
+  // from the sheet's edge and 16 wide, the verb 15 dp after it in the regular
+  // weight and the main colour, the detail 11 dp after the verb in the muted
+  // colour, the words at the transcript's prose size. Ours had the icon at 15,
+  // 18 wide, a bold verb and the detail in the secondary colour at the label
+  // size (13), which sat under the 15 prose above it.
+  describe.each(['light', 'dark'] as const)('the row geometry, in %s', (scheme) => {
+    const firstRow = (tree: ReactTestRenderer) => rowNodes(tree)[3]!
+    const words = (row: ReactTestInstance) => {
+      const verb = textNodes(row).find((node) => node.props.children === 'Ran')!
+      const detail = textNodes(row).find((node) => node.props.children === 'Snapshot the phase 3 draft')!
+      return { verb, detail }
+    }
+
+    it('puts the icon 27 dp from the sheet edge, 16 dp wide', () => {
+      const tree = render(scheme)
+      const content = tree.root.find((node) => node.props.testID === 'run-sheet')
+      // The drawer itself pads its content by space.md; the sheet adds the rest.
+      expect((styleOf(content).paddingLeft as number) + space.md).toBe(27)
+      const icon = firstRow(tree).find((node) => String(node.type) === 'SquareTerminal')
+      expect(icon.props.size).toBe(16)
+      expect(icon.props.color).toBe(own(scheme).textMuted)
+    })
+
+    it('keeps the connector centred under the icon', () => {
+      const tree = render(scheme)
+      const connectors = tree.root.findAll(
+        (node) => String(node.type) === 'View' && styleOf(node).width === 1 && styleOf(node).height === 10
+      )
+      // Six rows, five joints.
+      expect(connectors).toHaveLength(5)
+      // The line is 1 dp wide, so its left edge sits half a dp before the icon's centre.
+      expect((styleOf(connectors[0]!).marginLeft as number) + 0.5).toBe(8)
+      expect(styleOf(connectors[0]!).backgroundColor).toBe(own(scheme).border)
+    })
+
+    it('draws the verb in the regular weight and the main colour, 15 dp after the icon', () => {
+      const { verb } = words(firstRow(render(scheme)))
+      expect(styleOf(verb).fontFamily).toBe(fontFamily.regular)
+      expect(styleOf(verb).color).toBe(own(scheme).text)
+      expect(styleOf(verb).marginLeft).toBe(15)
+    })
+
+    it('draws the detail in the muted colour, 11 dp after the verb, on one line', () => {
+      const { detail } = words(firstRow(render(scheme)))
+      expect(styleOf(detail).color).toBe(own(scheme).textMuted)
+      expect(styleOf(detail).marginLeft).toBe(11)
+      expect(detail.props.numberOfLines).toBe(1)
+    })
+
+    it("sets the words at the transcript's prose size, which the label size sat under", () => {
+      const { verb, detail } = words(firstRow(render(scheme)))
+      for (const word of [verb, detail]) {
+        expect(styleOf(word).fontSize).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize)
+        expect(styleOf(word).lineHeight).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.lineHeight)
+      }
+      expect(type.label.size).toBeLessThan(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize)
+    })
+
+    it('lets a long detail take the ellipsis, never the verb', () => {
+      const { verb, detail } = words(firstRow(render(scheme)))
+      expect(styleOf(verb).flexShrink).toBe(0)
+      expect(styleOf(detail).flexShrink).toBe(1)
+    })
+
+    it('lets a verb with no detail shrink instead, so a long tool name is cut, not clipped', () => {
+      const tree = render(scheme)
+      const loaded = textNodes(rowNodes(tree)[2]!).find((node) => node.props.children === 'Loaded tools')!
+      expect(styleOf(loaded).flexShrink).toBe(1)
+      expect(loaded.props.numberOfLines).toBe(1)
     })
   })
 

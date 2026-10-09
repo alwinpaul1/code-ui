@@ -14,6 +14,7 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
@@ -76,7 +77,7 @@ export function MobileNativeChatRunSheet({
       expandable
       header={<MobileSheetTitleBar title={title} onClose={onClose} wrap />}
     >
-      <View style={{ paddingBottom: space.md }} testID="run-sheet">
+      <View style={{ paddingBottom: space.md, paddingLeft: ROW_ICON_INSET - space.md }} testID="run-sheet">
         {rows.map((row, index) => (
           <View key={index}>
             <RunSheetRowView
@@ -102,9 +103,28 @@ export function MobileNativeChatRunSheet({
   )
 }
 
+/** The rows' geometry, measured on the Claude app's sheet (claude-sheet3.png,
+ *  2026-10-09, 2.57 px/dp). From the sheet's edge to the icon 27 dp (the drawer
+ *  pads its content by `space.md`, the sheet adds the rest); the icon 16 wide;
+ *  15 to the verb, 11 from the verb to the detail. Ours had the icon at 15, 18
+ *  wide, with 12 between every part. */
+const ROW_ICON_INSET = 27
+const ROW_ICON_SIZE = 16
+const ROW_ICON_TO_VERB = 15
+const ROW_VERB_TO_DETAIL = 11
+/** The row's words are the transcript's prose size, as the Claude app's are
+ *  (its row glyphs measure the same as its transcript text). The label size
+ *  (13) these had sat under the 15 prose above the sheet. */
+const ROW_TEXT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose
+
 function RowConnector() {
   const { colors } = useTheme()
-  return <View style={{ width: 1, height: 10, marginLeft: 8.5, backgroundColor: colors.border }} />
+  // A 1 dp line centred under the icon.
+  return (
+    <View
+      style={{ width: 1, height: 10, marginLeft: ROW_ICON_SIZE / 2 - 0.5, backgroundColor: colors.border }}
+    />
+  )
 }
 
 /** Between two rows: a row 34 plus this 10 is the Claude app's 44 dp pitch
@@ -116,8 +136,7 @@ const ROW_HIT_SLOP = { top: 5, bottom: 5 } as const
 function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => void }) {
   const { colors, fonts, space, type } = useTheme()
   const Icon = row.glyph === 'toolbox' ? Briefcase : ICON_BY_KIND[row.kind]
-  // About 15% under the body size the rows had, the label step of the scale.
-  const size = type.label.size
+  const word = { fontSize: ROW_TEXT.fontSize, lineHeight: ROW_TEXT.lineHeight }
   // The Claude app marks a failed step with a warning triangle after its icon
   // and the verb in the danger colour. The row's spoken label still says it.
   const verbColor = row.failed ? colors.danger : colors.text
@@ -133,28 +152,49 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
-        gap: space.md,
         minHeight: ROW_HEIGHT,
         opacity: pressed ? 0.6 : 1
       })}
     >
-      <Icon size={18} color={colors.textMuted} />
-      {row.failed ? <TriangleAlert size={16} color={colors.danger} testID="run-sheet-row-failed" /> : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+        <Icon size={ROW_ICON_SIZE} color={colors.textMuted} />
+        {row.failed ? <TriangleAlert size={ROW_ICON_SIZE} color={colors.danger} testID="run-sheet-row-failed" /> : null}
+      </View>
+      {/* The verb keeps its width while a detail follows, so a long detail takes
+          the ellipsis; with none it is the one text and shrinks itself. */}
       <Text
-        style={{ flexShrink: 1, fontFamily: fonts.regular, fontSize: size, color: colors.textSecondary }}
+        style={{
+          ...word,
+          flexShrink: row.detail ? 0 : 1,
+          marginLeft: ROW_ICON_TO_VERB,
+          fontFamily: fonts.regular,
+          color: verbColor
+        }}
         numberOfLines={1}
       >
-        <Text style={{ fontFamily: fonts.medium, color: verbColor }}>{row.verb}</Text>
-        {row.detail ? (
-          <Text
-            style={[
-              row.detailIsKey ? { color: colors.textMuted } : undefined,
-              row.detailMono ? { fontFamily: fonts.mono, fontSize: type.mono.size } : undefined
-            ]}
-          >{`  ${row.detail}`}</Text>
-        ) : null}
+        {row.verb}
       </Text>
-      {row.diff ? <DiffPill stat={row.diff} fontFamily={fonts.mono} fontSize={type.caption.size} /> : null}
+      {row.detail ? (
+        <Text
+          style={{
+            ...word,
+            flexShrink: 1,
+            marginLeft: ROW_VERB_TO_DETAIL,
+            fontFamily: row.detailMono ? fonts.mono : fonts.regular,
+            // A file name is code: its own size, not the prose's.
+            ...(row.detailMono ? { fontSize: type.mono.size } : null),
+            color: colors.textMuted
+          }}
+          numberOfLines={1}
+        >
+          {row.detail}
+        </Text>
+      ) : null}
+      {row.diff ? (
+        <View style={{ marginLeft: space.sm }}>
+          <DiffPill stat={row.diff} fontFamily={fonts.mono} fontSize={type.caption.size} />
+        </View>
+      ) : null}
     </Pressable>
   )
 }

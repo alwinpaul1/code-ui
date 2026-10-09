@@ -217,7 +217,7 @@ describe('the conversation row for five agents launched at once', () => {
     expect(shown).toContain('Ran 5 agents')
     expect(shown.filter((text) => text === 'Ran agent')).toHaveLength(5)
     for (const agent of PARALLEL_AGENTS) {
-      expect(shown).toContain(`  ${agent.description}`)
+      expect(shown).toContain(agent.description)
     }
   })
 

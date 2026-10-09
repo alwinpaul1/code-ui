@@ -224,7 +224,7 @@ describe('the run sheet opened from the chat', () => {
       )
     )
     expect(rows()).toHaveLength(6)
-    expect(texts(tree)).toContain('  late.ts')
+    expect(texts(tree)).toContain('late.ts')
   })
 
   // The screenshot's own sequence: commands first, then an Agent. The run's row
