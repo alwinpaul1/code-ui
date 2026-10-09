@@ -30,7 +30,15 @@ export type NativeChatAgentRunInputs = {
  *  id this call launched; a guess would open another agent's transcript. */
 export type NativeChatAgentRunEntry = { title: string; agentId: string | null }
 
-export type NativeChatAgentRunState = { running: boolean; entries: NativeChatAgentRunEntry[] }
+export type NativeChatAgentRunState = {
+  running: boolean
+  entries: NativeChatAgentRunEntry[]
+  /** What the collapsed row names while the run works, the way the Claude app's
+   *  reads "Running agent: Review: story flow" (2026-10-09): the first agent of
+   *  the run that is known to still run, else the last one launched. Null where
+   *  the run's agents name nothing (a call with no description, name or type). */
+  subject: string | null
+}
 
 /** Claude Code's own names for the tool that launches a subagent. */
 const AGENT_TOOLS = new Set(['Agent', 'Task'])
@@ -54,6 +62,11 @@ export function isAgentOnlyRun(blocks: readonly NativeChatBlock[]): boolean {
     }
   }
   return calls > 0
+}
+
+/** The collapsed row's words while an agent of the run still works. */
+export function runningAgentText(subject: string | null): string {
+  return subject ? `Running agent: ${subject}` : 'Running agent'
 }
 
 /** The agents of a run, read over the WHOLE run: the Agent/Task calls are the
@@ -89,7 +102,7 @@ export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
 ): NativeChatAgentRunState {
-  const calls: { title: string; description: string | null; live: boolean }[] = []
+  const calls: { title: string; description: string | null; live: boolean; named: boolean }[] = []
   const launched: string[] = []
   for (const block of blocks) {
     if (isToolCallBlock(block)) {
@@ -100,7 +113,8 @@ export function agentRunState(
       calls.push({
         title: agentTitle(block.input),
         description: description ? foldWhitespace(description) : null,
-        live: block.state === 'running'
+        live: block.state === 'running',
+        named: readString(block.input, 'name') !== null || readString(block.input, 'subagent_type') !== null || description !== null
       })
     } else if (isToolResultBlock(block)) {
       const id = readLaunch({ name: 'Agent', input: null, startedAt: null }, block.output)?.id
@@ -120,5 +134,9 @@ export function agentRunState(
       launched.find((id) => call.description !== null && inputs.confirmed.get(id) === call.description) ??
       (calls.length === 1 && launched.length === 1 ? launched[0]! : null)
   }))
-  return { running, entries }
+  const stillRunning = calls.findIndex(
+    (call, index) => call.live || (entries[index]!.agentId !== null && inputs.runningIds.has(entries[index]!.agentId!))
+  )
+  const subjectCall = calls[stillRunning !== -1 ? stillRunning : calls.length - 1]
+  return { running, entries, subject: subjectCall?.named ? subjectCall.title : null }
 }

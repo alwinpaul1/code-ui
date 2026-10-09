@@ -172,9 +172,11 @@ describe('the conversation row for five agents launched at once', () => {
     await act(async () => target.props.onPress())
   }
 
-  it('reads "Running agent" while any of them runs, not "Ran 5 agents"', async () => {
+  // 2026-10-09, the Claude app: "Running agent: Review: story flow ›", the
+  // agent it names, not a bare "Running agent".
+  it('reads "Running agent: <the agent that runs>" while any of them runs, not "Ran 5 agents"', async () => {
     const tree = await render({ status: statusWith([PARALLEL_AGENTS[2]]), agentWorking: false })
-    expect(labelText(tree)).toBe('Running agent')
+    expect(labelText(tree)).toBe(`Running agent: ${PARALLEL_AGENTS[2].description}`)
     expect(texts(tree)).not.toContain('Ran 5 agents')
   })
 
@@ -191,7 +193,7 @@ describe('the conversation row for five agents launched at once', () => {
     )
     expect(row.findAll((node) => opacityOf(node.props.style) !== undefined)).toEqual([])
     // The label is drawn a glyph at a time, each one coloured by the sweep.
-    expect(glyphsOf(tree).join('')).toBe('Running agent')
+    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${PARALLEL_AGENTS[2].description}`)
   })
 
   it('draws "Ran 5 agents" whole, with nothing left sweeping, once they have all reported', async () => {

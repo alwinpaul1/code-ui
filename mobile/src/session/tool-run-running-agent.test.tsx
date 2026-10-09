@@ -9,6 +9,7 @@ import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ToolRun } from './MobileNativeChatToolRun'
 import { NativeChatAgentRunsContext, type NativeChatAgentRuns } from './native-chat-tasks-context'
 import {
+  MIXED_RUN_AGENT_DESCRIPTION,
   MIXED_RUN_AGENT_ID,
   mixedRunWithBackgroundAgent
 } from './fixtures/claude-mixed-tool-run-agent-2026-10-01'
@@ -132,8 +133,30 @@ describe('a mixed run whose background agent is still running', () => {
 
   const agentLabel = (tree: ReactTestRenderer) => tree.root.find(isLabel)
 
-  it("reads Running agent while a mixed run's background agent still runs", () => {
+  // 2026-10-09, same session side by side: the Claude app's row reads "Running
+  // agent: Review: story flow ›". Ours read "Running agent  2 failed  +32 −0 ›".
+  it("reads Running agent and the agent it names while a mixed run's background agent still runs", () => {
     const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+    expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+  })
+
+  it('names the first agent that still runs, not one that has reported', () => {
+    const blocks: NativeChatBlock[] = [
+      ...mixedRunWithBackgroundAgent().slice(0, 2),
+      { type: 'tool-call', name: 'Agent', input: { description: 'Review: story flow', prompt: 'p' }, state: 'running' },
+      { type: 'tool-call', name: 'Agent', input: { description: 'Review: integrity', prompt: 'p' }, state: 'running' }
+    ]
+    const tree = render({ blocks, agentRuns: { ...RUNNING, runningIds: new Set() } })
+    expect(headerText(tree)).toBe('Running agent: Review: story flow')
+  })
+
+  it("says only Running agent when the run's agents name nothing", () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' },
+      { type: 'tool-result', output: 'x' },
+      { type: 'tool-call', name: 'Agent', input: { prompt: 'p' }, state: 'running' }
+    ]
+    const tree = render({ blocks, agentRuns: { ...RUNNING, runningIds: new Set() } })
     expect(headerText(tree)).toBe('Running agent')
   })
 
@@ -181,20 +204,12 @@ describe('a mixed run whose background agent is still running', () => {
       { type: 'tool-result', output: '# Notes' }
     ]
     const tree = render({ blocks, agentRuns: RUNNING })
-    expect(headerText(tree)).toBe('Running agent')
+    expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
   })
 
-  it('keeps a failed command visible on the Running agent row', () => {
-    const blocks = mixedRunWithBackgroundAgent()
-    const at = blocks.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')
-    blocks[at] = { type: 'tool-result', output: 'ssh: timed out', isError: true }
-    const tree = render({ blocks, agentRuns: RUNNING })
-    expect(headerText(tree)).toBe('Running agent1 failed')
-  })
-
-  // Review of feat/tool-run-sheet: the row's accessibilityLabel replaces its
-  // children for a screen reader, which dropped the failure and the chip.
-  it('announces the failure and the line count, not only Running agent', () => {
+  // The failure count and the +A −R pill stay in the sheet (its title and its
+  // file rows); the collapsed row says what is running and nothing else.
+  it('leaves the failed count and the line-count pill off the Running agent row', () => {
     const blocks = mixedRunWithBackgroundAgent()
     const at = blocks.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')
     blocks[at] = { type: 'tool-result', output: 'ssh: timed out', isError: true }
@@ -203,10 +218,26 @@ describe('a mixed run whose background agent is still running', () => {
       { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
     )
     const tree = render({ blocks, agentRuns: RUNNING })
-    const label = String(tree.root.findByProps({ testID: 'tool-run-header' }).props.accessibilityLabel)
-    expect(label).toContain('Running agent')
-    expect(label).toContain('1 failed')
-    expect(label).toContain('2 lines added')
+    expect(headerText(tree)).toBe(`Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`)
+    expect(tree.root.findAllByProps({ testID: 'tool-run-failed-count' })).toHaveLength(0)
+    expect(tree.root.findAllByProps({ testID: 'tool-run-diff-chip' })).toHaveLength(0)
+  })
+
+  it('keeps the pill on the finished row, where the sentence says what ran', () => {
+    const blocks = mixedRunWithBackgroundAgent()
+    blocks.push(
+      { type: 'tool-call', name: 'Write', input: { file_path: '/repo/NEW.md', content: 'x\ny\n' } },
+      { type: 'tool-result', output: 'File created successfully at: /repo/NEW.md' }
+    )
+    const tree = render({ blocks, agentRuns: REPORTED })
+    expect(tree.root.findAllByProps({ testID: 'tool-run-diff-chip' })).not.toHaveLength(0)
+  })
+
+  it('announces the agent it names, as the row says it', () => {
+    const tree = render({ blocks: mixedRunWithBackgroundAgent(), agentRuns: RUNNING })
+    expect(tree.root.findByProps({ testID: 'tool-run-header' }).props.accessibilityLabel).toBe(
+      `Running agent: ${MIXED_RUN_AGENT_DESCRIPTION}`
+    )
   })
 
   it('says only the count in focus view, where the row never names what ran', () => {

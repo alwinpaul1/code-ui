@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { agentRunState, isAgentOnlyRun } from './mobile-native-chat-agent-run'
+import { agentRunState, isAgentOnlyRun, runningAgentText } from './mobile-native-chat-agent-run'
 import { deriveBackgroundTasks } from './mobile-background-tasks'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
@@ -185,5 +185,46 @@ describe('an unanswered call that is not an agent', () => {
   it('counts a launch that landed in another call\'s slot as the agent\'s answer', () => {
     const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } }, agentCall!, launch!]
     expect(agentRunState(blocks, idle).running).toBe(false)
+  })
+})
+
+// 2026-10-09: the Claude app's collapsed row names the agent, "Running agent:
+// Review: story flow". Three reviewers ran side by side and it named the first.
+describe('the agent the collapsed row names', () => {
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
+  const call = (input: unknown, state: 'running' | 'completed'): NativeChatBlock => ({
+    type: 'tool-call',
+    name: 'Agent',
+    input,
+    state
+  })
+
+  it('is the first agent that still runs, by its launch id', () => {
+    const { subject } = agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[3].agentId, PARALLEL_AGENTS[4].agentId]))
+    expect(subject).toBe(PARALLEL_AGENTS[3].description)
+  })
+
+  it('is the first agent whose call is still live, when no launch id says so', () => {
+    const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'running'), call({ description: 'three' }, 'running')]
+    expect(agentRunState(blocks, idle).subject).toBe('two')
+  })
+
+  it('falls back to the last agent launched when none is known to run on its own', () => {
+    const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'completed')]
+    expect(agentRunState(blocks, { ...idle, agentWorking: true }).subject).toBe('two')
+  })
+
+  it('is the one agent of a run of one', () => {
+    expect(agentRunState([call({ description: 'only' }, 'running')], idle).subject).toBe('only')
+  })
+
+  it('is null for a run with no agent, and for an agent that names nothing', () => {
+    expect(agentRunState([], idle).subject).toBeNull()
+    expect(agentRunState([call({ prompt: 'p' }, 'running')], idle).subject).toBeNull()
+  })
+
+  it('reads as the bare label with no subject, and with one as "Running agent: <subject>"', () => {
+    expect(runningAgentText(null)).toBe('Running agent')
+    expect(runningAgentText('Review: story flow')).toBe('Running agent: Review: story flow')
   })
 })

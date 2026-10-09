@@ -34,7 +34,7 @@ import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
-import { agentRunState, isAgentToolName } from './mobile-native-chat-agent-run'
+import { agentRunState, isAgentToolName, runningAgentText } from './mobile-native-chat-agent-run'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
@@ -66,9 +66,9 @@ function RunningAgentGate({
 }: {
   blocks: NativeChatBlock[]
   enabled: boolean
-  children: (runningAgent: boolean) => React.ReactNode
+  children: (runningAgent: boolean, subject: string | null) => React.ReactNode
 }) {
-  return enabled ? <ReadsAgents blocks={blocks}>{children}</ReadsAgents> : <>{children(false)}</>
+  return enabled ? <ReadsAgents blocks={blocks}>{children}</ReadsAgents> : <>{children(false, null)}</>
 }
 
 function ReadsAgents({
@@ -76,11 +76,11 @@ function ReadsAgents({
   children
 }: {
   blocks: NativeChatBlock[]
-  children: (runningAgent: boolean) => React.ReactNode
+  children: (runningAgent: boolean, subject: string | null) => React.ReactNode
 }) {
   const agentRuns = useNativeChatAgentRuns()
-  const running = useMemo(() => agentRunState(blocks, agentRuns).running, [blocks, agentRuns])
-  return <>{children(running)}</>
+  const state = useMemo(() => agentRunState(blocks, agentRuns), [blocks, agentRuns])
+  return <>{children(state.running, state.subject)}</>
 }
 
 type ToolRunProps = {
@@ -264,7 +264,7 @@ function ToolRunView({
   return (
     <View style={styles.toolRun}>
       <RunningAgentGate blocks={blocks} enabled={hasAgentCall}>
-        {(runningAgent) => {
+        {(runningAgent, agentSubject) => {
           const sentenceStatesFailures = !runningAgent && sentenceShowsFailures
           return (
       <View style={styles.toolRunHeader}>
@@ -299,17 +299,17 @@ function ToolRunView({
           hitSlop={6}
           accessibilityRole="button"
           accessibilityState={{ expanded: open }}
-          accessibilityLabel={runningAgent ? runningAgentLabel(failedCallCount, diffStat) : undefined}
+          accessibilityLabel={runningAgent ? runningAgentText(agentSubject) : undefined}
           accessibilityLiveRegion={runningAgent ? 'polite' : undefined}
         >
           {runningAgent ? (
             <>
               <AgentRunGlyph color={colors.textMuted} />
               <ShimmerText
-                text="Running agent"
+                text={runningAgentText(agentSubject)}
                 active
                 color={colors.textSecondary}
-                style={[styles.toolRunLabel, { flex: 0 }]}
+                style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
                 numberOfLines={1}
                 testID="tool-run-agent-label"
               />
@@ -327,7 +327,7 @@ function ToolRunView({
               {planPreview}
             </Text>
           ) : null}
-          {failedCallCount > 0 && !sentenceStatesFailures ? (
+          {failedCallCount > 0 && !sentenceStatesFailures && !runningAgent ? (
             <Text
               testID="tool-run-failed-count"
               accessibilityLabel={`Failed tool calls: ${failedCallCount}`}
@@ -337,7 +337,7 @@ function ToolRunView({
               {`${failedCallCount} failed`}
             </Text>
           ) : null}
-          {diffStat ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
+          {diffStat && !runningAgent ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
           <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
         {trailing}
@@ -381,20 +381,4 @@ function ToolRunView({
       </View>
     )
   }
-}
-
-const lines = (n: number): string => `${n} line${n === 1 ? '' : 's'}`
-
-/** What a screen reader hears for the Running agent row. The label stands in for
- *  the row's children, so what the row also shows (the failure count and the
- *  "+A −R" pill) is said in it. */
-function runningAgentLabel(failedCallCount: number, diffStat: { added: number; removed: number } | null): string {
-  const parts = ['Running agent']
-  if (failedCallCount > 0) {
-    parts.push(`${failedCallCount} failed`)
-  }
-  if (diffStat) {
-    parts.push(`${lines(diffStat.added)} added`, `${lines(diffStat.removed)} removed`)
-  }
-  return parts.join(', ')
 }
