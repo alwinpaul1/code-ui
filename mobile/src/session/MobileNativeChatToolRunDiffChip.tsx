@@ -34,12 +34,29 @@ export function ToolRunDiffChip({
   stat: NativeChatToolRunDiffStat
   styles: ChatMessageStyles
 }): React.JSX.Element {
-  const { colors } = useTheme()
   const sentenceSize = styles.toolRunLabel.fontSize ?? 13
-  const type = {
-    fontFamily: styles.toolRunLabel.fontFamily,
-    fontSize: Math.round(sentenceSize * DIFF_PILL_TYPE_SCALE)
-  }
+  return (
+    <DiffPill
+      stat={stat}
+      fontFamily={styles.toolRunLabel.fontFamily}
+      fontSize={Math.round(sentenceSize * DIFF_PILL_TYPE_SCALE)}
+    />
+  )
+}
+
+/** The pill itself, at the type size and face its caller sets: the run sheet's
+ *  file rows draw it beside a file name, as the Claude app does. */
+export function DiffPill({
+  stat,
+  fontFamily,
+  fontSize
+}: {
+  stat: NativeChatToolRunDiffStat
+  fontFamily: string | undefined
+  fontSize: number
+}): React.JSX.Element {
+  const { colors } = useTheme()
+  const type = { fontFamily, fontSize }
   return (
     <View testID="tool-run-diff-chip" style={pill.pill}>
       <Text

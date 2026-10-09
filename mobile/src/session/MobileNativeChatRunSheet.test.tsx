@@ -24,7 +24,7 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () =>
   Object.fromEntries(
-    ['Eye', 'Globe', 'ListTodo', 'MessageSquare', 'Pencil', 'Search', 'Sparkles', 'SquareTerminal', 'Wrench', 'X'].map(
+    ['Briefcase', 'Eye', 'FileText', 'Globe', 'ListTodo', 'MessageSquare', 'Search', 'Sparkles', 'SquareTerminal', 'TriangleAlert', 'Wrench', 'X'].map(
       (name) => [name, name]
     )
   )
@@ -152,12 +152,12 @@ describe('the sheet behind a run of CronDelete, three commands and an agent', ()
     expect(rowNodes(tree).slice(0, 4).every((node) => node.props.disabled !== true)).toBe(true)
   })
 
-  it('says Failed on a failed call, in the danger tone, and nowhere else', () => {
+  it('marks a failed call with a warning triangle in the danger tone, and no other row', () => {
     const failed = mixedRunWithBackgroundAgent()
     const at = failed.findIndex((block) => block.type === 'tool-result' && block.output === 'cancelled 2 jobs')
     failed[at] = { type: 'tool-result', output: 'ssh: timed out', isError: true }
     const { tree } = render({ rows: runSheetRows(failed, []) })
-    const marks = tree.root.findAll((node) => node.props.testID === 'run-sheet-row-failed' && String(node.type) === 'Text')
+    const marks = tree.root.findAll((node) => node.props.testID === 'run-sheet-row-failed')
     expect(marks).toHaveLength(1)
     // A screen reader hears the row's label, not its children.
     const labels = rowNodes(tree).map((node) => String(node.props.accessibilityLabel))

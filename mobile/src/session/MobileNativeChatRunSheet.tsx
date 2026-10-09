@@ -1,13 +1,15 @@
 import { Pressable, Text, View } from 'react-native'
 import {
+  Briefcase,
   Eye,
+  FileText,
   Globe,
   ListTodo,
   MessageSquare,
-  Pencil,
   Search,
   Sparkles,
   SquareTerminal,
+  TriangleAlert,
   Wrench,
   type LucideIcon
 } from 'lucide-react-native'
@@ -16,13 +18,14 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import type { RunSheetRow } from './mobile-native-chat-run-sheet-rows'
+import { DiffPill } from './MobileNativeChatToolRunDiffChip'
 import type { ToolRunKind } from './mobile-native-chat-tool-kind'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 
 const ICON_BY_KIND: Record<ToolRunKind, LucideIcon> = {
   command: SquareTerminal,
   read: Eye,
-  edit: Pencil,
+  edit: FileText,
   search: Search,
   agent: ListTodo,
   web: Globe,
@@ -71,7 +74,7 @@ export function MobileNativeChatRunSheet({
       dragContentToDismiss
       dismissKeyboardOnOpen
       expandable
-      header={<MobileSheetTitleBar title={title} onClose={onClose} />}
+      header={<MobileSheetTitleBar title={title} onClose={onClose} wrap />}
     >
       <View style={{ paddingBottom: space.md }} testID="run-sheet">
         {rows.map((row, index) => (
@@ -104,9 +107,20 @@ function RowConnector() {
   return <View style={{ width: 1, height: 10, marginLeft: 8.5, backgroundColor: colors.border }} />
 }
 
+/** Between two rows: a row 34 plus this 10 is the Claude app's 44 dp pitch
+ *  (114 px at 2.57 px/dp, 2026-10-09 screenshots); ours was 56. A row stays
+ *  tappable at 44 through the slop its hit area gets above and below. */
+const ROW_HEIGHT = 34
+const ROW_HIT_SLOP = { top: 5, bottom: 5 } as const
+
 function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => void }) {
   const { colors, fonts, space, type } = useTheme()
-  const Icon = ICON_BY_KIND[row.kind]
+  const Icon = row.glyph === 'toolbox' ? Briefcase : ICON_BY_KIND[row.kind]
+  // About 15% under the body size the rows had, the label step of the scale.
+  const size = type.label.size
+  // The Claude app marks a failed step with a warning triangle after its icon
+  // and the verb in the danger colour. The row's spoken label still says it.
+  const verbColor = row.failed ? colors.danger : colors.text
   return (
     <Pressable
       accessibilityRole={row.opens ? 'button' : undefined}
@@ -115,29 +129,32 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
       accessibilityHint={row.opens ? (row.agentId ? 'Shows what this agent did' : 'Shows this call') : undefined}
       testID="run-sheet-row"
       onPress={row.opens ? onPress : undefined}
+      hitSlop={ROW_HIT_SLOP}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.md,
-        minHeight: 44,
+        minHeight: ROW_HEIGHT,
         opacity: pressed ? 0.6 : 1
       })}
     >
       <Icon size={18} color={colors.textMuted} />
+      {row.failed ? <TriangleAlert size={16} color={colors.danger} testID="run-sheet-row-failed" /> : null}
       <Text
-        style={{ flex: 1, fontFamily: fonts.regular, fontSize: type.body.size, color: colors.textSecondary }}
+        style={{ flexShrink: 1, fontFamily: fonts.regular, fontSize: size, color: colors.textSecondary }}
         numberOfLines={1}
       >
-        <Text style={{ fontFamily: fonts.medium, color: colors.text }}>{row.verb}</Text>
+        <Text style={{ fontFamily: fonts.medium, color: verbColor }}>{row.verb}</Text>
         {row.detail ? (
-          <Text style={row.detailIsKey ? { color: colors.textMuted } : undefined}>{`  ${row.detail}`}</Text>
+          <Text
+            style={[
+              row.detailIsKey ? { color: colors.textMuted } : undefined,
+              row.detailMono ? { fontFamily: fonts.mono, fontSize: type.mono.size } : undefined
+            ]}
+          >{`  ${row.detail}`}</Text>
         ) : null}
       </Text>
-      {row.failed ? (
-        <Txt variant="label" tone="danger" testID="run-sheet-row-failed">
-          Failed
-        </Txt>
-      ) : null}
+      {row.diff ? <DiffPill stat={row.diff} fontFamily={fonts.mono} fontSize={type.caption.size} /> : null}
     </Pressable>
   )
 }

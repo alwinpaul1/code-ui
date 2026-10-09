@@ -41,7 +41,7 @@ vi.mock('lucide-react-native', () =>
     [
       'ChevronDown', 'ChevronRight', 'Copy', 'Image', 'ListTodo', 'Eye', 'Globe', 'MessageSquare', 'Pencil',
       'Search', 'SquareChevronRight', 'SquareTerminal', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle',
-      'AlertTriangle', 'Info', 'ArrowUp'
+      'AlertTriangle', 'Info', 'ArrowUp', 'Briefcase', 'FileText', 'TriangleAlert'
     ].map((name) => [name, name])
   )
 )
