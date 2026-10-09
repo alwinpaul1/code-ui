@@ -1575,9 +1575,11 @@ added up, each fixed with its own failing-first test:
   waited for the host again. The reading per session (host id, model id, name,
   `freshAsOf`) is now kept in `codeui:chat-transcript-models` (32 sessions,
   `createPersistedMap`, hydrated in `session-caches-hydrate.ts`) and stated by
-  `peekClaudeTranscriptModel` until a scan of that host succeeds in this run;
-  from then the scan alone answers, so a scan that does not list the session
-  says nothing about it. It is the SOURCE reading, not the pill: every tier
+  `peekClaudeTranscriptModel` until a scan that LISTS the session replaces it
+  (a listed row with no Claude model clears it). A scan that does not list the
+  session says nothing about it: each scan asks for one folder and 20 rows, so
+  a scan of another project on the same host, after which the per-host budget
+  holds this chat's own scan back, must not blank it (review). It is the SOURCE reading, not the pill: every tier
   above it is laid over it as before, and it keeps its real `freshAsOf`, so a
   reply newer than it still supersedes it. A malformed or unreadable store
   starts empty and the scan still runs. The persisted spinner effort
@@ -1586,7 +1588,14 @@ added up, each fixed with its own failing-first test:
 - **The settle was 8 s for every tab.** It exists so a tab that is about to
   beacon never costs a scan, but a tab typed in by hand (no `launchAgent`) and
   any tab on a Windows host (`hostTakesAgentHudFlag` false) can never beacon.
-  Those now scan at once, unforced, inside the same five-minute budget. A tab
+  Those now scan, unforced, inside the same five-minute budget, as soon as the
+  chat's first screen read lands with no badge on it (`screenRead`: the HUD's
+  task completions, null until that read), or after the settle if no read ever
+  lands. Not before that read: the first cut asked on the first render, and
+  the review found that the scan it wasted on a tab whose badge was about to
+  speak throttled a badge-less chat in another project on the same host (the
+  budget is per host, the scan per folder), whose unforced, throttled scan is
+  never asked again. A tab
   launched as Claude on a host that is not Windows, or has not said what it
   runs on (an unknown platform may be any host), waits 5.5 s: one 5 s
   status-line beat and slack (`CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS`). The
@@ -1606,13 +1615,21 @@ added up, each fixed with its own failing-first test:
   now retried once after 1 s (`HUD_FIRST_READ_RETRY_MS`); a host that stays
   down is read at the poll's cadence after that, never in a loop.
 
+- **A command was timed against a written-off beacon (review, found while
+  doing the above).** `beaconStoredAt`, the time a model command must be newer
+  than to outrank the live pair, came from the session-matched beacon. With a
+  dead beacon and a badge on the user's own status line naming the same model,
+  a `/model` row first seen after that beacon outranked the badge, and since an
+  alt+p switch back writes no row and a dead process never beacons again, the
+  pill kept the command's model for good. It now comes from `liveBeacon`.
+
 Not changed: a tab with nothing kept for its session (first view on this
 device, a hand-typed session that has not answered yet) still shows nothing
-until the scan answers, which is now at once on such a tab. Seen while doing
-this and not fixed (read from the code, not proven by a test):
-`beaconStoredAt` is still taken from the session-matched beacon rather than the
-liveness-checked one, so with a written-off beacon and a badge stating the same
-model, a command row first seen after that dead beacon may outrank the badge.
+until the scan answers. Still open: the budget is per host while each scan is
+per folder, so two badge-less chats in different projects on one host within
+five minutes leave the second waiting for its own scan (an unforced scan the
+budget holds back is not deferred); the remembered reading covers it only for
+a session read before.
 
 ### Tests must never reach a real terminal (2026-10-06)
 
