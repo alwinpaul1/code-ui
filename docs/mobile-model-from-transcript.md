@@ -38,20 +38,21 @@ also keeps only one cache slot (`cached-session-list.ts`). So the phone uses it
 under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
 `use-claude-transcript-model.ts`):
 
-- **When it runs:** only for a Claude chat on the terminal lane with no live
-  beacon naming a model and no badge. A tab that may still beacon (launched as
-  Claude, on a host that is not Windows or has not said) waits 5.5 s for one:
-  one 5 s status-line beat and slack. A tab typed in by hand and a Windows host
-  can never beacon, so they ask, unforced, as soon as the chat's first screen
-  read lands with no badge on it, or after the settle if none lands (2026-10-09;
-  it was 8 s for every tab). The last reading per session is also kept on the phone
+- **When it runs:** for a Claude chat on the terminal lane with no live
+  beacon naming a model and no badge, the moment it opens, on every host. There
+  is no settle any more (2026-10-09; it was 8 s for every tab, then 5.5 s): a
+  beacon or a badge that speaks later replaces the reading. The session screen
+  also warms the scan for a project whose cached tabs hold a Claude tab, before
+  any chat opens. The last reading per session is kept on the phone
   (`codeui:chat-transcript-models`), so a relaunch shows it before asking; it
   stands until a scan that lists the session replaces it.
 - **Triggers:** it asks the host when the chat opens (and again on a new
   connection), when the user opens the model sheet, and at the end of the
   first turn that began after the phone itself changed the model. It never
   asks on every turn end.
-- **Budget:** at most one attempt per host per five minutes, except the one
+- **Budget:** at most one attempt per host and project folder per five
+  minutes, and at most four per host across its folders in any five minutes
+  (a scan held by that cap runs by itself once the host has room), except the one
   retry after a failure (below). It sends
   `limit: 20` and the history screen's own workspace `scopePaths`, so the two
   share the host's cache. Every call uses `force: false` except the one that
