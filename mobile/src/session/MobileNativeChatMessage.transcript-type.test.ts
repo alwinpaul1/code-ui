@@ -6,7 +6,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 // 2026-10-09, the user, beside the Claude app's transcript: "we can't see most
 // of the content ... we need the same for ours, transcript and code, others
 // stay the same". Every row of the transcript that draws Markdown takes the
-// transcript's type, the sent prompt's bubble drops to the same 14 on 21, and
+// transcript's type, the sent prompt's bubble takes the same size (14 on 21 then, 15 on 22 since the
+// Claude app was measured again the same day), and
 // the tool detail sheet, a sheet and not the transcript, keeps its own.
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -183,10 +184,10 @@ describe('the chat transcript’s type', () => {
     expect(typography.blockGap).toBeNull()
   })
 
-  it('sets a sent prompt at 14 on 21, as the replies around it', () => {
+  it('sets a sent prompt at 15 on 22, as the replies around it', () => {
     render(createElement(MobileNativeChatMessage, { message: { ...reply, id: 'u1', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] } }))
     const words = byType('Text').find((node) => node.children.includes('ship it'))!
-    expect(flat(words.props.style)).toMatchObject({ fontSize: 14, lineHeight: 21 })
+    expect(flat(words.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22 })
   })
 
   it.each(['light', 'dark'] as const)('keeps the sent prompt’s colours on the theme tokens in %s', (scheme) => {
@@ -194,6 +195,6 @@ describe('the chat transcript’s type', () => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     expect(styles.userText.color).toBe(colors.userBubbleText)
     expect(styles.userBubble.backgroundColor).toBe(colors.userBubble)
-    expect(styles.userText).toMatchObject({ fontSize: 14, lineHeight: 21 })
+    expect(styles.userText).toMatchObject({ fontSize: 15, lineHeight: 22 })
   })
 })

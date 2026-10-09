@@ -153,12 +153,12 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
 }
 
 /**
- * The chat transcript, as the Claude app sets it at its "Small" transcript
- * size (two screenshots on the same phone, 2026-10-09): a body line every
- * 21.4 dp, about 7 dp between paragraphs and 4 between bullets, its words 94%
- * as wide as Instrument Sans at 15, and inline code in a monospace face on a
- * pill about 16 dp tall. Instrument Sans at 14 draws its words 93% as wide as
- * at 15, so the face stays.
+ * The chat transcript, as the Claude app sets it (two screenshots on the same
+ * phone, 2026-10-09): a body line every 22 dp (the app's 57.1 px at 2.57 px/dp
+ * is 22.2), glyphs 9% taller than the 14 dp set this replaced (ink 37 px
+ * against 34), about 7 dp between paragraphs and 4 between bullets, and inline
+ * code in a monospace face on a pill about 16 dp tall. Instrument Sans at 15
+ * is the face's own base size.
  *
  * A reply stays one selectable Text, so a hold's handles drag across its
  * paragraphs and bullets (the user's call, 2026-10-09). The 7 dp is the
@@ -171,21 +171,21 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
  *
  * The pill is JetBrains Mono at 12 on a 14 dp line: the face's own box is
  * 1.32 em, its ink 1.23 em (JETBRAINS_MONO_FACE), and markdownChipInkRoom
- * gives the rest back as padding. That pill is 16 dp tall, which a 21 dp line
- * holds with 5 dp to the pill below and its bottom a dp inside the line (the
+ * gives the rest back as padding. That pill is 16 dp tall, which a 22 dp line
+ * holds with 6 dp to the pill below and its bottom a dp inside the line (the
  * rules in mobile-markdown-chip-clipping.test.ts, checked for this type in
  * mobile-markdown-transcript-typography.test.ts). A 13 sp pill needs a 23 dp
  * line by the same rules.
  */
 export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
-  prose: { fontSize: 14, lineHeight: 21 },
-  heading: { fontSize: 14.5, lineHeight: 21 },
-  headingLevel1: { fontSize: 18, lineHeight: 25 },
-  headingLevel2: { fontSize: 16, lineHeight: 23 },
-  headingLevel3: { fontSize: 15, lineHeight: 22 },
-  tableCell: { fontSize: 12, lineHeight: 21 },
+  prose: { fontSize: 15, lineHeight: 22 },
+  heading: { fontSize: 15.5, lineHeight: 22 },
+  headingLevel1: { fontSize: 19, lineHeight: 26 },
+  headingLevel2: { fontSize: 17, lineHeight: 24 },
+  headingLevel3: { fontSize: 16, lineHeight: 23 },
+  tableCell: { fontSize: 13, lineHeight: 22 },
   chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
-  listMarkerSize: 13,
+  listMarkerSize: 14,
   blockGap: 7,
   nativeProse: true
 }

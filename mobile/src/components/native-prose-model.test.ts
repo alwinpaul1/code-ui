@@ -98,7 +98,7 @@ describe('a reply drawn as one native text, as the Claude app sets it', () => {
     // copy keeps, drawn 7 dp tall (TRANSCRIPT_MARKDOWN_TYPOGRAPHY.blockGap).
     expect(gap!.lineHeight).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.blockGap)
     expect(paragraphText(model, 1)).toBe('')
-    expect(model.paragraphs.every((paragraph) => paragraph.kind === 'gap' || paragraph.lineHeight === 21)).toBe(true)
+    expect(model.paragraphs.every((paragraph) => paragraph.kind === 'gap' || paragraph.lineHeight === 22)).toBe(true)
   })
 
   it('draws the bold lead-ins bold and the code as pills, over the drawn words', () => {
