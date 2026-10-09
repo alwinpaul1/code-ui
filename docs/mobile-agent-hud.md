@@ -570,9 +570,19 @@ rounded.
 **What is refused** (no ring from this source, never a guess):
 - two figures anywhere in those rows, the mod's subagent pill (`↳ … ◔ 3%
   6.1k/200k`) beside the main one included;
-- a figure whose segment (back to `│`, `|` or a three-space gap) names a usage
-  window or a cost: `$`, `5h`, `7d`, `session`, `weekly`, `limit`, `cost`,
-  `quota`. The 5h and 7d percents are never read as the context;
+- a figure whose segment (between `│`, `|`, a three-space gap or a Powerline
+  pill cap U+E0A0 to U+E0D7, on either side of the figure) names a usage
+  window or a cost: `$`, `5h`, `7d`, `5-hour`, `session`, `weekly`, `wk`,
+  `today`, `usage`, `resets`, `block`, `plan`, `limit`, `cost`, `quota`. The
+  5h and 7d percents are never read as the context. usage-band draws its pills
+  with the caps U+E0B4 and U+E0B6, so its 5h pill begins two columns after the
+  context figure and the caps are what end the figure's segment. When this
+  refuses a figure, the older under-box patterns (`ctx 54%`, claude-hud's
+  `78% (776k/1.0M)`) are not tried on the screen either; only Claude Code's own
+  warning still is;
+- a figure in a row Claude Code paints in those zones: a todo list's or a tip's
+  continuation under the spinner (indented four or more columns) and the slash
+  and `@` menus under the box (review, 2026-10-09);
 - a figure on a row that fills the box's width, or on the row after one, since
   it may have wrapped in two;
 - a percent alone (`◔ 7%`, the mod at 100 columns and below), which states no

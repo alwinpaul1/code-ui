@@ -5,7 +5,7 @@ import {
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
 import { parseClaudeRunningShellCount, runningShellCountField } from './claude-footer-shell-count'
-import { readClaudeStatusLineContext } from './claude-status-line-context'
+import { readClaudeStatusLine, readClaudeStatusLineContext } from './claude-status-line-context'
 import {
   CODEX_STATUS_BOX_ROW,
   claudeFullscreenNoticeRow,
@@ -412,10 +412,13 @@ export function parseTerminalHudObservation(
     // The user's own status line stating `<used>/<window>` outranks Claude Code's warning: it is the
     // session's own fraction, where the warning is measured to the compaction point and appears only
     // near the end (claude-status-line-context.ts; the user's decision, 2026-10-09).
-    const stated = readClaudeStatusLineContext(lines)
-    if (stated) {
-      return claudeFooterObservation(lines, stated)
+    const stated = readClaudeStatusLine(lines)
+    if (stated.kind === 'figure') {
+      return claudeFooterObservation(lines, stated.context)
     }
+    // A figure the reader refused is not read by the looser patterns below either; Claude Code's own
+    // warning still is.
+    const refused = stated.kind === 'refused'
     const underBox = claudeRowsUnderInputBox(lines)
     const notice = claudeFullscreenNoticeRow(lines)
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
@@ -427,7 +430,7 @@ export function parseTerminalHudObservation(
       if (!under && !isNotice && isClaudeConversationRow(line, underBox !== -1)) {
         continue
       }
-      const context = parseTerminalHudContextWindow(line, { ownWarningOnly: !hinted || !under })
+      const context = parseTerminalHudContextWindow(line, { ownWarningOnly: refused || !hinted || !under })
       if (context) {
         return claudeFooterObservation(lines, context)
       }

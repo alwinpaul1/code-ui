@@ -25,10 +25,15 @@ const FIGURE =
 const PERCENT_BEFORE = /(\d{1,3})%\s{0,2}\(?\s?$/
 /** A percent directly after it: `54.2k/200k (27%)`, `68.3k/1.0M 7%`. */
 const PERCENT_AFTER = /^\s?\)?\s{0,2}\(?\s?(\d{1,3})%/
-/** What labels a percent or figure as a usage window or a cost rather than the context. */
-const RATE_OR_COST = /\$|\b\d+\s*[hdw]\b|\b(?:session|week(?:ly)?|daily|hourly|limit|cost|quota)\b/i
-/** A segment of a status line ends at a separator or a wide gap. */
-const SEGMENT_BREAK = /[│|]|\s{3,}/g
+/** What labels a percent or figure as a usage window or a cost rather than the context, on either
+ *  side of it in its segment (review, 2026-10-09: "5-hour 120k/500k", "120k/500k tokens today",
+ *  claude-hud's "Usage … (55k/500k) (resets …)"). */
+const RATE_OR_COST =
+  /\$|\b\d+\s*-?\s*(?:[hdw]|hours?|days?|weeks?)\b|\b(?:session|week(?:ly)?|wk|daily|hourly|today|limit|cost|quota|usage|resets?|block|plan)\b/i
+/** A segment of a status line ends at a separator, a wide gap, or a Powerline pill cap (the
+ *  private-use glyphs U+E0A0-U+E0D7; usage-band draws its pills with U+E0B4/U+E0B6, so the 5h pill
+ *  starts two columns after the context figure, 2.1.295 capture). */
+const SEGMENT_BREAK = /[│|\uE0A0-\uE0D7]|\s{3,}/g
 
 type Figure = { used: string; window: string; before: string | null; after: string | null; label: string }
 
@@ -38,6 +43,14 @@ function tokens(label: string): { value: number; half: number } {
   const digits = suffix === 'm' || suffix === 'k' ? label.slice(0, -1) : label
   const decimals = digits.includes('.') ? digits.length - digits.indexOf('.') - 1 : 0
   return { value: Number(digits) * scale, half: 0.5 * 10 ** -decimals * scale }
+}
+
+/** The text of the figure's own segment after it, up to the next separator or wide gap. */
+function segmentAfter(row: string, from: number): string {
+  const after = row.slice(from)
+  SEGMENT_BREAK.lastIndex = 0
+  const next = after.search(SEGMENT_BREAK)
+  return next === -1 ? after : after.slice(0, next)
 }
 
 /** The text of the figure's own segment before it, back to the previous separator or wide gap. */
@@ -55,7 +68,7 @@ function figuresOn(row: string): Figure[] | null {
   for (const match of row.matchAll(FIGURE)) {
     const prefix = segmentBefore(row, match.index)
     const before = PERCENT_BEFORE.exec(prefix)
-    if (RATE_OR_COST.test(prefix)) {
+    if (RATE_OR_COST.test(prefix) || RATE_OR_COST.test(segmentAfter(row, match.index + match[0].length))) {
       // A figure in a segment labelled as a usage window or a cost is not the context. Refuse the
       // whole read: the row states something this reader cannot place.
       return null
@@ -92,8 +105,26 @@ function checkedPercent(figure: Figure): number | null {
   return painted[0] ?? Math.round((used.value / window.value) * 100)
 }
 
+/** What the status-line rows say about the context: a figure, nothing, or a refusal (a figure is
+ *  there and cannot be placed). A refusal also stops the older under-box patterns reading the same
+ *  row ("Usage … 11% (55k/500k) (resets …)" is claude-hud's shape; review, 2026-10-09). */
+export type ClaudeStatusLineContextRead =
+  | { kind: 'figure'; context: TerminalHudContextWindow }
+  | { kind: 'none' }
+  | { kind: 'refused' }
+
 /** The ring from a `<used>/<window>` figure the user's own status-line painting shows, or null. */
 export function readClaudeStatusLineContext(lines: readonly string[]): TerminalHudContextWindow | null {
+  const read = readClaudeStatusLine(lines)
+  return read.kind === 'figure' ? read.context : null
+}
+
+export function readClaudeStatusLine(lines: readonly string[]): ClaudeStatusLineContextRead {
+  const read = readFigure(lines)
+  return read === 'refused' ? { kind: 'refused' } : read === null ? { kind: 'none' } : { kind: 'figure', context: read }
+}
+
+function readFigure(lines: readonly string[]): TerminalHudContextWindow | 'refused' | null {
   const { rows, width } = claudeStatusLineRows(lines)
   if (rows.length === 0) {
     return null
@@ -102,12 +133,12 @@ export function readClaudeStatusLineContext(lines: readonly string[]): TerminalH
   for (const index of rows) {
     const figures = figuresOn(lines[index] ?? '')
     if (figures === null) {
-      return null
+      return 'refused'
     }
     found.push(...figures.map((figure) => ({ figure, index })))
   }
   if (found.length !== 1) {
-    return null
+    return found.length === 0 ? null : 'refused'
   }
   const { figure, index } = found[0]!
   // A row that fills the pane may be wrapped onto the next, and one after a full row may be the
@@ -115,11 +146,11 @@ export function readClaudeStatusLineContext(lines: readonly string[]): TerminalH
   const fills = (row: string | undefined) =>
     row !== undefined && !isClaudeBoxRule(row) && Array.from(row.trimEnd()).length >= width
   if (fills(lines[index]) || fills(lines[index - 1])) {
-    return null
+    return 'refused'
   }
   const usedPercent = checkedPercent(figure)
   if (usedPercent === null) {
-    return null
+    return 'refused'
   }
   return { usedPercent, usedLabel: figure.used, windowLabel: figure.window }
 }

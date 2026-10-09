@@ -151,6 +151,42 @@ describe('what is refused', () => {
   })
 })
 
+// Review, 2026-10-09: three shapes the first cut read. Built on the captured default-layout screen,
+// with the band row taken out so a wrong read cannot hide behind the two-figure refusal.
+describe('rows Claude Code paints in the status-line zones', () => {
+  const noBand = replaceRow(DEFAULT_160, BAND_ROW, '')
+
+  it("ignores a figure on a todo row under the spinner", () => {
+    // The todo list's later rows sit under its `⎿` row with no glyph of their own. Layout modelled on
+    // the `⎿  Tip:` row captured under the spinner; no 2.1.295 todo capture yet.
+    const working = replaceRow(FULLSCREEN_160_WORKING, BAND_ROW, '')
+    const at = working.findLastIndex((line) => /⎿\s+Tip:/.test(line))
+    expect(at).toBeGreaterThan(-1)
+    const todos = [
+      ...working.slice(0, at),
+      '  ⎿  ☐ Profile the bundle',
+      '     ☐ Shrink vendor chunk 1.4M/2.0M',
+      ...working.slice(at + 1)
+    ]
+    expect(contextOf(todos)).toBeNull()
+  })
+
+  it('ignores a figure in the slash-command menu under the box', () => {
+    expect(contextOf(replaceRow(noBand, /cache ● 1h/, '  /compact   Shrink history from 150k/200k'))).toBeNull()
+    expect(contextOf(replaceRow(noBand, /cache ● 1h/, '❯ /compact   Shrink history from 150k/200k'))).toBeNull()
+  })
+
+  it.each([
+    '  Usage █░░░░ 11% (55k/500k) (resets 1:40 PM)',
+    '  5-hour 120k/500k',
+    '  120k/500k tokens today',
+    '  Opus │ 1.2M/5.0M wk',
+    '  block 120k/500k'
+  ])('ignores a usage-window figure: %s', (row) => {
+    expect(contextOf(replaceRow(noBand, /cache ● 1h/, row))).toBeNull()
+  })
+})
+
 describe('where the figure sits among the other sources', () => {
   it("prefers the user's figure over Claude Code's own low-context warning", () => {
     const warned = replaceRow(DEFAULT_160, /cache ● 1h/, `  cache ● 1h${' '.repeat(100)}Context low (22% remaining)`)
