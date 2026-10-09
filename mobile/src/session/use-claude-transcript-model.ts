@@ -95,7 +95,9 @@ export function useClaudeTranscriptModel(args: {
   connected: boolean
   /** The live pair's model: the beacon or the badge. */
   liveModel: string | null
-  /** This session's beacon has been heard. */
+  /** This session's beacon is live (not written off) and names a model. A
+   *  beacon the pill cannot show must not stand this fallback down: it left the
+   *  pill blank (2026-10-09). */
   beacon: boolean
   /** A beacon may still come for this tab: it was launched as an agent (the
    *  phone and Orca's own launcher carry the flag) on a host that takes the

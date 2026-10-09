@@ -175,7 +175,7 @@ export function useMobileNativeChatController(
     NATIVE_CHAT_STREAM_THROTTLE_MS
   )
   const {
-    observation: hudObservation,
+    observation: hudObservation, liveBeacon: hudLiveBeacon,
     // The screen's last pair and context, held per tab, terminal and session,
     // with the beacon merged in only for the session on screen and only while
     // its process still paints: the live pair, or nothing.
@@ -202,7 +202,8 @@ export function useMobileNativeChatController(
   // Model and effort as one pair, from one source; see the module's comment.
   const claudeLive = reportedModelPair(liveHud, activeChatAgentStatus)
   // No beacon and no badge (a Windows host, a tab typed in by hand, a tab launched before the flag): what the transcript last answered with.
-  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeLive.model, beacon: hudBeacon !== null, beaconCanCome: useClaudeBeaconCanCome(hostId, activeSessionTab?.launchAgent ?? null), beaconHandle: activeHandle, beaconStoredAt: hudObservation?.modelId && hudObservation.modelId !== hudBeacon?.modelId ? null : (hudBeacon?.receivedAt ?? null), liveEffort: claudeLive.effort, agentWorking: nativeChatAgentWorking, messages: nativeChatSession.messages, screenStatement: screenModelStatement })
+  // `beacon` is a beacon the HUD still believes AND that names a model: one written off, or naming none, shows nothing, so it must not stand the fallback down.
+  const transcriptModel = useClaudeTranscriptModel({ client, hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, enabled: showNativeChat && !activeChatStructured && activeChatResolution?.agent === 'claude', connected: connState === 'connected', liveModel: claudeLive.model, beacon: hudLiveBeacon?.modelId != null, beaconCanCome: useClaudeBeaconCanCome(hostId, activeSessionTab?.launchAgent ?? null), beaconHandle: activeHandle, beaconStoredAt: hudObservation?.modelId && hudObservation.modelId !== hudBeacon?.modelId ? null : (hudBeacon?.receivedAt ?? null), liveEffort: claudeLive.effort, agentWorking: nativeChatAgentWorking, messages: nativeChatSession.messages, screenStatement: screenModelStatement })
   // A model command written after the beacon last heard is newer than it (a switch made while the phone was away).
   const claudeReported = claudeReportedOverLive(claudeLive, transcriptModel.fallback)
   const isCodexChat = activeChatResolution?.agent === 'codex', isOmpChat = activeChatResolution?.agent === 'omp'

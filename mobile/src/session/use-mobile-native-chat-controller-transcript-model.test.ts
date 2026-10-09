@@ -15,7 +15,9 @@ const fakes = vi.hoisted(() => ({
     label: string | null
     effort: string | null
     context: null
-  }
+  },
+  /** The beacon the HUD believed: live (not written off) and this session's. */
+  liveBeacon: null as { modelId: string | null } | null
 }))
 vi.mock('./use-mobile-native-chat-hud', async () => {
   const actual = await vi.importActual<typeof import('./use-mobile-native-chat-hud')>(
@@ -26,6 +28,7 @@ vi.mock('./use-mobile-native-chat-hud', async () => {
     useMobileNativeChatHud: () => ({
       observation: null,
       live: fakes.live,
+      liveBeacon: fakes.liveBeacon,
       refresh: async () => null,
       dialogOptions: null,
       dialogKind: null,
@@ -203,6 +206,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     // outlives the component, which is the point of it.
     hostCount += 1
     fakes.live = { model: null, label: null, effort: null, context: null }
+    fakes.liveBeacon = null
     sessions = [neighbourRow, ownRow]
     host = createAnsweringClient((method) =>
       method === 'aiVault.listSessions'
@@ -250,6 +254,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
   it('lets the beacon win over the transcript, and asks the host nothing', async () => {
     fakes.live = { model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium', context: null }
+    fakes.liveBeacon = { modelId: 'claude-fable-5-1' }
     act(() => {
       consumeAgentHudBeacons(
         'term-1',
@@ -261,6 +266,40 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
     expect(host.sent('aiVault.listSessions')).toHaveLength(0)
     expect(pills().header).toEqual({ model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' })
+  })
+
+  // 2026-10-09: the controller told the fallback "a beacon was heard" for any
+  // beacon stored for this session, including one the HUD had written off
+  // (a hand-started `claude -c` keeps the session id of the phone-launched
+  // process that beaconed before it, 2026-09-18) and one that names no model.
+  // The fallback then stood down for a beacon the pill does not show, and the
+  // pill stayed blank for good.
+  it('shows the transcript model, not a blank pill, when the beacon left on the terminal was written off', async () => {
+    act(() => {
+      consumeAgentHudBeacons(
+        'term-1',
+        `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} model=claude-fable-5-1 name=Fable%205.1 effort=medium${BEL}`
+      )
+    })
+    // The HUD wrote it off (its process is gone) and no badge is on screen.
+    fakes.liveBeacon = null
+    rerender()
+    await settle(10_000)
+
+    expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    expect(pills().header?.label).toBe('Opus 5.5')
+    expect(pills().composer?.label).toBe('Opus 5.5')
+  })
+
+  it('shows the transcript model when the live beacon names no model', async () => {
+    act(() => {
+      consumeAgentHudBeacons('term-1', `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} hk=1 up=41:hello${BEL}`)
+    })
+    fakes.liveBeacon = { modelId: null }
+    rerender()
+    await settle(10_000)
+
+    expect(pills().composer?.label).toBe('Opus 5.5')
   })
 
   it('gives way to a live pair that arrives after the scan', async () => {
