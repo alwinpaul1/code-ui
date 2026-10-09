@@ -17,7 +17,8 @@ export function clearDraftAtSendStartWith(
     clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
     restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
     acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]) => string | null
-    removePending: (id: string) => void
+    /** `draftKey`: the scope the bubble was added under (mobile-native-chat-live-drafts.ts). */
+    removePending: (id: string, draftKey?: string) => void
   },
   text: string,
   images?: string[],
@@ -32,7 +33,7 @@ export function clearDraftAtSendStartWith(
   return () => {
     drafts.restoreRejectedDraft(origin, text)
     if (pendingId) {
-      drafts.removePending(pendingId)
+      drafts.removePending(pendingId, origin.draftKey)
     }
   }
 }

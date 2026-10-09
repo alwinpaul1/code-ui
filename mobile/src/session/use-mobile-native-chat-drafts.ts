@@ -107,7 +107,7 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
-  removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
+  removePending: (id: string, draftKey?: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
 } {
   const {
     hostId,
@@ -374,8 +374,8 @@ export function useMobileNativeChatDrafts(args: {
   const written = pendingKey && !pendingBySession[pendingKey] ? waitingPhotoSends(pendingKey) : undefined
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
-  const removePending = useCallback((id: string) => {
-    const live = liveNativeChatDrafts(activeDraftKeyRef.current, own)
+  const removePending = useCallback((id: string, draftKey?: string) => {
+    const live = liveNativeChatDrafts(draftKey ?? activeDraftKeyRef.current, own)
     live.setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
     live.setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
   }, [own])

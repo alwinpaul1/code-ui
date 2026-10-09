@@ -51,4 +51,19 @@ describe("a send's draft writes go to the chat screen showing its scope now", ()
     unregisterA()
     unregisterB()
   })
+
+  // Opus review of 4103c597b: the history panel pushes a second session screen over the first,
+  // so two screens show one tab, and going back leaves the first one on view.
+  it('goes back to the screen underneath when a second screen for the same tab goes away', () => {
+    const under = screen()
+    const unregisterUnder = registerLiveNativeChatDrafts('h\0w\0tab-stacked', under)
+    const over = screen()
+    const unregisterOver = registerLiveNativeChatDrafts('h\0w\0tab-stacked', over)
+    expect(liveNativeChatDrafts('h\0w\0tab-stacked', screen())).toBe(over)
+
+    unregisterOver()
+
+    expect(liveNativeChatDrafts('h\0w\0tab-stacked', screen())).toBe(under)
+    unregisterUnder()
+  })
 })
