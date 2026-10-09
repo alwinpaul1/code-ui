@@ -114,12 +114,6 @@ export function makeChatMessageStyles(theme: Theme) {
       marginTop: space.xs,
       marginLeft: -space.xs
     },
-    toolRunCount: {
-      color: colors.success,
-      fontFamily: fonts.mono,
-      fontSize: MONO_SIZE,
-      fontWeight: '700'
-    },
     toolRunLabel: {
       flex: 1,
       fontFamily: fonts.medium,
@@ -138,11 +132,6 @@ export function makeChatMessageStyles(theme: Theme) {
       color: colors.textMuted,
       fontFamily: fonts.regular,
       fontSize: 13
-    },
-    toolRunMore: {
-      color: colors.textMuted,
-      fontFamily: fonts.mono,
-      fontSize: MONO_SIZE
     },
     // The live row that stands in for the batch summary while a call runs.
     toolRunActive: {

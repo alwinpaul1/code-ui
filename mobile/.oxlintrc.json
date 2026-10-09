@@ -368,7 +368,13 @@
             // mobile-video-frame-extractor.ts / mobile-video-frame-picker.ts.
             // 2026-10-09: +2 for MobileNativeChatDockBackdrop, the dock's ground
             // (its import and the element); the fade lives in its own module.
-            "max": 422,
+            // 2026-10-09, later: 427. The dock-ground and turn-end branches each
+            // sat under 422 alone; merged on claude-look-integration the file
+            // was 426 (the turn-end ids' import, memo, prop and dependency).
+            // +1 for `dockClearance`, which the list's end spacer and the jump
+            // button now clear (the dock plus its fade). The turn wiring itself
+            // moved to use-mobile-native-chat-turn-ends.ts.
+            "max": 427,
             "skipBlankLines": true,
             "skipComments": true
           }
