@@ -91,15 +91,32 @@ const CLAUDE_CONTINUATION_ROW = /^ {4,}\S/
  *  included. Their descriptions are anyone's text (review, 2026-10-09). */
 const CLAUDE_MENU_ROW = /^\s*(?:❯\s*)?[/@]/
 
+/** A row a Powerline-style painter draws: one column in (usage-band's `paddingX: 1`) or none, then a
+ *  pill cap or icon from the private-use block U+E0A0-U+E0D7 (usage-band opens every pill with
+ *  U+E0B6; Orca screen reads of Claude Code 2.1.295, claude-usage-band-fullscreen-126-*.txt). Claude
+ *  Code draws its conversation two columns in at least (the `⏺ ` gutter, `⎿` rows deeper), so a reply
+ *  cannot put a row here, whatever text it prints. */
+const PAINTED_PILL_ROW = /^ ?[-]/
+/** The `[-]` toggle drawn alone and right-aligned above the slot a mod paints into over the box
+ *  (every 2.1.294 and 2.1.295 capture of the usage-band layout). */
+const SLOT_TOGGLE_ROW = /^\s+\[[-+]\]\s*$/
+
 /** The rows a user's own status-line painting may sit on, as indices, around Claude Code's input
- *  box: every row under the box (where Claude Code draws a status line), and the rows directly
- *  above the box's top rule up to Claude Code's own spinner or turn-end row (where a mod such as
- *  usage-band draws its band; 2.1.295 captures). Above the box a row counts only with that turn
- *  row bounding it: the conversation sits above the turn row, and an answer's continuation row
- *  ("  Opus 5.5 high │ ◔ 12% 120.0k/1.0M") has the band's exact shape, so with no turn row in reach
- *  (a resumed screen, a cleared one) nothing above the box is read. Rows Claude Code paints under its
- *  turn row (`⎿`, a todo list's continuations) and its menus under the box are skipped. Empty with no box on screen.
- *  `width` is the box's, which is the pane's: a row that fills it may have wrapped. */
+ *  box: every row under the box (where Claude Code draws a status line), and rows above the box's
+ *  top rule (where a mod such as usage-band draws its band; 2.1.295 captures), in one of two ways:
+ *  - Claude Code's own spinner or turn-end row in reach: every row between it and the box, except
+ *    the rows Claude Code paints there itself (`⎿`, a todo list's continuations) and its fullscreen
+ *    notice slot. The conversation sits above the turn row.
+ *  - No turn row in reach (an agent's `⏺ Agent "…" finished` notice right above the band, a resumed
+ *    or cleared screen): only the painted pill rows (PAINTED_PILL_ROW) of the unbroken block directly
+ *    above the rule, which may also hold blank rows, the `[-]` toggle and the notice slot. The block
+ *    ends at the first other row. An answer's continuation row ("  Opus 5.5 high │ ◔ 12% 120.0k/1.0M")
+ *    has the band's text but sits two columns in with no pill cap, so it ends the block unread. A
+ *    painter that draws without the caps (the 2.1.294 captures) is read only under a turn row. Until
+ *    2026-10-09 nothing above the box was read without a turn row, and a 126-column tab whose lowest
+ *    conversation row was an agent's finished notice had no ring and no effort (Orca screen read).
+ *  Claude Code's menus under the box are skipped. Empty with no box on screen. `width` is the box's,
+ *  which is the pane's: a row that fills it may have wrapped. */
 export function claudeStatusLineRows(lines: readonly string[]): { rows: number[]; width: number } {
   const input = lines.findLastIndex((row) => CLAUDE_INPUT_ROW.test(row))
   const top = input - 1
@@ -116,15 +133,18 @@ export function claudeStatusLineRows(lines: readonly string[]): { rows: number[]
       }
     }
   }
-  const above: number[] = []
   const notice = claudeFullscreenNoticeRow(lines)
-  for (let index = top - 1; index >= 0; index -= 1) {
+  const turn = claudeTurnRowAbove(lines, top)
+  const above: number[] = []
+  for (let index = top - 1; index > turn; index -= 1) {
     const row = lines[index] ?? ''
-    if (CLAUDE_TURN_ROW.test(row)) {
-      return { rows: [...above, ...rows], width }
-    }
-    if (/^\S/.test(row)) {
-      return { rows, width }
+    if (turn === -1) {
+      if (PAINTED_PILL_ROW.test(row)) {
+        above.push(index)
+      } else if (row.trim() !== '' && !SLOT_TOGGLE_ROW.test(row) && index !== notice) {
+        break
+      }
+      continue
     }
     // Claude Code's own fullscreen notice slot, where only its wording is read
     // (claude-fullscreen-context-warning.test.ts); a status line never paints flush with the box.
@@ -132,7 +152,22 @@ export function claudeStatusLineRows(lines: readonly string[]): { rows: number[]
       above.push(index)
     }
   }
-  return { rows, width }
+  return { rows: [...above, ...rows], width }
+}
+
+/** Claude Code's spinner or turn-end row above the box's top rule, reached through indented rows
+ *  only; -1 when a column-0 row (an answer, a prompt, a notice) or the top of the screen comes first. */
+function claudeTurnRowAbove(lines: readonly string[], top: number): number {
+  for (let index = top - 1; index >= 0; index -= 1) {
+    const row = lines[index] ?? ''
+    if (CLAUDE_TURN_ROW.test(row)) {
+      return index
+    }
+    if (/^\S/.test(row)) {
+      return -1
+    }
+  }
+  return -1
 }
 
 /** Claude Code's input box rule: a row of `─` alone. */

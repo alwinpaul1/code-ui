@@ -6,6 +6,27 @@ export type TerminalPermissionMode =
   | 'auto'
   | 'bypassPermissions'
 
+/** The mode as the mode pill and sheet name it. */
+export function permissionModeLabel(mode: TerminalPermissionMode): string {
+  switch (mode) {
+    case 'default':
+    case 'manual':
+      return 'Manual'
+    case 'acceptEdits':
+      return 'Accept edits'
+    case 'plan':
+      return 'Plan'
+    case 'auto':
+      return 'Auto'
+    case 'bypassPermissions':
+      return 'Bypass'
+    default: {
+      const exhaustive: never = mode
+      return exhaustive
+    }
+  }
+}
+
 /**
  * Claude Code's mode footer as captured: the phrase opens the row after its
  * glyph and is followed by the hint, a "·" item, or nothing.

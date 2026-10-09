@@ -1,0 +1,40 @@
+❯  [Image #15] also why not showing the effort here
+  ⎿  [Image #15]
+⏺ Two things are missing on that tab: the effort, and the context ring. On a hand-typed tab, effort only comes from Claude's
+  own screen (the thinking spinner, a toast, /effort, or the startup banner), and none of those is visible right now. Your
+  mod's row does say "Opus 5.5 medium", but the phone reads only the context figure from that row, not the model and effort.
+  The ring is missing too, so the figure probably wasn't readable. Most likely the pane is 100 columns or less. Checking that
+  tab's real screen from the desktop:
+  Ran 3 shell commands
+⏺ Found two bugs: the ring reader fails when a finished-agent notice or [-] marker sits above the input instead of the usual
+  spinner/turn-end row, and effort level isn't parsed from the status line at all, only context percentage. I'll save this
+  screen as a real fixture to fix both.
+  Ran 1 shell command
+⏺ Agent(Status-line ring and effort fixes)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+❯ The denser transcript draws paragraphs as separate pieces on Android, which would stop the drag at the end of a paragraph.
+  So the agent will render each reply as one selectable block again, and keep the smaller text and tight
+  also while I copy something the markdown star bullets that should not appear
+  spacing another way.
+  ⎿  Message queued for delivery to a14331e2b6cad045a at its next tool round.
+  ⎿  Allowed by auto mode classifier
+⏺ I passed this to the hold-to-copy agent: copying from a reply must give the text you see, with no **, #, backticks, or */-
+  list markers. A test will pin it on a reply that has bold, italic, code, a heading, a list and a link.
+  Agents running now:
+  - Hold-to-copy revert: drag-select across paragraphs like 0.9.116, and copy without Markdown symbols.
+  - Status-line ring and effort fix, for the missing effort and ring on your Project tab. The tab's pane is wide enough. The
+    phone's reader refused that screen layout, and it never read the "xhigh" from your mod's row.
+  The 0.9.118 CI build is also still running. Each agent's work gets reviewed, then merged and installed.
+  session:ok
+✻ Waiting for 2 background agents to finish
+                                                                                                                          [-]
+  Opus 5.5 medium │ ◔ ━━━╸━━━━ 42% 415.3k/1.0M   ◷ 5h ╸━━━━━━━ 5% │ 10:20 PM   ▦ 7d ━━╸━━━━━ 34% │ Wed 7:00 PM 
+   Code UI │  main ↑2 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 100% · misses 0
+  ⏵⏵ auto mode on · 2 shells · ← for agents
+  ⏺ main
+  ◯ general-purpose  Finding port leftovers in MobileMarkdown.tsx                                   4m 23s · ↓ 128.1k tokens
+  ◯ general-purpose  Status-line ring and effort fixes                                                  43s · ↓ 78.0k tokens

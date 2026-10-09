@@ -1,0 +1,45 @@
+  │ story-and-structure │ the paper's story flow              │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ sections            │ slot templates per section          │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ sentences           │ style rules                         │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ tables-figures      │ notes, bold rows, n/a cells         │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ honesty-and-claims  │ caveats and the two-limitation rule │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ process             │ how revisions are run               │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ checklists          │ checks before sending               │
+  ├─────────────────────┼─────────────────────────────────────┤
+  │ group-and-venue     │ Robin's rules, ACM vs IEEE          │
+  └─────────────────────┴─────────────────────────────────────┘
+  After they finish, I'll merge the two drafts. A Sonnet agent then tests the merged skill on a real DEMO paragraph and an
+  abstract before it's installed in ~/.claude/skills/style-guide-kit.
+  The phase 1 table writer is still running on the paper.
+  session:ok
+› Message from @general-purpose (ctrl+o to expand)
+⏺ The Fable 5.1 draft is in: about 900 lines in nine files.
+  - SKILL.md (60 lines): 11 non-negotiables, an 8-step workflow, and an authority order for conflicts. Your latest word wins,
+    then Robin, then your published articles, then ABCD, then older notes.
+  - Every quote is tagged with its source: [IEEE], [ABCD], [DEMO before] or [DEMO after].
+  - Its three main design choices:
+    a. Every conflict is settled inline, so the skill never has to ask you.
+    b. Each subsection ends on its verdict, and the hand-off lives in the next subsection's opener.
+    c. The integrity review is a separate read-only pass. That's the step that caught the conditions the shortening pass
+       dropped.
+  The Opus 5.5 draft is still running, and so is the phase 1 table writer. When the Opus draft lands, I'll merge the two and
+  run the Sonnet test.
+  session:ok
+⏺ Agent "Council Fable: draft style-guide-kit skill" finished · 10m 28s
+                                                                                                                          [-]
+  Opus 5.5 xhigh │ ◔ ━━━━━╸━━ 68% 680.7k/1.0M   ◷ 5h ╸━━━━━━━ 5% │ 10:20 PM   ▦ 7d ━━╸━━━━━ 34% │ Wed 7:00 PM 
+   sample_project_1 │  main-draft ✓ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 56m left · hit 100% · misses 0
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
+  ⏺ main
+  ◯ general-purpose  Running mix.py table variants                                                 22m 43s · ↓ 306.0k tokens
+  ◯ general-purpose  Testing number snippet on concl.tex                                           14m 20s · ↓ 259.7k tokens

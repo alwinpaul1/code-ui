@@ -523,8 +523,9 @@ Orca's own screen read on a phone; the parser is pinned to tmux captures.
 **The user's decision, 2026-10-09:** the phone may read the context figure a
 user's OWN Claude Code status-line painting shows. This overrides the earlier
 rule (recorded in `fixtures/claude-model-toast-2.1.294.ts`) that the
-usage-band rows must not be read. Only the `<used>/<window>` figure is read;
-the model, effort and rate-limit pills on those rows still are not.
+usage-band rows must not be read. The `<used>/<window>` figure is read for the
+ring, and (approved later the same day) the model and effort the row opens
+with for the pill; the rate-limit pills on those rows still are not.
 
 **What this host actually paints (captured).** Live Claude Code 2.1.295 in a
 private tmux server with this user's real settings, fullscreen (their saved
@@ -550,12 +551,74 @@ has no figure to read.
   5s · done 12:54 PM`). The spinner's `⎿  Tip:` row and any `❯` or `⏺` row
   there are skipped, and so is Claude Code's fullscreen notice slot (the row
   flush with the box's right edge, `claudeFullscreenNoticeRow`), where only
-  Claude Code's own warning wording is ever read. The conversation sits above the turn row, and an answer's
-  continuation row (`  Opus 5.5 high │ ◔ 12% 120.0k/1.0M`, captured) has the
-  band's exact shape. So when the walk up meets any other column-0 row (an
-  answer, a prompt) or the top of the screen before a turn row, nothing above
-  the box is read. A resumed or cleared screen gets no ring from the band until
-  a turn has painted its row.
+  Claude Code's own warning wording is ever read. The conversation sits above
+  the turn row;
+- with no turn row in reach (the walk up meets a column-0 row, an answer or a
+  prompt, or the top of the screen first): only the PAINTED PILL ROWS of the
+  unbroken block directly on the box's top rule. A pill row is one column in
+  (or none) and then a Powerline cap or icon (U+E0A0 to U+E0D7); usage-band
+  opens every pill with U+E0B6 at column 1 (its `paddingX: 1`). The block may
+  hold blank rows, the `[-]` toggle and the notice slot, and ends at the first
+  other row. Claude Code draws its conversation two columns in at least, so an
+  answer's continuation row (`  Opus 5.5 high │ ◔ 12% 120.0k/1.0M`, captured)
+  has the band's text but not its shape: it ends the block unread, whether it
+  sits right on the rule or under the `[-]` row. A painter that draws no caps
+  (the 2.1.294 captures show the band two columns in, capless) is still read
+  only under a turn row.
+
+**Why the second rule (device report, 2026-10-09, build 0.9.117).** A
+hand-typed Claude Code 2.1.295 tab, fullscreen, macOS, 126 columns, showed the
+pill "Opus 5.5" with no effort and no ring under a band reading `Opus 5.5 xhigh
+│ ◔ ━━━━━╸━━ 68% 680.7k/1.0M`. Orca's own screen read of that tab
+(`orca terminal read --screen --json`, the RPC family the phone uses;
+`fixtures/claude-usage-band-fullscreen-126-agent-finished-2.1.295.txt`) has no
+spinner or turn-end row above the band: the lowest conversation row is
+`⏺ Agent "…" finished · 10m 28s`, then `[-]`, then the two pill rows with no
+blank rows between them, then the rule. The walk met the `⏺` row first and the
+old rule read nothing above the box. The figure itself parsed: the bar glyphs
+(`━╸`) sit before the percent, which the percent-before pattern already skips
+past. Now that screen shows the ring at 68% (680.7k of 1.0M) and the pill
+"Opus 5.5 Extra".
+
+**The model and effort** (`readClaudeStatusLineModel`). Off the same rows, a
+row that opens (after up to three columns and an optional pill cap) with
+`<Fable|Opus|Sonnet|Haiku> <version> [<effort>] │`, the way usage-band's
+`contextSpec` draws it. It becomes the observation's pair exactly as a
+claude-hud `[Model effort]` badge's does: `modelId` the family (`opus`),
+`modelLabel` "Opus 5.5", `effort` the word, drawn by `sessionModelPillLabel` as
+"Opus 5.5 Extra" for `xhigh`. A badge on screen is read first; this pair is
+taken where there is none. Being the screen's pair, it is held by the sticky
+hold and owns the pair over the beacon (`hud-beacon-fields.ts`: the screen is
+the present), while the beacon still owns the ring. Effort words are Claude
+Code 2.1.295's: `low`, `medium`, `high`, `xhigh`, `max`; a row with no effort
+word gives the model alone. Refused (no pair, never a guess): two rows naming a
+pair, an effort word not in that list, and a subagent's pill on screen.
+
+**The subagent view.** While the user views a subagent's transcript, usage-band
+draws `↳ general-purpose · Opus 5.5 medium │ ◔ 14% …` IN PLACE of the main
+pill (`agentContextSpec`; seen on an Orca stream read of such a tab). Every
+figure on it is that subagent's: its model, effort and own window. So a `↳`
+pill anywhere in the rows refuses the whole read, ring and pair, for the main
+session; the sticky hold keeps what the main band last said.
+
+**No beacon or setting gates it.** The screen poll (1 s while working, 5 s
+otherwise, `use-mobile-terminal-hud-observation.ts`) runs for any shown,
+connected terminal chat, beacon or none. The reader needs Claude Code's `❯`
+input box and its footer (the mode row or the `shift+tab to cycle` hint), as
+every Claude read here does. A first cut also read the band with no footer row
+on screen; review found that five subagent rows under the box push the
+`⏵⏵ auto mode on` row out of the footer's six rows, and that read then stated
+Manual for a footer nobody saw. Such a screen is an empty read again: the hook
+keeps its last observation and the sticky hold the band's last pair and ring
+(`claude-status-line-band-without-turn-row.test.ts`).
+
+**Known lag.** The band's pair is the screen's pair at the badge's tier. A
+claude-hud badge has the same lag. On a tab with no beacon it replaces the
+Claude Code alt+p toast and spinner statements that stood in for a missing
+pair before. So for one band repaint after an alt+p switch, the pill shows the
+band's old model (`NARROW_TOAST_SONNET`, 2.1.294: the toast says Sonnet while
+the band still says `Opus 5.5 high`). The 160-column capture of the same
+switch shows the band caught up.
 
 **What counts as the figure.** `<used>/<window>`, where the window carries a `k`
 or `M` suffix and the used figure may be bare. Both sides must be bounded by a
@@ -568,8 +631,9 @@ does not, the read is refused. With no percent beside it, used/window is
 rounded.
 
 **What is refused** (no ring from this source, never a guess):
-- two figures anywhere in those rows, the mod's subagent pill (`↳ … ◔ 3%
-  6.1k/200k`) beside the main one included;
+- two figures anywhere in those rows;
+- any row with the mod's subagent pill (`↳ … ◔ 3% 6.1k/200k`), with or without
+  a figure on it;
 - a figure whose segment (between `│`, `|`, a three-space gap or a Powerline
   pill cap U+E0A0 to U+E0D7, on either side of the figure) names a usage
   window or a cost: `$`, `5h`, `7d`, `5-hour`, `session`, `weekly`, `wk`,
@@ -602,10 +666,10 @@ Code's `❯` input box, and a figure in a Codex conversation sets no ring
 
 **Where the ring shows for this user now:** any fullscreen or default-layout
 Claude tab, hand-started or not, whose pane is wide enough for the mod to paint
-the token figure (160 columns captured; 100 is not). On a phone-width pane the
-band shows `◔ 7%` only, and the ring there still comes from the beacon or from
-Claude Code's own warning. Not verified: Orca's own screen read on the phone
-(the parser is pinned to tmux captures) and a Windows host.
+the token figure (160 columns captured by tmux, 126 by Orca's screen read; 100
+is not). On a phone-width pane the band shows `◔ 7%` only, and the ring there
+still comes from the beacon or from Claude Code's own warning; the model and
+effort are still read off it. Not verified: a Windows host.
 
 ## Update 2026-09-09 (night): Claude Code's own context warning
 
