@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { readCachedSessionTabs, sessionTabsCacheKey } from './mobile-session-tabs-cache'
+import type { MobileSessionTab } from './mobile-session-route-types'
 import { getPendingModelPick } from './mobile-native-chat-model-report-authority'
 import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
 import { getAgentHudBeaconArrivedAt, subscribeAgentHudBeaconArrivals } from './agent-hud-beacon'
@@ -25,6 +27,15 @@ import {
 } from './claude-transcript-model-scan'
 
 const NONE: ClaudeModelFallback = { kind: 'none' }
+
+/** A terminal tab running Claude, by Orca's status or, before the first
+ *  status reaches the phone, by what Orca launched in it. */
+function isClaudeTab(tab: MobileSessionTab): boolean {
+  if (tab.type !== 'terminal') {
+    return false
+  }
+  return (tab.agentStatus?.agentType ?? tab.launchAgent ?? null) === 'claude'
+}
 
 type PickProgress = {
   pickAt: number
@@ -133,6 +144,21 @@ export function useClaudeTranscriptModel(args: {
       request()
     }
   }, [quietKey, lastConnectedAt, request])
+
+  // Warm-up: the session screen knows this project's tabs (the last accepted
+  // list, cached per project) before any chat opens. One of them running Claude
+  // warms the scan for this folder, unforced, so a chat opened next states the
+  // reading on its first render. Once per screen, per new connection, and per
+  // active tab (so a first visit's tab list, cached as it arrives, counts); the
+  // scan module's per-folder budget keeps one in flight per folder and its
+  // host cap bounds a visit to many projects. Only the screen in front of the
+  // user does this, never a project list. A failure only logs, as any scan's.
+  useEffect(() => {
+    if (!connected || !client || !readCachedSessionTabs(sessionTabsCacheKey(hostId, worktreeId)).some(isClaudeTab)) {
+      return
+    }
+    void requestClaudeTranscriptModelScan(client, hostId, worktreeId, { connection: lastConnectedAt })
+  }, [client, connected, hostId, worktreeId, lastConnectedAt, tabId])
 
   // The phone's own pick, and whether a turn begun after it has ended yet.
   const scopeKey = mobileNativeChatScopeKey(hostId, worktreeId, tabId)
