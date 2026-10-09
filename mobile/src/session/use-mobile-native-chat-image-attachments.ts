@@ -13,10 +13,8 @@ import {
 } from './mobile-native-chat-image-scope-state'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
-import {
-  openMobileNativeChatSendBudget,
-  type MobileNativeChatSendOutcome
-} from './mobile-native-chat-send'
+import { openMobileNativeChatSendBudget, type MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { spentSendBudgetRefusal } from './mobile-native-chat-send-budget-refusal'
 import {
   clearMobileNativeChatInputResidue,
   clearMobileNativeChatInputStale,
@@ -239,6 +237,8 @@ export function useMobileNativeChatImageAttachments({
           onSendError(message)
           return false
         }
+        // Says why when the budget ran out (the app was away, or the desktop slow).
+        const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
         return sendFollowingTheTab(
           {
             tappedTerminal: operationTerminal,
@@ -312,7 +312,7 @@ export function useMobileNativeChatImageAttachments({
                 // A tab switch during the clear would send this text to a terminal the
                 // clear never touched, so abort rather than reroute it.
                 if (!healed || activeHandleRef.current !== staleTerminal) {
-                  return refuse(healed && follow && !follow.tabChanged() ? SEND_TERMINAL_RESTARTED : 'Message not sent')
+                  return refuse(!healed ? notSent() : follow && !follow.tabChanged() ? SEND_TERMINAL_RESTARTED : 'Message not sent')
                 }
               }
               // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
@@ -383,7 +383,7 @@ export function useMobileNativeChatImageAttachments({
                 // Put the chips and text back so the user can retry; the failed paste never submitted.
                 restoreOptimistic()
                 markMobileNativeChatInputStale(handle)
-                return refuse('Message not sent')
+                return refuse(notSent())
               }
               // The paste's leading Ctrl+U cleared any earlier stale input in `handle`.
               clearMobileNativeChatInputStale(handle)
@@ -427,7 +427,7 @@ export function useMobileNativeChatImageAttachments({
               // attempt's leading Ctrl+U clears whatever fraction of the paste landed.
               restoreOptimistic()
               markMobileNativeChatInputStale(handle)
-              return refuse('Message not sent')
+              return refuse(notSent())
             }
             }
         )

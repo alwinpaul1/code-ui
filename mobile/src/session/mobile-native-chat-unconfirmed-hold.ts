@@ -4,9 +4,10 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { appForegroundSince } from './app-foreground-clock'
 
 /** How long an ack-lost send waits for evidence before the view says the
- *  delivery is unconfirmed. */
+ *  delivery is unconfirmed: time with the app in the foreground (foregroundTimeStillOwed). */
 export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
 
 /**
@@ -47,9 +48,39 @@ export function parkUnconfirmedSend(args: {
   if (isActiveTranscript && findLandedUnconfirmedSends(messages, [entry]).length > 0) {
     return null
   }
-  entry.deadline = setTimeout(() => {
-    onExpire(entry)
-    onUnconfirmed()
-  }, UNCONFIRMED_SEND_DEADLINE_MS)
+  const arm = (delayMs: number): void => {
+    const armedAt = Date.now()
+    entry.deadline = setTimeout(() => {
+      const left = foregroundTimeStillOwed(armedAt)
+      if (left > 0) {
+        arm(left)
+        return
+      }
+      onExpire(entry)
+      onUnconfirmed()
+    }, delayMs)
+  }
+  arm(UNCONFIRMED_SEND_DEADLINE_MS)
   return entry
+}
+
+/**
+ * How much longer a hold armed at `armedAt` waits before it says the delivery is
+ * unconfirmed, or 0 when its time is up.
+ *
+ * The deadline is time the phone could have heard the evidence in: the app in the
+ * foreground, its link up, the transcript and the prompt hook flowing. Android runs no
+ * JS timer while the app is away, and Date.now() keeps going, so a hold whose deadline
+ * came due while the app was away fired the moment it came back, before the link could
+ * redial and the transcript catch up, and called a delivered message "Delivery
+ * unconfirmed" (2026-10-09). With a headless task running timers it fired while the app
+ * was away, where nobody saw it. Either way it now waits the full deadline again from
+ * the moment the app came back.
+ */
+function foregroundTimeStillOwed(armedAt: number): number {
+  const back = appForegroundSince()
+  if (back === null) {
+    return UNCONFIRMED_SEND_DEADLINE_MS
+  }
+  return back > armedAt ? Math.max(0, back + UNCONFIRMED_SEND_DEADLINE_MS - Date.now()) : 0
 }

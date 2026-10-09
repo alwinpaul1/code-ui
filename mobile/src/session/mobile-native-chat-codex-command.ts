@@ -1,4 +1,5 @@
 import type { RpcClient } from '../transport/rpc-client'
+import { spentSendBudgetRefusal } from './mobile-native-chat-send-budget-refusal'
 import {
   openMobileNativeChatSendBudget,
   typeMobileNativeChatCommandWithOutcome,
@@ -24,8 +25,10 @@ export async function typeCodexChatCommand(args: {
 }): Promise<MobileNativeChatSendOutcome> {
   const { client, terminal, command, deviceToken, onSendError } = args
   const deadline = openMobileNativeChatSendBudget()
+  // Says why when the budget ran out (the app was away, or the desktop slow).
+  const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
   if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken, deadline }))) {
-    onSendError('Message not sent')
+    onSendError(notSent())
     return 'rejected'
   }
   const typed = await typeMobileNativeChatCommandWithOutcome({
@@ -36,7 +39,7 @@ export async function typeCodexChatCommand(args: {
     deadline
   })
   if (typed !== 'accepted') {
-    onSendError(typed === 'unknown' ? COMMAND_UNCONFIRMED : 'Message not sent')
+    onSendError(typed === 'unknown' ? COMMAND_UNCONFIRMED : notSent())
   }
   return typed
 }

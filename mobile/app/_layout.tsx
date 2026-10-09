@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import { View, StyleSheet } from 'react-native'
+import { AppState, View, StyleSheet } from 'react-native'
 import { Stack, useRouter } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
@@ -27,6 +27,7 @@ import {
   getBackgroundLinkWatcher
 } from '../src/background/background-link'
 import { startBackgroundLinkHealing } from '../src/background/background-link-healing'
+import { subscribeAppForegroundClock } from '../src/session/app-foreground-clock'
 import { answerPromptFromNotification } from '../src/notifications/prompt-notification-response'
 import { lookupPendingPrompt } from '../src/notifications/permission-lookup'
 import { sendQuestionAnswerFromNotification } from '../src/notifications/question-notification-send'
@@ -99,6 +100,10 @@ function ThemedRoot() {
     // foreground-service start is actually permitted.
     return startBackgroundLinkHealing()
   }, [])
+
+  // A chat send's clocks run on the wall clock, which goes on while Android runs no JS
+  // timer: they read this to tell the app's time away from the desktop's (2026-10-09).
+  useEffect(() => subscribeAppForegroundClock(AppState), [])
 
   useEffect(() => {
     // Why: pairing publication is journaled across process death; startup must

@@ -52,6 +52,10 @@ export type ChatSendWrite =
 
 type MobileClient = { id: string; type: 'mobile' }
 
+/** A clear that did not go: the caller says why when its budget is the reason
+ *  (spentSendBudgetRefusal), and this bare word otherwise. */
+export const CLEAR_NOT_WRITTEN = 'Message not sent'
+
 async function clearInputForSend(args: {
   agent: string | null
   client: RpcClient
@@ -69,7 +73,7 @@ async function clearInputForSend(args: {
       return { message: INPUT_STILL_HOLDS_TEXT }
     }
     if (result === 'write-failed') {
-      return { message: 'Message not sent' }
+      return { message: CLEAR_NOT_WRITTEN }
     }
   } else if (
     !(await clearMobileNativeChatInput({
@@ -77,7 +81,7 @@ async function clearInputForSend(args: {
       clearInput: buildMobileNativeChatClearInputForText(...believedTexts)
     }))
   ) {
-    return { message: 'Message not sent' }
+    return { message: CLEAR_NOT_WRITTEN }
   }
   clearMobileNativeChatInputResidue(args.terminal)
   return null

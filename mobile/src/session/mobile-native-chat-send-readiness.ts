@@ -2,6 +2,8 @@ import { useMemo, useRef } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RelayHostReachability } from '../transport/relay-host-reachability'
 import type { StableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
+import { appWasAwaySince } from './app-foreground-clock'
+import { SEND_BUDGET_SPENT_AWAY } from './mobile-native-chat-send-budget-refusal'
 
 /** What a send needs to be true before it writes anything, read from the render
  *  that is current when the send looks, not the one that was current at the tap. */
@@ -29,6 +31,9 @@ export type MobileNativeChatSendUnready = {
   readonly neverConnected: boolean
   /** The link came back, but too little of the budget was left to write in. */
   readonly late: boolean
+  /** The app was out of the foreground while the send waited: Android ran no timer
+   *  then, so the wait (and the link's own redial) could not run either. */
+  readonly away: boolean
 }
 
 export type MobileNativeChatSendReadiness =
@@ -124,7 +129,9 @@ export function mobileNativeChatSendRefusal(
 function mobileNativeChatSendUnready(
   conditions: MobileNativeChatSendConditions,
   waitedMs = 0,
-  late = false
+  late = false,
+  /** When the wait began; null for a look that did not wait. */
+  waitedSince: number | null = null
 ): MobileNativeChatSendUnready {
   const { client } = conditions
   const state = client?.getState() ?? 'disconnected'
@@ -136,7 +143,8 @@ function mobileNativeChatSendUnready(
     waitedMs,
     reachability: logical?.getRelayHostReachability?.() ?? null,
     neverConnected: missing === 'connection' && (client?.getLastConnectedAt() ?? null) === null,
-    late
+    late,
+    away: waitedSince !== null && appWasAwaySince(waitedSince)
   }
 }
 
@@ -179,7 +187,7 @@ export async function waitForMobileNativeChatSendable(args: {
       // short on a slow relay, as it could before any wait.
       return !waited || remainingMs >= 0
         ? { ready: true, client }
-        : mobileNativeChatSendUnready(conditions, elapsed, true)
+        : mobileNativeChatSendUnready(conditions, elapsed, true, startedAt)
     }
     const state = conditions.client?.getState()
     // A refused pairing never comes back by itself; waiting only delays the news.
@@ -194,7 +202,7 @@ export async function waitForMobileNativeChatSendable(args: {
       conditions.client.notifyForeground('user-send')
     }
     if (remainingMs <= 0) {
-      return mobileNativeChatSendUnready(conditions, elapsed)
+      return mobileNativeChatSendUnready(conditions, elapsed, false, startedAt)
     }
     await new Promise((resolve) =>
       setTimeout(resolve, Math.min(MOBILE_NATIVE_CHAT_SEND_READY_POLL_MS, remainingMs))
@@ -212,14 +220,19 @@ const RELAY_REACHABILITY_REASON: Partial<Record<RelayHostReachability, string>> 
 }
 
 function connectionReason(unready: MobileNativeChatSendUnready, within: string): string {
+  // A wait the app spent in the background is the app's, not the desktop's: no
+  // timer ran, so neither the wait nor the link's redial could (2026-10-09).
   if (unready.late) {
-    return 'your desktop came back too late to send it. Send it again'
+    return unready.away ? SEND_BUDGET_SPENT_AWAY : 'your desktop came back too late to send it. Send it again'
   }
   const relayReason = unready.reachability
     ? RELAY_REACHABILITY_REASON[unready.reachability]
     : undefined
   if (relayReason) {
     return relayReason
+  }
+  if (unready.away) {
+    return SEND_BUDGET_SPENT_AWAY
   }
   if (!within) {
     return 'not connected to your desktop'

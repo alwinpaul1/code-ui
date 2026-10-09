@@ -8,7 +8,12 @@ import {
   readClaudeInput
 } from './claude-composer-screen'
 import { shellCommandOfSend } from './mobile-native-chat-shell-command'
-import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
+import {
+  MOBILE_NATIVE_CHAT_SCREEN_READ_MS,
+  readMobileNativeChatScreen,
+  type MobileNativeChatScreen
+} from './mobile-native-chat-screen-read'
+import { appWasAwaySince } from './app-foreground-clock'
 
 /**
  * What the desktop did with a message the host took.
@@ -126,6 +131,7 @@ export async function verifyClaudeSubmit(args: {
   const wait = args.wait ?? sleep
   const now = args.now ?? Date.now
   const startedAt = now()
+  const wallStartedAt = Date.now()
   const window = Math.min(
     SUBMIT_VERIFY_WINDOW_MS,
     args.deadline === undefined ? Infinity : args.deadline - startedAt
@@ -152,9 +158,45 @@ export async function verifyClaudeSubmit(args: {
   let failedLooks = 0
   let lastLookAt = -Infinity
   let sawWords = false
+  /** What one picture of the screen settles, or null when it settles nothing. */
+  const judge = (screen: MobileNativeChatScreen): SubmitVerdict | null => {
+    looked = true
+    const notice = claudeSubmitNotice(screen.lines)
+    if (notice) {
+      return { kind: 'not-sent', message: `Not sent. Claude says: ${notice}.` }
+    }
+    const input = readClaudeInput(screen.lines, screen.draft)
+    if (!input.located) {
+      return null
+    }
+    if (heard(input.text)) {
+      sawWords = true
+      return null
+    }
+    // The words are not in the input. That is a submitted message, or a body
+    // Claude has not read yet (see SUBMIT_SETTLE_MS): told apart by having seen
+    // the words in the input, or the prompt drawn above the composer. What is
+    // left in the input may be a placeholder (a prompt suggestion, the queue
+    // hint, "Message @agent…") or text from the desk, neither of which is this
+    // message.
+    return sawWords ||
+      claudeSentPromptTexts(screen.lines).some((row) =>
+        photos
+          ? words !== '' && heard(row)
+          : words !== '' && dense(row).startsWith(words)
+      ) ||
+      (shell !== null &&
+        args.priorBashRows !== null &&
+        claudeSentBashTexts(screen.lines).filter(heard).length >
+          (args.priorBashRows ?? []).filter(heard).length)
+      ? { kind: 'sent' }
+      : null
+  }
+  const beaconHeard = (): boolean =>
+    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text)
   while (now() - startedAt < window) {
     await wait(TICK_MS)
-    if (shell === null && args.receipts && beaconHasWords(args.receipts(), args.seenNonces, args.text)) {
+    if (beaconHeard()) {
       return { kind: 'sent' }
     }
     const elapsed = now() - startedAt
@@ -177,38 +219,27 @@ export async function verifyClaudeSubmit(args: {
       }
       continue
     }
-    looked = true
-    const notice = claudeSubmitNotice(screen.lines)
-    if (notice) {
-      return { kind: 'not-sent', message: `Not sent. Claude says: ${notice}.` }
+    const verdict = judge(screen)
+    if (verdict) {
+      return verdict
     }
-    const input = readClaudeInput(screen.lines, screen.draft)
-    if (!input.located) {
-      continue
-    }
-    if (heard(input.text)) {
-      sawWords = true
-      continue
-    }
-    // The words are not in the input. That is a submitted message, or a body
-    // Claude has not read yet (see SUBMIT_SETTLE_MS): told apart by having seen
-    // the words in the input, or the prompt drawn above the composer. What is
-    // left in the input may be a placeholder (a prompt suggestion, the queue
-    // hint, "Message @agent…") or text from the desk, neither of which is this
-    // message.
-    if (
-      sawWords ||
-      claudeSentPromptTexts(screen.lines).some((row) =>
-        photos
-          ? words !== '' && heard(row)
-          : words !== '' && dense(row).startsWith(words)
-      ) ||
-      (shell !== null &&
-        args.priorBashRows !== null &&
-        claudeSentBashTexts(screen.lines).filter(heard).length >
-          (args.priorBashRows ?? []).filter(heard).length)
-    ) {
+  }
+  // The window ran out while the app was out of the foreground (2026-10-09): Android
+  // ran no timer then, so the looks it was meant to hold never ran, and the send came
+  // back to a window already over. One more look, on its own short budget since the
+  // send's has gone the same way: Claude has had all that time to draw the prompt.
+  if (appWasAwaySince(wallStartedAt)) {
+    if (beaconHeard()) {
       return { kind: 'sent' }
+    }
+    const screen = await readMobileNativeChatScreen({
+      client: args.client,
+      terminal: args.terminal,
+      deadline: Date.now() + MOBILE_NATIVE_CHAT_SCREEN_READ_MS
+    })
+    const verdict = screen ? judge(screen) : null
+    if (verdict) {
+      return verdict
     }
   }
   return { kind: looked ? 'unknown' : 'unverified' }

@@ -9,6 +9,7 @@ import {
 } from '../../../src/shared/structured-agent-session-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { spentSendBudgetRefusal } from './mobile-native-chat-send-budget-refusal'
 import {
   requestStructuredAgentSessionMutation,
   structuredSessionOperationId,
@@ -34,7 +35,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
 }): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs = timeoutForDeadline(input.deadline)
   if (timeoutMs === null) {
-    input.onError('Message not sent')
+    // Only a deadline is ever spent. Say why: the app was away, or the desktop slow.
+    input.onError((input.deadline !== undefined && spentSendBudgetRefusal('Message', input.deadline)) || 'Message not sent')
     return 'rejected'
   }
   const requestedBody = structuredAgentSessionSendBody(input.text, input.attachments)

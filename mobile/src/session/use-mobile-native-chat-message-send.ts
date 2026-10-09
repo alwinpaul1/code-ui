@@ -4,6 +4,7 @@ import {
   openMobileNativeChatSendBudget,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
+import { spentSendBudgetRefusal } from './mobile-native-chat-send-budget-refusal'
 import type { PickDispatch, PickDispatchOptions } from './session-option-pick-failure'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
@@ -20,7 +21,7 @@ import { COMMAND_UNCONFIRMED, typeCodexChatCommand } from './mobile-native-chat-
 import { unconfirmedChatSendNotice } from './mobile-native-chat-shell-command'
 import { readSendUnderDialogRefusal, refusedUnderDialog } from './mobile-native-chat-dialog-guard'
 import { notePhoneTerminalSend } from './native-chat-kept-session-state'
-import { writeChatSend } from './mobile-native-chat-send-write'
+import { CLEAR_NOT_WRITTEN, writeChatSend } from './mobile-native-chat-send-write'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 
@@ -204,8 +205,11 @@ export function useMobileNativeChatMessageSend(args: {
         deviceToken: deviceTokenRef.current,
         deadline
       }
+      // A bare "Message not sent" below says why when the budget is what ran out
+      // (spentSendBudgetRefusal: the app was away, or the desktop was slow).
+      const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
-        report('Message not sent')
+        report(notSent())
         return 'rejected'
       }
       // Why: empty the composer at send time, not on the ack — over relay the
@@ -245,7 +249,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
         }
-        report(written.message)
+        report(written.message === CLEAR_NOT_WRITTEN ? notSent() : written.message)
         return 'rejected'
       }
       const outcome = written.outcome
@@ -273,7 +277,7 @@ export function useMobileNativeChatMessageSend(args: {
         if (syncComposer) {
           restoreRejectedDraft(origin, draftText)
         }
-        report('Message not sent')
+        report(notSent())
         return 'rejected'
       }
       if (classification === 'chat') {
