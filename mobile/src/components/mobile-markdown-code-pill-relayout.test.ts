@@ -16,7 +16,6 @@ import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
 /** The system font size (Settings > Display > Font size), as RN reads it. */
 const system = vi.hoisted(() => ({ fontScale: 1 }))
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
   Linking: { openURL: vi.fn() },
   PixelRatio: { getFontScale: () => system.fontScale },
   Pressable: 'Pressable',

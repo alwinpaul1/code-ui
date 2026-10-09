@@ -40,8 +40,7 @@ export function MobileMarkdownCodeChip({
   chipScale,
   typography = DEFAULT_MARKDOWN_TYPOGRAPHY,
   table,
-  onPress,
-  hold = HOLD_DOES_NOT_OPEN
+  onPress
 }: {
   /** The surface's type: the pill's sizes and face (the code face in the
    *  chat transcript). `styles` was made from the same one. */
@@ -58,9 +57,6 @@ export function MobileMarkdownCodeChip({
   table: boolean
   /** Opens the file a path pill names; a tap, never a hold (markdown-link-hold.ts). */
   onPress?: () => void
-  /** What a hold on a file pill does: nothing by default, or, on the Android
-   *  chat transcript, the message's long press (MobileMarkdown's `onLongPress`). */
-  hold?: { onLongPress: () => void } | typeof HOLD_DOES_NOT_OPEN
 }) {
   // The room for ink grows with the type, in whole pixels (see the style).
   const inkRoom = chipScale
@@ -110,7 +106,7 @@ export function MobileMarkdownCodeChip({
           onPress ? styles.inlineCodeLink : null
         ]}
         onPress={onPress}
-        {...(onPress ? hold : null)}
+        {...(onPress ? HOLD_DOES_NOT_OPEN : null)}
       >
         {piece}
       </Text>

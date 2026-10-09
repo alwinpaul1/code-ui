@@ -6,6 +6,7 @@ import { createPhone, type PhoneAs } from './mobile-markdown-code-pill-phone.tes
 import { HANDOVER_2026_09_26_LINES_18_TO_68 } from './mobile-markdown-handover-fixture.test-support'
 import { pillRows, type PillRow } from './mobile-markdown-pill-rows.test-support'
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY, type MarkdownTypography } from './mobile-markdown-prose-scale'
 
 const system = vi.hoisted(() => ({ fontScale: 1, api: 34 }))
 vi.mock('react-native', () => ({
@@ -38,9 +39,9 @@ afterEach(() => {
 /** The Files tab's reader on a Galaxy S23 Ultra: 384 dp less its margins. */
 const READER_WIDTH = 360
 
-function rows(content: string, width = READER_WIDTH, as: PhoneAs = {}) {
+function rows(content: string, width = READER_WIDTH, as: PhoneAs = {}, typography?: MarkdownTypography) {
   act(() => {
-    renderer = create(createElement(MobileMarkdown, { content, textScale: as.textScale ?? 1 }))
+    renderer = create(createElement(MobileMarkdown, { content, textScale: as.textScale ?? 1, typography }))
   })
   act(() => device.layOutDocument(width))
   const { lineWidth } = device.settle(width, as)
@@ -108,5 +109,26 @@ describe('code pills in the HANDOVER.md the phone drew them over', () => {
       .filter(({ line, placed: other }) => Math.abs(line.height - other.height) > 0.01)
       .map(({ line, placed: other }) => `"${line.text}" drawn ${line.height} dp, placed ${other.height} dp`)
     expect(apart).toEqual([])
+  })
+})
+
+// 2026-10-09: the transcript keeps a run of prose one selectable Text (the
+// fork's hold-to-copy, #22871 reverted) and sets its blocks 7 dp apart by
+// drawing the blank line between them at 7 dp. That blank line is a paragraph
+// of its own whose only line height is the gap's, so the layout a pill is
+// placed from and the one the words are drawn from still agree on every line.
+describe('code pills in a transcript reply whose blocks are 7 dp apart', () => {
+  it('keeps every pill in the document on its row', () => {
+    expect(off(rows(HANDOVER_2026_09_26_LINES_18_TO_68, READER_WIDTH, {}, TRANSCRIPT_MARKDOWN_TYPOGRAPHY).pills)).toEqual([])
+  })
+
+  it('lays every line out at one height, the gap lines at 7 dp, where pills are placed and where words are drawn', () => {
+    const { drawn, placed } = rows(HANDOVER_2026_09_26_LINES_18_TO_68, READER_WIDTH, {}, TRANSCRIPT_MARKDOWN_TYPOGRAPHY)
+    const apart = drawn
+      .map((line, index) => ({ line, placed: placed[index]! }))
+      .filter(({ line, placed: other }) => Math.abs(line.height - other.height) > 0.01)
+      .map(({ line, placed: other }) => `"${line.text}" drawn ${line.height} dp, placed ${other.height} dp`)
+    expect(apart).toEqual([])
+    expect(drawn.filter((line) => line.text.trim() === '').map((line) => line.height)).toContain(7)
   })
 })

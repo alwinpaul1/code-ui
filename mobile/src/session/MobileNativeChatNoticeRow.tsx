@@ -6,7 +6,6 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { MobileNativeChatLongPressRow } from './MobileNativeChatLongPressRow'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
@@ -31,14 +30,11 @@ export function isRenderableNativeChatNotice(block: NativeChatTextBlock): boolea
 export function MobileNativeChatNoticeRow({
   block,
   fontScale = 1,
-  onOpenFile,
-  onLongPress
+  onOpenFile
 }: {
   block: NativeChatTextBlock
   fontScale?: number
   onOpenFile?: (relativePath: string) => void
-  /** Android only: the message's actions sheet, for the plan's Markdown (Orca #22871). */
-  onLongPress?: () => void
 }) {
   const theme = useTheme()
   const styles = useMemo(() => makeNoticeStyles(theme), [theme])
@@ -63,7 +59,7 @@ export function MobileNativeChatNoticeRow({
 
   if (block.presentation === 'plan-document') {
     return (
-      <MobileNativeChatLongPressRow onLongPress={onLongPress} style={styles.card}>
+      <View style={styles.card}>
         <Txt variant="caption" weight="semibold" tone="secondary">
           {NATIVE_CHAT_NOTICE_COPY.plan}
         </Txt>
@@ -71,11 +67,9 @@ export function MobileNativeChatNoticeRow({
           content={block.text}
           textScale={fontScale}
           onOpenFile={onOpenFile}
-          rangeSelectable
           typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
-          onLongPress={onLongPress}
         />
-      </MobileNativeChatLongPressRow>
+      </View>
     )
   }
 

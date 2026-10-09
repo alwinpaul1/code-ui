@@ -27,9 +27,9 @@ export function MobileSyntaxLine({
   /** The code colours: the live theme's `useTheme().syntax`. */
   palette: SyntaxPalette
   gutterWidth: number
-  /** False on the Android chat transcript, which draws with no inline
-   *  selection (Orca #22871, mobile-markdown-android-selection.test.tsx).
-   *  The file reader keeps the default. */
+  /** False while a list is scrolling: a selectable Text under a finger that
+   *  stops a fling arms a long-press the reader did not ask for, which
+   *  MobileMarkdown.selection.test.ts pins. The file reader keeps the default. */
   selectable?: boolean
   /** Digits in the file's LAST line number. A fixed 3 shifted every line from
    *  1000 onward, because a nested `Text` ignores `width` (2026-09-13). */
