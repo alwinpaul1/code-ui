@@ -53,7 +53,10 @@ describe('the detached runner', () => {
   // runner used to swallow its own: Ctrl-C hung on a child like `sleep`.
   it('escalates an interrupt a non-node child ignores: SIGTERM, then SIGKILL, and exits 130', async () => {
     const started = Date.now()
-    const child = spawn('node', [RUNNER, 'sleep', '60'], { stdio: 'ignore' })
+    // A duration no other run uses, so a concurrent run of this test (another
+    // worker, another checkout) never reads as this one's leftover.
+    const nap = `60.${process.pid}${Date.now() % 1000}`
+    const child = spawn('node', [RUNNER, 'sleep', nap], { stdio: 'ignore' })
     const exit = new Promise<number | null>((resolve) => child.on('exit', (code) => resolve(code)))
     await new Promise((resolve) => setTimeout(resolve, 800))
     child.kill('SIGINT')
@@ -63,7 +66,9 @@ describe('the detached runner', () => {
     }
     expect(code).toBe(130)
     expect(Date.now() - started).toBeLessThan(12_000)
-    // Nothing is left sleeping.
-    expect(spawnSync('sh', ['-c', 'pgrep -f "sleep 60" >/dev/null && echo alive || echo gone'], { encoding: 'utf8' }).stdout.trim()).toBe('gone')
+    // Nothing is left sleeping. `[s]leep`: on Linux the `sh -c` running pgrep
+    // has the sleep's own command line in its arguments and matched itself, so
+    // this read "alive" on every ubuntu-latest run (CI, 2026-10-09).
+    expect(spawnSync('sh', ['-c', `pgrep -f "[s]leep ${nap}" >/dev/null && echo alive || echo gone`], { encoding: 'utf8' }).stdout.trim()).toBe('gone')
   }, 30_000)
 })

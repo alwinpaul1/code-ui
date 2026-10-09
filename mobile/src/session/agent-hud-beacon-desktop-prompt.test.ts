@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CLAUDE_HUD_PROMPT_HOOK_SCRIPT } from './agent-hud-launch-args'
@@ -13,11 +13,11 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 /** The desk copy the phone reads when the real prompt hook runs on `prompt`:
  *  the hook under /bin/sh, its frame written to a file, decoded by the
  *  phone's own channel reader and beacon parser. */
-function deskCopy(prompt: string): DesktopPrompt {
+function deskCopy(prompt: string, env: NodeJS.ProcessEnv = {}): DesktopPrompt {
   const tty = join(mkdtempSync(join(tmpdir(), 'cuihud-cut-')), 'tty')
   execFileSync('/bin/sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
     input: JSON.stringify({ prompt }),
-    env: { ...process.env, CUIHUD_TTY: tty }
+    env: { ...process.env, ...env, CUIHUD_TTY: tty }
   })
   const payload = decodeAgentHudChannelText(readFileSync(tty, 'latin1')).join('\n')
   const copy = parseAgentHudBeaconPayload(payload)?.desktopPrompt
@@ -52,6 +52,36 @@ describe('a long desk prompt the hook had to cut', () => {
     expect(new TextEncoder().encode(copy.text).length).toBeGreaterThanOrEqual(1997)
     expect(typed.startsWith(copy.text)).toBe(true)
     expect(withoutLandedDesktopPrompts([copy], [row(typed)])).toEqual([])
+  })
+
+  // CI on ubuntu-latest, 2026-10-09: the two multibyte cases above came back
+  // uncut. Ubuntu's awk counts CHARACTERS under a UTF-8 locale (gawk does;
+  // macOS's awk 20200816 counts bytes), so `substr($0,1,2000)` kept a
+  // 1501-character, 3001-byte prompt whole and the beacon carried up to four
+  // times the bytes the cut exists to bound, on any Linux host. This awk
+  // stands in for gawk on the one program the hook runs: characters under a
+  // UTF-8 locale, bytes under LC_ALL=C.
+  it('cuts at 2000 bytes where awk counts characters (gawk under a UTF-8 locale)', () => {
+    const bin = mkdtempSync(join(tmpdir(), 'cuihud-gawk-'))
+    writeFileSync(
+      join(bin, 'awk'),
+      [
+        `#!${process.execPath}`,
+        "const raw = require('fs').readFileSync(0)",
+        "const loc = process.env.LC_ALL || process.env.LC_CTYPE || process.env.LANG || ''",
+        "const bytes = loc === 'C' || loc === 'POSIX' || !/utf-?8/i.test(loc)",
+        "const out = bytes ? raw.subarray(0, 2000) : Buffer.from([...raw.toString('utf8')].slice(0, 2000).join(''))",
+        "process.stdout.write(Buffer.concat([out, Buffer.from('\\n')]))"
+      ].join('\n')
+    )
+    chmodSync(join(bin, 'awk'), 0o755)
+    const env = { PATH: `${bin}:${process.env.PATH ?? ''}`, LANG: 'C.UTF-8', LC_ALL: '', LC_CTYPE: '' }
+    for (const typed of ['a' + 'é'.repeat(1500), 'a' + '\u{1F600}'.repeat(600)]) {
+      const copy = deskCopy(typed, env)
+      expect(copy.cut).toBe(true)
+      expect(new TextEncoder().encode(copy.text).length).toBeLessThanOrEqual(2000)
+      expect(withoutLandedDesktopPrompts([copy], [row(typed)])).toEqual([])
+    }
   })
 
   it('retires a long prompt of one-byte letters, as it always did', () => {

@@ -25,7 +25,10 @@ export const CLAUDE_HUD_PROMPT_HOOK_SCRIPT = [
   ENCODE_FN,
   // JSON-escaped, so the value is one line and any quote inside it is \".
   'pr=$(g "\\"prompt\\":\\"(([^\\"\\\\\\\\]|\\\\\\\\.)*)\\"")',
-  'pf=$(printf %s "$pr" | awk "{print substr(\\$0,1,2000)}")',
+  // LC_ALL=C: the cut is 2000 BYTES. gawk (Ubuntu's awk) counts characters
+  // under a UTF-8 locale, so without it a long multibyte prompt went uncut on
+  // a Linux host (CI, 2026-10-09).
+  'pf=$(printf %s "$pr" | LC_ALL=C awk "{print substr(\\$0,1,2000)}")',
   // `cut=1` when the text was shortened: the phone matched a long prompt to
   // its transcript row by guessing at the cut length, and the guess was wrong
   // whenever escapes or multibyte text moved the boundary (2026-09-13).
