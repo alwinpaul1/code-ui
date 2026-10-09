@@ -16,7 +16,10 @@ describe('the model pills read the fallback with the session command pair laid o
     // (claude-screen-model-pair.ts), from the same HUD the pills read.
     expect(controller).toMatch(/useClaudeTranscriptModel\(\{[^}]*screenStatement: screenModelStatement \}\)/)
     expect(controller).toMatch(/modelStatement: screenModelStatement\s*\} = useMobileNativeChatHud\(/)
-    expect(controller).toMatch(/beaconHandle: activeHandle, beaconStoredAt: [^,]*hudBeacon\?\.receivedAt/)
+    // The liveness-checked beacon's time, never the stored one's: a written-off
+    // beacon timed a /model row over the badge for good (review, 2026-10-09).
+    expect(controller).toMatch(/beaconHandle: activeHandle, beaconStoredAt: [^,]*hudLiveBeacon\?\.receivedAt/)
+    expect(controller).not.toMatch(/beaconStoredAt: [^,]*hudBeacon\?\./)
     expect(controller).toMatch(/liveEffort: claudeLive\.effort/)
     expect(controller).toMatch(/liveModel: claudeLive\.model/)
   })

@@ -35,7 +35,7 @@ const WORKTREE = 'repo-1::C:\\Users\\danny\\code\\app'
 const SESSION = 'a3f1c2d4-5b6e-4f70-8a91-b2c3d4e5f607'
 const SCOPE = mobileNativeChatScopeKey(HOST, WORKTREE, 'tab-1')!
 
-type Probe = { liveModel?: string | null; beacon?: boolean; working?: boolean; sessionId?: string | null }
+type Probe = { liveModel?: string | null; beacon?: boolean; working?: boolean; sessionId?: string | null; beaconCanCome?: boolean; screenRead?: boolean }
 
 describe('when a Claude chat with no live model asks the host what answered', () => {
   let host: AnsweringClient
@@ -43,7 +43,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
   let latest: { fallback: ClaudeModelFallback; requestScan: () => void } | null = null
   let model = 'claude-opus-5-5'
 
-  function Harness({ liveModel = null, beacon = false, working = false, sessionId = SESSION }: Probe) {
+  function Harness({ liveModel = null, beacon = false, working = false, sessionId = SESSION, beaconCanCome, screenRead }: Probe) {
     latest = useClaudeTranscriptModel({
       client: host.client,
       hostId: HOST,
@@ -54,6 +54,8 @@ describe('when a Claude chat with no live model asks the host what answered', ()
       connected: true,
       liveModel,
       beacon,
+      ...(beaconCanCome === undefined ? {} : { beaconCanCome }),
+      ...(screenRead === undefined ? {} : { screenRead }),
       agentWorking: working
     })
     return null
@@ -118,6 +120,33 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 4)
     expect(scans()).toBe(0)
     expect(latest?.fallback).toEqual({ kind: 'none' })
+  })
+
+  // 2026-10-09: the pill came up seconds late on every hand-typed tab, which
+  // can never beacon, because it waited out a settle meant for tabs that might.
+  it('asks once the first screen read shows no badge, unforced, when no beacon can come (a hand-typed tab, a Windows host)', async () => {
+    render({ beaconCanCome: false, screenRead: true })
+    await advance(0)
+    expect(scans()).toBe(1)
+    expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+  })
+
+  it('asks nothing at once, even where no beacon can come, while the status line states the model', async () => {
+    render({ beaconCanCome: false, screenRead: true, liveModel: 'claude-fable-5-1' })
+    await advance(0)
+    expect(scans()).toBe(0)
+    render({ beaconCanCome: false, screenRead: true, sessionId: null })
+    await advance(0)
+    expect(scans()).toBe(0)
+  })
+
+  it('asks after one five-second heartbeat and its slack when the tab may still beacon', async () => {
+    render()
+    await advance(5_499)
+    expect(scans()).toBe(0)
+    await advance(1)
+    expect(scans()).toBe(1)
   })
 
   it('asks nothing and states nothing before the tab knows its session', async () => {

@@ -38,8 +38,15 @@ also keeps only one cache slot (`cached-session-list.ts`). So the phone uses it
 under a strict budget (`mobile/src/session/claude-transcript-model-scan.ts`,
 `use-claude-transcript-model.ts`):
 
-- **When it runs:** only for a Claude chat on the terminal lane that has had no
-  beacon and no badge for 8 s.
+- **When it runs:** only for a Claude chat on the terminal lane with no live
+  beacon naming a model and no badge. A tab that may still beacon (launched as
+  Claude, on a host that is not Windows or has not said) waits 5.5 s for one:
+  one 5 s status-line beat and slack. A tab typed in by hand and a Windows host
+  can never beacon, so they ask, unforced, as soon as the chat's first screen
+  read lands with no badge on it, or after the settle if none lands (2026-10-09;
+  it was 8 s for every tab). The last reading per session is also kept on the phone
+  (`codeui:chat-transcript-models`), so a relaunch shows it before asking; it
+  stands until a scan that lists the session replaces it.
 - **Triggers:** it asks the host when the chat opens (and again on a new
   connection), when the user opens the model sheet, and at the end of the
   first turn that began after the phone itself changed the model. It never

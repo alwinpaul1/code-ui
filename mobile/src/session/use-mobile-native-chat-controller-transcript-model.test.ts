@@ -15,7 +15,13 @@ const fakes = vi.hoisted(() => ({
     label: string | null
     effort: string | null
     context: null
-  }
+  },
+  /** The beacon the HUD believed: live (not written off) and this session's. */
+  liveBeacon: null as { modelId: string | null } | null,
+  /** Null until the HUD's first screen read lands. */
+  taskCompletions: [] as unknown[] | null,
+  /** The chat's rows (the transcript). */
+  messages: [] as unknown[]
 }))
 vi.mock('./use-mobile-native-chat-hud', async () => {
   const actual = await vi.importActual<typeof import('./use-mobile-native-chat-hud')>(
@@ -26,6 +32,7 @@ vi.mock('./use-mobile-native-chat-hud', async () => {
     useMobileNativeChatHud: () => ({
       observation: null,
       live: fakes.live,
+      liveBeacon: fakes.liveBeacon,
       refresh: async () => null,
       dialogOptions: null,
       dialogKind: null,
@@ -33,7 +40,7 @@ vi.mock('./use-mobile-native-chat-hud', async () => {
       permissionDismissed: false,
       queuedMessages: [],
       sentPrompts: [],
-      taskCompletions: [],
+      taskCompletions: fakes.taskCompletions,
       peerNotices: [],
       spinner: null,
       sentPhotos: []
@@ -47,7 +54,7 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: () => null
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => ({ messages: [], status: 'ready', transcriptLoading: false })
+  useMobileNativeChatSession: () => ({ messages: fakes.messages, status: 'ready', transcriptLoading: false })
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
@@ -106,7 +113,9 @@ import {
   refused,
   type AnsweringClient
 } from '../agent-history/agent-history-panel.test-support'
+import { noteHostPlatform, resetHostPlatformsForTests } from '../transport/host-platform-store'
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
+import { resetSessionCommandPairCacheForTests } from './claude-session-command-pair'
 import {
   useMobileNativeChatController,
   type MobileNativeChatController
@@ -145,7 +154,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
   let host: AnsweringClient
   let sessions: unknown[] = [neighbourRow, ownRow]
   let hostCount = 0
-  const tab = {
+  const tab: { launchAgent?: string } & Record<string, unknown> = {
     type: 'terminal',
     id: 'tab-1',
     terminal: 'term-1',
@@ -153,13 +162,14 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     agentStatus: { state: 'done', agentType: 'claude', providerSession: { id: OWN } },
     isActive: true
   }
+  const hostIdNow = (): string => `host-win-${String(hostCount)}`
 
   function Harness(): null {
     controller = useMobileNativeChatController({
       client: host.client,
       connState: 'connected',
       tabsLive: true,
-      hostId: `host-win-${String(hostCount)}`,
+      hostId: hostIdNow(),
       worktreeId: `repo-1::${FOLDER}`,
       activeSessionTab: tab as never,
       activeSessionTabId: 'tab-1',
@@ -195,10 +205,16 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     vi.useFakeTimers()
     vi.setSystemTime(Date.parse('2026-09-27T10:10:00.000Z'))
     resetAgentHudBeacons()
+    resetHostPlatformsForTests()
+    tab.launchAgent = 'claude'
     // A host of its own per case: the five-minute budget is per host and
     // outlives the component, which is the point of it.
     hostCount += 1
     fakes.live = { model: null, label: null, effort: null, context: null }
+    fakes.liveBeacon = null
+    fakes.taskCompletions = []
+    fakes.messages = []
+    resetSessionCommandPairCacheForTests()
     sessions = [neighbourRow, ownRow]
     host = createAnsweringClient((method) =>
       method === 'aiVault.listSessions'
@@ -246,6 +262,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
   it('lets the beacon win over the transcript, and asks the host nothing', async () => {
     fakes.live = { model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium', context: null }
+    fakes.liveBeacon = { modelId: 'claude-fable-5-1' }
     act(() => {
       consumeAgentHudBeacons(
         'term-1',
@@ -257,6 +274,75 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
     expect(host.sent('aiVault.listSessions')).toHaveLength(0)
     expect(pills().header).toEqual({ model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' })
+  })
+
+  // 2026-10-09: the controller told the fallback "a beacon was heard" for any
+  // beacon stored for this session, including one the HUD had written off
+  // (a hand-started `claude -c` keeps the session id of the phone-launched
+  // process that beaconed before it, 2026-09-18) and one that names no model.
+  // The fallback then stood down for a beacon the pill does not show, and the
+  // pill stayed blank for good.
+  it('shows the transcript model, not a blank pill, when the beacon left on the terminal was written off', async () => {
+    act(() => {
+      consumeAgentHudBeacons(
+        'term-1',
+        `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} model=claude-fable-5-1 name=Fable%205.1 effort=medium${BEL}`
+      )
+    })
+    // The HUD wrote it off (its process is gone) and no badge is on screen.
+    fakes.liveBeacon = null
+    rerender()
+    await settle(10_000)
+
+    expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    expect(pills().header?.label).toBe('Opus 5.5')
+    expect(pills().composer?.label).toBe('Opus 5.5')
+  })
+
+  it('shows the transcript model when the live beacon names no model', async () => {
+    act(() => {
+      consumeAgentHudBeacons('term-1', `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} hk=1 up=41:hello${BEL}`)
+    })
+    fakes.liveBeacon = { modelId: null }
+    rerender()
+    await settle(10_000)
+
+    expect(pills().composer?.label).toBe('Opus 5.5')
+  })
+
+  // Review, 2026-10-09: the time the beacon was last heard, which a model
+  // command must be newer than to outrank the live pair, was taken from the
+  // stored beacon even after the HUD wrote it off. With the badge on the user's
+  // own status line speaking, a `/model` row seen after that dead beacon
+  // outranked the badge for good: an alt+p back to Opus writes no row, and a
+  // dead process never beacons again.
+  it("never lets a command seen after a written-off beacon outrank the status line's badge", async () => {
+    const command = (name: string, body: string, at: number) => [
+      { id: `c${at}`, role: 'user', blocks: [{ type: 'text', text: `<command-name>/${name}</command-name>\n<command-args></command-args>` }], timestamp: at, source: 'transcript' },
+      { id: `o${at}`, role: 'user', blocks: [{ type: 'text', text: `<local-command-stdout>${body}</local-command-stdout>` }], timestamp: at, source: 'transcript' }
+    ]
+    act(() => {
+      consumeAgentHudBeacons(
+        'term-1',
+        `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} model=claude-opus-5-5 name=Opus%205.5 effort=xhigh${BEL}`
+      )
+    })
+    // The HUD wrote that beacon off; the badge says Opus.
+    fakes.liveBeacon = null
+    fakes.live = { model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh', context: null }
+    fakes.messages = command('model', 'Set model to `Opus 5.5` for this session only', 1_000)
+    rerender()
+    await settle(10_000)
+    // `/model` to Sonnet, then alt+p back to Opus, which writes no row.
+    fakes.messages = [
+      ...fakes.messages,
+      ...command('model', 'Set model to `Sonnet 5.5` for this session only', 2_000)
+    ]
+    rerender()
+    await settle(1_000)
+
+    expect(pills().header).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh' })
+    expect(pills().composer?.label).toBe('Opus 5.5')
   })
 
   it('gives way to a live pair that arrives after the scan', async () => {
@@ -292,5 +378,64 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     expect(host.sent('aiVault.listSessions')).toHaveLength(1)
     expect(pills().header?.model).toBeNull()
     expect(pills().composer?.model ?? null).toBeNull()
+  })
+
+  // Reported 2026-10-09: the pill and its effort came up seconds late on a
+  // hand-typed Claude tab (no launch agent, so no beacon flag) on a macOS host,
+  // because the chat waited out a settle meant for tabs that might beacon.
+  describe('how soon it asks the host', () => {
+    function render(): void {
+      act(() => renderer?.unmount())
+      act(() => {
+        renderer = create(createElement(Harness))
+      })
+    }
+
+    it('shows the model at once on a hand-typed tab, which no beacon flag reached', async () => {
+      delete tab.launchAgent
+      noteHostPlatform(hostIdNow(), 'darwin')
+      render()
+      await settle(0)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+      expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
+      expect(pills().composer?.label).toBe('Opus 5.5')
+    })
+
+    it('asks nothing on a hand-typed tab until its first screen read has landed', async () => {
+      delete tab.launchAgent
+      fakes.taskCompletions = null
+      render()
+      await settle(1_000)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
+      fakes.taskCompletions = []
+      rerender()
+      await settle(0)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    })
+
+    it('shows the model at once on a Windows host, which takes no beacon flag', async () => {
+      noteHostPlatform(hostIdNow(), 'win32')
+      render()
+      await settle(0)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+      expect(pills().composer?.label).toBe('Opus 5.5')
+    })
+
+    it('still gives a phone-launched tab on a Mac one heartbeat to beacon before asking', async () => {
+      noteHostPlatform(hostIdNow(), 'darwin')
+      render()
+      await settle(5_000)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
+      await settle(500)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    })
+
+    it('waits the same heartbeat while the host has not yet said what it runs on', async () => {
+      render()
+      await settle(5_000)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
+      await settle(500)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    })
   })
 })

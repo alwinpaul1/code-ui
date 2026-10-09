@@ -25,10 +25,17 @@ import { terminalDialogKind, type TerminalDialogKind } from './mobile-native-cha
 import { isCodexTerminalLocked } from './codex-terminal-lock'
 
 const HUD_POLL_MS = 5_000
+/** How soon a watch's first read is tried again when it did not land (failed,
+ *  refused, or answered from the stream fallback). Once only: a host that stays
+ *  down is then read at the poll's cadence, never in a loop. Without it the
+ *  pills waited a whole idle poll after a chat opened over a relay still
+ *  settling (2026-10-09). */
+export const HUD_FIRST_READ_RETRY_MS = 1_000
 
 /**
  * While chat covers a terminal, read its screen for live controls and queued
- * messages: once per second while active, every five seconds while idle.
+ * messages: once per second while active, every five seconds while idle, and
+ * once more a second after a watch's first read if that one did not land.
  *
  * Why polling `terminal.read`: chat pauses the terminal stream, the hook report
  * has no effort, and the host's mobile allowlist exposes no transcript read.
@@ -148,6 +155,8 @@ export function useMobileTerminalHudObservation(args: {
     let sawPermission = false
     let active = true
     let inFlight = false
+    /** A read of the live screen has come back for this watch. */
+    let landed = false
     const read = async (): Promise<TerminalHudObservation | null> => {
       const handle = handleRef.current
       if (!handle || inFlight) {
@@ -186,6 +195,7 @@ export function useMobileTerminalHudObservation(args: {
         if (terminal.terminal?.source && terminal.terminal.source !== 'screen') {
           return null
         }
+        landed = true
         const raw = terminal.terminal?.tail ?? terminal.terminal?.lines
         const lines = Array.isArray(raw)
           ? raw.filter((line): line is string => typeof line === 'string')
@@ -286,9 +296,20 @@ export function useMobileTerminalHudObservation(args: {
       }
     }
     readRef.current = read
-    void read()
+    let retry: ReturnType<typeof setTimeout> | null = null
+    void read().then(() => {
+      if (active && !landed) {
+        retry = setTimeout(() => {
+          retry = null
+          void read()
+        }, HUD_FIRST_READ_RETRY_MS)
+      }
+    })
     return () => {
       active = false
+      if (retry) {
+        clearTimeout(retry)
+      }
       readRef.current = async () => null
       // Not read again until the next watch's first read, which finds what
       // was painted meanwhile rather than watching it arrive.

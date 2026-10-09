@@ -113,14 +113,28 @@ export function transcriptModelForSession(
   rows: readonly unknown[],
   sessionId: string
 ): TranscriptModel | null {
+  const row = claudeRowForSession(rows, sessionId)
+  if (row === null) {
+    return null
+  }
+  const model = typeof row.model === 'string' ? row.model.trim() : ''
+  const label = claudeTranscriptModelName(model)
+  return label === null ? null : { model, label }
+}
+
+/** Whether a host session list holds Claude's own row for exactly this
+ *  session, readable or not: a list that does not hold it (a scan of another
+ *  folder, a session past the row limit) says nothing about it. */
+export function listsClaudeSession(rows: readonly unknown[], sessionId: string): boolean {
+  return claudeRowForSession(rows, sessionId) !== null
+}
+
+function claudeRowForSession(rows: readonly unknown[], sessionId: string): Record<string, unknown> | null {
   for (const entry of rows) {
     const row = record(entry)
-    if (row?.agent !== 'claude' || row.sessionId !== sessionId || row.subagent) {
-      continue
+    if (row?.agent === 'claude' && row.sessionId === sessionId && !row.subagent) {
+      return row
     }
-    const model = typeof row.model === 'string' ? row.model.trim() : ''
-    const label = claudeTranscriptModelName(model)
-    return label === null ? null : { model, label }
   }
   return null
 }

@@ -127,7 +127,9 @@ const HEAD_MAIN_HOOK_SHA256 = '090cc40fd4a219699215880baf1f967aa90b41f99e0c877af
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
-const HEAD_HOOK_BINDING_SHA256 = '43e1a34ae749466e370fd4aa37a730e337427be6022ae23ce95607daca520f05'
+// 2026-10-09: hostId binds in the tab reconciliation, which files the probed host platform
+// under it for the chat's model pill (host-platform-store.ts).
+const HEAD_HOOK_BINDING_SHA256 = '8a0c99893370272a111b95ca1cf005f44a92efa20b6b111dfbe7faeee2682d8d'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -248,7 +250,9 @@ const HEAD_CALLBACK_BODY_SHA256 = '5e5e0f9f137c307f2d7cf3b70d7e818b2eca78585d78b
 // useSoftKeyboard, visibility and height (26).
 // 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
-const HEAD_EFFECT_SHA256 = 'f17512e385d4cd804c40f8876c03e40215c4f75fc85999371880e02ae9826faa'
+// 2026-10-09: the same effect files the probed host platform under hostId (noteHostPlatform)
+// and lists hostId in its deps. Only that effect moved; the count held.
+const HEAD_EFFECT_SHA256 = 'fe3eb6d8a521e7549ba58044435d4dc3d34717fb7bed4102553ce66c00eb432a'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -569,7 +573,9 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
 // 2026-10-04 (Orca #24301): agent-session.repeated-stop.v1 joins prompt-cancel in the probe.
-const HEAD_CAPABILITY_SHA256 = 'f383f0560334f563fb3c2be792c1c68c166dd4735885d8962705d729901f5a11'
+// 2026-10-09: the probe also files the host platform it read (noteHostPlatform), and its
+// effect re-runs on hostId; no capability gate changed.
+const HEAD_CAPABILITY_SHA256 = 'eed500f60d8fce54f6b58be5b0e4a4ac344cfd2e5da980a1b7eb22643bdec4b2'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
