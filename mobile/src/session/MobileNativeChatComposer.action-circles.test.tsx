@@ -1,4 +1,3 @@
-import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
@@ -63,24 +62,22 @@ function flat(style: unknown, pressed = false): Record<string, unknown> {
   return (style ?? {}) as Record<string, unknown>
 }
 
-async function render(scheme: 'light' | 'dark', value: string, extra: Record<string, unknown> = {}): Promise<void> {
+async function render(scheme: 'light' | 'dark', value: string, extra: { micActive?: boolean } = {}): Promise<void> {
   await act(async () => {
     renderer = create(
-      createElement(
-        ThemeProvider,
-        { initialPreference: scheme },
-        createElement(MobileNativeChatComposer, {
-          value,
-          onChangeText: vi.fn(),
-          onSend: vi.fn().mockResolvedValue(true),
-          sendSurfaceId: 'tab-a',
-          getSendCompletionGeneration: () => 0,
-          getComposerEditGeneration: () => 0,
-          onAttachImage: vi.fn(),
-          onMicPress: vi.fn(),
-          ...extra
-        })
-      )
+      <ThemeProvider initialPreference={scheme}>
+        <MobileNativeChatComposer
+          value={value}
+          onChangeText={vi.fn()}
+          onSend={vi.fn().mockResolvedValue(true)}
+          sendSurfaceId="tab-a"
+          getSendCompletionGeneration={() => 0}
+          getComposerEditGeneration={() => 0}
+          onAttachImage={vi.fn()}
+          onMicPress={vi.fn()}
+          {...extra}
+        />
+      </ThemeProvider>
     )
   })
 }
