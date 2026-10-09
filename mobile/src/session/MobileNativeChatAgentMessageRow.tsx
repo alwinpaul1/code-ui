@@ -73,6 +73,7 @@ export function MobileNativeChatAgentMessageRow({
                 textScale={fontScale}
                 onOpenFile={onOpenFile}
                 typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
+                widthKey="chat-agent-message"
               />
               {cut ? (
                 <Txt variant="caption" tone="muted" scale={fontScale} testID="native-chat-agent-message-cut">

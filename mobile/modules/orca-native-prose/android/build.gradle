@@ -1,0 +1,24 @@
+apply plugin: 'com.android.library'
+
+group = 'expo.modules.orcanativeprose'
+version = '0.0.1'
+
+def expoModulesCorePlugin = new File(project(':expo-modules-core').projectDir.absolutePath, 'ExpoModulesCorePlugin.gradle')
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+useDefaultAndroidSdkVersions()
+
+android {
+  namespace 'expo.modules.orcanativeprose'
+  defaultConfig {
+    consumerProguardFiles 'proguard-rules.pro'
+  }
+}
+
+dependencies {
+  // ReactFontManager (the faces expo-font registered) and PixelUtil (sp and dp counted as a Text
+  // counts them). The version comes from the app's React Native, as for orca-selection-copy.
+  implementation 'com.facebook.react:react-android'
+}

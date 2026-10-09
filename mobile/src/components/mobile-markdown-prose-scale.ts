@@ -126,6 +126,11 @@ export type MarkdownTypography = {
    *  (mobile-markdown-prose-runs.ts); this sets only how tall the blank line
    *  is. Null: a whole prose line, and the default gap between blocks. */
   blockGap: number | null
+  /** On Android, draw each prose run as one native TextView with hanging
+   *  bullets and space between them (modules/orca-native-prose,
+   *  native-prose-model.ts) instead of a React Native Text. Only the chat
+   *  transcript sets it; iOS and the web keep the Text either way. */
+  nativeProse?: boolean
 }
 
 export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
@@ -157,9 +162,12 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
  *
  * A reply stays one selectable Text, so a hold's handles drag across its
  * paragraphs and bullets (the user's call, 2026-10-09). The 7 dp is the
- * blank line between blocks drawn 7 dp tall. Bullets keep the line pitch with
- * no extra 4 dp, and a wrapped bullet starts its next line under the marker:
- * both need an item to be a Text of its own, which a selection cannot cross.
+ * blank line between blocks drawn 7 dp tall. On Android a run is one native
+ * TextView (`nativeProse`, native-prose-model.ts), which also sets the bullets
+ * in from the margin, hangs a wrapped bullet line under the bullet's words and
+ * puts 4.5 dp between bullets, still one view a selection crosses. Elsewhere
+ * the React Native Text keeps bullets at the line pitch and a wrapped bullet
+ * line under its marker: a Text has no paragraph margin or spacing.
  *
  * The pill is JetBrains Mono at 12 on a 14 dp line: the face's own box is
  * 1.32 em, its ink 1.23 em (JETBRAINS_MONO_FACE), and markdownChipInkRoom
@@ -178,7 +186,8 @@ export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   tableCell: { fontSize: 12, lineHeight: 21 },
   chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
   listMarkerSize: 13,
-  blockGap: 7
+  blockGap: 7,
+  nativeProse: true
 }
 
 /**
@@ -188,7 +197,9 @@ export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
  */
 export const TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
-  blockGap: null
+  blockGap: null,
+  // A bubble keeps the Text: it is a prompt, drawn as the bubble always drew it.
+  nativeProse: false
 }
 
 /** The face a surface's pills are set in. */
