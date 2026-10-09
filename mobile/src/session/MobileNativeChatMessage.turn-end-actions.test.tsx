@@ -184,6 +184,44 @@ describe.each([
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('All green.')
   })
 
+  // Review, 2026-10-09: the one Copy under a turn copied only its last row.
+  it('copy the whole reply under a turn of several rows, not only its last one', async () => {
+    const turnText = vi.fn((id: string) => (id === 'a1' ? 'Looking at the test.\n\nAll green.' : ''))
+    const root = render(PROSE, scheme, { endsTurn: true, turnHasProse: true, copyTurnText: turnText })
+    await act(async () => copyControls(root)[0]!.props.onPress())
+    expect(turnText).toHaveBeenCalledWith('a1')
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('Looking at the test.\n\nAll green.')
+  })
+
+  it('offer Copy under a wordless turn end when an earlier row of the turn has words', async () => {
+    const root = render(TOOLS_ONLY, scheme, { endsTurn: true, turnHasProse: true, copyTurnText: () => 'On it.' })
+    expect(copyControls(root)).toHaveLength(1)
+    await act(async () => copyControls(root)[0]!.props.onPress())
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('On it.')
+  })
+
+  it('offer no Copy under a turn with no words in any row', () => {
+    const root = render(TOOLS_ONLY, scheme, { endsTurn: true, turnHasProse: false, copyTurnText: () => '' })
+    expect(copyControls(root)).toHaveLength(0)
+    expect(upControls(root)).toHaveLength(1)
+  })
+
+  it('jump to the start of the turn, not to its last row, on the scroll-up arrow', () => {
+    const onScrollToMessage = vi.fn()
+    const root = render(TOOLS_THEN_PROSE, scheme, { endsTurn: true, messageIndex: 2, turnStartIndex: 5, onScrollToMessage })
+    act(() => upControls(root)[0]!.props.onPress())
+    expect(onScrollToMessage).toHaveBeenCalledWith(5)
+  })
+
+  it('keep each message its own Copy and arrow where the surface names no turn (a subagent transcript)', async () => {
+    const onScrollToMessage = vi.fn()
+    const root = render(PROSE, scheme, { messageIndex: 2, onScrollToMessage })
+    await act(async () => copyControls(root)[0]!.props.onPress())
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith('All green.')
+    act(() => upControls(root)[0]!.props.onPress())
+    expect(onScrollToMessage).toHaveBeenCalledWith(2)
+  })
+
   it('draw by default, so a chat that does not say where its turns end keeps its actions', () => {
     const root = render(PROSE, scheme)
     expect(copyControls(root)).toHaveLength(1)

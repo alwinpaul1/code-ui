@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -31,7 +31,7 @@ import { ChatTextSelectableContext } from '../components/chat-text-selectable-co
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { DOCK_BACKDROP_FADE, MobileNativeChatDockBackdrop } from './MobileNativeChatDockBackdrop'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
-import { messageIdsEndingATurn } from './mobile-native-chat-turn-end'
+import { agentTurnPlainText, agentTurnsByEnd } from './mobile-native-chat-turn-end'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
@@ -49,6 +49,17 @@ import {
 
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
+
+/** The list index (newest first) of the first row of the turn `endId` ends,
+ *  or undefined for a row that ends no turn. */
+function turnStartIndexOf(
+  turnsByEnd: ReadonlyMap<string, { firstIndex: number }>,
+  endId: string,
+  rowCount: number
+): number | undefined {
+  const turn = turnsByEnd.get(endId)
+  return turn ? rowCount - 1 - turn.firstIndex : undefined
+}
 
 export function MobileNativeChatView({
   messages,
@@ -165,8 +176,20 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
-  // The Claude app draws a reply's actions once, under the turn's last message.
-  const turnEndIds = useMemo(() => messageIdsEndingATurn(data), [data])
+  // The Claude app draws a reply's actions once, under the turn's last message,
+  // and its Copy copies the whole reply.
+  const turnsByEnd = useMemo(() => agentTurnsByEnd(data), [data])
+  // A row asks for its turn's words only when Copy is tapped, after a commit,
+  // so a ref the commit updates is current then. Read through one stable
+  // callback, the rows do not all re-render each time the transcript grows.
+  const turnsByEndRef = useRef(turnsByEnd)
+  useEffect(() => {
+    turnsByEndRef.current = turnsByEnd
+  }, [turnsByEnd])
+  const copyTurnText = useCallback((endId: string): string => {
+    const turn = turnsByEndRef.current.get(endId)
+    return turn ? agentTurnPlainText(turn) : ''
+  }, [])
   // Labels say "today" or a weekday relative to now; five minutes keeps a
   // divider honest across midnight without churning the rows.
   const dividerNow = useNow(5 * 60_000)
@@ -264,7 +287,11 @@ export function MobileNativeChatView({
         onOpenFile={onOpenFile}
         onRevertHunk={onRevertHunk}
         focusView={focusView}
-        endsTurn={turnEndIds.has(item.id)}
+        endsTurn={turnsByEnd.has(item.id)}
+        turnHasProse={turnsByEnd.get(item.id)?.hasProse}
+        // The list is inverted: its index counts from the newest row.
+        turnStartIndex={turnStartIndexOf(turnsByEnd, item.id, data.length)}
+        copyTurnText={copyTurnText}
         onCancelQueued={
           agentWorking && onCancelQueued && item.id.startsWith('pending-')
             ? () => void onCancelQueued(item.id)
@@ -290,7 +317,8 @@ export function MobileNativeChatView({
       onOpenFile,
       onRevertHunk,
       focusView,
-      turnEndIds,
+      turnsByEnd,
+      copyTurnText,
       agentWorking,
       onCancelQueued,
       rewindable,

@@ -12,18 +12,9 @@ export const NATIVE_CHAT_NOTICE_COPY = {
   plan: 'Plan'
 } as const
 
-/** Whether a text block carries display hints this build knows how to draw. A
- *  hint from a newer host falls through to ordinary prose rather than to a
- *  blank row — the text is always readable on its own. */
-export function isRenderableNativeChatNotice(block: NativeChatTextBlock): boolean {
-  return (
-    block.presentation === 'compaction' ||
-    block.presentation === 'plan-document' ||
-    block.tone === 'warning' ||
-    block.tone === 'error' ||
-    block.tone === 'notice'
-  )
-}
+// The rule lives in a module with no React Native in it, so the turn reader
+// (mobile-native-chat-turn-end.ts) can ask it too.
+export { isRenderableNativeChatNotice } from './mobile-native-chat-notice-kind'
 
 /** A host-authored notice: a compaction boundary, a plan document, or a toned
  *  line. Desktop parity: `NativeChatNoticeRow`. */

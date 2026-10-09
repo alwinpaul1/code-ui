@@ -137,14 +137,26 @@ describe('MobileNativeChatView, where a turn ends', () => {
     })
   }
 
-  function endsTurn(id: string): unknown {
+  type RowProps = {
+    endsTurn: unknown
+    turnHasProse?: unknown
+    turnStartIndex?: unknown
+    copyTurnText?: (id: string) => string
+  }
+
+  /** What the list hands the row for one message, and that row's list index. */
+  function rowOf(id: string): { props: RowProps; index: number } {
     const list = renderer!.root.find((node) => String(node.type) === 'FlashList')
     const data = list.props.data as NativeChatMessage[]
     const index = data.findIndex((row) => row.id === id)
     const row = list.props.renderItem({ item: data[index], index }) as {
-      props: { children: [unknown, { props: { endsTurn: unknown } }] }
+      props: { children: [unknown, { props: RowProps }] }
     }
-    return row.props.children[1].props.endsTurn
+    return { props: row.props.children[1].props, index }
+  }
+
+  function endsTurn(id: string): unknown {
+    return rowOf(id).props.endsTurn
   }
 
   it('flags only the last assistant message of each turn', async () => {
@@ -174,5 +186,44 @@ describe('MobileNativeChatView, where a turn ends', () => {
     })
     expect(endsTurn('a1')).toBe(false)
     expect(endsTurn('a2')).toBe(true)
+  })
+
+  // Review, 2026-10-09: the turn's one Copy copied only its last row, a turn
+  // whose newest row was a thought lost its actions, and the arrow lined up
+  // the last row instead of the start of the reply.
+  const said = (id: string, role: NativeChatMessage['role'], blocks: NativeChatMessage['blocks']): NativeChatMessage => ({
+    id,
+    role,
+    blocks,
+    timestamp: 0,
+    source: 'transcript'
+  })
+  const textThenTool = said('a1', 'assistant', [
+    { type: 'text', text: 'Looking.' },
+    { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+    { type: 'tool-result', output: 'ok' }
+  ])
+
+  it('hands the turn end a Copy of every row of the reply, a blank line apart', async () => {
+    await render([turn('u1', 'user'), textThenTool, said('a2', 'assistant', [{ type: 'text', text: 'Done.' }])])
+    const end = rowOf('a2').props
+    expect(end.turnHasProse).toBe(true)
+    expect(end.copyTurnText?.('a2')).toBe('Looking.\n\nDone.')
+  })
+
+  it('keeps the actions on the reply while a thought is its newest row', async () => {
+    await render([turn('u1', 'user'), turn('a1', 'assistant'), turn('r1', 'reasoning')])
+    expect(endsTurn('a1')).toBe(true)
+    expect(endsTurn('r1')).toBe(false)
+  })
+
+  it('aims the arrow at the first row of the reply, in the list\'s own (newest-first) order', async () => {
+    await render([turn('u1', 'user'), turn('a1', 'assistant'), turn('a2', 'assistant'), turn('a3', 'assistant')])
+    expect(rowOf('a3').props.turnStartIndex).toBe(rowOf('a1').index)
+  })
+
+  it('aims the arrow of a turn of one at its own row', async () => {
+    await render([turn('u1', 'user'), turn('a1', 'assistant')])
+    expect(rowOf('a1').props.turnStartIndex).toBe(rowOf('a1').index)
   })
 })

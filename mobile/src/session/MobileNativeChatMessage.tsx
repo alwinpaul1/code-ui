@@ -72,10 +72,11 @@ function Bubble({
   )
 }
 
-/** Subtle controls for an agent message: copy its prose, or scroll so this
- *  message's top aligns to the top of the viewport. No Copy without prose to
- *  copy: under a message made only of tool calls a tap copied nothing and
- *  said nothing, a dead button (review, 2026-09-30). */
+/** Subtle controls under the end of an agent turn: copy the reply's prose, or
+ *  scroll so the reply's first row aligns to the top of the viewport (where a
+ *  surface names no turns, the message's own). No Copy without prose to copy:
+ *  under a message made only of tool calls a tap copied nothing and said
+ *  nothing, a dead button (review, 2026-09-30). */
 function AgentControls({
   onCopy,
   onScrollToTop,
@@ -132,7 +133,10 @@ function MobileNativeChatMessageImpl({
   structuredActivityUi = false,
   turnActivity = null,
   taskListPredecessors,
-  endsTurn = true
+  endsTurn = true,
+  turnHasProse,
+  turnStartIndex,
+  copyTurnText
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -176,6 +180,17 @@ function MobileNativeChatMessageImpl({
    *  does, not under every message of it (2026-10-09). The list says it; a
    *  surface that does not (a subagent's transcript) keeps them on each. */
   endsTurn?: boolean
+  /** Whether any row of the turn this row ends has words: its Copy copies the
+   *  whole reply, so a turn end with none of its own still offers it. Absent,
+   *  the row's own words decide. */
+  turnHasProse?: boolean
+  /** The list index of the first row of the turn this row ends. The arrow
+   *  brings the start of the reply to the top, not this last row of it.
+   *  Absent, it brings this row. */
+  turnStartIndex?: number
+  /** The whole reply this row ends, as Copy gives it, asked for only on a tap.
+   *  Absent, Copy copies this row alone (a subagent's transcript). */
+  copyTurnText?: (messageId: string) => string
 }) {
   const styles = useChatMessageStyles()
   const { colors } = useTheme()
@@ -247,18 +262,30 @@ function MobileNativeChatMessageImpl({
   // for the Markdown-to-text pass. Text that draws as nothing (an image-only
   // Markdown line) still passes this and copies nothing when tapped.
   const hasProse = nativeChatMessageText(message.blocks) !== ''
+  // The Copy under a turn's end copies the whole reply, as the Claude app's
+  // does: one Copy under a text, tool, text turn copied only "Done." (review,
+  // 2026-10-09), and the earlier words had no Copy of their own any more.
+  const copiesTurn = isAgent && copyTurnText !== undefined
+  const copyable = copiesTurn ? (turnHasProse ?? hasProse) : hasProse
   const handleCopy = (): void => {
     // A prompt copies as typed, unless it is drawn as Markdown (the subagent
     // transcript's task prompts); then it copies what it draws, like a reply.
-    const text =
-      isUser && !promptsAsMarkdown ? nativeChatMessageText(message.blocks) : nativeChatReplyPlainText(message.blocks)
+    const text = copiesTurn
+      ? copyTurnText(message.id)
+      : isUser && !promptsAsMarkdown
+        ? nativeChatMessageText(message.blocks)
+        : nativeChatReplyPlainText(message.blocks)
     if (!text) {
       return
     }
     copy(text)
   }
+  // The start of the reply, as the arrow under each row once meant for its own
+  // row: now that only a turn's last row has the arrow, aiming at that row
+  // lined up its last words ("Done.") instead of where the reply began.
+  const scrollTarget = turnStartIndex ?? messageIndex
   const scrollToTop =
-    onScrollToMessage && messageIndex !== undefined ? () => onScrollToMessage(messageIndex) : undefined
+    onScrollToMessage && scrollTarget !== undefined ? () => onScrollToMessage(scrollTarget) : undefined
 
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
@@ -283,8 +310,8 @@ function MobileNativeChatMessageImpl({
     ) : null
 
   const controls =
-    isAgent && endsTurn && (hasProse || scrollToTop) ? (
-      <AgentControls onCopy={hasProse ? handleCopy : undefined} onScrollToTop={scrollToTop} styles={styles} />
+    isAgent && endsTurn && (copyable || scrollToTop) ? (
+      <AgentControls onCopy={copyable ? handleCopy : undefined} onScrollToTop={scrollToTop} styles={styles} />
     ) : null
 
   return (
