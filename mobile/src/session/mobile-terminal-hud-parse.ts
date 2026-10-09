@@ -412,16 +412,6 @@ export function parseTerminalHudObservation(
         return claudeFooterObservation(lines, context, pair)
       }
     }
-  } else {
-    // No footer row or hint on screen, but Claude Code's input box is (the status-line rows need it):
-    // the user's own status line is read off it all the same, so nothing but the box gates it.
-    const stated = readClaudeStatusLine(lines)
-    if (stated.kind === 'figure') {
-      return claudeFooterObservation(lines, stated.context, pair)
-    }
-  }
-  if (pair !== null) {
-    return claudeFooterObservation(lines, null, pair)
   }
   // No Claude badge or figure on screen; try the Codex footer, which names a
   // model, and reads its own "context left" figures the right way round.
@@ -435,8 +425,10 @@ export function parseTerminalHudObservation(
   // the mode stepper pressed Shift+Tab six times on null reads and said the
   // mode was not available (review, 2026-09-30). Only a footer ROW counts
   // here, not the hint alone: "shift+tab to cycle" in the conversation would
-  // otherwise state Manual over a footer nobody saw.
-  return claudeFooterObservation(lines, null)
+  // otherwise state Manual over a footer nobody saw. That holds for the user's own status line too:
+  // with no footer row its band is not read, so its pair cannot carry a Manual pill in with it
+  // (review, 2026-10-09, five subagent rows pushing the mode row out of the footer's reach).
+  return claudeFooterObservation(lines, null, pair)
 }
 
 /** Claude Code's own footer with no badge above it: the model and effort only where the user's own

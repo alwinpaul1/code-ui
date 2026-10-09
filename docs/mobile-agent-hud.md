@@ -601,11 +601,24 @@ figure on it is that subagent's: its model, effort and own window. So a `↳`
 pill anywhere in the rows refuses the whole read, ring and pair, for the main
 session; the sticky hold keeps what the main band last said.
 
-**Nothing gates it but the box.** The screen poll (1 s while working, 5 s
+**No beacon or setting gates it.** The screen poll (1 s while working, 5 s
 otherwise, `use-mobile-terminal-hud-observation.ts`) runs for any shown,
-connected terminal chat, beacon or none. The reader needs only Claude Code's
-`❯` input box; a screen with no footer row (no mode row, no hint) is read too
+connected terminal chat, beacon or none. The reader needs Claude Code's `❯`
+input box and its footer (the mode row or the `shift+tab to cycle` hint), as
+every Claude read here does. A first cut also read the band with no footer row
+on screen; review found that five subagent rows under the box push the
+`⏵⏵ auto mode on` row out of the footer's six rows, and that read then stated
+Manual for a footer nobody saw. Such a screen is an empty read again: the hook
+keeps its last observation and the sticky hold the band's last pair and ring
 (`claude-status-line-band-without-turn-row.test.ts`).
+
+**Known lag.** The band's pair is the screen's pair at the badge's tier. A
+claude-hud badge has the same lag. On a tab with no beacon it replaces the
+Claude Code alt+p toast and spinner statements that stood in for a missing
+pair before. So for one band repaint after an alt+p switch, the pill shows the
+band's old model (`NARROW_TOAST_SONNET`, 2.1.294: the toast says Sonnet while
+the band still says `Opus 5.5 high`). The 160-column capture of the same
+switch shows the band caught up.
 
 **What counts as the figure.** `<used>/<window>`, where the window carries a `k`
 or `M` suffix and the used figure may be bare. Both sides must be bounded by a

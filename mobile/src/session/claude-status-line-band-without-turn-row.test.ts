@@ -82,16 +82,16 @@ describe('the band above the box with no turn row in reach', () => {
     })
   })
 
-  it('reads the band with no footer row on screen: the input box is all it needs', () => {
-    // A hand-typed tab has no beacon, and the screen poll reads this screen as it is; a footer row
-    // the screen happens not to show (a repaint, a mode with none) must not hide the band.
-    const noFooter = withoutRows(WAITING, /⏵⏵ auto mode on/)
-    expect(observe(noFooter)).toMatchObject({
-      modelLabel: 'Opus 5.5',
-      effort: 'medium',
-      context: { usedPercent: 42 },
-      permissionModeSeen: null
-    })
+  it('does not claim Manual when five subagent rows push the mode row out of the footer', () => {
+    // Review, 2026-10-09: with the band read off a screen whose `⏵⏵ auto mode on` row sat beyond the
+    // footer's six rows, the observation stated 'default' and the mode pill turned Manual over a
+    // footer nobody saw. With no footer row the read is empty, as before: the hook keeps the last
+    // observation and the sticky hold keeps the band's last pair and ring.
+    const agentRow = AGENT_FINISHED.findLast((line) => line.startsWith('  ◯ general-purpose'))!
+    const fiveAgents = [...AGENT_FINISHED.slice(0, -1), agentRow, agentRow, agentRow, '']
+    expect(observe(fiveAgents)).toBeNull()
+    // The same screen with its mode row in reach reads the band and the mode.
+    expect(observe(AGENT_FINISHED)).toMatchObject({ effort: 'xhigh', permissionModeSeen: 'auto' })
   })
 
   it('reads the band at the top of the screen, nothing above it', () => {
