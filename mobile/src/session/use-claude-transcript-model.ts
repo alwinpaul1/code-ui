@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import { useHostPlatform } from '../transport/host-platform-store'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { getPendingModelPick } from './mobile-native-chat-model-report-authority'
 import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
@@ -24,15 +25,27 @@ import {
   watchClaudeTranscriptModelHost
 } from './claude-transcript-model-scan'
 
-/** How long a Claude chat must go without a beacon or a badge before the phone
- *  asks the host. A beaconed tab repaints its status line — and so beacons —
- *  every 5 s while idle (agent-hud-launch-args.ts), and the badge arrives with
- *  the first screen read, so a tab that is going to speak has spoken by then.
- *  Only a Windows host (no flag at all), a tab launched before the flag, or a
- *  session under a dialog stays quiet this long. */
-export const CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS = 8_000
+/** How long a Claude chat that may still beacon must go without a beacon or a
+ *  badge before the phone asks the host. A beaconed tab repaints its status
+ *  line, and so beacons, every 5 s while idle (agent-hud-launch-args.ts), and
+ *  the badge arrives with the first screen read, so a tab that is going to
+ *  speak has spoken within one beat; the half second is slack for the relay.
+ *  Only a tab that CAN beacon waits: a tab no flag reached (typed in by hand)
+ *  and a Windows host (no flag at all) ask at once (`beaconCanCome`). It was
+ *  8 s, and the pill sat blank that long on every hand-typed tab (2026-10-09). */
+export const CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS = 5_500
 
 const NONE: ClaudeModelFallback = { kind: 'none' }
+
+/** Whether a Claude beacon can still come for this tab: only from a tab
+ *  launched as Claude (the phone and Orca's launcher carry the flag) on a host
+ *  that takes the flag, and a Windows host takes none (`hostTakesAgentHudFlag`).
+ *  A host that has not said what it runs on may be any host, so it counts as
+ *  one that can, and waits out the settle like a Mac. */
+export function useClaudeBeaconCanCome(hostId: string, launchAgent: string | null): boolean {
+  const platform = useHostPlatform(hostId)
+  return launchAgent === 'claude' && platform !== 'win32'
+}
 
 type PickProgress = {
   pickAt: number
@@ -55,7 +68,8 @@ export function resetClaudeTranscriptModelPicksForTests(): void {
  *
  * Asks the host (claude-transcript-model-scan.ts, which holds the five-minute
  * budget) only on:
- * - the chat opening, once it has stayed quiet for the settle time, and again
+ * - the chat opening, at once when no beacon can come and otherwise once it
+ *   has stayed quiet for the settle time, and again
  *   on each new connection after that (the repo's "nothing stays stale once
  *   the relay connects"; the budget still applies);
  * - the user opening the model sheet (`requestScan`);
@@ -83,6 +97,11 @@ export function useClaudeTranscriptModel(args: {
   liveModel: string | null
   /** This session's beacon has been heard. */
   beacon: boolean
+  /** A beacon may still come for this tab: it was launched as an agent (the
+   *  phone and Orca's own launcher carry the flag) on a host that takes the
+   *  flag. False for a tab typed in by hand and for a Windows host, which ask
+   *  the host at once instead of waiting out the settle. Absent: true. */
+  beaconCanCome?: boolean
   /** The terminal whose beacon states the live pair; its last ARRIVAL is read
    *  here (repeats included), and the hook listens for arrivals only while a
    *  model command is waiting to be outranked by one. */
@@ -103,7 +122,7 @@ export function useClaudeTranscriptModel(args: {
    *  (claude-screen-model-pair.ts). */
   screenStatement?: ClaudeScreenModelStatement | null
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconCanCome = true, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
@@ -126,17 +145,18 @@ export function useClaudeTranscriptModel(args: {
   )
   const request = useCallback(() => scan(false), [scan])
 
-  // The chat opening: only once it has stayed quiet for the settle time.
+  // The chat opening: at once where no beacon can come, otherwise only once it
+  // has stayed quiet for the settle time.
   const [settledFor, setSettledFor] = useState<string | null>(null)
   const quietKey = quiet ? `${hostId}\u0000${sessionId}` : null
   useEffect(() => {
-    if (!quietKey) {
+    if (!quietKey || !beaconCanCome) {
       return
     }
     const timer = setTimeout(() => setSettledFor(quietKey), CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
     return () => clearTimeout(timer)
-  }, [quietKey])
-  const settled = quietKey !== null && settledFor === quietKey
+  }, [quietKey, beaconCanCome])
+  const settled = quietKey !== null && (!beaconCanCome || settledFor === quietKey)
   useEffect(() => {
     if (settled) {
       request()

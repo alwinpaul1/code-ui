@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { noteHostPlatform } from '../transport/host-platform-store'
 import { supportsMobileQuickCommands } from '../terminal/quick-commands'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
 import {
@@ -19,6 +20,7 @@ import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-mar
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -181,6 +183,9 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     // status.get without changing connState, which used to latch these hidden.
     return startRuntimeCapabilityProbe(client, (capabilities, statusResult) => {
       hostPlatformRef.current = readMobileRuntimeHostPlatform(statusResult)
+      // Why: the chat's model pill asks the host at once on a host that takes
+      // no beacon flag, and it is not on this probe's path (host-platform-store).
+      noteHostPlatform(hostId, hostPlatformRef.current)
       setBrowserScreencastSupported(capabilities.includes('browser.screencast.v1'))
       setAgentSessionHistorySupported(capabilities.includes(MOBILE_AI_VAULT_CAPABILITY))
       setAgentSessionPromptCancelSupported(
@@ -198,7 +203,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY
       )
     })
-  }, [client, connState])
+  }, [client, connState, hostId])
   return {
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,
