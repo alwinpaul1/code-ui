@@ -170,7 +170,7 @@ describe('useMobileNativeChatDrafts', () => {
     expect(state?.composerText).toBe('ping')
   })
 
-  it('does not clobber newer edits when restoring a rejected send', async () => {
+  it('appends a rejected send after edits typed while it was in flight', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -185,10 +185,10 @@ describe('useMobileNativeChatDrafts', () => {
         state?.restoreRejectedDraft(origin, 'ping')
       }
     })
-    expect(state?.composerText).toBe('newer edit')
+    expect(state?.composerText).toBe('newer edit\n\nping')
   })
 
-  it('preserves an intentional clear after a newer edit while a rejection is pending', async () => {
+  it('returns a rejected send even after a newer edit was cleared', async () => {
     await mount('a')
     act(() => state?.setComposerText('ping'))
     const origin = state?.captureSendOrigin('ping')
@@ -205,7 +205,33 @@ describe('useMobileNativeChatDrafts', () => {
       }
     })
 
-    expect(state?.composerText).toBe('')
+    expect(state?.composerText).toBe('ping')
+  })
+
+  // Every restoring caller hands back the same text, so a second restore of one
+  // failed send, or one onto a draft the user already retyped it into, must not
+  // draw it twice. The dedupe lives in vendored src/shared/returned-draft-text.ts,
+  // whose own test the mobile gate does not run (review, 2026-10-09).
+  it('draws a failed message once when it is returned twice or was already retyped', async () => {
+    await mount('a')
+    act(() => state?.setComposerText('ping'))
+    const origin = state?.captureSendOrigin('ping')
+    act(() => {
+      if (origin) {
+        state?.clearDraftForSend(origin, 'ping')
+        state?.restoreRejectedDraft(origin, 'ping')
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('ping')
+
+    act(() => state?.setComposerText('as I said\n\nping'))
+    act(() => {
+      if (origin) {
+        state?.restoreRejectedDraft(origin, 'ping')
+      }
+    })
+    expect(state?.composerText).toBe('as I said\n\nping')
   })
 
   it('restores a rejected send onto its originating tab only', async () => {
