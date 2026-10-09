@@ -206,6 +206,8 @@ const REMAINING_PATTERNS = [
   /Context low\s*\(\s*(\d{1,3})%\s+remaining\)/i
 ]
 const CLAUDE_FOOTER = /shift\+tab to cycle/i
+/** Claude Code's own warning as the first text on its row (the fullscreen notice row). */
+const CLAUDE_OWN_WARNING_START = /^\s*(?:Context low\s*\(|\d{1,3}%\s+until\s+auto-compact)/i
 
 // On the badge line itself the first percent after the badge is the context
 // meter (claude-hud draws "████░░ 61% (60…" there, often cut by the column).
@@ -407,7 +409,10 @@ export function parseTerminalHudObservation(
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
       const line = lines[index] ?? ''
       const under = underBox !== -1 && index >= underBox
-      if (!under && index !== notice && isClaudeConversationRow(line, underBox !== -1)) {
+      // The notice is the whole right-aligned text, so it OPENS with Claude Code's wording; a flush
+      // tool-output row quoting it after other text is conversation (review, 2026-10-09).
+      const isNotice = index === notice && CLAUDE_OWN_WARNING_START.test(line)
+      if (!under && !isNotice && isClaudeConversationRow(line, underBox !== -1)) {
         continue
       }
       const context = parseTerminalHudContextWindow(line, { ownWarningOnly: !hinted || !under })

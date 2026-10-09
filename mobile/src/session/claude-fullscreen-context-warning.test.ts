@@ -81,6 +81,14 @@ describe("Claude Code's own context warning in fullscreen shows the ring", () =>
     expect(parseTerminalHudObservation(swapped)?.context).toBeNull()
   })
 
+  it('shows no ring for a flush tool-output row that quotes the warning after other text', () => {
+    // Review, 2026-10-09: a `⎿` continuation row, flush at the box's edge by chance, quoting it.
+    const row = FULLSCREEN_LOW_44.find((line) => line.includes('Context low'))!
+    const quote = `${'x'.repeat(10)}Context low (22% remaining)`
+    const quoted = withWarningRow(FULLSCREEN_LOW_44, `${' '.repeat(row.length - quote.length)}${quote}`)
+    expect(parseTerminalHudObservation(quoted)?.context).toBeNull()
+  })
+
   it('reads the notice row when it is the first row on screen (nothing above it)', () => {
     const at = FULLSCREEN_LOW.findIndex((line) => line.includes('Context low'))
     expect(parseTerminalHudObservation(FULLSCREEN_LOW.slice(at))?.context?.usedPercent).toBe(78)
