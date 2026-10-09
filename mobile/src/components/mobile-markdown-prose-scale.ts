@@ -120,12 +120,12 @@ export type MarkdownTypography = {
   chip: { fontSize: number; lineHeight: number; tableFontSize: number; tableLineHeight: number; mono: boolean }
   /** The list marker's size. */
   listMarkerSize: number
-  /** The space between blocks where each paragraph, heading and list item
-   *  is a Text of its own, and between list items (`listItemGap`). Null: a
-   *  run of prose is one Text, its blocks a blank line apart, so a selection
-   *  crosses them (mobile-markdown-prose-runs.ts). */
+  /** The space between blocks: the height of the blank line between the
+   *  blocks of a prose run, and the gap between the document's other blocks.
+   *  A run stays one Text either way, so a selection crosses its blocks
+   *  (mobile-markdown-prose-runs.ts); this sets only how tall the blank line
+   *  is. Null: a whole prose line, and the default gap between blocks. */
   blockGap: number | null
-  listItemGap: number
 }
 
 export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
@@ -144,8 +144,7 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
     mono: false
   },
   listMarkerSize: MARKDOWN_BASE_SIZE - 1,
-  blockGap: null,
-  listItemGap: 0
+  blockGap: null
 }
 
 /**
@@ -155,6 +154,12 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
  * as wide as Instrument Sans at 15, and inline code in a monospace face on a
  * pill about 16 dp tall. Instrument Sans at 14 draws its words 93% as wide as
  * at 15, so the face stays.
+ *
+ * A reply stays one selectable Text, so a hold's handles drag across its
+ * paragraphs and bullets (the user's call, 2026-10-09). The 7 dp is the
+ * blank line between blocks drawn 7 dp tall. Bullets keep the line pitch with
+ * no extra 4 dp, and a wrapped bullet starts its next line under the marker:
+ * both need an item to be a Text of its own, which a selection cannot cross.
  *
  * The pill is JetBrains Mono at 12 on a 14 dp line: the face's own box is
  * 1.32 em, its ink 1.23 em (JETBRAINS_MONO_FACE), and markdownChipInkRoom
@@ -173,22 +178,17 @@ export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   tableCell: { fontSize: 12, lineHeight: 21 },
   chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
   listMarkerSize: 13,
-  blockGap: 7,
-  listItemGap: 4
+  blockGap: 7
 }
 
 /**
  * A lead's Markdown prompt in a user bubble, in the transcript's size and
- * code face. A bubble is as wide as its text: RN measures ONE Text as wide as
- * its widest line, and blocks drawn apart (a list as rows) are several, so a
- * bubble whose widest line was a list item never settled on a width
- * (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09). Its prose stays
- * one Text, its blocks a blank line apart.
+ * code face, its blocks a whole blank line apart as the bubble always drew
+ * them (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09).
  */
 export const TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
-  blockGap: null,
-  listItemGap: 0
+  blockGap: null
 }
 
 /** The face a surface's pills are set in. */

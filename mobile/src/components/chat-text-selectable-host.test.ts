@@ -3,21 +3,29 @@ import { createRequire } from 'node:module'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// Until 2026-10-08 the chat turned `selectable` off while the reader's fling
-// was in flight, and a second block here pinned that the flip kept each Text
-// the same native view (React Native 0.86.3: NativeSelectableText is its own
-// host only under enablePreparedTextLayout, off in every OSS Android build).
-// Orca #22871 took inline selection off the Android chat transcript
-// altogether, so nothing flips `selectable` any more and that block guarded
-// nothing; it was removed with the gate.
+// The chat turns `selectable` off while the reader's fling is in flight and
+// back on after (chat-text-selectable-context.ts). On 2026-09-25 a hold on
+// the agent's reply mid-turn selected nothing, and one suspect was that
+// flip: if `selectable` changed which native view a Text is, every flip
+// would unmount and remount every chat Text, and a hold would land on a
+// view about to be replaced.
 //
-// What stays: a hold on a link must not open it on release. Off the
-// transcript that is markdown-link-hold.ts's no-op onLongPress; on the
-// Android transcript the hold opens the message's actions sheet, and the same
-// Pressability rule is what keeps the release from also opening the link.
+// On React Native 0.86.3 it does not, and this pins why: a selectable Text
+// is `NativeSelectableText`, which is a separate host (RCTSelectableText,
+// a real TextView, because PreparedLayoutTextView cannot select) ONLY when
+// `enablePreparedTextLayout` is on, and that flag is off in every place an
+// OSS Android build takes it from. So the flip only calls
+// setTextIsSelectable on the same TextView. If an upgrade turns the flag on,
+// this fails, and the scroll gate has to stop flipping the prop.
+//
+// What this cannot show: Android's own rule that a hold which began while a
+// TextView was not selectable never becomes a selection, even if it turns
+// selectable under the finger. That is why the gate must not be off at
+// touch-down (use-mobile-native-chat-tail-follow.selection.test.ts).
 
 const require = createRequire(import.meta.url)
 const reactNative = path.dirname(require.resolve('react-native/package.json'))
+const featureFlags = 'ReactAndroid/src/main/java/com/facebook/react/internal/featureflags'
 
 /** The file's code with its comments taken out, so a match is never prose. */
 function code(relative: string): string {
@@ -45,5 +53,42 @@ describe('a hold on a link in chat text does not open it', () => {
     expect(pressProps).toMatch(/\bonLongPress,/)
     expect(pressProps).toMatch(/\bonPress,/)
     expect(pressProps).not.toMatch(/delayLongPress/)
+  })
+})
+
+describe('flipping selection for a scroll keeps each chat Text the same native view', () => {
+  it('draws a selectable Text as NativeSelectableText and any other as NativeText', () => {
+    expect(code('Libraries/Text/Text.js')).toMatch(
+      /_selectable === true \?\s*\(\s*<NativeSelectableText[^>]*\/>\s*\)\s*:\s*\(\s*<NativeText /
+    )
+  })
+
+  it('makes NativeSelectableText its own host only under enablePreparedTextLayout', () => {
+    expect(code('Libraries/Text/TextNativeComponent.js')).toMatch(
+      /export const NativeSelectableText[^=]*=\s*enablePreparedTextLayout\(\)\s*\?[\s\S]*?:\s*NativeText;/
+    )
+  })
+
+  it('leaves enablePreparedTextLayout off in JS, in C++ and in every OSS Android override', () => {
+    expect(code('src/private/featureflags/ReactNativeFeatureFlags.js')).toMatch(
+      /enablePreparedTextLayout: Getter<boolean> = createNativeFlagGetter\(\s*'enablePreparedTextLayout',\s*false,?\s*\)/
+    )
+    expect(code('ReactCommon/react/featureflags/ReactNativeFeatureFlagsDefaults.h')).toMatch(
+      /bool enablePreparedTextLayout\(\) override \{\s*return false;\s*\}/
+    )
+    expect(code(`${featureFlags}/ReactNativeFeatureFlagsDefaults.kt`)).toMatch(
+      /override fun enablePreparedTextLayout\(\): Boolean = false/
+    )
+    for (const overrides of [
+      'ReactNativeFeatureFlagsOverrides_RNOSS_Stable_Android.kt',
+      'ReactNativeFeatureFlagsOverrides_RNOSS_Canary_Android.kt',
+      'ReactNativeFeatureFlagsOverrides_RNOSS_Experimental_Android.kt',
+      'ReactNativeNewArchitectureFeatureFlagsDefaults.kt'
+    ]) {
+      expect({ overrides, sets: code(`${featureFlags}/${overrides}`).includes('enablePreparedTextLayout') }).toEqual({
+        overrides,
+        sets: false
+      })
+    }
   })
 })

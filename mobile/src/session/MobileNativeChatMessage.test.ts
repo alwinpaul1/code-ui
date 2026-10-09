@@ -217,17 +217,11 @@ describe('MobileNativeChatMessage', () => {
 
   // 2026-09-25, phone recording: a hold on the agent's reply mid-turn
   // selected nothing. One suspect was a touchable above the prose taking the
-  // hold first. Until 2026-10-08 this pinned that NOTHING above the prose
-  // took a touch, so Android's inline selection got the hold. Orca #22871
-  // replaced inline selection on the Android transcript with a long press
-  // that opens the message's actions sheet, so exactly one thing above the
-  // prose now takes a touch: the prose segment's long press (not the whole
-  // bubble, see the Android suite), the same function the markdown hands its
-  // links. No press handler and no second Pressable, in a settled reply, an
-  // interim note, or a reply in a turn that is still working with a live
-  // tool row beside it (this suite runs as Android). Pressable is a string
-  // here, so whether the real one claims the responder is not visible.
-  it('puts nothing but the actions sheet’s long press above the agent reply’s prose, working or settled', () => {
+  // hold first, as the sent prompt's bubble does on purpose. Nothing between
+  // the reply's markdown and the row may claim a press, a long press or the
+  // responder, in a settled reply, an interim note, or a reply in a turn that
+  // is still working with a live tool row beside it.
+  it('puts nothing that takes a touch above the agent reply’s prose, working or settled', () => {
     const TOUCH_PROPS = [
       'onPress',
       'onLongPress',
@@ -255,23 +249,12 @@ describe('MobileNativeChatMessage', () => {
       expect({ label, prose: prose.length }).toEqual({ label, prose: 2 })
       for (const node of prose) {
         const claims: string[] = []
-        const pressables: ReactTestInstance[] = []
-        const holds = new Set<unknown>()
         for (let ancestor = node.parent; ancestor; ancestor = ancestor.parent) {
           if (ancestor.type === ('Pressable' as never)) {
-            pressables.push(ancestor)
+            claims.push('Pressable')
           }
-          for (const prop of TOUCH_PROPS.filter((name) => typeof ancestor!.props[name] === 'function')) {
-            if (prop === 'onLongPress') {
-              holds.add(ancestor.props.onLongPress)
-            } else {
-              claims.push(prop)
-            }
-          }
+          claims.push(...TOUCH_PROPS.filter((prop) => typeof ancestor!.props[prop] === 'function'))
         }
-        expect({ label, pressables: pressables.length, holds: holds.size }).toEqual({ label, pressables: 1, holds: 1 })
-        expect(holds.has(pressables[0]!.props.onLongPress)).toBe(true)
-        expect(node.props.onLongPress).toBe(pressables[0]!.props.onLongPress)
         expect({ label, claims }).toEqual({ label, claims: [] })
       }
       act(() => tree.unmount())

@@ -51,9 +51,6 @@ vi.mock('lucide-react-native', () => {
   })
 })
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
-vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
-  MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
-}))
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({
   MobileNativeChatToolDetailSheet: 'MobileNativeChatToolDetailSheet'
@@ -166,11 +163,8 @@ describe('the chat transcript’s type', () => {
   })
 
   // A lead's prompt in a subagent's transcript is Markdown in a bubble as wide
-  // as its text. A bubble measures one Text as wide as its widest line, and
-  // blocks drawn apart (a list as rows) are not one Text: a bubble whose
-  // widest line was a list item never settled on a width
-  // (mobile-markdown-code-pill-bubble.test.ts). The bubble keeps the size and
-  // the code face, and its prose stays one Text.
+  // as its text (mobile-markdown-code-pill-bubble.test.ts). The bubble keeps
+  // the size and the code face, and its blocks the whole blank line it drew.
   it('sets a lead’s Markdown prompt in its bubble at the same size, its prose one Text', () => {
     const styles = makeChatMessageStyles(themeFor('light'))
     render(

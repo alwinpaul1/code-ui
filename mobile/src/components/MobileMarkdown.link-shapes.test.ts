@@ -6,7 +6,6 @@ import { MobileMarkdown } from './MobileMarkdown'
 const openURL = vi.fn((_url: string) => Promise.resolve())
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
   Linking: { openURL: (url: string) => openURL(url) },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

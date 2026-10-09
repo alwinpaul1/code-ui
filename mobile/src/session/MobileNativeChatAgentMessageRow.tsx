@@ -6,7 +6,6 @@ import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-pr
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
-import { MobileNativeChatLongPressRow } from './MobileNativeChatLongPressRow'
 
 /** What an opened row says when only the TUI's row reached the phone: the
  *  sender, and no words (a tab launched without the prompt hook). */
@@ -31,7 +30,6 @@ export function MobileNativeChatAgentMessageRow({
   cut,
   fontScale,
   onOpenFile,
-  onLongPress,
   styles
 }: {
   sender: string
@@ -40,8 +38,6 @@ export function MobileNativeChatAgentMessageRow({
   cut?: boolean
   fontScale: number
   onOpenFile?: (relativePath: string) => void
-  /** Android only: the message's actions sheet (Orca #22871). */
-  onLongPress?: () => void
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -69,16 +65,14 @@ export function MobileNativeChatAgentMessageRow({
         )}
       </Pressable>
       {open ? (
-        <MobileNativeChatLongPressRow onLongPress={onLongPress} style={styles.toolRunBody} testID="native-chat-agent-message-body">
+        <View style={styles.toolRunBody} testID="native-chat-agent-message-body">
           {body.trim().length > 0 ? (
             <>
               <MobileMarkdown
                 content={body}
                 textScale={fontScale}
                 onOpenFile={onOpenFile}
-                rangeSelectable
                 typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
-                onLongPress={onLongPress}
               />
               {cut ? (
                 <Txt variant="caption" tone="muted" scale={fontScale} testID="native-chat-agent-message-cut">
@@ -91,7 +85,7 @@ export function MobileNativeChatAgentMessageRow({
               {AGENT_MESSAGE_UNREAD_NOTE}
             </Txt>
           )}
-        </MobileNativeChatLongPressRow>
+        </View>
       ) : null}
     </View>
   )

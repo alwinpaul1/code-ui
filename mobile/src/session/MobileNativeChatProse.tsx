@@ -25,8 +25,7 @@ export function Prose({
   fontScale,
   onOpenFile,
   styles,
-  identity,
-  onLongPress
+  identity
 }: {
   block: NativeChatBlock
   invert?: boolean
@@ -38,8 +37,6 @@ export function Prose({
   /** Which message block this is, so a recycled row's markdown tells one
    *  message from the next (MobileMarkdown's `identity`). */
   identity?: string
-  /** Android only: routes a long press on a link span to the row's actions sheet. */
-  onLongPress?: () => void
 }) {
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt) {
@@ -65,9 +62,7 @@ export function Prose({
         textScale={fontScale}
         onOpenFile={onOpenFile}
         identity={identity}
-        rangeSelectable
         typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
-        onLongPress={onLongPress}
       />
     )
   }

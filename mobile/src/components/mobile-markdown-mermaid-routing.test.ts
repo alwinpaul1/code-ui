@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MobileMarkdown } from './MobileMarkdown'
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
   Linking: { openURL: vi.fn() },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',

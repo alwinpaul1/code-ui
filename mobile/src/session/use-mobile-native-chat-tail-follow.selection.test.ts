@@ -29,16 +29,6 @@ const appState = vi.hoisted(() => {
 })
 vi.mock('react-native', () => ({ AppState: { addEventListener: appState.addEventListener } }))
 
-// 2026-10-08: until Orca #22871 was ported, the chat drew its text
-// unselectable while a scroll was in flight, and these tests pinned that flag
-// (`textSelectable`). The port took inline selection off the Android
-// transcript altogether, so the flag is gone. It was always exactly "no
-// scroll in flight", the window `scrollingRef` still holds, and a settled
-// list re-pins to the live edge only once that window has closed, so the
-// same sequences now read `scrollingRef` (at rest = not in flight). Where the
-// dated history below says the text was or was not selectable, read: the
-// scroll had or had not ended.
-//
 // Hold to copy, while the agent is working (2026-09-25, phone recording):
 // the reader held a paragraph and a bullet of the agent's reply for seconds
 // and got nothing. No handles, no Copy bar. The Claude app selects the word.
@@ -254,7 +244,7 @@ function release(): void {
 }
 
 /** A decelerating fling: one sample a frame, each step smaller. `seen`
- *  collects whether the list counted as at rest as each frame lands. */
+ *  collects the selection flag as each frame lands. */
 function flingFrames(firstStep: number, frames: number, seen: boolean[] = []): Frame[] {
   return Array.from({ length: frames }, (_, index) => ({
     at: now + (index + 1) * FRAME_MS,
@@ -262,12 +252,12 @@ function flingFrames(firstStep: number, frames: number, seen: boolean[] = []): F
       const step = Math.max(1, Math.abs(firstStep) * (1 - index / frames))
       world.y = Math.max(0, world.y + Math.sign(firstStep) * step)
       act(() => latest!.evaluateEdge(sample(world.y, world.height)))
-      seen.push(!latest!.scrollingRef.current)
+      seen.push(latest!.textSelectable)
     }
   }))
 }
 
-describe('the reader’s scroll settling while the reply streams in', () => {
+describe('holding the agent’s reply to copy it while the reply streams in', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.stubGlobal('requestAnimationFrame', (callback: (time: number) => void) =>
@@ -287,37 +277,37 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     vi.useRealTimers()
   })
 
-  it('ends the reader’s fling once it has stopped, while the reply keeps streaming, and stays at rest through a hold', () => {
+  it('lets a hold select once the reader’s fling has stopped, while the reply keeps streaming', () => {
     mount()
     runFor(200)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
 
     drag(180)
-    expect(!latest!.scrollingRef.current).toBe(false)
+    expect(latest!.textSelectable).toBe(false)
     release()
     runFor(30 * FRAME_MS, flingFrames(40, 30))
     // The fling has stopped. The reply has not, and no momentum end comes.
     expect(world.y).toBeGreaterThan(world.replyEnd)
 
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
 
     // A hold mid-stream: a still finger on text, which the scroll view never
     // takes, so JS sees its touchend.
     act(() => latest!.touchStart())
     runFor(100)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
     runFor(350)
     // Past Android's 400 ms long-press mark, with the finger still down.
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
     runFor(400)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
     act(() => latest!.touchEnd())
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
   })
 
-  it('ends the scroll after a drag that let go without a fling, with no momentum end ever sent', () => {
+  it('lets a hold select after a drag that let go without a fling, with no momentum end ever sent', () => {
     mount()
     drag(400)
     release()
@@ -325,10 +315,10 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     // stream's place-holding corrections arrive.
     expect(world.y).toBeGreaterThan(world.replyEnd)
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
   })
 
-  it('keeps the scroll in flight on every frame of a fling mid-stream', () => {
+  it('keeps text unselectable while a fling moves the list mid-stream', () => {
     mount()
     drag(180)
     release()
@@ -346,7 +336,7 @@ describe('the reader’s scroll settling while the reply streams in', () => {
   // view took the finger, and the text turned selectable 250 ms into a hold
   // that had caught a fling.
   for (const stream of [true, false]) {
-    it(`keeps the scroll in flight under the finger that catches a fling and holds still (stream ${stream ? 'on' : 'off'})`, () => {
+    it(`keeps text unselectable under the finger that catches a fling and holds still (stream ${stream ? 'on' : 'off'})`, () => {
       mount()
       drag(400)
       release()
@@ -355,14 +345,14 @@ describe('the reader’s scroll settling while the reply streams in', () => {
       act(() => latest!.touchStart())
       intercept()
       const held: boolean[] = []
-      runFor(2_000, [], stream, () => held.push(!latest!.scrollingRef.current))
+      runFor(2_000, [], stream, () => held.push(latest!.textSelectable))
       // The 2026-09-12 rule: held, not scrolling, and still no selection.
       expect(held.length).toBeGreaterThan(100)
       expect(held.filter(Boolean)).toEqual([])
       // It lifts, and the list is at rest: selection comes back by itself.
       release()
       runFor(300, [], stream)
-      expect(!latest!.scrollingRef.current).toBe(true)
+      expect(latest!.textSelectable).toBe(true)
     })
   }
 
@@ -420,7 +410,7 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     ['the app goes to the background', () => appState.emit('change', 'background')],
     ['the app’s window loses focus', () => appState.emit('blur')]
   ] as const) {
-    it(`ends the scroll for the first hold after the system takes a drag mid-way, when ${label}`, () => {
+    it(`gives selection back to the first hold after the system takes a drag mid-way, when ${label}`, () => {
       mount(600)
       drag(120)
       // The system took the touch: no end drag, no touch event, nothing.
@@ -428,11 +418,11 @@ describe('the reader’s scroll settling while the reply streams in', () => {
       runFor(300)
       act(() => appState.emit('change', 'active'))
       runFor(STREAM_TICK_MS)
-      expect(!latest!.scrollingRef.current).toBe(true)
+      expect(latest!.textSelectable).toBe(true)
       // The first hold back in the app, probed a frame at a time.
       act(() => latest!.touchStart())
       const held: boolean[] = []
-      runFor(900, [], true, () => held.push(!latest!.scrollingRef.current))
+      runFor(900, [], true, () => held.push(latest!.textSelectable))
       expect(held.length).toBeGreaterThan(50)
       expect(held.filter((selectable) => !selectable)).toEqual([])
       act(() => latest!.touchEnd())
@@ -475,7 +465,7 @@ describe('the reader’s scroll settling while the reply streams in', () => {
         run: () => {
           world.y += 15
           act(() => latest!.evaluateEdge(sample(world.y, world.height)))
-          seen.push(!latest!.scrollingRef.current)
+          seen.push(latest!.textSelectable)
         }
       }))
     )
@@ -486,7 +476,7 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     // Let go: the list comes to rest and selection comes back.
     release()
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
   })
 
   // Fourth review, 2026-09-25: a focus loss ended the hold too. A hold is
@@ -512,13 +502,13 @@ describe('the reader’s scroll settling while the reply streams in', () => {
       latest!.evaluateEdge(sample(world.y, world.height))
     })
     expect(latest!.showJumpToLatest).toBe(true)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
     act(() => latest!.touchEnd())
   })
 
   // The jump control sits outside the list, so its tap reaches no touch
   // handler of the list's; the jump is the reader saying no finger drags it.
-  it('ends the scroll when the reader jumps to the newest message after a drag whose end never came', () => {
+  it('comes back when the reader jumps to the newest message after a drag whose end never came', () => {
     mount(600)
     drag(120)
     runFor(2_000)
@@ -536,7 +526,7 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     )
     act(() => latest!.onMomentumScrollEnd(sample(world.y, world.height)))
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
     expect(latest!.showJumpToLatest).toBe(false)
     expect(world.y).toBe(0)
   })
@@ -546,14 +536,14 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     drag(120)
     runFor(1_000)
     // Stranded: nothing says the finger is gone. The next touch does.
-    expect(!latest!.scrollingRef.current).toBe(false)
+    expect(latest!.textSelectable).toBe(false)
     act(() => latest!.touchStart())
     act(() => latest!.touchEnd())
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
   })
 
-  it('keeps the list at rest through the re-pins while a hold starts on the streaming reply at the live edge', () => {
+  it('keeps selection on through the re-pins while a hold starts on the streaming reply at the live edge', () => {
     mount()
     // Following the newest message: the stream re-pins the list, which is
     // already at the edge, so Android sends no scroll at all.
@@ -571,14 +561,14 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     runFor(STREAM_TICK_MS)
     expect(list.scrollToOffset).toHaveBeenCalledWith({ offset: 0, animated: false })
     expect(world.y).toBe(0)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
 
     // The hold starts on the streaming reply, mid-stream.
     list.scrollToOffset.mockClear()
     act(() => latest!.touchStart())
     for (const checkpoint of [100, 350, 400, 400]) {
       runFor(checkpoint)
-      expect(!latest!.scrollingRef.current).toBe(true)
+      expect(latest!.textSelectable).toBe(true)
     }
     // Under the finger nothing re-pins, and past the long-press mark the
     // reader owns the list: the anchoring is on, so the selection stays
@@ -587,6 +577,6 @@ describe('the reader’s scroll settling while the reply streams in', () => {
     expect(latest!.showJumpToLatest).toBe(true)
     act(() => latest!.touchEnd())
     runFor(300)
-    expect(!latest!.scrollingRef.current).toBe(true)
+    expect(latest!.textSelectable).toBe(true)
   })
 })

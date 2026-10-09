@@ -27,6 +27,7 @@ import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
+import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
@@ -174,6 +175,7 @@ export function MobileNativeChatView({
   const {
     listRef,
     showJumpToLatest,
+    textSelectable,
     touchStart,
     touchEnd,
     evaluateEdge,
@@ -317,6 +319,7 @@ export function MobileNativeChatView({
         </View>
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
+          <ChatTextSelectableContext.Provider value={textSelectable}>
           <FlashList
             ref={listRef}
             renderScrollComponent={ChatScrollView}
@@ -395,6 +398,7 @@ export function MobileNativeChatView({
               <MobileNativeChatListEmpty emptyState={emptyState} agent={agent} styles={styles} />
             }
           />
+          </ChatTextSelectableContext.Provider>
           <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}

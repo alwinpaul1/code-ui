@@ -10,7 +10,6 @@ import { createPhone, earlyLineEnds, overflowingLines, sharedLines, type ModelLi
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
 
 vi.mock('react-native', () => ({
-  Platform: { OS: 'android' },
   Image: 'Image',
   Linking: { openURL: vi.fn() },
   PixelRatio: { getFontScale: () => 1 },
