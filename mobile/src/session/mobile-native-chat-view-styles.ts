@@ -36,8 +36,8 @@ export function makeChatViewStyles(theme: Theme) {
       paddingHorizontal: space.md,
       paddingBottom: space.xs
     },
-    // A bare line here was painted over the transcript when the dock had no ground (2026-10-02); it has one now
-    // (MobileNativeChatDockBackdrop), and the pill keeps its own opaque panel surface so it reads as a notice:
+    // A bare line here was painted over the transcript, since the dock has no ground (2026-10-02), so the pill
+    // keeps its own opaque panel surface so it reads as a notice:
     // dangerSoft is translucent, and danger text on bgRaised is under 4.5:1.
     sendErrorPill: {
       maxWidth: '100%',
@@ -62,22 +62,23 @@ export function makeChatViewStyles(theme: Theme) {
       flex: 1,
       position: 'relative'
     },
-    // The composer and its chrome float over the list, absolutely placed, on
-    // the ground MobileNativeChatDockBackdrop draws (see below).
+    // The composer and its chrome float over the list, absolutely placed, with
+    // nothing behind them (see below).
     dock: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0
-      // No ground in this style: the dock's ground is MobileNativeChatDockBackdrop,
-      // the page colour with a fade into it above the row (2026-10-09, text
-      // scrolled under the Working row collided with it). A flat ground read as
+      // No ground, here or as a child: the transcript shows through the row and
+      // the glass composer. A page-coloured ground with a fade above the row
+      // (2026-10-09) was withdrawn the next day at the user's request ("used to
+      // be transparent", and the composer "transparent too like glass"). A flat ground read as
       // a line above the Working row each time it was tried: the translucent
       // one on 2026-09-13 (removed the same day, 0a8642a6), the page-coloured
       // opaque one on 2026-09-19 (a hard edge over scrolled rows), and the
       // translucent one again on 2026-09-20 ("a black line above the tools").
-      // The list keeps a spacer at its end as tall as the dock plus the fade
-      // above it (DOCK_BACKDROP_FADE), so at rest no message sits under either.
+      // The list keeps a spacer at its end as tall as the dock, so at rest no
+      // message sits under it.
     },
     listContent: {
       paddingVertical: space.sm,

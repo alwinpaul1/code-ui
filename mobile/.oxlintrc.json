@@ -374,6 +374,9 @@
             // +1 for `dockClearance`, which the list's end spacer and the jump
             // button now clear (the dock plus its fade). The turn wiring itself
             // moved to use-mobile-native-chat-turn-ends.ts.
+            // 2026-10-10: the dock's ground and `dockClearance` were withdrawn
+            // (the user wanted the row and the composer see-through again);
+            // the cap stays, the file only shrank.
             "max": 427,
             "skipBlankLines": true,
             "skipComments": true

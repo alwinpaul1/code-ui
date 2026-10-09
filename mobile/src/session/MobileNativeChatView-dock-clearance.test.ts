@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { ThemeProvider } from '../theme/theme-context'
 import { space } from '../theme/tokens'
-import { DOCK_BACKDROP_FADE } from './MobileNativeChatDockBackdrop'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
@@ -105,15 +104,14 @@ vi.mock('./MobileNativeChatComposer', async () => {
   }
 })
 
-// 2026-10-09 review: the dock's ground fades in over the 28 dp above the dock
-// (DOCK_BACKDROP_FADE), but the list's end spacer and the jump-to-latest
-// button cleared only the dock itself. At rest, pinned to the tail, the last
-// line of the newest reply sat about 16 dp above the dock, under a veil about
-// 43% opaque, and the bottom 16 dp of the 40 dp button sat under the fade.
+// The list's end spacer and the jump-to-latest button clear the dock. The dock
+// draws nothing behind itself (the fade it had on 2026-10-09 was withdrawn on
+// 2026-10-10, mobile-native-chat-dock-glass.test.ts), so the dock's own
+// measured height is the whole clearance: no extra gap above the composer.
 
 const DOCK = 180
 
-describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session, at the dock\'s fade', (scheme) => {
+describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session, at the dock\'s edge', (scheme) => {
   let renderer: ReturnType<typeof create> | null = null
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -173,20 +171,20 @@ describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session,
     return visit(list.props.ListHeaderComponent)
   }
 
-  it('keeps the newest line clear of the fade when pinned to the tail', async () => {
+  it('keeps the newest line just clear of the dock when pinned to the tail', async () => {
     await render()
     // The header is the visual bottom of the inverted list: at the tail the
     // newest row sits on top of this spacer.
-    expect(spacerHeight()).toBe(DOCK + DOCK_BACKDROP_FADE)
+    expect(spacerHeight()).toBe(DOCK)
   })
 
-  it('keeps the jump-to-latest button clear of the fade', async () => {
+  it('keeps the jump-to-latest button just above the dock', async () => {
     await render()
     const jump = renderer!.root.find(
       (node) => typeof node.type === 'function' && node.type.name === 'MobileNativeChatJumpToLatest'
     )
     const fab = Object.assign({}, ...[jump.props.styles.fab].flat(Infinity).filter(Boolean)) as { bottom: number }
     // space.md: the button's own gap above whatever it clears.
-    expect(fab.bottom).toBe(DOCK + DOCK_BACKDROP_FADE + space.md)
+    expect(fab.bottom).toBe(DOCK + space.md)
   })
 })

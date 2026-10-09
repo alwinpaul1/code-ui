@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { LayoutChangeEvent } from 'react-native'
 
-/** The dock's measured height, which the spacer at the list's end clears
- *  (with the backdrop's fade above it, DOCK_BACKDROP_FADE). When it
- *  changes while the reader sits at the live edge, re-pin, or the newest row
+/** The dock's measured height, which the spacer at the list's end clears.
+ *  When it changes while the reader sits at the live edge, re-pin, or the newest row
  *  ends up under the dock (2026-09-13, first open of 0.5.29).
  *
  *  The re-pin goes through the tail-follow owner's `pinToTail`, which is the
