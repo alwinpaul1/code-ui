@@ -116,7 +116,9 @@ export function videoFrameExtractionControllerFor(scope: string): AbortControlle
  *  leaving it (source control, another worktree) and coming back still shows
  *  the chips (2026-09-13: the text draft survived that trip from disk, the
  *  images did not). Never written to disk: the files live in the app cache
- *  and would not outlive the process anyway. */
+ *  and would not outlive the process anyway. A send's words and bubble follow
+ *  the same screen the chips do (mobile-native-chat-live-drafts.ts), so a send
+ *  out across a remount puts back, or takes out, all three together. */
 export const useNativeChatImageAttachmentsStore = create<{
   byScope: MobileNativeChatImagesByScope
   videoFrameExtractionByScope: MobileNativeChatVideoFrameExtractionByScope

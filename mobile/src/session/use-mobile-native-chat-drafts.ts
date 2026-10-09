@@ -34,6 +34,7 @@ import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-lau
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
+import { liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -141,6 +142,8 @@ export function useMobileNativeChatDrafts(args: {
   const activePendingKeyRef = useRef(pendingKey)
   activePendingKeyRef.current = pendingKey
   const mountedRef = useRef(false)
+  // A send's clear, bubble and undo go to the screen showing its scope NOW (mobile-native-chat-live-drafts.ts).
+  const own = useLiveNativeChatDrafts(draftKey, setDrafts, setPendingBySession, setPendingWaitingForSession)
 
   const { readSeededLaunchDraft, readSeededLaunchDraftSeed } = useMobileNativeChatLaunchDraftSeed({
     draftKey,
@@ -205,22 +208,24 @@ export function useMobileNativeChatDrafts(args: {
   // A document rides ahead as a note; the draft is only the text.
   const clearDraftForSend = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     const draftText = stripMobileNativeChatAttachmentNotes(text)
-    setDrafts((previous) =>
-      draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration) &&
+    const live = liveNativeChatDrafts(origin.draftKey, own)
+    // A screen mounted since the tap counts its own edits; the box holding the sent words is the test there.
+    live.setDrafts((previous) =>
+      (live !== own || draftEditGenerationsRef.current.isCurrent(origin.draftKey, origin.draftEditGeneration)) &&
       draftWasSent(previous[origin.draftKey] ?? '', draftText)
         ? { ...previous, [origin.draftKey]: '' }
         : previous
     )
-  }, [])
+  }, [own])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
     // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
-    setDrafts((previous) => {
+    liveNativeChatDrafts(origin.draftKey, own).setDrafts((previous) => {
       const current = previous[origin.draftKey] ?? ''
       const next = appendReturnedDraftText(current, stripMobileNativeChatAttachmentNotes(text))
       return next === current ? previous : { ...previous, [origin.draftKey]: next }
     })
-  }, [])
+  }, [own])
 
   const acceptSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]): string | null => {
@@ -231,17 +236,13 @@ export function useMobileNativeChatDrafts(args: {
       const id = `pending-${Date.now()}-${pendingCounter}`
       const key = origin.pendingKey
       if (key) {
-        setPendingBySession((previous) =>
-          acceptOwnSendInPending(previous, key, id, origin, text, images, imagePaths)
-        )
+        liveNativeChatDrafts(origin.draftKey, own).setPendingBySession((previous) => acceptOwnSendInPending(previous, key, id, origin, text, images, imagePaths))
       } else {
-        setPendingWaitingForSession((previous) =>
-          acceptOwnSendInPending(previous, origin.draftKey, id, origin, text, images, imagePaths)
-        )
+        liveNativeChatDrafts(origin.draftKey, own).setPendingWaitingForSession((previous) => acceptOwnSendInPending(previous, origin.draftKey, id, origin, text, images, imagePaths))
       }
       return id
     },
-    []
+    [own]
   )
 
   // Why: a relay drop mid-send loses only the ack in the common case — the
@@ -374,9 +375,10 @@ export function useMobileNativeChatDrafts(args: {
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
   const removePending = useCallback((id: string) => {
-    setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
-    setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
-  }, [])
+    const live = liveNativeChatDrafts(activeDraftKeyRef.current, own)
+    live.setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
+    live.setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
+  }, [own])
 
   const clearDraftAtSendStart = useCallback((text: string, images?: string[], imagePaths?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images, imagePaths), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 
