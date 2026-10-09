@@ -19,7 +19,9 @@ const fakes = vi.hoisted(() => ({
   /** The beacon the HUD believed: live (not written off) and this session's. */
   liveBeacon: null as { modelId: string | null } | null,
   /** Null until the HUD's first screen read lands. */
-  taskCompletions: [] as unknown[] | null
+  taskCompletions: [] as unknown[] | null,
+  /** The chat's rows (the transcript). */
+  messages: [] as unknown[]
 }))
 vi.mock('./use-mobile-native-chat-hud', async () => {
   const actual = await vi.importActual<typeof import('./use-mobile-native-chat-hud')>(
@@ -52,7 +54,7 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
   useLastConnectedAt: () => null
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => ({ messages: [], status: 'ready', transcriptLoading: false })
+  useMobileNativeChatSession: () => ({ messages: fakes.messages, status: 'ready', transcriptLoading: false })
 }))
 vi.mock('./use-mobile-structured-agent-session', () => ({
   useMobileStructuredAgentSession: () => ({
@@ -113,6 +115,7 @@ import {
 } from '../agent-history/agent-history-panel.test-support'
 import { noteHostPlatform, resetHostPlatformsForTests } from '../transport/host-platform-store'
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
+import { resetSessionCommandPairCacheForTests } from './claude-session-command-pair'
 import {
   useMobileNativeChatController,
   type MobileNativeChatController
@@ -210,6 +213,8 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     fakes.live = { model: null, label: null, effort: null, context: null }
     fakes.liveBeacon = null
     fakes.taskCompletions = []
+    fakes.messages = []
+    resetSessionCommandPairCacheForTests()
     sessions = [neighbourRow, ownRow]
     host = createAnsweringClient((method) =>
       method === 'aiVault.listSessions'
@@ -302,6 +307,41 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     rerender()
     await settle(10_000)
 
+    expect(pills().composer?.label).toBe('Opus 5.5')
+  })
+
+  // Review, 2026-10-09: the time the beacon was last heard, which a model
+  // command must be newer than to outrank the live pair, was taken from the
+  // stored beacon even after the HUD wrote it off. With the badge on the user's
+  // own status line speaking, a `/model` row seen after that dead beacon
+  // outranked the badge for good: an alt+p back to Opus writes no row, and a
+  // dead process never beacons again.
+  it("never lets a command seen after a written-off beacon outrank the status line's badge", async () => {
+    const command = (name: string, body: string, at: number) => [
+      { id: `c${at}`, role: 'user', blocks: [{ type: 'text', text: `<command-name>/${name}</command-name>\n<command-args></command-args>` }], timestamp: at, source: 'transcript' },
+      { id: `o${at}`, role: 'user', blocks: [{ type: 'text', text: `<local-command-stdout>${body}</local-command-stdout>` }], timestamp: at, source: 'transcript' }
+    ]
+    act(() => {
+      consumeAgentHudBeacons(
+        'term-1',
+        `${ESC}]7777;CUIHUD1 agent=claude sid=${OWN} model=claude-opus-5-5 name=Opus%205.5 effort=xhigh${BEL}`
+      )
+    })
+    // The HUD wrote that beacon off; the badge says Opus.
+    fakes.liveBeacon = null
+    fakes.live = { model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh', context: null }
+    fakes.messages = command('model', 'Set model to `Opus 5.5` for this session only', 1_000)
+    rerender()
+    await settle(10_000)
+    // `/model` to Sonnet, then alt+p back to Opus, which writes no row.
+    fakes.messages = [
+      ...fakes.messages,
+      ...command('model', 'Set model to `Sonnet 5.5` for this session only', 2_000)
+    ]
+    rerender()
+    await settle(1_000)
+
+    expect(pills().header).toEqual({ model: 'claude-opus-5-5', label: 'Opus 5.5', effort: 'xhigh' })
     expect(pills().composer?.label).toBe('Opus 5.5')
   })
 
