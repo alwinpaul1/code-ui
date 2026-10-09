@@ -8,6 +8,7 @@ import { hydrateNativeChatKeptSessions } from './native-chat-kept-session-store'
 import { hydrateSessionCommandPairs } from './claude-session-command-pair'
 import { hydrateStartupFramePairs } from './claude-startup-frame-pair'
 import { hydrateScreenModelRecords } from './claude-screen-model-pair'
+import { hydrateClaudeTranscriptModelReadings } from './claude-transcript-model-scan'
 import { hydrateScheduledPromptMemory } from './scheduled-prompt-memory'
 
 /** Load the persisted project caches once at app start, before any project opens. */
@@ -38,6 +39,9 @@ export function hydrateSessionCaches(): Promise<void> {
     hydrateStartupFramePairs(),
     // Why: what the spinner and an alt+p toast last said about the model and
     // effort, which are on screen for seconds at a time (claude-screen-model-pair).
-    hydrateScreenModelRecords()
+    hydrateScreenModelRecords(),
+    // Why: the model the host's transcript scan last read for a session, so a
+    // relaunch shows it at once instead of waiting for the host (claude-transcript-model-scan).
+    hydrateClaudeTranscriptModelReadings()
   ]).then(() => undefined)
 }

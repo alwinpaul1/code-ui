@@ -7,7 +7,8 @@ import {
   shouldRefetchAfterReconnect
 } from '../transport/stale-after-reconnect'
 import { worktreePathFromId } from './mobile-native-chat-skill-browse'
-import { transcriptModelForSession, type ScannedTranscriptModel } from './claude-transcript-model'
+import { claudeTranscriptModelName, transcriptModelForSession, type ScannedTranscriptModel } from './claude-transcript-model'
+import { createPersistedMap } from './session-cache-persistence'
 
 /**
  * The host session scan behind the model pills of a Claude session that states
@@ -45,6 +46,18 @@ import { transcriptModelForSession, type ScannedTranscriptModel } from './claude
  * stays stale once the relay connects", through `shouldRefetchAfterReconnect`),
  * and once the five minutes are up the scan runs by itself, if a chat still
  * wants this host.
+ *
+ * The scan's rows live in memory, so a relaunched app had nothing to say until
+ * the host answered again, and the pill sat blank for those seconds on every
+ * launch (2026-10-09). The READING for each session shown is kept on the phone
+ * too (`codeui:chat-transcript-models`, 32 sessions, fail-open both ways): the
+ * host's model id, its name, and how recent a transcript it speaks for. It is
+ * the source reading, never the pill: every tier above it (the live pair, the
+ * screen, the command rows, the startup frame) is laid over it exactly as over
+ * a reading this run took, and `freshAsOf` keeps its real age, so a reply newer
+ * than it still supersedes it. A remembered reading stands only until a scan of
+ * the same host succeeds in this run; from then the scan alone answers, and a
+ * scan that does not list the session says nothing about it.
  */
 export const CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS = 5 * 60_000
 /** How old a list the host may answer an unforced scan with: Orca's
@@ -75,6 +88,51 @@ type DeferredScan = {
 }
 
 const scans = new Map<string, HostScan>()
+
+/** What the host last said about one session, kept across launches. */
+type RememberedReading = { hostId: string; model: string; label: string; freshAsOf: number }
+
+const remembered = createPersistedMap<RememberedReading>({
+  storageKey: 'codeui:chat-transcript-models',
+  maxEntries: 32
+})
+
+/** A stored entry is read back only when it has every field a reading has; a
+ *  malformed one is skipped, as if nothing were kept. */
+function rememberedReading(hostId: string, sessionId: string): ScannedTranscriptModel | null {
+  const entry = remembered.get(sessionId) as Partial<RememberedReading> | null | undefined
+  if (
+    entry == null ||
+    typeof entry !== 'object' ||
+    entry.hostId !== hostId ||
+    typeof entry.model !== 'string' ||
+    typeof entry.label !== 'string' ||
+    typeof entry.freshAsOf !== 'number' ||
+    !Number.isFinite(entry.freshAsOf) ||
+    claudeTranscriptModelName(entry.model) === null
+  ) {
+    return null
+  }
+  return { model: entry.model, label: entry.label, freshAsOf: entry.freshAsOf }
+}
+
+function remember(hostId: string, sessionId: string, reading: ScannedTranscriptModel): void {
+  const held = remembered.get(sessionId)
+  if (
+    held?.hostId === hostId &&
+    held.model === reading.model &&
+    held.label === reading.label &&
+    held.freshAsOf === reading.freshAsOf
+  ) {
+    return
+  }
+  remembered.set(sessionId, { hostId, model: reading.model, label: reading.label, freshAsOf: reading.freshAsOf })
+}
+
+/** Read at app start with the other session caches; never rejects. */
+export function hydrateClaudeTranscriptModelReadings(): Promise<void> {
+  return remembered.hydrate().then(notify)
+}
 const deferred = new Map<string, DeferredScan>()
 const watchers = new Map<string, number>()
 const listeners = new Set<() => void>()
@@ -113,6 +171,7 @@ export function resetClaudeTranscriptModelScansForTests(): void {
     clearTimeout(pending.timer)
   }
   scans.clear()
+  remembered.reset()
   deferred.clear()
   watchers.clear()
   listeners.clear()
@@ -120,14 +179,23 @@ export function resetClaudeTranscriptModelScansForTests(): void {
 }
 
 /** What the last scan of this host says about one session, with how recent a
- *  transcript it speaks for, or null. */
+ *  transcript it speaks for, or null. Before any scan of the host has succeeded
+ *  in this run, what one said before the app was last closed. */
 export function peekClaudeTranscriptModel(
   hostId: string,
   sessionId: string
 ): ScannedTranscriptModel | null {
   const scan = scans.get(hostId)
-  const reading = scan ? transcriptModelForSession(scan.rows, sessionId) : null
-  return reading && scan?.freshAsOf != null ? { ...reading, freshAsOf: scan.freshAsOf } : null
+  if (scan?.freshAsOf == null) {
+    return rememberedReading(hostId, sessionId)
+  }
+  const reading = transcriptModelForSession(scan.rows, sessionId)
+  if (reading === null) {
+    return null
+  }
+  const scanned = { ...reading, freshAsOf: scan.freshAsOf }
+  remember(hostId, sessionId, scanned)
+  return scanned
 }
 
 /** The history screen's workspace scope for this worktree: its folder, or no
