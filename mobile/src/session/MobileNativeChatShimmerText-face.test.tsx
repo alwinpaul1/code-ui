@@ -8,6 +8,7 @@ import { fontFamily } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentRun } from './MobileNativeChatAgentRun'
+import { ShimmerText } from './MobileNativeChatShimmerText'
 import { ToolRun } from './MobileNativeChatToolRun'
 import { NativeChatAgentRunsContext } from './native-chat-tasks-context'
 
@@ -146,6 +147,30 @@ describe('the face a running label keeps while it shimmers', () => {
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running')
       expect(faceOf(label)).toBe(fontFamily.medium)
       expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
+    }
+  })
+
+  // Every caller is Medium now, so the two tests above cannot tell a ShimmerText
+  // that copies its caller's face from one that hard-codes Medium. A face of
+  // another weight does.
+  it.each([
+    ['Regular', fontFamily.regular],
+    ['SemiBold', fontFamily.semibold]
+  ] as const)('draws each swept glyph in the caller\'s own %s, whatever the callers use', (_name, face) => {
+    function Row() {
+      return createElement(ShimmerText, {
+        text: 'Running',
+        active: true,
+        color: '#888888',
+        style: { fontFamily: face },
+        testID: 'probe'
+      })
+    }
+    for (const scheme of ['light', 'dark'] as const) {
+      const { label, glyphs } = draw(Row, scheme, 'probe')
+      expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running')
+      expect(faceOf(label)).toBe(face)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([face]))
     }
   })
 })
