@@ -31,7 +31,8 @@ import {
  *  the badge arrives with the first screen read, so a tab that is going to
  *  speak has spoken within one beat; the half second is slack for the relay.
  *  Only a tab that CAN beacon waits: a tab no flag reached (typed in by hand)
- *  and a Windows host (no flag at all) ask at once (`beaconCanCome`). It was
+ *  and a Windows host (no flag at all) ask as soon as the first screen read
+ *  lands without a badge (`beaconCanCome`, `screenRead`). It was
  *  8 s, and the pill sat blank that long on every hand-typed tab (2026-10-09). */
 export const CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS = 5_500
 
@@ -68,8 +69,9 @@ export function resetClaudeTranscriptModelPicksForTests(): void {
  *
  * Asks the host (claude-transcript-model-scan.ts, which holds the five-minute
  * budget) only on:
- * - the chat opening, at once when no beacon can come and otherwise once it
- *   has stayed quiet for the settle time, and again
+ * - the chat opening, as soon as the first screen read shows no badge when no
+ *   beacon can come, otherwise once it has stayed quiet for the settle time,
+ *   and again
  *   on each new connection after that (the repo's "nothing stays stale once
  *   the relay connects"; the budget still applies);
  * - the user opening the model sheet (`requestScan`);
@@ -104,6 +106,11 @@ export function useClaudeTranscriptModel(args: {
    *  flag. False for a tab typed in by hand and for a Windows host, which ask
    *  the host at once instead of waiting out the settle. Absent: true. */
   beaconCanCome?: boolean
+  /** A read of the live screen has landed for this chat since it opened. A tab
+   *  that can never beacon asks at once only from then: the badge on the user's
+   *  own status line arrives with that read, and a scan asked before it is a
+   *  scan of the host's per-host budget wasted (review, 2026-10-09). Absent: false. */
+  screenRead?: boolean
   /** The terminal whose beacon states the live pair; its last ARRIVAL is read
    *  here (repeats included), and the hook listens for arrivals only while a
    *  model command is waiting to be outranked by one. */
@@ -124,7 +131,7 @@ export function useClaudeTranscriptModel(args: {
    *  (claude-screen-model-pair.ts). */
   screenStatement?: ClaudeScreenModelStatement | null
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconCanCome = true, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconCanCome = true, screenRead = false, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
@@ -147,18 +154,22 @@ export function useClaudeTranscriptModel(args: {
   )
   const request = useCallback(() => scan(false), [scan])
 
-  // The chat opening: at once where no beacon can come, otherwise only once it
-  // has stayed quiet for the settle time.
+  // The chat opening: where no beacon can come, as soon as the first screen
+  // read has landed without a badge; otherwise, and if no read ever lands, once
+  // it has stayed quiet for the settle time. Never before the first read: the
+  // budget is per host and the scan per folder, so a scan wasted on a tab
+  // whose badge was about to speak throttled the next chat in another project
+  // on that host, and left it blank (review, 2026-10-09).
   const [settledFor, setSettledFor] = useState<string | null>(null)
   const quietKey = quiet ? `${hostId}\u0000${sessionId}` : null
   useEffect(() => {
-    if (!quietKey || !beaconCanCome) {
+    if (!quietKey) {
       return
     }
     const timer = setTimeout(() => setSettledFor(quietKey), CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
     return () => clearTimeout(timer)
-  }, [quietKey, beaconCanCome])
-  const settled = quietKey !== null && (!beaconCanCome || settledFor === quietKey)
+  }, [quietKey])
+  const settled = quietKey !== null && (settledFor === quietKey || (!beaconCanCome && screenRead))
   useEffect(() => {
     if (settled) {
       request()

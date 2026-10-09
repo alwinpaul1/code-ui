@@ -17,7 +17,9 @@ const fakes = vi.hoisted(() => ({
     context: null
   },
   /** The beacon the HUD believed: live (not written off) and this session's. */
-  liveBeacon: null as { modelId: string | null } | null
+  liveBeacon: null as { modelId: string | null } | null,
+  /** Null until the HUD's first screen read lands. */
+  taskCompletions: [] as unknown[] | null
 }))
 vi.mock('./use-mobile-native-chat-hud', async () => {
   const actual = await vi.importActual<typeof import('./use-mobile-native-chat-hud')>(
@@ -36,7 +38,7 @@ vi.mock('./use-mobile-native-chat-hud', async () => {
       permissionDismissed: false,
       queuedMessages: [],
       sentPrompts: [],
-      taskCompletions: [],
+      taskCompletions: fakes.taskCompletions,
       peerNotices: [],
       spinner: null,
       sentPhotos: []
@@ -207,6 +209,7 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     hostCount += 1
     fakes.live = { model: null, label: null, effort: null, context: null }
     fakes.liveBeacon = null
+    fakes.taskCompletions = []
     sessions = [neighbourRow, ownRow]
     host = createAnsweringClient((method) =>
       method === 'aiVault.listSessions'
@@ -356,6 +359,18 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
       expect(host.sent('aiVault.listSessions')).toHaveLength(1)
       expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
       expect(pills().composer?.label).toBe('Opus 5.5')
+    })
+
+    it('asks nothing on a hand-typed tab until its first screen read has landed', async () => {
+      delete tab.launchAgent
+      fakes.taskCompletions = null
+      render()
+      await settle(1_000)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
+      fakes.taskCompletions = []
+      rerender()
+      await settle(0)
+      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
     })
 
     it('shows the model at once on a Windows host, which takes no beacon flag', async () => {
