@@ -18,31 +18,30 @@ import {
 } from './claude-transcript-model-scan'
 import { clearPendingModelPicksForTests } from './mobile-native-chat-model-report-authority'
 import {
-  CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS,
   resetClaudeTranscriptModelPicksForTests,
   useClaudeTranscriptModel
 } from './use-claude-transcript-model'
 
-// Review, 2026-10-09: asking at once on a tab that can never beacon fired the
-// scan on the first render, before the first screen read could show a badge.
-// The budget is one scan per HOST per five minutes, but each scan is asked with
-// its own project's folder, so that wasted scan of project A throttled the
-// next chat in project B on the same host, and an unforced throttled scan is
-// never asked again: B's pill stayed blank. The early ask now waits for the
-// first screen read to land with no badge on it.
+// Review, 2026-10-09: asking early on a tab whose badge was about to speak
+// spent the host's whole five-minute budget, while each scan asks for one
+// project's folder, so the next chat in another project on that host was held
+// back and, unforced and throttled, never asked again: its pill stayed blank.
+// The budget is now per folder (claude-transcript-model-scan.ts), so every chat
+// asks the moment it opens and no project can starve another; a badge that
+// speaks later still outranks the reading.
 const HOST = 'host-mac'
 const A = { worktreeId: 'repo-a::/Users/alwin/a', folder: '/Users/alwin/a', sessionId: 'a3f1c2d4-5b6e-4f70-8a91-b2c3d4e5f607' }
 const B = { worktreeId: 'repo-b::/Users/alwin/b', folder: '/Users/alwin/b', sessionId: '8b19cb22-996c-40e5-a887-a5323a9845e1' }
 
 type Tab = typeof A
-type Probe = { tab: Tab; liveModel?: string | null; screenRead?: boolean }
+type Probe = { tab: Tab; liveModel?: string | null }
 
-describe('when a Claude tab that can never beacon asks the host at once', () => {
+describe('two Claude chats in different projects on one host', () => {
   let host: AnsweringClient
   const renderers: ReactTestRenderer[] = []
   const latest = new Map<string, ClaudeModelFallback>()
 
-  function Harness({ tab, liveModel = null, screenRead = false }: Probe) {
+  function Harness({ tab, liveModel = null }: Probe) {
     latest.set(
       tab.sessionId,
       useClaudeTranscriptModel({
@@ -55,8 +54,6 @@ describe('when a Claude tab that can never beacon asks the host at once', () => 
         connected: true,
         liveModel,
         beacon: false,
-        beaconCanCome: false,
-        screenRead,
         agentWorking: false
       }).fallback
     )
@@ -113,42 +110,22 @@ describe('when a Claude tab that can never beacon asks the host at once', () => 
     vi.useRealTimers()
   })
 
-  it('asks nothing before the first screen read, so a badge on that read costs no scan', async () => {
+  it('asks on opening, before any screen read, and gives way to the badge that read brings', async () => {
     const tab = mount({ tab: A })
-    await advance(300)
-    expect(scans()).toBe(0)
-    // The first read lands with the user's status line on it.
-    update(tab, { tab: A, liveModel: 'claude-opus-5-5', screenRead: true })
-    await advance(60_000)
-    expect(scans()).toBe(0)
-  })
-
-  it('asks as soon as the first screen read lands with no badge on it', async () => {
-    const tab = mount({ tab: A })
-    await advance(300)
-    expect(scans()).toBe(0)
-    update(tab, { tab: A, screenRead: true })
     await advance(0)
     expect(scans()).toBe(1)
     expect(latest.get(A.sessionId)).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
-  })
-
-  it('still asks after the settle when no screen read ever lands', async () => {
-    mount({ tab: A })
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS - 1)
-    expect(scans()).toBe(0)
-    await advance(1)
-    expect(scans()).toBe(1)
+    update(tab, { tab: A, liveModel: 'claude-opus-5-5' })
+    expect(latest.get(A.sessionId)).toEqual({ kind: 'none' })
   })
 
   it("leaves another project's badge-less chat on the same host its scan, after a chat whose badge spoke", async () => {
     const first = mount({ tab: A })
     await advance(300)
-    update(first, { tab: A, liveModel: 'claude-opus-5-5', screenRead: true })
+    update(first, { tab: A, liveModel: 'claude-opus-5-5' })
     await advance(30_000)
 
-    const second = mount({ tab: B })
-    update(second, { tab: B, screenRead: true })
+    mount({ tab: B })
     await advance(10_000)
     expect(latest.get(B.sessionId)).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)

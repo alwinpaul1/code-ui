@@ -1578,29 +1578,16 @@ added up, each fixed with its own failing-first test:
   `peekClaudeTranscriptModel` until a scan that LISTS the session replaces it
   (a listed row with no Claude model clears it). A scan that does not list the
   session says nothing about it: each scan asks for one folder and 20 rows, so
-  a scan of another project on the same host, after which the per-host budget
-  holds this chat's own scan back, must not blank it (review). It is the SOURCE reading, not the pill: every tier
+  a scan of another project on the same host must not blank it (review). It is
+  the SOURCE reading, not the pill: every tier
   above it is laid over it as before, and it keeps its real `freshAsOf`, so a
   reply newer than it still supersedes it. A malformed or unreadable store
   starts empty and the scan still runs. The persisted spinner effort
   (`claude-screen-model-pair.ts`) lies only over a model another tier supplies,
   so this also brings the effort back at once on reopen.
-- **The settle was 8 s for every tab.** It exists so a tab that is about to
-  beacon never costs a scan, but a tab typed in by hand (no `launchAgent`) and
-  any tab on a Windows host (`hostTakesAgentHudFlag` false) can never beacon.
-  Those now scan, unforced, inside the same five-minute budget, as soon as the
-  chat's first screen read lands with no badge on it (`screenRead`: the HUD's
-  task completions, null until that read), or after the settle if no read ever
-  lands. Not before that read: the first cut asked on the first render, and
-  the review found that the scan it wasted on a tab whose badge was about to
-  speak throttled a badge-less chat in another project on the same host (the
-  budget is per host, the scan per folder), whose unforced, throttled scan is
-  never asked again. A tab
-  launched as Claude on a host that is not Windows, or has not said what it
-  runs on (an unknown platform may be any host), waits 5.5 s: one 5 s
-  status-line beat and slack (`CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS`). The
-  platform comes from the session screen's capability probe, filed per host
-  (`transport/host-platform-store.ts`).
+- **The settle was 8 s for every tab.** First cut to 5.5 s for a tab that may
+  beacon and "after the first screen read" for one that cannot, then removed
+  altogether (below, "Near-instant on every host").
 - **A beacon the pill could not show stood the fallback down.** The controller
   passed `beacon: hudBeacon !== null`, which checks the session id but not
   liveness. A hand-started `claude -c` keeps the session id of a
@@ -1623,13 +1610,57 @@ added up, each fixed with its own failing-first test:
   alt+p switch back writes no row and a dead process never beacons again, the
   pill kept the command's model for good. It now comes from `liveBeacon`.
 
-Not changed: a tab with nothing kept for its session (first view on this
-device, a hand-typed session that has not answered yet) still shows nothing
-until the scan answers. Still open: the budget is per host while each scan is
-per folder, so two badge-less chats in different projects on one host within
-five minutes leave the second waiting for its own scan (an unforced scan the
-budget holds back is not deferred); the remembered reading covers it only for
-a session read before.
+#### Near-instant on every host (2026-10-09, later)
+
+The requirement: the model and effort pill appears near-instantly on opening a
+Claude chat, on macOS, Linux and Windows hosts and every phone.
+
+- **The budget is per project folder, capped per host.** It was one scan per
+  host per five minutes while each scan asks for one folder (20 rows), so a scan
+  of project A held back project B's, and B's unforced, throttled scan was never
+  asked again: a blank pill. Now each host and folder has its own five minutes,
+  and a host is asked at most `CLAUDE_TRANSCRIPT_MODEL_HOST_SCANS_PER_INTERVAL`
+  (4) times in any five minutes across its folders; a scan that cap holds back
+  runs by itself once the host has room, while a chat for it is on screen. A
+  session's reading comes from whichever scan of its host lists it.
+- **No settle.** `git log -S CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS` shows the settle
+  introduced (5669a05ab) for one reason: a tab about to beacon should not cost
+  the host a scan. No correctness case rests on it. A phone pick shows nothing
+  until a turn after it is scanned, whenever the scan runs; a new session has no
+  row in the scan, so it shows nothing; and the reading is the session's own
+  last-answered model, a permitted tier that a beacon or a badge replaces the
+  moment it speaks (`quiet` turns false). The cost it saved is bounded by the
+  budget above, so every quiet Claude chat asks the host the moment it opens and
+  on each new connection. The one visible cost: on a flagged tab whose model
+  changed with no reply since (a resume with `--model`), the scan's model can
+  stand for up to one 5 s beat before the beacon replaces it, the same exposure
+  an unflagged tab always had. The host-platform store the settle needed is gone.
+- **Warm-up.** The session screen knows a project's tabs (the last accepted list,
+  cached per project, `mobile-session-tabs-cache.ts`) before any chat opens. One
+  running Claude warms the scan for that folder, unforced, once per screen, new
+  connection and active tab, so the chat opened next states the reading on its
+  first render. The per-folder budget keeps one in flight per folder; the host cap
+  bounds a visit to many projects; a project list never warms anything.
+- **A flagged tab reopens from its warm-start beacon** (`agent-hud-beacon-warm-start.ts`):
+  the record is in memory or hydrated before the chat renders, liveness starts it
+  live, so the pill is drawn on the first render and no scan is asked
+  (controller test "asks the host nothing for a chat whose beacon already speaks
+  when it opens").
+- **The screen's first read** goes out from the watch's own effect, behind no
+  timer, on any host (the hook takes no platform), and a failed one is retried
+  after 1 s.
+
+What is instant now, with no host round trip: a session read before on this
+phone (the remembered reading, plus any persisted spinner effort, toast,
+startup frame or command row), a flagged tab with a warm-start beacon, and a
+chat whose project's scan was warmed. What still costs one round trip: the
+first open of a session this phone has never read and whose project was not
+warmed (one `aiVault.listSessions`, or a `terminal.read` for a badge). The
+floor: the effort of a hand-typed session that has never painted a startup
+banner the phone read, a thinking spinner, an alt+p toast or a `/model` or
+`/effort` row, with no status line of the user's own, is not known anywhere the
+phone can read, and shows nothing until one of those appears; the transcript
+scan carries the model only.
 
 ### Tests must never reach a real terminal (2026-10-06)
 

@@ -63,6 +63,15 @@ async function advance(ms: number): Promise<void> {
 }
 
 describe("a Claude chat's first screen read", () => {
+  // The hook takes no host platform, so this holds for a Windows host too.
+  it('reads the screen on the mount itself and draws the badge with no timer advanced', async () => {
+    const sendRequest = vi.fn().mockResolvedValue(screen(CLAUDE_STATUS_2_1_277))
+    await mount(sendRequest)
+    expect(sendRequest).toHaveBeenCalledTimes(1)
+    expect(sendRequest.mock.calls[0]?.[1]).toEqual({ terminal: 'terminal', screen: true })
+    expect(hud.observation?.effort).toBe('xhigh')
+  })
+
   it('reads the screen again after one second when the first read fails, not after the idle poll', async () => {
     const sendRequest = vi
       .fn()

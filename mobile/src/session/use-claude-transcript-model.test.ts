@@ -25,7 +25,6 @@ import {
 } from './mobile-native-chat-model-report-authority'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import {
-  CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS,
   resetClaudeTranscriptModelPicksForTests,
   useClaudeTranscriptModel
 } from './use-claude-transcript-model'
@@ -35,7 +34,7 @@ const WORKTREE = 'repo-1::C:\\Users\\danny\\code\\app'
 const SESSION = 'a3f1c2d4-5b6e-4f70-8a91-b2c3d4e5f607'
 const SCOPE = mobileNativeChatScopeKey(HOST, WORKTREE, 'tab-1')!
 
-type Probe = { liveModel?: string | null; beacon?: boolean; working?: boolean; sessionId?: string | null; beaconCanCome?: boolean; screenRead?: boolean }
+type Probe = { liveModel?: string | null; beacon?: boolean; working?: boolean; sessionId?: string | null }
 
 describe('when a Claude chat with no live model asks the host what answered', () => {
   let host: AnsweringClient
@@ -43,7 +42,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
   let latest: { fallback: ClaudeModelFallback; requestScan: () => void } | null = null
   let model = 'claude-opus-5-5'
 
-  function Harness({ liveModel = null, beacon = false, working = false, sessionId = SESSION, beaconCanCome, screenRead }: Probe) {
+  function Harness({ liveModel = null, beacon = false, working = false, sessionId = SESSION }: Probe) {
     latest = useClaudeTranscriptModel({
       client: host.client,
       hostId: HOST,
@@ -54,8 +53,6 @@ describe('when a Claude chat with no live model asks the host what answered', ()
       connected: true,
       liveModel,
       beacon,
-      ...(beaconCanCome === undefined ? {} : { beaconCanCome }),
-      ...(screenRead === undefined ? {} : { screenRead }),
       agentWorking: working
     })
     return null
@@ -78,6 +75,15 @@ describe('when a Claude chat with no live model asks the host what answered', ()
   }
 
   const scans = (): number => host.sent('aiVault.listSessions').length
+
+  /** Lets the host's answer land with NO timer advanced: only promises settle. */
+  async function flush(): Promise<void> {
+    await act(async () => {
+      for (let i = 0; i < 10; i += 1) {
+        await Promise.resolve()
+      }
+    })
+  }
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -111,47 +117,38 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     vi.useRealTimers()
   })
 
-  it('waits out the settle time before asking, so a tab about to beacon never costs a scan', async () => {
+  // 2026-10-09: the pill must appear near-instantly on opening a chat, on
+  // every host. Nothing waits on a timer before the host is asked: the scan
+  // reading is the session's own last-answered model, and a beacon or a badge
+  // that speaks later replaces it (tier 1).
+  it('shows the model on the render the scan answers in, with no timer advanced, on any tab', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS - 1)
-    expect(scans()).toBe(0)
-    // The beacon arrives inside the window: nothing is asked, now or later.
-    render({ beacon: true })
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 4)
-    expect(scans()).toBe(0)
-    expect(latest?.fallback).toEqual({ kind: 'none' })
-  })
-
-  // 2026-10-09: the pill came up seconds late on every hand-typed tab, which
-  // can never beacon, because it waited out a settle meant for tabs that might.
-  it('asks once the first screen read shows no badge, unforced, when no beacon can come (a hand-typed tab, a Windows host)', async () => {
-    render({ beaconCanCome: false, screenRead: true })
-    await advance(0)
+    await flush()
     expect(scans()).toBe(1)
-    expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
     expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
   })
 
-  it('asks nothing at once, even where no beacon can come, while the status line states the model', async () => {
-    render({ beaconCanCome: false, screenRead: true, liveModel: 'claude-fable-5-1' })
-    await advance(0)
-    expect(scans()).toBe(0)
-    render({ beaconCanCome: false, screenRead: true, sessionId: null })
-    await advance(0)
-    expect(scans()).toBe(0)
+  it('asks on mount for a tab that may still beacon too, and gives way to the beacon when it speaks', async () => {
+    render()
+    await flush()
+    expect(scans()).toBe(1)
+    expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
+    render({ liveModel: 'claude-fable-5-1', beacon: true })
+    expect(latest?.fallback).toEqual({ kind: 'none' })
   })
 
-  it('asks after one five-second heartbeat and its slack when the tab may still beacon', async () => {
-    render()
-    await advance(5_499)
+  it('asks nothing while the status line states the model, or before the tab knows its session', async () => {
+    render({ liveModel: 'claude-fable-5-1' })
+    await advance(0)
     expect(scans()).toBe(0)
-    await advance(1)
-    expect(scans()).toBe(1)
+    render({ sessionId: null })
+    await advance(0)
+    expect(scans()).toBe(0)
   })
 
   it('asks nothing and states nothing before the tab knows its session', async () => {
     render({ sessionId: null })
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
+    await advance(10_000)
     latest?.requestScan()
     await advance(0)
     expect(scans()).toBe(0)
@@ -165,7 +162,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
     expect(scans()).toBe(1)
     expect(latest?.fallback).toMatchObject({ kind: 'transcript', model: { label: 'Opus 5.5' } })
     // The chat's own settle-time ask lands inside the budget and is skipped.
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     act(() => latest?.requestScan())
     await advance(0)
     expect(scans()).toBe(1)
@@ -173,7 +170,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('asks again on a new connection once the budget allows, never before', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(scans()).toBe(1)
     fakes.lastConnectedAt = 2
     render()
@@ -188,7 +185,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it("shows nothing after the phone's own pick, then asks once when the next turn ends, and not on the turns after", async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(scans()).toBe(1)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
 
@@ -224,7 +221,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('shows nothing through the end of a turn a pick was made in, which Claude Code finishes on the old model', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
 
     // Opus is working; the phone picks Sonnet. Claude Code queues the switch
@@ -248,7 +245,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('never shows a pick the agent refused, and shows what answered once a turn after it is scanned', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
     // The switch never took (a dismissed confirmation): the next reply is Opus.
     notePendingModelPick(SCOPE, 'sonnet', null)
@@ -264,19 +261,19 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it("does not carry a pick made in one session into the next session in the same tab", async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     notePendingModelPick(SCOPE, 'sonnet', null)
     render()
     // `/clear` in the same tab: a new session under the same scope.
     const NEXT = '0f9e8d7c-6b5a-4c3d-8e2f-1a0b9c8d7e6f'
     render({ sessionId: NEXT })
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(latest?.fallback).toEqual({ kind: 'none' })
   })
 
   it("does not take the host's cached answer from before the turn that confirms a pick", async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     await advance(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
     notePendingModelPick(SCOPE, 'sonnet', null)
     render()
@@ -292,7 +289,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('runs the confirming scan when the five minutes allow it, and shows nothing until then', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(scans()).toBe(1)
     // A minute later the phone picks Sonnet and a turn runs under it: the
     // scan that would confirm it falls inside the budget.
@@ -320,7 +317,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
         : refused('unavailable', 'relay not ready')
     )
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(scans()).toBe(1)
     expect(latest?.fallback).toEqual({ kind: 'none' })
 
@@ -334,7 +331,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('keeps one answer object across renders, so the pickers are not rebuilt every render', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     const first = latest?.fallback
     expect(first?.kind).toBe('transcript')
     render()
@@ -344,7 +341,7 @@ describe('when a Claude chat with no live model asks the host what answered', ()
 
   it('states nothing once a live pair speaks, whatever the last scan said', async () => {
     render()
-    await advance(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS)
+    await advance(0)
     expect(latest?.fallback.kind).toBe('transcript')
     render({ liveModel: 'claude-fable-5-1' })
     expect(latest?.fallback).toEqual({ kind: 'none' })
