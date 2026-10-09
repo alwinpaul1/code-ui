@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.295
+▝▜██████▀  Opus 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   ~/Desktop/Project/Code UI/.claude/worktrees/agent-af91be4bc71e248fd · /rc
+
+⚠ Your login expires in 3 days · run /login to renew
+
+❯ Reply with exactly this line and nothing else, no tools: Opus 5.5 high │ ◔ 12% 120.0k/1.0M
+
+⏺ Opus 5.5 high │ ◔ 12% 120.0k/1.0M
+
+✻ Crunched for 5s · done 12:54 PM
+
+❯ Reply with exactly these two lines and nothing else, no tools. Line 1: Here it is. Line 2: Opus 5.5 high │ ◔ 12% 120.0k/1.0M
+
+⏺ Here it is.
+  Opus 5.5 high │ ◔ 12% 120.0k/1.0M
+
+✻ Sautéed for 2s · done 12:55 PM
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                                                            [-]
+  Opus 5.5 medium │ ◔ ╸━━━━━━━ 7% 68.8k/1.0M   ◷ 5h ╸━━━━━━━ 6% │ 5:20 PM   ▦ 7d ━━━━━━━━ 24% │ Wed 7:00 PM 
+
+   agent-af91be4bc71e248fd │  worktree-agent-af91be4bc71e248fd ✓ 
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 58m left · hit 71% · misses 0
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
