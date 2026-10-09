@@ -133,7 +133,6 @@ src/session/use-mobile-native-chat-image-attachments.remount.test.ts
 src/session/use-mobile-native-chat-input-lease.test.ts
 src/session/use-mobile-native-chat-rewind.test.tsx
 src/session/use-mobile-native-chat-stop.test.ts
-src/session/use-mobile-native-chat-turn-disclosure.test.tsx
 src/session/use-mobile-session-terminal-input.test.ts
 src/session/use-mobile-session-view-switch.test.tsx
 src/session/use-mobile-structured-agent-session-rewind.test.tsx
