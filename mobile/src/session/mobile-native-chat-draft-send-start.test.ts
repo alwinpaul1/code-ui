@@ -62,8 +62,7 @@ describe('clearDraftAtSendStartWith', () => {
     undo?.()
 
     expect(deps.restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'hi')
-    // From the send's own scope, not the tab the screen shows now (Opus review of 4103c597b).
-    expect(deps.removePending).toHaveBeenCalledWith('pending-7', ORIGIN.draftKey)
+    expect(deps.removePending).toHaveBeenCalledWith('pending-7')
   })
 
   it('does not touch the pending list when acceptSend added nothing (no draft scope)', () => {

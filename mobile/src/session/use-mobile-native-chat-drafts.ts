@@ -21,7 +21,6 @@ import { knownNativeChatImagePreviews } from './mobile-native-chat-image-preview
 import { waitingPhotoSends } from './mobile-native-chat-waiting-photo-sends'
 import { acceptOwnSendInPending } from './mobile-native-chat-remember-echo'
 import {
-  dropMobileNativeChatPending,
   combineMobileNativeChatPending,
   mergeWaitingSessionPending,
   removeWaitingSessionPending,
@@ -34,7 +33,7 @@ import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-lau
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
-import { liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'
+import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -107,7 +106,7 @@ export function useMobileNativeChatDrafts(args: {
     onUnconfirmed: () => void
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
-  removePending: (id: string, draftKey?: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
+  removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
 } {
   const {
     hostId,
@@ -374,11 +373,7 @@ export function useMobileNativeChatDrafts(args: {
   const written = pendingKey && !pendingBySession[pendingKey] ? waitingPhotoSends(pendingKey) : undefined
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
-  const removePending = useCallback((id: string, draftKey?: string) => {
-    const live = liveNativeChatDrafts(draftKey ?? activeDraftKeyRef.current, own)
-    live.setPendingBySession((previous) => dropMobileNativeChatPending(previous, id))
-    live.setPendingWaitingForSession((previous) => dropMobileNativeChatPending(previous, id))
-  }, [own])
+  const removePending = useCallback((id: string) => dropNativeChatPendingEverywhere(own, id), [own])
 
   const clearDraftAtSendStart = useCallback((text: string, images?: string[], imagePaths?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images, imagePaths), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 

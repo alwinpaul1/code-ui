@@ -24,6 +24,7 @@ import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-im
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
+import { resetLiveNativeChatDraftsForTests } from './mobile-native-chat-live-drafts'
 import { baseArgs, methodNotFound, ok } from './use-mobile-native-chat-image-attachments.test-support'
 
 const pick = vi.hoisted(() => vi.fn())
@@ -75,6 +76,7 @@ describe('the photos of a sent message leave the composer with its text', () => 
     renderer = null
     drafts = null
     images = null
+    resetLiveNativeChatDraftsForTests()
     await clearNativeChatDraftStores()
   })
 
