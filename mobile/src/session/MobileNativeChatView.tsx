@@ -31,6 +31,7 @@ import { ChatTextSelectableContext } from '../components/chat-text-selectable-co
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
 import { MobileNativeChatDockBackdrop } from './MobileNativeChatDockBackdrop'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
+import { messageIdsEndingATurn } from './mobile-native-chat-turn-end'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
 import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
@@ -164,6 +165,8 @@ export function MobileNativeChatView({
     [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
+  // The Claude app draws a reply's actions once, under the turn's last message.
+  const turnEndIds = useMemo(() => messageIdsEndingATurn(data), [data])
   // Labels say "today" or a weekday relative to now; five minutes keeps a
   // divider honest across midnight without churning the rows.
   const dividerNow = useNow(5 * 60_000)
@@ -257,6 +260,7 @@ export function MobileNativeChatView({
         onOpenFile={onOpenFile}
         onRevertHunk={onRevertHunk}
         focusView={focusView}
+        endsTurn={turnEndIds.has(item.id)}
         onCancelQueued={
           agentWorking && onCancelQueued && item.id.startsWith('pending-')
             ? () => void onCancelQueued(item.id)
@@ -282,6 +286,7 @@ export function MobileNativeChatView({
       onOpenFile,
       onRevertHunk,
       focusView,
+      turnEndIds,
       agentWorking,
       onCancelQueued,
       rewindable,

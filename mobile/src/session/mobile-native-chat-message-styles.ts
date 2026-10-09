@@ -48,7 +48,7 @@ export function makeChatMessageStyles(theme: Theme) {
     },
     controls: {
       flexDirection: 'row',
-      justifyContent: 'flex-end',
+      justifyContent: 'flex-start',
       gap: space.xs,
       marginBottom: 2,
       opacity: 0.8
@@ -105,6 +105,14 @@ export function makeChatMessageStyles(theme: Theme) {
     controlsRow: {
       flexDirection: 'row',
       justifyContent: 'flex-end'
+    },
+    // An agent turn's actions: at the left, under the text, the Claude app's place
+    // for them. The button's own padding moves out so the icon meets the text edge.
+    agentControlsRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      marginTop: space.xs,
+      marginLeft: -space.xs
     },
     toolRunCount: {
       color: colors.success,

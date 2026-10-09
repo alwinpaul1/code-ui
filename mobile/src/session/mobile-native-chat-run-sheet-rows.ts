@@ -7,6 +7,7 @@ import { soleCallCreatedFile } from './mobile-native-chat-edited-files'
 import { isAgentToolName, type NativeChatAgentRunEntry } from './mobile-native-chat-agent-run'
 import { agentTitle, readString } from './mobile-background-task-transcript'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import { editFileCountIsWhole } from './mobile-native-chat-edit-wire-cut'
 import { toolDetailInputRows, toolDetailStatus } from './mobile-native-chat-tool-detail'
 import { sendMessageDetail, toolCallKind } from './mobile-native-chat-tool-sentence'
 import type { ToolRunKind } from './mobile-native-chat-tool-kind'
@@ -37,6 +38,14 @@ export type RunSheetRow = {
   /** The detail is an input KEY, not a value: drawn muted. Set only for a
    *  tool the phone has no verb for ("Used CronDelete  id"). */
   detailIsKey: boolean
+  /** The detail is a file name: the sheet draws it in the monospace face. */
+  detailMono: boolean
+  /** The "+A −R" lines the call's file edit changed, when the data has a whole
+   *  count (a landed edit whose rows the wire did not cut); null otherwise. */
+  diff: { added: number; removed: number } | null
+  /** A glyph of its own, where the kind's icon would say the wrong thing: the
+   *  Claude app draws a ToolSearch as a toolbox, not a wrench. */
+  glyph: 'toolbox' | null
   /** The call failed, by its result or its own state. */
   failed: boolean
   /** The call and its result, for the detail sheet a tap opens. */
@@ -66,29 +75,58 @@ function inputLabel(input: unknown): string | null {
   return label.length > 0 ? label : null
 }
 
-/** The first input key of a call with named inputs: the only thing a tool the
- *  phone has no verb for says about itself that is not a value. Null for a
- *  call with no input, or one whose input is a bare string or number. */
-function firstInputKey(input: unknown): string | null {
+/** The input key of a call with exactly one named input: the only thing a tool
+ *  the phone has no verb for says about itself that is not a value ("Used
+ *  CronDelete  id", the 2026-10-01 screenshot). With several inputs no key is
+ *  more the call's subject than another, and the sheet's input rows are
+ *  name-sorted, so "the first" was only whichever sorted first: a ToolSearch
+ *  read "Used ToolSearch  max_results" (2026-10-09). Null for a call with no
+ *  input, several, or one whose input is a bare string or number. */
+function loneInputKey(input: unknown): string | null {
   const structured =
     (typeof input === 'object' && input !== null) ||
     (typeof input === 'string' && /^\s*[{[]/.test(input))
-  return structured ? (toolDetailInputRows(input)[0]?.name ?? null) : null
+  if (!structured) {
+    return null
+  }
+  const rows = toolDetailInputRows(input)
+  return rows.length === 1 ? rows[0]!.name : null
 }
 
-function editDetail(pair: NativeChatToolPair): { verb: string; detail: string | null } {
+/** Whether a tool name is ToolSearch, Claude Code's loader for deferred tools. */
+function isToolSearch(name: string): boolean {
+  return name.trim().toLowerCase() === 'toolsearch'
+}
+
+function editDetail(pair: NativeChatToolPair): {
+  verb: string
+  detail: string | null
+  detailMono: boolean
+  diff: RunSheetRow['diff']
+} {
   const call = pair.call!
   const files = editFilesForToolCall(call, pair.result ?? null)
   const paths = files && files.length > 0 ? files.map((file) => file.path) : []
   const own = toolCallPath(call.input)
   const verb = soleCallCreatedFile({ call, result: pair.result ?? null }) ? 'Created' : 'Edited'
+  // A sum that leaves a file out is not the edit's count: no chips then.
+  const diff =
+    files && files.length > 0 && files.every(editFileCountIsWhole)
+      ? {
+          added: files.reduce((sum, file) => sum + file.added, 0),
+          removed: files.reduce((sum, file) => sum + file.removed, 0)
+        }
+      : null
   if (paths.length > 1) {
-    return { verb, detail: `${paths.length} files` }
+    return { verb, detail: `${paths.length} files`, detailMono: false, diff }
   }
-  return { verb, detail: fileName(paths[0] ?? own) ?? inputLabel(call.input) }
+  const name = fileName(paths[0] ?? own)
+  return { verb, detail: name ?? inputLabel(call.input), detailMono: name !== null, diff }
 }
 
-function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 'agentId' | 'opens'> {
+type RowFacts = Omit<RunSheetRow, 'pair' | 'failed' | 'agentId' | 'opens'>
+
+function rowOf(pair: NativeChatToolPair): RowFacts {
   const call = pair.call
   if (!call) {
     // A result whose call the window cut: its first line is all there is.
@@ -97,11 +135,22 @@ function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 
       kind: 'other',
       verb: 'Result',
       detail: line ? cutWholeCharacters(line.trim(), RESULT_PREVIEW_CHARS) : null,
-      detailIsKey: false
+      detailIsKey: false,
+      detailMono: false,
+      diff: null,
+      glyph: null
     }
   }
   const kind = toolCallKind(call.name)
-  const plain = (verb: string, detail: string | null) => ({ kind, verb, detail, detailIsKey: false })
+  const plain = (verb: string, detail: string | null): RowFacts => ({
+    kind,
+    verb,
+    detail,
+    detailIsKey: false,
+    detailMono: false,
+    diff: null,
+    glyph: null
+  })
   switch (kind) {
     case 'command': {
       const description = readString(call.input, 'description')
@@ -112,7 +161,7 @@ function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 
     case 'read':
       return plain('Read', fileName(toolCallPath(call.input)) ?? inputLabel(call.input))
     case 'edit':
-      return { kind, detailIsKey: false, ...editDetail(pair) }
+      return { kind, detailIsKey: false, glyph: null, ...editDetail(pair) }
     case 'search':
       return plain('Searched', inputLabel(call.input))
     case 'web':
@@ -126,8 +175,12 @@ function rowOf(pair: NativeChatToolPair): Omit<RunSheetRow, 'pair' | 'failed' | 
       return plain('Messaged', message ? [message.to, message.preview].filter(Boolean).join(' ') : null)
     }
     case 'other': {
-      const key = firstInputKey(call.input)
-      return { kind, verb: `Used ${call.name.trim() || 'a tool'}`, detail: key, detailIsKey: key !== null }
+      if (isToolSearch(call.name)) {
+        // Its inputs are a query and a count, none of them worth a line.
+        return { ...plain('Loaded tools', null), glyph: 'toolbox' }
+      }
+      const key = loneInputKey(call.input)
+      return { ...plain(`Used ${call.name.trim() || 'a tool'}`, key), detailIsKey: key !== null }
     }
     default: {
       const unhandled: never = kind

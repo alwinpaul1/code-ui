@@ -129,10 +129,10 @@ describe('the face a running label keeps while it shimmers', () => {
   // the plain label is Medium. Each glyph span named no face, so the patched
   // Text gave it Regular, and the narrower word pulled the chevron sideways
   // when the sweep started and stopped.
-  it('keeps "Running agent" in Medium while it sweeps, in light and dark', () => {
+  it('keeps "Running agent: <subject>" in Medium while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(AgentRow, scheme, 'agent-run-label')
-      expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running agent')
+      expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running agent: Fix the chat rows')
       expect(faceOf(label)).toBe(fontFamily.medium)
       expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
     }

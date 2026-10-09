@@ -131,7 +131,8 @@ function MobileNativeChatMessageImpl({
   activeTurnIsWorking,
   structuredActivityUi = false,
   turnActivity = null,
-  taskListPredecessors
+  taskListPredecessors,
+  endsTurn = true
 }: {
   message: NativeChatMessage
   toolsExpanded?: boolean
@@ -170,6 +171,11 @@ function MobileNativeChatMessageImpl({
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
   turnActivity?: { kind: 'description'; text: string } | null
+  /** Whether this is the last message of the agent's turn. Its actions (copy,
+   *  scroll to top) are drawn once, under the turn's end, as the Claude app
+   *  does, not under every message of it (2026-10-09). The list says it; a
+   *  surface that does not (a subagent's transcript) keeps them on each. */
+  endsTurn?: boolean
 }) {
   const styles = useChatMessageStyles()
   const { colors } = useTheme()
@@ -237,12 +243,6 @@ function MobileNativeChatMessageImpl({
     !turnExpanded &&
     !toolsExpanded
   const showToolRun = tools.length > 0 && !settledToolsHidden
-  // The turn's controls hang off the final run of work.
-  const lastToolSegment = segments.reduce(
-    (last, segment, index) => (segment.kind === 'tools' ? index : last),
-    -1
-  )
-
   // Whether there is any prose to copy, without parsing it: only a tap pays
   // for the Markdown-to-text pass. Text that draws as nothing (an image-only
   // Markdown line) still passes this and copies nothing when tapped.
@@ -283,7 +283,7 @@ function MobileNativeChatMessageImpl({
     ) : null
 
   const controls =
-    isAgent && (hasProse || scrollToTop) ? (
+    isAgent && endsTurn && (hasProse || scrollToTop) ? (
       <AgentControls onCopy={hasProse ? handleCopy : undefined} onScrollToTop={scrollToTop} styles={styles} />
     ) : null
 
@@ -333,9 +333,6 @@ function MobileNativeChatMessageImpl({
                 // are handed it and simply do not match.
                 activeCall={activeCall}
                 taskListPredecessors={taskListPredecessors}
-                // The controls belong to the turn, so only the LAST run carries
-                // them — otherwise every run would grow its own copy.
-                trailing={segmentIndex === lastToolSegment ? controls : undefined}
                 onOpenFile={onOpenFile}
                 onRevertHunk={onRevertHunk}
                 revertScope={`${message.id}:${segmentIndex}`}
@@ -344,7 +341,9 @@ function MobileNativeChatMessageImpl({
               />
             ) : null
           )}
-          {showToolRun ? null : onCancelQueued ? (
+          {showToolRun ? (
+            controls ? <View style={styles.agentControlsRow}>{controls}</View> : null
+          ) : onCancelQueued ? (
             <View style={styles.controlsRow}>
               <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
                 Queued
@@ -362,7 +361,8 @@ function MobileNativeChatMessageImpl({
               </Pressable>
             </View>
           ) : controls ? (
-            <View style={styles.controlsRow}>{controls}</View>
+            // Under the turn's last block, at the text's own edge.
+            <View style={styles.agentControlsRow}>{controls}</View>
           ) : (
             sentPromptControls
           )}
