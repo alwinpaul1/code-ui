@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { RpcClient } from '../transport/rpc-client'
 import {
+  agentTextNamesPath,
   collectHostImagePaths,
   mergeImagePreviews,
   loadHostImage,
@@ -273,14 +275,115 @@ describe('an image the agent read, once the host sends it', () => {
 
   // The host shares a file outside every workspace only when the agent's own
   // words or its terminal output named it (Orca 1.4.212). A Read's path is
-  // neither, so the step drew nothing, and nothing anywhere said why.
+  // rarely either (Claude Code paints it once, on a row its renderer can
+  // split), so the step drew nothing, and nothing anywhere said why.
   it('leaves one line naming the path and why, when the host will not share it', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const refused = { ok: true, result: { worktree: 'worktree', relativePath: null, absolutePath: args.path, exists: false } }
     expect(await loadHostImage({ ...args, client: client(refused), files: fakeFiles() })).toBeNull()
     expect(warn).toHaveBeenCalledTimes(1)
     expect(String(warn.mock.calls[0]?.[0])).toBe(
-      `[host-image] no picture for ${args.path}: the desktop did not share it (outside every workspace, and not named in the agent's text or terminal output)`
+      `[host-image] no picture for ${args.path}: the desktop did not share it (outside every workspace). ` +
+        "Rule 1, named in the agent's text: it is not. " +
+        'Rule 2, printed in terminal term: not found there as one unbroken path ' +
+        "(Claude Code shows a Read's path once, while it runs, on a row its renderer can split or wrap)"
     )
+  })
+})
+
+// 2026-10-09, Claude Code 2.1.295 in a Thesis session on Orca 1.4.223: three
+// pictures the agent read from its scratchpad never showed, and the one line
+// left behind said "not named in the agent's text or terminal output", which
+// named neither rule nor whether either had even been tried. Outside every
+// workspace the desktop shares a file on one of two rules: (1) the agent's
+// text in the session's transcript names it, or (2) the tab's terminal
+// printed it, unbroken, under a temp folder. Both refuse with the same empty
+// resolution, so the line says what the phone knows of each.
+describe('the line a refused agent-read picture leaves behind', () => {
+  // The real tool_use path and the real terminal handle of that session.
+  const path =
+    '/private/tmp/claude-501/-Users-alwinpaul-Desktop-Project-Thesis/36279b15-23eb-49ee-aa03-67b6555076bd/scratchpad/tp12-12.png'
+  const handle = 'term_87d9e73b-ab0f-4ce3-887d-90f2f9fa2270'
+  const worktree = '10e21f69-ad82-4743-8c4b-b938873247d6::/Users/alwinpaul/Desktop/Project/Thesis'
+  // What Orca 1.4.223 answers for every refusal: no openTarget, exists false.
+  const refused = {
+    ok: true,
+    result: { worktree, relativePath: null, absolutePath: path, exists: false, isDirectory: false }
+  }
+  const base = {
+    hostId: 'host',
+    worktreeId: worktree,
+    nativeChatContext: { tabId: '1559e482-09d6-4325-96ea-ae90ff4cd634', sessionId: '36279b15-23eb-49ee-aa03-67b6555076bd' },
+    terminalHandle: handle,
+    path,
+    files: null
+  }
+  const refusingClient = (): RpcClient => ({ sendRequest: vi.fn().mockResolvedValue(refused) }) as unknown as RpcClient
+  const lineFor = async (args: Partial<Parameters<typeof loadHostImage>[0]>): Promise<string> => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    expect(await loadHostImage({ ...base, client: refusingClient(), ...args })).toBeNull()
+    expect(warn).toHaveBeenCalledTimes(1)
+    return String(warn.mock.calls[0]?.[0])
+  }
+  afterEach(() => {
+    resetHostImagePreviewCacheForTests()
+    vi.restoreAllMocks()
+  })
+
+  it('names both rules, and says the terminal never showed the path unbroken, for a scratchpad read', async () => {
+    expect(await lineFor({})).toBe(
+      `[host-image] no picture for ${path}: the desktop did not share it (outside every workspace). ` +
+        "Rule 1, named in the agent's text: it is not. " +
+        `Rule 2, printed in terminal ${handle}: not found there as one unbroken path ` +
+        "(Claude Code shows a Read's path once, while it runs, on a row its renderer can split or wrap)"
+    )
+  })
+
+  it('says rule 1 failed on the desktop when the agent text the phone holds does name the path', async () => {
+    expect(await lineFor({ agentTextNamesPath: true })).toContain(
+      "Rule 1, named in the agent's text: this chat's text names it, but the desktop's transcript tail did not."
+    )
+  })
+
+  it('says which rule was never tried when no chat session and no terminal went with the ask', async () => {
+    expect(await lineFor({ nativeChatContext: null, terminalHandle: null })).toBe(
+      `[host-image] no picture for ${path}: the desktop did not share it (outside every workspace). ` +
+        "Rule 1, named in the agent's text: not checked, no chat session was sent. " +
+        'Rule 2, printed in the terminal: not checked, no terminal handle was sent'
+    )
+  })
+
+  it('says rule 2 cannot apply to a file outside the temp folders', async () => {
+    expect(await lineFor({ path: '/Users/alwinpaul/Pictures/shot.png' })).toContain(
+      'Rule 2, printed in the terminal: cannot apply, it is outside the temp folders (/tmp, $TMPDIR)'
+    )
+  })
+
+  // The failure path is untouched: a resolve the desktop rejects still says
+  // the desktop's own reason, not a rule it never reached.
+  it('still names the desktop’s own reason when it rejects the resolve outright', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const client = {
+      sendRequest: vi.fn().mockResolvedValue({ ok: false, error: { code: 'forbidden', message: 'worktree not found' } })
+    } as unknown as RpcClient
+    expect(await loadHostImage({ ...base, client })).toBeNull()
+    expect(String(warn.mock.calls[0]?.[0])).toBe(
+      `[host-image] no picture for ${path}: the desktop could not resolve it (worktree not found)`
+    )
+  })
+})
+
+describe('agentTextNamesPath', () => {
+  const path = '/private/tmp/claude-501/x/scratchpad/tp12-12.png'
+  const msg = (role: 'user' | 'assistant', blocks: unknown[]): NativeChatMessage =>
+    ({ id: role, role, blocks }) as NativeChatMessage
+  it('is true only for assistant text that names the path, not for the Read call itself', () => {
+    const read = msg('assistant', [{ type: 'tool-call', name: 'Read', input: { file_path: path } }])
+    expect(agentTextNamesPath([read], path)).toBe(false)
+    expect(agentTextNamesPath([msg('user', [{ type: 'text', text: `see ${path}` }])], path)).toBe(false)
+    expect(agentTextNamesPath([read, msg('assistant', [{ type: 'text', text: `Saved \`${path}\`.` }])], path)).toBe(true)
+  })
+  it('is false for no messages at all', () => {
+    expect(agentTextNamesPath([], path)).toBe(false)
   })
 })

@@ -13,6 +13,7 @@ import {
 import { normalizeImageTranscriptMessages } from '../../../src/shared/native-chat-image-transcript-markers'
 import {
   isImageRefBlock,
+  isTextBlock,
   isToolCallBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
@@ -120,11 +121,52 @@ function explainMissing(key: string, path: string, why: string): void {
   console.warn(`[host-image] no picture for ${path}: ${why}`)
 }
 
-/** The host resolved the path and granted nothing: outside every workspace,
- *  a file is shared only when the agent's words or its terminal output named
- *  it (Orca 1.4.212's resolveTerminalPath), and a Read's path is neither. */
-const NOT_SHARED =
-  "the desktop did not share it (outside every workspace, and not named in the agent's text or terminal output)"
+/** True when assistant TEXT the phone holds names the path. That is the
+ *  desktop's rule 1; a Read call's own input does not count there. */
+export function agentTextNamesPath(messages: readonly NativeChatMessage[], path: string): boolean {
+  return messages.some(
+    (message) =>
+      message.role === 'assistant' &&
+      Array.isArray(message.blocks) &&
+      message.blocks.some((block) => isTextBlock(block) && block.text.includes(path))
+  )
+}
+
+/** The host resolved the path and granted nothing. Outside every workspace
+ *  Orca 1.4.223's resolveTerminalPath shares a file on one of two rules:
+ *  (1) assistant text in the session's transcript tail names it, or (2) the
+ *  path lies under a temp folder and the tab's terminal printed it, as one
+ *  unbroken string, in its recent raw output. Every refusal comes back as the
+ *  same empty resolution, so this says what the phone knows of each rule.
+ *  It cannot see the desktop's other rule-2 refusals (no cwd for the handle,
+ *  a handle from another worktree), and it takes /var/folders as macOS's
+ *  $TMPDIR; a Linux host with its own $TMPDIR is reported as outside it.
+ *
+ *  Rule 2 rarely holds for a Read (Claude Code 2.1.296, captured 2026-10-09):
+ *  the path shows only on a `⎿` row under `Reading N files…`, painted once
+ *  and then folded into `Read N files`. Its renderer writes only the cells
+ *  that changed, so a cell the last frame already held splits the path with
+ *  a cursor move (`/pr\x1b[15Gvate/tmp/…`), a row narrower than the path
+ *  wraps it, and a parallel read that ends between frames is never painted. */
+function notShared(args: {
+  path: string
+  nativeChatContext: unknown
+  terminalHandle: string | null
+  agentTextNamesPath?: boolean
+}): string {
+  const rule1 = !args.nativeChatContext
+    ? 'not checked, no chat session was sent'
+    : args.agentTextNamesPath
+      ? "this chat's text names it, but the desktop's transcript tail did not"
+      : 'it is not'
+  const rule2 = !args.terminalHandle
+    ? 'Rule 2, printed in the terminal: not checked, no terminal handle was sent'
+    : !/^\/(?:private\/)?tmp\/|^\/(?:private\/)?var\/folders\//.test(args.path)
+      ? 'Rule 2, printed in the terminal: cannot apply, it is outside the temp folders (/tmp, $TMPDIR)'
+      : `Rule 2, printed in terminal ${args.terminalHandle}: not found there as one unbroken path ` +
+        "(Claude Code shows a Read's path once, while it runs, on a row its renderer can split or wrap)"
+  return `the desktop did not share it (outside every workspace). Rule 1, named in the agent's text: ${rule1}. ${rule2}`
+}
 
 export async function loadHostImage(args: {
   client: RpcClient
@@ -135,6 +177,9 @@ export async function loadHostImage(args: {
    *  one provenance the host accepts for a user-pasted file. */
   terminalHandle: string | null
   path: string
+  /** Whether agent text the phone holds names the path (for the line a
+   *  refusal leaves behind; the desktop decides on its own transcript). */
+  agentTextNamesPath?: boolean
   /** Where the picture is kept; the platform's own when not given. */
   files?: HostImageFileStore | null
 }): Promise<string | null> {
@@ -203,7 +248,7 @@ export async function loadHostImage(args: {
             : null
       if (!request) {
         failedPaths.set(key, Date.now() + RETRY_MS)
-        explainMissing(key, args.path, NOT_SHARED)
+        explainMissing(key, args.path, notShared(args))
         return null
       }
       const read = await args.client.sendRequest(request.method, request.params, {
@@ -261,6 +306,11 @@ export function useHostImagePreviews(args: {
         : {},
     [enabled, localPreviews, messages]
   )
+  // Only for the line a refusal leaves behind; recomputed with `wanted`.
+  const namedInAgentText = useMemo(
+    () => new Set(Object.values(wanted).flat().filter((path) => agentTextNamesPath(messages, path))),
+    [messages, wanted]
+  )
   const [loaded, setLoaded] = useState<Record<string, string>>({})
 
   useEffect(() => {
@@ -282,7 +332,8 @@ export function useHostImagePreviews(args: {
             worktreeId,
             nativeChatContext: tabId && sessionId ? { tabId, sessionId } : null,
             terminalHandle: terminalHandleRef.current,
-            path
+            path,
+            agentTextNamesPath: namedInAgentText.has(path)
           })
           if (active && uri) {
             setLoaded((current) => (current[key] === uri ? current : { ...current, [key]: uri }))
@@ -302,7 +353,7 @@ export function useHostImagePreviews(args: {
       active = false
       clearTimeout(timer)
     }
-  }, [client, enabled, hostId, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
+  }, [client, enabled, hostId, namedInAgentText, tabId, sessionId, terminalHandleRef, wanted, worktreeId])
 
   return useMemo(() => {
     const previews: Record<string, string[]> = {}
