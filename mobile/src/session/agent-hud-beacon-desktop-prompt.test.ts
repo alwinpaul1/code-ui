@@ -13,7 +13,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 /** The desk copy the phone reads when the real prompt hook runs on `prompt`:
  *  the hook under /bin/sh, its frame written to a file, decoded by the
  *  phone's own channel reader and beacon parser. */
-function deskCopy(prompt: string, env: NodeJS.ProcessEnv = {}): DesktopPrompt {
+function deskCopy(prompt: string, env: Record<string, string> = {}): DesktopPrompt {
   const tty = join(mkdtempSync(join(tmpdir(), 'cuihud-cut-')), 'tty')
   execFileSync('/bin/sh', ['-c', CLAUDE_HUD_PROMPT_HOOK_SCRIPT], {
     input: JSON.stringify({ prompt }),
