@@ -96,7 +96,6 @@ type ToolRunProps = {
   /** Last accepted plan of each family from earlier messages, so a revision
    *  in this run diffs against the one before it, not only this run. */
   taskListPredecessors?: MobileTaskListPredecessors
-  trailing?: React.ReactNode
   onOpenFile?: (relativePath: string) => void
   /** Put one hunk of a landed edit back, from its diff card. */
   onRevertHunk?: MobileNativeChatRevertHunk
@@ -116,7 +115,6 @@ function ToolRunView({
   expandChildren,
   activeCall = null,
   taskListPredecessors,
-  trailing,
   onOpenFile,
   onRevertHunk,
   revertScope,
@@ -239,7 +237,6 @@ function ToolRunView({
             />
             <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
           </Pressable>
-          {trailing}
         </View>
         {open ? renderBody() : null}
         {detailSheet}
@@ -340,7 +337,6 @@ function ToolRunView({
           {diffStat && !runningAgent ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
           <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
-        {trailing}
       </View>
           )
         }}

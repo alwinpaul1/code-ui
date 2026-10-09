@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo } from 'react'
 import { Pressable, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
@@ -20,14 +20,12 @@ import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-c
  */
 export function MobileNativeChatAgentRun({
   blocks,
-  trailing,
   revertScope,
   styles
 }: {
   blocks: readonly NativeChatBlock[]
   /** The run's place in its message; names its sheet's owner. */
   revertScope?: string
-  trailing?: ReactNode
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
@@ -59,7 +57,6 @@ export function MobileNativeChatAgentRun({
           />
           <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
         </Pressable>
-        {trailing}
       </View>
     </View>
   )
