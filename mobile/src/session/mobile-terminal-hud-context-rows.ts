@@ -50,6 +50,30 @@ export function rowsUnderAgentInput(lines: readonly string[]): number {
   return composer + 1
 }
 
+/** Claude Code's FULLSCREEN notice row: the first non-empty row above the input box's top rule, drawn
+ *  right-aligned and flush with the box's right edge two columns in (the footer's `paddingX: 2`).
+ *  Claude Code 2.1.295 paints its own "Context low (N% remaining)" and "N% until auto-compact" there,
+ *  as it does the effort hint and the alt+p toast (claude-screen-model-statement.ts); the default
+ *  layout paints them on the footer row instead. A reply row opens two columns in and is not flush,
+ *  so it is never this row (claude-fullscreen-context-warning.test.ts). -1 when there is none. */
+export function claudeFullscreenNoticeRow(lines: readonly string[]): number {
+  const input = lines.findLastIndex((row) => CLAUDE_INPUT_ROW.test(row))
+  const top = input - 1
+  if (top < 0 || !CLAUDE_BOX_RULE.test(lines[top] ?? '')) {
+    return -1
+  }
+  const edge = Array.from(lines[top]!.trimEnd()).length - 2
+  let above = top - 1
+  while (above >= 0 && lines[above]!.trim() === '') {
+    above -= 1
+  }
+  if (above < 0) {
+    return -1
+  }
+  const row = lines[above]!.trimEnd()
+  return /^ {3}/.test(row) && Array.from(row).length === edge ? above : -1
+}
+
 /** A row of Claude's conversation rather than its own painting: an answer (`⏺`), and, above an input
  *  box on screen, any indented row (an answer's continuation or a tool's output). With no box on
  *  screen the footer rows themselves are indented, so only an answer row is known for one. */

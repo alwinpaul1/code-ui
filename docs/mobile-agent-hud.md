@@ -428,6 +428,95 @@ by shape only. Treat the whole Windows path as unproven.
 
 The sections below are the record of what was tried before this.
 
+## The ring for a hand-started session (2026-10-09)
+
+Asked for: the composer ring for ANY Claude Code session, including a `claude`
+typed by hand into an Orca terminal (no launch flag, so no beacon) and
+fullscreen, on any host. Checked against Orca 1.4.222 (`app.asar`, extracted to
+a scratch directory) and Claude Code 2.1.295 (binary strings, and live screens).
+
+**The tokens in context are not reachable for such a session.**
+- `aiVault.listSessions` `totalTokens` is CUMULATIVE. Orca's Claude scanner
+  adds `input + output + cache_read + cache_creation` for EVERY `assistant`
+  record in the transcript (`r.totalTokens += K(message.usage)`). Claude Code
+  writes one record per content block, each repeating the same usage, so it
+  double counts on top of that: a fresh session with one turn of 54,723 tokens
+  in context reported 109,734; this user's live sessions read 116,553,156
+  against 210,904 in context, and 123,774,907 against 120,918. The difference
+  between two scans is not one turn either (records per turn vary), so it
+  cannot be inverted.
+- No other phone-reachable method carries per-session usage. The 1.4.222
+  mobile allowlist is 1.4.205's plus `agent.launch`, `agent.launchReplay`,
+  `agentSession.modelCatalog`, three `agentSession.queuedMessage*` methods and
+  three `mobileWeb.bundle.*` methods. `nativeChat.readSession`/`subscribe` still
+  emit `{id, role, blocks, timestamp, source}`; `terminal.agentStatus` and the
+  tab snapshot carry no usage; `previewMessages` are text. Orca's own
+  `modelUsage[..].contextWindow` reader belongs to its structured agent
+  sessions, not to a terminal.
+- **Orca receives the figure and drops it.** 1.4.222 writes a managed status
+  line into `~/.claude/settings.json` when the user has none (`Vr()` decides
+  `empty | user | managed`; a user's own is kept). It prints nothing, and for a
+  payload holding `rate_limits` it posts the whole status-line JSON, with
+  `context_window`, to the hook server's `/statusline/claude`. Orca parses
+  only `rate_limits` there (`parseClaudeStatusLineBody`). Forwarding
+  `context_window.current_usage` and `context_window_size` onto `agentStatus`
+  would give every Orca terminal a ring, hand-started or not, but that is an
+  upstream change (`docs/orca-upstream-agent-status-usage.md`). This host
+  has its own status line, so the managed one is not installed here.
+
+**A window alone would draw no ring, and the session does not state one
+either.** Claude Code's window (`im()` in 2.1.295) is not a function of the
+model id: an env override (`DISABLE_COMPACT` with
+`CLAUDE_CODE_MAX_CONTEXT_TOKENS`), an account latch that caps at 200k
+(`longContext1mCreditsBlocked`), a server flag for Sonnet 4.6, then the
+built-in table (`context.window`, `native_1m`). Most current models are
+natively 1M (Opus 4.7 to 5.5, Sonnet 5 and 5.5, Fable 5 and 5.1, Haiku 5.5),
+and the startup banner's `(1M context)` note appears only for an id carrying
+`[1m]` (`Iv()`), so `Opus 5.5 · Claude Max` (captured) says nothing about the
+window. The status-line `model.id` carries `[1m]` only when the user picked
+one, so another session's beacon for the same id is evidence about that
+session's window, not this one's. The table is a model-name guess, which this
+file and `CLAUDE.md` rule out. `claude-list-models-2.1.295.jsonl` has
+`resolvedModel` and no window.
+
+**What Claude Code paints itself.** Fullscreen's footer (captured, 2.1.295)
+holds the mode row and no context figure. The only figure Claude Code draws
+with no status line is its warning (`hLe()`): `warn` from 20,000 tokens below
+the auto-compact trigger, and the trigger is the window less 13,000 (the
+blocking limit is the window less 3,000). So it starts at 967,000 on a 1M window
+and 167,000 on 200k. It reads `N% until auto-compact` (or `N% context used`)
+with auto-compact on, and `Context low (N% remaining)` with it off. In the
+default layout it sits at the right of the footer row (already read). **In
+fullscreen it sits right-aligned on the row directly above the input box's top
+rule**, flush with the box's right edge two columns in, the same slot as the
+effort hint and the alt+p toast. That row is indented, and the reader skipped
+every indented row above the box as conversation, so a fullscreen session
+never got the ring. Fixed: `claudeFullscreenNoticeRow` in
+`mobile-terminal-hud-context-rows.ts` finds that row by its geometry, and only
+Claude Code's own wording is read off it
+(`claude-fullscreen-context-warning.test.ts`, on four real captures). The
+captures were made in a private tmux server with user settings skipped
+(`--setting-sources project`), fullscreen set for the process only
+(`--settings '{"tui":"fullscreen"}'`), and the warning brought forward with
+session env (`DISABLE_COMPACT=1 CLAUDE_CODE_MAX_CONTEXT_TOKENS=90000`;
+`CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=7.5`). No setting was saved.
+
+**Where the ring shows now.**
+
+| Session | Ring |
+|---|---|
+| Launched with the flag (POSIX host) | always, from the beacon |
+| Any session whose user status line paints a badge with a figure | always, from the screen |
+| Hand-started, no status line, default layout | from Claude Code's own warning only |
+| Hand-started, no status line, fullscreen | from Claude Code's own warning only (new) |
+| Windows host | as the row above; the screen read is the same, the beacon is off |
+| Codex | always; it reports its own window (unchanged) |
+
+Before the warning, a hand-started session with no status line shows no ring:
+nothing reachable states its tokens, and nothing it states gives its window.
+Not verified: the fullscreen notice row on a Windows host (ConPTY) and through
+Orca's own screen read on a phone; the parser is pinned to tmux captures.
+
 ## Update 2026-09-09 (night): Claude Code's own context warning
 
 Claude Code paints a context figure itself once the window runs low, with no
@@ -438,7 +527,9 @@ now reads those on a bare Claude footer (`REMAINING_PATTERNS` in
 line exactly when Claude Code starts warning, and stays absent before that
 rather than showing a guessed figure. The model still comes from Orca's hook.
 The threshold at which Claude Code starts painting the figure is its own and
-was not measured here (no near-full session was available).
+was not measured here (no near-full session was available). It was read from
+the 2.1.295 binary on 2026-10-09, and fullscreen was added: see "The ring for
+a hand-started session" below.
 
 ## Update 2026-09-09 (evening): status-line flags tried and withdrawn
 

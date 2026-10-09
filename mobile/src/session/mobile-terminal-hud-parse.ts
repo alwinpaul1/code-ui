@@ -7,6 +7,7 @@ import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
 import { parseClaudeRunningShellCount, runningShellCountField } from './claude-footer-shell-count'
 import {
   CODEX_STATUS_BOX_ROW,
+  claudeFullscreenNoticeRow,
   claudeRowsUnderInputBox,
   codexFooterFigureRows,
   isClaudeConversationRow,
@@ -395,14 +396,18 @@ export function parseTerminalHudObservation(
   // left" read as 100% used (review, 2026-09-30).
   // Only a row under the input box may state a figure in a status-line shape; above it, and on any
   // answer row, an answer's "about 45% context" set the ring (review, 2026-09-30), so there only
-  // Claude Code's own warning is read, and never off the conversation.
+  // Claude Code's own warning is read, and never off the conversation. In fullscreen Claude Code
+  // paints that warning right-aligned on the row above the box, which is indented like a reply row;
+  // it is told apart by sitting flush with the box's right edge (claudeFullscreenNoticeRow), and
+  // only the warning is read off it (2.1.295, 2026-10-09).
   const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line.replace(CODEX_PLAN_HINT, '')))
   if (hinted || hasClaudeModeFooter(lines)) {
     const underBox = claudeRowsUnderInputBox(lines)
+    const notice = claudeFullscreenNoticeRow(lines)
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
       const line = lines[index] ?? ''
       const under = underBox !== -1 && index >= underBox
-      if (!under && isClaudeConversationRow(line, underBox !== -1)) {
+      if (!under && index !== notice && isClaudeConversationRow(line, underBox !== -1)) {
         continue
       }
       const context = parseTerminalHudContextWindow(line, { ownWarningOnly: !hinted || !under })
