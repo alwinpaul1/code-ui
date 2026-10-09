@@ -82,8 +82,10 @@ export type NativeProseLink = { kind: 'href'; href: string } | { kind: 'file'; p
 export const NATIVE_PROSE_LIST_INDENT = 8
 /** One more level of nesting. */
 export const NATIVE_PROSE_LIST_DEPTH_INDENT = 16
-/** Between two bullets: 4 px at the screenshot's 19 px line pitch, 4.5 dp at
- *  the transcript's 21. Between blocks it stays the typography's blockGap. */
+/** Between two bullets: 4 px at the screenshot's 19 px line pitch, which is
+ *  about 4.6 dp at the transcript's 22 (15/22); 4.5 was set when its line was
+ *  21 and is within a dp of that. Between blocks it stays the typography's
+ *  blockGap. */
 export const NATIVE_PROSE_LIST_ITEM_GAP = 4.5
 /** A `---`, as the Text path draws it (MobileMarkdown RULE_TEXT). */
 export const NATIVE_PROSE_RULE_TEXT = '─'.repeat(24)

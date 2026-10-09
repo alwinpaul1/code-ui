@@ -36,8 +36,9 @@ export function makeChatViewStyles(theme: Theme) {
       paddingHorizontal: space.md,
       paddingBottom: space.xs
     },
-    // The dock draws no ground, so a bare line here is painted over the transcript behind it
-    // (2026-10-02). An opaque panel surface: dangerSoft is translucent, and danger text on bgRaised is under 4.5:1.
+    // A bare line here was painted over the transcript when the dock had no ground (2026-10-02); it has one now
+    // (MobileNativeChatDockBackdrop), and the pill keeps its own opaque panel surface so it reads as a notice:
+    // dangerSoft is translucent, and danger text on bgRaised is under 4.5:1.
     sendErrorPill: {
       maxWidth: '100%',
       paddingHorizontal: space.md,
@@ -61,10 +62,8 @@ export function makeChatViewStyles(theme: Theme) {
       flex: 1,
       position: 'relative'
     },
-    // The composer and its chrome float over the list with nothing behind
-    // them: any ground, even a faded one, read as a line or a box above the
-    // Working row (2026-09-13). The list keeps a spacer the dock's height at
-    // its end, so at rest no message sits under it.
+    // The composer and its chrome float over the list, absolutely placed, on
+    // the ground MobileNativeChatDockBackdrop draws (see below).
     dock: {
       position: 'absolute',
       left: 0,
@@ -77,8 +76,8 @@ export function makeChatViewStyles(theme: Theme) {
       // one on 2026-09-13 (removed the same day, 0a8642a6), the page-coloured
       // opaque one on 2026-09-19 (a hard edge over scrolled rows), and the
       // translucent one again on 2026-09-20 ("a black line above the tools").
-      // The list keeps a spacer the dock's height at its end, so at rest no
-      // message sits under it.
+      // The list keeps a spacer at its end as tall as the dock plus the fade
+      // above it (DOCK_BACKDROP_FADE), so at rest no message sits under either.
     },
     listContent: {
       paddingVertical: space.sm,

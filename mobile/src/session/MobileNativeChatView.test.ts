@@ -474,7 +474,7 @@ describe('MobileNativeChatView', () => {
     expect(scrollToOffset).not.toHaveBeenCalled()
   })
 
-  // The dock's height is the spacer at the list's end, so a dock that grows —
+  // The dock's height sizes the spacer at the list's end, so a dock that grows —
   // a permission card, the key strip — leaves the newest row underneath it
   // (2026-09-13, first open of 0.5.29). That re-pin used to reach for the list
   // itself from `use-mobile-chat-dock`; it now goes through the tail-follow

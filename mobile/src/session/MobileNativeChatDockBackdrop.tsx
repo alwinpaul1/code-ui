@@ -13,8 +13,10 @@ export const DOCK_BACKDROP_FADE = 28
  * were painted on top of each other (device, 2026-10-09). A flat ground read
  * as a line above the row each time it was tried (2026-09-13, 09-19, 09-20),
  * which the fade is for. Absolutely placed, so the dock's measured height
- * (and the list spacer that clears it) does not change, and it takes no
- * touches, so a swipe begun on the row still scrolls the list.
+ * does not change; the list's end spacer and the jump-to-latest button clear
+ * that height plus this fade, or the newest line and the button's lower half
+ * sat under the veil at rest (review, 2026-10-09). It takes no touches, so a
+ * swipe begun on the row still scrolls the list.
  */
 export function MobileNativeChatDockBackdrop() {
   const { colors } = useTheme()

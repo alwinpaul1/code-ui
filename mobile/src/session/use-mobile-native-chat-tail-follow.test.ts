@@ -227,7 +227,7 @@ describe('the chat transcript has one owner for its scroll position', () => {
     expect(onLoadEarlier).toHaveBeenCalledOnce()
   })
 
-  // The dock's height is the spacer at the list's end; when it grows, the
+  // The dock's height sizes the spacer at the list's end; when it grows, the
   // newest row ends up underneath it. That re-pin is the same command as every
   // other, so it goes through the same owner and obeys the same refusal.
   it('lets a dock or viewport resize re-pin only while the reader is still following', () => {

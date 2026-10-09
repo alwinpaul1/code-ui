@@ -29,7 +29,7 @@ import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
-import { MobileNativeChatDockBackdrop } from './MobileNativeChatDockBackdrop'
+import { DOCK_BACKDROP_FADE, MobileNativeChatDockBackdrop } from './MobileNativeChatDockBackdrop'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { messageIdsEndingATurn } from './mobile-native-chat-turn-end'
 import { useNow } from '../hooks/use-now'
@@ -199,6 +199,10 @@ export function MobileNativeChatView({
     onLoadEarlier
   })
   const { dockHeight, onDockLayout } = useChatDock(pinToTail)
+  // What the list's end and the jump button clear: the dock and the fade its
+  // ground draws above it. Clearing the dock alone left the newest line and
+  // the button's lower half under a veil at rest (review, 2026-10-09).
+  const dockClearance = dockHeight + DOCK_BACKDROP_FADE
   // The composer's popover may take only the room between the header and the
   // dock, keyboard included (mobile-native-chat-suggestion-popover.ts).
   const [rootHeight, onRootLayout] = useMeasuredHeight()
@@ -387,8 +391,8 @@ export function MobileNativeChatView({
                 unanchoredTurnStatus={turns.activeTurnIsUnanchored ? turns.active : null}
                 turnActivity={turnActivity}
               />
-              {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock. */}
-              <View style={{ height: dockHeight }} testID="native-chat-dock-spacer" />
+              {/* Inverted list: the header is the visual bottom; the spacer keeps the newest row clear of the dock and its fade. */}
+              <View style={{ height: dockClearance }} testID="native-chat-dock-spacer" />
               </>
             }
             ListFooterComponent={
@@ -405,7 +409,7 @@ export function MobileNativeChatView({
             }
           />
           </ChatTextSelectableContext.Provider>
-          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
+          <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockClearance + space.md }] }} colors={colors} />
         </GestureHandlerRootView>
       )}
       <MobileNativeChatQueueEditor editor={queueEditor} />
@@ -426,8 +430,8 @@ export function MobileNativeChatView({
       {/* Inside the dock, not above it: the dock is absolutely positioned at the
           bottom, so a card left in normal flow was painted under it and its
           buttons could not be tapped (a long "Allow Bash?" on 0.5.67). Here its
-          height is measured with the dock, which is what the list's spacer
-          clears, so the newest rows still sit above it. */}
+          height is measured with the dock, which (with the fade above it) is
+          what the list's spacer clears, so the newest rows still sit above it. */}
       <MobileNativeChatPromptCard
         ask={ask} askKey={askKey} askSentAt={askSentAt} onDismissAsk={onDismissAsk}
         onAnswerAsk={onAnswerAsk} onCancelAsk={onCancelAsk} onCancelPrompt={onCancelPrompt}
