@@ -73,13 +73,128 @@ export const MARKDOWN_CHIP_INK_ROOM_BOTTOM = 2
  *  does. */
 const PIXEL_NUDGE = 1e-5
 
-const INSTRUMENT_SANS_ASCENT = 0.97
-const INSTRUMENT_SANS_DESCENT = 0.25
-/** How far the font's ink reaches past the 970 and 250 its line is built
- *  from: the ring of Å to 986 above, a comma below to 296 (glyf of the
- *  bundled TTF). */
-const INK_ABOVE = 0.986
-const INK_BELOW = 0.296
+/** A face's line, ascent and descent per em (hhea of the bundled TTF), and
+ *  how far its ink reaches past them. */
+export type MarkdownFaceMetrics = {
+  ascent: number
+  descent: number
+  inkAbove: number
+  inkBelow: number
+}
+
+/** Instrument Sans: 970 and 250; its ink reaches past them, the ring of Å to
+ *  986 above and a comma below to 296 (glyf of the bundled TTF). */
+export const INSTRUMENT_SANS_FACE: MarkdownFaceMetrics = {
+  ascent: 0.97,
+  descent: 0.25,
+  inkAbove: 0.986,
+  inkBelow: 0.296
+}
+
+/** JetBrains Mono: 1020 and 300, its ink inside them: Å to 994 above and the
+ *  cedilla of Ģ to 240 below, over ASCII and Latin (the bundled TTF, measured
+ *  2026-10-09). Every glyph is 600 of the em wide. */
+export const JETBRAINS_MONO_FACE: MarkdownFaceMetrics = {
+  ascent: 1.02,
+  descent: 0.3,
+  inkAbove: 0.994,
+  inkBelow: 0.24
+}
+
+/**
+ * The type one Markdown surface is set in. Every surface but the chat
+ * transcript uses DEFAULT_MARKDOWN_TYPOGRAPHY, the sizes the constants above
+ * have always carried; the transcript passes TRANSCRIPT_MARKDOWN_TYPOGRAPHY.
+ */
+export type MarkdownTypography = {
+  /** Paragraphs, list items and quotes. */
+  prose: { fontSize: number; lineHeight: number }
+  /** h4 to h6, then h1, h2 and h3. */
+  heading: { fontSize: number; lineHeight: number }
+  headingLevel1: { fontSize: number; lineHeight: number }
+  headingLevel2: { fontSize: number; lineHeight: number }
+  headingLevel3: { fontSize: number; lineHeight: number }
+  tableCell: { fontSize: number; lineHeight: number }
+  /** An inline code pill, in a paragraph and in a table cell. `mono` sets it
+   *  in the code face; otherwise it is the paragraph's own face. */
+  chip: { fontSize: number; lineHeight: number; tableFontSize: number; tableLineHeight: number; mono: boolean }
+  /** The list marker's size. */
+  listMarkerSize: number
+  /** The space between blocks where each paragraph, heading and list item
+   *  is a Text of its own, and between list items (`listItemGap`). Null: a
+   *  run of prose is one Text, its blocks a blank line apart, so a selection
+   *  crosses them (mobile-markdown-prose-runs.ts). */
+  blockGap: number | null
+  listItemGap: number
+}
+
+export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
+  prose: { fontSize: MARKDOWN_BASE_SIZE, lineHeight: MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP },
+  heading: { fontSize: MARKDOWN_BASE_SIZE + 1, lineHeight: MARKDOWN_BASE_SIZE + 9 },
+  headingLevel1: { fontSize: MARKDOWN_BASE_SIZE + 7, lineHeight: MARKDOWN_BASE_SIZE + 15 },
+  headingLevel2: { fontSize: MARKDOWN_BASE_SIZE + 4, lineHeight: MARKDOWN_BASE_SIZE + 13 },
+  headingLevel3: { fontSize: MARKDOWN_BASE_SIZE + 2, lineHeight: MARKDOWN_BASE_SIZE + 11 },
+  // MARKDOWN_TABLE_CELL_FONT_SIZE and _LINE_HEIGHT, declared further down.
+  tableCell: { fontSize: MARKDOWN_BASE_SIZE - 2, lineHeight: MARKDOWN_BASE_SIZE + MARKDOWN_PROSE_LINE_GAP },
+  chip: {
+    fontSize: MARKDOWN_CHIP_FONT_SIZE,
+    lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
+    tableFontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE,
+    tableLineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+    mono: false
+  },
+  listMarkerSize: MARKDOWN_BASE_SIZE - 1,
+  blockGap: null,
+  listItemGap: 0
+}
+
+/**
+ * The chat transcript, as the Claude app sets it at its "Small" transcript
+ * size (two screenshots on the same phone, 2026-10-09): a body line every
+ * 21.4 dp, about 7 dp between paragraphs and 4 between bullets, its words 94%
+ * as wide as Instrument Sans at 15, and inline code in a monospace face on a
+ * pill about 16 dp tall. Instrument Sans at 14 draws its words 93% as wide as
+ * at 15, so the face stays.
+ *
+ * The pill is JetBrains Mono at 12 on a 14 dp line: the face's own box is
+ * 1.32 em, its ink 1.23 em (JETBRAINS_MONO_FACE), and markdownChipInkRoom
+ * gives the rest back as padding. That pill is 16 dp tall, which a 21 dp line
+ * holds with 5 dp to the pill below and its bottom a dp inside the line (the
+ * rules in mobile-markdown-chip-clipping.test.ts, checked for this type in
+ * mobile-markdown-transcript-typography.test.ts). A 13 sp pill needs a 23 dp
+ * line by the same rules.
+ */
+export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
+  prose: { fontSize: 14, lineHeight: 21 },
+  heading: { fontSize: 14.5, lineHeight: 21 },
+  headingLevel1: { fontSize: 18, lineHeight: 25 },
+  headingLevel2: { fontSize: 16, lineHeight: 23 },
+  headingLevel3: { fontSize: 15, lineHeight: 22 },
+  tableCell: { fontSize: 12, lineHeight: 21 },
+  chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
+  listMarkerSize: 13,
+  blockGap: 7,
+  listItemGap: 4
+}
+
+/**
+ * A lead's Markdown prompt in a user bubble, in the transcript's size and
+ * code face. A bubble is as wide as its text: RN measures ONE Text as wide as
+ * its widest line, and blocks drawn apart (a list as rows) are several, so a
+ * bubble whose widest line was a list item never settled on a width
+ * (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09). Its prose stays
+ * one Text, its blocks a blank line apart.
+ */
+export const TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
+  ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
+  blockGap: null,
+  listItemGap: 0
+}
+
+/** The face a surface's pills are set in. */
+export function markdownChipFace(typography: MarkdownTypography): MarkdownFaceMetrics {
+  return typography.chip.mono ? JETBRAINS_MONO_FACE : INSTRUMENT_SANS_FACE
+}
 /** Pixels on top of that for Android's whole-pixel type: font metrics
  *  rounded (Paint.getFontMetricsInt), the odd pixel of a negative leading
  *  taken off the descent (CustomLineHeightSpan), and the font size rounded
@@ -113,18 +228,21 @@ const METRIC_PIXELS = 2
 export function markdownChipInkRoom(
   density: number,
   zoom = 1,
-  sp: (size: number) => number = (size) => size
+  sp: (size: number) => number = (size) => size,
+  typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY
 ): { top: number; bottom: number } {
   let top = MARKDOWN_CHIP_INK_ROOM_TOP * zoom
   let bottom = MARKDOWN_CHIP_INK_ROOM_BOTTOM * zoom
+  const { chip } = typography
+  const face = markdownChipFace(typography)
   for (const [size, line] of [
-    [MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT],
-    [MARKDOWN_TABLE_CHIP_FONT_SIZE, MARKDOWN_TABLE_CHIP_LINE_HEIGHT]
+    [chip.fontSize, chip.lineHeight],
+    [chip.tableFontSize, chip.tableLineHeight]
   ] as const) {
     const type = sp(size * zoom)
-    const short = Math.max(0, ((INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * type - sp(line * zoom)) / 2)
-    top = Math.max(top, (INK_ABOVE - INSTRUMENT_SANS_ASCENT) * type + short + METRIC_PIXELS / density)
-    bottom = Math.max(bottom, (INK_BELOW - INSTRUMENT_SANS_DESCENT) * type + short + METRIC_PIXELS / density)
+    const short = Math.max(0, ((face.ascent + face.descent) * type - sp(line * zoom)) / 2)
+    top = Math.max(top, (face.inkAbove - face.ascent) * type + short + METRIC_PIXELS / density)
+    bottom = Math.max(bottom, (face.inkBelow - face.descent) * type + short + METRIC_PIXELS / density)
   }
   const whole = (dp: number) => (Math.ceil(dp * density - PIXEL_NUDGE) + PIXEL_NUDGE) / density
   return { top: whole(top), bottom: whole(bottom) }
@@ -147,12 +265,17 @@ export const MARKDOWN_CHIP_RADIUS = 7
  * so the pill's own text rides above the words by its border, its padding,
  * and the part of its line below its baseline. 3.71 dp for a prose pill.
  */
-export function markdownChipBaselineShift(fontSize: number, lineHeight: number): number {
-  const leading = lineHeight - (INSTRUMENT_SANS_ASCENT + INSTRUMENT_SANS_DESCENT) * fontSize
+export function markdownChipBaselineShift(
+  fontSize: number,
+  lineHeight: number,
+  /** The pill's face: Instrument Sans, or JetBrains Mono in the transcript. */
+  face: MarkdownFaceMetrics = INSTRUMENT_SANS_FACE
+): number {
+  const leading = lineHeight - (face.ascent + face.descent) * fontSize
   return (
     MARKDOWN_CHIP_BORDER_WIDTH +
     MARKDOWN_CHIP_PADDING_VERTICAL +
-    INSTRUMENT_SANS_DESCENT * fontSize +
+    face.descent * fontSize +
     leading / 2 -
     MARKDOWN_CHIP_LIFT
   )
@@ -160,13 +283,15 @@ export function markdownChipBaselineShift(fontSize: number, lineHeight: number):
 
 export function markdownProseScale(
   size: number,
-  textScale: number
+  textScale: number,
+  /** The line at no zoom; the default type's is size + MARKDOWN_PROSE_LINE_GAP. */
+  lineHeight = size + MARKDOWN_PROSE_LINE_GAP
 ): { fontSize: number; lineHeight: number } | null {
   // The pill's 1px borders do NOT scale — a hairline stays a hairline — so at
   // a small zoom they eat the gap the line height is there to provide. Adding
   // them back keeps the clear air between two wrapped pills constant at every
   // zoom instead of shrinking it away (markdownZoomedLine).
-  return markdownZoomedLine(size, size + MARKDOWN_PROSE_LINE_GAP, textScale)
+  return markdownZoomedLine(size, lineHeight, textScale)
 }
 
 export type MarkdownChipScale = {
@@ -179,19 +304,22 @@ export type MarkdownChipScale = {
   baselineShift: number
 }
 
-export function markdownChipScale(textScale: number): MarkdownChipScale | null {
+export function markdownChipScale(
+  textScale: number,
+  typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY
+): MarkdownChipScale | null {
   if (textScale === 1) {
     return null
   }
+  const { chip } = typography
   return {
     factor: textScale,
-    fontSize: MARKDOWN_CHIP_FONT_SIZE * textScale,
-    lineHeight: MARKDOWN_CHIP_LINE_HEIGHT * textScale,
+    fontSize: chip.fontSize * textScale,
+    lineHeight: chip.lineHeight * textScale,
     paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL * textScale,
     paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL * textScale,
     borderRadius: MARKDOWN_CHIP_RADIUS * textScale,
-    baselineShift:
-      markdownChipBaselineShift(MARKDOWN_CHIP_FONT_SIZE, MARKDOWN_CHIP_LINE_HEIGHT) * textScale
+    baselineShift: markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography)) * textScale
   }
 }
 
@@ -214,9 +342,12 @@ export function markdownZoomedLine(
 }
 
 /** What the pill actually paints, top to bottom, at a given zoom. */
-export function markdownChipFootprint(textScale: number): number {
-  const chip = markdownChipScale(textScale)
-  const lineHeight = chip?.lineHeight ?? MARKDOWN_CHIP_LINE_HEIGHT
+export function markdownChipFootprint(
+  textScale: number,
+  typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY
+): number {
+  const chip = markdownChipScale(textScale, typography)
+  const lineHeight = chip?.lineHeight ?? typography.chip.lineHeight
   const padding = chip?.paddingVertical ?? MARKDOWN_CHIP_PADDING_VERTICAL
   return lineHeight + 2 * padding + 2 * MARKDOWN_CHIP_BORDER_WIDTH
 }

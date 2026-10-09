@@ -5,10 +5,15 @@ import {
   InstrumentSans_700Bold,
   useFonts
 } from '@expo-google-fonts/instrument-sans'
-// The one weight, from its own entry: the package root requires every weight
-// and Metro bundles what is required, which was 28 files for one face.
-import { JetBrainsMono_400Regular } from '@expo-google-fonts/jetbrains-mono/400Regular'
 import { installInstrumentSansText } from './instrument-sans-text'
+
+/** The code face, the one weight, from the repo with its licence (SIL OFL
+ *  1.1) beside it in assets/fonts/jetbrains-mono/: the same file the
+ *  @expo-google-fonts package carried, which kept its licence out of the
+ *  repo. The chat transcript's code blocks and inline code are set in it
+ *  (TRANSCRIPT_MARKDOWN_TYPOGRAPHY), as the file reader's code is. Metro
+ *  bundles what is required, so the release APK carries this file. */
+const JetBrainsMono_400Regular: number = require('../../assets/fonts/jetbrains-mono/JetBrainsMono-Regular.ttf')
 
 export { fontFamily, type FontWeight } from './tokens'
 

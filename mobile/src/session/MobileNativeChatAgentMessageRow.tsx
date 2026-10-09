@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -76,6 +77,7 @@ export function MobileNativeChatAgentMessageRow({
                 textScale={fontScale}
                 onOpenFile={onOpenFile}
                 rangeSelectable
+                typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
                 onLongPress={onLongPress}
               />
               {cut ? (

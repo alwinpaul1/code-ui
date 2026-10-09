@@ -76,7 +76,11 @@
             // Later that day +4: lists and quotes moved INTO the run as spans
             // (so a selection can cross them); their View branches went, the
             // span branches are a little longer.
-            "max": 420,
+            // 2026-10-09: +26 for the chat transcript's type (the Claude app's
+            // "Small"): the typography prop threaded to the styles, pills and
+            // table, and the context and branch for blocks drawn apart
+            // (mobile-markdown-blocks-apart.tsx holds the drawing).
+            "max": 446,
             "skipBlankLines": true,
             "skipComments": true
           }

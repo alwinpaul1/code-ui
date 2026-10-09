@@ -1,12 +1,17 @@
 import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
 const IMAGE_TILE_HEIGHT = 176
 
 export const TEXT_SIZE = 15
 export const MONO_SIZE = 12
+/** A sent prompt's words, at the replies' size: the transcript's prose
+ *  (TRANSCRIPT_MARKDOWN_TYPOGRAPHY, the Claude app's "Small", 2026-10-09). */
+export const USER_TEXT_SIZE = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize
+export const USER_TEXT_LINE_HEIGHT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.lineHeight
 
 export function makeChatMessageStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
@@ -34,8 +39,8 @@ export function makeChatMessageStyles(theme: Theme) {
     userText: {
       fontFamily: fonts.regular,
       color: colors.userBubbleText,
-      fontSize: TEXT_SIZE,
-      lineHeight: TEXT_SIZE + 7,
+      fontSize: USER_TEXT_SIZE,
+      lineHeight: USER_TEXT_LINE_HEIGHT,
       // A long harness paragraph used to paint past the bubble and get clipped.
       flexShrink: 1
     },
