@@ -62,6 +62,7 @@ export function MobileNativeChatReasoningNote({
             textScale={fontScale * 0.93}
             onOpenFile={onOpenFile}
             typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
+            widthKey="chat-thought"
           />
         </View>
         {opening ? (

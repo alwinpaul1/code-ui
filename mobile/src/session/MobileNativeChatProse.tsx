@@ -63,6 +63,7 @@ export function Prose({
         onOpenFile={onOpenFile}
         identity={identity}
         typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
+        widthKey={invert ? undefined : 'chat-reply'}
       />
     )
   }

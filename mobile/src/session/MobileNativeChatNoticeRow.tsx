@@ -68,6 +68,7 @@ export function MobileNativeChatNoticeRow({
           textScale={fontScale}
           onOpenFile={onOpenFile}
           typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
+          widthKey="chat-plan"
         />
       </View>
     )
