@@ -29,6 +29,7 @@ import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { MobileNativeChatDockBackdrop } from './MobileNativeChatDockBackdrop'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useNow } from '../hooks/use-now'
 import { MobileNativeChatTimeDivider } from './MobileNativeChatTimeDivider'
@@ -408,14 +409,15 @@ export function MobileNativeChatView({
         style={[styles.dock, { paddingBottom: bottomPad }]}
         onLayout={onDockLayout}
         testID="native-chat-dock"
-        // The dock draws no ground, so the list shows through its empty parts
-        // and reads as list; a swipe begun there must scroll the list, not
+        // The dock's ground (MobileNativeChatDockBackdrop) takes no touches, so
+        // a swipe begun on the dock's empty parts must scroll the list, not
         // die on the dock. Its controls (the chrome row's buttons, the
         // composer, the cards) still take their own touches (device,
         // 2026-09-20, keyboard open: swipes on the row above the composer
         // did nothing).
         pointerEvents="box-none"
       >
+      <MobileNativeChatDockBackdrop />
       {/* Inside the dock, not above it: the dock is absolutely positioned at the
           bottom, so a card left in normal flow was painted under it and its
           buttons could not be tapped (a long "Allow Bash?" on 0.5.67). Here its

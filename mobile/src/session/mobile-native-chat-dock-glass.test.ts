@@ -8,6 +8,9 @@ import { describe, expect, it } from 'vitest'
 // ground added on 2026-09-19 read as a hard edge over scrolled rows, and the
 // translucent one put back on 2026-09-20 read as the line again. A source pin
 // on the style block, since the styles module needs React Native to load.
+// 2026-10-09: the dock STYLE still draws nothing; the ground behind the status
+// row is its own absolutely placed child, MobileNativeChatDockBackdrop, whose
+// top edge is a fade and not a line (MobileNativeChatDockBackdrop.test.tsx).
 describe('the composer dock', () => {
   it('draws no ground of its own', () => {
     const source = readFileSync(new URL('./mobile-native-chat-view-styles.ts', import.meta.url), 'utf8')
@@ -30,5 +33,17 @@ describe('touches on the dock’s empty parts', () => {
     expect(dock).toMatch(/pointerEvents="box-none"/)
     const row = readFileSync(new URL('./MobileNativeChatChromeRow.tsx', import.meta.url), 'utf8')
     expect(row).toMatch(/<View style=\{styles\.chromeRow\} pointerEvents="box-none">/)
+  })
+})
+
+// 2026-10-09: the ground behind the Working row is the dock's FIRST child, so
+// everything the dock holds paints on it, and it sits inside the dock, which
+// is where its height comes from. Pinned on the source, as the pins above are:
+// MobileNativeChatView needs the whole chat to render.
+describe('the dock’s ground', () => {
+  it('is the first thing the dock draws', () => {
+    const view = readFileSync(new URL('./MobileNativeChatView.tsx', import.meta.url), 'utf8')
+    const code = view.replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/^\s*\/\/.*$/gm, '')
+    expect(code).toMatch(/<View\s+style=\{\[styles\.dock[^>]*>\s*<MobileNativeChatDockBackdrop \/>/)
   })
 })
