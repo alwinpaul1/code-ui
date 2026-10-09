@@ -74,6 +74,72 @@ export function claudeFullscreenNoticeRow(lines: readonly string[]): number {
   return /^ {3}/.test(row) && Array.from(row).length === edge ? above : -1
 }
 
+/** Claude Code's own turn row, the lowest thing it paints in the conversation: the spinner while it
+ *  works ("✻ Incubating… (4s · ↓ 325 tokens)") and the turn-end row after ("✻ Crunched for 5s · done
+ *  12:54 PM"), both at column 0 (2.1.295 captures, claude-status-line-context.test.ts). */
+const CLAUDE_TURN_ROW = new RegExp(
+  String.raw`^[✳✻✽✶✢·*]\s+\p{Lu}[\p{L}'’\-]+(?:…|\s+for\s+\d)`,
+  'u'
+)
+/** Rows between the turn row and the box that Claude Code itself paints there, never a status
+ *  line's: the spinner's `⎿  Tip:` row, a queued or typed prompt, an answer. */
+const CLAUDE_OWN_ROW_UNDER_TURN = /^\s*[⎿❯⏺]/
+/** A continuation under one of those rows (a todo list's later items, a wrapped tip) is indented
+ *  four or more columns; a status line's own rows are drawn two or three in (2.1.295 captures). */
+const CLAUDE_CONTINUATION_ROW = /^ {4,}\S/
+/** Claude Code's own menus under the box: the slash-command and `@` file pickers, highlighted row
+ *  included. Their descriptions are anyone's text (review, 2026-10-09). */
+const CLAUDE_MENU_ROW = /^\s*(?:❯\s*)?[/@]/
+
+/** The rows a user's own status-line painting may sit on, as indices, around Claude Code's input
+ *  box: every row under the box (where Claude Code draws a status line), and the rows directly
+ *  above the box's top rule up to Claude Code's own spinner or turn-end row (where a mod such as
+ *  usage-band draws its band; 2.1.295 captures). Above the box a row counts only with that turn
+ *  row bounding it: the conversation sits above the turn row, and an answer's continuation row
+ *  ("  Opus 5.5 high │ ◔ 12% 120.0k/1.0M") has the band's exact shape, so with no turn row in reach
+ *  (a resumed screen, a cleared one) nothing above the box is read. Rows Claude Code paints under its
+ *  turn row (`⎿`, a todo list's continuations) and its menus under the box are skipped. Empty with no box on screen.
+ *  `width` is the box's, which is the pane's: a row that fills it may have wrapped. */
+export function claudeStatusLineRows(lines: readonly string[]): { rows: number[]; width: number } {
+  const input = lines.findLastIndex((row) => CLAUDE_INPUT_ROW.test(row))
+  const top = input - 1
+  if (top < 0 || !CLAUDE_BOX_RULE.test(lines[top] ?? '')) {
+    return { rows: [], width: 0 }
+  }
+  const width = Array.from(lines[top]!.trimEnd()).length
+  const under = claudeRowsUnderInputBox(lines)
+  const rows: number[] = []
+  if (under !== -1) {
+    for (let index = under; index < lines.length; index += 1) {
+      if (!CLAUDE_MENU_ROW.test(lines[index] ?? '')) {
+        rows.push(index)
+      }
+    }
+  }
+  const above: number[] = []
+  const notice = claudeFullscreenNoticeRow(lines)
+  for (let index = top - 1; index >= 0; index -= 1) {
+    const row = lines[index] ?? ''
+    if (CLAUDE_TURN_ROW.test(row)) {
+      return { rows: [...above, ...rows], width }
+    }
+    if (/^\S/.test(row)) {
+      return { rows, width }
+    }
+    // Claude Code's own fullscreen notice slot, where only its wording is read
+    // (claude-fullscreen-context-warning.test.ts); a status line never paints flush with the box.
+    if (!CLAUDE_OWN_ROW_UNDER_TURN.test(row) && !CLAUDE_CONTINUATION_ROW.test(row) && index !== notice) {
+      above.push(index)
+    }
+  }
+  return { rows, width }
+}
+
+/** Claude Code's input box rule: a row of `─` alone. */
+export function isClaudeBoxRule(row: string): boolean {
+  return CLAUDE_BOX_RULE.test(row)
+}
+
 /** A row of Claude's conversation rather than its own painting: an answer (`⏺`), and, above an input
  *  box on screen, any indented row (an answer's continuation or a tool's output). With no box on
  *  screen the footer rows themselves are indented, so only an answer row is known for one. */

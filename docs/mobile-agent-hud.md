@@ -507,6 +507,7 @@ session env (`DISABLE_COMPACT=1 CLAUDE_CODE_MAX_CONTEXT_TOKENS=90000`;
 |---|---|
 | Launched with the flag (POSIX host) | always, from the beacon |
 | Any session whose user status line paints a badge with a figure | always, from the screen |
+| Any session whose user's own status line (or mod) paints `<used>/<window>` | while that figure is on screen (new, next section) |
 | Hand-started, no status line, default layout | from Claude Code's own warning only |
 | Hand-started, no status line, fullscreen | from Claude Code's own warning only (new) |
 | Windows host | as the row above; the screen read is the same, the beacon is off |
@@ -516,6 +517,95 @@ Before the warning, a hand-started session with no status line shows no ring:
 nothing reachable states its tokens, and nothing it states gives its window.
 Not verified: the fullscreen notice row on a Windows host (ConPTY) and through
 Orca's own screen read on a phone; the parser is pinned to tmux captures.
+
+### The user's own status-line figure (2026-10-09, later)
+
+**The user's decision, 2026-10-09:** the phone may read the context figure a
+user's OWN Claude Code status-line painting shows. This overrides the earlier
+rule (recorded in `fixtures/claude-model-toast-2.1.294.ts`) that the
+usage-band rows must not be read. Only the `<used>/<window>` figure is read;
+the model, effort and rate-limit pills on those rows still are not.
+
+**What this host actually paints (captured).** Live Claude Code 2.1.295 in a
+private tmux server with this user's real settings, fullscreen (their saved
+default) and the default layout (`--settings '{"tui":"default"}'`, that
+process only), at 160, 100 and 44 columns, nothing saved
+(`fixtures/claude-usage-band-*-2.1.295.txt`). The status-line command
+(`~/.claude/mods/usage-band/bin/statusline.sh`) prints ONE row, the `cache ●
+1h … hit 43% · misses 0` row under the input box. A real payload piped into it
+gave that row alone (`claude-usage-band-statusline-output-2.1.295.txt`; the
+payload's own `context_window` said 68,312 of 1,000,000, 7%). The figure row,
+`Opus 5.5 medium │ ◔ ╸━━━━━━━ 7% 68.3k/1.0M   ◷ 5h … 6% │ 5:20 PM   ▦ 7d …`,
+is drawn by the usage-band MOD from the payload its bridge saves, ABOVE the
+input box, under a `[-]` toggle row and over a worktree row, in both layouts.
+At 100 columns and at 44 the mod keeps `◔ 7%` and drops the token figure (at
+44 it also moves the 5h and 7d pills onto rows of their own), so a narrow pane
+has no figure to read.
+
+**Where it is read** (`claudeStatusLineRows` in
+`mobile-terminal-hud-context-rows.ts`, `claude-status-line-context.ts`):
+- every row under the input box, where Claude Code draws a status line;
+- the rows directly above the box's top rule, up to Claude Code's own spinner
+  row (`✻ Incubating… (4s · ↓ 325 tokens)`) or turn-end row (`✻ Crunched for
+  5s · done 12:54 PM`). The spinner's `⎿  Tip:` row and any `❯` or `⏺` row
+  there are skipped, and so is Claude Code's fullscreen notice slot (the row
+  flush with the box's right edge, `claudeFullscreenNoticeRow`), where only
+  Claude Code's own warning wording is ever read. The conversation sits above the turn row, and an answer's
+  continuation row (`  Opus 5.5 high │ ◔ 12% 120.0k/1.0M`, captured) has the
+  band's exact shape. So when the walk up meets any other column-0 row (an
+  answer, a prompt) or the top of the screen before a turn row, nothing above
+  the box is read. A resumed or cleared screen gets no ring from the band until
+  a turn has painted its row.
+
+**What counts as the figure.** `<used>/<window>`, where the window carries a `k`
+or `M` suffix and the used figure may be bare. Both sides must be bounded by a
+space, the row's edge, a bracket or a separator, so `68.3k/1.0M…` (cut by the
+painter) and `$1.2k/$5k` are not figures. A percent directly before
+(`7% 68.3k/1.0M`, `27% (54.2k/200k)`) or after (`54.2k/200k (27%)`) is
+cross-checked against the figure, allowing for the labels' own rounding plus
+one point for the painter's. When it agrees it is the percent shown; when it
+does not, the read is refused. With no percent beside it, used/window is
+rounded.
+
+**What is refused** (no ring from this source, never a guess):
+- two figures anywhere in those rows, the mod's subagent pill (`↳ … ◔ 3%
+  6.1k/200k`) beside the main one included;
+- a figure whose segment (between `│`, `|`, a three-space gap or a Powerline
+  pill cap U+E0A0 to U+E0D7, on either side of the figure) names a usage
+  window or a cost: `$`, `5h`, `7d`, `5-hour`, `session`, `weekly`, `wk`,
+  `today`, `usage`, `resets`, `block`, `plan`, `limit`, `cost`, `quota`. The
+  5h and 7d percents are never read as the context. usage-band draws its pills
+  with the caps U+E0B4 and U+E0B6, so its 5h pill begins two columns after the
+  context figure and the caps are what end the figure's segment. When this
+  refuses a figure, the older under-box patterns (`ctx 54%`, claude-hud's
+  `78% (776k/1.0M)`) are not tried on the screen either; only Claude Code's own
+  warning still is;
+- a figure in a row Claude Code paints in those zones: a todo list's or a tip's
+  continuation under the spinner (indented four or more columns) and the slash
+  and `@` menus under the box (review, 2026-10-09);
+- a figure on a row that fills the box's width, or on the row after one, since
+  it may have wrapped in two;
+- a percent alone (`◔ 7%`, the mod at 100 columns and below), which states no
+  window;
+- used larger than the window.
+
+**Order.** The beacon still wins: `applyAgentHudBeaconFields` replaces the
+screen's context whenever the beacon states a window. On the screen, a
+claude-hud badge's own figure comes first, a badge with none takes this
+figure, and with no badge this figure outranks Claude Code's low-context
+warning, which is read only when no figure is on screen. A refused or absent
+read is an empty read to the sticky hold (`use-sticky-live-hud.ts`), which
+keeps the last figure the screen stated for that tab, terminal and session, as
+it does for the badge. Codex is not read by this at all: the rows need Claude
+Code's `❯` input box, and a figure in a Codex conversation sets no ring
+(`claude-status-line-context.test.ts`).
+
+**Where the ring shows for this user now:** any fullscreen or default-layout
+Claude tab, hand-started or not, whose pane is wide enough for the mod to paint
+the token figure (160 columns captured; 100 is not). On a phone-width pane the
+band shows `◔ 7%` only, and the ring there still comes from the beacon or from
+Claude Code's own warning. Not verified: Orca's own screen read on the phone
+(the parser is pinned to tmux captures) and a Windows host.
 
 ## Update 2026-09-09 (night): Claude Code's own context warning
 
@@ -1398,7 +1488,8 @@ first moments of opening a chat, before its rows have loaded, loses to an older
 off the host's VISIBLE rows on the poll (once a second while the agent works), so
 a thinking phase shorter than a poll can be missed; the next one says the same.
 The `◐ medium · /effort` row some screens show is a user's own mod, not Claude
-Code's, and nothing reads it. Also seen on 2.1.294 and not used: the default
+Code's, and nothing reads it (the same mod's `<used>/<window>` context figure
+is read since 2026-10-09; see "The user's own status-line figure"). Also seen on 2.1.294 and not used: the default
 TUI's startup header repaints its `with <level> effort` after a picker switch
 while it is still on screen.
 

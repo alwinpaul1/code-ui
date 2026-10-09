@@ -1,0 +1,33 @@
+           Claude Code v2.1.295
+ ▐▛███▛█   Opus 5.5 with medium effort
+▝▜██████▀  Claude Max
+ ▝▝   ▝▝   ~/…/agent-af91be4bc71e248fd
+
+⚠ Your login expires in 3 days · run /login
+  to renew
+
+❯ Reply with exactly: ok
+
+⏺ ok
+
+  session:ok
+
+✻ Churned for 5s · done 12:57 PM
+                                        [-]
+  Opus 5.5 medium │ ◔ 7%            
+
+
+  ◷ 5h 6% │ 5:20 PM                 
+
+
+  ▦ 7d 24% │ Wed 7:00 PM            
+
+
+   agent-af91be4bc71e248fd │      
+  worktree-agent-af91be4bc71e248fd ✓
+
+────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 43% · …
+  ⏵⏵ auto mode on (shift+tab to cycle) · …

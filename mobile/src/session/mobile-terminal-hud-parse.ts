@@ -5,6 +5,7 @@ import {
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
 import { parseClaudeRunningShellCount, runningShellCountField } from './claude-footer-shell-count'
+import { readClaudeStatusLine, readClaudeStatusLineContext } from './claude-status-line-context'
 import {
   CODEX_STATUS_BOX_ROW,
   claudeFullscreenNoticeRow,
@@ -370,10 +371,14 @@ export function parseTerminalHudObservation(
     // The context figure sits after the badge on the same line, or on the line
     // below when the HUD wraps; the badge line wins when both carry one.
     const line = lines[index] ?? ''
+    // A badge with no figure of its own may sit beside a status line that prints one as
+    // `<used>/<window>` (claude-status-line-context.ts).
     const context =
       parseTerminalHudContextWindow(line.slice(match.index + match[0].length), {
         allowBarePercent: true
-      }) ?? parseTerminalHudContextWindow(lines[index + 1] ?? '')
+      }) ??
+      parseTerminalHudContextWindow(lines[index + 1] ?? '') ??
+      readClaudeStatusLineContext(lines)
     return {
       modelLabel,
       modelId,
@@ -404,6 +409,16 @@ export function parseTerminalHudObservation(
   // only the warning is read off it (2.1.295, 2026-10-09).
   const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line.replace(CODEX_PLAN_HINT, '')))
   if (hinted || hasClaudeModeFooter(lines)) {
+    // The user's own status line stating `<used>/<window>` outranks Claude Code's warning: it is the
+    // session's own fraction, where the warning is measured to the compaction point and appears only
+    // near the end (claude-status-line-context.ts; the user's decision, 2026-10-09).
+    const stated = readClaudeStatusLine(lines)
+    if (stated.kind === 'figure') {
+      return claudeFooterObservation(lines, stated.context)
+    }
+    // A figure the reader refused is not read by the looser patterns below either; Claude Code's own
+    // warning still is.
+    const refused = stated.kind === 'refused'
     const underBox = claudeRowsUnderInputBox(lines)
     const notice = claudeFullscreenNoticeRow(lines)
     for (let index = lines.length - 1; index >= Math.max(0, lines.length - 8); index -= 1) {
@@ -415,7 +430,7 @@ export function parseTerminalHudObservation(
       if (!under && !isNotice && isClaudeConversationRow(line, underBox !== -1)) {
         continue
       }
-      const context = parseTerminalHudContextWindow(line, { ownWarningOnly: !hinted || !under })
+      const context = parseTerminalHudContextWindow(line, { ownWarningOnly: refused || !hinted || !under })
       if (context) {
         return claudeFooterObservation(lines, context)
       }

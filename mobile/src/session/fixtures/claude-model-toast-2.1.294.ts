@@ -10,7 +10,12 @@
 // The rows between the spinner and the input box (`[-]`, `Opus 5.5 xhigh │ …`,
 // the worktree row), the `cache ● 1h …` footer row and the `◉ xhigh · /effort`
 // row are the USER'S OWN mod, not Claude Code's. They are kept because a
-// reader has to see past them, and nothing may read them.
+// reader has to see past them. Nothing read them when these were captured;
+// on 2026-10-09 the user approved reading the `<used>/<window>` context
+// figure such a row paints (`◔ 7% 68.3k/1.0M`), and only that figure, for the
+// ring (claude-status-line-context.ts, docs/mobile-agent-hud.md "The user's
+// own status-line figure"). The model, effort and rate-limit pills on those
+// rows are still not read.
 
 /** Default TUI, 160 columns: alt+p, Down, Down, s. The toast sits at the right of the first footer row (here the user's own `cache` row). */
 export const WIDE_TOAST_SONNET: readonly string[] = [
