@@ -93,11 +93,29 @@ describe('the model reading a relaunched app shows before it asks the host again
     expect(peekClaudeTranscriptModel(HOST, SESSION)?.model).toBe('claude-sonnet-5-5')
   })
 
-  it('states nothing remembered once a scan this run lists the host without this session', async () => {
+  // Review, 2026-10-09: a scan is asked for ONE folder and 20 rows, so a scan
+  // of another project on the same host says nothing about this session, and
+  // the five-minute budget then holds this chat's own scan back.
+  it('keeps the remembered reading when a scan of another folder does not list the session', async () => {
     await scanOpusAndRelaunch()
 
-    const empty = createAnsweringClient(() => ok({ sessions: [], issues: [] }))
-    await requestClaudeTranscriptModelScan(empty.client, HOST, WORKTREE, { now: T0 + 2_000 })
+    const otherFolder = createAnsweringClient(() =>
+      ok({ sessions: [historySession({ sessionId: 'other-session', cwd: '/Users/alwin/other', model: 'claude-sonnet-5-5' })], issues: [] })
+    )
+    await requestClaudeTranscriptModelScan(otherFolder.client, HOST, 'repo-2::/Users/alwin/other', { now: T0 + 2_000 })
+    expect(await requestClaudeTranscriptModelScan(otherFolder.client, HOST, WORKTREE, { now: T0 + 3_000 })).toBe('throttled')
+    expect(peekClaudeTranscriptModel(HOST, SESSION)).toEqual({
+      model: 'claude-opus-5-5',
+      label: 'Opus 5.5',
+      freshAsOf: T0 - HOST_SESSION_LIST_CACHE_MS
+    })
+  })
+
+  it('lets a scan that lists the session with no Claude model replace the remembered reading', async () => {
+    await scanOpusAndRelaunch()
+
+    const synthetic = createAnsweringClient(() => ok({ sessions: [row('<synthetic>')], issues: [] }))
+    await requestClaudeTranscriptModelScan(synthetic.client, HOST, WORKTREE, { now: T0 + 2_000 })
     expect(peekClaudeTranscriptModel(HOST, SESSION)).toBeNull()
   })
 

@@ -7,7 +7,7 @@ import {
   shouldRefetchAfterReconnect
 } from '../transport/stale-after-reconnect'
 import { worktreePathFromId } from './mobile-native-chat-skill-browse'
-import { claudeTranscriptModelName, transcriptModelForSession, type ScannedTranscriptModel } from './claude-transcript-model'
+import { claudeTranscriptModelName, listsClaudeSession, transcriptModelForSession, type ScannedTranscriptModel } from './claude-transcript-model'
 import { createPersistedMap } from './session-cache-persistence'
 
 /**
@@ -55,9 +55,11 @@ import { createPersistedMap } from './session-cache-persistence'
  * the source reading, never the pill: every tier above it (the live pair, the
  * screen, the command rows, the startup frame) is laid over it exactly as over
  * a reading this run took, and `freshAsOf` keeps its real age, so a reply newer
- * than it still supersedes it. A remembered reading stands only until a scan of
- * the same host succeeds in this run; from then the scan alone answers, and a
- * scan that does not list the session says nothing about it.
+ * than it still supersedes it. A remembered reading stands until a scan that
+ * LISTS the session replaces it: each scan is asked for one folder and 20 rows,
+ * so a scan of another project on the same host says nothing about this one,
+ * and the per-host budget then holds this chat's own scan back (review,
+ * 2026-10-09).
  */
 export const CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS = 5 * 60_000
 /** How old a list the host may answer an unforced scan with: Orca's
@@ -179,14 +181,17 @@ export function resetClaudeTranscriptModelScansForTests(): void {
 }
 
 /** What the last scan of this host says about one session, with how recent a
- *  transcript it speaks for, or null. Before any scan of the host has succeeded
- *  in this run, what one said before the app was last closed. */
+ *  transcript it speaks for, or null. When no scan of the host has succeeded in
+ *  this run, or the last one does not list the session, the reading kept from
+ *  an earlier one (this run or before the app was last closed). */
 export function peekClaudeTranscriptModel(
   hostId: string,
   sessionId: string
 ): ScannedTranscriptModel | null {
   const scan = scans.get(hostId)
-  if (scan?.freshAsOf == null) {
+  // A scan that does not list the session (another folder, past its 20 rows)
+  // says nothing about it; one that lists it replaces what was kept.
+  if (scan?.freshAsOf == null || !listsClaudeSession(scan.rows, sessionId)) {
     return rememberedReading(hostId, sessionId)
   }
   const reading = transcriptModelForSession(scan.rows, sessionId)
