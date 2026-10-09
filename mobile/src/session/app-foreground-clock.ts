@@ -21,6 +21,8 @@
 let away = false
 /** When the app last came back to the foreground; null before it ever left. */
 let backAt: number | null = null
+/** When the app last left the foreground; null before it ever did. */
+let leftAt: number | null = null
 
 /** AppState said `active` (true) or anything else (false). Repeats are ignored. */
 export function noteAppForeground(active: boolean, now = Date.now()): void {
@@ -30,7 +32,18 @@ export function noteAppForeground(active: boolean, now = Date.now()): void {
   away = !active
   if (active) {
     backAt = now
+  } else {
+    leftAt = now
   }
+}
+
+/** How long the app's latest time away overlaps the stretch from `since` until now: a
+ *  moment away is not what spent a 15 s budget, a minute is. Earlier times away are
+ *  not counted. */
+export function appAwayMsSince(since: number, now = Date.now()): number {
+  const from = Math.max(leftAt ?? since, since)
+  const to = away ? now : (backAt ?? from)
+  return Math.max(0, to - from)
 }
 
 /** Whether the app was out of the foreground at any moment from `since` until now. */
@@ -51,6 +64,7 @@ export function appForegroundSince(): number | null {
 export function resetAppForegroundClockForTests(): void {
   away = false
   backAt = null
+  leftAt = null
 }
 
 /** The part of React Native's AppState the clock listens to. */

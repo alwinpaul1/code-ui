@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  appAwayMsSince,
   appForegroundSince,
   appWasAwaySince,
   noteAppForeground,
@@ -29,6 +30,18 @@ describe('the app foreground clock', () => {
     expect(appWasAwaySince(8_999)).toBe(true)
     expect(appWasAwaySince(9_000)).toBe(false)
     expect(appWasAwaySince(12_000)).toBe(false)
+  })
+
+  it('measures only the part of the latest time away inside the stretch asked about', () => {
+    expect(appAwayMsSince(0, 50_000)).toBe(0)
+    noteAppForeground(false, 10_000)
+    expect(appAwayMsSince(0, 12_000)).toBe(2_000)
+    expect(appAwayMsSince(11_000, 12_000)).toBe(1_000)
+    noteAppForeground(true, 15_000)
+    expect(appAwayMsSince(0, 60_000)).toBe(5_000)
+    expect(appAwayMsSince(14_000, 60_000)).toBe(1_000)
+    expect(appAwayMsSince(15_000, 60_000)).toBe(0)
+    expect(appAwayMsSince(20_000, 60_000)).toBe(0)
   })
 
   it('ignores a repeated state, so a second `active` does not move the return', () => {

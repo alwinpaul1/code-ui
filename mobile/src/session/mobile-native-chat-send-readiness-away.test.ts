@@ -84,6 +84,18 @@ describe('a send that waited for the link while the app was in the background', 
     )
   })
 
+  it('still blames the link when the app was away only a moment of the wait (review, 2026-10-09)', async () => {
+    const readiness = await waitWhile(() => {
+      noteAppForeground(false)
+      vi.setSystemTime(Date.now() + 1_000)
+      noteAppForeground(true)
+    })
+
+    expect(said(readiness)).toBe(
+      'Message not sent: the connection to your desktop dropped and did not come back within 11 s'
+    )
+  })
+
   it('does not count a time away that ended before the send began', async () => {
     noteAppForeground(false)
     noteAppForeground(true)

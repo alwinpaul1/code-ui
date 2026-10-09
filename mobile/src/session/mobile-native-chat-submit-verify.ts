@@ -158,6 +158,14 @@ export async function verifyClaudeSubmit(args: {
   let failedLooks = 0
   let lastLookAt = -Infinity
   let sawWords = false
+  /** The send drawn above the composer: its prompt row, or one more `! cmd` row than before. */
+  const drawnAbove = (lines: readonly string[]): boolean =>
+    claudeSentPromptTexts(lines).some((row) =>
+      photos ? words !== '' && heard(row) : words !== '' && dense(row).startsWith(words)
+    ) ||
+    (shell !== null &&
+      args.priorBashRows !== null &&
+      claudeSentBashTexts(lines).filter(heard).length > (args.priorBashRows ?? []).filter(heard).length)
   /** What one picture of the screen settles, or null when it settles nothing. */
   const judge = (screen: MobileNativeChatScreen): SubmitVerdict | null => {
     looked = true
@@ -179,18 +187,7 @@ export async function verifyClaudeSubmit(args: {
     // left in the input may be a placeholder (a prompt suggestion, the queue
     // hint, "Message @agent…") or text from the desk, neither of which is this
     // message.
-    return sawWords ||
-      claudeSentPromptTexts(screen.lines).some((row) =>
-        photos
-          ? words !== '' && heard(row)
-          : words !== '' && dense(row).startsWith(words)
-      ) ||
-      (shell !== null &&
-        args.priorBashRows !== null &&
-        claudeSentBashTexts(screen.lines).filter(heard).length >
-          (args.priorBashRows ?? []).filter(heard).length)
-      ? { kind: 'sent' }
-      : null
+    return sawWords || drawnAbove(screen.lines) ? { kind: 'sent' } : null
   }
   const beaconHeard = (): boolean =>
     shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text)
@@ -237,6 +234,12 @@ export async function verifyClaudeSubmit(args: {
       terminal: args.terminal,
       deadline: Date.now() + MOBILE_NATIVE_CHAT_SCREEN_READ_MS
     })
+    // This look can come minutes after the Enter, so a review notice on it may belong to
+    // later desktop activity: the send's own row, drawn above, wins over it (review of
+    // 34c021948). Otherwise it is judged like any look.
+    if (screen && drawnAbove(screen.lines)) {
+      return { kind: 'sent' }
+    }
     const verdict = screen ? judge(screen) : null
     if (verdict) {
       return verdict

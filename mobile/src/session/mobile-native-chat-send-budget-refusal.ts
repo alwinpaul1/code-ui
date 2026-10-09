@@ -1,4 +1,4 @@
-import { appWasAwaySince } from './app-foreground-clock'
+import { appAwayMsSince } from './app-foreground-clock'
 import {
   MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS,
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS
@@ -25,7 +25,14 @@ export function spentSendBudgetRefusal(action: string, deadline: number, now = D
   if (deadline - now >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS) {
     return null
   }
-  return appWasAwaySince(deadline - MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS)
+  return appWasAwayLongEnoughSince(deadline - MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS, now)
     ? `${action} not sent: ${SEND_BUDGET_SPENT_AWAY}`
     : `${action} not sent: your desktop did not answer within ${MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS / 1_000} s. Send it again`
+}
+
+/** Whether the app was away long enough since `since` to be what spent a send: at least
+ *  a write's worth (MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS). A moment away while the link
+ *  or the desktop was the slow one does not move the blame (review of 34c021948). */
+export function appWasAwayLongEnoughSince(since: number, now = Date.now()): boolean {
+  return appAwayMsSince(since, now) >= MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS
 }

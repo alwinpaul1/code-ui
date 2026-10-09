@@ -2,8 +2,7 @@ import { useMemo, useRef } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RelayHostReachability } from '../transport/relay-host-reachability'
 import type { StableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
-import { appWasAwaySince } from './app-foreground-clock'
-import { SEND_BUDGET_SPENT_AWAY } from './mobile-native-chat-send-budget-refusal'
+import { appWasAwayLongEnoughSince, SEND_BUDGET_SPENT_AWAY } from './mobile-native-chat-send-budget-refusal'
 
 /** What a send needs to be true before it writes anything, read from the render
  *  that is current when the send looks, not the one that was current at the tap. */
@@ -31,8 +30,8 @@ export type MobileNativeChatSendUnready = {
   readonly neverConnected: boolean
   /** The link came back, but too little of the budget was left to write in. */
   readonly late: boolean
-  /** The app was out of the foreground while the send waited: Android ran no timer
-   *  then, so the wait (and the link's own redial) could not run either. */
+  /** The app was out of the foreground for a write's worth or more while the send
+   *  waited: Android ran no timer then, so the wait (and the link's redial) could not run. */
   readonly away: boolean
 }
 
@@ -144,7 +143,7 @@ function mobileNativeChatSendUnready(
     reachability: logical?.getRelayHostReachability?.() ?? null,
     neverConnected: missing === 'connection' && (client?.getLastConnectedAt() ?? null) === null,
     late,
-    away: waitedSince !== null && appWasAwaySince(waitedSince)
+    away: waitedSince !== null && appWasAwayLongEnoughSince(waitedSince)
   }
 }
 
