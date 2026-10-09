@@ -220,13 +220,85 @@ describe('the run sheet, the Claude app way', () => {
       expect(type.label.size).toBeLessThan(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize)
     })
 
-    it('lets a long detail take the ellipsis, never the verb', () => {
-      const { verb, detail } = words(firstRow(render(scheme)))
-      expect(styleOf(verb).flexShrink).toBe(0)
-      expect(styleOf(detail).flexShrink).toBe(1)
+    // Yoga's rule for a row of fixed-basis items that overflow it: each shrinks
+    // by its flexShrink times its basis, an item that reaches 0 stops, and the
+    // rest take what it could not give. (A Text has no minimum width.) Checked
+    // against yoga-layout 3.2.1 at 384 dp: with the verb at flexShrink 0 a 330 dp
+    // verb ended 16 dp past the row and its detail had 0 width.
+    function shrunk(items: { basis: number; shrink: number }[], room: number): number[] {
+      const widths = items.map((item) => item.basis)
+      const frozen = items.map(() => false)
+      for (;;) {
+        const over = widths.reduce((sum, w) => sum + w, 0) - room
+        const live = items.map((_, i) => i).filter((i) => !frozen[i] && items[i]!.shrink > 0)
+        const weight = live.reduce((sum, i) => sum + items[i]!.shrink * items[i]!.basis, 0)
+        if (over <= 1e-9 || weight === 0) {
+          return widths
+        }
+        let hitZero = false
+        for (const i of live) {
+          const next = widths[i]! - (over * items[i]!.shrink * items[i]!.basis) / weight
+          if (next <= 0) {
+            widths[i] = 0
+            frozen[i] = true
+            hitZero = true
+          } else {
+            widths[i] = next
+          }
+        }
+        if (!hitZero) {
+          return widths
+        }
+      }
+    }
+
+    it.each([1, 1.3])(
+      'keeps a long tool name inside the row and gives the detail up first, at font scale %s',
+      (fontScale) => {
+        const name = 'mcp__claude_ai_Google_Drive__get_file_metadata'
+        const tree = render(scheme, call(name, { fileId: 'abc' }, 'ok'))
+        const row = rowNodes(tree)[0]!
+        const verb = textNodes(row).find((node) => node.props.children === `Used ${name}`)!
+        const detail = textNodes(row).find((node) => node.props.children === 'fileId')!
+        expect(verb.props.numberOfLines).toBe(1)
+        expect(detail.props.numberOfLines).toBe(1)
+        // 384 dp screen: the drawer's padding and the sheet's inset leave the row this wide.
+        const rowWidth = 384 - 2 * space.md - ((styleOf(tree.root.find((n) => n.props.testID === 'run-sheet')).paddingLeft as number) ?? 0)
+        const glyph = 0.55 * (styleOf(verb).fontSize as number) * fontScale
+        const icon = 16
+        const sizes = shrunk(
+          [
+            { basis: name.length * glyph + 5 * glyph, shrink: styleOf(verb).flexShrink as number },
+            { basis: 'fileId'.length * glyph, shrink: styleOf(detail).flexShrink as number }
+          ],
+          rowWidth - icon - (styleOf(verb).marginLeft as number) - (styleOf(detail).marginLeft as number)
+        )
+        const verbRight = icon + (styleOf(verb).marginLeft as number) + sizes[0]!
+        expect(verbRight).toBeLessThanOrEqual(rowWidth)
+        expect(sizes[1]).toBeGreaterThanOrEqual(0)
+        // The detail is what gave way: gone before the verb lost a glyph's width more than it must.
+        expect(sizes[1]).toBe(0)
+        expect(sizes[0]).toBeGreaterThan(0)
+      }
+    )
+
+    it('lets the verb of a short row keep its whole word beside a long detail', () => {
+      const tree = render(scheme)
+      const { verb, detail } = words(firstRow(tree))
+      const glyph = 0.55 * (styleOf(verb).fontSize as number)
+      const sizes = shrunk(
+        [
+          { basis: 3 * glyph, shrink: styleOf(verb).flexShrink as number },
+          { basis: 120 * glyph, shrink: styleOf(detail).flexShrink as number }
+        ],
+        200
+      )
+      // Under a tenth of a dp off its measured width: well inside one pixel, which layout rounds up for text.
+      expect(3 * glyph - sizes[0]!).toBeLessThan(0.1)
+      expect(sizes[1]!).toBeLessThan(200)
     })
 
-    it('lets a verb with no detail shrink instead, so a long tool name is cut, not clipped', () => {
+    it('lets a verb with no detail shrink too, so a long tool name is cut, not clipped', () => {
       const tree = render(scheme)
       const loaded = textNodes(rowNodes(tree)[2]!).find((node) => node.props.children === 'Loaded tools')!
       expect(styleOf(loaded).flexShrink).toBe(1)

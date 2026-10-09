@@ -112,6 +112,10 @@ const ROW_ICON_INSET = 27
 const ROW_ICON_SIZE = 16
 const ROW_ICON_TO_VERB = 15
 const ROW_VERB_TO_DETAIL = 11
+/** Flex shrinks in proportion to flexShrink times width, so a detail this
+ *  much more willing to shrink takes the overflow before a verb loses even a
+ *  dp (the verb loses well under a tenth of a dp, which layout rounds off). */
+const DETAIL_SHRINK = 1000
 /** The row's words are the transcript's prose size, as the Claude app's are
  *  (its row glyphs measure the same as its transcript text). The label size
  *  (13) these had sat under the 15 prose above the sheet. */
@@ -160,12 +164,14 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
         <Icon size={ROW_ICON_SIZE} color={colors.textMuted} />
         {row.failed ? <TriangleAlert size={ROW_ICON_SIZE} color={colors.danger} testID="run-sheet-row-failed" /> : null}
       </View>
-      {/* The verb keeps its width while a detail follows, so a long detail takes
-          the ellipsis; with none it is the one text and shrinks itself. */}
+      {/* Both shrink, the detail by far the more: a row that overflows cuts the
+          detail first, and only a verb too long for the row on its own (a
+          tool's raw name) takes an ellipsis itself, rather than running past
+          the edge for the drawer to clip mid-glyph. */}
       <Text
         style={{
           ...word,
-          flexShrink: row.detail ? 0 : 1,
+          flexShrink: 1,
           marginLeft: ROW_ICON_TO_VERB,
           fontFamily: fonts.regular,
           color: verbColor
@@ -178,7 +184,7 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
         <Text
           style={{
             ...word,
-            flexShrink: 1,
+            flexShrink: DETAIL_SHRINK,
             marginLeft: ROW_VERB_TO_DETAIL,
             fontFamily: row.detailMono ? fonts.mono : fonts.regular,
             // A file name is code: its own size, not the prose's.
