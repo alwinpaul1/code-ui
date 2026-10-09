@@ -169,10 +169,10 @@ describe('MobileMarkdown in the chat transcript', () => {
     )
   })
 
-  it('draws the prose at 14 on 21 and its pill in JetBrains Mono', () => {
+  it('draws the prose at 15 on 22 and its pill in JetBrains Mono', () => {
     const root = render({ content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY })
     const run = blockTexts(root)[0]!
-    expect(flat(run.props.style)).toMatchObject({ fontSize: 14, lineHeight: 21 })
+    expect(flat(run.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22 })
     const pill = root.findAll((node) => String(node.type) === 'Text' && words(node) === 'code')[0]!
     expect(flat(pill.props.style).fontFamily).toBe(fontFamily.mono)
     expect(flat(pill.props.style).fontSize).toBe(12)
@@ -181,7 +181,7 @@ describe('MobileMarkdown in the chat transcript', () => {
   it('follows the pinch zoom from the transcript’s own size', () => {
     const root = render({ content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY, textScale: 1.5 })
     const run = blockTexts(root)[0]!
-    expect(flat(run.props.style)).toMatchObject({ fontSize: 21, lineHeight: 21 * 1.5 + 2 })
+    expect(flat(run.props.style)).toMatchObject({ fontSize: 22.5, lineHeight: 22 * 1.5 + 2 })
     const pill = root.findAll((node) => String(node.type) === 'Text' && words(node) === 'code')[0]!
     expect(flat(pill.props.style)).toMatchObject({ fontSize: 18, lineHeight: 21 })
   })

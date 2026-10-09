@@ -31,10 +31,12 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '86%',
       flexShrink: 1,
       backgroundColor: colors.userBubble,
-      borderRadius: radius.lg,
+      // Taller and a little rounder than it was (radius.lg, space.sm + 2): the
+      // Claude app's one-line bubble is 106 px against our 91, 3 dp each side.
+      borderRadius: radius.lg + 2,
       borderBottomRightRadius: radius.xs,
       paddingHorizontal: space.md + 2,
-      paddingVertical: space.sm + 2
+      paddingVertical: space.sm + 5
     },
     userText: {
       fontFamily: fonts.regular,

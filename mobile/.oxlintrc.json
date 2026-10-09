@@ -366,7 +366,9 @@
             // threaded from the overlay to the composer for the over-the-cap
             // video-frames progress chip; the extraction itself lives in
             // mobile-video-frame-extractor.ts / mobile-video-frame-picker.ts.
-            "max": 420,
+            // 2026-10-09: +2 for MobileNativeChatDockBackdrop, the dock's ground
+            // (its import and the element); the fade lives in its own module.
+            "max": 422,
             "skipBlankLines": true,
             "skipComments": true
           }

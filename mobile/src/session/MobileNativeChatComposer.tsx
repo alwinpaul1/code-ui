@@ -457,8 +457,8 @@ export function MobileNativeChatComposer({
                     backgroundColor: micActive
                       ? colors.dangerSoft
                       : pressed
-                        ? colors.bgRaised
-                        : 'transparent'
+                        ? colors.borderStrong
+                        : colors.bgRaised
                   }
                 ]}
                 // Hold mode is walkie-talkie (press-in/out); toggle mode taps.
@@ -482,14 +482,16 @@ export function MobileNativeChatComposer({
               accessibilityRole="button"
               accessibilityState={{ disabled: !canSend }}
               // Extra margin: two filled circles on the row's 4 px gap read as one blob.
-              style={[iconButton, { marginLeft: space.xs, backgroundColor: canSend ? colors.accent : colors.bgRaised }]}
+              // The accent circle always; with nothing to send it is dimmed, as the
+              // Claude app draws it, not swapped for a grey one.
+              style={[iconButton, { marginLeft: space.xs, backgroundColor: colors.accent, opacity: canSend ? 1 : 0.4 }]}
               pressedScale={0.9}
               onPress={handleSend}
               disabled={!canSend}
             >
               <ArrowUp
                 size={19}
-                color={canSend ? colors.onAccent : colors.textMuted}
+                color={colors.onAccent}
                 strokeWidth={2.6}
               />
             </PressScale>

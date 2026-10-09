@@ -65,7 +65,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ height: 823, width: 384, scale: 2.8125, fontScale: 1 })
   }
 })
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))

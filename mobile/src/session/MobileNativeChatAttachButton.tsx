@@ -66,7 +66,9 @@ export function MobileNativeChatAttachButton({
         accessibilityLabel={onAttachFile ? 'Add to chat' : 'Attach image'}
         style={({ pressed }) => [
           iconButtonStyle,
-          { backgroundColor: pressed ? colors.bgRaised : 'transparent' }
+          // A filled circle one step above the composer's surface, as the Claude app
+          // draws it; a press goes one tone further (bgRaised is the resting fill).
+          { backgroundColor: pressed ? colors.borderStrong : colors.bgRaised }
         ]}
         onPressIn={opensSheet ? openSheet : undefined}
         onPress={opensSheet ? openSheet : onAttachImage}

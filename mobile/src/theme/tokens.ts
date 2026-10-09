@@ -167,7 +167,7 @@ export const darkColors: ThemeColors = {
   // Violet-400, the desktop ReviewIcon's tone, exactly as the sidebar always drew
   // it in dark (pinned by pr-sidebar-status-color.test.ts).
   mergedPurple: '#a78bfa',
-  userBubble: '#2E2B26',
+  userBubble: '#100F0D',
   userBubbleText: '#ECE9E2',
   codeBg: '#26231F',
   codeSpanBg: 'rgba(138, 180, 248, 0.10)',

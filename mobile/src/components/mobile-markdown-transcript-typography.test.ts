@@ -28,7 +28,9 @@ import { codePillWidth } from './mobile-markdown-code-chip-split'
 // size draws a body line every 21.4 dp, about 7 dp between paragraphs and 4
 // between bullets, its words 94% as wide as ours, and its inline code in a
 // monospace face on a pill about 16 dp tall. Ours drew 15 sp on a 25 dp line
-// with a whole blank line between paragraphs.
+// with a whole blank line between paragraphs. The set was 14 on 21 first; a
+// second pass the same day (ink 37 px against 34, line pitch 57.1 px against
+// 55.3) moved it to 15 on 22.
 
 function themeFor(scheme: 'light' | 'dark'): Theme {
   return {
@@ -51,14 +53,30 @@ type Styles = Record<string, Record<string, unknown>>
 const SCHEMES = ['light', 'dark'] as const
 
 describe('the chat transcript at the Claude app’s Small density', () => {
-  it.each(SCHEMES)('sets prose at 14 on a 21 dp line in %s', (scheme) => {
+  it.each(SCHEMES)('sets prose at 15 on a 22 dp line in %s', (scheme) => {
     const styles = makeMarkdownStyles(themeFor(scheme), TRANSCRIPT_MARKDOWN_TYPOGRAPHY) as unknown as Styles
     for (const name of ['paragraph', 'quoteText', 'listText']) {
-      expect(styles[name]!.fontSize, name).toBe(14)
-      expect(styles[name]!.lineHeight, name).toBe(21)
+      expect(styles[name]!.fontSize, name).toBe(15)
+      expect(styles[name]!.lineHeight, name).toBe(22)
     }
     // Between one block and the next, as between the Claude app's paragraphs.
     expect(styles.root!.gap).toBe(7)
+  })
+
+  it.each(SCHEMES)('steps the headings and list marker up with the 15 dp prose in %s', (scheme) => {
+    // Claude's glyphs are ~9% taller than the 14 dp set (ink 37 px vs 34 px, line pitch
+    // 57.1 px vs 55.3 px, same phone, 2026-10-09), so the whole ladder moves a step.
+    const styles = makeMarkdownStyles(themeFor(scheme), TRANSCRIPT_MARKDOWN_TYPOGRAPHY) as unknown as Styles
+    expect(styles.heading).toMatchObject({ fontSize: 15.5, lineHeight: 22 })
+    expect(styles.headingLevel1).toMatchObject({ fontSize: 19, lineHeight: 26 })
+    expect(styles.headingLevel2).toMatchObject({ fontSize: 17, lineHeight: 24 })
+    expect(styles.headingLevel3).toMatchObject({ fontSize: 16, lineHeight: 23 })
+    expect(styles.listMarkerInline).toMatchObject({ fontSize: 14 })
+    const sizes = ['headingLevel1', 'headingLevel2', 'headingLevel3', 'heading'].map(
+      (name) => styles[name]!.fontSize as number
+    )
+    expect(sizes).toEqual([...sizes].sort((x, y) => y - x))
+    expect(Math.min(...sizes)).toBeGreaterThan(15)
   })
 
   it.each(SCHEMES)('draws inline code in JetBrains Mono, one size under the prose step, in %s', (scheme) => {

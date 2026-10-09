@@ -24,7 +24,7 @@ vi.mock('lucide-react-native', () => ({
 }))
 
 // 2026-10-02 (screenshot): the red "Couldn't open <file>" line sat over the assistant's text and
-// the Tools row. The dock draws no ground by design (mobile-native-chat-dock-glass.test.ts), so the
+// the Tools row. The dock style draws no ground by design (mobile-native-chat-dock-glass.test.ts), so the
 // line itself needs an opaque surface of its own. dangerSoft is translucent in both schemes and
 // would still let the text through, and danger text on bgRaised measures 4.40:1 light / 4.47:1
 // dark, under the 4.5 bar, so the surface is bgPanel (opaque, 5.21 / 5.06).
