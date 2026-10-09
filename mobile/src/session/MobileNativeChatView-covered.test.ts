@@ -45,7 +45,7 @@ vi.mock('expo-router', async () => {
 })
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 vi.mock('./use-app-interruptions', () => ({ useAppInterruptions: () => undefined }))
 vi.mock('react-native', () => ({

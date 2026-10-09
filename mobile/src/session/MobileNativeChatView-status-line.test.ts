@@ -5,7 +5,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
+vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
 vi.mock('../hooks/use-now', () => ({ useNow: () => 0 }))
 // The system interrupting a touch is not what these tests are about; see
 // use-mobile-native-chat-tail-follow.selection.test.ts for that.
