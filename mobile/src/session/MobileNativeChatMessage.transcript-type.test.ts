@@ -63,6 +63,7 @@ import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageR
 import { Prose } from './MobileNativeChatProse'
 import { makeChatMessageStyles } from './mobile-native-chat-message-styles'
 import { darkColors, fontFamily, lightColors, radius, space, type } from '../theme/tokens'
+import { contrastRatio } from '../test/contrast'
 import { syntaxPaletteForScheme } from '../theme/syntax-palette'
 import type { Theme } from '../theme/theme-context'
 
@@ -196,5 +197,29 @@ describe('the chat transcript’s type', () => {
     expect(styles.userText.color).toBe(colors.userBubbleText)
     expect(styles.userBubble.backgroundColor).toBe(colors.userBubble)
     expect(styles.userText).toMatchObject({ fontSize: 15, lineHeight: 22 })
+  })
+
+  // The Claude app's dark bubble is DARKER than its page (#0d0d0d on #151515,
+  // same phone, 2026-10-09); ours was lighter (#2E2B26 on #1A1917). Light keeps
+  // its bubble, which already reads like Claude's.
+  it('draws the dark sent-prompt bubble darker than the page, and keeps its words readable', () => {
+    const lum = (hex: string) => contrastRatio('#FFFFFF', hex)
+    // A higher contrast against white means a darker surface.
+    expect(lum(darkColors.userBubble)).toBeGreaterThan(lum(darkColors.bg))
+    expect(lum(darkColors.userBubble)).toBeGreaterThan(lum(darkColors.bgSunken))
+    expect(contrastRatio(darkColors.userBubbleText, darkColors.userBubble)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('keeps the light sent-prompt bubble as it was, with readable words', () => {
+    expect(lightColors.userBubble).toBe('#E6E2D7')
+    expect(contrastRatio(lightColors.userBubbleText, lightColors.userBubble)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(['light', 'dark'] as const)('gives the sent-prompt bubble Claude’s taller, rounder shape in %s', (scheme) => {
+    // 106 px tall for one line against our 91 at the same text: 3 dp more
+    // above and below at 2.57 px per dp, and corners a little rounder.
+    const bubble = makeChatMessageStyles(themeFor(scheme)).userBubble
+    expect(bubble.paddingVertical).toBe(13)
+    expect(bubble.borderRadius).toBe(20)
   })
 })
