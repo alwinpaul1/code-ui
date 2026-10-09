@@ -351,7 +351,10 @@ export function earlyLineEnds(
   scale = 1,
   pillError = 1,
   fontScale = 1,
-  placeholder?: Placeholder
+  placeholder?: Placeholder,
+  /** The surface's type, where it is not the default: the pill's size and
+   *  face, and the prose size (the chat transcript's mono pills, 2026-10-09). */
+  type: { pillSize: number; pillFamily: string; proseSize: number } = { pillSize: 14, pillFamily: '', proseSize: 15 }
 ): string[] {
   const found: string[] = []
   lines.forEach((line, index) => {
@@ -365,7 +368,7 @@ export function earlyLineEnds(
     if (head.kind === 'pill') {
       const unit = /^[^/\s]*[/\s]?/.exec(head.text)![0]
       need = placeholderWidth(
-        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, 14 * scale), 0) * pillError * fontScale +
+        Array.from(unit.trimEnd()).reduce((sum, ch) => sum + glyphWidth(ch, type.pillSize * scale, type.pillFamily), 0) * pillError * fontScale +
           10 * scale,
         placeholder
       )
@@ -379,7 +382,7 @@ export function earlyLineEnds(
       }
     } else {
       const word = /^\S+/.exec(next.text)?.[0] ?? ''
-      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, 15 * scale), 0) * fontScale
+      need = Array.from(word).reduce((sum, ch) => sum + glyphWidth(ch, type.proseSize * scale), 0) * fontScale
     }
     if (need <= room - 2) {
       found.push(`line ${index} "${line.text}" left ${room.toFixed(1)} dp for "${next.text.slice(0, 12)}" (${need.toFixed(1)} dp)`)

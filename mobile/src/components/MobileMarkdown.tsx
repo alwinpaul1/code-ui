@@ -11,11 +11,7 @@ import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-ta
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
 import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import {
-  MARKDOWN_BASE_SIZE,
-  useMarkdownStyles,
-  type MarkdownStyles
-} from './mobile-markdown-styles'
+import { useMarkdownStyles, type MarkdownStyles } from './mobile-markdown-styles'
 import {
   detectFilePathSegments,
   isFilePathCodeSpan,
@@ -35,8 +31,14 @@ import { renderMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
 import { MobileMarkdownCodeChip } from './MobileMarkdownCodeChip'
 import { HOLD_DOES_NOT_OPEN } from './markdown-link-hold'
 import { MarkdownSelectionRoot } from './markdown-selection-copy'
-import { markdownProseScale, markdownZoomedLine } from './mobile-markdown-prose-scale'
+import {
+  DEFAULT_MARKDOWN_TYPOGRAPHY,
+  markdownProseScale,
+  markdownZoomedLine,
+  type MarkdownTypography
+} from './mobile-markdown-prose-scale'
 import { buildProseRuns } from './mobile-markdown-prose-runs'
+import { drawProseBlockApart, type BlocksApartContext } from './mobile-markdown-blocks-apart'
 import {
   markdownDocumentKey,
   useMarkdownCodePillRuns,
@@ -79,6 +81,9 @@ type Props = {
    *  a named file, a file pill, an image) goes to the message, so the thing
    *  under the finger does not swallow the actions sheet. */
   onLongPress?: () => void
+  /** The type this surface is set in. Only the chat transcript passes one
+   *  (TRANSCRIPT_MARKDOWN_TYPOGRAPHY); every other surface keeps the default. */
+  typography?: MarkdownTypography
 }
 
 /** What a tappable span does on a hold: nothing, so the release does not open
@@ -235,6 +240,7 @@ function renderInline(
               span={code} pieceIndex={pieceIndex}
               styles={styles}
               chipScale={pills.chipScale}
+              typography={pills.typography}
               table={pills.table}
               onPress={openFile}
               hold={hold}
@@ -289,7 +295,8 @@ function MobileMarkdownInner({
   resolveImage,
   identity,
   rangeSelectable = false,
-  onLongPress
+  onLongPress,
+  typography = DEFAULT_MARKDOWN_TYPOGRAPHY
 }: Props) {
   // Other Markdown surfaces retain their existing selection behavior.
   const androidTranscript = rangeSelectable && !INLINE_TEXT_SELECTION
@@ -297,7 +304,7 @@ function MobileMarkdownInner({
   // Interactive children own their touches and must forward the row action.
   const rowLongPress = androidTranscript ? onLongPress : undefined
   const hold: SpanHold = rowLongPress ? { onLongPress: rowLongPress } : HOLD_DOES_NOT_OPEN
-  const styles = useMarkdownStyles()
+  const styles = useMarkdownStyles(typography)
   // The document's width, for figures drawn inline in the prose run (an
   // inline view needs a size of its own; see MobileMarkdownImage).
   const [contentWidth, setContentWidth] = useState(0)
@@ -307,10 +314,13 @@ function MobileMarkdownInner({
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
   // why the line height is not simply `(size + 8) * scale`.
-  const scaled = (size: number) => markdownProseScale(size, textScale)
-  const proseScale = scaled(MARKDOWN_BASE_SIZE)
+  const proseScale = markdownProseScale(typography.prose.fontSize, textScale, typography.prose.lineHeight)
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
-  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity)
+  const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity, typography)
+  // Each block a Text of its own, a gap apart, where nothing needs a run to
+  // be one Text: the Android transcript, which has no inline selection (Orca
+  // #22871). Elsewhere a run stays one Text so a selection crosses it.
+  const blockApart = typography.blockGap !== null && !selectable
   if (!text) {
     return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
   }
@@ -321,6 +331,30 @@ function MobileMarkdownInner({
     blocks,
     (url) => isRemoteImageUrl(url) || resolveImage !== undefined
   )
+
+  // What the blocks drawn apart borrow from the document (blockApart).
+  const apart: BlocksApartContext = {
+    styles,
+    typography,
+    textScale,
+    proseScale,
+    contentWidth,
+    selectable,
+    pillRuns,
+    inline: (source, pills) => renderInline(styles, source, onOpenFile, pills, hold),
+    headingStyle: (level) => headingStyle(styles, level, textScale),
+    image: (member) => (
+      <MobileMarkdownImage
+        alt={markdownInlinePlainText(member.alt)}
+        url={member.url}
+        width={contentWidth}
+        resolve={resolveImage}
+        onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+        onLongPress={rowLongPress}
+        styles={styles}
+      />
+    )
+  }
 
   const drawn = (
     <View
@@ -338,6 +372,10 @@ function MobileMarkdownInner({
       {runs.map((run) => {
         const index = run.start
         const block = run.blocks[0]!
+        if (run.prose && blockApart) {
+          const apartBlocks = run.prose.map((member, memberIndex) => drawProseBlockApart(apart, member, `${index}:${memberIndex}`))
+          return <Fragment key={index}>{apartBlocks}</Fragment>
+        }
         if (run.prose) {
           const pills = pillRuns(`run:${index}`, contentWidth, false)
           const lastMember = run.prose.length - 1
@@ -473,8 +511,9 @@ function MobileMarkdownInner({
             headers: block.headers,
             rows: visibleRows,
             columnCount,
-            fontSize: (MARKDOWN_BASE_SIZE - 2) * textScale,
-            horizontalPadding: styles.tableCell.paddingHorizontal
+            fontSize: typography.tableCell.fontSize * textScale,
+            horizontalPadding: styles.tableCell.paddingHorizontal,
+            pill: { fontSize: typography.chip.tableFontSize * textScale, mono: typography.chip.mono }
           })
           const columns = Array.from({ length: columnCount }, (_, cellIndex) => cellIndex)
           // A pill is cut to its own cell, as a paragraph's is to its line;

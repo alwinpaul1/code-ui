@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, View } from 'react-native'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
@@ -65,6 +66,7 @@ export function MobileNativeChatReasoningNote({
             textScale={fontScale * 0.93}
             onOpenFile={onOpenFile}
             rangeSelectable
+            typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
             onLongPress={onLongPress}
           />
         </View>

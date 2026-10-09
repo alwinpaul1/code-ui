@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { androidSpScale } from './android-font-scale'
-import { codeTextWidth, cutCodePills, type CodePillFont } from './mobile-markdown-code-chip-split'
+import { codeTextWidth, cutCodePills, pillTextWidth, type CodePillFont } from './mobile-markdown-code-chip-split'
 import {
   pillFitRoom,
   pillFitScale,
@@ -13,13 +13,12 @@ import {
 } from './mobile-markdown-code-pill-fit'
 import { androidApiLevel, systemFontScale } from './system-font-scale'
 import {
-  MARKDOWN_BASE_SIZE,
+  DEFAULT_MARKDOWN_TYPOGRAPHY,
   MARKDOWN_CHIP_BORDER_WIDTH,
-  MARKDOWN_CHIP_FONT_SIZE,
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
-  MARKDOWN_TABLE_CHIP_FONT_SIZE,
   markdownChipScale,
-  type MarkdownChipScale
+  type MarkdownChipScale,
+  type MarkdownTypography
 } from './mobile-markdown-prose-scale'
 
 /** The line a span is cut to before the document has been measured. */
@@ -75,6 +74,8 @@ export type CodePillTextLayout = { nativeEvent: { lines: readonly PillLayoutLine
 export type CodePillRun = {
   table: boolean
   chipScale: MarkdownChipScale | null
+  /** The surface's type, which the pills are drawn in. */
+  typography: MarkdownTypography
   /** Tells the run the source of an inline stretch it draws, so it knows
    *  whether a code span may be in it (a backtick) before one closes. */
   noteSource: (source: string) => void
@@ -127,7 +128,9 @@ export function useMarkdownCodePillRuns(
   documentKey: string,
   /** The message the document is, when the caller has a name for it (a chat
    *  list recycles one cell for many). */
-  identity: string | undefined
+  identity: string | undefined,
+  /** The surface's type: its prose size, and its pills' size and face. */
+  typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY
 ): (textKey: string, lineWidth: number, table: boolean) => CodePillRun {
   // Live cuts per Text and width: a width it comes back to keeps its own.
   const [entries, setEntries] = useState<ReadonlyMap<string, Entry>>(() => new Map())
@@ -139,7 +142,8 @@ export function useMarkdownCodePillRuns(
   // The width each Text was last drawn at, and how many times it has come to
   // a width from another; see Entry.visit.
   const visits = useRef(new Map<string, { width: number; visit: number }>())
-  const chipScale = markdownChipScale(textScale)
+  const chipScale = markdownChipScale(textScale, typography)
+  const { chip, prose, tableCell } = typography
   const factor = chipScale?.factor ?? 1
   // The system font size (Settings > Display > Font size). A pill's text and
   // the words beside it are drawn larger by it, through Android 14's curve
@@ -162,13 +166,15 @@ export function useMarkdownCodePillRuns(
   return (textKey, lineWidth, table) => {
     const font: CodePillFont = {
       // A pill's text size in sp, drawn in dp at the system font size.
-      fontSize: sp.toDp((table ? MARKDOWN_TABLE_CHIP_FONT_SIZE : MARKDOWN_CHIP_FONT_SIZE) * factor),
+      fontSize: sp.toDp((table ? chip.tableFontSize : chip.fontSize) * factor),
+      mono: chip.mono,
       insets: 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL * factor + MARKDOWN_CHIP_BORDER_WIDTH),
       reserve: reserve?.toDp
     }
     const measured = lineWidth > 0
     const liveKey = `${textKey}|${lineWidth}`
-    const rememberKey = `${textKey}|${lineWidth}|${textScale}|${fontScale}|${documentKey}`
+    // The type is in the key: cuts learnt at one size or face are not another's.
+    const rememberKey = `${textKey}|${lineWidth}|${textScale}|${fontScale}|${prose.fontSize}|${chip.fontSize}|${chip.mono}|${documentKey}`
     const live = entries.get(liveKey)
     // A reply streaming in keeps its live cuts as it grows. A list cell
     // recycled for another message takes that message's own, if it has
@@ -182,7 +188,7 @@ export function useMarkdownCodePillRuns(
     const lineRoom = measured ? lineWidth : UNMEASURED_LINE_ROOM
     // A table cell is set at BASE - 2; both follow the zoom and the system
     // font size.
-    const proseSize = sp.toDp((table ? MARKDOWN_BASE_SIZE - 2 : MARKDOWN_BASE_SIZE) * textScale)
+    const proseSize = sp.toDp((table ? tableCell.fontSize : prose.fontSize) * textScale)
     const current: TextPillFits = { fits: entry?.fits ?? NO_FITS }
     // The scale a span with no reading of its own is cut with.
     const textScaleNow = textPillScale(current.fits)
@@ -201,7 +207,7 @@ export function useMarkdownCodePillRuns(
 
     const rememberSettled = () => {
       // Per Text and width: the same message at another width keeps its own.
-      const slot = `${textKey}|${lineWidth}|${textScale}|${fontScale}`
+      const slot = `${textKey}|${lineWidth}|${textScale}|${fontScale}|${prose.fontSize}|${chip.fontSize}|${chip.mono}`
       const previous = rememberedHere.current.get(slot)
       if (previous && previous.document !== document && sameMessage(previous, identity, document)) {
         // The same message, grown or edited: its earlier text is never
@@ -236,7 +242,7 @@ export function useMarkdownCodePillRuns(
         current,
         cut: cutWith,
         measure: {
-          textWidth: (piece) => codeTextWidth(piece, font.fontSize),
+          textWidth: (piece) => pillTextWidth(piece, font.fontSize, font.mono),
           insets: font.insets,
           reserve: reserve?.toDp,
           frame: reserve?.toSp
@@ -284,6 +290,7 @@ export function useMarkdownCodePillRuns(
     return {
       table,
       chipScale,
+      typography,
       noteSource: (source) => {
         backtick ||= source.includes('`')
       },

@@ -4,10 +4,10 @@ import { pillCopyNativeId } from './markdown-selection-copy'
 import { markdownScreenDensity, type MarkdownStyles } from './mobile-markdown-styles'
 import { systemSpScale } from './system-font-scale'
 import {
-  MARKDOWN_TABLE_CHIP_FONT_SIZE,
-  MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+  DEFAULT_MARKDOWN_TYPOGRAPHY,
   markdownChipInkRoom,
-  type MarkdownChipScale
+  type MarkdownChipScale,
+  type MarkdownTypography
 } from './mobile-markdown-prose-scale'
 
 /**
@@ -38,10 +38,14 @@ export function MobileMarkdownCodeChip({
   pieceIndex,
   styles,
   chipScale,
+  typography = DEFAULT_MARKDOWN_TYPOGRAPHY,
   table,
   onPress,
   hold = HOLD_DOES_NOT_OPEN
 }: {
+  /** The surface's type: the pill's sizes and face (the code face in the
+   *  chat transcript). `styles` was made from the same one. */
+  typography?: MarkdownTypography
   piece: string
   /** The whole code span `piece` was cut from, which a Copy puts in place of the pill. */
   span: string
@@ -59,7 +63,9 @@ export function MobileMarkdownCodeChip({
   hold?: { onLongPress: () => void } | typeof HOLD_DOES_NOT_OPEN
 }) {
   // The room for ink grows with the type, in whole pixels (see the style).
-  const inkRoom = chipScale ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp) : null
+  const inkRoom = chipScale
+    ? markdownChipInkRoom(markdownScreenDensity(), chipScale.factor, systemSpScale().toDp, typography)
+    : null
   return (
     <View
       nativeID={pillCopyNativeId(span, pieceIndex)}
@@ -88,8 +94,8 @@ export function MobileMarkdownCodeChip({
           chipScale
             ? table
               ? {
-                  fontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE * chipScale.factor,
-                  lineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT * chipScale.factor
+                  fontSize: typography.chip.tableFontSize * chipScale.factor,
+                  lineHeight: typography.chip.tableLineHeight * chipScale.factor
                 }
               : { fontSize: chipScale.fontSize, lineHeight: chipScale.lineHeight }
             : null,

@@ -2,10 +2,19 @@ import { Pressable, Text } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import {
+  TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY,
+  TRANSCRIPT_MARKDOWN_TYPOGRAPHY
+} from '../components/mobile-markdown-prose-scale'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
-import { TEXT_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
+import {
+  TEXT_SIZE,
+  USER_TEXT_LINE_HEIGHT,
+  USER_TEXT_SIZE,
+  type ChatMessageStyles
+} from './mobile-native-chat-message-styles'
 
 /** One text or image block of a message: a sent prompt as a plain bubble
  *  line, an answer as markdown, an image as a thumbnail or a chip. */
@@ -43,7 +52,7 @@ export function Prose({
         <Text
           style={[
             styles.userText,
-            { fontSize: TEXT_SIZE * fontScale, lineHeight: (TEXT_SIZE + 7) * fontScale }
+            { fontSize: USER_TEXT_SIZE * fontScale, lineHeight: USER_TEXT_LINE_HEIGHT * fontScale }
           ]}
         >
           {block.text}
@@ -57,6 +66,7 @@ export function Prose({
         onOpenFile={onOpenFile}
         identity={identity}
         rangeSelectable
+        typography={invert ? TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY : TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
         onLongPress={onLongPress}
       />
     )

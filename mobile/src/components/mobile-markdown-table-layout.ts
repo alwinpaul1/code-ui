@@ -38,11 +38,14 @@ const PILL_INSETS = 2 * (MARKDOWN_CHIP_PADDING_HORIZONTAL + MARKDOWN_CHIP_BORDER
 const PILL_CELL_EDGE = 2
 const CODE_SPAN = /`([^`]+)`/g
 
-function cellPaintedWidth(cell: string, fontSize: number): number {
+/** A pill's size, when not the cell's, and whether it is set in the code face. */
+type TablePillFace = { fontSize?: number; mono?: boolean }
+
+function cellPaintedWidth(cell: string, fontSize: number, pill: TablePillFace): number {
   let width = 0
   let prose = cell
   for (const match of cell.matchAll(CODE_SPAN)) {
-    width += Math.ceil(codePillWidth(match[1] ?? '', { fontSize, insets: PILL_INSETS })) + PILL_CELL_EDGE
+    width += Math.ceil(codePillWidth(match[1] ?? '', { fontSize: pill.fontSize ?? fontSize, mono: pill.mono, insets: PILL_INSETS })) + PILL_CELL_EDGE
     prose = prose.replace(match[0], '')
   }
   // Inline markup markers (*, _) do not paint; do not pay for them.
@@ -57,6 +60,9 @@ export function computeTableColumnWidths(args: {
   horizontalPadding: number
   minWidth?: number
   maxWidth?: number
+  /** The pills' size and face where they are not the cell's own: the chat
+   *  transcript sets them in JetBrains Mono a step smaller (2026-10-09). */
+  pill?: TablePillFace
 }): number[] {
   const min = args.minWidth ?? TABLE_CELL_MIN_WIDTH
   const max = args.maxWidth ?? TABLE_CELL_MAX_WIDTH
@@ -64,7 +70,7 @@ export function computeTableColumnWidths(args: {
   for (let column = 0; column < args.columnCount; column += 1) {
     let widest = 0
     for (const row of [args.headers, ...args.rows]) {
-      widest = Math.max(widest, cellPaintedWidth(row[column] ?? '', args.fontSize))
+      widest = Math.max(widest, cellPaintedWidth(row[column] ?? '', args.fontSize, args.pill ?? {}))
     }
     const estimate = widest + args.horizontalPadding * 2
     widths.push(Math.max(min, Math.min(max, estimate)))

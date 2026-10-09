@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import type { NativeChatTextBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { MobileNativeChatLongPressRow } from './MobileNativeChatLongPressRow'
@@ -71,6 +72,7 @@ export function MobileNativeChatNoticeRow({
           textScale={fontScale}
           onOpenFile={onOpenFile}
           rangeSelectable
+          typography={TRANSCRIPT_MARKDOWN_TYPOGRAPHY}
           onLongPress={onLongPress}
         />
       </MobileNativeChatLongPressRow>

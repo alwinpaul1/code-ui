@@ -12,13 +12,12 @@ import {
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
   MARKDOWN_CHIP_RADIUS,
-  MARKDOWN_TABLE_CELL_FONT_SIZE,
-  MARKDOWN_TABLE_CELL_LINE_HEIGHT,
   MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
-  MARKDOWN_TABLE_CHIP_FONT_SIZE,
-  MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
+  DEFAULT_MARKDOWN_TYPOGRAPHY,
   markdownChipBaselineShift,
-  markdownChipInkRoom
+  markdownChipFace,
+  markdownChipInkRoom,
+  type MarkdownTypography
 } from './mobile-markdown-prose-scale'
 export { MARKDOWN_BASE_SIZE } from './mobile-markdown-prose-scale'
 
@@ -53,10 +52,17 @@ const CODE_COPY_PADDING_VERTICAL = 2
 /** The "Copied" label's line, in sp: text does follow the font size. */
 const CODE_COPIED_LINE_HEIGHT = 14
 
-export function makeMarkdownStyles(theme: Theme) {
+export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY) {
   const { colors, fonts, radius, space } = theme
+  const { prose, chip } = typography
   const spScale = systemSpScale()
-  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, spScale.toDp)
+  const inkRoom = markdownChipInkRoom(markdownScreenDensity(), 1, spScale.toDp, typography)
+  // The pill's face: the paragraph's own, or the code face in the transcript.
+  const chipFamily = chip.mono ? fonts.mono : fonts.regular
+  const chipShift =
+    typography === DEFAULT_MARKDOWN_TYPOGRAPHY
+      ? MARKDOWN_INLINE_CHIP_BASELINE_SHIFT
+      : markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography))
   // Tall enough for "Copied" at this phone's font size, which grows with it
   // while the icon does not: a fixed 18 dp let a block grow for the 1.5 s the
   // label shows and shrink back under the reader (review, 2026-09-29).
@@ -64,19 +70,20 @@ export function makeMarkdownStyles(theme: Theme) {
     Math.max(MARKDOWN_CODE_COPY_ICON_SIZE, Math.ceil(spScale.toDp(CODE_COPIED_LINE_HEIGHT))) +
     2 * CODE_COPY_PADDING_VERTICAL
   // Between one block and the next.
-  const blockGap = space.sm + 2
+  const blockGap = typography.blockGap ?? space.sm + 2
   return StyleSheet.create({
     root: {
       gap: blockGap
     },
     paragraph: {
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_BASE_SIZE,
+      fontSize: prose.fontSize,
       // +10, not +8: a wrapped inline code pill is an inline View whose only
       // separation from the pill on the next line is this line height (Android
       // ignores an inline View's vertical margins). See the collision invariant
-      // in mobile-markdown-chip-clipping.test.ts (2026-09-14).
-      lineHeight: MARKDOWN_BASE_SIZE + 10,
+      // in mobile-markdown-chip-clipping.test.ts (2026-09-14). The transcript's
+      // own line is checked in mobile-markdown-transcript-typography.test.ts.
+      lineHeight: prose.lineHeight,
       color: colors.text
     },
     // Headings carry the document's structure, and at ~40 columns a reader
@@ -85,23 +92,14 @@ export function makeMarkdownStyles(theme: Theme) {
     // heading eating the screen; h4-h6 lean on weight alone.
     heading: {
       fontFamily: fonts.semibold,
-      fontSize: MARKDOWN_BASE_SIZE + 1,
-      lineHeight: MARKDOWN_BASE_SIZE + 9,
+      fontSize: typography.heading.fontSize,
+      lineHeight: typography.heading.lineHeight,
       color: colors.text,
       marginTop: space.xs
     },
-    headingLevel1: {
-      fontSize: MARKDOWN_BASE_SIZE + 7,
-      lineHeight: MARKDOWN_BASE_SIZE + 15
-    },
-    headingLevel2: {
-      fontSize: MARKDOWN_BASE_SIZE + 4,
-      lineHeight: MARKDOWN_BASE_SIZE + 13
-    },
-    headingLevel3: {
-      fontSize: MARKDOWN_BASE_SIZE + 2,
-      lineHeight: MARKDOWN_BASE_SIZE + 11
-    },
+    headingLevel1: { ...typography.headingLevel1 },
+    headingLevel2: { ...typography.headingLevel2 },
+    headingLevel3: { ...typography.headingLevel3 },
     bold: {
       fontFamily: fonts.semibold,
       color: colors.text
@@ -123,8 +121,8 @@ export function makeMarkdownStyles(theme: Theme) {
     // (mobile-markdown-code-chip-split.ts). Only a span with a newline in it
     // stays this nested Text. Chosen by the user on 2026-09-12 over square chips.
     inlineCode: {
-      fontFamily: fonts.regular,
-      fontSize: MARKDOWN_CHIP_FONT_SIZE,
+      fontFamily: chipFamily,
+      fontSize: chip.fontSize,
       color: colors.codeSpanText,
       // Translucent, so a selection's highlight shows through the chip; an
       // opaque one made every `code` span read as unselected (2026-09-12).
@@ -146,16 +144,16 @@ export function makeMarkdownStyles(theme: Theme) {
       // above its sentence; 2026-09-26, beside the Claude app's). This moves
       // the pill's text down to half a dp above the paragraph's baseline
       // (MARKDOWN_CHIP_LIFT).
-      transform: [{ translateY: MARKDOWN_INLINE_CHIP_BASELINE_SHIFT }]
+      transform: [{ translateY: chipShift }]
     },
     // The paragraph's own face, one step smaller, as the Claude app sets it
     // (2026-09-26); JetBrains Mono read wider and heavier than the words
     // around it. The line is the glyphs' own height and no more
     // (mobile-markdown-prose-scale.ts).
     inlineCodeChipText: {
-      fontFamily: fonts.regular,
-      fontSize: MARKDOWN_CHIP_FONT_SIZE,
-      lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
+      fontFamily: chipFamily,
+      fontSize: chip.fontSize,
+      lineHeight: chip.lineHeight,
       // Room for the font's ink past its line (accents, a comma below), which
       // the Text would clip, taken back in margin (markdownChipInkRoom).
       paddingTop: inkRoom.top,
@@ -166,9 +164,9 @@ export function makeMarkdownStyles(theme: Theme) {
     },
     /** A pill in a table cell: the cell's own size, which is smaller type. */
     inlineCodeChipTextTable: {
-      fontFamily: fonts.regular,
-      fontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE,
-      lineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT
+      fontFamily: chipFamily,
+      fontSize: chip.tableFontSize,
+      lineHeight: chip.tableLineHeight
     },
     inlineCodeLink: {
       color: colors.accentText,
@@ -191,8 +189,8 @@ export function makeMarkdownStyles(theme: Theme) {
     },
     quoteText: {
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_BASE_SIZE + 10,
+      fontSize: prose.fontSize,
+      lineHeight: prose.lineHeight,
       color: colors.text
     },
     codeBlock: {
@@ -310,14 +308,14 @@ export function makeMarkdownStyles(theme: Theme) {
       // (markdownZoomedLine).
       paddingBottom: MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_TABLE_CELL_FONT_SIZE,
+      fontSize: typography.tableCell.fontSize,
       // +10, the same headroom the paragraph carries, and for the same reason:
       // a cell is a block an inline code pill can wrap inside, and Android
       // ignores an inline View's vertical margins, so this line height is the
       // only separation there is. At +4 a Branch column that stacked two pills
       // of one split path collided and clipped them (device screenshot,
       // 2026-09-15). Pinned in mobile-markdown-chip-clipping.test.ts.
-      lineHeight: MARKDOWN_TABLE_CELL_LINE_HEIGHT,
+      lineHeight: typography.tableCell.lineHeight,
       color: colors.text
     },
     tableHeader: {
@@ -327,7 +325,7 @@ export function makeMarkdownStyles(theme: Theme) {
     tableTruncated: {
       padding: space.sm,
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_BASE_SIZE - 2,
+      fontSize: typography.tableCell.fontSize,
       color: colors.textMuted
     },
     /** A list marker inside the prose run. The list was a column of row
@@ -335,7 +333,7 @@ export function makeMarkdownStyles(theme: Theme) {
      *  is spans now (2026-09-19). */
     listMarkerInline: {
       fontFamily: fonts.mono,
-      fontSize: MARKDOWN_BASE_SIZE - 1,
+      fontSize: typography.listMarkerSize,
       color: colors.textSecondary
     },
     /** Kept for the chip-clipping fixture, which measures a list line. */
@@ -343,8 +341,8 @@ export function makeMarkdownStyles(theme: Theme) {
       flex: 1,
       minWidth: 0,
       fontFamily: fonts.regular,
-      fontSize: MARKDOWN_BASE_SIZE,
-      lineHeight: MARKDOWN_BASE_SIZE + 10,
+      fontSize: prose.fontSize,
+      lineHeight: prose.lineHeight,
       color: colors.text
     },
     /** The notice row's divider (MobileNativeChatNoticeRow); the markdown
@@ -358,7 +356,7 @@ export function makeMarkdownStyles(theme: Theme) {
 
 export type MarkdownStyles = ReturnType<typeof makeMarkdownStyles>
 
-export function useMarkdownStyles(): MarkdownStyles {
+export function useMarkdownStyles(typography: MarkdownTypography = DEFAULT_MARKDOWN_TYPOGRAPHY): MarkdownStyles {
   const theme = useTheme()
-  return useMemo(() => makeMarkdownStyles(theme), [theme])
+  return useMemo(() => makeMarkdownStyles(theme, typography), [theme, typography])
 }

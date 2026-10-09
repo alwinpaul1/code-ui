@@ -55,8 +55,29 @@ export function codeTextWidth(text: string, fontSize: number): number {
   return (units * fontSize) / 1000
 }
 
+/** JetBrains Mono's advance: 600 of its 1000 units, every glyph it has. */
+const MONO_ADVANCE = 600
+
+/** The painted width of code set in JetBrains Mono, the chat transcript's
+ *  pill face (TRANSCRIPT_MARKDOWN_TYPOGRAPHY), in dp. A character it lacks
+ *  comes from a fallback, as in codeTextWidth. */
+export function monoCodeTextWidth(text: string, fontSize: number): number {
+  let units = 0
+  for (const ch of text) {
+    units += isWide(ch.codePointAt(0) ?? 0) ? WIDE_ADVANCE : MONO_ADVANCE
+  }
+  return (units * fontSize) / 1000
+}
+
+/** A pill's text width in the face it is set in. */
+export function pillTextWidth(text: string, fontSize: number, mono: boolean | undefined): number {
+  return mono ? monoCodeTextWidth(text, fontSize) : codeTextWidth(text, fontSize)
+}
+
 export type CodePillFont = {
   fontSize: number
+  /** Set in JetBrains Mono (the chat transcript), not the paragraph's face. */
+  mono?: boolean
   /** Border and padding, both sides together. */
   insets: number
   /** How much wider than estimated the phone draws a pill's text, learnt
@@ -71,7 +92,7 @@ export type CodePillFont = {
 /** What one pill takes on the line: its text, its padding and border, and
  *  at a system font size the room RN reserves for that. */
 export function codePillWidth(text: string, font: CodePillFont): number {
-  const frame = codeTextWidth(text, font.fontSize) * (font.scale ?? 1) + font.insets
+  const frame = pillTextWidth(text, font.fontSize, font.mono) * (font.scale ?? 1) + font.insets
   return font.reserve ? font.reserve(frame) : frame
 }
 
