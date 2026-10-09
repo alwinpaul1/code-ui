@@ -82,14 +82,17 @@ describe('what is refused', () => {
     expect(contextOf(replaceRow(FULLSCREEN_160, BAND_ROW, ''))).toBeNull()
   })
 
-  it('refuses the rows above the box when nothing Claude paints separates them from the conversation', () => {
+  it('reads only the painted band above the box when no turn row separates it from the conversation', () => {
+    // Without Claude's turn row only the mod's own pill rows (one column in, a Powerline cap) of the
+    // block on the box are read; the answer's band-shaped continuation above them is not.
     const noTurnEnd = replaceRow(FULLSCREEN_160_CONTINUATION, /^✻ .* · done /, '')
-    expect(contextOf(noTurnEnd)).toBeNull()
-    // With only the quoted figure left, nothing but the missing turn row stops it being read.
+    expect(contextOf(noTurnEnd)?.usedLabel).toBe('68.8k')
+    // With only the quoted figure left, nothing reads it.
     expect(contextOf(replaceRow(noTurnEnd, BAND_ROW, ''))).toBeNull()
-    // The band at the top of the screen, nothing above it: no turn row in reach either.
+    // The band at the top of the screen, nothing above it (claude-status-line-band-without-turn-row.test.ts
+    // has the real screen this was refused on).
     const fromBand = FULLSCREEN_160.slice(FULLSCREEN_160.findLastIndex((line) => BAND_ROW.test(line)))
-    expect(contextOf(fromBand)).toBeNull()
+    expect(contextOf(fromBand)?.usedLabel).toBe('68.3k')
   })
 
   it('ignores rate-limit percents', () => {
@@ -217,13 +220,17 @@ describe('where the figure sits among the other sources', () => {
     expect(merged?.context?.usedPercent).toBe(30)
   })
 
-  it('leaves the model to the beacon: the figure names none', () => {
+  it('takes the model and effort the band opens with (the user approved it, 2026-10-09)', () => {
     expect(parseTerminalHudObservation(FULLSCREEN_160)).toMatchObject({
-      modelLabel: '',
-      modelId: null,
-      effort: null,
+      modelLabel: 'Opus 5.5',
+      modelId: 'opus',
+      effort: 'medium',
       permissionModeSeen: 'auto'
     })
+    // On a narrow pane the band drops the token figure but keeps the pair.
+    for (const narrow of [FULLSCREEN_100, FULLSCREEN_44, DEFAULT_44]) {
+      expect(parseTerminalHudObservation(narrow)).toMatchObject({ modelLabel: 'Opus 5.5', effort: 'medium', context: null })
+    }
   })
 
   it('leaves Codex alone: a figure in its conversation sets no ring', () => {

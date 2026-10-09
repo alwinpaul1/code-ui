@@ -8,10 +8,14 @@
 // figure").
 //
 // Read only where a status-line painting sits (claudeStatusLineRows): under the input box, and above
-// it between Claude Code's own turn row and the box's top rule. Refused whenever it is not one
-// unambiguous figure: two figures, a percent beside it that disagrees with it or is labelled as a
-// rate-limit window, a row cut by the painter or wrapped by the pane. The window is the one the row
-// states; nothing here derives one.
+// it between Claude Code's own turn row and the box's top rule, or with no turn row in reach, on the
+// painted pill rows of the block directly on the rule. Refused whenever it is not one unambiguous
+// figure: two figures, a percent beside it that disagrees with it or is labelled as a rate-limit
+// window, a row cut by the painter or wrapped by the pane, a subagent's pill on screen. The window is
+// the one the row states; nothing here derives one.
+//
+// The model and effort the same row opens with (`Opus 5.5 xhigh │`) are read too since the user
+// approved it later on 2026-10-09 (readClaudeStatusLineModel).
 
 import { claudeStatusLineRows, isClaudeBoxRule } from './mobile-terminal-hud-context-rows'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
@@ -124,10 +128,65 @@ export function readClaudeStatusLine(lines: readonly string[]): ClaudeStatusLine
   return read === 'refused' ? { kind: 'refused' } : read === null ? { kind: 'none' } : { kind: 'figure', context: read }
 }
 
+/** The start of a status-line row: up to three columns in, then a Powerline pill cap if the painter
+ *  draws one (usage-band: `  ` on 2.1.295, two plain spaces on the 2.1.294 captures). */
+const ROW_START = String.raw`^\s{0,3}(?:[-]\s?)?`
+/** usage-band's pill while the user views a subagent's transcript: `↳ general-purpose · Opus 5.5
+ *  medium │ ◔ 14% …`. It is drawn IN PLACE of the main session's pill (usage-band `agentContextSpec`)
+ *  and states that subagent's model, effort and window, never the session the tab is running, so a
+ *  screen showing one says nothing about the main session (Orca stream read, 2026-10-09). */
+const SUBAGENT_PILL = new RegExp(`${ROW_START}↳\\s`)
+/** The model pair a status line opens with, before its first `│`: `Opus 5.5 xhigh │` (usage-band, as
+ *  its `contextSpec` draws `<Family> <version> [<effort>] │`). */
+const MODEL_PAIR = new RegExp(`${ROW_START}(Fable|Opus|Sonnet|Haiku) (\\d+(?:\\.\\d+)*)(?: (\\S+))? │`)
+const FAMILY_IDS = { Fable: 'fable', Opus: 'opus', Sonnet: 'sonnet', Haiku: 'haiku' } as const
+/** Claude Code 2.1.295's effort levels, as its status-line payload's `effort.level` names them. */
+const STATUS_LINE_EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
+
+/** The model and effort a status line names, in the shape of the claude-hud badge's
+ *  (`mobile-terminal-hud-parse.ts`): the catalog family as the id, "Opus 5.5" as the label. */
+export type ClaudeStatusLineModelPair = {
+  modelLabel: string
+  modelId: 'fable' | 'opus' | 'sonnet' | 'haiku'
+  effort: string | null
+}
+
+/** The model pair the user's own status-line painting opens with, read off the same rows as the
+ *  figure (claudeStatusLineRows). The user approved reading it on 2026-10-09, after a hand-typed tab
+ *  showed "Opus 5.5" with no effort under a band that said `Opus 5.5 xhigh │`. Null when there is
+ *  none and when it is not one unambiguous pair: two rows naming a pair, an effort word Claude Code
+ *  does not have, or a subagent's pill on screen. A pair with no effort word is the model alone,
+ *  as the mod draws a model that takes none. */
+export function readClaudeStatusLineModel(lines: readonly string[]): ClaudeStatusLineModelPair | null {
+  const { rows } = claudeStatusLineRows(lines)
+  const pairs: ClaudeStatusLineModelPair[] = []
+  for (const index of rows) {
+    const row = lines[index] ?? ''
+    if (SUBAGENT_PILL.test(row)) {
+      return null
+    }
+    const match = MODEL_PAIR.exec(row)
+    if (!match) {
+      continue
+    }
+    const effort = match[3] ?? null
+    if (effort !== null && !STATUS_LINE_EFFORTS.has(effort)) {
+      return null
+    }
+    const family = match[1] as keyof typeof FAMILY_IDS
+    pairs.push({ modelLabel: `${family} ${match[2]!}`, modelId: FAMILY_IDS[family], effort })
+  }
+  return pairs.length === 1 ? pairs[0]! : null
+}
+
 function readFigure(lines: readonly string[]): TerminalHudContextWindow | 'refused' | null {
   const { rows, width } = claudeStatusLineRows(lines)
   if (rows.length === 0) {
     return null
+  }
+  // A subagent's pill states that subagent's window, not this session's.
+  if (rows.some((index) => SUBAGENT_PILL.test(lines[index] ?? ''))) {
+    return 'refused'
   }
   const found: { figure: Figure; index: number }[] = []
   for (const index of rows) {

@@ -1,11 +1,23 @@
 import {
   hasClaudeModeFooter,
+  permissionModeLabel,
   readTerminalPermissionMode,
   type TerminalPermissionMode
 } from './claude-terminal-mode-footer'
 import { SPINNER_VERB_SOURCE } from './mobile-terminal-spinner-line'
+import {
+  CODEX_AGENT_MODES,
+  CODEX_PLAN_HINT,
+  parseCodexAgentMode,
+  type TerminalAgentMode
+} from './codex-terminal-agent-mode'
 import { parseClaudeRunningShellCount, runningShellCountField } from './claude-footer-shell-count'
-import { readClaudeStatusLine, readClaudeStatusLineContext } from './claude-status-line-context'
+import {
+  readClaudeStatusLine,
+  readClaudeStatusLineContext,
+  readClaudeStatusLineModel,
+  type ClaudeStatusLineModelPair
+} from './claude-status-line-context'
 import {
   CODEX_STATUS_BOX_ROW,
   claudeFullscreenNoticeRow,
@@ -17,7 +29,8 @@ import {
 
 // The footer's mode and shell-count readers live beside this parser; its callers import them
 // from here.
-export { parseClaudeRunningShellCount, readTerminalPermissionMode, type TerminalPermissionMode }
+export { parseClaudeRunningShellCount, permissionModeLabel, readTerminalPermissionMode, type TerminalPermissionMode }
+export { CODEX_AGENT_MODES, parseCodexAgentMode, type TerminalAgentMode }
 
 const EFFORT_LEVELS = new Set(['low', 'medium', 'high', 'xhigh', 'max'])
 /** Read as the badge's FIRST word, never as a substring of it. */
@@ -58,27 +71,6 @@ export type TerminalHudObservation = {
    *  lead's named shells, and is their floor only up to what the lead can
    *  have (`mobile-background-task-footer.ts`). Null when the footer states none. */
   runningShellCount?: number | null
-}
-
-export type TerminalAgentMode = 'default' | 'plan'
-
-export const CODEX_AGENT_MODES: ReadonlyArray<{
-  id: TerminalAgentMode
-  label: string
-  hint: string
-}> = [
-  { id: 'default', label: 'Default', hint: 'Codex works on the task directly' },
-  { id: 'plan', label: 'Plan', hint: 'Codex writes a plan before making changes' }
-]
-
-/** Codex's Plan hint. Claude Code's own mode rows put "on" before theirs
- *  ("⏸ plan mode on (shift+tab to cycle)"), so this matches none of them. */
-const CODEX_PLAN_HINT = /Plan mode \(shift\+tab to cycle\)/
-
-/** Codex prints "Plan mode (shift+tab to cycle)" at the footer's right edge in
- *  Plan mode and nothing in Default. The last few lines are the footer. */
-export function parseCodexAgentMode(lines: readonly string[]): TerminalAgentMode {
-  return CODEX_PLAN_HINT.test(lines.slice(-4).join('\n')) ? 'plan' : 'default'
 }
 
 // Codex states its context window as what is LEFT; the ring shows what is used.
@@ -143,26 +135,6 @@ function activityField(lines: readonly string[]): { activity?: string } {
 /** The footer's mode for the pill: 'default' when no footer states one. */
 export function parseTerminalPermissionMode(lines: readonly string[]): TerminalPermissionMode {
   return readTerminalPermissionMode(lines) ?? 'default'
-}
-
-export function permissionModeLabel(mode: TerminalPermissionMode): string {
-  switch (mode) {
-    case 'default':
-    case 'manual':
-      return 'Manual'
-    case 'acceptEdits':
-      return 'Accept edits'
-    case 'plan':
-      return 'Plan'
-    case 'auto':
-      return 'Auto'
-    case 'bypassPermissions':
-      return 'Bypass'
-    default: {
-      const exhaustive: never = mode
-      return exhaustive
-    }
-  }
 }
 
 export type TerminalHudContextWindow = {
@@ -392,7 +364,8 @@ export function parseTerminalHudObservation(
   }
   // No status-line badge, but Claude Code's own footer is on screen: read the
   // context figure Claude Code paints itself once the window runs low. The
-  // model is not the screen's to state here; the beacon names it, or nothing.
+  // model is the screen's to state here only where the user's own status line
+  // names it (below); else the beacon names it, or nothing.
   // The footer is known by its hint or by its mode row: the footers captured
   // with a shell running, in manual mode, or at 46 columns paint no whole
   // "shift+tab to cycle" (review, 2026-09-30). Over a footer known only by
@@ -407,6 +380,10 @@ export function parseTerminalHudObservation(
   // paints that warning right-aligned on the row above the box, which is indented like a reply row;
   // it is told apart by sitting flush with the box's right edge (claudeFullscreenNoticeRow), and
   // only the warning is read off it (2.1.295, 2026-10-09).
+  // The model pair the user's own status line opens with (`Opus 5.5 xhigh │`, usage-band), read where
+  // its figure is read and taken in the badge's place: the screen's pair, which the beacon does not
+  // override (hud-beacon-fields.ts). The user's decision, 2026-10-09 (claude-status-line-context.ts).
+  const pair = readClaudeStatusLineModel(lines)
   const hinted = lines.slice(-6).some((line) => CLAUDE_FOOTER.test(line.replace(CODEX_PLAN_HINT, '')))
   if (hinted || hasClaudeModeFooter(lines)) {
     // The user's own status line stating `<used>/<window>` outranks Claude Code's warning: it is the
@@ -414,7 +391,7 @@ export function parseTerminalHudObservation(
     // near the end (claude-status-line-context.ts; the user's decision, 2026-10-09).
     const stated = readClaudeStatusLine(lines)
     if (stated.kind === 'figure') {
-      return claudeFooterObservation(lines, stated.context)
+      return claudeFooterObservation(lines, stated.context, pair)
     }
     // A figure the reader refused is not read by the looser patterns below either; Claude Code's own
     // warning still is.
@@ -432,9 +409,19 @@ export function parseTerminalHudObservation(
       }
       const context = parseTerminalHudContextWindow(line, { ownWarningOnly: refused || !hinted || !under })
       if (context) {
-        return claudeFooterObservation(lines, context)
+        return claudeFooterObservation(lines, context, pair)
       }
     }
+  } else {
+    // No footer row or hint on screen, but Claude Code's input box is (the status-line rows need it):
+    // the user's own status line is read off it all the same, so nothing but the box gates it.
+    const stated = readClaudeStatusLine(lines)
+    if (stated.kind === 'figure') {
+      return claudeFooterObservation(lines, stated.context, pair)
+    }
+  }
+  if (pair !== null) {
+    return claudeFooterObservation(lines, null, pair)
   }
   // No Claude badge or figure on screen; try the Codex footer, which names a
   // model, and reads its own "context left" figures the right way round.
@@ -452,15 +439,17 @@ export function parseTerminalHudObservation(
   return claudeFooterObservation(lines, null)
 }
 
-/** Claude Code's own footer with no badge above it: no model, no effort. */
+/** Claude Code's own footer with no badge above it: the model and effort only where the user's own
+ *  status line names them, else none. */
 function claudeFooterObservation(
   lines: readonly string[],
-  context: TerminalHudContextWindow | null
+  context: TerminalHudContextWindow | null,
+  pair: ClaudeStatusLineModelPair | null = null
 ): TerminalHudObservation {
   return {
-    modelLabel: '',
-    modelId: null,
-    effort: null,
+    modelLabel: pair?.modelLabel ?? '',
+    modelId: pair?.modelId ?? null,
+    effort: pair?.effort ?? null,
     context,
     ...activityField(lines),
     permissionMode: parseTerminalPermissionMode(lines),
