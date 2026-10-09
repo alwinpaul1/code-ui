@@ -203,4 +203,25 @@ describe('the collapsed row of a command that is still running', () => {
       'Running Read, src/app.ts'
     )
   })
+
+  // The row's own words for an agent and an MCP tool, not the raw call name
+  // ("Running Agent, …", "Running mcp__claude_ai_Google_Drive__get_file_metadata").
+  it.each([
+    ['an Agent call', 'Agent', { description: 'Review: story flow', prompt: 'p' }, 'Running agent, Review: story flow'],
+    ['an older Task call', 'Task', { description: 'Review: story flow', prompt: 'p' }, 'Running agent, Review: story flow'],
+    ['an agent with no description', 'Agent', { prompt: 'p' }, 'Running agent'],
+    [
+      'an MCP tool',
+      'mcp__claude_ai_Google_Drive__get_file_metadata',
+      { fileId: 'abc' },
+      'Running get file metadata'
+    ]
+  ] as const)('speaks %s in words, not its raw name', (_name, tool, input, spoken) => {
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: tool, input, state: 'running' }]
+    const label = String(header(render(blocks, 'light', blocks.find(isToolCallBlock)!)).props.accessibilityLabel)
+    expect(label.startsWith(spoken)).toBe(true)
+    expect(label).not.toContain('mcp__')
+    expect(label).not.toContain('Agent,')
+    expect(label).not.toContain('Task')
+  })
 })
