@@ -14,14 +14,13 @@ import { readClaudeScreenModelStatement, type ClaudeScreenModelStatement } from 
 import { resetSessionCommandPairCacheForTests } from './claude-session-command-pair'
 import { rememberStartupFramePair, resetStartupFramePairsForTests } from './claude-startup-frame-pair'
 import { readClaudeStartupFrame } from './claude-startup-frame'
-import { resetClaudeTranscriptModelScansForTests } from './claude-transcript-model-scan'
+import { CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS, resetClaudeTranscriptModelScansForTests } from './claude-transcript-model-scan'
 import type { ClaudeModelFallback } from './claude-transcript-model'
 import { QUOTED_IN_REPLY, WIDE_TOAST_OPUS, WIDE_TOAST_SONNET } from './fixtures/claude-model-toast-2.1.294'
 import { NARROW_SPINNER_HIGH, NARROW_SPINNER_WRAPPED, WIDE_IDLE_AFTER_TURN, WIDE_SONNET_THINKING_NO_EFFORT, WIDE_SPINNER_HIGH_AFTER_PICK, WIDE_SPINNER_XHIGH, WIDE_THOUGHT_NO_EFFORT } from './fixtures/claude-spinner-effort-2.1.294'
 import { LOGO_FRAME } from './fixtures/claude-startup-frame-2.1.290-modelled'
 import { clearPendingModelPicksForTests } from './mobile-native-chat-model-report-authority'
 import {
-  CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS,
   resetClaudeTranscriptModelPicksForTests,
   useClaudeTranscriptModel
 } from './use-claude-transcript-model'
@@ -222,8 +221,10 @@ describe('the model and effort a Claude tab with nothing set up states on its ow
     const reply = row('assistant', 'answered under Fable')
     scannedModel = 'claude-fable-5-1'
     await poll(WIDE_IDLE_AFTER_TURN, { messages: [row('user', 'hi'), row('assistant', 'hello'), reply] })
+    // The chat asked on opening, before the host had anything to say; the scan
+    // after the reply is the retry once the five minutes are up.
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS + 10)
+      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SCAN_INTERVAL_MS)
     })
     await poll(WIDE_IDLE_AFTER_TURN)
     expect(pair()).toEqual({ model: 'claude-fable-5-1', effort: null })
@@ -234,7 +235,7 @@ describe('the model and effort a Claude tab with nothing set up states on its ow
     scannedModel = 'claude-opus-5-5'
     await poll(WIDE_TOAST_SONNET)
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS + 10)
+      await vi.advanceTimersByTimeAsync(10)
     })
     await poll(WIDE_IDLE_AFTER_TURN)
     expect(pair()).toEqual({ model: 'claude-sonnet-5-5', effort: null })

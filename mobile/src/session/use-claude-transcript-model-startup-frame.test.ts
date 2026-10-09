@@ -18,7 +18,6 @@ import { LOGO_FRAME, SCROLLED_PAST, SECOND_RUN_FRAME } from './fixtures/claude-s
 import { clearPendingModelPicksForTests, notePendingModelPick } from './mobile-native-chat-model-report-authority'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import {
-  CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS,
   resetClaudeTranscriptModelPicksForTests,
   useClaudeTranscriptModel
 } from './use-claude-transcript-model'
@@ -132,7 +131,7 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
   it('shows nothing for a late attach whose screen no longer holds the frame, rather than reading the host\'s oldest rows', async () => {
     streamRows = [...LOGO_FRAME, ...SCROLLED_PAST]
     render({ messages: [] })
-    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
+    await settle(10_000)
     expect(latest).toEqual({ kind: 'none' })
     expect(peekStartupFramePair(SESSION)).toBeNull()
     expect(streamReads()).toEqual([])
@@ -146,7 +145,7 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     const runB = ['$ claude --model sonnet --effort low', ...SECOND_RUN_FRAME]
     streamRows = [...runA, ...runB]
     render({ sessionId: 'session-B', messages: [] })
-    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS * 2)
+    await settle(10_000)
     expect(peekStartupFramePair('session-B')).toBeNull()
     expect(latest).toEqual({ kind: 'none' })
     expect(streamReads()).toEqual([])
@@ -206,7 +205,7 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     rememberStartupFramePair(SESSION, readClaudeStartupFrame(LOGO_FRAME))
     scannedModel = 'claude-fable-5-1'
     render({ messages: [] })
-    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS + 10)
+    await settle(10)
     render({ messages: [] })
     await settle()
     expect(latest).toMatchObject({ kind: 'transcript', model: { model: 'claude-fable-5-1' } })
@@ -217,7 +216,7 @@ describe('a hand-typed Claude tab with no beacon and no badge', () => {
     rememberStartupFramePair(SESSION, readClaudeStartupFrame(LOGO_FRAME))
     scannedModel = 'claude-opus-5'
     render({ messages: [] })
-    await settle(CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS + 10)
+    await settle(10)
     render({ messages: [] })
     await settle()
     expect(latest).toMatchObject({ kind: 'transcript', model: { model: 'claude-opus-5' }, effort: 'xhigh' })

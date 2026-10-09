@@ -113,7 +113,6 @@ import {
   refused,
   type AnsweringClient
 } from '../agent-history/agent-history-panel.test-support'
-import { noteHostPlatform, resetHostPlatformsForTests } from '../transport/host-platform-store'
 import { consumeAgentHudBeacons, resetAgentHudBeacons } from './agent-hud-beacon'
 import { resetSessionCommandPairCacheForTests } from './claude-session-command-pair'
 import {
@@ -194,6 +193,15 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     act(() => renderer?.update(createElement(Harness)))
   }
 
+  /** The chat opened afresh on a host of its own: it asks on opening. */
+  function reopenOnNewHost(): void {
+    act(() => renderer?.unmount())
+    hostCount += 1
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+  }
+
   function pills() {
     return {
       header: controller?.nativeChatLiveModel,
@@ -205,7 +213,6 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     vi.useFakeTimers()
     vi.setSystemTime(Date.parse('2026-09-27T10:10:00.000Z'))
     resetAgentHudBeacons()
-    resetHostPlatformsForTests()
     tab.launchAgent = 'claude'
     // A host of its own per case: the five-minute budget is per host and
     // outlives the component, which is the point of it.
@@ -235,6 +242,27 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
     vi.useRealTimers()
   })
 
+  it('shows the pill on the render the scan answers in, with no timer advanced, on any host', async () => {
+    // A phone-launched tab (may beacon) and a hand-typed one (never can).
+    for (const launchAgent of ['claude', undefined]) {
+      tab.launchAgent = launchAgent
+      const before = host.sent('aiVault.listSessions').length
+      act(() => renderer?.unmount())
+      hostCount += 1
+      act(() => {
+        renderer = create(createElement(Harness))
+      })
+      await act(async () => {
+        for (let i = 0; i < 10; i += 1) {
+          await Promise.resolve()
+        }
+      })
+      expect(host.sent('aiVault.listSessions')).toHaveLength(before + 1)
+      expect(pills().composer?.label).toBe('Opus 5.5')
+      expect(pills().header?.label).toBe('Opus 5.5')
+    }
+  })
+
   it('shows the model that answered on a Windows host with no status line', async () => {
     await settle(10_000)
 
@@ -253,14 +281,18 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
   it('shows nothing when the host lists every session but this one', async () => {
     sessions = [neighbourRow]
+    const before = host.sent('aiVault.listSessions').length
+    reopenOnNewHost()
     await settle(10_000)
 
-    expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    expect(host.sent('aiVault.listSessions')).toHaveLength(before + 1)
     expect(pills().header?.model).toBeNull()
     expect(pills().composer?.model ?? null).toBeNull()
   })
 
-  it('lets the beacon win over the transcript, and asks the host nothing', async () => {
+  it('lets a beacon that speaks after the scan win over the transcript', async () => {
+    await settle(0)
+    expect(pills().header?.label).toBe('Opus 5.5')
     fakes.live = { model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium', context: null }
     fakes.liveBeacon = { modelId: 'claude-fable-5-1' }
     act(() => {
@@ -270,9 +302,17 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
       )
     })
     rerender()
+    expect(pills().header).toEqual({ model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' })
+  })
+
+  it('asks the host nothing for a chat whose beacon already speaks when it opens (a warm-start beacon)', async () => {
+    fakes.live = { model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium', context: null }
+    fakes.liveBeacon = { modelId: 'claude-fable-5-1' }
+    const before = host.sent('aiVault.listSessions').length
+    reopenOnNewHost()
     await settle(60_000)
 
-    expect(host.sent('aiVault.listSessions')).toHaveLength(0)
+    expect(host.sent('aiVault.listSessions')).toHaveLength(before)
     expect(pills().header).toEqual({ model: 'claude-fable-5-1', label: 'Fable 5.1', effort: 'medium' })
   })
 
@@ -372,70 +412,11 @@ describe('the model pills on a Claude chat whose agent states no model', () => {
 
   it('shows nothing when the host refuses the scan', async () => {
     host = createAnsweringClient(() => refused('method_not_found', 'Unknown method: aiVault.listSessions'))
-    rerender()
+    reopenOnNewHost()
     await settle(10_000)
 
     expect(host.sent('aiVault.listSessions')).toHaveLength(1)
     expect(pills().header?.model).toBeNull()
     expect(pills().composer?.model ?? null).toBeNull()
-  })
-
-  // Reported 2026-10-09: the pill and its effort came up seconds late on a
-  // hand-typed Claude tab (no launch agent, so no beacon flag) on a macOS host,
-  // because the chat waited out a settle meant for tabs that might beacon.
-  describe('how soon it asks the host', () => {
-    function render(): void {
-      act(() => renderer?.unmount())
-      act(() => {
-        renderer = create(createElement(Harness))
-      })
-    }
-
-    it('shows the model at once on a hand-typed tab, which no beacon flag reached', async () => {
-      delete tab.launchAgent
-      noteHostPlatform(hostIdNow(), 'darwin')
-      render()
-      await settle(0)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
-      expect(host.sent('aiVault.listSessions')[0]?.params).toMatchObject({ force: false })
-      expect(pills().composer?.label).toBe('Opus 5.5')
-    })
-
-    it('asks nothing on a hand-typed tab until its first screen read has landed', async () => {
-      delete tab.launchAgent
-      fakes.taskCompletions = null
-      render()
-      await settle(1_000)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
-      fakes.taskCompletions = []
-      rerender()
-      await settle(0)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
-    })
-
-    it('shows the model at once on a Windows host, which takes no beacon flag', async () => {
-      noteHostPlatform(hostIdNow(), 'win32')
-      render()
-      await settle(0)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
-      expect(pills().composer?.label).toBe('Opus 5.5')
-    })
-
-    it('still gives a phone-launched tab on a Mac one heartbeat to beacon before asking', async () => {
-      noteHostPlatform(hostIdNow(), 'darwin')
-      render()
-      await settle(5_000)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
-      await settle(500)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
-    })
-
-    it('waits the same heartbeat while the host has not yet said what it runs on', async () => {
-      render()
-      await settle(5_000)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(0)
-      await settle(500)
-      expect(host.sent('aiVault.listSessions')).toHaveLength(1)
-    })
   })
 })
