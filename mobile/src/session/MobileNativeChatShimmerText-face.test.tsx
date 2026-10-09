@@ -138,12 +138,14 @@ describe('the face a running label keeps while it shimmers', () => {
     }
   })
 
-  it('keeps the running tool row\'s "Running" in its own Regular while it sweeps, in light and dark', () => {
+  // The tool row's "Running" is the agent row's Medium (2026-10-09, matching the
+  // Claude app's row for a running command), not the Regular it first had.
+  it('keeps the running tool row\'s "Running" in Medium while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(ToolRow, scheme, 'tool-run-active-label')
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running')
-      expect(faceOf(label)).toBe(fontFamily.regular)
-      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.regular]))
+      expect(faceOf(label)).toBe(fontFamily.medium)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
     }
   })
 })

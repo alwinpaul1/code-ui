@@ -133,22 +133,6 @@ export function makeChatMessageStyles(theme: Theme) {
       fontFamily: fonts.regular,
       fontSize: 13
     },
-    // The live row that stands in for the batch summary while a call runs.
-    toolRunActive: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.sm,
-      paddingVertical: 3
-    },
-    // Hugs its words like the settled sentence, so the chevron sits after
-    // it in both states and does not jump when the run settles.
-    toolRunActiveLabel: {
-      flexShrink: 1,
-      color: colors.textSecondary,
-      fontFamily: fonts.regular,
-      fontSize: 13
-    },
     toolRunBody: {
       paddingLeft: space.sm + 2,
       borderLeftWidth: 2,

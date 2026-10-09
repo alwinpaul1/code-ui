@@ -35,6 +35,7 @@ import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState, isAgentToolName, runningAgentText } from './mobile-native-chat-agent-run'
+import { runningCallAccessibilityLabel } from './mobile-native-chat-running-call-label'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
@@ -113,7 +114,7 @@ function ToolRunView({
   blocks,
   defaultExpanded,
   expandChildren,
-  activeCall = null,
+  activeCall: turnActiveCall = null,
   taskListPredecessors,
   onOpenFile,
   onRevertHunk,
@@ -122,6 +123,10 @@ function ToolRunView({
   styles
 }: ToolRunProps) {
   const { colors } = useTheme()
+  // The turn's live call is handed to every run of the turn; only the run that
+  // holds it draws the "Running" row. Taken as given, an earlier settled run
+  // drew a second one over its own "Ran 2 commands".
+  const activeCall = turnActiveCall && blocks.includes(turnActiveCall) ? turnActiveCall : null
   const [open, setOpen] = useState(defaultExpanded)
   // The Claude-app detail sheet for whichever call was tapped, in this run or
   // one of its lines; null closes it. Kept local to the run rather than
@@ -219,11 +224,12 @@ function ToolRunView({
         <View style={styles.toolRunHeader}>
           <Pressable
             testID="tool-run-active-header"
-            style={styles.toolRunActive}
+            style={styles.toolRunToggle}
             onPress={() => setOpen((v) => !v)}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityState={{ expanded: open }}
+            accessibilityLabel={focusView ? undefined : runningCallAccessibilityLabel(activeCall)}
             accessibilityLiveRegion="polite"
           >
             <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
@@ -231,7 +237,7 @@ function ToolRunView({
               text={focusView ? countLabel : 'Running'}
               active
               color={colors.textSecondary}
-              style={styles.toolRunActiveLabel}
+              style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
               numberOfLines={1}
               testID="tool-run-active-label"
             />
