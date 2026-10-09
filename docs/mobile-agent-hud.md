@@ -1030,7 +1030,8 @@ live pair for every tab that carried no beacon.
 4. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
    under tier 3 and under the scan whenever the scan names another model.
 5. The model the host's transcript scan last read for this session
-   (`claude-transcript-model.ts`), which carries no effort.
+   (`claude-transcript-model.ts`), which carries no effort. Kept across
+   relaunches since 2026-10-09 (below, "The pill on opening a chat").
 6. Nothing.
 
 Tiers 4 and 5 are ordered by what each statement is about, not by rank: the frame
@@ -1560,8 +1561,58 @@ while mounted (`refreshInterval`); read from the binary, not timed on a device.
 | any switch | other project / other tab | frames are lost; on return the command row (newer than the held beacon) | when the chat loads; then the first beacon, at most 5 s after resubscribing |
 | any switch, no row (alt+p picker, effort keys, resume) | other project | the first beacon after return | at most 5 s after resubscribing; until then the last pair is shown |
 | any switch | app backgrounded | as other project | as above |
-| any switch | app killed | warm-start beacon and the persisted command pair, then rows, then the first beacon | rows on open; beacon at most 5 s after |
+| any switch | app killed | warm-start beacon, the persisted command pair and the persisted scan reading, then rows, then the first beacon | rows on open; beacon at most 5 s after |
 | any switch | no flag (typed-in, untrusted workspace, Windows) | command rows, the alt+p toast, the next thinking spinner | when the chat loads, the row arrives, or the screen poll sees it (1 s while working) |
+
+### The pill on opening a chat (2026-10-09)
+
+Reported on Claude Code 2.1.295, fullscreen TUI, `claude` typed by hand (no
+beacon flag), macOS host: the composer's model pill and its effort came up
+seconds after the chat opened, on every open and every relaunch. Four delays
+added up, each fixed with its own failing-first test:
+
+- **The scan's reading was memory only.** A relaunch started with nothing and
+  waited for the host again. The reading per session (host id, model id, name,
+  `freshAsOf`) is now kept in `codeui:chat-transcript-models` (32 sessions,
+  `createPersistedMap`, hydrated in `session-caches-hydrate.ts`) and stated by
+  `peekClaudeTranscriptModel` until a scan of that host succeeds in this run;
+  from then the scan alone answers, so a scan that does not list the session
+  says nothing about it. It is the SOURCE reading, not the pill: every tier
+  above it is laid over it as before, and it keeps its real `freshAsOf`, so a
+  reply newer than it still supersedes it. A malformed or unreadable store
+  starts empty and the scan still runs. The persisted spinner effort
+  (`claude-screen-model-pair.ts`) lies only over a model another tier supplies,
+  so this also brings the effort back at once on reopen.
+- **The settle was 8 s for every tab.** It exists so a tab that is about to
+  beacon never costs a scan, but a tab typed in by hand (no `launchAgent`) and
+  any tab on a Windows host (`hostTakesAgentHudFlag` false) can never beacon.
+  Those now scan at once, unforced, inside the same five-minute budget. A tab
+  launched as Claude on a host that is not Windows, or has not said what it
+  runs on (an unknown platform may be any host), waits 5.5 s: one 5 s
+  status-line beat and slack (`CLAUDE_TRANSCRIPT_MODEL_SETTLE_MS`). The
+  platform comes from the session screen's capability probe, filed per host
+  (`transport/host-platform-store.ts`).
+- **A beacon the pill could not show stood the fallback down.** The controller
+  passed `beacon: hudBeacon !== null`, which checks the session id but not
+  liveness. A hand-started `claude -c` keeps the session id of a
+  phone-launched process that beaconed before it (2.1.276, above), so its
+  written-off beacon, or a live one naming no model, made the fallback stand
+  down while the HUD showed nothing from it: a blank pill until the next
+  beacon, which never came. The controller now passes whether the HUD's
+  liveness-checked beacon (`liveBeacon`) names a model.
+- **A failed first screen read cost a whole idle poll.** When a watch's first
+  `terminal.read` failed, was refused or came from the stream fallback (relay
+  still settling), the badge, spinner and toast waited 5 s. The first read is
+  now retried once after 1 s (`HUD_FIRST_READ_RETRY_MS`); a host that stays
+  down is read at the poll's cadence after that, never in a loop.
+
+Not changed: a tab with nothing kept for its session (first view on this
+device, a hand-typed session that has not answered yet) still shows nothing
+until the scan answers, which is now at once on such a tab. Seen while doing
+this and not fixed (read from the code, not proven by a test):
+`beaconStoredAt` is still taken from the session-matched beacon rather than the
+liveness-checked one, so with a written-off beacon and a badge stating the same
+model, a command row first seen after that dead beacon may outrank the badge.
 
 ### Tests must never reach a real terminal (2026-10-06)
 
