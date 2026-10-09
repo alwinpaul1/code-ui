@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Keyboard, View } from 'react-native'
-import { ChevronLeft, X } from 'lucide-react-native'
+import { ArrowLeft, X } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { useTheme } from '../theme/theme-context'
 import { sessionModelPillLabel } from './session-model-pill'
 import { matchClaudeCatalogModelId } from './claude-model-identity'
 import { IconButton } from '../ui/IconButton'
-import { Surface } from '../ui/Surface'
 import { Txt } from '../ui/Txt'
 import type {
   SessionOptionDescriptor,
+  SessionOptionSelectChoice,
   SessionOptionValue
 } from '../../../src/shared/native-chat-session-options'
 import {
@@ -21,6 +21,8 @@ import {
 import {
   DescriptorRows,
   Pill,
+  RowGroup,
+  tileColour,
   SessionOptionCaption,
   SessionOptionSummaryRow
 } from './MobileNativeChatSessionOptionRows'
@@ -29,6 +31,7 @@ import { sortNativeChatSessionOptions } from '../../../src/shared/native-chat-se
 import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
 import type { PickFailureReport } from './session-option-pick-failure'
 import { useSheetFailure } from './use-sheet-failure'
+import { modelSheetLayout } from './model-sheet-layout'
 
 /** Descriptor id of the per-model effort option in every agent catalog. */
 const EFFORT_OPTION_ID = 'effort'
@@ -63,6 +66,9 @@ export type MobileNativeChatSessionOptionPickersProps = {
   modelsPending?: boolean
   /** The user tapped the pill to open the sheet. */
   onOpen?: () => void
+  /** The list is Claude Code's own, laid out as the Claude app's picker
+   *  (model-sheet-layout.ts). Every other agent's list is drawn flat. */
+  claudeModelLayout?: boolean
 }
 
 /** Combined model/session-option trigger and its mobile bottom drawer. */
@@ -102,6 +108,16 @@ function withRunningModelSelected(
   return { ...descriptor, kind: { ...descriptor.kind, currentValue: row } }
 }
 
+/** The model descriptor showing one page of its rows; the checked value stays. */
+function withChoices(
+  descriptor: SessionOptionDescriptor,
+  choices: SessionOptionSelectChoice[]
+): SessionOptionDescriptor {
+  return descriptor.kind.type === 'select'
+    ? { ...descriptor, kind: { ...descriptor.kind, choices } }
+    : descriptor
+}
+
 export function MobileNativeChatSessionOptionPickers({
   controller,
   isWorking,
@@ -111,10 +127,13 @@ export function MobileNativeChatSessionOptionPickers({
   openRequest = 0,
   modelsPending = false,
   liveModel,
-  onOpen
+  onOpen,
+  claudeModelLayout = false
 }: MobileNativeChatSessionOptionPickersProps): React.JSX.Element | null {
-  const { colors, space } = useTheme()
+  const { colors, space, isDark } = useTheme()
   const [openDescriptorId, setOpenDescriptorId] = useState<string | null>(null)
+  // The model view's second page: the rows the first page leaves out.
+  const [morePage, setMorePage] = useState(false)
   const [lastRequest, setLastRequest] = useState(controller.optionPickerRequest)
   if (controller.optionPickerRequest && lastRequest !== controller.optionPickerRequest) {
     setLastRequest(controller.optionPickerRequest)
@@ -157,17 +176,35 @@ export function MobileNativeChatSessionOptionPickers({
   const optionsLabel = options.length > 0 ? mobileOptionsPillLabel(options) || null : null
   const pillLabel = live ?? (optionsLabel ? `${modelLabel} ${optionsLabel}` : modelLabel)
   const reason = mobileSessionOptionDisabledReason(activeDescriptor?.disabledReason)
+  // The running model decides the checked row on both pages, so the layout is
+  // cut from the descriptor that already carries it.
+  const modelShown = withRunningModelSelected(model, model.id, liveModel)
+  const layout =
+    claudeModelLayout && modelShown.kind.type === 'select'
+      ? modelSheetLayout(modelShown.kind.choices)
+      : null
+  const onMorePage = modelView && morePage && layout !== null
+  // Why the More models row names a pick: with the running model on the
+  // second page, the first page checks nothing, and the row is where it is.
+  const runningValue = modelShown.kind.type === 'select' ? modelShown.kind.currentValue : undefined
+  const moreSelectedLabel =
+    layout?.more.find((choice) => choice.value === runningValue)?.label ?? null
 
   // Another view of the drawer drops the failure the user read in this one.
   // Closing leaves it to use-sheet-failure.ts, which drops it if
   // it has been read and hands it to the chat's banner if not.
-  const showView = (id: string): void => {
+  const showView = (id: string, more = false): void => {
     failure.clear()
+    setMorePage(more)
     setOpenDescriptorId(id)
   }
-  const closePicker = (): void => setOpenDescriptorId(null)
+  const closePicker = (): void => {
+    setMorePage(false)
+    setOpenDescriptorId(null)
+  }
   const openPicker = (): void => {
     Keyboard.dismiss()
+    setMorePage(false)
     setOpenDescriptorId(model.id)
     onOpen?.()
   }
@@ -179,6 +216,7 @@ export function MobileNativeChatSessionOptionPickers({
   // what the pick said (an ack that was lost): it stays in the drawer, or goes to
   // the banner once the drawer has closed.
   const afterApply = (descriptor: SessionOptionDescriptor): void => {
+    setMorePage(false)
     setOpenDescriptorId(descriptor.id === model.id ? EFFORT_OPTION_ID : null)
   }
 
@@ -221,15 +259,19 @@ export function MobileNativeChatSessionOptionPickers({
           <View style={{ paddingBottom: space.xs }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingBottom: space.lg }}>
               <IconButton
-                icon={modelView ? X : ChevronLeft}
-                accessibilityLabel={modelView ? 'Close picker' : 'Back to models'}
-                variant="soft"
+                icon={modelView && !onMorePage ? X : ArrowLeft}
+                accessibilityLabel={modelView && !onMorePage ? 'Close picker' : 'Back to models'}
+                variant="ghost"
                 size={36}
-                iconSize={18}
-                onPress={modelView ? closePicker : () => showView(model.id)}
+                iconSize={22}
+                onPress={modelView && !onMorePage ? closePicker : () => showView(model.id)}
               />
               <Txt variant="title" weight="semibold" align="center" style={{ flex: 1 }}>
-                {modelView ? 'Select model' : `Select ${activeDescriptor.label.toLowerCase()}`}
+                {onMorePage
+                  ? 'More models'
+                  : modelView
+                    ? 'Select model'
+                    : `Select ${activeDescriptor.label.toLowerCase()}`}
               </Txt>
               <View
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
@@ -248,7 +290,7 @@ export function MobileNativeChatSessionOptionPickers({
               <SessionOptionCaption>Sent to the agent — not confirmed</SessionOptionCaption>
             ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
-            <Surface level="raised" bordered rounded="lg" style={{ overflow: 'hidden' }}>
+            <RowGroup>
               {modelView && modelsPending ? (
                 <View
                   accessibilityRole="progressbar"
@@ -260,7 +302,8 @@ export function MobileNativeChatSessionOptionPickers({
                     alignItems: 'center',
                     gap: space.sm,
                     paddingHorizontal: space.md,
-                    paddingVertical: space.md
+                    paddingVertical: space.md,
+                    backgroundColor: tileColour(colors, isDark)
                   }}
                 >
                   <ActivityIndicator size="small" color={colors.textSecondary} />
@@ -272,32 +315,42 @@ export function MobileNativeChatSessionOptionPickers({
                 </View>
               ) : (
                 <DescriptorRows
-                  descriptor={withRunningModelSelected(activeDescriptor, model.id, liveModel)}
+                  descriptor={
+                    modelView && layout
+                      ? withChoices(modelShown, onMorePage ? layout.more : layout.featured)
+                      : withRunningModelSelected(activeDescriptor, model.id, liveModel)
+                  }
                   disabled={disabled}
                   grouped
                   onSetOption={(value) => applyOption(activeDescriptor, value)}
                   onInvokeAction={() => invokeAction(activeDescriptor)}
                 />
               )}
-            </Surface>
-            {modelView && options.length > 0 ? (
-              <Surface
-                level="raised"
-                bordered
-                rounded="lg"
-                style={{ overflow: 'hidden', marginTop: space.md }}
-              >
-                {options.map((descriptor, index) => (
+            </RowGroup>
+            {modelView && !onMorePage && options.length > 0 ? (
+              <RowGroup style={{ marginTop: space.md }}>
+                {options.map((descriptor) => (
                   <SessionOptionSummaryRow
                     key={descriptor.id}
                     label={descriptor.label}
                     value={mobileSessionOptionSummaryValue(descriptor)}
                     disabled={disabled}
-                    divided={index < options.length - 1}
+                    divided={false}
                     onPress={() => showView(descriptor.id)}
                   />
                 ))}
-              </Surface>
+              </RowGroup>
+            ) : null}
+            {modelView && !onMorePage && !modelsPending && layout && layout.more.length > 0 ? (
+              <RowGroup style={{ marginTop: space.md }}>
+                <SessionOptionSummaryRow
+                  label="More models"
+                  value={moreSelectedLabel ?? ''}
+                  disabled={false}
+                  divided={false}
+                  onPress={() => showView(model.id, true)}
+                />
+              </RowGroup>
             ) : null}
           </View>
         ) : null}

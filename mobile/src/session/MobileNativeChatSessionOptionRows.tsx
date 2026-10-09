@@ -96,7 +96,8 @@ function RowBase({
   onPress: () => void
   children: React.ReactNode
 }) {
-  const { colors, radius, space } = useTheme()
+  const { colors, radius, space, isDark } = useTheme()
+  const tile = tileColour(colors, isDark)
   return (
     <Pressable
       accessibilityRole={accessibilityRole}
@@ -104,11 +105,15 @@ function RowBase({
       style={({ pressed }) => ({
         flexDirection: 'row',
         gap: space.sm + 2,
-        padding: space.md,
-        minHeight: 46,
+        paddingHorizontal: space.md,
+        paddingVertical: space.md - 2,
+        minHeight: 56,
         alignItems: 'center',
+        // Why every grouped row paints its own surface: the group draws its
+        // rows as tiles with the sheet showing through the gaps between them
+        // (the Claude app's picker), not as one card cut by divider lines.
         borderRadius: grouped ? 0 : radius.md,
-        backgroundColor: pressed ? colors.bgSunken : grouped ? 'transparent' : colors.bgRaised,
+        backgroundColor: pressed ? colors.bgSunken : tile,
         borderWidth: grouped ? 0 : 1,
         borderColor: selected ? colors.accent : colors.border,
         borderBottomWidth: divided ? 1 : grouped ? 0 : 1,
@@ -124,22 +129,40 @@ function RowBase({
   )
 }
 
-function Radio({ selected }: { selected: boolean }) {
-  const { colors } = useTheme()
+/**
+ * A row tile's surface. Dark draws bgRaised on the sheet, as the Claude app
+ * does. In light, bgRaised on the sheet read 1.09:1 (review, 2026-10-09), so
+ * light tiles are the paler panel colour and the group's border colour
+ * outlines them through the gaps.
+ */
+export function tileColour(colors: { bgPanel: string; bgRaised: string }, isDark: boolean): string {
+  return isDark ? colors.bgRaised : colors.bgPanel
+}
+
+/** Tiles for grouped rows: rounded as one block, the border colour between them. */
+export function RowGroup({
+  children,
+  style
+}: {
+  children: React.ReactNode
+  style?: { marginTop?: number }
+}): React.JSX.Element {
+  const { colors, radius } = useTheme()
   return (
     <View
-      style={{
-        width: 20,
-        height: 20,
-        borderRadius: 10,
-        borderWidth: 1.5,
-        borderColor: selected ? colors.accent : colors.textMuted,
-        backgroundColor: selected ? colors.accent : 'transparent',
-        alignItems: 'center',
-        justifyContent: 'center'
-      }}
+      style={[
+        {
+          borderRadius: radius.lg,
+          overflow: 'hidden',
+          gap: 1,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: colors.border
+        },
+        style
+      ]}
     >
-      {selected ? <Check size={12} color={colors.onAccent} strokeWidth={3} /> : null}
+      {children}
     </View>
   )
 }
@@ -161,6 +184,7 @@ function ChoiceRow({
   divided: boolean
   onPress: () => void
 }): React.JSX.Element {
+  const { colors } = useTheme()
   return (
     <RowBase
       selected={selected}
@@ -170,17 +194,17 @@ function ChoiceRow({
       accessibilityRole="radio"
       onPress={onPress}
     >
-      <Radio selected={selected} />
       <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="body" weight="medium" numberOfLines={1}>
+        <Txt variant="heading" weight="regular" numberOfLines={1}>
           {label}
         </Txt>
         {description ? (
-          <Txt variant="caption" tone="secondary" numberOfLines={2}>
+          <Txt variant="body" tone="secondary" numberOfLines={2}>
             {description}
           </Txt>
         ) : null}
       </View>
+      {selected ? <Check size={22} color={colors.accent} strokeWidth={2.2} /> : null}
     </RowBase>
   )
 }
@@ -206,7 +230,7 @@ function ToggleRow({
   grouped: boolean
   onToggle: (next: boolean) => void
 }): React.JSX.Element {
-  const { colors, radius, space } = useTheme()
+  const { colors, radius, space, isDark } = useTheme()
   return (
     <View
       style={{
@@ -216,7 +240,7 @@ function ToggleRow({
         minHeight: 46,
         alignItems: 'center',
         borderRadius: grouped ? 0 : radius.md,
-        backgroundColor: grouped ? 'transparent' : colors.bgRaised,
+        backgroundColor: tileColour(colors, isDark),
         borderWidth: grouped ? 0 : 1,
         borderColor: colors.border,
         marginBottom: grouped ? 0 : space.xs,
@@ -286,14 +310,14 @@ export function SessionOptionSummaryRow({
   divided: boolean
   onPress: () => void
 }): React.JSX.Element {
-  const { colors, space } = useTheme()
+  const { colors, space, isDark } = useTheme()
   return (
     <Pressable
-      accessibilityLabel={`${label}, ${value}`}
+      accessibilityLabel={value ? `${label}, ${value}` : label}
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       style={({ pressed }) => ({
-        minHeight: 50,
+        minHeight: 56,
         flexDirection: 'row',
         alignItems: 'center',
         gap: space.sm,
@@ -301,19 +325,21 @@ export function SessionOptionSummaryRow({
         paddingVertical: space.sm,
         borderBottomWidth: divided ? 1 : 0,
         borderBottomColor: colors.border,
-        backgroundColor: pressed && !disabled ? colors.bgSunken : 'transparent',
+        backgroundColor: pressed && !disabled ? colors.bgSunken : tileColour(colors, isDark),
         opacity: disabled ? 0.5 : 1
       })}
       onPress={onPress}
       disabled={disabled}
     >
-      <Txt variant="body" weight="medium" style={{ flex: 1 }}>
+      <Txt variant="heading" weight="regular" style={{ flex: 1 }}>
         {label}
       </Txt>
-      <Txt variant="body" tone="secondary" numberOfLines={1} style={{ maxWidth: 160 }}>
-        {value}
-      </Txt>
-      <ChevronRight size={16} color={colors.textMuted} strokeWidth={2.2} />
+      {value ? (
+        <Txt variant="heading" weight="regular" tone="secondary" numberOfLines={1} style={{ maxWidth: 160 }}>
+          {value}
+        </Txt>
+      ) : null}
+      <ChevronRight size={18} color={colors.textMuted} strokeWidth={2.2} />
     </Pressable>
   )
 }
@@ -372,7 +398,7 @@ export function DescriptorRows({
   const { currentValue, choices } = descriptor.kind
   return (
     <>
-      {choices.map((choice, index) => (
+      {choices.map((choice) => (
         <ChoiceRow
           key={choice.value}
           label={choice.label}
@@ -380,7 +406,7 @@ export function DescriptorRows({
           selected={choice.value === currentValue}
           disabled={locked}
           grouped={grouped}
-          divided={grouped && index < choices.length - 1}
+          divided={false}
           onPress={() => onSetOption(choice.value)}
         />
       ))}

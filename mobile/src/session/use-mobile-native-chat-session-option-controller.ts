@@ -211,11 +211,13 @@ export function useMobileNativeChatSessionOptionController(args: {
                 !reportedModel && transcriptModel?.kind === 'transcript'
                   ? { model: transcriptModel.model.model, label: transcriptModel.model.label, effort: transcriptModel.effort ?? null }
                   : { model: reportedModel, label: reportedModelLabel ?? null, effort: reportedEffort ?? null },
-              onOpen: onModelSheetOpen
+              onOpen: onModelSheetOpen,
+              claudeModelLayout: agent === 'claude'
             }
           : null,
     [
       activeChatStructured,
+      agent,
       codex.modelsPending,
       isWorking,
       onFailure,
