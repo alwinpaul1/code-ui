@@ -209,9 +209,44 @@ describe('the agent the collapsed row names', () => {
     expect(agentRunState(blocks, idle).subject).toBe('two')
   })
 
-  it('falls back to the last agent launched when none is known to run on its own', () => {
+  it('falls back to the last agent call with no answer when none is known to run on its own', () => {
     const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'completed')]
     expect(agentRunState(blocks, { ...idle, agentWorking: true }).subject).toBe('two')
+  })
+
+  // Review, 2026-10-09: with no running call tied to an agent id (no roster,
+  // or parallel foreground agents whose calls are not marked running), the
+  // subject fell back to the LAST call, which had already answered:
+  // "Running agent: Beta" over a finished Beta while Alpha still ran.
+  describe('when no call is tied to a running agent', () => {
+    const alpha = (callId?: string): NativeChatBlock => ({ type: 'tool-call', name: 'Agent', input: { description: 'Alpha' }, ...(callId ? { callId } : {}) })
+    const beta = (callId?: string): NativeChatBlock => ({ type: 'tool-call', name: 'Agent', input: { description: 'Beta' }, ...(callId ? { callId } : {}) })
+    const betaDone = (callId?: string): NativeChatBlock => ({ type: 'tool-result', output: 'Beta finished: all checks pass.', ...(callId ? { callId } : {}) })
+    const probe = { runningIds: new Set(['alpha-agent']), confirmed: new Map<string, string>(), agentWorking: true }
+
+    it('never names an agent whose call has its answer', () => {
+      const state = agentRunState([alpha(), beta(), betaDone()], probe)
+      expect(state.running).toBe(true)
+      expect(state.subject).not.toBe('Beta')
+    })
+
+    it('names the agent still unanswered when the results say which call they answer', () => {
+      expect(agentRunState([alpha('t1'), beta('t2'), betaDone('t2')], probe).subject).toBe('Alpha')
+    })
+
+    it('reads the bare label when the answers cannot say which agent is left', () => {
+      // No call ids: the one answer could be Alpha's or Beta's.
+      expect(agentRunState([alpha(), beta(), betaDone()], probe).subject).toBeNull()
+    })
+
+    it('names the last agent launched after the only answer came', () => {
+      const gamma: NativeChatBlock = { type: 'tool-call', name: 'Agent', input: { description: 'Gamma' } }
+      expect(agentRunState([alpha(), betaDone(), gamma], probe).subject).toBe('Gamma')
+    })
+
+    it('reads the bare label when every agent has answered', () => {
+      expect(agentRunState([alpha('t1'), { type: 'tool-result', output: 'done', callId: 't1' }], probe).subject).toBeNull()
+    })
   })
 
   it('is the one agent of a run of one', () => {

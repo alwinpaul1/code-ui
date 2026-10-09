@@ -35,8 +35,11 @@ export type NativeChatAgentRunState = {
   entries: NativeChatAgentRunEntry[]
   /** What the collapsed row names while the run works, the way the Claude app's
    *  reads "Running agent: Review: story flow" (2026-10-09): the first agent of
-   *  the run that is known to still run, else the last one launched. Null where
-   *  the run's agents name nothing (a call with no description, name or type). */
+   *  the run that is known to still run, else the last agent call the run's own
+   *  results show unanswered. Never a call that has its answer: falling back to
+   *  the last call named a finished agent while another ran (review,
+   *  2026-10-09). Null where no agent is known to run, or it names nothing (a
+   *  call with no description, name or type). */
   subject: string | null
 }
 
@@ -98,6 +101,41 @@ function hasUnansweredAgent(blocks: readonly NativeChatBlock[]): boolean {
   return agentsWithoutResult > strayLaunches
 }
 
+/** The agent calls of a run (by their index among its Agent/Task calls) that
+ *  its results show to be still unanswered, oldest first. A result that names
+ *  its call (`callId`) answers that call. One that does not answers the oldest
+ *  open call, as `pairToolBlocks` pairs it, which is only certain while one
+ *  call is open: with two or more, it may have answered any of them, so none
+ *  of those is offered. A call made after it is certain again. */
+function unansweredAgentCalls(blocks: readonly NativeChatBlock[]): number[] {
+  const open: { agentIndex: number | null; callId: string | undefined; certain: boolean }[] = []
+  let agentIndex = 0
+  for (const block of blocks) {
+    if (isToolCallBlock(block)) {
+      open.push({
+        agentIndex: AGENT_TOOLS.has(block.name) ? agentIndex++ : null,
+        callId: block.callId,
+        certain: true
+      })
+    } else if (isToolResultBlock(block)) {
+      if (block.callId !== undefined) {
+        const answered = open.findIndex((call) => call.callId === block.callId)
+        if (answered !== -1) {
+          open.splice(answered, 1)
+        }
+        continue
+      }
+      if (open.length > 1) {
+        for (const call of open) {
+          call.certain = false
+        }
+      }
+      open.shift()
+    }
+  }
+  return open.flatMap((call) => (call.certain && call.agentIndex !== null ? [call.agentIndex] : []))
+}
+
 export function agentRunState(
   blocks: readonly NativeChatBlock[],
   inputs: NativeChatAgentRunInputs
@@ -137,6 +175,7 @@ export function agentRunState(
   const stillRunning = calls.findIndex(
     (call, index) => call.live || (entries[index]!.agentId !== null && inputs.runningIds.has(entries[index]!.agentId!))
   )
-  const subjectCall = calls[stillRunning !== -1 ? stillRunning : calls.length - 1]
+  const subjectIndex = stillRunning !== -1 ? stillRunning : unansweredAgentCalls(blocks).at(-1)
+  const subjectCall = subjectIndex === undefined ? undefined : calls[subjectIndex]
   return { running, entries, subject: subjectCall?.named ? subjectCall.title : null }
 }
