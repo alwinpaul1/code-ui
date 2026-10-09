@@ -75,7 +75,7 @@ describe("the host session scan behind a Windows session's model pill", () => {
     expect(peekClaudeTranscriptModel(HOST, SESSION)?.freshAsOf).toBe(T0)
   })
 
-  it('skips a second scan of the same host within five minutes of the first', async () => {
+  it('skips a second scan of the same folder within five minutes of the first', async () => {
     const host = answering(() => ok({ sessions: [opusRow], issues: [] }))
     await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: T0 })
 
@@ -83,11 +83,12 @@ describe("the host session scan behind a Windows session's model pill", () => {
     expect(await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: soon })).toBe(
       'throttled'
     )
-    // Another worktree on the same host is the same desktop doing the work.
+    // Another project's folder has a budget of its own (2026-10-09): a scan of
+    // one folder says nothing about sessions in another.
     expect(
       await requestClaudeTranscriptModelScan(host.client, HOST, 'repo-1::C:\\other', { now: soon })
-    ).toBe('throttled')
-    expect(host.sent('aiVault.listSessions')).toHaveLength(1)
+    ).toBe('scanned')
+    expect(host.sent('aiVault.listSessions')).toHaveLength(2)
     // What the first scan said still answers while the second waits.
     expect(peekClaudeTranscriptModel(HOST, SESSION)?.label).toBe('Opus 5.5')
 
@@ -95,7 +96,7 @@ describe("the host session scan behind a Windows session's model pill", () => {
     expect(await requestClaudeTranscriptModelScan(host.client, HOST, WORKTREE, { now: later })).toBe(
       'scanned'
     )
-    expect(host.sent('aiVault.listSessions')).toHaveLength(2)
+    expect(host.sent('aiVault.listSessions')).toHaveLength(3)
   })
 
   it('keeps each host on its own clock', async () => {

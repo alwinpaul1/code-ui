@@ -94,8 +94,7 @@ describe('the model reading a relaunched app shows before it asks the host again
   })
 
   // Review, 2026-10-09: a scan is asked for ONE folder and 20 rows, so a scan
-  // of another project on the same host says nothing about this session, and
-  // the five-minute budget then holds this chat's own scan back.
+  // of another project on the same host says nothing about this session.
   it('keeps the remembered reading when a scan of another folder does not list the session', async () => {
     await scanOpusAndRelaunch()
 
@@ -103,7 +102,8 @@ describe('the model reading a relaunched app shows before it asks the host again
       ok({ sessions: [historySession({ sessionId: 'other-session', cwd: '/Users/alwin/other', model: 'claude-sonnet-5-5' })], issues: [] })
     )
     await requestClaudeTranscriptModelScan(otherFolder.client, HOST, 'repo-2::/Users/alwin/other', { now: T0 + 2_000 })
-    expect(await requestClaudeTranscriptModelScan(otherFolder.client, HOST, WORKTREE, { now: T0 + 3_000 })).toBe('throttled')
+    // This folder's own scan answers without the session too (past its 20 rows).
+    await requestClaudeTranscriptModelScan(otherFolder.client, HOST, WORKTREE, { now: T0 + 3_000 })
     expect(peekClaudeTranscriptModel(HOST, SESSION)).toEqual({
       model: 'claude-opus-5-5',
       label: 'Opus 5.5',
