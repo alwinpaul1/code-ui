@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.295
+▝▜██████▀  Opus 5.5 · Claude Max
+ ▝▝   ▝▝   ~/…/agent-a65e6f79263ffffc0
+
+⚠ Your login expires in 3 days · run /login
+  to renew
+
+❯ Reply with just the word ok.
+
+⏺ ok
+
+  session:ok
+
+✻ Cogitated for 2s · done 11:20 AM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+               Context low (22% remaining)
+────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · …
