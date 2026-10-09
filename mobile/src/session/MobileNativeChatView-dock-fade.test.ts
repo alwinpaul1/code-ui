@@ -127,10 +127,10 @@ describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session,
     ]
     await act(async () => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(MobileNativeChatView, {
+        createElement(ThemeProvider, {
+          initialPreference: scheme,
+          // oxlint-disable-next-line react/no-children-prop -- a .ts file has no JSX, and ThemeProvider types children as required, so createElement only type-checks with them in props.
+          children: createElement(MobileNativeChatView, {
             messages,
             folded: messages,
             status: 'ready',
@@ -143,7 +143,7 @@ describe.each(['light', 'dark'] as const)('MobileNativeChatView in a %s session,
             composerText: '',
             onComposerTextChange: vi.fn()
           })
-        )
+        })
       )
     })
     const dock = renderer!.root.find((node) => node.props.testID === 'native-chat-dock')
