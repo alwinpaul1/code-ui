@@ -3,8 +3,10 @@ import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { MAC_HOST_COMMAND_DONE_PATTERN, readMacHostRefusal } from './mac-host-commands'
+import { MAC_HOST_COMMAND_DONE_PATTERN, MAC_HOST_REFUSAL_REASONS, readMacHostRefusal } from './mac-host-commands'
+import { WINDOWS_HOST_COMMAND_TIMEOUT_MS } from './run-mac-host-command'
 import {
+  DISPLAY_OFF_WAIT_MS,
   WINDOWS_AUDIO_TYPE,
   WINDOWS_HOST_ACTION_LABELS,
   buildWindowsHostCommand,
@@ -14,8 +16,10 @@ import {
 import {
   DISPLAY_OFF_READY_EVENT,
   DISPLAY_WAKE_EVENT,
+  OFF_WITHIN_MS,
   WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT,
-  WINDOWS_DISPLAY_OFF_KEEPER_MEMBERS
+  WINDOWS_DISPLAY_OFF_KEEPER_MEMBERS,
+  WINDOWS_VIDEO_IDLE_UNSTICK_MEMBERS
 } from './windows-display-off-keeper'
 import {
   WINDOWS_DISPLAY_NAMESPACE,
@@ -41,7 +45,8 @@ describe('the Windows host commands', () => {
 
   it.each(ACTIONS)('sends %s as one quote-free encoded PowerShell call, whatever shell the PC runs', (action) => {
     const command = buildWindowsHostCommand(action)
-    expect(command).toMatch(/^powershell -NoProfile -NonInteractive -EncodedCommand [A-Za-z0-9+/=]+$/)
+    // -nop, -noni, -enc: -NoProfile, -NonInteractive, -EncodedCommand (for cmd.exe's 8,191).
+    expect(command).toMatch(/^powershell -nop -noni -enc [A-Za-z0-9+/=]+$/)
     expect(decode(command)).toBe(windowsHostScript(action))
   })
 
@@ -95,19 +100,24 @@ describe('the Windows host commands', () => {
 
     it('starts the keeper hidden and detached, encoding it on the PC rather than embedding base64', () => {
       expect(branch).toContain('[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(')
-      expect(branch).toContain(
-        "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$k"
-      )
+      // start: Start-Process; -Win, -Args: -WindowStyle, -ArgumentList; -nop, -noni,
+      // -enc: -NoProfile, -NonInteractive, -EncodedCommand (cut for cmd.exe's 8,191).
+      expect(branch).toContain("start powershell -Win Hidden -Args '-nop','-noni','-enc',$k")
       // The outer command is base64 already; base64 inside it would cost 2.7x again.
       expect(script).not.toMatch(/[A-Za-z0-9+/]{120,}/)
       // The keeper the PC encodes is exactly the keeper this repo tests.
       expect(keeper.replace(/''/g, "'")).toBe(WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT)
     })
 
-    it('waits for the keeper to say it holds the PC before printing done, and refuses otherwise', () => {
-      const ready = outer.indexOf(`Threading.EventWaitHandle($false,'ManualReset','${DISPLAY_OFF_READY_EVENT}')`)
-      const start = outer.indexOf('Start-Process')
-      const wait = outer.indexOf('.WaitOne(')
+    // 2026-10-10: the display goes off by Windows' own idle timeout now, a second or
+    // more after the keeper starts, so done waits for the display itself: the
+    // keeper sets the event only once the display reported off. The wait outlasts
+    // the keeper's own off window and still ends inside the phone's 15 s.
+    it('prints done only once the display reported off, and refuses otherwise', () => {
+      // 0 and 1: $false (not set) and ManualReset.
+      const ready = outer.indexOf(`$r=[Threading.EventWaitHandle]::new(0,1,'${DISPLAY_OFF_READY_EVENT}')`)
+      const start = outer.indexOf('start powershell')
+      const wait = outer.indexOf(`$r.WaitOne(${DISPLAY_OFF_WAIT_MS})`)
       const done = outer.indexOf(`'CUIDONE '+'ok'`)
       const refuse = outer.indexOf(`'CUIREF'+'USED keepawake'`)
       expect(ready).toBeGreaterThan(-1)
@@ -115,8 +125,13 @@ describe('the Windows host commands', () => {
       expect(wait).toBeGreaterThan(start)
       expect(done).toBeGreaterThan(wait)
       expect(refuse).toBeGreaterThan(done)
+      // Giving up, it tells a keeper still waiting for the display (review, 2026-10-10).
+      expect(outer).toContain(`}else{$r.Set();'CUIREF'+'USED keepawake'}`)
+      expect(DISPLAY_OFF_WAIT_MS).toBeGreaterThan(OFF_WITHIN_MS)
+      expect(DISPLAY_OFF_WAIT_MS).toBeLessThanOrEqual(WINDOWS_HOST_COMMAND_TIMEOUT_MS - 3_000)
       expect(readMacHostRefusal(script.split('\n'))).toBeNull()
       expect(readMacHostRefusal(['CUIREFUSED keepawake'])).toBe('keepawake')
+      expect(MAC_HOST_REFUSAL_REASONS.keepawake).toBe('The display did not turn off, so nothing was changed.')
     })
   })
 
@@ -135,10 +150,38 @@ describe('the Windows host commands', () => {
     expect(set).toBeGreaterThan(signal)
   })
 
-  // 2026-10-10: "there must be no timer". The power plan is never touched.
-  it('never touches the power plan', () => {
+  // 2026-10-10: a keeper that died between writing the 1-second display timeout and
+  // restoring it leaves a PC whose display goes off a second after every touch. Wake
+  // display repairs that on every PC, before it lets a running keeper go, so the
+  // keeper's own restore of the originals comes last.
+  it('puts a display timeout a dead keeper left at 1 second back, before it tells the keeper to stop', () => {
+    const script = windowsHostScript('wake-display')
+    expect(script).toContain(WINDOWS_VIDEO_IDLE_UNSTICK_MEMBERS)
+    const on = script.indexOf('[IntPtr]0xF170,[IntPtr](-1)')
+    const unstick = script.indexOf('[CodeUI.Fix]::Unstick()')
+    const signal = script.indexOf('TryOpenExisting(')
+    expect(unstick).toBeGreaterThan(on)
+    expect(signal).toBeGreaterThan(unstick)
+    // Its own compile, and one that may fail: the repair leans on the using-alias
+    // trick (USING_ALIASES), unproven under 5.1, and must never take Wake down with it.
+    const line = script.split('\n').find((l) => l.includes('Unstick()')) ?? ''
+    expect(line.startsWith('try{Add-Type -IgnoreWarnings -Namespace CodeUI -Name Fix ')).toBe(true)
+    expect(line.endsWith('[CodeUI.Fix]::Unstick()}catch{}')).toBe(true)
+    expect(script.split('\n').find((l) => l.includes('-Name Wake '))).not.toContain('UsingNamespace')
+  })
+
+  // 2026-10-10: the power plan is touched by Sleep display on a Modern Standby PC
+  // alone (the keeper, which restores it) and by Wake display's repair of a stuck
+  // 1-second timeout. Nothing else changes it, and nothing reads powercfg's text.
+  it('touches the power plan only in the keeper and in the repair', () => {
+    for (const action of ['lock', 'mute', 'unmute'] as const) {
+      expect(windowsHostScript(action)).not.toMatch(/ActiveScheme|ValueIndex|powercfg|3c0bc021/i)
+    }
+    const sleep = windowsHostScript('sleep-display')
+    const outside = sleep.replace(WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT.replace(/'/g, "''"), '')
+    expect(outside).not.toMatch(/ActiveScheme|ValueIndex|powercfg|3c0bc021/i)
     for (const script of [...ACTIONS.map(windowsHostScript), WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT]) {
-      expect(script).not.toMatch(/ActiveScheme|ValueIndex|powercfg|VIDEOIDLE|3c0bc021/i)
+      expect(script).not.toMatch(/powercfg/i)
     }
   })
 
@@ -186,12 +229,14 @@ describe('what the Windows probe spends its time on', () => {
 
   // Add-Type fails a unit its compiler only warns about, and none of this C# has met
   // Windows PowerShell 5.1's compiler. A warning there must not cost a read or an action.
+  // Sleep display and its keeper write it as -Ig, its unambiguous prefix (2026-10-10,
+  // for cmd.exe's 8,191: no other Add-Type parameter or common parameter starts so).
   it('lets every compile the phone sends through its warnings', () => {
-    const scripts = [WINDOWS_HOST_STATE_SCRIPT, ...ACTIONS.map(windowsHostScript)]
+    const scripts = [WINDOWS_HOST_STATE_SCRIPT, ...ACTIONS.map(windowsHostScript), WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT]
     const compiles = scripts.flatMap((script) => script.match(/Add-Type(?: -[A-Za-z]+)*/g) ?? [])
-    expect(compiles.length).toBeGreaterThanOrEqual(ACTIONS.length + 3)
+    expect(compiles.length).toBeGreaterThanOrEqual(ACTIONS.length + 4)
     for (const compile of compiles) {
-      expect(compile).toContain('-IgnoreWarnings')
+      expect(compile).toMatch(/ -Ig(noreWarnings)?( |$)/)
     }
   })
 
@@ -343,6 +388,17 @@ describe('the Windows scripts under a real PowerShell', () => {
     const out = powershell(
       `$ErrorActionPreference='Stop'\n${WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT.split('\n')[0]}\n[bool]('CodeUI.Keeper' -as [type])`
     )
+    expect(out.trim()).toBe('True')
+  })
+
+  // Wake display's repair compiles inside a try that swallows a failure, so only
+  // this test can see it broken.
+  run("compiles Wake display's stuck-timeout repair", () => {
+    const line = windowsHostScript('wake-display')
+      .split('\n')
+      .find((l) => l.includes('-Name Fix '))!
+    const compile = line.slice('try{'.length, line.indexOf(';[CodeUI.Fix]::Unstick()'))
+    const out = powershell(`$ErrorActionPreference='Stop'\n${compile}\n[bool]('CodeUI.Fix' -as [type])`)
     expect(out.trim()).toBe('True')
   })
 

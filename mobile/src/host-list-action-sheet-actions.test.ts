@@ -275,17 +275,20 @@ describe('the Mac controls on the host sheet', () => {
     // 2026-10-08, Danny: Sleep display put his whole laptop to sleep (Modern
     // Standby), and the row was hidden there. 2026-10-10 it came back with a keeper
     // holding the PC awake, and on 0.9.122 his laptop slept anyway: on his PC an
-    // instant display-off IS standby, held awake or not. Hidden again until the
-    // display goes off through Windows' own idle route.
-    it('never offers Sleep display on a PC that goes to sleep with its display', () => {
+    // instant display-off IS standby, held awake or not.
+    // 2026-10-10: back, through Windows' own idle route: the keeper sets the
+    // display timeout to 1 s while it holds the PC awake, and puts it back once the
+    // display is off (windows-display-off-keeper.ts).
+    it('offers Sleep display on a PC that goes to sleep with its display, as on any other', () => {
       const on = labelsFor({ lock: 'unknown', display: 'on', mute: 'unmuted', sleepsWithDisplay: true })
-      expect(on).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC']))
-      expect(on).not.toContain('Sleep display')
+      expect(on).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC', 'Sleep display']))
+      expect(on).not.toContain('Wake display')
       const unknown = labelsFor({ lock: 'unknown', display: 'unknown', mute: 'unknown', sleepsWithDisplay: true })
-      expect(unknown).not.toContain('Sleep display')
+      expect(unknown).toContain('Sleep display')
       expect(unknown).toContain('Wake display')
       const off = labelsFor({ lock: 'unknown', display: 'off', mute: 'unmuted', sleepsWithDisplay: true })
       expect(off).toContain('Wake display')
+      expect(off).not.toContain('Sleep display')
     })
 
     it('shows one checking row while the PC is asked', () => {

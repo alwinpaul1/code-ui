@@ -3,7 +3,9 @@ import type { MacHostAction } from './mac-host-commands'
 import {
   DISPLAY_OFF_READY_EVENT,
   DISPLAY_WAKE_EVENT,
-  WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT
+  USING_ALIASES,
+  WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT,
+  WINDOWS_VIDEO_IDLE_UNSTICK_MEMBERS
 } from './windows-display-off-keeper'
 
 /**
@@ -73,16 +75,29 @@ export const WINDOWS_AUDIO_TYPE = [
 // PostMessage rather than SendMessage, which waits on every window and can hang on one
 // that never answers. GetPwrCapabilities is for Sleep display's Modern Standby check.
 // Sleep and Wake each declare only what they call (2026-10-10): Sleep display carries
-// the keeper inside it and needs every character under cmd.exe's 8,191. They are
+// the keeper inside it and needs every character under cmd.exe's 8,191, so its line
+// is written tersely, Add-Type's parameters cut to unambiguous prefixes. They are
 // separate type names because the real-PowerShell test compiles both in one session.
-const POST_MESSAGE = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
+/** How long Sleep display waits, on a Modern Standby PC, for the keeper to say the
+ *  display reported off: a keeper start and compile, then up to OFF_WITHIN_MS for
+ *  the idle timeout. Inside the phone's 15 s (WINDOWS_HOST_COMMAND_TIMEOUT_MS) with
+ *  room for this script's own start and compile. */
+export const DISPLAY_OFF_WAIT_MS = 11_000
+
 const SLEEP_TYPE =
-  `Add-Type -IgnoreWarnings -Namespace CodeUI -Name Display -MemberDefinition '${POST_MESSAGE}` +
-  " [DllImport(\"powrprof.dll\")] public static extern byte GetPwrCapabilities(byte[] c);'"
+  "Add-Type -Ig -Names CodeUI -Name Display -M '[DllImport(\"user32\")]public static extern bool PostMessage(IntPtr h,int m,IntPtr w,IntPtr l);" +
+  "[DllImport(\"powrprof\")]public static extern byte GetPwrCapabilities(byte[] c);'"
 const WAKE_TYPE =
-  `Add-Type -IgnoreWarnings -Namespace CodeUI -Name Wake -MemberDefinition '${POST_MESSAGE}` +
+  'Add-Type -IgnoreWarnings -Namespace CodeUI -Name Wake -MemberDefinition ' +
+  "'[DllImport(\"user32.dll\")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);" +
   ' [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);' +
   " [DllImport(\"user32.dll\")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e);'"
+// The stuck-timeout repair compiles on its own and may fail: it leans on the
+// using-alias trick (USING_ALIASES), not yet run under Windows PowerShell 5.1, and a
+// failed compile must never take Wake display's own calls down with it.
+const UNSTICK =
+  `try{Add-Type -IgnoreWarnings -Namespace CodeUI -Name Fix -UsingNamespace ${USING_ALIASES} -MemberDefinition ` +
+  `'${WINDOWS_VIDEO_IDLE_UNSTICK_MEMBERS}';[CodeUI.Fix]::Unstick()}catch{}`
 
 const SCRIPTS: Record<WindowsHostAction, string[]> = {
   lock: [
@@ -92,29 +107,35 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
   ],
   // Why the branch (2026-10-08, Danny): on a PC with Modern Standby (S0 Low Power
   // Idle, most laptops since about 2019) the display going off IS the start of
-  // standby, so the post alone put his whole laptop to sleep and the phone lost it.
-  // AoAc is byte 20 of SYSTEM_POWER_CAPABILITIES (76 bytes; the buffer is larger to
-  // spare). On such a PC the script posts nothing itself: it starts the keeper
-  // (windows-display-off-keeper.ts), which holds the PC awake and then turns the
-  // display off, and waits for the keeper's ready event. Signalled: done. Not
-  // signalled: the keeper could not hold the PC, nothing was turned off, and the
-  // refusal says so (built from two strings so the script's own text never matches).
-  // 10 s, not more: the phone gives the whole command 15 s
-  // (WINDOWS_HOST_COMMAND_TIMEOUT_MS), and the keeper's only delay is a powershell
-  // start and one compile. The keeper is encoded here, on the PC: base64 inside this
+  // standby, so the post alone put his whole laptop to sleep and the phone lost it,
+  // and on 0.9.122 it did again with a power request held first. AoAc is byte 20 of
+  // SYSTEM_POWER_CAPABILITIES (76 bytes; the buffer is larger to spare). On such a
+  // PC the script posts nothing: it starts the keeper (windows-display-off-keeper.ts),
+  // which holds the PC awake, sets the display timeout to 1 s so Windows turns the
+  // display off by its own idle route, and puts the timeout back once it has. The
+  // keeper sets the ready event only once the display reported off. Signalled:
+  // done. Not signalled: the display did not go off (or the keeper could not hold
+  // the PC), the keeper put the timeout back, and the refusal says so (built from
+  // two strings so the script's own text never matches). DISPLAY_OFF_WAIT_MS fits
+  // the phone's 15 s. The keeper is encoded here, on the PC: base64 inside this
   // command, itself base64, would cost 2.7 times over and break cmd.exe's 8,191.
-  // Every other PC (AoAc 0, or a call that returns 0) gets the post, as before; a
-  // call that throws stops the script ('Stop'), which reads as "did not finish".
-  // The ready event needs no reset first: the keeper closes its handle the moment it
-  // has set it, so the event is gone once this script exits.
+  // `start` is Start-Process; -Win and -Args are -WindowStyle and -ArgumentList, and
+  // -nop, -noni and -enc are powershell.exe's -NoProfile, -NonInteractive and
+  // -EncodedCommand, all cut for the same budget. The event's 0 and 1 are $false
+  // and ManualReset. Every other PC (AoAc 0, or a call that returns 0) gets the post,
+  // as before; a call that throws stops the script ('Stop'), which reads as "did not
+  // finish". Giving up, it sets the ready event itself, which tells a keeper still
+  // waiting for the display to put the timeout back and stop (review, 2026-10-10).
+  // The ready event needs no reset first: the keeper closes its handle the
+  // moment it has set it, so the event is gone once this script exits.
   // NOT YET RUN ON A WINDOWS MACHINE: off Windows the capability call throws.
   'sleep-display': [
     SLEEP_TYPE,
     '$c=New-Object byte[] 128;if([CodeUI.Display]::GetPwrCapabilities($c) -and $c[20]){' +
-      `$r=New-Object Threading.EventWaitHandle($false,'ManualReset','${DISPLAY_OFF_READY_EVENT}');` +
+      `$r=[Threading.EventWaitHandle]::new(0,1,'${DISPLAY_OFF_READY_EVENT}');` +
       `$k=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('${WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT.replace(/'/g, "''")}'));` +
-      "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$k;" +
-      `if($r.WaitOne(10000)){${DONE}}else{'CUIREF'+'USED keepawake'};exit}`,
+      "start powershell -Win Hidden -Args '-nop','-noni','-enc',$k;" +
+      `if($r.WaitOne(${DISPLAY_OFF_WAIT_MS})){${DONE}}else{$r.Set();'CUIREF'+'USED keepawake'};exit}`,
     "if(-not [CodeUI.Display]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr]2)){throw 'PostMessage refused'}"
   ],
   // Monitor power on alone is unreliable since Windows 8, so the script also resets the
@@ -126,12 +147,17 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
   // display was still off, the one moment a Modern Standby laptop can slip into
   // standby (review, 2026-10-10). The display coming on ends the keeper anyway; so does mouse or
   // keyboard at the PC, as on the Mac. No keeper, no event, nothing to do.
+  // Before the event, Unstick puts back a display timeout a dead keeper left at 1 s
+  // (WINDOWS_VIDEO_IDLE_UNSTICK_MEMBERS), on every PC, so Wake always leaves the
+  // display turning off on its own again. Before, not after: a keeper told to stop
+  // writes the originals back, and that write must be the last one.
   'wake-display': [
     WAKE_TYPE,
     '[void][CodeUI.Wake]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr](-1))',
     '[void][CodeUI.Wake]::SetThreadExecutionState(2)',
     '[CodeUI.Wake]::mouse_event(1,1,0,0,[UIntPtr]::Zero)',
     '[CodeUI.Wake]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)',
+    UNSTICK,
     `$w=$null;if([Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)){[void]$w.Set()}`
   ],
   mute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($true)'],
@@ -148,8 +174,10 @@ export function windowsHostScript(action: WindowsHostAction): string {
  * Why `powershell -EncodedCommand`: the PC's terminal may be PowerShell, cmd or a WSL
  * shell, and no quoting survives all three. Base64 of UTF-16LE has no quotes at all,
  * and `powershell` is Windows PowerShell 5.1, present on every Windows. The same form
- * as the HUD's Windows beacon (CLAUDE_HUD_WINDOWS_COMMAND).
+ * as the HUD's Windows beacon (CLAUDE_HUD_WINDOWS_COMMAND). -nop, -noni and -enc are
+ * -NoProfile, -NonInteractive and -EncodedCommand, cut (2026-10-10) because Sleep
+ * display with its keeper inside sits right under cmd.exe's 8,191.
  */
 export function buildWindowsHostCommand(action: WindowsHostAction): string {
-  return `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(windowsHostScript(action))}`
+  return `powershell -nop -noni -enc ${encodePowerShellCommand(windowsHostScript(action))}`
 }
