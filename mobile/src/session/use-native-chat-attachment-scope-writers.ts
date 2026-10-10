@@ -71,7 +71,7 @@ export function useNativeChatAttachmentScopeWriters() {
     (
       scope: string,
       id: string,
-      next: { path: string; previewUri: string; contentFingerprint?: string }
+      next: { path: string; previewUri: string }
     ) => {
       setAttachmentsByScope((prev) =>
         withScopeAttachments(prev, scope, replaceNativeChatImageAttachment(prev[scope] ?? [], id, next))

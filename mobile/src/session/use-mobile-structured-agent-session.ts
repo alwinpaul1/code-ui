@@ -35,7 +35,6 @@ import type {
   StructuredMobileSession
 } from './mobile-structured-agent-session-contract'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
-import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 import {
   pendingStructuredPromptIdentity,
   requestMobileStructuredAgentSessionCancel,
@@ -47,8 +46,6 @@ export function useMobileStructuredAgentSession(args: {
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
-  /** Authenticated identity the host keys mutation admission under. */
-  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
@@ -61,7 +58,6 @@ export function useMobileStructuredAgentSession(args: {
 }): StructuredMobileSession {
   const {
     agent,
-    callerIdentity = '',
     client,
     connected,
     sessionId,
@@ -78,7 +74,6 @@ export function useMobileStructuredAgentSession(args: {
   useEffect(() => () => operationIdsRef.current.clear(), [])
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
-  useMobileStructuredSendOperationReconciliation(state.submissions)
 
   const mutate = useCallback(
     async <TValue>(
@@ -118,7 +113,7 @@ export function useMobileStructuredAgentSession(args: {
       if (result.status === 'unknown') {
         // Prompt/option plans cannot repeat a harmful effect under a fresh id;
         // issue a fresh id so a retry can be admitted after the user checks the
-        // stream. Sends keep theirs — see `mobile-structured-send-delivery.ts`.
+        // stream. A send mints its own id per press (mobile-structured-agent-session-send.ts).
         operationIdsRef.current.delete(key)
         return result
       }
@@ -207,8 +202,6 @@ export function useMobileStructuredAgentSession(args: {
       return sendMobileStructuredAgentSessionMessage({
         client,
         sessionId,
-        sessionKey,
-        callerIdentity,
         expectedRuntimeFence: currentFence,
         text,
         attachments: sendAttachments,
@@ -218,7 +211,6 @@ export function useMobileStructuredAgentSession(args: {
     },
     [
       agent,
-      callerIdentity,
       client,
       conversationCommands,
       enabled,

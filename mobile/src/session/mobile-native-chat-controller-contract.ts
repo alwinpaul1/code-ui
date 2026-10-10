@@ -209,7 +209,6 @@ export type MobileNativeChatController = {
       id?: string
       path: string
       previewUri: string
-      contentFingerprint?: string
     }[],
     /** The image hook's send follows its TAB, not the handle it started on
      *  (mobile-native-chat-send-follow.ts). */

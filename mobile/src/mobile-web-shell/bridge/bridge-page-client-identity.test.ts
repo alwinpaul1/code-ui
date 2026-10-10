@@ -36,8 +36,9 @@ const identitySubscribe = (id: string) =>
 
 describe('the placeholder a page claims', () => {
   it('is a fixed string, so a resent message fingerprints the same caller after a remount', () => {
-    // The composer's send journal refuses a retained operation whose caller changed, and it has no
-    // expiry. A per-document identity would turn "send it again" into a permanent refusal.
+    // An older host's page keeps a send journal (this phone has kept none since Orca #26392) that
+    // refuses a retained operation whose caller changed, and it has no expiry. A per-document
+    // identity would turn "send it again" into a permanent refusal there.
     expect(BRIDGE_PAGE_CLIENT_ID).toBe('orca-page-client')
     expect(BRIDGE_PAGE_CLIENT_IDENTITY_ACCEPT).toBe('page-client-identity')
   })

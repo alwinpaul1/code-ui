@@ -21,8 +21,6 @@ async function sendWithBudgetSpent(
   const outcome = await sendMobileStructuredAgentSessionMessage({
     client: { sendRequest } as unknown as RpcClient,
     sessionId: 's',
-    sessionKey: 'k',
-    callerIdentity: 'phone',
     expectedRuntimeFence: 1,
     text: 'is everything fixed and done',
     attachments: [],

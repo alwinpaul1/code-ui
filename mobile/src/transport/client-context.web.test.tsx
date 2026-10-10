@@ -161,8 +161,9 @@ describe('the page provider', () => {
     const first = readContext().getClientId('host-a')
 
     // A shell remount mints a new session id, which is what a per-document identity would follow.
-    // The composer's send journal refuses a retained operation whose caller fingerprint moved, and
-    // it has no expiry, so that would make "send it again" a permanent refusal for that message.
+    // An older host's page keeps a send journal (this phone has kept none since Orca #26392) that
+    // refuses a retained operation whose caller fingerprint moved, and it has no expiry, so that
+    // would make "send it again" a permanent refusal for that message.
     act(() => {
       channel.deliver({ ...INIT, sessionId: 'session-b' })
       create(render(client))

@@ -41,7 +41,6 @@ type Args = {
       id: string
       path: string
       previewUri: string
-      contentFingerprint?: string
     }[],
     follow?: MobileNativeChatSendFollow
   ) => Promise<MobileNativeChatSendOutcome>

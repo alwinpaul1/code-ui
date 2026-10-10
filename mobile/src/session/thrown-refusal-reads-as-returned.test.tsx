@@ -53,15 +53,15 @@ function clientAnswering(response: unknown): RpcClient {
 }
 
 describe('a send the host refused by throwing', () => {
-  // The returned form of each is refused before admission (agent-session-refusal-retry.ts), so the
-  // phone keeps the operation id; spending it on the thrown form would turn the same refusal into
-  // a new message on the next send.
+  // The returned form of each is refused before admission (agent-session-refusal-retry.ts): the
+  // send did not happen and its words go back to the composer. The thrown form must read the same.
+  // (It also said whether the phone kept the operation id; since Orca #26392 no send keeps one.)
   it.each([
     'agent_session_ownership_unknown',
     'agent_session_journal_unreadable',
     'execution_owner_reconciling',
     'agent_session_identity_required'
-  ])('keeps the operation id for a thrown %s, as for the returned one', async (code) => {
+  ])('reads a thrown %s as the returned one: not sent', async (code) => {
     const request = (response: unknown) =>
       requestStructuredAgentSessionMutation<AgentSessionSendResult>({
         client: clientAnswering(response),
@@ -74,7 +74,7 @@ describe('a send the host refused by throwing', () => {
       })
     const thrown = mobileStructuredSendDelivery(await request(thrownRefusal(code)))
     const returned = mobileStructuredSendDelivery(await request(returnedRefusal(code)))
-    expect(returned.operationIdSpent).toBe(false)
+    expect(returned.outcome).toBe('rejected')
     expect(thrown).toEqual(returned)
   })
 })
