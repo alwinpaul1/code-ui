@@ -48,7 +48,7 @@ function commandInput(
       setOption: vi.fn(async () => true),
       conversationCommands: ['clear', 'compact']
     },
-    canRun: () => true,
+    busy: () => null,
     onError: vi.fn(),
     timeoutMs: 15000
   }

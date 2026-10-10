@@ -8,6 +8,7 @@ import { useTheme } from '../theme/theme-context'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
 import { Button } from '../ui/Button'
 import { Txt } from '../ui/Txt'
+import { useMobileNativeChatAskAutoAdvance } from './use-mobile-native-chat-ask-auto-advance'
 
 type Props = {
   prompt: AskPrompt
@@ -40,7 +41,8 @@ export const ASK_SENT_WAIT_MS = 3_000
 
 /** Native renderer for an agent's AskUserQuestion prompt as a wizard: one
  *  question per step with tabs across the top, a Next button that advances (Send
- *  on the last step), and a Cancel that dismisses the prompt. */
+ *  on the last step), and a Cancel that dismisses the prompt. A single-select pick
+ *  moves on by itself after a short beat, as on desktop (Orca #26288). */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
   // 400 was a fixed guess: with the keyboard up on a short phone it grew the
@@ -62,21 +64,25 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
   const answeredAt = sentAt ?? acceptedAt
   const waitingLong = useSentWaitElapsed(answeredAt)
   const locked = busy !== null || answeredAt !== null
+  const autoAdvance = useMobileNativeChatAskAutoAdvance()
 
+  // A single-select option answers the question, so the card moves on after a
+  // beat that shows it chosen; "Other…" still needs its text. Picking the same
+  // row again inside the beat takes it back and cancels the move.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
-    if (locked) {
+    // The ref as well as `locked`: a tap can land before the render that disables the rows.
+    if (locked || busyRef.current) {
       return
     }
-    setSelections((prev) => {
-      const next = prev.map((s) => [...s])
-      const cur = next[qi] ?? []
-      if (multi) {
-        next[qi] = cur.includes(optIndex) ? cur.filter((i) => i !== optIndex) : [...cur, optIndex]
-      } else {
-        next[qi] = cur.includes(optIndex) ? [] : [optIndex]
-      }
-      return next
-    })
+    const cur = selections[qi] ?? []
+    const picked = !cur.includes(optIndex)
+    const chosen = !picked ? cur.filter((i) => i !== optIndex) : multi ? [...cur, optIndex] : [optIndex]
+    const next = selections.map((s, i) => (i === qi ? chosen : s))
+    setSelections(next)
+    autoAdvance.cancel()
+    if (picked && !multi && optIndex !== OTHER) {
+      autoAdvance.schedule(() => void advance(next))
+    }
   }
 
   const setOther = (qi: number, value: string): void => {
@@ -87,15 +93,16 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     })
   }
 
-  const selectionFor = (qi: number): AskAnswerSelection => {
-    const picked = (selections[qi] ?? []).filter((i) => i !== OTHER)
-    const other = (selections[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
+  // `sel` is an explicit snapshot so a just-made pick isn't lost to the async setState.
+  const selectionFor = (qi: number, sel = selections): AskAnswerSelection => {
+    const picked = (sel[qi] ?? []).filter((i) => i !== OTHER)
+    const other = (sel[qi] ?? []).includes(OTHER) ? (otherText[qi] ?? '').trim() : ''
     return other ? { indices: picked, other } : { indices: picked }
   }
 
-  const isAnswered = (qi: number): boolean => {
-    const sel = selectionFor(qi)
-    return sel.indices.length > 0 || (sel.other ?? '').length > 0
+  const isAnswered = (qi: number, sel = selections): boolean => {
+    const answer = selectionFor(qi, sel)
+    return answer.indices.length > 0 || (answer.other ?? '').length > 0
   }
 
   const total = prompt.questions.length
@@ -112,15 +119,15 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
   )
   const canAdvance = !locked && (isLast ? allAnswered : currentAnswered)
 
-  const submit = async (): Promise<void> => {
-    if (!allAnswered || busyRef.current || answeredAt !== null) {
+  const submit = async (sel: number[][]): Promise<void> => {
+    if (!prompt.questions.every((_, i) => isAnswered(i, sel)) || busyRef.current || answeredAt !== null) {
       return
     }
     busyRef.current = true
     setBusy('sending')
     let accepted = false
     try {
-      accepted = await onAnswer(prompt.questions.map((_, i) => selectionFor(i)))
+      accepted = await onAnswer(prompt.questions.map((_, i) => selectionFor(i, sel)))
     } finally {
       // A refusal has already said why (the send path reports every false), so
       // the tap goes back at once. An accepted answer keeps the ref held.
@@ -133,15 +140,17 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
     }
   }
 
-  const advance = async (): Promise<void> => {
+  const advance = async (sel = selections): Promise<void> => {
+    autoAdvance.cancel()
     if (isLast) {
-      await submit()
+      await submit(sel)
     } else if (!locked) {
       setIndex((i) => Math.min(i + 1, total - 1))
     }
   }
 
   const cancel = async (): Promise<void> => {
+    autoAdvance.cancel()
     if (busyRef.current || answeredAt !== null || !onCancel) {
       return
     }
@@ -199,7 +208,10 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
                   borderRadius: radius.pill,
                   backgroundColor: active ? colors.text : colors.bgRaised
                 }}
-                onPress={() => setIndex(i)}
+                onPress={() => {
+                  autoAdvance.cancel()
+                  setIndex(i)
+                }}
                 disabled={locked}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: active, disabled: locked }}

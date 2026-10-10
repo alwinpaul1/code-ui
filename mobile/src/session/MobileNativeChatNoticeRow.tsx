@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
 import type { NativeChatTextBlock } from '../../../src/shared/native-chat-types'
+import { isAgentSessionProviderContextBoundary } from '../../../src/shared/agent-session-provider-context'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme, type Theme } from '../theme/theme-context'
@@ -9,6 +10,7 @@ import { Txt } from '../ui/Txt'
 
 export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
+  contextCleared: 'Context cleared',
   plan: 'Plan'
 } as const
 
@@ -30,18 +32,20 @@ export function MobileNativeChatNoticeRow({
   const theme = useTheme()
   const styles = useMemo(() => makeNoticeStyles(theme), [theme])
 
-  if (block.presentation === 'compaction') {
+  // A /clear keeps the chat (Orca #26579): one divider where the agent's context restarted, the
+  // earlier messages left above it. Drawn as the compaction rule is, in the host's words.
+  const cleared = isAgentSessionProviderContextBoundary(block.contextClear)
+  if (cleared || block.presentation === 'compaction') {
     // A rule, not a sentence: compaction is a break in the conversation, and a
     // line of prose there reads as something the agent said.
+    const label = cleared
+      ? block.text.trim() || NATIVE_CHAT_NOTICE_COPY.contextCleared
+      : NATIVE_CHAT_NOTICE_COPY.compaction
     return (
-      <View
-        style={styles.compaction}
-        accessibilityRole="none"
-        accessibilityLabel={NATIVE_CHAT_NOTICE_COPY.compaction}
-      >
+      <View style={styles.compaction} accessibilityRole="none" accessibilityLabel={label}>
         <View style={styles.rule} />
         <Txt variant="caption" tone="muted">
-          {NATIVE_CHAT_NOTICE_COPY.compaction}
+          {label}
         </Txt>
         <View style={styles.rule} />
       </View>

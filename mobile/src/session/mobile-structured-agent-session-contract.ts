@@ -12,6 +12,7 @@ import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { MobileNativeChatCommandRefusalCauses } from './use-mobile-native-chat-send-error'
 
 export type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
   id?: string
@@ -64,6 +65,8 @@ export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgent
    *  advertises `agent-session.prompt-cancel.v1`; otherwise the turn stop
    *  (Orca #20601). Without an argument it names the pending prompt itself. */
   cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) => Promise<boolean>
+  /** What a refused /clear or /compact's line stands on (Orca #25704). */
+  commandRefusalCauses: MobileNativeChatCommandRefusalCauses
   /** Where this chat's `::orca-visual` lines read their HTML from (Orca #26071); null without a
    *  client. */
   visualSource: MobileNativeChatVisualSource | null

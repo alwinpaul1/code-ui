@@ -26,7 +26,7 @@ function setup() {
       setOption: vi.fn(async () => true),
       conversationCommands: ['clear', 'compact']
     },
-    canRun: () => true,
+    busy: () => null,
     onError: vi.fn(),
     timeoutMs: 15000
   }
@@ -93,13 +93,57 @@ describe('mobile structured conversation commands', () => {
         input.text = '/compact instructions'
       }
       if (reason === 'pending work') {
-        input.canRun = () => false
+        input.busy = () => 'working'
       }
       expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
       expect(input.onError).toHaveBeenCalled()
     }
   )
+  // Orca #25704: the phone's own check says what the person sees and can do, in the desktop's
+  // words, and names the cause so its line goes when that ends. Before, every case read "Wait for
+  // pending work to finish before using this command."
+  it('a /clear while the agent works says so in plain words', async () => {
+    const { input, sendRequest } = setup()
+    input.busy = () => 'working'
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /clear when it's done.",
+      'working'
+    )
+    input.busy = () => 'prompt'
+    expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "Answer the agent's question or approval, then run /clear.",
+      'prompt'
+    )
+    input.busy = () => 'working'
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /compact when it's done.",
+      'working'
+    )
+    expect(sendRequest).not.toHaveBeenCalled()
+  })
+  it("a host's refusal sentence is shown as sent, naming no cause the phone did not check", async () => {
+    const { input, sendRequest } = setup()
+    sendRequest.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        ok: true,
+        value: {
+          command: 'compact',
+          state: 'completed',
+          error: "The agent is still working. Run /compact when it's done."
+        }
+      }
+    } as never)
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      "The agent is still working. Run /compact when it's done.",
+      undefined
+    )
+  })
   it('lets /init reach Claude instead of answering "not available in chat sessions"', async () => {
     // Claude's own harness expands a slash command out of the message body, so
     // the host never had a way to run `/init` — claiming it only produced a

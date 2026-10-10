@@ -2,12 +2,14 @@ import {
   isToolCallBlock,
   isToolResultBlock,
   type NativeChatBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock,
-  type NativeChatToolResultBlock
+  type NativeChatMessage
 } from './native-chat-types'
 import { isKnownHarnessInjectedUserTurnText } from './harness-injected-user-turns'
 import { isNoiseMessage } from './native-chat-noise'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26968, 8452fc3315): pairing moved to
+// native-chat-tool-pairs.ts (same answers, an id index for out-of-order results). The fold's own
+// #26968 change (unpaired results as separate rows) is not taken; see src/shared/LOCAL-FILES.md.
+export { pairToolBlocks, type NativeChatToolPair } from './native-chat-tool-pairs'
 
 function isToolOnlyMessage(message: NativeChatMessage): boolean {
   return (
@@ -124,60 +126,6 @@ export function foldToolMessages(messages: readonly NativeChatMessage[]): Native
     }
   }
   return attributedOutput
-}
-
-export type NativeChatToolPair = {
-  call?: NativeChatToolCallBlock
-  result?: NativeChatToolResultBlock
-}
-
-/** Where in `unanswered` (oldest first) the call `result` answers is, or -1 for none. */
-function answeredToolCallIndex<T>(
-  unanswered: readonly T[],
-  result: NativeChatToolResultBlock,
-  callIdOf: (entry: T) => string | undefined
-): number {
-  if (result.callId === undefined) {
-    return unanswered.length > 0 ? 0 : -1
-  }
-  return unanswered.findIndex((entry) => callIdOf(entry) === result.callId)
-}
-
-/** Pair results to calls by `answeredToolCallIndex`. Every reader of a run pairs through this
- *  (`pairNativeChatToolResults` included), so they all agree on who owns an output. */
-export function pairToolBlocks(
-  blocks: readonly NativeChatBlock[],
-  limit = Infinity
-): NativeChatToolPair[] {
-  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19468, 44eb95fc6).
-  const pairs: NativeChatToolPair[] = []
-  /** Slots of retained calls not yet answered, oldest first. */
-  const callSlots: number[] = []
-  for (const block of blocks) {
-    if (pairs.length >= limit && callSlots.length === 0) {
-      break
-    }
-    if (block.type === 'tool-call') {
-      if (pairs.length < limit) {
-        callSlots.push(pairs.length)
-        pairs.push({ call: block })
-      }
-      continue
-    }
-    if (block.type !== 'tool-result') {
-      continue
-    }
-    const answered = answeredToolCallIndex(callSlots, block, (slot) => pairs[slot]?.call?.callId)
-    const [slot] = answered === -1 ? [] : callSlots.splice(answered, 1)
-    if (slot === undefined) {
-      if (pairs.length < limit) {
-        pairs.push({ result: block })
-      }
-    } else {
-      pairs[slot]!.result = block
-    }
-  }
-  return pairs
 }
 
 export function splitNativeChatBlocks(blocks: readonly NativeChatBlock[]): {
