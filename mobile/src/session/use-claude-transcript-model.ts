@@ -8,6 +8,7 @@ import { getPendingModelPick } from './mobile-native-chat-model-report-authority
 import { commandOverBeacon, resolveClaudeModelFallback, withSessionCommandPair, type ClaudeModelFallback } from './claude-transcript-model'
 import { getAgentHudBeaconArrivedAt, subscribeAgentHudBeaconArrivals } from './agent-hud-beacon'
 import { sessionCommandPairFor } from './claude-session-command-pair'
+import { requestTranscriptEffortProbe, subscribeTranscriptEffortProbes } from './claude-transcript-effort-probe'
 import { peekStartupFramePair, subscribeStartupFramePairs, withStartupFramePair } from './claude-startup-frame-pair'
 import type { ClaudeScreenModelStatement } from './claude-screen-model-statement'
 import {
@@ -102,19 +103,25 @@ export function useClaudeTranscriptModel(args: {
   /** The session's rows: its own /model and /effort output lies over the scan
    *  (claude-session-command-pair.ts). Absent: none. */
   messages?: readonly NativeChatMessage[]
+  /** The file Orca reads this session from, when its status names one: the
+   *  probe for an older /model or /effort answer reads the same file the chat
+   *  does (claude-transcript-effort-probe.ts). */
+  transcriptPath?: string | null
   /** What the latest screen read showed of the spinner's effort and an alt+p
    *  toast (claude-screen-model-statement.ts); null while the screen is not
    *  read. Kept per session and laid over every tier below the live pair
    *  (claude-screen-model-pair.ts). */
   screenStatement?: ClaudeScreenModelStatement | null
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, screenStatement = null } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, transcriptPath = null, screenStatement = null } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
   useEffect(() => subscribeClaudeTranscriptModelScans(() => setVersion((value) => value + 1)), [])
   useEffect(() => subscribeStartupFramePairs(() => setVersion((value) => value + 1)), [])
   useEffect(() => subscribeScreenModelRecords(() => setVersion((value) => value + 1)), [])
+  const [probeVersion, setProbeVersion] = useState(0)
+  useEffect(() => subscribeTranscriptEffortProbes(() => setProbeVersion((value) => value + 1)), [])
 
   useEffect(() => (quiet ? watchClaudeTranscriptModelHost(hostId) : undefined), [hostId, quiet])
 
@@ -199,10 +206,23 @@ export function useClaudeTranscriptModel(args: {
   const base = quiet && !pick ? withStartupFramePair(scanned, peekStartupFramePair(sessionId)) : scanned
   // Read whenever the chat is a Claude one, beacon or not: the pair is kept for
   // the session, so it is there once the beacon has gone.
+  // `probeVersion`: a pair the probe below filed for a session is read from
+  // the same memory as a loaded row's, so a filing re-reads it.
   const command = useMemo(
     () => (enabled && sessionId && messages ? sessionCommandPairFor(sessionId, messages, liveModel ?? transcript?.model ?? null) : null),
-    [enabled, messages, sessionId, transcript, liveModel]
+    [enabled, messages, sessionId, transcript, liveModel, probeVersion]
   )
+  // No row the chat holds, and nothing kept, states a /model or /effort answer:
+  // look further back in the session's own file, once per session (2026-10-11,
+  // "read the effort from the transcript"). Only with no live pair: the beacon
+  // and the badge always win, and a tab that has one asks the host nothing.
+  const scanModelId = transcript?.model ?? null
+  const probe = quiet && connected && client !== null && sessionId !== null && messages !== undefined && command === null
+  useEffect(() => {
+    if (probe && client && sessionId) {
+      requestTranscriptEffortProbe({ client, hostId, sessionId, transcriptPath, connection: lastConnectedAt, boundModel: scanModelId })
+    }
+  }, [probe, client, hostId, sessionId, transcriptPath, lastConnectedAt, scanModelId])
   // The last time the beacon was heard. Listened to only while a command is
   // waiting on the next arrival (it ends the override), so a quiet tab is not
   // re-rendered on every repeat.

@@ -43,8 +43,15 @@ import { isTextBlock, type NativeChatMessage } from '../../../src/shared/native-
  * the effort belongs to the model before it, and carrying it over is how "Opus
  * Medium" came to be drawn on an Opus xhigh session (2026-09-15).
  *
+ * Rows further back than the chat has loaded are read too, once per session,
+ * by claude-transcript-effort-probe.ts (2026-10-11), and filed here with
+ * `rememberProbedSessionCommandPair`: Claude Code's own words in the session's
+ * own file count as the agent's word, by the user's decision that day.
+ *
  * What it cannot see: a model change that writes no parsed row (the alt+p
- * picker, the effort-step keys, a resume into a new process). The caller orders
+ * picker, the effort-step keys, a resume into a new process), and an effort
+ * that no command set (the settings default a session starts with, which
+ * Claude Code 2.1.296 writes into no transcript record). The caller orders
  * the pair against the transcript scan with `at` and `answeredAt`
  * (`withSessionCommandPair`).
  */
@@ -180,6 +187,30 @@ const lastPairBySession = createPersistedMap<SessionCommandPair>({
 /** Read at app start with the other session caches; never rejects. */
 export function hydrateSessionCommandPairs(): Promise<void> {
   return lastPairBySession.hydrate()
+}
+
+/**
+ * File a pair read from rows OLDER than the chat's window (the transcript
+ * probe, claude-transcript-effort-probe.ts) as if it had been seen there.
+ * Nothing is replaced that is as new or newer, by the host's row time. It is
+ * marked never seen after a beacon (`seenAt` -Infinity): a row dug out of the
+ * past cannot outrank a live beacon. Returns whether it was filed.
+ */
+export function rememberProbedSessionCommandPair(
+  sessionId: string,
+  pair: SessionCommandPair,
+  boundModel: string | null
+): boolean {
+  const held = lastPairBySession.get(sessionId)
+  if (held && held.at !== null && (pair.at === null || held.at >= pair.at)) {
+    return false
+  }
+  lastPairBySession.set(sessionId, {
+    ...pair,
+    ...(pair.label === null ? { boundModel } : {}),
+    seenAt: Number.NEGATIVE_INFINITY
+  })
+  return true
 }
 
 /** Test-only: a fresh process, with storage left as it is. */
