@@ -203,7 +203,7 @@ describe('the Mac controls on the host sheet', () => {
     const labelsFor = (state: MacHostState) =>
       buildWithMac({ hostPlatform: 'win32', state }).actions.map((action) => action.label)
 
-    it('offers lock, both display rows and the mute that applies, under its own group', () => {
+    it('offers lock and the mute that applies, under its own group', () => {
       const { actions } = buildWithMac({
         hostPlatform: 'win32',
         state: { lock: 'unlocked', display: 'unknown', mute: 'unmuted' }
@@ -212,14 +212,35 @@ describe('the Mac controls on the host sheet', () => {
         'Reconnect',
         'Disconnect',
         'Lock PC',
-        'Sleep display',
-        'Wake display',
         'Mute PC',
         'Network diagnostics',
         'Edit host',
         'Remove'
       ])
       expect(actions.find((action) => action.label === 'Lock PC')?.group).toBe('Windows')
+    })
+
+    // 2026-10-10, the user: "Completely remove Sleep display features from Windows
+    // devices." It slept Modern Standby laptops (2026-10-08, 0.9.122), and neither the
+    // idle route (0.9.126) nor the dim and black covers were ever confirmed on a PC.
+    // The display state no longer picks any row on a PC, and a state still carrying
+    // the old Modern Standby flag (sleepsWithDisplay) cannot bring one back.
+    it('never offers Sleep display or Wake display on a PC, whatever its display or standby', () => {
+      for (const display of ['on', 'off', 'unknown'] as const) {
+        for (const mute of ['muted', 'unmuted', 'unknown'] as const) {
+          const plain: MacHostState = { lock: 'unknown', display, mute }
+          const modernStandby = { ...plain, sleepsWithDisplay: true }
+          for (const state of [plain, modernStandby]) {
+            const labels = labelsFor(state)
+            expect(labels).not.toContain('Sleep display')
+            expect(labels).not.toContain('Wake display')
+            expect(labels.some((label) => /display/i.test(label))).toBe(false)
+            expect(labels).toContain('Lock PC')
+            const muteRows = mute === 'muted' ? ['Unmute PC'] : mute === 'unmuted' ? ['Mute PC'] : ['Mute PC', 'Unmute PC']
+            expect(labels.filter((label) => label.endsWith('PC'))).toEqual(['Lock PC', ...muteRows])
+          }
+        }
+      }
     })
 
     // 2026-09-26: the user wants no lock status on a PC. The probe no longer asks
@@ -229,7 +250,7 @@ describe('the Mac controls on the host sheet', () => {
       for (const lock of ['locked', 'unlocked', 'unknown'] as const) {
         const { actions } = buildWithMac({ hostPlatform: 'win32', state: { lock, display: 'on', mute: 'muted' } })
         const windows = actions.filter((action) => /PC|display/.test(action.label))
-        expect(windows.map((action) => action.label)).toEqual(['Lock PC', 'Sleep display', 'Unmute PC'])
+        expect(windows.map((action) => action.label)).toEqual(['Lock PC', 'Unmute PC'])
         expect(windows.every((action) => !action.disabled)).toBe(true)
         expect(windows[0]?.group).toBe('Windows')
       }
@@ -261,33 +282,13 @@ describe('the Mac controls on the host sheet', () => {
       expect(onMacAction).not.toHaveBeenCalled()
     })
 
-    it('offers only the display row that applies once the PC says whether its display is on', () => {
-      const on = labelsFor({ lock: 'unlocked', display: 'on', mute: 'unmuted' })
-      expect(on).toContain('Sleep display')
-      expect(on).not.toContain('Wake display')
-      const off = labelsFor({ lock: 'unlocked', display: 'off', mute: 'muted' })
-      expect(off).toContain('Wake display')
-      expect(off).not.toContain('Sleep display')
-      expect(off).toContain('Unmute PC')
-      expect(off).not.toContain('Mute PC')
-    })
-
-    // 2026-10-08, Danny: Sleep display put his whole laptop to sleep (Modern
-    // Standby), and the row was hidden there. 2026-10-10 it came back with a keeper
-    // holding the PC awake, and on 0.9.122 his laptop slept anyway: on his PC an
-    // instant display-off IS standby, held awake or not.
-    // 2026-10-10: back; there Sleep display dims and covers the screens with the
-    // display held on (windows-display-dim-keeper.ts).
-    it('offers Sleep display on a PC that goes to sleep with its display, as on any other', () => {
-      const on = labelsFor({ lock: 'unknown', display: 'on', mute: 'unmuted', sleepsWithDisplay: true })
-      expect(on).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC', 'Sleep display']))
-      expect(on).not.toContain('Wake display')
-      const unknown = labelsFor({ lock: 'unknown', display: 'unknown', mute: 'unknown', sleepsWithDisplay: true })
-      expect(unknown).toContain('Sleep display')
-      expect(unknown).toContain('Wake display')
-      const off = labelsFor({ lock: 'unknown', display: 'off', mute: 'unmuted', sleepsWithDisplay: true })
-      expect(off).toContain('Wake display')
-      expect(off).not.toContain('Sleep display')
+    it('offers only the mute row that applies once the PC says whether it is muted', () => {
+      const muted = labelsFor({ lock: 'unlocked', display: 'off', mute: 'muted' })
+      expect(muted).toContain('Unmute PC')
+      expect(muted).not.toContain('Mute PC')
+      const unmuted = labelsFor({ lock: 'unlocked', display: 'on', mute: 'unmuted' })
+      expect(unmuted).toContain('Mute PC')
+      expect(unmuted).not.toContain('Unmute PC')
     })
 
     it('shows one checking row while the PC is asked', () => {

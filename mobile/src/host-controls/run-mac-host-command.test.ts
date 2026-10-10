@@ -193,33 +193,15 @@ describe('running a Mac control on the host', () => {
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
-  // 2026-10-10: on a Modern Standby PC Sleep display dims and covers the screens
-  // (windows-display-dim-keeper.ts). A keeper that never answered was told to put
-  // everything back, and the script refuses; the toast must say what happened, not
-  // "did not finish".
-  it('says the screens did not go off and nothing changed, when the keeper never answered', async () => {
-    const fake = fakeClient([['PS C:\\>', 'CUIREFUSED keepawake']])
-    expect(await run(fake)).toEqual({
-      ok: false,
-      reason: 'The PC did not turn its screens off, so nothing was changed.'
-    })
-  })
-
-  it('says the displays cannot be dimmed from here when neither dimming nor covering worked', async () => {
-    const fake = fakeClient([['PS C:\\>', 'CUIREFUSED nodim']])
-    expect(await run(fake)).toEqual({
-      ok: false,
-      reason: "This PC's displays can't be dimmed from here, so nothing was changed."
-    })
-  })
-
-  it('reports what Sleep display dimmed and covered on a Modern Standby PC', async () => {
-    const covered = fakeClient([['PS C:\\>', 'CUIDIMMED 2 covered=1', 'CUIDONE ok']])
-    expect(await run(covered)).toEqual({ ok: true, dim: { dimmed: 2, covered: true } })
-    const dimmedOnly = fakeClient([['PS C:\\>', 'CUIDIMMED 1 covered=0', 'CUIDONE ok']])
-    expect(await run(dimmedOnly)).toEqual({ ok: true, dim: { dimmed: 1, covered: false } })
-    // A classic PC prints no report: plain success, as before.
-    expect(await run(fakeClient([['CUIDONE ok']]))).toEqual({ ok: true })
+  // 2026-10-10: Sleep display was removed from Windows, and with it the dim keeper's
+  // report and its two refusals. A done marker is plain success, whatever else is
+  // on the screen, and a word only the removed script printed refuses nothing.
+  it('reads plain success and no Windows display refusal now that Sleep display is gone from Windows', async () => {
+    expect(await run(fakeClient([['PS C:\\>', 'CUIDIMMED 2 covered=1', 'CUIDONE ok']]))).toEqual({ ok: true })
+    for (const word of ['keepawake', 'nodim']) {
+      const outcome = await run(fakeClient([['PS C:\\>', `CUIREFUSED ${word}`]]))
+      expect(outcome.ok === false && outcome.reason).toMatch(/did not finish/i)
+    }
   })
 
   it("does not take the unlock's own echo of its refusal for a refusal", async () => {
