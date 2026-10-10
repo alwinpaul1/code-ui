@@ -155,3 +155,33 @@ that shape and delete the others.
 5. Send a test message from the Firebase console to the token and confirm the
    banner renders with the app swiped away. Pin the real envelope shape.
 6. Then, and only then, decide whether to host a sender.
+
+## Lock screen and Always On Display icon (Samsung One UI)
+
+Asked 2026-10-10: a locked S23 Ultra should show the Code UI icon the way
+WhatsApp does, on the lock screen and the Always On Display (AOD).
+
+What the app does itself:
+
+- **Small icon.** `assets/notification-icon.png` is a 96×96 white-on-transparent
+  glyph, wired through the `expo-notifications` plugin in `app.json` (`icon`,
+  `color`). A coloured launcher icon would be dropped or drawn as a white square.
+  The background service row uses the same drawable (`notification_icon`).
+- **Channel.** `orca-desktop-lockscreen`: importance HIGH, no vibration,
+  `lockscreenVisibility` PUBLIC, `showBadge` true. Android freezes all of these
+  when a channel is created, so the earlier `orca-desktop-quiet` (created
+  without visibility or badge) is deleted and replaced rather than edited.
+  Every banner is also posted with HIGH priority for pre-Oreo semantics.
+- **Service row stays quiet.** The "Background link" channel is LOW, the row is
+  silent, ongoing and `VISIBILITY_SECRET`, so it never pops or wakes the AOD.
+
+If Samsung still hides it, the phone owner has to allow it (an app cannot):
+
+1. Settings > Lock screen and AOD > Notifications: turn on, and choose Icons only
+   or Details (not "Off") for the lock screen.
+2. Settings > Lock screen and AOD > Always On Display: turn on, and enable
+   "Show notifications" if offered.
+3. Settings > Notifications > App notifications > Code UI: allow, and in the
+   category "Desktop Notifications" enable "Show on lock screen" and the pop-up
+   style (Alert, not Silent).
+4. Settings > Apps > Code UI > Battery: Unrestricted, so delivery is not delayed.

@@ -71,7 +71,7 @@ describe('re-posting a banner after a reply that was not sent', () => {
         },
         categoryIdentifier: 'codeui-permission-question:answer=reply(x):Answer'
       },
-      trigger: { channelId: 'orca-desktop-quiet' }
+      trigger: { channelId: 'orca-desktop-lockscreen' }
     })
   })
 
