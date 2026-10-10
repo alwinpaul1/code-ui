@@ -40,6 +40,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -286,7 +287,7 @@ export type MobileNativeChatControllerArgs = {
   /** `agent-session.repeated-stop.v1` from the same probe: a 1.4.220 host, which takes every
    *  chat action press as its own action (Orca #24301). */
   agentSessionRepeatedStopSupported?: boolean | null
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
   onSendResolved: () => void

@@ -26,6 +26,7 @@ import {
 } from './agent-session-failure-copy'
 import type { AgentSessionWireRefusalCode } from './agent-session-wire-refusals'
 import { joinSentences } from './sentence-joining'
+import { agentSessionSignInFor } from './agent-session-sign-in'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_CODEX_QUEUE_FULL,
@@ -65,6 +66,9 @@ export type AgentSessionFailureWordsContext = {
   /** The surface retries for the person — its own Retry beside the words, or a read that reconnects
    *  on its own — so they leave out sending or trying again. */
   retryControl?: boolean
+  /** A direct create has no submitted message to send again. (Hand-applied with #26544's
+   *  sign-in sentence, the only reader here.) */
+  messageSubmitted?: boolean
 }
 
 /**
@@ -103,6 +107,57 @@ type Sentence = (
 
 function agent(say: AgentSessionFailureSay, { agentName }: AgentSessionFailureWordsContext) {
   return { agent: agentName ?? say('theAgent') }
+}
+
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26544, ff4a51c872): upstream's `notSignedInSentence`
+// (agent-session-availability-sentences.ts) and the copy id it picks (`agentSessionSignInCopyId`,
+// agent-session-availability.ts), folded in here without `fact.account`, which this build's fact
+// does not carry. Those two modules are not vendored. See src/shared/LOCAL-FILES.md.
+const SENTENCE_END = /[.!?。！？][\p{Pe}\p{Pf}"']*\s*$/u
+
+function signInCopyId(signIn: ReturnType<typeof agentSessionSignInFor>): AgentSessionFailureCopyId {
+  if (!signIn) {
+    return 'notSignedIn'
+  }
+  return signIn.agent === 'claude'
+    ? 'claudeSystemNotSignedIn'
+    : signIn.agent === 'codex'
+      ? 'codexSystemNotSignedIn'
+      : signIn.agent === 'pi'
+        ? 'interactiveAgentNotSignedIn'
+        : signIn.loginCommand.length
+          ? 'agentCommandNotSignedIn'
+          : 'agentNotSignedIn'
+}
+
+function notSignedInSentence(
+  context: AgentSessionFailureWordsContext,
+  fact: AgentSessionFailureFact,
+  say: AgentSessionFailureSay,
+  surface: AgentSessionFailureSurface
+): string {
+  const signIn = agentSessionSignInFor(context.agentName ?? context.provider)
+  const copy = say(signInCopyId(signIn), {
+    ...agent(say, context),
+    loginCommand: signIn?.loginCommand.join(' '),
+    slashCommand: signIn && 'slashCommand' in signIn ? signIn.slashCommand : undefined
+  })
+  const next = context.retryControl
+    ? undefined
+    : context.command
+      ? say('runCommandAgain', { command: context.command })
+      : surface === 'rejection' &&
+          context.messageSubmitted !== false &&
+          signIn?.agent !== 'claude' &&
+          signIn?.agent !== 'codex'
+        ? say(signIn ? 'thenSendAgain' : 'signInThenSend')
+        : undefined
+  const detail = fact.detail?.audience === 'person' ? fact.detail.text : undefined
+  const detailSentence =
+    detail && next && !SENTENCE_END.test(detail) ? `${detail.trimEnd()}.` : detail
+  return joinSentences(
+    [copy, detailSentence, next].filter((sentence): sentence is string => sentence !== undefined)
+  )
 }
 
 function quotingPersonDetail(
@@ -187,16 +242,7 @@ const FAILURE_SENTENCES = {
   providerStartFailed: (context, _fact, _surface, say) =>
     joinSentences([say('providerStartFailed', agent(say, context)), ...startRetry(say, context)]),
   startFailed: couldNot('couldNotStart'),
-  // Beside a Retry the resend is the button, but signing in is still a step to take first.
-  notSignedIn: (context, _fact, _surface, say) =>
-    joinSentences([
-      say('notSignedIn', agent(say, context)),
-      context.retryControl
-        ? say('signInFirst')
-        : context.command
-          ? say('signInThenRunCommand', { command: context.command })
-          : say('signInThenSend')
-    ]),
+  notSignedIn: (context, fact, surface, say) => notSignedInSentence(context, fact, say, surface),
   historyTooLarge: (_context, _fact, _surface, say) =>
     joinSentences([say('historyTooLarge'), say('startNewChat')]),
   managedAccountEnvOverride: (_context, _fact, _surface, say) => say('managedAccountEnvOverride'),

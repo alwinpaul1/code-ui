@@ -17,6 +17,10 @@
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
 import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../src/shared/agent-session-failure'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
@@ -24,6 +28,9 @@ export type MobileStructuredSendDelivery = {
   outcome: MobileNativeChatSendOutcome
   /** Copy for the user, or null when the outcome needs none. */
   error: string | null
+  /** A sign-in rejection's typed cause (Orca #26544): its guidance steps aside once the
+   *  transcript states the same failure, so the person reads it once. */
+  failure?: AgentSessionFailureFact
 }
 
 export function mobileStructuredSendDelivery(
@@ -48,7 +55,12 @@ export function mobileStructuredSendDelivery(
     return { outcome: 'unknown', error: null }
   }
   if (submission.dispatchState === 'rejected') {
-    return { outcome: 'rejected', error: structuredAgentSessionRejectionNotice(submission.reason) }
+    const failure = readWholeAgentSessionFailureFact(submission.rejection)
+    return {
+      outcome: 'rejected',
+      error: structuredAgentSessionRejectionNotice(submission.reason),
+      ...(failure?.kind === 'notSignedIn' ? { failure } : {})
+    }
   }
   return { outcome: 'accepted', error: null }
 }

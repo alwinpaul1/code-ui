@@ -1,7 +1,63 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../src/shared/agent-session-failure'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+
+/** What a send error says beyond its text (Orca #26544). `failure`: a rejected send's fact, whose
+ *  guidance steps aside once the transcript states the same failure. */
+export type MobileNativeChatSendErrorDetails = {
+  failure?: AgentSessionFailureFact
+}
+
+export type MobileNativeChatSendErrorReporter = (
+  message: string,
+  details?: MobileNativeChatSendErrorDetails
+) => void
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
+
+/** Whether two facts are one failure. Upstream's `sameAgentSessionFailureFact`
+ *  (agent-session-visible-failures.ts) less `account`, which this build's fact does not carry: a
+ *  host fact with one is not read whole here, so it never reaches this comparison. */
+function sameFailureFact(a: AgentSessionFailureFact, b: AgentSessionFailureFact): boolean {
+  return (
+    a.kind === b.kind &&
+    a.detail?.text === b.detail?.text &&
+    a.detail?.audience === b.detail?.audience &&
+    a.refusal?.code === b.refusal?.code &&
+    a.refusal?.details?.reason === b.refusal?.details?.reason &&
+    a.attachment?.reason === b.attachment?.reason &&
+    a.attachment?.limit === b.attachment?.limit &&
+    a.retry?.error === b.retry?.error &&
+    a.retry?.status === b.retry?.status
+  )
+}
+
+/** A held rejection keeps its guidance until the conversation states the same failure on a row of
+ *  its own; then the banner says only that the message was not sent. A subagent's row is not the
+ *  conversation's, so it never stands in for the guidance. */
+export function mobileNativeChatSendErrorMessage(
+  error: { message: string | null; failure?: AgentSessionFailureFact },
+  messages: readonly NativeChatMessage[]
+): string | null {
+  const { failure, message } = error
+  if (!message || !failure) {
+    return message
+  }
+  const stated = messages.some(
+    (row) =>
+      !row.agentId &&
+      row.blocks.some((block) => {
+        const fact = block.type === 'text' ? readWholeAgentSessionFailureFact(block.failure) : undefined
+        return fact !== undefined && sameFailureFact(failure, fact)
+      })
+  )
+  return stated ? structuredAgentSessionRejectionNotice(null) : message
+}
 
 /** Holds the newest native-chat send failure for the composer's inline banner.
  *  Why a banner and not the bottom toast: chat failures happen with the keyboard
@@ -13,12 +69,15 @@ export function useMobileNativeChatSendError(args: {
   showToast: (message: string, durationMs?: number) => void
 }): {
   message: string | null
-  show: (message: string) => void
+  failure?: AgentSessionFailureFact
+  show: MobileNativeChatSendErrorReporter
   clear: () => void
   /** Set by the route each render; gates banner vs toast. */
   bannerMountedRef: MutableRefObject<boolean>
 } {
-  const [message, setMessage] = useState<string | null>(null)
+  const [held, setHeld] = useState<({ message: string } & MobileNativeChatSendErrorDetails) | null>(
+    null
+  )
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bannerMountedRef = useRef(false)
   const showToastRef = useRef(args.showToast)
@@ -41,10 +100,10 @@ export function useMobileNativeChatSendError(args: {
       return
     }
     clearTimer()
-    setMessage(null)
+    setHeld(null)
   }, [clearTimer, scopeKey])
   const show = useCallback(
-    (next: string) => {
+    (next: string, details?: MobileNativeChatSendErrorDetails) => {
       // Why: deferred failures can land after the user left chat (banner unmounted)
       // or moved to another tab, where the banner belongs to a different terminal —
       // both must fall back to the toast instead of being swallowed or misattributed.
@@ -53,10 +112,10 @@ export function useMobileNativeChatSendError(args: {
         return
       }
       clearTimer()
-      setMessage(next)
+      setHeld({ message: next, ...(details?.failure ? { failure: details.failure } : {}) })
       timerRef.current = setTimeout(() => {
         timerRef.current = null
-        setMessage(null)
+        setHeld(null)
       }, NATIVE_CHAT_SEND_ERROR_HOLD_MS)
     },
     [clearTimer, scopeKey]
@@ -64,7 +123,7 @@ export function useMobileNativeChatSendError(args: {
   // A held failure describes the scope it was raised on; drop it when that changes.
   useEffect(() => {
     clearTimer()
-    setMessage(null)
+    setHeld(null)
   }, [clearTimer, scopeKey])
   useEffect(
     () => () => {
@@ -76,5 +135,11 @@ export function useMobileNativeChatSendError(args: {
     },
     [clearTimer]
   )
-  return { message, show, clear, bannerMountedRef }
+  return {
+    message: held?.message ?? null,
+    ...(held?.failure ? { failure: held.failure } : {}),
+    show,
+    clear,
+    bannerMountedRef
+  }
 }

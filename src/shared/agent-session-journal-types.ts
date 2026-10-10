@@ -387,6 +387,10 @@ export type AgentJournalSubmission = {
   providerItemId: string | null
   /** Terminal reason on `rejected`. */
   reason: string | null
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26544's base, as at ff4a51c872): the typed cause of
+  // a rejection, which the phone reads for the sign-in banner (use-mobile-native-chat-send-error.ts).
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live

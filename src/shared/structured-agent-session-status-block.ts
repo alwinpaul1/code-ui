@@ -1,4 +1,6 @@
-import { readAgentSessionFailureFact } from './agent-session-failure'
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26544, ff4a51c872): the fact is kept only when read
+// whole, so a newer host's fact this build cannot re-word keeps the host's sentence.
+import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalStatusItem } from './agent-session-journal-types'
 import type { NativeChatTextBlock } from './native-chat-types'
 
@@ -6,7 +8,7 @@ import type { NativeChatTextBlock } from './native-chat-types'
 export function structuredAgentSessionStatusBlock(
   body: AgentJournalStatusItem
 ): NativeChatTextBlock {
-  const failure = readAgentSessionFailureFact(body.failure)
+  const failure = readWholeAgentSessionFailureFact(body.failure)
   return {
     type: 'text',
     text: body.text,

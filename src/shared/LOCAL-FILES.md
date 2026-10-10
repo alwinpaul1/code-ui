@@ -574,3 +574,26 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   advertises it, and only Pi chats carry them; Pi reaches a client only through the registered-agents
   reader (`agent-session.structured.registered-agents.v1`), which this phone does not have. So the
   phone does not advertise it, and the input shape stays latent until it does.
+
+## Sign-in guidance for every native chat agent (Orca #26544, ff4a51c872)
+
+- `agent-session-sign-in.ts` taken whole (each agent's login command, Pi's `/login`).
+- `agent-session-failure-copy.ts` — `notSignedIn` loses "for the selected account"; new
+  `claudeSystemNotSignedIn`, `codexSystemNotSignedIn`, `agentCommandNotSignedIn`,
+  `interactiveAgentNotSignedIn`, `agentNotSignedIn`, `thenSendAgain`, and the `loginCommand` /
+  `slashCommand` values. Hand-applied and marked. The managed-account sentences are not taken.
+- `agent-session-failure-words.ts` — `notSignedIn` now uses upstream's `notSignedInSentence` and
+  `agentSessionSignInCopyId`, folded into this file without `fact.account` (this build's fact has
+  none), plus `messageSubmitted?` on the words context. Marked in the source. Upstream's
+  `agent-session-availability.ts` and `agent-session-availability-sentences.ts` are not vendored:
+  both read `fact.account` and `AgentSessionAccountKind`, which arrive with the account-fact PRs
+  this fork never took.
+- `structured-agent-session-status-block.ts` — reads the row's fact with
+  `readWholeAgentSessionFailureFact`, so a newer host's fact (one naming an `account`) is not
+  re-worded here and the row keeps the host's sentence.
+- `agent-session-journal-types.ts` — `rejection?: UnreadAgentSessionFailureFact` on
+  `AgentJournalSubmission` (from upstream's type at ff4a51c872), which the phone reads for the
+  sign-in banner. Marked in the source.
+- Upstream's `agent-session-visible-failures.ts` is not vendored: its `sameAgentSessionFailureFact`
+  compares `account`. The phone's banner compares the remaining fields itself
+  (`mobile/src/session/use-mobile-native-chat-send-error.ts`).

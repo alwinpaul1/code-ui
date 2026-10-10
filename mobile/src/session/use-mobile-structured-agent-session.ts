@@ -41,6 +41,7 @@ import {
   requestMobileStructuredAgentSessionCancel,
   requestMobileStructuredBackgroundTaskStop
 } from './mobile-structured-agent-session-cancel'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
@@ -55,7 +56,7 @@ export function useMobileStructuredAgentSession(args: {
   /** `agent-session.repeated-stop.v1`: a 1.4.220 host takes every press as its own (Orca #24301). */
   repeatedStopSupported?: boolean | null
   agent: string | null
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): StructuredMobileSession {
   const {
     agent,
