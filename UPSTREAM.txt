@@ -151,7 +151,7 @@ src/shared/rpc-contract/files-target-params.ts: c84007c54
 src/shared/rpc-contract/files-terminal-artifact-params.ts: c84007c54
 src/shared/rpc-contract/folder-workspace-params.ts: c84007c54
 src/shared/rpc-contract/git-admission-tier-params.ts: c84007c54
-src/shared/rpc-contract/git-params.ts: 253f0e394 (v1.4.209 shared halves)
+src/shared/rpc-contract/git-params.ts: 253f0e394 (v1.4.209 shared halves); plus #26618's `GitBulkStage` (326133dec0), hunk applied verbatim, see LOCAL-FILES.md
 src/shared/rpc-contract/github-issue-params.ts: c84007c54
 src/shared/rpc-contract/github-issue-update-params.ts: c84007c54
 src/shared/rpc-contract/github-project-params.ts: c84007c54
@@ -187,7 +187,7 @@ src/shared/rpc-contract/project-runtime-params.ts: c84007c54
 src/shared/rpc-contract/repo-params.ts: c84007c54
 src/shared/rpc-contract/repo-update-params.ts: 231e805b1
 src/shared/rpc-contract/rpc-param-primitives.ts: c84007c54
-src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24244 FileOpenTab, #22636 orchestration.callerShow and orchestration.sessionAddress); plus the `agentSession.readVisual` row and its ReadVisualParams import from 1617ff32ef (#26103/#26071), hand-kept, see LOCAL-FILES.md
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: eedd35645 (plus the `agent.launch` entry from 97aa5ff19 and `agent.launchReplay` from abc8386e1, see LOCAL-FILES.md; plus two forward-ported hunks from #20277/#20886 adding the aiVault.search* rows, and 231e805b1's shape-name generic rename, see docs/upstream-port-inventory.md; plus the two `mobileWeb.bundle.*` entries and their import from 9641a1b54, and the `mobileWeb.bundle.range` entry from 996f9cc306 (#22381), see LOCAL-FILES.md; plus #21924's `agentSession.subscribeTurnCompletions: null` row, hand-kept in the v1.4.209..v1.4.210 shared halves, see LOCAL-FILES.md; plus #22377's `agentSession.threadGoal` row and its ThreadGoalParams import, hand-kept in the v1.4.210..v1.4.211 shared halves, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus the v1.4.219..v1.4.220 shared halves delta by hand (merge-file; #24244 FileOpenTab, #22636 orchestration.callerShow and orchestration.sessionAddress); plus the `agentSession.readVisual` row and its ReadVisualParams import from 1617ff32ef (#26103/#26071), hand-kept, see LOCAL-FILES.md; plus #26618's `GitBulkStage` import and the `git.bulkStage` row (326133dec0), hunks applied verbatim
 src/shared/rpc-contract/rpc-send-params.ts: 231e805b1
 src/shared/rpc-contract/runtime-client-capabilities-params.ts: c84007c54
 src/shared/rpc-contract/session-tabs-params.ts: c84007c54
@@ -514,3 +514,5 @@ src/shared/native-chat-subagent-summary.ts: 2460068883 (#26125, new)
 src/shared/native-chat-subagent-summary.test.ts: 2460068883 (new)
 src/shared/native-chat-subagent-group-header.ts: 2460068883 (#26125, new)
 src/shared/native-chat-subagent-group-header.test.ts: 2460068883 (new)
+src/shared/git-stage-worktree-scope.ts: 326133dec0 (#26618, new)
+src/shared/git-pathspec-stdin.ts: 326133dec0 (new; imported by git-stage-worktree-scope.ts)

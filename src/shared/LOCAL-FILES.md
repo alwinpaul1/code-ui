@@ -560,3 +560,13 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   `agent-session-journal-schemas.ts` is NOT changed: the phone does not validate journal rows
   against it (only the host does), so the roster stays an admissible unknown type there, and the
   phone drops a malformed roster itself (`mobile/src/session/mobile-native-chat-subagent-group-blocks.ts`).
+
+## Stage All on a capped listing (taken for the phone's Orca #26618, 326133dec0)
+
+- `git-stage-worktree-scope.ts` taken whole at 326133dec0 (the #26618 merge). The phone uses only
+  `requireGitStageWorktreeScopeReceipt` and `GIT_STAGE_WORKTREE_SCOPE_UNSUPPORTED_MESSAGE`; the
+  host-side `stageGitWorktreeScope` rides along unused. `git-pathspec-stdin.ts` is taken whole at the
+  same commit because that module imports `encodeGitPathspecs` from it.
+- `rpc-contract/git-params.ts` (`GitBulkStage`, `scope` optional so an older host strips it) and
+  `rpc-contract/rpc-params-catalog.generated.ts` (its import and the `git.bulkStage` row) are the
+  upstream hunks applied verbatim; the rest of both files is unchanged from their earlier pins.
