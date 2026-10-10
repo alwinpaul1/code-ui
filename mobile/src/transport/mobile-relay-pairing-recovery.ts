@@ -15,6 +15,7 @@ import {
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
+  claimMobileRelayPairingJournalPublication,
   clearMobileRelayPairingJournal,
   loadMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
@@ -23,6 +24,7 @@ import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
+import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { HostProfile } from './types'
 import {
@@ -36,6 +38,7 @@ type RecoveryDependencies = {
   loadJournal: typeof loadMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  claimJournal: typeof claimMobileRelayPairingJournalPublication
   readCredentialBundle: typeof readMobileRelayCredentialBundle
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   loadHosts: typeof loadHosts
@@ -50,6 +53,7 @@ const defaultDependencies: RecoveryDependencies = {
   loadJournal: loadMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  claimJournal: claimMobileRelayPairingJournalPublication,
   readCredentialBundle: readMobileRelayCredentialBundle,
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   loadHosts,
@@ -77,6 +81,22 @@ export function recoverMobileRelayPairing(
     recoveryPromise = null
   })
   return recoveryPromise
+}
+
+// Waits at most timeoutMs for recovery and never throws: a new scan proceeds
+// either way, and a recovery still running only loses its stale journal.
+export async function settleMobileRelayPairingRecovery(
+  timeoutMs: number,
+  overrides: Partial<RecoveryDependencies> = {}
+): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  await Promise.race([
+    recoverMobileRelayPairing(overrides).catch(() => {}),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs)
+    })
+  ])
+  clearTimeout(timer)
 }
 
 async function runRecovery(
@@ -107,6 +127,7 @@ async function runRecovery(
   // of an authoritatively committed install must not look like "nothing to
   // reconcile" — that journal is the only record left to retry the write from.
   let observedCommitted = false
+  let rejectedCredentials = 0
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
     try {
@@ -141,9 +162,12 @@ async function runRecovery(
         await publishCommitted(journal, reconciled, dependencies)
         return 'recovered'
       }
-    } catch {
+    } catch (error) {
       // Why: ambiguous pairing state advances only by credential priority and
       // authoritative status; a transport failure never rewrites the journal.
+      if (isExplicitCredentialRejection(error)) {
+        rejectedCredentials++
+      }
     } finally {
       client?.close()
     }
@@ -154,9 +178,12 @@ async function runRecovery(
   // any uncommitted server-side install expires on its own. The extra invite
   // lifetime of slack keeps a brief relay outage from discarding a journal whose
   // resume credential would have reconciled it on the next launch.
+  // A relay that rejected every credential (desktop rotated the QR or revoked
+  // the device) is authoritative too: nothing can ever reconcile this journal.
   if (
     !observedCommitted &&
-    journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now()
+    (rejectedCredentials === credentials.length ||
+      journal.metadata.relay.inviteExpiresAt + ABANDON_GRACE_MS <= dependencies.now())
   ) {
     await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
     return 'abandoned'
@@ -252,6 +279,20 @@ async function publishCommitted(
     throw new Error('relay pairing recovery was not committed')
   }
   const installed = endpoints.installStatus.result
+  const release = await dependencies.claimJournal(journal.metadata.journalId)
+  try {
+    await writeCommitted(journal, endpoints.relay, installed, dependencies)
+  } finally {
+    release()
+  }
+}
+
+async function writeCommitted(
+  journal: MobileRelayPairingJournal,
+  relay: NonNullable<PairingGetEndpointsResult['relay']>,
+  installed: DeviceCredentialInstalled,
+  dependencies: RecoveryDependencies
+): Promise<void> {
   const reconciledJournal: MobileRelayPairingJournal = {
     ...journal,
     metadata: {
@@ -266,7 +307,7 @@ async function publishCommitted(
   await dependencies.writeCredentialBundle(
     promotePairingJournalCredential({ journal: reconciledJournal, installed })
   )
-  await dependencies.saveHost(relayHost(reconciledJournal, endpoints.relay))
+  await dependencies.saveHost(relayHost(reconciledJournal, relay))
   await dependencies.clearJournal(journal.metadata.journalId)
 }
 
