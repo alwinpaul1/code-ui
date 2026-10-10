@@ -80,12 +80,9 @@ vi.mock('./host-reachability', async (importOriginal) => ({
   testHostReachability: async () => false
 }))
 vi.mock('../storage/preferences', () => ({
-  mobileWebShellFlagCanBeOn: () => false,
-  loadMobileWebShellEnabled: async () => false,
-  mobileShellBuildKind: () => 'ota',
-  saveMobileWebShellEnabled: async () => undefined
+  mobileShellBuildKind: () => 'native'
 }))
-// Why: the shell rows are imported statically even with the flag off; their stores reach native
+// Why: the shell rows are imported statically even in a native build; their stores reach native
 // modules at import.
 vi.mock('../mobile-web-shell/process-generation-store', () => ({
   processGenerationStore: () => ({ readUpdateFailures: async () => [] })

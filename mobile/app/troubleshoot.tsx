@@ -38,9 +38,8 @@ import {
 } from '../src/diagnostics/troubleshoot-paired-hosts'
 import { useTroubleshootScreenStyles } from '../src/diagnostics/troubleshoot-screen-styles'
 import { MobileWebBundleProbeRow } from '../src/diagnostics/mobile-web-bundle-probe-row'
-import { MobileWebShellDevRow } from '../src/diagnostics/mobile-web-shell-dev-row'
 import { MobileWebShellUpdateFailureRow } from '../src/diagnostics/mobile-web-shell-update-failure-row'
-import { mobileWebShellFlagCanBeOn } from '../src/storage/preferences'
+import { mobileShellBuildKind } from '../src/storage/preferences'
 
 // Same guard as mobile-terminal-diagnostics.ts: `__DEV__` is undefined outside the React Native runtime. The import
 // above is static, so a release bundle still carries the row's graph and evaluates its hoisted
@@ -261,16 +260,10 @@ export default function TroubleshootScreen() {
           <Text style={styles.diagnosticButtonLabel}>View network diagnostics</Text>
         </Pressable>
 
-        {mobileWebShellFlagCanBeOn() ? (
-          <>
-            {/* The shell rows wherever the flag can be on, which in an OTA build is the only way
-                back to the native screens and the only place its update failures show. The
-                bundle probe stays development-only: it fetches. */}
-            {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
-            <MobileWebShellDevRow />
-            <MobileWebShellUpdateFailureRow />
-          </>
-        ) : null}
+        {/* The bundle probe stays development-only: it fetches. Only an OTA build runs the shell,
+            so only it can have update failures to show. */}
+        {isDevelopmentBuild ? <MobileWebBundleProbeRow /> : null}
+        {mobileShellBuildKind() === 'ota' ? <MobileWebShellUpdateFailureRow /> : null}
 
         {checks.length > 0 && (
           <View style={styles.section}>
