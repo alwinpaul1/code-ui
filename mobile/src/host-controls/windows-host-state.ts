@@ -1,5 +1,6 @@
 import { encodePowerShellCommand } from '../session/agent-hud-launch-args'
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
+import { KEEPER_MUTEX } from './windows-display-dim-keeper'
 import { WINDOWS_AUDIO_TYPE } from './windows-host-commands'
 
 const MARKER = 'CUIWIN'
@@ -25,9 +26,15 @@ const MARKER = 'CUIWIN'
  * standby: Sleep display put Danny's whole laptop to sleep on 2026-10-08, and the
  * phone lost it. `modern` hid the row; a keeper holding the PC awake before an
  * instant display-off did not save his laptop on 0.9.122, and since 2026-10-10 the
- * row is back with the display going off through Windows' own idle route instead
- * (windows-display-off-keeper.ts). The sleep script itself asks again. Same caveat
- * as the display read: not yet run on a Windows machine.
+ * row is back: there Sleep display dims every screen and covers it with black,
+ * with the display held on (windows-display-dim-keeper.ts). The sleep script itself
+ * asks again. Same caveat as the display read: not yet run on a Windows machine.
+ *
+ * A running keeper reads as display=off (2026-10-10): Windows still counts the
+ * display on, and an `on` would offer Sleep display again with no way to bring the
+ * screens back from the phone. The keeper holds KEEPER_MUTEX for its whole life,
+ * so the probe asks only whether that name exists; with no keeper the open throws,
+ * which the probe's SilentlyContinue (0) swallows, and the answer stands.
  *
  * Lock is not asked (2026-09-26). The sheet offers Lock PC whatever the PC says,
  * since Windows has no Unlock to offer instead, so reading LogonUI only held up
@@ -76,8 +83,10 @@ export const WINDOWS_DISPLAY_TYPE =
  * unit holding both types starts it once. If that unit fails to compile, each
  * type is compiled alone, as before, so a display type Windows PowerShell 5.1
  * refuses (it has never been compiled there) cannot take the mute read with it.
- * `-IgnoreWarnings` because Add-Type fails a unit the compiler only warns about,
- * and a warning from that older compiler would have cost a third compile.
+ * `-Ig` (-IgnoreWarnings) because Add-Type fails a unit the compiler only warns
+ * about, and a warning from that older compiler would have cost a third compile.
+ * Written short, with SilentlyContinue as its value 0 and the command's flags as
+ * -nop -noni -enc, for cmd.exe's 8,191 once the keeper check went in (2026-10-10).
  *
  * Under PowerShell 7 on macOS (2026-09-26, six runs each) the probe script went
  * from 681 ms to 426 ms, against 186 ms for PowerShell starting and doing nothing.
@@ -86,14 +95,15 @@ export const WINDOWS_DISPLAY_TYPE =
  */
 export function windowsHostStateScript(displayNamespace: string = WINDOWS_DISPLAY_NAMESPACE): string {
   return [
-    "$ErrorActionPreference='SilentlyContinue'",
+    "$ErrorActionPreference=0",
     `$a='${WINDOWS_AUDIO_TYPE}'`,
     `$p='${displayNamespace}'`,
     "$u='using System.Threading;'",
-    "try{Add-Type -IgnoreWarnings -TypeDefinition ($u+$a+$p)}catch{try{Add-Type -IgnoreWarnings -TypeDefinition $a}catch{};try{Add-Type -IgnoreWarnings -TypeDefinition ('using System;using System.Runtime.InteropServices;'+$u+$p)}catch{}}",
+    "try{Add-Type -Ig -TypeDefinition ($u+$a+$p)}catch{try{Add-Type -Ig -TypeDefinition $a}catch{};try{Add-Type -Ig -TypeDefinition ('using System;using System.Runtime.InteropServices;'+$u+$p)}catch{}}",
     "$m=$d=$s='unknown'",
     "try{$m=if([CodeUI.Audio]::GetMute()){'true'}else{'false'}}catch{}",
     "try{$d=@{0='off';1='on';2='dimmed'}[[CodeUI.DisplayPower]::Read(1000)];if(!$d){$d='unknown'}}catch{}",
+    `if([Threading.Mutex]::OpenExisting('${KEEPER_MUTEX}')){$d='off'}`,
     'try{$s=[CodeUI.DisplayPower]::AoAc()}catch{}',
     `'${MARKER.slice(0, 3)}'+"${MARKER.slice(3)} mute=$m display=$d standby=$s"`
   ].join('\n')
@@ -101,7 +111,7 @@ export function windowsHostStateScript(displayNamespace: string = WINDOWS_DISPLA
 
 export const WINDOWS_HOST_STATE_SCRIPT = windowsHostStateScript()
 
-export const WINDOWS_HOST_STATE_PROBE_COMMAND = `powershell -NoProfile -NonInteractive -EncodedCommand ${encodePowerShellCommand(WINDOWS_HOST_STATE_SCRIPT)}`
+export const WINDOWS_HOST_STATE_PROBE_COMMAND = `powershell -nop -noni -enc ${encodePowerShellCommand(WINDOWS_HOST_STATE_SCRIPT)}`
 
 // Every field required: the script prints them in one string, so a line without
 // the last is a line still being painted.

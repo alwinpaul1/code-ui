@@ -276,9 +276,8 @@ describe('the Mac controls on the host sheet', () => {
     // Standby), and the row was hidden there. 2026-10-10 it came back with a keeper
     // holding the PC awake, and on 0.9.122 his laptop slept anyway: on his PC an
     // instant display-off IS standby, held awake or not.
-    // 2026-10-10: back, through Windows' own idle route: the keeper sets the
-    // display timeout to 1 s while it holds the PC awake, and puts it back once the
-    // display is off (windows-display-off-keeper.ts).
+    // 2026-10-10: back; there Sleep display dims and covers the screens with the
+    // display held on (windows-display-dim-keeper.ts).
     it('offers Sleep display on a PC that goes to sleep with its display, as on any other', () => {
       const on = labelsFor({ lock: 'unknown', display: 'on', mute: 'unmuted', sleepsWithDisplay: true })
       expect(on).toEqual(expect.arrayContaining(['Lock PC', 'Mute PC', 'Sleep display']))

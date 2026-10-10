@@ -80,9 +80,10 @@ function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction
   // A PC with Modern Standby (state.sleepsWithDisplay) gets the same rows. An instant
   // display-off starts standby there even with the PC held awake: Danny's laptop
   // slept on 2026-10-08, and again on 0.9.122 with a keeper holding it, and the row
-  // was hidden. 2026-10-10: back, through Windows' own idle route: its Sleep display
-  // sets the display timeout to 1 s while it holds the PC awake, and puts it back once
-  // the display is off (windows-display-off-keeper.ts).
+  // was hidden. 2026-10-10: back, and there Sleep display turns nothing off: it
+  // dims every screen and covers each with black while the display is held on
+  // (windows-display-dim-keeper.ts). The probe reads a running keeper as off, so the
+  // sheet offers Wake display while the screens are dark.
   const display: MacHostAction[] =
     state.display === 'off'
       ? ['wake-display']
