@@ -77,8 +77,8 @@ export type MobileNativeChatController = {
   requestComposerFocus: () => void
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
-  /** What each recovered outbox bubble says under it, by row id: "Sending…" or "Not sent"
-   *  (use-native-chat-outbox-recovery.ts). Optional: a stub controller has none. */
+  /** Each outbox bubble's state, by row id: on its way (drawn as a plain sent bubble, no label)
+   *  or "Not sent" (use-native-chat-outbox-recovery.ts). Optional: a stub controller has none. */
   nativeChatOutboxDeliveries?: Readonly<Record<string, OutboxDelivery>>
   retryNativeChatOutbox?: (rowId: string) => void
   /** Puts a "Not sent" bubble's words back in the composer and drops it. */

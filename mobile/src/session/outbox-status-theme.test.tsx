@@ -1,6 +1,8 @@
-// The line under a message the outbox is still seeing through ("Sending…", or "Not sent" with
-// Retry and Edit), drawn through the real Txt under both themes. A literal colour would pass every
-// other test and still ship one theme's ink on the other's canvas.
+// The line under a message the outbox is still seeing through: nothing at all while it is on its
+// way (2026-10-10, the user on 0.9.127: "why showing sending, that's not good, send it as fast as
+// possible"; the bubble alone says it was sent, as a normal sent message does), and "Not sent" with
+// Retry and Edit only for a real failure, drawn through the real Txt under both themes. A literal
+// colour would pass every other test and still ship one theme's ink on the other's canvas.
 
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -44,7 +46,7 @@ describe('the outbox line under a message, in light and dark', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('draws Sending… and Not sent · Retry · Edit in %s ink', (scheme, palette) => {
+  ] as const)('draws no "Sending…" under a message on its way, and Not sent · Retry · Edit in %s ink', (scheme, palette) => {
     act(() => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
@@ -52,9 +54,11 @@ describe('the outbox line under a message, in light and dark', () => {
         </ThemeProvider>
       )
     })
-    const sending = flat(textNode(OUTBOX_STATUS_COPY.sending).props.style).color as string
-    expect(sending).toBe(palette.textMuted)
-    expect(contrastRatio(sending, palette.bg)).toBeGreaterThanOrEqual(3)
+    // No label, no spinner: the line is not drawn at all.
+    expect(renderer!.toJSON()).toBeNull()
+    expect(
+      renderer!.root.findAll((node) => (node.type as unknown) === 'Text' && /sending/i.test([node.props.children].flat().join('')))
+    ).toEqual([])
 
     const onRetry = vi.fn()
     const onEdit = vi.fn()

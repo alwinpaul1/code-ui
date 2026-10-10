@@ -307,7 +307,7 @@ describe('outbox regressions found in review (2026-10-10) (terminal)', () => {
     expect(tab.submittedBodies).toEqual([])
   })
 
-  it('leaves no "Sending…" bubble for a recovered slash command, which never gets a row', async () => {
+  it('leaves no early bubble for a recovered slash command, which never gets a row', async () => {
     const COMMAND = '/compact'
     mount(desktop('hang').client)
     await typeAndTap(COMMAND)
