@@ -1,4 +1,5 @@
 import { AppUpdateDialog } from './AppUpdateDialog'
+import { HomeUpdateDownloadCard } from './HomeUpdateDownloadCard'
 import { useHomeUpdateCheck } from './use-home-update-check'
 
 export function HomeUpdateSurface() {
@@ -6,5 +7,12 @@ export function HomeUpdateSurface() {
   // Home screen does not need update-specific state.
   useHomeUpdateCheck()
 
-  return <AppUpdateDialog />
+  // The two are never up together: a download hides the dialog, and the
+  // download card is gone the moment the download is.
+  return (
+    <>
+      <HomeUpdateDownloadCard />
+      <AppUpdateDialog />
+    </>
+  )
 }

@@ -7,6 +7,8 @@ import Constants from 'expo-constants'
 import { AppLogo } from '../src/components/AppLogo'
 import { AppUpdateDialog } from '../src/app-update/AppUpdateDialog'
 import { useAppUpdateStore } from '../src/app-update/app-update-store'
+import { useApkInstallStore } from '../src/app-update/apk-install-store'
+import { downloadProgressPercent } from '../src/app-update/download-progress'
 import { useTheme } from '../src/theme/theme-context'
 import { ScreenHeader } from '../src/ui/ScreenHeader'
 import { SectionLabel } from '../src/ui/SectionLabel'
@@ -85,8 +87,14 @@ function CheckForUpdatesRow() {
   const status = useAppUpdateStore((s) => s.status)
   const latestVersion = useAppUpdateStore((s) => s.latestVersion)
   const checkForUpdate = useAppUpdateStore((s) => s.checkForUpdate)
-  const hint =
-    status === 'checking'
+  const installPhase = useApkInstallStore((s) => s.phase)
+  const installProgress = useApkInstallStore((s) => s.progress)
+  const downloading = installPhase === 'downloading'
+  // A download hides the update dialog (2026-09-14), so this row is where
+  // About says one is running.
+  const hint = downloading
+    ? `Downloading ${downloadProgressPercent(installProgress)}%`
+    : status === 'checking'
       ? 'Checking…'
       : status === 'available' && latestVersion
         ? `v${latestVersion} available`
@@ -115,7 +123,7 @@ function CheckForUpdatesRow() {
         Check for updates
       </Txt>
       {hint ? (
-        <Txt variant="caption" tone={status === 'available' ? 'accent' : 'muted'}>
+        <Txt variant="caption" tone={status === 'available' || downloading ? 'accent' : 'muted'}>
           {hint}
         </Txt>
       ) : null}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '../test/contrast'
-import { darkColors, lightColors, type ThemeColors } from './tokens'
+import { darkColors, lightColors } from './tokens'
 
 // These two cases measured the static dark palette in mobile-theme.ts until it was deleted
 // (2026-09-27). Its values were the dark scheme's, so the dark rows below are the same numbers;
@@ -50,11 +50,11 @@ describe('mobile text contrast', () => {
   })
 })
 
-// The update alert is a translucent material over a scrim over the page, so
-// the surface its text lands on is none of the palette's flat colours. It is
-// the composite, and that is what the text is measured against, in BOTH
-// schemes, since the onboarding page shipped at 1.07:1 in light while every
-// dark-only check stayed green (2026-09-16).
+// The update card was a translucent material over a scrim over the page until
+// the 2026-10-10 redesign made it solid ("not glass"). Its text is measured
+// against what it is actually drawn on, in BOTH schemes, since the onboarding
+// page shipped at 1.07:1 in light while every dark-only check stayed green
+// (2026-09-16). The compositing helpers below also serve the diff checks.
 
 type Rgb = { r: number; g: number; b: number }
 type Rgba = Rgb & { a: number }
@@ -90,26 +90,20 @@ function toHex({ r, g, b }: Rgb): string {
   return `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`
 }
 
-/** What the alert's text is actually drawn on: material over scrim over page. */
-function alertSurface(palette: ThemeColors): string {
-  const page = parseColor(palette.bg)
-  const dimmed = over(parseColor(palette.alertScrim), page)
-  return toHex(over(parseColor(palette.alertMaterial), dimmed))
-}
-
 const WCAG_AA_BODY = 4.5
 
-describe('the update alert stays readable on its own frosted surface', () => {
+describe('the update card stays readable on its own solid surface', () => {
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)('%s: title, message, tinted rows and a destructive row all clear AA', (scheme, palette) => {
-    const surface = alertSurface(palette)
+  ] as const)('%s: title, message, eyebrow, links and a failure all clear AA on the panel', (scheme, palette) => {
+    const surface = palette.bgPanel
     for (const [name, foreground] of [
-      ['title and notes', palette.text],
-      ['message and version line', palette.textSecondary],
-      ['action rows and links', palette.accentText],
-      ['destructive row', palette.danger]
+      ['title, version and notes', palette.text],
+      ['message and notes', palette.textSecondary],
+      ['meta line', palette.textMuted],
+      ['eyebrow and links', palette.accentText],
+      ['failure icon', palette.danger]
     ] as const) {
       expect(
         contrastRatio(foreground, surface),
@@ -118,21 +112,34 @@ describe('the update alert stays readable on its own frosted surface', () => {
     }
   })
 
-  it('dims with the same flat black in both schemes, as the alert spec asks', () => {
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: the failure reason clears AA in its sunken box', (scheme, palette) => {
+    for (const foreground of [palette.textSecondary, palette.textMuted]) {
+      expect(contrastRatio(foreground, palette.bgSunken), `${scheme}: ${foreground}`).toBeGreaterThanOrEqual(
+        WCAG_AA_BODY
+      )
+    }
+  })
+
+  it('dims with the same flat black in both schemes', () => {
     expect(lightColors.alertScrim).toBe('rgba(0, 0, 0, 0.28)')
     expect(darkColors.alertScrim).toBe(lightColors.alertScrim)
   })
 
-  it('shows a pressed row in both schemes: the highlight differs from the resting surface', () => {
+  it('shows a pressed pill in both schemes: the press differs from the resting accent', () => {
     for (const [scheme, palette] of [
       ['light', lightColors],
       ['dark', darkColors]
     ] as const) {
-      const resting = alertSurface(palette)
-      const pressed = toHex(over(parseColor(palette.alertRowPressed), parseColor(resting)))
-      expect(pressed, `${scheme}: pressed row must not look like a resting one`).not.toBe(resting)
-      // Still readable while pressed.
-      expect(contrastRatio(palette.accentText, pressed)).toBeGreaterThanOrEqual(WCAG_AA_BODY)
+      expect(palette.accentText, `${scheme}: pressed pill must not look like a resting one`).not.toBe(
+        palette.accent
+      )
+      // The label stays at least as readable while pressed as at rest.
+      expect(contrastRatio(palette.onAccent, palette.accentText)).toBeGreaterThanOrEqual(
+        contrastRatio(palette.onAccent, palette.accent) * 0.9
+      )
     }
   })
 })

@@ -2,11 +2,11 @@ import { useEffect, useRef } from 'react'
 import { Modal, Pressable, View } from 'react-native'
 
 import { useTheme } from '../theme/theme-context'
-import { AlertCard } from '../ui/alert/AlertCard'
 import { AppUpdateDialogBody } from './AppUpdateDialogBody'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
 import { useDialogState } from './app-update-dialog-state'
+import { UpdateCard } from './UpdateCard'
 import {
   claimAppUpdateDialogPresenter,
   releaseAppUpdateDialogPresenter,
@@ -21,18 +21,19 @@ import {
   useAppUpdateTouchShield
 } from './use-app-update-touch-shield'
 
-// One alert for the whole update journey, after UIAlertController by way of
-// BitChord's UpdateAvailableDialog: a fixed 270 card on a flat 28% scrim,
-// action rows stacked under the message, the release notes as markdown in a
-// capped scroller. The same card morphs through checking → latest / available
-// → ready → error rather than stacking banners, the shape Orca desktop's
-// UpdateCard has. A download shows nothing at all (2026-09-14): it runs in the
-// store and the card returns on its own when it is done. Transient states
-// (checking, up to date) only show for a user-initiated "Check for updates".
+// One card for the whole update journey: a solid panel (2026-10-10 redesign,
+// "not glass") on a flat 28% scrim, the version as its hero, the release
+// notes in sections inside a capped scroller, and an action bar pinned under
+// them. The same card morphs through checking → latest / available → ready →
+// error rather than stacking banners, the shape Orca desktop's UpdateCard
+// has. A download shows no dialog at all (2026-09-14): it runs in the store,
+// Home shows its progress on a card of its own (HomeUpdateDownloadCard), and
+// this card returns on its own when it is done. Transient states (checking,
+// up to date) only show for a user-initiated "Check for updates".
 //
 // This file owns the window: the Modal, the touch shield behind the card and
-// its tail, and what a tap on the scrim means. The card is ui/alert/AlertCard;
-// what it says is AppUpdateDialogBody.
+// its tail, and what a tap on the scrim means. The card is UpdateCard; what
+// it says is AppUpdateDialogBody.
 
 export function AppUpdateDialog() {
   const { colors, space } = useTheme()
@@ -130,12 +131,13 @@ export function AppUpdateDialog() {
               flex: 1,
               justifyContent: 'center',
               alignItems: 'center',
-              padding: space.xl
+              paddingHorizontal: space.lg,
+              paddingVertical: space.xxl
             }}
           >
-            <AlertCard morphKey={state.kind}>
+            <UpdateCard morphKey={state.kind}>
               <AppUpdateDialogBody state={state} onDismiss={dismiss} />
-            </AlertCard>
+            </UpdateCard>
           </View>
         ) : null}
       </View>

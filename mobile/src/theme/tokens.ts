@@ -70,27 +70,11 @@ export type ThemeColors = {
   /** Fallback behind the terminal WebView before the desktop theme arrives. */
   terminalBg: string
   shadow: string
-  /** The dim behind a system-style alert (the update dialog). Flat black at
-   *  28% in BOTH schemes, after UIAlertController: the alert's material is
-   *  what reads as frosted, and it needs an un-blurred page behind it to be
-   *  frosted against. Drawers keep the heavier `bgOverlay`. */
+  /** The dim behind the update dialog's card. Flat black at 28% in BOTH
+   *  schemes: the card on it is solid (2026-10-10 redesign, "not glass"), so
+   *  the dim only has to set it off from the page. Drawers keep the heavier
+   *  `bgOverlay`. */
   alertScrim: string
-  /** The alert card itself: the panel colour at 94%, so a little of the
-   *  dimmed page shows through and the card reads as a material rather than
-   *  a cut-out. Text contrast is proven against the COMPOSITE of this over
-   *  `alertScrim` over `bg` in mobile-theme-contrast.test.ts. */
-  alertMaterial: string
-  /** The hairline between an alert's rows. A translucent OVERLAY, not a palette
-   *  colour: the card's material is translucent, so a fixed hex is only correct
-   *  over one backdrop. `border` was used here and measured 1.03:1 against the
-   *  dark material — the rows ran together with no division at all. */
-  alertSeparator: string
-  /** An alert action row while the finger is on it: ink at 8% in light,
-   *  white at 6% in dark, painted over the material. `bgRaised` is the
-   *  pressed-row colour elsewhere, but in dark it IS the material's colour,
-   *  so a press there would be invisible. Not more than 6% in dark: at 10%
-   *  the tinted row label fell to 4.40:1 while pressed (contrast test). */
-  alertRowPressed: string
 }
 
 export const lightColors: ThemeColors = {
@@ -132,10 +116,7 @@ export const lightColors: ThemeColors = {
   diffDelText: '#A43227',
   terminalBg: '#1A1B26',
   shadow: 'rgba(30, 28, 25, 0.18)',
-  alertScrim: 'rgba(0, 0, 0, 0.28)',
-  alertMaterial: 'rgba(251, 250, 246, 0.94)',
-  alertSeparator: 'rgba(0, 0, 0, 0.14)',
-  alertRowPressed: 'rgba(30, 28, 25, 0.08)'
+  alertScrim: 'rgba(0, 0, 0, 0.28)'
 }
 
 export const darkColors: ThemeColors = {
@@ -179,10 +160,7 @@ export const darkColors: ThemeColors = {
   diffDelText: '#EE8B7B',
   terminalBg: '#1A1B26',
   shadow: 'rgba(0, 0, 0, 0.5)',
-  alertScrim: 'rgba(0, 0, 0, 0.28)',
-  alertMaterial: 'rgba(43, 41, 37, 0.94)',
-  alertSeparator: 'rgba(255, 255, 255, 0.14)',
-  alertRowPressed: 'rgba(255, 255, 255, 0.06)'
+  alertScrim: 'rgba(0, 0, 0, 0.28)'
 }
 
 /** The brand mark's red, the same in BOTH schemes on purpose: it is the app

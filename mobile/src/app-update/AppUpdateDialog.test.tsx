@@ -4,14 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ThemeProvider } from '../theme/theme-context'
 import { darkColors, lightColors, radius } from '../theme/tokens'
+import { ALERT_ENTER_SCALE } from '../ui/alert/alert-motion'
 import { resetReducedMotionForTests } from '../ui/use-reduced-motion'
 
-// The update dialog after UIAlertController (via BitChord's
-// UpdateAvailableDialog.kt): a fixed 270 card with a 14 corner, stacked 44
-// action rows under the message, a flat 28% black scrim that is "Later", and
-// the release notes rendered as markdown inside a capped scroller. These tests
-// were written against the previous Material-style card and watched fail:
-// see the report for which ones went red on the unfixed code.
+// The update dialog: a flat 28% black scrim that is "Later", and on it a
+// solid card (2026-10-10 redesign, "not glass"): the version as its hero, the
+// release notes rendered as markdown inside a capped scroller, an accent pill
+// and a quiet Later pinned under them. The behaviour pins (states, scrim,
+// back, touch shield, motion) predate the redesign and were kept as they
+// were; only the pins on the old alert's look changed. The new layout's own
+// pins, in both schemes, are in AppUpdateDialog.layout.test.tsx.
 
 const mocks = vi.hoisted(() => {
   type Callback = ((result: { finished: boolean }) => void) | undefined
@@ -108,7 +110,16 @@ vi.mock('react-native', async () => {
   }
 })
 
-vi.mock('lucide-react-native', () => ({ ExternalLink: 'ExternalLink', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  AlertTriangle: 'AlertTriangle',
+  CheckCircle2: 'CheckCircle2',
+  CloudOff: 'CloudOff',
+  ExternalLink: 'ExternalLink',
+  ShieldCheck: 'ShieldCheck',
+  Sparkles: 'Sparkles',
+  TrendingUp: 'TrendingUp',
+  X: 'X'
+}))
 vi.mock('../components/pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 vi.mock('./installed-version', () => ({
   getInstalledVersion: () => '0.6.4',
@@ -143,6 +154,8 @@ import { AppUpdateDialog } from './AppUpdateDialog'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
 import { resetAppUpdateDialogPresenterForTests } from './app-update-dialog-presenter'
+import { UPDATE_SCROLL_REGION_MAX_HEIGHT } from './update-card-parts'
+import { UPDATE_CARD_MAX_WIDTH } from './UpdateCard'
 
 /** The 0.6.4 release body exactly as GitHub's API returned it (CRLF and all). */
 const RELEASE_0_6_4 = [
@@ -277,15 +290,15 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-describe('the card is an alert, not a sheet', () => {
-  it('is 270 wide with a 14 corner, whatever the screen width', async () => {
+describe('the card', () => {
+  it('fills the width up to 400, with a 24 corner', async () => {
     showAvailable()
     const root = (await renderDialog()).root
     const style = flattenStyle(card(root).props.style)
-    expect(style.width).toBe(270)
-    expect(style.borderRadius).toBe(radius.md)
-    expect(style.borderRadius).toBe(14)
-    expect(style.maxWidth).toBeUndefined()
+    expect(style.width).toBe('100%')
+    expect(style.maxWidth).toBe(UPDATE_CARD_MAX_WIDTH)
+    expect(UPDATE_CARD_MAX_WIDTH).toBe(400)
+    expect(style.borderRadius).toBe(radius.xl)
   })
 
   it('sits on a flat 28% black scrim, the same in light and dark', async () => {
@@ -301,43 +314,46 @@ describe('the card is an alert, not a sheet', () => {
     }
   })
 
-  it('draws a frosted material that follows the appearance setting', async () => {
+  it('is solid, not glass: the opaque panel colour of the appearance setting', async () => {
     showAvailable()
     expect(flattenStyle(card((await renderDialog('light')).root).props.style).backgroundColor).toBe(
-      lightColors.alertMaterial
+      lightColors.bgPanel
     )
     await act(async () => renderer?.unmount())
     resetAppUpdateDialogPresenterForTests()
     expect(flattenStyle(card((await renderDialog('dark')).root).props.style).backgroundColor).toBe(
-      darkColors.alertMaterial
+      darkColors.bgPanel
     )
   })
 
-  it('stacks full-width 44 rows under the message, separated by hairlines', async () => {
+  it('offers the update as a full-width pill and Later as a quiet button, both 48dp or more', async () => {
     showAvailable()
     const root = (await renderDialog()).root
-    const update = actionRow(root, 'Update now')
-    const later = actionRow(root, 'Later')
-    for (const row of [update, later]) {
-      const style = flattenStyle(
-        typeof row.props.style === 'function' ? row.props.style({ pressed: false }) : row.props.style
-      )
-      expect(style.minHeight).toBe(44)
+    for (const label of ['Update now', 'Later']) {
+      const style = flattenStyle(actionRow(root, label).props.style({ pressed: false }))
+      expect(style.minHeight).toBeGreaterThanOrEqual(48)
       expect(style.alignSelf).toBe('stretch')
-      expect(style.borderTopWidth).toBe(0.5)
+      expect(style.borderRadius).toBe(radius.pill)
     }
+    expect(flattenStyle(actionRow(root, 'Update now').props.style({ pressed: false })).backgroundColor).toBe(
+      lightColors.accent
+    )
+    expect(flattenStyle(actionRow(root, 'Later').props.style({ pressed: false })).backgroundColor).toBe(
+      'transparent'
+    )
   })
 
-  it('highlights a row the instant it is pressed, and clears it when the finger drags away', async () => {
+  it('shows a press the instant the finger lands, and clears it when the finger drags away', async () => {
     showAvailable()
-    const row = actionRow((await renderDialog()).root, 'Update now')
+    const root = (await renderDialog()).root
+    const row = actionRow(root, 'Update now')
     // A style FUNCTION is the only way a Pressable paints on press-in rather
     // than on release; a static style is release-only feedback.
     expect(typeof row.props.style).toBe('function')
-    expect(flattenStyle(row.props.style({ pressed: true })).backgroundColor).toBe(
-      lightColors.alertRowPressed
-    )
-    expect(flattenStyle(row.props.style({ pressed: false })).backgroundColor).toBe('transparent')
+    expect(flattenStyle(row.props.style({ pressed: true })).backgroundColor).toBe(lightColors.accentText)
+    expect(flattenStyle(row.props.style({ pressed: false })).backgroundColor).toBe(lightColors.accent)
+    const later = actionRow(root, 'Later')
+    expect(flattenStyle(later.props.style({ pressed: true })).backgroundColor).toBe(lightColors.bgRaised)
   })
 })
 
@@ -398,11 +414,13 @@ describe('release notes', () => {
     expect(label.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('scroll inside the card past 220 instead of growing it', async () => {
+  it('scroll inside the card past the cap instead of growing it', async () => {
     showAvailable()
     const root = (await renderDialog()).root
     const scroller = root.findAll(
-      (node) => node.type === 'ScrollView' && flattenStyle(node.props.style).maxHeight === 220
+      (node) =>
+        node.type === 'ScrollView' &&
+        flattenStyle(node.props.style).maxHeight === UPDATE_SCROLL_REGION_MAX_HEIGHT
     )[0]
     expect(scroller).toBeTruthy()
     expect(scroller!.props.persistentScrollbar).toBe(true)
@@ -414,7 +432,7 @@ describe('release notes', () => {
     const root = (await renderDialog()).root
     const scroller = root.findAll((node) => node.type === 'ScrollView')[0]!
     const style = flattenStyle(scroller.props.style)
-    expect(style.maxHeight).toBe(220)
+    expect(style.maxHeight).toBe(UPDATE_SCROLL_REGION_MAX_HEIGHT)
     expect(style.height).toBeUndefined()
     expect(style.minHeight).toBeUndefined()
     expect(bullets(root)).toHaveLength(1)
@@ -454,7 +472,7 @@ describe('motion', () => {
     expect(config.damping).toBeCloseTo(2 * Math.sqrt(config.stiffness as number), 6)
     const style = flattenStyle(card(root).props.style)
     const scale = (style.transform as { scale: { interpolated: { outputRange: number[] } } }[])[0]!
-    expect(scale.scale.interpolated.outputRange).toEqual([1.1, 1])
+    expect(scale.scale.interpolated.outputRange).toEqual([ALERT_ENTER_SCALE, 1])
   })
 
   it('cross-fades under reduced motion, with no scale and no overshoot', async () => {
@@ -722,7 +740,9 @@ describe('a card taller than the screen', () => {
     showAvailable()
     const root = (await renderDialog()).root
     const notes = root.findAll(
-      (node) => node.type === 'ScrollView' && flattenStyle(node.props.style).maxHeight === 220
+      (node) =>
+        node.type === 'ScrollView' &&
+        flattenStyle(node.props.style).maxHeight === UPDATE_SCROLL_REGION_MAX_HEIGHT
     )[0]!
     expect(flattenStyle(notes.props.style).flexShrink).toBe(1)
     for (const label of ['Update now', 'Later']) {
@@ -737,7 +757,9 @@ describe('a card taller than the screen', () => {
     useApkInstallStore.setState({ phase: 'failed', version: '0.6.5', error })
     const root = (await renderDialog()).root
     const scroller = root.findAll(
-      (node) => node.type === 'ScrollView' && flattenStyle(node.props.style).maxHeight === 220
+      (node) =>
+        node.type === 'ScrollView' &&
+        flattenStyle(node.props.style).maxHeight === UPDATE_SCROLL_REGION_MAX_HEIGHT
     )[0]
     expect(scroller).toBeTruthy()
     expect(textOf(scroller!)).toContain('the server closed the connection')
@@ -748,7 +770,7 @@ describe('a card taller than the screen', () => {
     showAvailable()
     const row = actionRow((await renderDialog()).root, 'Later')
     const style = flattenStyle(row.props.style({ pressed: false }))
-    expect(style.minHeight).toBe(44)
+    expect(style.minHeight).toBe(48)
     expect(style.height).toBeUndefined()
     expect(row.findByType('Text').props.numberOfLines).toBeUndefined()
   })
