@@ -77,16 +77,18 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
  *  (MAC_SCREEN_LOCK_GATE); this keeps the row from asking for that in the first place. */
 function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction[] {
   const lock: MacHostAction[] = canUnlock && state.lock === 'locked' ? ['unlock'] : ['lock']
-  // A PC with Modern Standby (state.sleepsWithDisplay) gets the same rows: its Sleep
-  // display holds the PC awake before turning the display off
-  // (windows-display-off-keeper.ts). It was hidden from 2026-10-08, when the plain
-  // display-off slept Danny's laptop, until he asked for it back on 2026-10-10.
+  // A PC with Modern Standby (state.sleepsWithDisplay) is never offered Sleep display.
+  // An instant display-off starts standby there even with the PC held awake
+  // (windows-display-off-keeper.ts): Danny's laptop slept on 0.9.122, 2026-10-10, as
+  // it had on 2026-10-08 without the keeper. Hidden until the display goes off by
+  // Windows' own idle route, the one route that keeps such a PC awake.
+  const sleep: MacHostAction[] = state.sleepsWithDisplay ? [] : ['sleep-display']
   const display: MacHostAction[] =
     state.display === 'off'
       ? ['wake-display']
       : state.display === 'on'
-        ? ['sleep-display']
-        : ['sleep-display', 'wake-display']
+        ? sleep
+        : [...sleep, 'wake-display']
   const mute: MacHostAction[] =
     state.mute === 'muted' ? ['unmute'] : state.mute === 'unmuted' ? ['mute'] : ['mute', 'unmute']
   return [...lock, ...display, ...mute]

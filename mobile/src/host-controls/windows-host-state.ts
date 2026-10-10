@@ -23,10 +23,10 @@ const MARKER = 'CUIWIN'
  * Standby: whether the PC has Modern Standby (S0 Low Power Idle), from
  * GetPwrCapabilities' AoAc flag. There the display going off IS the start of
  * standby: Sleep display put Danny's whole laptop to sleep on 2026-10-08, and the
- * phone lost it. `modern` hid the row until 2026-10-10; the row is back, and the
- * sleep script itself asks again and holds the PC awake on such a PC
- * (windows-display-off-keeper.ts). Same caveat as the display read: not yet run on
- * a Windows machine.
+ * phone lost it. `modern` hides the row (mac-host-sheet-actions.ts). It came back
+ * on 2026-10-10 with a keeper holding the PC awake (windows-display-off-keeper.ts),
+ * and his laptop slept anyway on 0.9.122, so it is hidden again until the display
+ * goes off through Windows' own idle route.
  *
  * Lock is not asked (2026-09-26). The sheet offers Lock PC whatever the PC says,
  * since Windows has no Unlock to offer instead, so reading LogonUI only held up

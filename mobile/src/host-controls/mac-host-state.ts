@@ -9,9 +9,9 @@ export type MacHostState = {
   display: MacDisplayState
   mute: MacMuteState
   /** Set only when the host said its display going off puts it to sleep: a Windows
-   *  PC with Modern Standby (windows-host-state.ts). The sheet offers the same rows
-   *  there (its Sleep display holds the PC awake first, windows-display-off-keeper.ts);
-   *  kept so a later change can tell such a PC apart. */
+   *  PC with Modern Standby (windows-host-state.ts). The sheet offers no Sleep display
+   *  there (mac-host-sheet-actions.ts): an instant display-off slept Danny's laptop
+   *  even with the PC held awake (0.9.122, 2026-10-10). */
   sleepsWithDisplay?: true
 }
 
