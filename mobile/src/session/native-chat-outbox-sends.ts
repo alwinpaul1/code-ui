@@ -29,6 +29,8 @@ const live = new Set<string>()
 const recoveries = new Map<string, number>()
 type Adoption = { id: string; normalizedText: string; recovery: boolean }
 const adoptions = new Map<string, Adoption>()
+/** Entries whose send stopped in this process without knowing its fate (releaseOutboxSend). */
+const releasedThisRun = new Set<string>()
 
 export function newOutboxSendId(): string {
   return `send-${Date.now()}-${structuredSessionRandomUuid().slice(0, 12)}`
@@ -131,27 +133,30 @@ export function isOutboxSendLive(id: string): boolean {
 /**
  * The send in this process has stopped carrying the entry without knowing its fate: an
  * unconfirmed hold ran out, or its chat closed under it. Returns whether a chat's recovery is
- * mounted for its scope now to take it over; when none is, the caller says what it always said
- * ("Delivery unconfirmed"), and the entry waits for the next chat that shows its tab.
+ * mounted for its scope now to take it over; when none is, the caller decides what to say.
  *
  * A recovery registers only while its chat's transcript is a settled read, the only state in which
- * it can tell whether the send landed; otherwise the bubble said "Sending…" for good and nothing
- * was said. A photo send is never handed over and leaves the outbox here: the recovery resends no
- * files, and its give-back ("the app closed before it reached your desktop. Attach the files
- * again") was false in a process that never closed, and baited a second copy of a photo that may
- * well have arrived. Only a process that died with it out leaves one for the recovery to give back.
+ * it can tell whether the send landed. A photo send is never handed over: the recovery resends no
+ * files. It stays in the outbox for a later chat or process, marked as released in this run, so
+ * a recovery in this same run says delivery is unconfirmed (outboxReleasedThisRun) instead of
+ * "the app closed", which was false in a process that never closed.
  */
 export function releaseOutboxSend(id: string | undefined): boolean {
   if (!id) {
     return false
   }
   live.delete(id)
+  releasedThisRun.add(id)
   const entry = findOutboxEntry(id)
   if (entry?.hasAttachments) {
-    void retireOutboxSend(id)
     return false
   }
   return entry !== undefined && (recoveries.get(entry.draftKey) ?? 0) > 0
+}
+
+/** The send carrying it stopped in this process (releaseOutboxSend), not with a process that died. */
+export function outboxReleasedThisRun(id: string): boolean {
+  return releasedThisRun.has(id)
 }
 
 export function registerOutboxRecovery(draftKey: string): () => void {
@@ -171,4 +176,5 @@ export function resetOutboxSendsForTests(): void {
   live.clear()
   recoveries.clear()
   adoptions.clear()
+  releasedThisRun.clear()
 }
