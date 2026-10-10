@@ -155,7 +155,13 @@ const hash = (parts: string[] | string): string =>
 // moving); `semantics` 3,293 -> 3,294 (one `'linear'` comparison). Declarations, the render tree
 // and the StyleSheets do not move. mobile-tasks-linear-comment-over-failed-list.test.tsx guards
 // the behaviour.
-const PROVIDER_RPC_SCREEN_HOOKS = '38ffbdb52e09127e2da0a1638a7ed6c1e4673e1293ba361dc640273c444890c7'
+// 2026-10-10 (Orca #26197 ported): the GitLab detail read writes the selected item and the list
+// back only when the reply changed a field, through gitLabHydrationUnchanged (a helper outside the
+// screen's hooks) and a `changed` flag in the list updater. The effect body, the setItems updater
+// and the helper's comparison moved, so the hooks, statements and semantics pins moved with them;
+// counts hold at 371 and 440, `semantics` 3,294 -> 3,297 (the helper's three property-name literals, 'mergeable', 'reviewDecision' and 'reviewerCount', checked by diffing the reader's output against the pre-port tree).
+// Declarations, the render tree and the styles do not move.
+const PROVIDER_RPC_SCREEN_HOOKS = 'f3a197bd52d57cf8ab9910d66a8ba467c155b91e69874dc341bf6de0a4e938e5'
 // 2026-09-27 (theme pass 2): GitHubPrFileDiff reads `useTheme().syntax` for its code spans, which
 // had fallen back to MobileSyntaxSegments' Dark+ default in both schemes. One hook, 3 -> 4.
 // Later the same day it reads `useThemedStyles(mobileTasksStyles)` too, 4 -> 5 (see the note above).
@@ -200,7 +206,7 @@ const PRE_REFACTOR_DIFF_HOOKS = '62c82feed348183b33ac0a088db44dc57d94ec2dc57e3d4
 // 2026-09-30 (fix round 1, F12): 434 -> 435 (note above the hooks pin).
 // 2026-10-01 (fix round 2, finding 4): two statements changed, 435 still (note above the hooks pin).
 // 2026-10-01 (edge cases, Linear post after a switch): 435 -> 440 (note above the hooks pin).
-const PROVIDER_RPC_STATEMENTS = 'e28cb4c5c3e84934817deddf7d1e631c11a7147cf2acedf1526e317c8721b160'
+const PROVIDER_RPC_STATEMENTS = '1bd17f8b0ced2e1a2857de05c9fb5bd9f3485fe735f72a9456ac7844da8e9e22'
 // 2026-09-26, the code viewer's face sweep: the PR file diff's "+ "/"- " prefix is a nested Text
 // inside the monospace code line, and with no face of its own the app's Instrument Sans default
 // drew it proportional, so the code after it shifted row to row. It now takes
@@ -235,7 +241,7 @@ const PRESS_FEEDBACK_DECLARATIONS = '9951ae00ff6ae3a36153403301dd6e55e885ac93ceb
 // 2026-09-30 (fix round 3, finding 2): 3,282 -> 3,292, then 3,289 (notes above the hooks pin).
 // 2026-09-30 (fix round 1, F12): 3,289 -> 3,291, then 3,293 (notes above the hooks pin).
 // 2026-10-01 (edge cases, Linear post after a switch): 3,293 -> 3,294 (note above the hooks pin).
-const A11Y_BACK_SEMANTICS = 'b0d2bc4ec881956c00be0a75e9499e5ec42e1a3db1168e031cb03d69240fc50c'
+const A11Y_BACK_SEMANTICS = '437380337dfbc39a0954f174f21c4d2671d099de47ce949db190c1593d7e9cea'
 // 2026-09-26: `diffLinePrefix`, the prefix's code face; see the declarations pin above.
 // 2026-09-27 (theme pass 2): the static token names become the live theme's (note above the hooks pin).
 const PRE_REFACTOR_STYLES = '4c7a827406eab7fc071920185d4007d77d69dbc24821952a647a30c7e35351c3'
@@ -270,7 +276,7 @@ describe('Mobile Tasks refactor parity', () => {
 
   it('preserves RPC calls, runtime strings, and JSX host signatures', () => {
     const semantics = readMobileTasksSemanticSource()
-    expect(semantics.split('\n')).toHaveLength(3_294)
+    expect(semantics.split('\n')).toHaveLength(3_297)
     expect(hash(semantics)).toBe(A11Y_BACK_SEMANTICS)
   })
 
