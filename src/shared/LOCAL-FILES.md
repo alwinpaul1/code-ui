@@ -609,3 +609,12 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   (`savedOnly`, `waitForListing`, `listingNamesConfiguredModel`, `defaultHoldsInEveryWorkspace`) and
   the catalog-types field. All of it serves the host model-catalog read, which this phone has never
   ported (deferred since the v1.4.217 notes in docs/upstream-port-inventory.md).
+
+## Workspace-scoped agent detection (Orca #27054, d3e3b173e6)
+
+- `rpc-contract/preflight-params.ts` taken whole (adds `PreflightAgentDetection`).
+- `rpc-contract/rpc-params-catalog.generated.ts` — `preflight.detectAgents` and
+  `preflight.refreshAgents` take `PreflightAgentDetection`, with its import; hand-kept and marked.
+- Not taken: `PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY` in `protocol-version.ts` (a host
+  capability; upstream's phone does not read it either) and `getWorkspaceRuntimePreference` in
+  `project-execution-runtime.ts` (host side, and it needs `wsl-paths.ts`).

@@ -92,4 +92,27 @@ describe('mobile new-tab agent loading', () => {
       'preflight.detectRemoteAgents'
     ])
   })
+
+  // Orca #27054: the host resolves a local workspace's own runtime (a WSL distro on a Windows host)
+  // from the workspace it is asked about. An older host discards the params, as before.
+  it('names the workspace when it asks the paired host to detect agents for a local repo', async () => {
+    const client = createClient(async (method, params) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        return { ok: true, result: { repos: [{ id: 'repo-1' }] } }
+      }
+      if (method === 'preflight.detectAgents') {
+        expect(params).toEqual({ worktreeId: 'repo-1::/Users/ada/app' })
+        return { ok: true, result: ['codex'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+
+    await expect(
+      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/Users/ada/app' })
+    ).resolves.toEqual([{ agent: 'codex', label: 'Codex' }])
+    expect(client.sendRequest.mock.calls.map(([method]) => method)).toContain('preflight.detectAgents')
+  })
 })
