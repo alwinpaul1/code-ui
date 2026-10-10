@@ -16,6 +16,7 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
+import { MobileBackgroundTaskCard } from './MobileBackgroundTaskCard'
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -157,5 +158,67 @@ describe('the background tasks sheet across a disconnect', () => {
     expect(read('./MobileNativeChatView.tsx')).toMatch(/<MobileNativeChatTasksProvider[\s\S]*?hostConnection=\{hostConnection\}/)
     expect(read('./MobileNativeChatTasksProvider.tsx')).toMatch(/<MobileBackgroundTasksSheet[\s\S]*?connection=\{hostConnection\}/)
     expect(read('./MobileBackgroundTasksSheet.tsx')).toMatch(/<MobileBackgroundTasksSheetBody[\s\S]*?connection=\{connection\}/)
+  })
+
+  // Review finding (2026-10-10): the reconnect frame that also drops a confirmed row used to put the
+  // old connection's holds back (the leave-the-list drop was computed from the pre-reset set).
+  it('lets every hold go on a reconnect frame that also drops a confirmed row', async () => {
+    const roster2 = (ids: string[]): AgentSessionBackgroundTaskState => ({
+      ...ROSTER,
+      tasks: (ROSTER.tasks ?? []).filter((task) => ids.includes(task.id))
+    })
+    const withRoster = (state: AgentSessionBackgroundTaskState, connection: Connection) =>
+      createElement(
+        ThemeProvider,
+        { initialPreference: 'light' },
+        createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state, onStopTask, connection })
+      )
+    await act(async () => {
+      renderer = create(withRoster(roster2(['dev', 'watch']), { connected: true, lastConnectedAt: 1 }))
+    })
+    const press = async (title: string) => {
+      const button = renderer!.root
+        .findAllByType('Pressable' as never)
+        .find((node) => node.props.accessibilityLabel === `Stop ${title}`)!
+      await act(async () => {
+        button.props.onPress()
+      })
+    }
+    await press('pnpm dev')
+    await press('pnpm watch')
+    const held = (title: string) =>
+      renderer!.root
+        .findAllByType('Pressable' as never)
+        .find((node) => node.props.accessibilityLabel === `Stop ${title}`)!.props.disabled === true
+    expect(held('pnpm watch')).toBe(true)
+    await act(async () => {
+      renderer!.update(withRoster(roster2(['watch']), { connected: true, lastConnectedAt: 2 }))
+    })
+    expect(held('pnpm watch')).toBe(false)
+  })
+
+  // Review finding: a running Workflow card kept its ticking time while disconnected.
+  it('says "Status unknown" on a running workflow card too while disconnected, in both themes', async () => {
+    for (const scheme of ['light', 'dark'] as const) {
+      const card = createElement(MobileBackgroundTaskCard, {
+        task: {
+          id: 'wf',
+          kind: 'workflow',
+          title: 'Release review',
+          status: 'running',
+          startedAt: NOW - 61_000,
+          elapsedMs: 61_000,
+          workflow: { description: null, phases: null, lanes: null, usage: null }
+        } as never,
+        statusUnknown: true
+      })
+      await act(async () => {
+        renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, card))
+      })
+      expect(texts()).toContain('Status unknown')
+      expect(texts()).not.toContain('1m 1s')
+      act(() => renderer?.unmount())
+      renderer = null
+    }
   })
 })

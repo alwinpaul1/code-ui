@@ -209,4 +209,24 @@ describe('mobile new-tab agent loading', () => {
     ).resolves.toEqual([{ agent: 'codex', label: 'Codex' }])
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toContain('preflight.detectAgents')
   })
+
+  // Review finding: `repo.list` rows are loosely read, so a field of the wrong type must not throw
+  // the whole list into "Agent Presets Unavailable".
+  it('reads a repo row whose execution host is not a string as this host’s own', async () => {
+    const client = createClient(async (method) => {
+      if (method === 'settings.get') {
+        return { ok: true, result: { settings: {} } }
+      }
+      if (method === 'repo.list') {
+        return { ok: true, result: { repos: [{ id: 'repo-1', executionHostId: 42 }] } }
+      }
+      if (method === 'preflight.detectAgents') {
+        return { ok: true, result: ['claude'] }
+      }
+      throw new Error(`unexpected request: ${method}`)
+    })
+    await expect(
+      loadMobileNewTabAgentOptions({ client, worktreeId: 'repo-1::/srv/worktree' })
+    ).resolves.toEqual([{ agent: 'claude', label: 'Claude' }])
+  })
 })

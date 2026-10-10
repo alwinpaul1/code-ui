@@ -101,7 +101,10 @@ async function loadDetectedAgents(
   // Orca #27196. A prefix test, as upstream's (parseExecutionHostId would split a web chunk there).
   const runtimeOwned = repos
     .filter((candidate) => candidate.id === repoId)
-    .map((candidate) => candidate.executionHostId?.startsWith('runtime:') === true)
+    .map((candidate) => {
+      const host: unknown = candidate.executionHostId
+      return typeof host === 'string' && host.startsWith('runtime:')
+    })
   if (runtimeOwned.includes(true)) {
     // Why: rows on several hosts can share a repo id, and then only a host that refuses another
     // runtime's workspace may decide; the first row's connection could name this host's SSH target.

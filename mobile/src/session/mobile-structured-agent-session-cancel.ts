@@ -107,9 +107,9 @@ async function sendStop(input: {
   return false
 }
 
-/** Stops one background task. The tasks sheet voids the result and the row keeps
- *  its Stop until the host reports the task ended, so an unknown outcome is said
- *  here or nowhere (2026-09-25). A host refusal is said by the shared mutation,
+/** Stops one background task, resolving true only on the host's `cancelled: true`: the
+ *  tasks sheet holds that row's Stop until the row leaves (Orca #26780). An unknown
+ *  outcome is said here or nowhere (2026-09-25). A host refusal is said by the shared mutation,
  *  through the same `onSendError`: the sheet's own reporter when it brought one,
  *  because the chat's banner draws under the sheet. The mutation's not-ready
  *  exit (no client, session or fence) says nothing, but the sheet is drawn from

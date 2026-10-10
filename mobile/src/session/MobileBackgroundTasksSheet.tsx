@@ -19,11 +19,11 @@ import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
 import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
 
-/** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
- *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
 /** Whether the sheet's host is reachable, and which connection it is on. */
 export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
 
+/** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
+ *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
 export type BackgroundTaskStopHandler = (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,

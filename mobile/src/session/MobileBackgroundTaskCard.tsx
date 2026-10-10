@@ -35,7 +35,7 @@ export function MobileBackgroundTaskCard({
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
-    return <MobileWorkflowCard task={task} onStop={onStop} stopHeld={stopHeld} />
+    return <MobileWorkflowCard task={task} onStop={onStop} stopHeld={stopHeld} statusUnknown={statusUnknown} />
   }
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'

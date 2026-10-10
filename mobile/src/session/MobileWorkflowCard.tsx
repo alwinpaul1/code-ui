@@ -28,11 +28,14 @@ import {
 export function MobileWorkflowCard({
   task,
   onStop,
-  stopHeld = false
+  stopHeld = false,
+  statusUnknown = false
 }: {
   task: BackgroundTask
   onStop?: (taskId: string) => void
   stopHeld?: boolean
+  /** No connection to the host: a running workflow's time reads "Status unknown", with no Stop. */
+  statusUnknown?: boolean
 }) {
   const { colors, radius, space } = useTheme()
   const detail = task.workflow
@@ -49,7 +52,7 @@ export function MobileWorkflowCard({
         <Txt variant="body" weight="medium" numberOfLines={2} style={{ flex: 1 }}>
           {task.title}
         </Txt>
-        {onStop && running && task.stoppable !== false ? (
+        {onStop && running && !statusUnknown && task.stoppable !== false ? (
           <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
         ) : null}
       </View>
@@ -62,7 +65,11 @@ export function MobileWorkflowCard({
             {backgroundTaskStatusLabel(task.status)}
           </Txt>
         )}
-        {elapsed ? (
+        {running && statusUnknown ? (
+          <Txt variant="caption" tone="muted">
+            Status unknown
+          </Txt>
+        ) : elapsed ? (
           <Txt variant="caption" tone="muted">
             {elapsed}
           </Txt>

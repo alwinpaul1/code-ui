@@ -45,9 +45,15 @@ export function useMobileBackgroundTasksStopAll(args: {
       void Promise.all(
         batch.map(async (task) => {
           let said: string | null = null
-          const done = await onStop(task.id, (message) => {
-            said = message
-          })
+          // With nowhere to name them, each Stop keeps its own failure path (the chat's banner).
+          const done = await onStop(
+            task.id,
+            onFailed
+              ? (message) => {
+                  said = message
+                }
+              : undefined
+          )
           if (!done && said !== null) {
             failures.push({ title: task.title, message: said })
           }

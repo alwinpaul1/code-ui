@@ -37,7 +37,8 @@ export function useMobileBackgroundTaskStops(args: {
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(NO_TASKS)
   const connectionRef = useRef(connection)
   const [heldOn, setHeldOn] = useState(connection)
-  if (heldOn !== connection) {
+  const reconnected = heldOn !== connection
+  if (reconnected) {
     setHeldOn(connection)
     setConfirmed(NO_TASKS)
     inFlightRef.current = NO_TASKS
@@ -45,8 +46,9 @@ export function useMobileBackgroundTaskStops(args: {
   }
   connectionRef.current = connection
   const listed = new Set(runningIds)
-  const stillListed = new Set([...confirmed].filter((id) => listed.has(id)))
-  if (!sameSet(stillListed, confirmed)) {
+  // On the reconnect frame every hold is already let go: the drop below must not put them back.
+  const stillListed = reconnected ? NO_TASKS : new Set([...confirmed].filter((id) => listed.has(id)))
+  if (!reconnected && !sameSet(stillListed, confirmed)) {
     // Render-time drop: a confirmed row that left is forgotten, so its return offers Stop again.
     setConfirmed(stillListed)
   }
@@ -79,6 +81,8 @@ export function useMobileBackgroundTaskStops(args: {
     [stop]
   )
   const holding =
-    inFlight.size === 0 && stillListed.size === 0 ? NO_TASKS : new Set([...inFlight, ...stillListed])
+    reconnected || (inFlight.size === 0 && stillListed.size === 0)
+      ? NO_TASKS
+      : new Set([...inFlight, ...stillListed])
   return { holding, onStop }
 }

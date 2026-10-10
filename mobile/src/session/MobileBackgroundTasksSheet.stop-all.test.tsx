@@ -204,4 +204,16 @@ describe('Stop all on the background tasks sheet', () => {
       "2 of 3 tasks didn't stop.\nnpm run watch: The background task wasn't stopped.\nnpm run serve: Stop unconfirmed — check chat before retrying"
     )
   })
+
+  // Review finding: with nowhere to name the failures, a collecting reporter would swallow them, so
+  // each Stop keeps its own reporter (the lane's default: the chat's banner).
+  it('leaves each Stop its own failure path when the sheet has nowhere to collect them', async () => {
+    const onStopTask = vi.fn(async (_taskId: string, _report?: (message: string) => void) => false)
+    await mountBody(roster([{ id: 'dev' }]), onStopTask)
+    await act(async () => {
+      stopAll()!.props.onPress()
+    })
+    expect(onStopTask).toHaveBeenCalledTimes(1)
+    expect(onStopTask.mock.calls[0]![1]).toBeUndefined()
+  })
 })
