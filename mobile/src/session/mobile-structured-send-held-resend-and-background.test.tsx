@@ -28,7 +28,6 @@ import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-s
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 
 const TEXT = 'please continue'
-const UNCONFIRMED = 'Delivery unconfirmed — check chat before retrying'
 
 function ok(result: unknown) {
   return { id: 'response', ok: true as const, result }
