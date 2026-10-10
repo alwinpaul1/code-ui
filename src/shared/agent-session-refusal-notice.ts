@@ -44,7 +44,26 @@ const NOT_DONE: Record<AgentSessionWriteKind, AgentSessionWriteNoticeSentence> =
   answer: 'notDoneAnswer',
   option: 'notDoneOption',
   command: 'notDoneCommand',
+  clear: 'notDoneCommand',
+  compact: 'notDoneCommand',
   goal: 'notDoneGoal'
+}
+
+/** A /clear or /compact refused because the agent is working: one plain sentence for every
+ *  reason that is, saying only what the person sees and can do. */
+const COMMAND_WHILE_WORKING: Partial<
+  Record<AgentSessionWriteKind, Partial<Record<string, AgentSessionWriteNoticeSentence[]>>>
+> = {
+  clear: {
+    turnActive: ['agentStillWorking', 'runClearWhenDone'],
+    messagesUnsettled: ['agentStillWorking', 'runClearWhenDone'],
+    promptPending: ['clearAfterAnswer']
+  },
+  compact: {
+    turnActive: ['agentStillWorking', 'runCompactWhenDone'],
+    messagesUnsettled: ['agentStillWorking', 'runCompactWhenDone'],
+    promptPending: ['compactAfterAnswer']
+  }
 }
 
 /** That the write did not happen, for one that a second attempt can carry out. Only the phone says
@@ -247,6 +266,14 @@ function reasonParts(
   write: AgentSessionWriteKind,
   context: AgentSessionFailureWordsContext
 ): AgentSessionWriteNoticePart[] | undefined {
+  // Orca #25704 (4735ecefac), hand-applied: the fork's reasonParts starts here.
+  const commandWhileWorking =
+    failure.code === 'agent_session_operation_invalid'
+      ? COMMAND_WHILE_WORKING[write]?.[failure.details?.reason ?? '']
+      : undefined
+  if (commandWhileWorking) {
+    return commandWhileWorking
+  }
   const words = agentSessionRefusalReasonWords(failure)
   if (!words || 'words' in words) {
     return undefined

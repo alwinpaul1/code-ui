@@ -1,15 +1,33 @@
-import type { AgentSessionConversationCommandResult } from '../../../src/shared/agent-session-conversation-command'
+import type {
+  AgentSessionConversationCommand,
+  AgentSessionConversationCommandResult
+} from '../../../src/shared/agent-session-conversation-command'
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
+  type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/structured-agent-session-composer'
+import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
   retainStructuredSessionOperationId
 } from './mobile-structured-agent-session-rpc'
+
+/** What the person sees and can do, in the words the desktop uses (Orca #25704). */
+function busyCommandText(
+  command: AgentSessionConversationCommand,
+  busy: 'working' | 'prompt'
+): string {
+  const clear = command === 'clear'
+  return agentSessionWriteNoticeEnglish(
+    busy === 'prompt'
+      ? [clear ? 'clearAfterAnswer' : 'compactAfterAnswer']
+      : ['agentStillWorking', clear ? 'runClearWhenDone' : 'runCompactWhenDone']
+  )
+}
 
 export async function dispatchMobileStructuredCommand(input: {
   text: string
@@ -25,8 +43,11 @@ export async function dispatchMobileStructuredCommand(input: {
    *  came with it). Null until the status probe answers. */
   hostAnswersRepeats: boolean | null
   controller: StructuredAgentSessionComposerOptions
-  canRun: () => boolean
-  onError: (message: string) => void
+  /** What the agent still has in flight that refuses a command now; null when nothing does. */
+  busy: () => 'working' | 'prompt' | null
+  /** `refusedWhile`: what the phone showed the refused command waiting on, so its line goes
+   *  once that ends (use-mobile-native-chat-send-error.ts). */
+  onError: (message: string, refusedWhile?: StructuredAgentSessionCommandRefusalCause) => void
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (input.pending.current) {
@@ -47,11 +68,11 @@ export async function dispatchMobileStructuredCommand(input: {
   const outcome = await dispatchStructuredAgentSessionComposerCommand(input.text, {
     ...input.controller,
     runConversationCommand: async (command) => {
-      if (!input.canRun()) {
-        return {
-          accepted: false,
-          error: 'Wait for pending work to finish before using this command.'
-        }
+      // No `delivery: 'queue-if-active'` here: a /compact waits in line only where the host's
+      // queued-message cards render, and this phone has none (see the port inventory).
+      const busy = input.busy()
+      if (busy) {
+        return { accepted: false, error: busyCommandText(command, busy), refusedWhile: busy }
       }
       input.pending.current = true
       // Orca #24301: against a host that answers a repeat from its record (a /clear pressed again
@@ -100,7 +121,7 @@ export async function dispatchMobileStructuredCommand(input: {
     }
   })
   if (outcome.error) {
-    input.onError(outcome.error)
+    input.onError(outcome.error, outcome.refusedWhile)
   }
   return unknown ? 'unknown' : outcome.accepted ? 'accepted' : 'rejected'
 }

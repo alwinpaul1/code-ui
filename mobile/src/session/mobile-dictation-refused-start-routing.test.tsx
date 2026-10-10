@@ -61,6 +61,7 @@ vi.mock('./use-mobile-native-chat-send-error', () => ({
     message: null,
     show: () => {},
     clear: () => {},
+    keepWhile: () => {},
     bannerMountedRef: { current: false }
   })
 }))

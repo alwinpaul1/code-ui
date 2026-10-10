@@ -16,7 +16,8 @@ import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
   projectStructuredPermission,
-  projectStructuredQuestion
+  projectStructuredQuestion,
+  structuredCommandBusy
 } from './mobile-structured-agent-prompts'
 import {
   requestStructuredAgentSessionMutation,
@@ -27,6 +28,7 @@ import {
   type StructuredAgentSessionMutationResult
 } from './mobile-structured-agent-session-rpc'
 import type { RpcClient } from '../transport/rpc-client'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
@@ -55,7 +57,7 @@ export function useMobileStructuredAgentSession(args: {
   /** `agent-session.repeated-stop.v1`: a 1.4.220 host takes every press as its own (Orca #24301). */
   repeatedStopSupported?: boolean | null
   agent: string | null
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): StructuredMobileSession {
   const {
     agent,
@@ -186,11 +188,7 @@ export function useMobileStructuredAgentSession(args: {
           invokeAction: invokeStructuredOption,
           conversationCommands
         },
-        canRun: () =>
-          !activeStructuredAgentSessionTurnId(stateRef.current.items) &&
-          !stateRef.current.items.some(
-            (item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item)
-          ),
+        busy: () => structuredCommandBusy(stateRef.current.items),
         onError: onSendError,
         timeoutMs
       })
@@ -280,6 +278,11 @@ export function useMobileStructuredAgentSession(args: {
     () => state.items.find(pendingStructuredQuestion) ?? null,
     [state.items]
   )
+  // What a refused command's line stands on (Orca #25704): it goes once this ends.
+  const commandRefusalCauses = useMemo(
+    () => ({ working: turnId !== null, prompt: approvalPrompt !== null || questionPrompt !== null }),
+    [approvalPrompt, questionPrompt, turnId]
+  )
   // Where this chat's `::orca-visual` lines read their HTML from; null without a client (#26071).
   const visualSource = useMemo(() => (client && sessionId ? { client, sessionId } : null), [client, sessionId])
   return {
@@ -324,6 +327,7 @@ export function useMobileStructuredAgentSession(args: {
     rewindToItem,
     respondPermission,
     respondQuestion,
+    commandRefusalCauses,
     setStructuredOption,
     invokeStructuredOption
   }

@@ -1,5 +1,6 @@
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import type { AgentSessionQuestionAnswer } from '../../../src/shared/agent-session-question-answer'
+import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import {
@@ -57,6 +58,19 @@ export function pendingStructuredQuestion(
   item: AgentJournalRenderItem
 ): item is StructuredQuestionItem {
   return item.body.kind === 'question' && item.body.resolution.state === 'pending'
+}
+
+/** What refuses a /clear or /compact now, as the chat shows it: a turn running, or a question or
+ *  approval waiting (Orca #25704). Null when nothing does. */
+export function structuredCommandBusy(
+  items: readonly AgentJournalRenderItem[]
+): 'working' | 'prompt' | null {
+  if (activeStructuredAgentSessionTurnId(items)) {
+    return 'working'
+  }
+  return items.some((item) => pendingStructuredApproval(item) || pendingStructuredQuestion(item))
+    ? 'prompt'
+    : null
 }
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {

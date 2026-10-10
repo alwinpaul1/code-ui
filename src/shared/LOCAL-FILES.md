@@ -560,3 +560,23 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   `agent-session-journal-schemas.ts` is NOT changed: the phone does not validate journal rows
   against it (only the host does), so the roster stays an admissible unknown type there, and the
   phone drops a malformed roster itself (`mobile/src/session/mobile-native-chat-subagent-group-blocks.ts`).
+
+## Conversation commands refused while the agent works (Orca #25704, 4735ecefac)
+
+Only the half that is live without the host queue. Not taken: `delivery: 'queue-if-active'`, the
+queued-commands capability, `agent-session-command-refusal-words.ts`,
+`structured-agent-session-command-refusal-cause.ts` (it reads `failure` on a conversation-command
+result, which this fork's `agent-session-conversation-command.ts` does not carry), the
+failure-words `commandRefused` hunk, the coalescer and params hunks.
+
+- `returned-draft-text.ts` and its test equalled upstream's parent, so both are taken whole.
+- `structured-agent-session-composer.ts`: `StructuredAgentSessionCommandRefusalCause`, the
+  `refusedWhile` member on the command outcome, the widened `runConversationCommand` return,
+  and `isLoneStructuredAgentSessionConversationCommand`, applied as upstream's hunks (they applied
+  cleanly onto the fork's older base).
+- `agent-session-refusal-notice.ts`: the `clear`/`compact` NOT_DONE rows and `COMMAND_WHILE_WORKING`,
+  with its check placed at the top of the fork's `reasonParts` (upstream's sits after a block this
+  copy does not have).
+- `agent-session-write-notice-copy.ts`: the nine /clear and /compact sentences and the switch of
+  four sentences to the shared constants, by hand (the import hunk did not apply).
+- `agent-session-failure-copy.ts` and `agent-session-write-failure.ts`: upstream's hunks as written.

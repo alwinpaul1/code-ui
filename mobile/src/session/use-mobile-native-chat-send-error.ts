@@ -1,4 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
+import type { StructuredAgentSessionCommandRefusalCause } from '../../../src/shared/structured-agent-session-composer'
+
+/** `refusedWhile`: a refused command's cause, which its line is said only while the chat shows. */
+export type MobileNativeChatSendErrorReporter = (
+  message: string,
+  refusedWhile?: StructuredAgentSessionCommandRefusalCause
+) => void
+
+/** What the phone's chat shows a refused command waiting on. */
+export type MobileNativeChatCommandRefusalCauses = Readonly<
+  Partial<Record<StructuredAgentSessionCommandRefusalCause, boolean>>
+>
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
@@ -13,12 +25,17 @@ export function useMobileNativeChatSendError(args: {
   showToast: (message: string, durationMs?: number) => void
 }): {
   message: string | null
-  show: (message: string) => void
+  show: MobileNativeChatSendErrorReporter
   clear: () => void
+  /** Called each render with what the chat shows: a refusal whose cause has ended is dropped. */
+  keepWhile: (causes: MobileNativeChatCommandRefusalCauses | null) => void
   /** Set by the route each render; gates banner vs toast. */
   bannerMountedRef: MutableRefObject<boolean>
 } {
   const [message, setMessage] = useState<string | null>(null)
+  const [refusedWhile, setRefusedWhile] = useState<
+    StructuredAgentSessionCommandRefusalCause | undefined
+  >(undefined)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bannerMountedRef = useRef(false)
   const showToastRef = useRef(args.showToast)
@@ -44,7 +61,7 @@ export function useMobileNativeChatSendError(args: {
     setMessage(null)
   }, [clearTimer, scopeKey])
   const show = useCallback(
-    (next: string) => {
+    (next: string, cause?: StructuredAgentSessionCommandRefusalCause) => {
       // Why: deferred failures can land after the user left chat (banner unmounted)
       // or moved to another tab, where the banner belongs to a different terminal —
       // both must fall back to the toast instead of being swallowed or misattributed.
@@ -54,6 +71,7 @@ export function useMobileNativeChatSendError(args: {
       }
       clearTimer()
       setMessage(next)
+      setRefusedWhile(cause)
       timerRef.current = setTimeout(() => {
         timerRef.current = null
         setMessage(null)
@@ -76,5 +94,12 @@ export function useMobileNativeChatSendError(args: {
     },
     [clearTimer]
   )
-  return { message, show, clear, bannerMountedRef }
+  const keepWhile = (causes: MobileNativeChatCommandRefusalCauses | null) => {
+    // Dropped, not hidden: the cause coming back later is not what this refusal was about.
+    if (message !== null && refusedWhile !== undefined && causes?.[refusedWhile] === false) {
+      setMessage(null)
+      setRefusedWhile(undefined)
+    }
+  }
+  return { message, show, clear, keepWhile, bannerMountedRef }
 }

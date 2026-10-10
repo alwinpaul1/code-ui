@@ -6,6 +6,7 @@ import { useMemo } from 'react'
 import { surfaceShellCommandTurns } from './mobile-native-chat-shell-command-turns'
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 
 /** Mounts both transcript sources and hands back the one this tab's lane owns.
  *  Both hooks always run (hook order is fixed); the inactive lane is starved of
@@ -37,7 +38,7 @@ export function useMobileNativeChatSessionLane({
   repeatedStopSupported?: boolean | null
   enabled: boolean
   connState: ConnectionState
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>

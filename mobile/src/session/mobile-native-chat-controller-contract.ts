@@ -16,6 +16,10 @@ import type {
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type {
+  MobileNativeChatCommandRefusalCauses,
+  MobileNativeChatSendErrorReporter
+} from './use-mobile-native-chat-send-error'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type {
   AgentSessionBackgroundTaskState,
@@ -114,6 +118,8 @@ export type MobileNativeChatController = {
   /** Whether there is a turn to interrupt. On the structured lane a send reads
    *  as working before the provider opens one, and Stop cannot act until it does. */
   nativeChatCanStop: boolean
+  /** What a refused command's line stands on (Orca #25704); the bridge lane names none. */
+  nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses
   /** The pane's live hook status, for reconciling background tasks the transcript cannot retire.
    *  Null while it is a nested agent's, not the chat agent's (native-chat-kept-session.ts). The
    *  pane's last hook row while Orca stands in its title with one that says nothing about
@@ -286,7 +292,8 @@ export type MobileNativeChatControllerArgs = {
   /** `agent-session.repeated-stop.v1` from the same probe: a 1.4.220 host, which takes every
    *  chat action press as its own action (Orca #24301). */
   agentSessionRepeatedStopSupported?: boolean | null
-  onSendError: (message: string) => void
+  /** Forwarded to the session lane, a refused command's cause with it (Orca #25704). */
+  onSendError: MobileNativeChatSendErrorReporter
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
   onSendResolved: () => void

@@ -550,6 +550,8 @@ export function useMobileNativeChatController(
     nativeChatAgentWorking,
     nativeChatLeadTurnEnded,
     nativeChatCanStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking,
+    // Only the structured lane names a refusal's cause; the bridge lane's starved ones drop none.
+    nativeChatCommandRefusalCauses: structuredNativeChat.commandRefusalCauses,
     nativeChatAgentStatus: activeChatTaskStatus, nativeChatSessionIdentity: activeChatSessionIdentity,
     nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
     nativeChatBackgroundTasks: activeChatStructured
