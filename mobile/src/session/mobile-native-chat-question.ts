@@ -14,6 +14,7 @@ import {
   type OptionList
 } from './mobile-native-chat-question-lists'
 import { asksAfter, asksToChoose } from './mobile-native-chat-question-asks'
+import type { AgentJournalFreeTextInput } from '../../../src/shared/agent-session-journal-types'
 
 export type MobileChatQuestion = {
   question: string
@@ -31,6 +32,8 @@ export type MobileChatQuestion = {
   optionDescriptions?: (string | undefined)[]
   /** Opaque prefix used when free-text answers must target a specific prompt. */
   freeTextToken?: string
+  /** A provider editor's input shape (Orca #25851): empty allowed, multiline, prefill, placeholder. */
+  freeTextInput?: AgentJournalFreeTextInput
 }
 
 export function mobileChatQuestionKey(question: MobileChatQuestion): string {
@@ -205,11 +208,13 @@ export function formatQuestionAnswer(question: MobileChatQuestion, selected: str
 }
 
 export function formatQuestionFreeTextAnswer(question: MobileChatQuestion, text: string): string {
-  const trimmed = text.trim()
-  if (trimmed.length === 0) {
+  const answer = question.freeTextInput?.allowEmpty ? text : text.trim()
+  if (answer.length === 0 && !question.freeTextInput?.allowEmpty) {
     return ''
   }
   return question.freeTextToken
-    ? `${question.freeTextToken}:${encodeURIComponent(trimmed)}`
-    : formatQuestionAnswer(question, [trimmed])
+    ? `${question.freeTextToken}:${encodeURIComponent(answer)}`
+    : question.freeTextInput?.allowEmpty
+      ? answer
+      : formatQuestionAnswer(question, [answer])
 }

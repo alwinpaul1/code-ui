@@ -10,7 +10,7 @@ src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d443320af2 (v1.4.211..v1.4.217 shared halves)
-src/shared/agent-session-question-answer.ts: add99c908b (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-question-answer.ts: c71601f51c (#25851; before it add99c908b, v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/structured-agent-session-create.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-provider-handle.test.ts: eb746a6d32 (v1.4.211..v1.4.217 shared halves)
@@ -514,3 +514,4 @@ src/shared/native-chat-subagent-summary.ts: 2460068883 (#26125, new)
 src/shared/native-chat-subagent-summary.test.ts: 2460068883 (new)
 src/shared/native-chat-subagent-group-header.ts: 2460068883 (#26125, new)
 src/shared/native-chat-subagent-group-header.test.ts: 2460068883 (new)
+src/shared/agent-session-question-free-text.test.ts: c71601f51c (#25851, new)

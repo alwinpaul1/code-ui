@@ -560,3 +560,17 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   `agent-session-journal-schemas.ts` is NOT changed: the phone does not validate journal rows
   against it (only the host does), so the roster stays an admissible unknown type there, and the
   phone drops a malformed roster itself (`mobile/src/session/mobile-native-chat-subagent-group-blocks.ts`).
+
+## Provider free-text dialogs (the phone half of Orca #25851, c71601f51c)
+
+- `agent-session-question-answer.ts` taken whole at c71601f51c, and its new test
+  `agent-session-question-free-text.test.ts` with it. Taking it whole also brings
+  `AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH` (an earlier upstream export nothing here reads).
+- `agent-session-journal-types.ts` — `AgentJournalFreeTextInput` and `freeTextInput?` on a question
+  and on a question item, hand-applied and marked in the source. `agent-session-journal-schemas.ts`
+  is NOT changed: the phone does not validate journal rows against it (only the host does).
+- Not taken: `PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY` and its home
+  `structured-agent-session-surface-capabilities.ts`. A host sends Pi's dialogs only to a client that
+  advertises it, and only Pi chats carry them; Pi reaches a client only through the registered-agents
+  reader (`agent-session.structured.registered-agents.v1`), which this phone does not have. So the
+  phone does not advertise it, and the input shape stays latent until it does.

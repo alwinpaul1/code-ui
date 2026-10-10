@@ -153,6 +153,16 @@ export type AgentJournalPromptOption = {
   description?: string
 }
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #25851, c71601f51c): the free-text input shape a
+// question may carry (empty allowed, multiline, a prefill, a placeholder), on a question and on
+// the item. Types only; the schemas are not changed (the phone does not validate journal rows).
+export type AgentJournalFreeTextInput = {
+  allowEmpty?: boolean
+  multiline?: boolean
+  initialValue?: string
+  placeholder?: string
+}
+
 export type AgentJournalQuestion = {
   id: string
   question: string
@@ -161,6 +171,7 @@ export type AgentJournalQuestion = {
   options: AgentJournalPromptOption[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
 }
 
 export type AgentJournalApprovalMatchedAskRule = {
@@ -196,6 +207,7 @@ export type AgentJournalQuestionItem = {
   questions?: AgentJournalQuestion[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
   resolution: AgentJournalResolution
 }
 

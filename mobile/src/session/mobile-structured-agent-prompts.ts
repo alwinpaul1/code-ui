@@ -181,6 +181,7 @@ export function projectStructuredQuestion(
     ...(optionDescriptions.some(Boolean) ? { optionDescriptions } : {}),
     multiSelect: false,
     allowOther: Boolean(prompt.body.freeTextQuestionId),
+    ...(prompt.body.freeTextInput ? { freeTextInput: prompt.body.freeTextInput } : {}),
     optionTokens: prompt.body.options.map((option) =>
       encodePromptToken({
         kind: 'question-option',
@@ -246,8 +247,13 @@ export function structuredQuestionResponseTarget(
   }
   const freeText = decodeQuestionFreeTextAnswer(response)
   if (freeText) {
-    const answer = freeText.answer.trim()
-    return answer.length > 0
+    const allowEmpty =
+      currentPrompt?.itemId === freeText.payload.itemId &&
+      currentPrompt.revision === freeText.payload.revision &&
+      currentPrompt.body.freeTextQuestionId === freeText.payload.questionId &&
+      currentPrompt.body.freeTextInput?.allowEmpty === true
+    const answer = allowEmpty ? freeText.answer : freeText.answer.trim()
+    return answer.length > 0 || allowEmpty
       ? {
           itemId: freeText.payload.itemId,
           expectedRevision: freeText.payload.revision,
@@ -260,6 +266,7 @@ export function structuredQuestionResponseTarget(
     return null
   }
   const trimmed = response.trim()
+  const allowEmpty = currentPrompt.body.freeTextInput?.allowEmpty === true
   const option = currentPrompt.body.options.find(
     (candidate) => candidate.id === response || candidate.label === trimmed
   )
@@ -270,14 +277,13 @@ export function structuredQuestionResponseTarget(
       optionId: option.id
     }
   }
-  return currentPrompt.body.freeTextQuestionId && trimmed
+  const other = allowEmpty ? response : trimmed
+  return currentPrompt.body.freeTextQuestionId && (trimmed || allowEmpty)
     ? {
         itemId: currentPrompt.itemId,
         expectedRevision: currentPrompt.revision,
-        optionId: encodeQuestionAnswer(currentPrompt.body.freeTextQuestionId, trimmed),
-        answers: [
-          { questionId: currentPrompt.body.freeTextQuestionId, optionIds: [], other: trimmed }
-        ]
+        optionId: encodeQuestionAnswer(currentPrompt.body.freeTextQuestionId, other),
+        answers: [{ questionId: currentPrompt.body.freeTextQuestionId, optionIds: [], other }]
       }
     : null
 }
