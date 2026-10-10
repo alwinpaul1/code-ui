@@ -1,10 +1,8 @@
 import { Platform } from 'react-native'
 import type {
   DeviceCredentialInstalled,
-  MobileRelayEndpoint,
   PairingGetEndpointsResult
 } from '../../../src/shared/mobile-relay-credential-contract'
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { loadHosts, saveHost } from './host-store'
 import {
   promotePairingJournalCredential,
@@ -26,7 +24,11 @@ import {
 } from './mobile-relay-physical-client'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
-import type { HostProfile } from './types'
+import {
+  assertCommitted,
+  pairingRelay,
+  relayHost
+} from './mobile-relay-pairing-recovery-host'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
@@ -309,39 +311,6 @@ async function writeCommitted(
   )
   await dependencies.saveHost(relayHost(reconciledJournal, relay))
   await dependencies.clearJournal(journal.metadata.journalId)
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: url.toString() }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function pairingRelay(journal: MobileRelayPairingJournal): PairingRelay {
-  return { ...journal.metadata.relay, inviteToken: journal.secrets.inviteToken }
-}
-
-function assertCommitted(
-  endpoints: PairingGetEndpointsResult,
-  installed: DeviceCredentialInstalled
-): void {
-  if (
-    endpoints.installStatus?.state !== 'committed' ||
-    JSON.stringify(endpoints.installStatus.result) !== JSON.stringify(installed)
-  ) {
-    throw new Error('relay pairing recovery install was not authoritatively committed')
-  }
 }
 
 /** Test-only: clear the startup single-flight between cases. */
