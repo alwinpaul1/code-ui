@@ -87,7 +87,6 @@ describe('the messages the chat lane hands out', () => {
       transcriptPath: null,
       sessionId: 'session-1',
       sourceIdentity: 'host-1',
-      callerIdentity: 'device',
       enabled: true,
       connState: 'connected',
       onSendError: vi.fn()
@@ -162,7 +161,6 @@ describe('the created-file count, through the lane', () => {
       transcriptPath: null,
       sessionId: 'session-1',
       sourceIdentity: 'host-1',
-      callerIdentity: 'device',
       enabled: true,
       connState: 'connected',
       onSendError: vi.fn()

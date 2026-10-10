@@ -20,7 +20,7 @@ type Args = {
   readonly replaceAttachmentImage: (
     scope: string,
     id: string,
-    next: { path: string; previewUri: string; contentFingerprint?: string }
+    next: { path: string; previewUri: string }
   ) => void
   /** The attach failures' own channel, not the send banner: this is attach-side. */
   readonly showToast: (message: string, durationMs?: number) => void

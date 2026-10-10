@@ -54,13 +54,9 @@ import {
   PAGE_STORAGE_KEY_PREFIXES,
   pageStorageKeysForRoute
 } from '../mobile-web-shell/page-storage-keys'
-import {
-  getOrCreateMobileStructuredSendOperation,
-  resetMobileStructuredSendOperationJournalForTests
-} from '../session/mobile-structured-send-operation-journal'
 import { saveTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
 import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-repo'
-import { readMirroredStorage } from './mirrored-storage-keys'
+import { persistMirrored, readMirroredStorage } from './mirrored-storage-keys'
 import {
   saveDisabledTerminalLiveInputHandles,
   saveHostDockWidth,
@@ -75,8 +71,6 @@ import {
   saveDefaultSessionView,
   updateSessionViewOverride
 } from './session-view-preferences'
-
-const NOW = 1_900_000_000_000
 
 /** A host and a workspace whose ids both change under escaping, and the page the shell opens. */
 const HOST = 'host 1'
@@ -135,16 +129,10 @@ const ROWS: readonly Row[] = [
   {
     allowlisted: 'orca:mobileStructuredSendOperations:v1',
     written: 'orca:mobileStructuredSendOperations:v1',
-    save: async () => {
-      await getOrCreateMobileStructuredSendOperation({
-        operationKey: 'a'.repeat(64),
-        callerIdentity: 'mobile-device-a',
-        payloadFingerprint: 'b'.repeat(64),
-        attachmentPaths: [],
-        createOperationId: () => `${NOW}-${'8'.repeat(32)}`,
-        now: NOW
-      })
-    }
+    // No phone code writes this since Orca #26392. It stays allowlisted because an older host's
+    // embedded page still keeps its send journal here, and that page wrote it through
+    // persistMirrored, as here.
+    save: () => persistMirrored('orca:mobileStructuredSendOperations:v1', '{"version":1,"operations":{}}')
   },
   {
     allowlisted: 'orca:terminalTextScale',
@@ -180,7 +168,6 @@ const ROWS: readonly Row[] = [
 
 beforeEach(() => {
   store.held.clear()
-  resetMobileStructuredSendOperationJournalForTests()
   resetSessionViewPreferenceMemoryForTests()
 })
 

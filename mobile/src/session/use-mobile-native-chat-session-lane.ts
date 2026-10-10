@@ -18,7 +18,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath,
   sessionId,
   sourceIdentity,
-  callerIdentity,
   promptCancelSupported,
   repeatedStopSupported,
   enabled,
@@ -34,7 +33,6 @@ export function useMobileNativeChatSessionLane({
   transcriptPath: string | null
   sessionId: string | null
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
-  callerIdentity: string
   promptCancelSupported?: boolean | null
   repeatedStopSupported?: boolean | null
   enabled: boolean
@@ -63,7 +61,6 @@ export function useMobileNativeChatSessionLane({
     client,
     sessionId: structured ? sessionId : null,
     sourceIdentity,
-    callerIdentity,
     promptCancelSupported,
     repeatedStopSupported,
     enabled,

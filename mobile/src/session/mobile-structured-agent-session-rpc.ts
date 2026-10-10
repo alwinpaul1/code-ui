@@ -193,8 +193,8 @@ function isReplayableStructuredSessionOperationId(operationId: string, now: numb
 }
 
 /**
- * Retains transient non-send mutation ids while the host can still replay them. Structured sends
- * use the durable journal because delivery ambiguity itself does not expire.
+ * Retains transient non-send mutation ids while the host can still replay them. A send keeps no id
+ * across presses: each one is a new action under a fresh id (Orca #26392).
  */
 export function retainStructuredSessionOperationId(
   operationIds: Map<string, string>,

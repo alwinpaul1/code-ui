@@ -60,8 +60,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/orca-attach.png',
-        previewUri: 'file:///photo.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///photo.jpg'
       }
     ])
     // Native chat defers the paste to submit — nothing is sent to the terminal here.
@@ -101,18 +100,15 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/a.png',
-        previewUri: 'file:///a.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///a.jpg'
       },
       {
         path: '/tmp/b.png',
-        previewUri: 'file:///b.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///b.jpg'
       },
       {
         path: '/tmp/c.png',
-        previewUri: 'file:///c.jpg',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'file:///c.jpg'
       }
     ])
     expect(order).toEqual([
@@ -161,8 +157,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(onImageUploaded).toHaveBeenCalledOnce()
     expect(onImageUploaded).toHaveBeenCalledWith({
       path: '/tmp/a.png',
-      previewUri: 'file:///a.jpg',
-      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      previewUri: 'file:///a.jpg'
     })
   })
 
@@ -178,8 +173,7 @@ describe('uploadMobileNativeChatImages', () => {
     expect(result).toEqual([
       {
         path: '/tmp/x.png',
-        previewUri: 'data:image/png;base64,BBBB',
-        contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+        previewUri: 'data:image/png;base64,BBBB'
       }
     ])
   })
@@ -260,16 +254,14 @@ describe('replaceNativeChatImageAttachment', () => {
     ]
     const next = replaceNativeChatImageAttachment(current, 'img-2', {
       path: '/tmp/b-marked.png',
-      previewUri: 'data:image/png;base64,ZZZZ',
-      contentFingerprint: 'fp-2'
+      previewUri: 'data:image/png;base64,ZZZZ'
     })
     expect(next).toEqual([
       { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' },
       {
         id: 'img-2',
         path: '/tmp/b-marked.png',
-        previewUri: 'data:image/png;base64,ZZZZ',
-        contentFingerprint: 'fp-2'
+        previewUri: 'data:image/png;base64,ZZZZ'
       }
     ])
   })
@@ -296,8 +288,7 @@ describe('uploadMarkedUpNativeChatImage', () => {
 
     expect(result).toEqual({
       path: '/tmp/marked.png',
-      previewUri: 'data:image/png;base64,AAAA',
-      contentFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/)
+      previewUri: 'data:image/png;base64,AAAA'
     })
     const saveCall = client.calls.find((c) => c.method === 'clipboard.saveImageAsTempFile')
     expect(saveCall?.params).toMatchObject({ connectionId: 'conn-9' })

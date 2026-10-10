@@ -3,7 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
@@ -77,7 +76,6 @@ describe('a structured send turned away while a command runs says so', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    resetMobileStructuredSendOperationJournalForTests()
     finishCommand = null
     sendRequest.mockImplementation(async (method: string) => {
       if (method === 'agentSession.options') {

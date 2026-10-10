@@ -1,6 +1,5 @@
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
-import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -32,18 +31,6 @@ export type PendingNativeChatImage = {
    *  settle first and delete the video's chip, and the video never went with
    *  the message (2026-09-13). */
   readonly batch?: string
-  /** Stable across repeat uploads of the same bytes; never contains the image
-   *  (Orca #20133: the send's durable operation key is built from it, so a
-   *  re-pick of the same photo is the same send). */
-  readonly contentFingerprint?: string
-}
-
-export function mobileNativeChatImageContentFingerprint(base64: string): string {
-  return structuredAgentSessionDomainFingerprint({
-    domain: 'mobile.nativeChat.image',
-    sessionId: '',
-    fields: { base64 }
-  })
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */
@@ -103,7 +90,7 @@ export function dropUploadingNativeChatImages(
 export function replaceNativeChatImageAttachment(
   current: readonly PendingNativeChatImage[],
   id: string,
-  next: { path: string; previewUri: string; contentFingerprint?: string }
+  next: { path: string; previewUri: string }
 ): PendingNativeChatImage[] {
   const index = current.findIndex((attachment) => attachment.id === id)
   if (index === -1) {
@@ -153,14 +140,10 @@ export type UploadMarkedUpImageDeps = {
 export async function uploadMarkedUpNativeChatImage(
   base64: string,
   { client, getConnectionId }: UploadMarkedUpImageDeps
-): Promise<{ path: string; previewUri: string; contentFingerprint: string }> {
+): Promise<{ path: string; previewUri: string }> {
   const connectionId = await getConnectionId()
   const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
-  return {
-    path,
-    previewUri: markedUpNativeChatImagePreviewUri(base64),
-    contentFingerprint: mobileNativeChatImageContentFingerprint(base64)
-  }
+  return { path, previewUri: markedUpNativeChatImagePreviewUri(base64) }
 }
 
 export type UploadNativeChatImagesDeps = {
@@ -222,12 +205,11 @@ export async function uploadMobileNativeChatImages(
       continue
     }
     const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
-    const contentFingerprint = mobileNativeChatImageContentFingerprint(base64)
     const result = image.name
-      ? { path, previewUri, kind: 'file' as const, name: image.name, contentFingerprint }
+      ? { path, previewUri, kind: 'file' as const, name: image.name }
       : image.videoFrame
-        ? { path, previewUri, videoFrame: image.videoFrame, contentFingerprint }
-        : { path, previewUri, contentFingerprint }
+        ? { path, previewUri, videoFrame: image.videoFrame }
+        : { path, previewUri }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

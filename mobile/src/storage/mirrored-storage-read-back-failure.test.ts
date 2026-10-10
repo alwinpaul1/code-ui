@@ -8,8 +8,9 @@ import { saveHostDockWidth } from './preferences'
  * `persistMirrored` (#21977, ruling 35) reads each key back after writing it, so the mirror notes
  * what the store holds rather than what was asked for. Upstream chains that read onto the write,
  * so a rejected read rejects the save: the preference is on disk and its caller is told it is
- * not. The structured-send journal then reports "Message not sent" for an operation id it did
- * store, and the custom-key drawer stays open over a key it saved. Only the device's AsyncStorage
+ * not. The structured-send journal (gone from this phone since Orca #26392, still in an older
+ * host's page) then reported "Message not sent" for an operation id it did store, and the
+ * custom-key drawer stays open over a key it saved. Only the device's AsyncStorage
  * can do this: the page's adapter never rejects a read.
  *
  * Driven against a store that really rejects its reads, because the defect is in the failure

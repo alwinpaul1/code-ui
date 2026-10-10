@@ -253,7 +253,8 @@ describe('what the shell puts on every init', () => {
   })
 
   it('leaves out a value the page would refuse the whole frame over, and says which', async () => {
-    // The send journal is the real one: 48 unsettled sends put it past the cap, and `init` is
+    // The send journal is the real one (an older host's page still keeps it; this phone has not
+    // since Orca #26392): 48 unsettled sends put it past the cap, and `init` is
     // refined on that bound — so handing it over takes the session screen down rather than one key.
     const warned: unknown[][] = []
     const warn = console.warn

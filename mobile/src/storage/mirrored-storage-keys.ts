@@ -79,8 +79,7 @@ function note(key: string, value: string | null): void {
  * the page exactly that. There is nothing to undo, because nothing is written until the answer.
  *
  * Rejects when the store refuses the write, so a caller that has something to say about a
- * refusal — the durable send journal is the one — still hears it, and a caller that has not is
- * unchanged. A write the store took and a read-back that then failed is not a refusal: the value
+ * refusal still hears it, and a caller that has not is unchanged. A write the store took and a read-back that then failed is not a refusal: the value
  * is on disk, so the save resolves and the map takes the value that was written.
  */
 export function persistMirrored(key: string, value: string | null): Promise<void> {

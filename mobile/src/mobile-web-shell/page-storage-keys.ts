@@ -29,7 +29,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   'orca:custom-accessory-keys',
   /** Whether a supported agent session opens on the terminal or the native chat. */
   'orca:defaultSessionView',
-  /** The durable send journal: which `agentSession.send` operation ids are still unsettled. */
+  /** Legacy journal access for embedded pages served by older hosts. This phone has written no
+   *  send journal since Orca #26392; an older host's page bundle still reads and writes it. */
   'orca:mobileStructuredSendOperations:v1',
   /** The terminal's text scale, which pinch-to-zoom writes. */
   'orca:terminalTextScale',
@@ -174,7 +175,9 @@ export type PageStorageForInit = {
  * The allowlisted values as `init` may carry them: nothing over the caps the page's schema refines
  * on, and the names of whatever was left out.
  *
- * The send journal is why this exists and is not a hypothetical. Measured on this tree: one entry
+ * The send journal is why this exists and is not a hypothetical. This phone stopped keeping one with
+ * Orca #26392, but an older host's embedded page still does, and it reaches this key through the
+ * `storage` grant. Measured on the tree that still had it: one entry
  * with no attachment costs 343 characters in the array — 342 of its own plus the comma that joins
  * it — so 47 unsettled sends measure 16,140 and 48 measure 16,483, past
  * `PAGE_STORAGE_MAX_VALUE_CHARS`, and the journal's own schema admits 4,096 of them. Handed to

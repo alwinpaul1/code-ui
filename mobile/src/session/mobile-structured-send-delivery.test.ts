@@ -13,51 +13,31 @@ function accepted(
 }
 
 describe('mobileStructuredSendDelivery', () => {
-  it('keeps the operation id for every unknown, host-recorded or ack-lost', () => {
-    // The one answer that may be a delivery. Spending the id here turns the next
-    // identical send into a second copy in front of the model.
+  it('reports transport and host uncertainty on this send', () => {
     expect(mobileStructuredSendDelivery({ status: 'unknown' })).toEqual({
       outcome: 'unknown',
-      operationIdSpent: false,
       error: null
     })
     expect(mobileStructuredSendDelivery(accepted('unknown'))).toEqual({
       outcome: 'unknown',
-      operationIdSpent: false,
       error: null
     })
   })
 
-  it('reports a written send as sent and spends its id', () => {
-    // `pending` is written and awaiting the provider's acknowledgement — not doubt.
-    for (const dispatchState of ['accepted', 'pending'] as const) {
-      expect(mobileStructuredSendDelivery(accepted(dispatchState))).toEqual({
-        outcome: 'accepted',
-        operationIdSpent: true,
-        error: null
-      })
-    }
+  // `pending` is written and awaiting the provider's acknowledgement — not doubt.
+  it.each(['accepted', 'pending'] as const)('reports a written %s send as accepted', (state) => {
+    expect(mobileStructuredSendDelivery(accepted(state))).toEqual({
+      outcome: 'accepted',
+      error: null
+    })
   })
 
-  it('does not report a retained payload replay as a new accepted send', () => {
-    for (const dispatchState of ['accepted', 'pending'] as const) {
-      expect(mobileStructuredSendDelivery(accepted(dispatchState), true)).toEqual({
-        outcome: 'unknown',
-        operationIdSpent: false,
-        error: null
-      })
-    }
-  })
-
-  it('spends the id of a rejection and withholds its internal reason', () => {
-    // Provably undelivered and terminal, so the id can only replay it: spending the
-    // id makes the retry a first delivery. The marker itself names nothing a person
-    // can act on, so it must not reach the screen.
+  it('withholds internal provider write reasons', () => {
+    // The marker names nothing a person can act on, so it must not reach the screen.
     expect(
       mobileStructuredSendDelivery(accepted('rejected', 'provider_write_failed: broken pipe'))
     ).toEqual({
       outcome: 'rejected',
-      operationIdSpent: true,
       error: "Couldn't reach the agent. Your message was not sent — Retry to send it again."
     })
   })
@@ -65,49 +45,49 @@ describe('mobileStructuredSendDelivery', () => {
   it('shows a provider content rejection verbatim', () => {
     expect(
       mobileStructuredSendDelivery(accepted('rejected', 'Claude does not support .bmp'))
-    ).toEqual({
+    ).toEqual({ outcome: 'rejected', error: 'Claude does not support .bmp' })
+  })
+
+  // An expired id is now only ever this press's own: no earlier attempt's id is sent again, so the
+  // refusal is reported like any other and the words go back to the composer.
+  it.each([
+    ['agent_session_operation_invalid', 'Invalid operation'],
+    ['agent_session_checkpoint_stale', 'Fence moved'],
+    ['agent_session_operation_expired', 'Operation expired'],
+    ['agent_session_operation_conflict', 'Operation conflict']
+  ] as const)('reports the current %s refusal', (code, message) => {
+    expect(mobileStructuredSendDelivery({ status: 'refused', code, message })).toEqual({
       outcome: 'rejected',
-      operationIdSpent: true,
-      error: 'Claude does not support .bmp'
+      error: message
     })
   })
 
-  it('spends only refusals that prove the operation is settled', () => {
-    expect(
-      mobileStructuredSendDelivery({
-        status: 'refused',
-        code: 'agent_session_operation_invalid',
-        message: 'Invalid operation'
-      })
-    ).toEqual({ outcome: 'rejected', operationIdSpent: true, error: 'Invalid operation' })
-    expect(
-      mobileStructuredSendDelivery({
-        status: 'refused',
-        code: 'agent_session_checkpoint_stale',
-        message: 'Fence moved'
-      })
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Fence moved' })
+  it('preserves an unknown operation refusal as uncertainty', () => {
     expect(
       mobileStructuredSendDelivery({
         status: 'refused',
         code: 'agent_session_operation_unknown',
         message: 'Outcome unknown'
       })
-    ).toEqual({ outcome: 'unknown', operationIdSpent: false, error: null })
-    expect(mobileStructuredSendDelivery({ status: 'failed', message: 'Request not sent' })).toEqual(
-      {
-        outcome: 'rejected',
-        operationIdSpent: true,
-        error: 'Message not sent'
-      }
-    )
+    ).toEqual({ outcome: 'unknown', error: null })
   })
 
-  it("lets Retry send under a fresh id after the host could not restart the chat's agent", () => {
+  it('reports a request failure without consulting earlier sends', () => {
+    expect(mobileStructuredSendDelivery({ status: 'failed', message: 'Request not sent' })).toEqual(
+      { outcome: 'rejected', error: 'Message not sent' }
+    )
+    expect(
+      mobileStructuredSendDelivery({
+        status: 'failed',
+        message: 'Your message was not sent. Send it again.'
+      })
+    ).toEqual({ outcome: 'rejected', error: 'Your message was not sent. Send it again.' })
+  })
+
+  it("reports a send the host refused after it could not restart the chat's agent", () => {
     // Orca 1.4.217 (#22364, 6ae6ed08bb): a send to a chat whose provider had died makes the host restart
     // it first. When that fails the host refuses the send with this code and the restart's own
-    // cause as the message, in the wording of ownerRestartFailedOutcome. The refusal is final for
-    // that send, so a retry under the same id would only replay it.
+    // cause as the message, in the wording of ownerRestartFailedOutcome.
     for (const agentName of ['Claude', 'Codex']) {
       expect(
         mobileStructuredSendDelivery({
@@ -117,45 +97,9 @@ describe('mobileStructuredSendDelivery', () => {
         })
       ).toEqual({
         outcome: 'rejected',
-        operationIdSpent: true,
         error: `${agentName} couldn't restart: the process exited with code 1.`
       })
     }
-  })
-
-  it('spends an ambiguous id the host has expired, and says to check the chat', () => {
-    // The host refuses an expired id on every replay; keeping it would refuse this text forever.
-    // The earlier attempt may still be in the chat, so the words never say it was not sent.
-    expect(
-      mobileStructuredSendDelivery(
-        {
-          status: 'refused',
-          code: 'agent_session_operation_expired',
-          message: 'Operation expired'
-        },
-        true
-      )
-    ).toEqual({
-      outcome: 'rejected',
-      operationIdSpent: true,
-      error: "Orca couldn't confirm what happened. Check the chat."
-    })
-  })
-
-  it('never releases an ambiguous id on any other later RPC refusal or failure', () => {
-    expect(
-      mobileStructuredSendDelivery(
-        {
-          status: 'refused',
-          code: 'agent_session_operation_conflict',
-          message: 'Operation conflict'
-        },
-        true
-      )
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Operation conflict' })
-    expect(
-      mobileStructuredSendDelivery({ status: 'failed', message: 'Request not sent' }, true)
-    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Message not sent' })
   })
 
   it('fails closed when an invalid host response omits the required submission', () => {
@@ -163,10 +107,6 @@ describe('mobileStructuredSendDelivery', () => {
       status: 'accepted',
       value: { clientMessageId: 'msg-1' }
     } as unknown as StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
-    expect(mobileStructuredSendDelivery(result)).toEqual({
-      outcome: 'unknown',
-      operationIdSpent: false,
-      error: null
-    })
+    expect(mobileStructuredSendDelivery(result)).toEqual({ outcome: 'unknown', error: null })
   })
 })

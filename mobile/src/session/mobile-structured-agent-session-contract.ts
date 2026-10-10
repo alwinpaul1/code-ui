@@ -14,7 +14,6 @@ import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured
 
 export type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
   id?: string
-  contentFingerprint?: string
 }
 
 /** What `useMobileStructuredAgentSession` hands the controller. Its own file so
