@@ -45,7 +45,11 @@ describe('mobile legacy E2EE fixtures', () => {
         (largest, [binary]) => Math.max(largest, binary.length),
         0
       )
-      expect(largestBinaryString).toBeGreaterThan(0)
+      // An engine with Uint8Array.prototype.toBase64 (Node 26; Orca #26165) builds no binary
+      // string at all. Without it, the chunked fallback must have run, in bounded pieces.
+      if (!('toBase64' in Uint8Array.prototype)) {
+        expect(largestBinaryString).toBeGreaterThan(0)
+      }
       expect(largestBinaryString).toBeLessThanOrEqual(16 * 1024)
     } finally {
       encode.mockRestore()
