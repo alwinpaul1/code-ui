@@ -2,10 +2,11 @@
 // (src/renderer/src/components/native-chat/native-chat-session-option-labels.ts),
 // minus i18n — mobile renders plain strings throughout.
 
-import type {
-  SessionOptionDescriptor,
-  SessionOptionDisabledReason,
-  SessionOptionSelectChoice
+import {
+  isDefaultServiceTier,
+  type SessionOptionDescriptor,
+  type SessionOptionDisabledReason,
+  type SessionOptionSelectChoice
 } from '../../../src/shared/native-chat-session-options'
 
 export function mobileSessionOptionDisabledReason(
@@ -58,7 +59,8 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
 export function mobileOptionsPillLabel(descriptors: readonly SessionOptionDescriptor[]): string {
   const labels: string[] = []
   for (const descriptor of descriptors) {
-    if (descriptor.valueSource === 'unknown') {
+    // Like Fast off, the standard speed adds nothing to the pill (Orca #26962).
+    if (descriptor.valueSource === 'unknown' || isDefaultServiceTier(descriptor)) {
       continue
     }
     if (descriptor.kind.type === 'select') {

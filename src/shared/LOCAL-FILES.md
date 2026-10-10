@@ -618,3 +618,17 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
 - Not taken: `PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY` in `protocol-version.ts` (a host
   capability; upstream's phone does not read it either) and `getWorkspaceRuntimePreference` in
   `project-execution-runtime.ts` (host side, and it needs `wsl-paths.ts`).
+
+## Codex Ultrafast as a speed choice (Orca #26962, c8b8997762)
+
+- `structured-agent-session-discovered-model.ts` taken whole (a listed model's picker options, now
+  with the Speed choice in place of the Fast toggle where the model lists `serviceTiers`).
+- `native-chat-session-options.ts` taken whole (`isDefaultServiceTier`); it matched #26962's parent.
+- Hand-applied and marked: `agent-session-wire.ts` (`serviceTiers` on a model option,
+  `serviceTier` on the options result's `current`), `native-chat-session-option-defaults.ts`
+  (`serviceTier` seeds a launch), `rpc-contract/client-settings-params.ts` (`serviceTier` is a
+  string pick), `structured-agent-session-options.ts` (the three local option builders replaced by
+  the new module's `discoveredModel`; `serviceTier` cleared and applied like `fastMode`). The rest of
+  the merge versions of those files carry earlier upstream changes this fork has not taken
+  (`parseStructuredLaunchSeedOptions`, the any-TUI-agent pick schema, `zcodePlanSite`, #26407's
+  catalog sources), so they are not taken whole.

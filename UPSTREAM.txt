@@ -520,3 +520,6 @@ src/shared/agent-session-failure-copy.ts, agent-session-failure-words.ts, struct
 src/shared/structured-agent-session-seed-catalog.ts: 6ba86414bf (#26407, new)
 src/shared/rpc-contract/preflight-params.ts: d3e3b173e6 (#27054; byte-identical to its parent before)
 src/shared/rpc-contract/rpc-params-catalog.generated.ts: plus #27054's preflight.detectAgents / preflight.refreshAgents rows and import, hand-kept (CODE UI HAND-KEPT), see LOCAL-FILES.md
+src/shared/structured-agent-session-discovered-model.ts: c8b8997762 (#26962, new)
+src/shared/native-chat-session-options.ts: c8b8997762 (#26962; byte-identical to its parent before, was c287a5d9b)
+src/shared/agent-session-wire.ts, native-chat-session-option-defaults.ts, rpc-contract/client-settings-params.ts, structured-agent-session-options.ts: plus #26962 (c8b8997762) hunks hand-applied, see LOCAL-FILES.md
