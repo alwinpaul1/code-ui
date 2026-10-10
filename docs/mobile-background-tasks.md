@@ -97,9 +97,14 @@ host confirmed it (`cancelled: true`), until the row leaves the Running list
 nothing-stopped answer gives the button back at once, and so does a row that
 leaves and comes back. There is no timer.
 
-**Not ported:** the wire's `totalTokens` per task. Upstream's desktop strip
-renders it as "18.1k · 2m"; the phone sheet has no place for it yet, so it is
-read off the wire by the equality check and then dropped.
+**Tokens per task (2026-10-10).** The wire's `totalTokens` (provider-reported,
+cumulative) is drawn on the card's meta line after the time or the ending, in
+this app's own figure format ("18K tokens", "1.3M tokens", as the Workflow card
+writes them; upstream's strip writes "18.1k"). A row without the field, or with
+a value that is not a positive finite number, shows no figure, never a guess.
+A running row's figure goes with its time while the relay is down. A terminal
+tab's rows carry none: the transcript reader has no per-task usage (a
+Workflow's totals stay on its own card).
 
 **Not verified against a live host.** The shared contract and the projection
 are covered by tests, but no structured session on a real desktop has been

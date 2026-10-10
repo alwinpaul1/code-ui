@@ -8,7 +8,8 @@ import { MobileBackgroundTaskStopButton } from './MobileBackgroundTaskStopButton
 import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
-  formatBackgroundTaskElapsed
+  formatBackgroundTaskElapsed,
+  formatTokenCount
 } from './mobile-background-task-labels'
 
 /**
@@ -77,6 +78,11 @@ export function MobileBackgroundTaskCard({
               {backgroundTaskStatusLabel(task.status)}
             </Txt>
           )}
+          {task.totalTokens !== undefined && !(running && statusUnknown) ? (
+            <Txt variant="caption" tone="muted">
+              {`${formatTokenCount(task.totalTokens)} tokens`}
+            </Txt>
+          ) : null}
         </View>
       </View>
       {onStop && running && !statusUnknown && task.stoppable !== false ? (

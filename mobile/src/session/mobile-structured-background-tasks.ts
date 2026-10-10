@@ -85,10 +85,18 @@ function identity(task: AgentSessionBackgroundTask): {
   id: string
   kind: BackgroundTaskKind
   title: string
+  totalTokens?: number
 } {
   const kind = localKind(task.kind)
   const named = task.description?.trim() || task.name?.trim()
-  return { id: task.id, kind, title: named || backgroundTaskKindLabel(kind) }
+  // The host's own figure, or none: a value the wire cannot vouch for is not drawn.
+  const tokens = task.totalTokens
+  return {
+    id: task.id,
+    kind,
+    title: named || backgroundTaskKindLabel(kind),
+    ...(typeof tokens === 'number' && Number.isFinite(tokens) && tokens > 0 ? { totalTokens: tokens } : {})
+  }
 }
 
 function localKind(kind: AgentSessionBackgroundTask['kind']): BackgroundTaskKind {
