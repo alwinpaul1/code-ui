@@ -1,9 +1,10 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useContext, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
+import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { copyFailedNotice } from '../components/use-copy-to-clipboard'
@@ -31,6 +32,7 @@ import {
   MobileNativeChatNoticeRow
 } from './MobileNativeChatNoticeRow'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
+import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
 
 /** A finger held this long is a copy, not a tap: Android's own long-press
  *  timeout, the one the chat's scroll gate already keys on. */
@@ -115,6 +117,7 @@ function AgentControls({
 
 function MobileNativeChatMessageImpl({
   message,
+  mayStillGrow = false,
   toolsExpanded = false,
   promptsAsMarkdown = false,
   fontScale = 1,
@@ -136,9 +139,13 @@ function MobileNativeChatMessageImpl({
   endsTurn = true,
   turnHasProse,
   turnStartIndex,
-  copyTurnText
+  copyTurnText,
+  subagentGroupsOpen,
+  onToggleSubagentGroup
 }: {
   message: NativeChatMessage
+  /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
+  mayStillGrow?: boolean
   toolsExpanded?: boolean
   /** A transcript whose user rows the lead agent wrote (a subagent's task),
    *  drawn as Markdown; the user's own prompts stay the plain text they typed. */
@@ -191,6 +198,10 @@ function MobileNativeChatMessageImpl({
   /** The whole reply this row ends, as Copy gives it, asked for only on a tap.
    *  Absent, Copy copies this row alone (a subagent's transcript). */
   copyTurnText?: (messageId: string) => string
+  /** The spawn groups the reader opened, held by the transcript so a remounted row keeps them;
+   *  only a row holding a roster gets it (Orca #26125). */
+  subagentGroupsOpen?: ReadonlySet<string>
+  onToggleSubagentGroup?: (groupId: string) => void
 }) {
   const styles = useChatMessageStyles()
   const { colors } = useTheme()
@@ -202,6 +213,12 @@ function MobileNativeChatMessageImpl({
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
+  // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
+  const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
+  const renderVisual = message.role === 'assistant' ? transcriptVisuals : undefined
+  // Structured replies grow in place: only the last block of the newest row may still be typing.
+  const growingBlock =
+    renderVisual && mayStillGrow && activeTurnIsWorking === true ? message.blocks.at(-1) : undefined
 
   if (isReasoning) {
     return <MobileNativeChatReasoningNote message={message} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
@@ -240,7 +257,9 @@ function MobileNativeChatMessageImpl({
   // words lost their place relative to the work (reported 2026-09-15 against
   // the terminal, which shows the true order). The user's own messages still
   // get a soft bubble so they stand apart from agent prose.
-  const segments = splitTurnIntoSegments(message.blocks)
+  // A roster the row can draw replaces the frozen sentence the host wrote beside it (#26125).
+  const drawn = drawnNativeChatBlocks(message.blocks)
+  const segments = splitTurnIntoSegments(drawn)
   // Still needed whole: the active call is chosen across the turn, and whether
   // any work ran at all decides the settled-tools rule below.
   const { tools } = splitNativeChatBlocks(message.blocks)
@@ -261,7 +280,7 @@ function MobileNativeChatMessageImpl({
   // Whether there is any prose to copy, without parsing it: only a tap pays
   // for the Markdown-to-text pass. Text that draws as nothing (an image-only
   // Markdown line) still passes this and copies nothing when tapped.
-  const hasProse = nativeChatMessageText(message.blocks) !== ''
+  const hasProse = nativeChatMessageText(drawn) !== ''
   // The Copy under a turn's end copies the whole reply, as the Claude app's
   // does: one Copy under a text, tool, text turn copied only "Done." (review,
   // 2026-10-09), and the earlier words had no Copy of their own any more.
@@ -273,8 +292,8 @@ function MobileNativeChatMessageImpl({
     const text = copiesTurn
       ? copyTurnText(message.id)
       : isUser && !promptsAsMarkdown
-        ? nativeChatMessageText(message.blocks)
-        : nativeChatReplyPlainText(message.blocks)
+        ? nativeChatMessageText(drawn)
+        : nativeChatReplyPlainText(drawn)
     if (!text) {
       return
     }
@@ -342,7 +361,11 @@ function MobileNativeChatMessageImpl({
                       styles,
                       // The list recycles a row's cell for other messages;
                       // this names the block for its markdown.
-                      identity: `${message.id}:${segmentIndex}:${index}`
+                      identity: `${message.id}:${segmentIndex}:${index}`,
+                      renderVisual,
+                      holdPendingVisual: group.type === 'block' && group.block === growingBlock,
+                      subagentGroupsOpen,
+                      onToggleSubagentGroup
                     })}
                   </View>
                 ))}

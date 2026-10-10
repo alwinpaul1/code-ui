@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isSubagentGroupBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import {
   MOBILE_UNANCHORED_TURN_KEY,
@@ -17,6 +17,14 @@ export type MobileNativeChatTurnRow = {
   /** Set only on a settled turn — the one row that has activity to disclose. */
   turnKey?: string
   activeTurnIsWorking: boolean
+  /** The newest assistant row of a live turn with no prompt open: its last text may still grow,
+   *  so a visual line still being typed at its tail is held back (Orca #26071). */
+  mayStillGrow: boolean
+  /** The spawn groups the reader opened; set only on a row that holds a roster, so no other row's
+   *  memo sees the set change (Orca #26125). */
+  subagentGroupsOpen?: ReadonlySet<string>
+  /** Stable for a chat scope; the row calls it with the group id it draws. */
+  onToggleSubagentGroup: (groupId: string) => void
 }
 
 /** Owns the transcript's per-turn status rows and their disclosure state, and
@@ -103,6 +111,28 @@ export function useMobileNativeChatTurnDisclosure({
     })
   }, [enabled, messages])
 
+  // Which spawn groups the reader opened, by group id: held here and not in the row, because the
+  // list remounts a row that scrolls out of its window (maxItemsInRecyclePool 0).
+  const [openGroups, setOpenGroups] = useState<{ scopeKey: string; groupIds: ReadonlySet<string> }>(
+    () => ({ scopeKey, groupIds: new Set() })
+  )
+  const openGroupIds = openGroups.scopeKey === scopeKey ? openGroups.groupIds : EMPTY_TURN_IDS
+  const toggleSubagentGroup = useCallback(
+    (groupId: string) => {
+      setOpenGroups((current) => {
+        const next = new Set(current.scopeKey === scopeKey ? current.groupIds : [])
+        if (!next.delete(groupId)) {
+          next.add(groupId)
+        }
+        return { scopeKey, groupIds: next }
+      })
+    },
+    [scopeKey]
+  )
+  const latestAssistantId = useMemo(
+    () => messages.findLast((row) => row.role === 'assistant')?.id ?? null,
+    [messages]
+  )
   const { active: liveActive, activeTurnKey, completedByTurn } = turnStatuses
   // Withheld, not settled: the timing state above still counts the turn.
   const active = awaitingInput ? null : liveActive
@@ -130,10 +160,14 @@ export function useMobileNativeChatTurnDisclosure({
           enabled &&
           isWorking &&
           (turnKey === activeTurnKey ||
-            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
+            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY)),
+        // A prompt card waiting means the agent has stopped writing until it is answered.
+        mayStillGrow: !awaitingInput && message.id === latestAssistantId,
+        subagentGroupsOpen: message.blocks.some(isSubagentGroupBlock) ? openGroupIds : undefined,
+        onToggleSubagentGroup: toggleSubagentGroup
       }
     },
-    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking]
+    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking, awaitingInput, latestAssistantId, openGroupIds, toggleSubagentGroup]
   )
 
   return {

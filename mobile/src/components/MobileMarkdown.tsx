@@ -10,7 +10,7 @@ import { Fragment, memo, useMemo, useState, type ReactNode } from 'react'
 import { computeTableColumnWidths, tableColumnCount } from './mobile-markdown-table-layout'
 import { ScrollView, Text, View } from 'react-native'
 import { openExternalLink } from '../platform/external-link'
-import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
+import { markdownDocumentSource } from './mobile-markdown-preview-html'
 import { useMarkdownStyles, type MarkdownStyles } from './mobile-markdown-styles'
 import {
   detectFilePathSegments,
@@ -20,7 +20,8 @@ import {
 import { routeMarkdownHref } from './markdown-href-routing'
 import { afterRefusedUnderscoreOpener, autolinkParts, isIntrawordUnderscoreToken } from './markdown-inline-token-rules'
 import { unescapeMarkdownText } from './markdown-inline-escapes'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { useMobileMarkdownBlocks } from './use-mobile-markdown-blocks'
+import type { NativeChatVisualDirective } from '../../../src/shared/native-chat-visual-directive'
 import { markdownInlinePlainText } from './markdown-plain-text'
 import { renderLinkLabel } from './mobile-markdown-link-label'
 import { listMarker } from './mobile-markdown-list-marker'
@@ -81,6 +82,10 @@ type Props = {
    *  (native-prose-width.ts). Surfaces of one type at different widths need
    *  different names; with none, a run waits for its own layout. */
   widthKey?: string
+  /** Native-chat assistant prose only: renders `::orca-visual{...}` directive lines (Orca
+   *  #26071), each as a block of its own between the prose runs around it. Without it, a
+   *  directive line is ordinary text. Must be referentially stable (this component is memoized). */
+  renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
 }
 
 const MAX_TABLE_ROWS = 40
@@ -284,7 +289,8 @@ function MobileMarkdownInner({
   resolveImage,
   identity,
   typography = DEFAULT_MARKDOWN_TYPOGRAPHY,
-  widthKey
+  widthKey,
+  renderVisual
 }: Props) {
   const selectable = useChatTextSelectable()
   const styles = useMarkdownStyles(typography)
@@ -304,8 +310,7 @@ function MobileMarkdownInner({
   const [nativeWidth, setNativeWidth] = useState(() => (nativeProse ? lastNativeProseWidth(widthKey, textScale) : 0))
   // Not trimmed whole: the first line's indent can make it code.
   const text = markdownDocumentSource(content)
-  const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
-  const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
+  const { blocks, directives } = useMobileMarkdownBlocks(text, renderVisual !== undefined)
   // Prose and pill sizes move together; see mobile-markdown-prose-scale.ts for
   // why the line height is not simply `(size + 8) * scale`.
   const proseScale = markdownProseScale(typography.prose.fontSize, textScale, typography.prose.lineHeight)
@@ -353,6 +358,14 @@ function MobileMarkdownInner({
       {runs.map((run) => {
         const index = run.start
         const block = run.blocks[0]!
+        if (block.type === 'visual') {
+          const directive = directives[block.index]
+          return directive && renderVisual ? (
+            <Fragment key={`visual:${block.index}:${directive.file}`}>
+              {renderVisual(directive, block.index)}
+            </Fragment>
+          ) : null
+        }
         if (run.prose) {
           const prose = run.prose
           const model = nativeProse ? buildNativeProseModel(prose, { typography, opensFiles: !!onOpenFile }) : null

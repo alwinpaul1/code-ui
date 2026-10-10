@@ -38,6 +38,7 @@ import { useMeasuredHeight } from './mobile-native-chat-suggestion-popover'
 import { useChatDock } from './use-mobile-chat-dock'
 import { MobileNativeChatPromptCard } from './MobileNativeChatPromptCard'
 import { MobileNativeChatTasksProvider } from './MobileNativeChatTasksProvider'
+import { MobileNativeChatVisualProvider } from './MobileNativeChatVisual'
 import { ChatRowOnScreenScope, useChatRowVisibility } from './native-chat-row-visibility'
 import type { MobileNativeChatViewProps } from './mobile-native-chat-view-props'
 import { composerPlaceholder, useMobileNativeChatInputLock } from './use-mobile-native-chat-input-lock'
@@ -59,6 +60,7 @@ export function MobileNativeChatView({
   agentWorking,
   canStop,
   structuredActivityUi = false,
+  visualSource = null,
   turnActivity = null,
   turnThinking = false,
   workingStartedAt,
@@ -328,6 +330,8 @@ export function MobileNativeChatView({
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
           <ChatTextSelectableContext.Provider value={textSelectable}>
+          {/* Inline `::orca-visual` lines of a structured chat's replies (Orca #26071). */}
+          <MobileNativeChatVisualProvider source={visualSource}>
           <FlashList
             ref={listRef}
             renderScrollComponent={ChatScrollView}
@@ -406,6 +410,7 @@ export function MobileNativeChatView({
               <MobileNativeChatListEmpty emptyState={emptyState} agent={agent} styles={styles} />
             }
           />
+          </MobileNativeChatVisualProvider>
           </ChatTextSelectableContext.Provider>
           <MobileNativeChatJumpToLatest visible={showJumpToLatest} onPress={() => jumpToTail(true)} styles={{ fab: [styles.fab, { bottom: dockHeight + space.md }] }} colors={colors} />
         </GestureHandlerRootView>

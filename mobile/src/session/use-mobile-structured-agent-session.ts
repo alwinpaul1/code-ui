@@ -280,9 +280,12 @@ export function useMobileStructuredAgentSession(args: {
     () => state.items.find(pendingStructuredQuestion) ?? null,
     [state.items]
   )
+  // Where this chat's `::orca-visual` lines read their HTML from; null without a client (#26071).
+  const visualSource = useMemo(() => (client && sessionId ? { client, sessionId } : null), [client, sessionId])
   return {
     conversationCommands,
     optionPickerRequest,
+    visualSource,
     session: {
       messages,
       status,

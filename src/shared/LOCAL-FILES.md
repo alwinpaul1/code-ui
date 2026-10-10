@@ -292,8 +292,11 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `native-chat-tool-fold.ts` — the allocation work from Orca #19468
   (44eb95fc6), in `dropUnattributableToolResults` and `pairToolBlocks`. The file
   cannot be re-vendored whole at that commit: the same range carries #18773's
-  subagent-roster fold, which reads `isSubagentGroupBlock` from a block type
-  this fork does not vendor. Both hunks are marked
+  subagent-roster fold, which reads `isSubagentGroupBlock`. The block type is
+  vendored since #26125 (see the end of this file), but the fold is still not
+  taken: it moves later tool calls above a roster row, a reordering of its own
+  to port and pin. A roster mid-turn therefore still splits the tool run, as its
+  sentence did before. Both hunks are marked
   `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source, and both are byte-equal to
   upstream's — the file differs from 44eb95fc6 only by the absent #18773 code
   and those two markers.
@@ -532,3 +535,28 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   as upstream's phone does; #22944's parity test (in `agent-row-display.test.ts`) pins the mirror to
   this module over every row. The tab pill (`tabPillDotState`, `mobile/src/session/session-tab-activity.ts`)
   no longer strips the legacy `interrupted` flag, so it draws the verdict the desktop tab draws.
+
+## Inline chat visuals (Orca #26103's shared half, taken for the phone's #26071, 1617ff32ef)
+
+- `native-chat-visual-directive.ts`, `native-chat-visual-shell.ts`,
+  `native-chat-visual-height-governor.ts` and their tests, and
+  `rpc-contract/agent-session-visual-params.ts`, taken whole at 1617ff32ef (the #26071 merge;
+  #26103 added them). `rpc-contract/structured-agent-session-identifiers.ts` is taken whole at the
+  same commit because the params module imports `SessionId` from it; its schemas are the ones
+  `structured-agent-session-params.ts` already defines here.
+- `rpc-contract/rpc-params-catalog.generated.ts` — the `agentSession.readVisual` row and its
+  `ReadVisualParams` import, hand-kept from 1617ff32ef (marked `CODE UI HAND-KEPT`). The phone sends
+  it from `mobile/src/session/mobile-native-chat-visual-read.ts`; a 1.4.205 host's mobile gate
+  refuses it, which the read latches per client (orca-mobile-rpc-allowlist.test.ts, `fails-open`).
+
+## Subagent groups in the transcript (taken for the phone's Orca #26125, 2460068883)
+
+- `native-chat-subagent-summary.ts` and `native-chat-subagent-group-header.ts` and their tests,
+  taken whole at 2460068883 (the #26125 merge).
+- `native-chat-types.ts` — #18773's roster block (`NATIVE_CHAT_SUBAGENT_STATES`,
+  `NativeChatSubagentState`, `NativeChatSubagentEntry`, `NativeChatSubagentGroupBlock`, its
+  member of `NativeChatBlock`, `isSubagentGroupBlock`), hand-applied at its 2460068883 form and
+  marked in the source. Upstream's `background-task` block beside it is not taken.
+  `agent-session-journal-schemas.ts` is NOT changed: the phone does not validate journal rows
+  against it (only the host does), so the roster stays an admissible unknown type there, and the
+  phone drops a malformed roster itself (`mobile/src/session/mobile-native-chat-subagent-group-blocks.ts`).

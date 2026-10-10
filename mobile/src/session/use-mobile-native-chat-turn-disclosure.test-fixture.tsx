@@ -25,12 +25,15 @@ export function Harness({
   enabled,
   isWorking = true,
   settledTurns,
+  awaitingInput,
   scopeKey = 'host\0worktree\0tab-a'
 }: {
   messages: readonly NativeChatMessage[]
   enabled: boolean
   isWorking?: boolean
   settledTurns?: NativeChatSettledTurns
+  /** A prompt card (approval, question, ask) is waiting on the user. */
+  awaitingInput?: boolean
   scopeKey?: string
 }): React.JSX.Element {
   const disclosure = useMobileNativeChatTurnDisclosure({
@@ -38,6 +41,7 @@ export function Harness({
     enabled,
     isWorking,
     settledTurns,
+    awaitingInput,
     scopeKey
   })
   return createElement(Result, { disclosure })

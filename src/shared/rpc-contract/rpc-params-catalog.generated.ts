@@ -37,6 +37,9 @@ import {
 import { PrepareCodexForWslPaneParams } from './agent-hooks-params'
 import { AgentLaunch, AgentLaunchReplay } from './agent-launch-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './agent-session-params'
+// CODE UI HAND-KEPT (Orca #26103/#26071, 1617ff32ef): the phone reads a chat's inline visuals.
+// See LOCAL-FILES.md.
+import { ReadVisualParams } from './agent-session-visual-params'
 import {
   AiVaultListSessionsParams,
   AiVaultPrepareSessionResumeParams,
@@ -576,6 +579,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'agentSession.hold': HoldParams,
   'agentSession.modelCatalog': ModelCatalogParams,
   'agentSession.options': OptionsParams,
+  // CODE UI HAND-KEPT (Orca #26103/#26071, 1617ff32ef): sent by mobile-native-chat-visual-read.ts.
+  'agentSession.readVisual': ReadVisualParams,
   'agentSession.release': HoldParams,
   'agentSession.respondToApproval': RespondParams,
   'agentSession.respondToQuestion': RespondToQuestionParams,

@@ -126,6 +126,11 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     why: 'The size and mtime a video or music preview checks before and after it streams the file (Orca #26148, which adds files.stat to the host allowlist; 1.4.205 refuses it). A refusal ends the download with "Update Orca on your desktop to preview media files on mobile": mobile-file-media-download.ts reads the gate\'s refusal (isMobileScopeRefusal) and asks nothing further; the preview\'s Retry is the user asking again, and the row it opens from is a read, never a write.'
   },
   {
+    method: 'agentSession.readVisual',
+    guard: 'fails-open',
+    why: 'An inline chat visual (Orca #26071), asked for only when an assistant reply carries an `::orca-visual` line. mobile-native-chat-visual-read.ts latches the gate\'s refusal (or method_not_found) per client, so that host is asked once, and the line then reads "Visualization unavailable" as plain text with no retry to tap.'
+  },
+  {
     method: 'agent.launch',
     guard: 'capability',
     capability: protocolVersion.AGENT_LAUNCH_RUNTIME_CAPABILITY,

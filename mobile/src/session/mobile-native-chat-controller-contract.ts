@@ -39,6 +39,7 @@ import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeCh
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -95,6 +96,8 @@ export type MobileNativeChatController = {
   nativeChatSession: ReturnType<typeof useMobileNativeChatSession>
   /** Structured lane: drives the per-turn status row and live tool progress. */
   nativeChatStructured: boolean
+  /** Structured lane with a live client: where the transcript's visuals are read from. */
+  nativeChatVisualSource: MobileNativeChatVisualSource | null
   /** Provider-authored copy for the live turn tail. Null off the structured lane. */
   nativeChatTurnActivity: { kind: 'description'; text: string } | null
   /** Whether the live turn is reasoning right now, from its journal content.
