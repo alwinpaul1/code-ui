@@ -99,4 +99,29 @@ describe('Stop on a structured roster, per agent', () => {
     await pressStop('pnpm dev')
     expect(onStopTask.mock.calls[0]?.[0]).toBe('codex-command:exec-1')
   })
+
+  // Orca #27022: a Grok host lists the commands and sub-agents Grok left running with `stoppable`
+  // and `supportsTaskStop`, the fields this sheet already reads, and `supportsStopAll: false`. Each
+  // row stops by its own id. (No phone opens a Grok structured chat yet: those reach a client only
+  // through the registered-agents reader. This pins what the sheet does once one does.)
+  it('stops a Grok background command and the Grok sub-agent beside it by their own ids', async () => {
+    const onStopTask = vi.fn()
+    await mount(
+      {
+        state: 'monitoring',
+        supportsTaskStop: true,
+        supportsStopAll: false,
+        tasks: [
+          { id: 'subagent-1', kind: 'agent', description: 'Review the diff' },
+          { id: 'acp-task:01a10366', kind: 'command', description: 'Run the dev server' }
+        ]
+      },
+      onStopTask
+    )
+    expect(stopLabels()).toEqual(expect.arrayContaining(['Stop Run the dev server', 'Stop Review the diff']))
+    await pressStop('Run the dev server')
+    expect(onStopTask.mock.calls[0]?.[0]).toBe('acp-task:01a10366')
+    await pressStop('Review the diff')
+    expect(onStopTask.mock.calls[1]?.[0]).toBe('subagent-1')
+  })
 })
