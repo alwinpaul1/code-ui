@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import type { ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalTurnBody } from '../../../src/shared/agent-session-turn-record'
@@ -15,7 +15,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({ MobileNativeChatToolDetailSheet: () => null }))
 vi.mock('react-native', async () => {
   const React = await import('react')
-  const Text = ({ children, ...props }: { children?: unknown }): unknown =>
+  const Text = ({ children, ...props }: { children?: ReactNode }) =>
     React.createElement('Text', props, children)
   return {
     Animated: {
@@ -34,7 +34,7 @@ vi.mock('react-native', async () => {
     Image: 'Image',
     Pressable: 'Pressable',
     Text,
-    View: ({ children, ...props }: { children?: unknown }) =>
+    View: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('View', props, children),
     StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     useColorScheme: () => 'light'
@@ -100,11 +100,9 @@ describe('the boundary a /clear leaves in the chat', () => {
   function render(message: NativeChatMessage, scheme: 'light' | 'dark'): ReactTestRenderer {
     act(() => {
       renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(MobileNativeChatMessage, { message })
-        )
+        <ThemeProvider initialPreference={scheme}>
+          <MobileNativeChatMessage message={message} />
+        </ThemeProvider>
       )
     })
     return renderer!

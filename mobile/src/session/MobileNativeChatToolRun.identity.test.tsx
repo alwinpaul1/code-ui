@@ -76,10 +76,10 @@ afterEach(() => {
 })
 
 function show(blocks: NativeChatBlock[]): void {
-  const element = createElement(
-    ThemeProvider,
-    { initialPreference: 'light' },
-    createElement(Harness, { blocks })
+  const element = (
+    <ThemeProvider initialPreference="light">
+      <Harness blocks={blocks} />
+    </ThemeProvider>
   )
   act(() => {
     if (tree) {
