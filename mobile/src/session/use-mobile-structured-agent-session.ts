@@ -151,7 +151,8 @@ export function useMobileStructuredAgentSession(args: {
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileAttachment[]
+      attachments?: readonly StructuredMobileAttachment[],
+      operationId?: string
     ): Promise<MobileNativeChatSendOutcome> => {
       const currentFence = stateRef.current.fence
       if (!client || !sessionId || !enabled || currentFence === null) {
@@ -206,6 +207,7 @@ export function useMobileStructuredAgentSession(args: {
         text,
         attachments: sendAttachments,
         deadline,
+        ...(operationId !== undefined ? { operationId } : {}),
         onError: onSendError
       })
     },

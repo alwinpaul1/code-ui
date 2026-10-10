@@ -24,6 +24,8 @@ export type UnconfirmedSend = {
    *  across launches), so without this a receipt from hours ago confirms a send
    *  that never arrived and silently cancels its "Delivery unconfirmed" notice. */
   knownReceiptNonces?: ReadonlySet<string>
+  /** The outbox entry the send is written under, retired when it lands. */
+  outboxId?: string
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {

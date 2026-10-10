@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RelayHostReachability } from '../transport/relay-host-reachability'
 import type { StableLogicalRpcClient } from '../transport/stable-logical-rpc-client'
 import { appWasAwayLongEnoughSince, SEND_BUDGET_SPENT_AWAY } from './mobile-native-chat-send-budget-refusal'
+import { noteSendPath, noteSendStage } from './native-chat-send-timing'
 
 /** What a send needs to be true before it writes anything, read from the render
  *  that is current when the send looks, not the one that was current at the tap. */
@@ -89,8 +90,16 @@ export function useMobileNativeChatSendGate(
       return null
     }
     return {
-      wait: async (deadline, abandoned) =>
-        settle(await waitForMobileNativeChatSendable({ read, deadline, abandoned })),
+      wait: async (deadline, abandoned) => {
+        const startedAt = Date.now()
+        const readiness = await waitForMobileNativeChatSendable({ read, deadline, abandoned })
+        // How long the send waited for the link and the lane, and the path it then had.
+        noteSendStage('readiness', Date.now() - startedAt)
+        if (readiness.ready) {
+          noteSendPath((readiness.client as Partial<StableLogicalRpcClient>).getActivePath?.())
+        }
+        return settle(readiness)
+      },
       now: (action, onUnready) => settle(mobileNativeChatSendReadinessNow(read()), action, onUnready),
       isReady: () => readyClient(read()) !== null
     }

@@ -10,6 +10,7 @@ import {
 import { releaseMobileNativeChatTerminalWriteForSend } from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
+import { timeSendStage } from './native-chat-send-timing'
 import { claudeSentBashTexts } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
@@ -185,7 +186,7 @@ export async function writeChatSend(args: {
   // took for this send, and still holds (its own release then finds nothing to
   // undo): never another sequence's on whatever terminal the send resolved.
   releaseMobileNativeChatTerminalWriteForSend(terminal)
-  const verdict = await verifyClaudeSubmit({
+  const verdict = await timeSendStage('verify', () => verifyClaudeSubmit({
     client,
     terminal,
     text,
@@ -194,7 +195,7 @@ export async function writeChatSend(args: {
     seenNonces,
     priorBashRows,
     deadline
-  })
+  }))
   if (verdict.kind === 'not-sent') {
     // Claude asked the user to review it: nothing more is typed or submitted.
     return { kind: 'stopped', message: verdict.message }

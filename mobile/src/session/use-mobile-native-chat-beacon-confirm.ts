@@ -6,6 +6,7 @@ import {
 
 export type { BeaconPromptReceipt }
 import type { UnconfirmedSend } from './mobile-native-chat-draft-reconcile'
+import { retireOutboxSend } from './native-chat-outbox-sends'
 
 /**
  * Stops the unconfirmed-send clock on the agent's own prompt receipt.
@@ -59,6 +60,8 @@ export function useMobileNativeChatBeaconConfirm(input: {
     unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !confirmedSet.has(entry))
     for (const entry of confirmed) {
       clearTimeout(entry.deadline ?? undefined)
+      // The agent took it: nothing is left to resend after a restart.
+      void retireOutboxSend(entry.outboxId)
     }
     onConfirmed?.()
   }, [beaconPromptReceipts, draftKey, pendingKey, onConfirmed, unconfirmedRef])

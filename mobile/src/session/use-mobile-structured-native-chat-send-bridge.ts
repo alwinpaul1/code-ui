@@ -10,6 +10,8 @@ import {
   type MobileNativeChatSendConditions
 } from './mobile-native-chat-send-readiness'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
+import { outboxOperationId, recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
+import { noteSendOutcome, noteSendStage } from './native-chat-send-timing'
 
 type StructuredNativeChatAttachment = {
   id?: string
@@ -23,7 +25,9 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     text: string,
     images?: string[],
     deadline?: number,
-    attachments?: readonly StructuredNativeChatAttachment[]
+    attachments?: readonly StructuredNativeChatAttachment[],
+    /** The outbox entry's operation id: the same on every attempt of one press. */
+    operationId?: string
   ) => Promise<MobileNativeChatSendOutcome>
   /** The session's own gate (useMobileStructuredAgentSession): its client, and
    *  whether it is loaded with the link up. */
@@ -37,6 +41,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     onUnconfirmed: () => void
   ) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** Draws a text send's "Sending…" bubble as its box empties (showSendingEchoWith). */
+  showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
   onSendError: (message: string) => void
 }): {
   send: (text: string, images?: string[]) => Promise<boolean>
@@ -55,7 +61,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     holdUnconfirmedSend,
     onSendError,
     restoreRejectedDraft,
-    sendConditions
+    sendConditions,
+    showSendingEcho
   } = args
   // The session's key rides along as the send's target: the controller's one
   // structured lane follows the active tab, so a wait that outlives a tab
@@ -95,15 +102,28 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       }
       const sendStructured = latestSendStructured.current
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
+      // Written down before the box empties (native-chat-outbox-sends.ts). Fail-open.
+      recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length || attachments?.length) })
       clearDraftForSend(origin, text)
-      const outcome =
-        attachments !== undefined
+      if (!isHostCommand && !images?.length && !attachments?.length) {
+        showSendingEcho?.(origin)
+      }
+      // Every attempt of this press sends one operation id, so the host's ledger answers a
+      // retry with the first attempt's result instead of posting it twice. A new press is a
+      // new entry and a new id (Orca #26392).
+      const operationId = outboxOperationId(origin)
+      const mutationStartedAt = Date.now()
+      const outcome = operationId !== undefined
+        ? await sendStructured(text, images, deadline, attachments, operationId)
+        : attachments !== undefined
           ? await sendStructured(text, images, deadline, attachments)
           : deadline !== undefined
             ? await sendStructured(text, images, deadline)
             : images !== undefined
               ? await sendStructured(text, images)
               : await sendStructured(text)
+      noteSendStage('mutation', Date.now() - mutationStartedAt)
+      noteSendOutcome(outcome)
       if (outcome === 'accepted') {
         // An image-carrying send already got its echo from the caller, at the
         // same moment the composer cleared (clearDraftAtSendStartWith) — not
@@ -111,6 +131,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         if (!isHostCommand && !images?.length) {
           acceptSend(origin, text.trimEnd(), images)
         }
+        void retireOutboxSend(origin.outboxId)
         return 'accepted'
       }
       if (outcome === 'unknown') {
@@ -134,7 +155,8 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       holdUnconfirmedSend,
       onSendError,
       restoreRejectedDraft,
-      sendGate
+      sendGate,
+      showSendingEcho
     ]
   )
   const send = useCallback(

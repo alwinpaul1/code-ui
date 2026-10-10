@@ -450,7 +450,7 @@ export function MobileNativeChatOverlay({
         onEditQueue={controller.nativeChatQueueEditable ? controller.openNativeChatQueueEditor : undefined}
         onSendQueueNow={controller.sendNativeChatQueueNow}
         queueEditor={controller.nativeChatQueueEditor}
-        pending={pendingInArrivalOrder}
+        pending={pendingInArrivalOrder} outboxDeliveries={controller.nativeChatOutboxDeliveries} onRetryOutbox={controller.retryNativeChatOutbox} onEditOutbox={controller.editNativeChatOutbox}
         imagePreviewsByMessageId={controller.chatImagePreviewsByMessageId}
         composerText={controller.chatComposerText}
         onComposerTextChange={controller.setChatComposerText}

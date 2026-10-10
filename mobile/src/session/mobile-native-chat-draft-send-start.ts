@@ -1,4 +1,5 @@
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
+import { noteOutboxEcho, offerOutboxAdoption, recordOutboxSend } from './native-chat-outbox-sends'
 
 /** An image send pastes, waits for the TUI, then sends the text; the box
  *  must not sit full for that beat (2026-09-13: the Claude app sends both at
@@ -27,8 +28,17 @@ export function clearDraftAtSendStartWith(
   if (!origin) {
     return null
   }
+  // Written down before the box empties, and handed to the text send this same press makes
+  // next, so the press has one outbox entry (native-chat-outbox-sends.ts).
+  recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length) })
+  if (origin.outboxId) {
+    offerOutboxAdoption(origin.draftKey, origin.normalizedText, origin.outboxId, false)
+  }
   drafts.clearDraftForSend(origin, text)
   const pendingId = images?.length ? drafts.acceptSend(origin, text, images, imagePaths) : null
+  if (pendingId) {
+    noteOutboxEcho(origin, pendingId)
+  }
   return () => {
     drafts.restoreRejectedDraft(origin, text)
     if (pendingId) {

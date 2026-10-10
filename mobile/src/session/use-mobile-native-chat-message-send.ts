@@ -24,6 +24,7 @@ import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { CLEAR_NOT_WRITTEN, writeChatSend } from './mobile-native-chat-send-write'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
+import { recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'; import { noteSendStage, timeSendWrites } from './native-chat-send-timing'
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
 
@@ -66,7 +67,8 @@ export function useMobileNativeChatMessageSend(args: {
    *  at send time so the pre-clear can be sized to every line it occupies. */
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
+  /** `showSendingEcho` draws a text send's "Sending…" bubble as its box empties (showSendingEchoWith). */
+  restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void; showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (
     origin: MobileNativeChatSendOrigin,
@@ -98,7 +100,7 @@ export function useMobileNativeChatMessageSend(args: {
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
-    restoreRejectedDraft,
+    restoreRejectedDraft, showSendingEcho,
     acceptSend,
     holdUnconfirmedSend,
     onSendError,
@@ -182,6 +184,7 @@ export function useMobileNativeChatMessageSend(args: {
       // hook looked already, before any paste, and its follow says so
       // (use-mobile-native-chat-image-attachments.ts). One that did not (a caller
       // with no hook) looks here when the agent is Claude or Codex.
+      const lookStartedAt = Date.now()
       if (
         (!syncComposer || (!follow && (agent === 'claude' || agent === 'codex'))) &&
         (await refusedUnderDialog(
@@ -212,14 +215,17 @@ export function useMobileNativeChatMessageSend(args: {
         report(notSent())
         return 'rejected'
       }
+      if (syncComposer) { noteSendStage('look', Date.now() - lookStartedAt) } // screen look, mirror drain, heal
       // Why: empty the composer at send time, not on the ack — over relay the
       // round trip is visible, and a lost ack must not strand the sent prompt
       // in the box. Only a definite rejection puts the text back.
       if (syncComposer) {
+        recordOutboxSend(origin, draftText, { hasAttachments: Boolean(images?.length) }) // before the box empties (native-chat-outbox-sends.ts); fail-open
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
+      if (syncComposer && classification === 'chat' && !images?.length) { showSendingEcho?.(origin) }
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
@@ -228,10 +234,8 @@ export function useMobileNativeChatMessageSend(args: {
       // Clear, body, and for Claude a check that it took the words. The limit
       // behind it is per stdin READ and writes coalesce, so the host's ack is not
       // proof (mobile-native-chat-send-write.ts).
-      const written = await writeChatSend({
-        agent,
-        client,
-        terminal: handle,
+      const written = await timeSendWrites(syncComposer, () => writeChatSend({
+        agent, client, terminal: handle,
         text,
         hasImages: Boolean(images?.length),
         syncComposer,
@@ -239,10 +243,8 @@ export function useMobileNativeChatMessageSend(args: {
         typesCodexCommand,
         seed: seededLaunchDraft,
         residue: mobileNativeChatInputResidue(handle),
-        deadline,
-        deviceToken: deviceTokenRef.current,
-        receipts: () => promptReceiptsRef.current
-      })
+        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current
+      }))
       if (written.kind === 'stopped') {
         // Refused before the body, or Claude declined it. Nothing more is typed,
         // and Enter is not pressed again: Claude asked the user to review.
@@ -269,7 +271,7 @@ export function useMobileNativeChatMessageSend(args: {
           holdUnconfirmedSend(origin, text, () => report(unconfirmedChatSendNotice(text, agent)))
         } else {
           // A command has no echo to wait for, so this is the only word it gets.
-          report(COMMAND_UNCONFIRMED)
+          void retireOutboxSend(origin.outboxId); report(COMMAND_UNCONFIRMED)
         }
         return 'unknown'
       }
@@ -299,7 +301,7 @@ export function useMobileNativeChatMessageSend(args: {
           onCommandDispatched?.(text.trim())
         }
       }
-      return 'accepted'
+      void retireOutboxSend(origin.outboxId); return 'accepted' // the desktop has it
     },
     [
       acceptSend,
@@ -315,7 +317,7 @@ export function useMobileNativeChatMessageSend(args: {
       onSendError,
       readSeededLaunchDraftSeed,
       refuseUnderDialog,
-      restoreRejectedDraft,
+      restoreRejectedDraft, showSendingEcho,
       sendGate
     ]
   )

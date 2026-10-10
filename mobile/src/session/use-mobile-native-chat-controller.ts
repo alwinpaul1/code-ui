@@ -41,7 +41,7 @@ import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { useBeaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
-import { useLastConnectedAt } from '../transport/client-context-connection-metrics'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -143,8 +143,7 @@ export function useMobileNativeChatController(
     restoreRejectedDraft,
     clearDraftAtSendStart,
     acceptSend,
-    holdUnconfirmedSend,
-    removePending
+    holdUnconfirmedSend, removePending, showOutboxEcho, showSendingEcho
   } = useMobileNativeChatDrafts({
     hostId, worktreeId,
     tabId: activeSessionTabId,
@@ -356,7 +355,7 @@ export function useMobileNativeChatController(
     captureSendOrigin,
     readSeededLaunchDraftSeed,
     clearDraftForSend,
-    restoreRejectedDraft,
+    restoreRejectedDraft, showSendingEcho,
     acceptSend,
     holdUnconfirmedSend,
     onSendError,
@@ -371,7 +370,7 @@ export function useMobileNativeChatController(
     clearDraftForSend,
     acceptSend,
     holdUnconfirmedSend,
-    restoreRejectedDraft,
+    restoreRejectedDraft, showSendingEcho,
     onSendError
   })
 
@@ -519,6 +518,9 @@ export function useMobileNativeChatController(
     onError: onSendError
   })
 
+  // What a closed app or an expired hold left in the outbox: resent once when safe, or handed back (use-native-chat-outbox-recovery.ts).
+  const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
+
   const structuredCancelPrompt = useNativeChatAcceptedAction(
     activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
     onSendResolved
@@ -536,7 +538,7 @@ export function useMobileNativeChatController(
     chatComposerText,
     setChatComposerText, appendComposerMention, composerFocusRequest, requestComposerFocus: () => setComposerFocusRequest((n) => n + 1),
     getChatComposerEditGeneration,
-    chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends,
+    chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable,
     chatImagePreviewsByMessageId: mergeImagePreviews(
       chatImagePreviewsByMessageIdLocal,
