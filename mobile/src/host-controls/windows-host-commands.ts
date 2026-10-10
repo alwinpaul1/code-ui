@@ -1,5 +1,10 @@
 import { encodePowerShellCommand } from '../session/agent-hud-launch-args'
 import type { MacHostAction } from './mac-host-commands'
+import {
+  DISPLAY_OFF_READY_EVENT,
+  DISPLAY_WAKE_EVENT,
+  WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT
+} from './windows-display-off-keeper'
 
 /**
  * The one-tap controls a Windows host gets: the Mac set without Unlock.
@@ -67,10 +72,15 @@ export const WINDOWS_AUDIO_TYPE = [
 // SC_MONITORPOWER over WM_SYSCOMMAND to every top-level window: 2 is off, -1 is on.
 // PostMessage rather than SendMessage, which waits on every window and can hang on one
 // that never answers. GetPwrCapabilities is for Sleep display's Modern Standby check.
-const DISPLAY_TYPE =
-  'Add-Type -IgnoreWarnings -Namespace CodeUI -Name Display -MemberDefinition ' +
-  "'[DllImport(\"user32.dll\")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);" +
-  ' [DllImport("powrprof.dll")] public static extern byte GetPwrCapabilities(byte[] c);' +
+// Sleep and Wake each declare only what they call (2026-10-10): Sleep display carries
+// the keeper inside it and needs every character under cmd.exe's 8,191. They are
+// separate type names because the real-PowerShell test compiles both in one session.
+const POST_MESSAGE = '[DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);'
+const SLEEP_TYPE =
+  `Add-Type -IgnoreWarnings -Namespace CodeUI -Name Display -MemberDefinition '${POST_MESSAGE}` +
+  " [DllImport(\"powrprof.dll\")] public static extern byte GetPwrCapabilities(byte[] c);'"
+const WAKE_TYPE =
+  `Add-Type -IgnoreWarnings -Namespace CodeUI -Name Wake -MemberDefinition '${POST_MESSAGE}` +
   ' [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint f);' +
   " [DllImport(\"user32.dll\")] public static extern void mouse_event(uint f, int x, int y, uint d, UIntPtr e);'"
 
@@ -80,30 +90,47 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
       "'[DllImport(\"user32.dll\")] public static extern bool LockWorkStation();'",
     "if(-not [CodeUI.Session]::LockWorkStation()){throw 'LockWorkStation refused'}"
   ],
-  // Why the check (2026-10-08, Danny): on a PC with Modern Standby (S0 Low Power
+  // Why the branch (2026-10-08, Danny): on a PC with Modern Standby (S0 Low Power
   // Idle, most laptops since about 2019) the display going off IS the start of
-  // standby, so this put his whole laptop to sleep and the phone lost it. AoAc is
-  // byte 20 of SYSTEM_POWER_CAPABILITIES (76 bytes; the buffer is larger to spare).
-  // The probe already hides the row on such a PC (windows-host-state.ts); this
-  // covers a probe that could not tell. A call that returns 0 falls through to the
-  // post, as before; one that throws stops the script ('Stop'), which reads as "did
-  // not finish" rather than sleeping a PC nobody asked about. The refusal is printed
-  // instead of the done marker, built from two strings so the script's own text
-  // never matches it. The refusal branch has not run yet: off Windows the call throws.
+  // standby, so the post alone put his whole laptop to sleep and the phone lost it.
+  // AoAc is byte 20 of SYSTEM_POWER_CAPABILITIES (76 bytes; the buffer is larger to
+  // spare). On such a PC the script posts nothing itself: it starts the keeper
+  // (windows-display-off-keeper.ts), which holds the PC awake and then turns the
+  // display off, and waits for the keeper's ready event. Signalled: done. Not
+  // signalled: the keeper could not hold the PC, nothing was turned off, and the
+  // refusal says so (built from two strings so the script's own text never matches).
+  // 10 s, not more: the phone gives the whole command 15 s
+  // (WINDOWS_HOST_COMMAND_TIMEOUT_MS), and the keeper's only delay is a powershell
+  // start and one compile. The keeper is encoded here, on the PC: base64 inside this
+  // command, itself base64, would cost 2.7 times over and break cmd.exe's 8,191.
+  // Every other PC (AoAc 0, or a call that returns 0) gets the post, as before; a
+  // call that throws stops the script ('Stop'), which reads as "did not finish".
+  // The ready event needs no reset first: the keeper closes its handle the moment it
+  // has set it, so the event is gone once this script exits.
+  // NOT YET RUN ON A WINDOWS MACHINE: off Windows the capability call throws.
   'sleep-display': [
-    DISPLAY_TYPE,
-    "$c=New-Object byte[] 128;if([CodeUI.Display]::GetPwrCapabilities($c) -and $c[20]){'CUIREF'+'USED standby';exit}",
+    SLEEP_TYPE,
+    '$c=New-Object byte[] 128;if([CodeUI.Display]::GetPwrCapabilities($c) -and $c[20]){' +
+      `$r=New-Object Threading.EventWaitHandle($false,'ManualReset','${DISPLAY_OFF_READY_EVENT}');` +
+      `$k=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes('${WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT.replace(/'/g, "''")}'));` +
+      "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$k;" +
+      `if($r.WaitOne(10000)){${DONE}}else{'CUIREF'+'USED keepawake'};exit}`,
     "if(-not [CodeUI.Display]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr]2)){throw 'PostMessage refused'}"
   ],
   // Monitor power on alone is unreliable since Windows 8, so the script also resets the
   // display idle timer (ES_DISPLAY_REQUIRED, as `caffeinate -u` does on the Mac) and
   // nudges the pointer one pixel and back, which any monitor treats as activity.
+  // First it sets the keeper's wake event, when a keeper is running (2026-10-10: a
+  // Wake right after Sleep must end the keeper at once, even before the display has
+  // reported off). The display coming on ends the keeper anyway; so does mouse or
+  // keyboard at the PC, as on the Mac. No keeper, no event, nothing to do.
   'wake-display': [
-    DISPLAY_TYPE,
-    '[void][CodeUI.Display]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr](-1))',
-    '[void][CodeUI.Display]::SetThreadExecutionState(2)',
-    '[CodeUI.Display]::mouse_event(1,1,0,0,[UIntPtr]::Zero)',
-    '[CodeUI.Display]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)'
+    WAKE_TYPE,
+    `$w=$null;if([Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)){[void]$w.Set()}`,
+    '[void][CodeUI.Wake]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr](-1))',
+    '[void][CodeUI.Wake]::SetThreadExecutionState(2)',
+    '[CodeUI.Wake]::mouse_event(1,1,0,0,[UIntPtr]::Zero)',
+    '[CodeUI.Wake]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)'
   ],
   mute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($true)'],
   unmute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($false)']

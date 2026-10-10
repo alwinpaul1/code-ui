@@ -12,6 +12,12 @@ import {
   type WindowsHostAction
 } from './windows-host-commands'
 import {
+  DISPLAY_OFF_READY_EVENT,
+  DISPLAY_WAKE_EVENT,
+  WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT,
+  WINDOWS_DISPLAY_OFF_KEEPER_MEMBERS
+} from './windows-display-off-keeper'
+import {
   WINDOWS_DISPLAY_NAMESPACE,
   WINDOWS_DISPLAY_TYPE,
   WINDOWS_HOST_STATE_PROBE_COMMAND,
@@ -60,20 +66,81 @@ describe('the Windows host commands', () => {
     expect(windowsHostScript('unmute')).toContain('SetMute($false)')
   })
 
-  // 2026-10-08, Danny: Sleep display put his whole laptop to sleep. On Modern
-  // Standby (SYSTEM_POWER_CAPABILITIES.AoAc, byte 20) the display going off starts
-  // standby, so the script asks first and refuses, and nothing is posted.
-  it('asks whether the PC sleeps with its display before turning the display off, and refuses if it does', () => {
+  // 2026-10-10, Danny: on a Modern Standby PC (AoAc, byte 20) SC_MONITORPOWER
+  // starts standby (2026-10-08), so the script hands the display-off to a keeper
+  // that holds the PC awake first, and says done only once the keeper says so.
+  describe('Sleep display on a PC with Modern Standby', () => {
     const script = windowsHostScript('sleep-display')
     const ask = script.indexOf('GetPwrCapabilities($c)')
-    const refuse = script.indexOf("'CUIREF'+'USED standby'")
-    const post = script.indexOf('[IntPtr]0xF170,[IntPtr]2')
-    expect(ask).toBeGreaterThan(-1)
-    expect(script).toContain('$c[20]')
-    expect(refuse).toBeGreaterThan(ask)
-    expect(post).toBeGreaterThan(refuse)
-    expect(readMacHostRefusal(script.split('\n'))).toBeNull()
-    expect(readMacHostRefusal(['CUIREFUSED standby'])).toBe('standby')
+    const branchEnd = script.indexOf(';exit}', ask)
+    const branch = script.slice(ask, branchEnd)
+    // The keeper's own text rides inside the branch as a literal; what the branch
+    // itself runs is the rest.
+    const keeper = /GetBytes\('((?:[^']|'')*)'\)/.exec(branch)?.[1] ?? ''
+    const outer = branch.replace(keeper, '')
+
+    it('asks whether the PC has Modern Standby first, and keeps the post for every other PC', () => {
+      expect(ask).toBeGreaterThan(-1)
+      expect(script).toContain('$c[20]')
+      expect(branchEnd).toBeGreaterThan(ask)
+      // The classic path: the same post as before, after the branch.
+      expect(script.indexOf('[IntPtr]0xF170,[IntPtr]2')).toBeGreaterThan(branchEnd)
+    })
+
+    it('never posts the display off itself on that PC: the keeper does, once it holds the PC awake', () => {
+      expect(keeper.length).toBeGreaterThan(0)
+      expect(outer).not.toContain('0xF170')
+      expect(outer).not.toContain('PostMessage')
+    })
+
+    it('starts the keeper hidden and detached, encoding it on the PC rather than embedding base64', () => {
+      expect(branch).toContain('[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes(')
+      expect(branch).toContain(
+        "Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand',$k"
+      )
+      // The outer command is base64 already; base64 inside it would cost 2.7x again.
+      expect(script).not.toMatch(/[A-Za-z0-9+/]{120,}/)
+      // The keeper the PC encodes is exactly the keeper this repo tests.
+      expect(keeper.replace(/''/g, "'")).toBe(WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT)
+    })
+
+    it('waits for the keeper to say it holds the PC before printing done, and refuses otherwise', () => {
+      const ready = outer.indexOf(`Threading.EventWaitHandle($false,'ManualReset','${DISPLAY_OFF_READY_EVENT}')`)
+      const start = outer.indexOf('Start-Process')
+      const wait = outer.indexOf('.WaitOne(')
+      const done = outer.indexOf(`'CUIDONE '+'ok'`)
+      const refuse = outer.indexOf(`'CUIREF'+'USED keepawake'`)
+      expect(ready).toBeGreaterThan(-1)
+      expect(start).toBeGreaterThan(ready)
+      expect(wait).toBeGreaterThan(start)
+      expect(done).toBeGreaterThan(wait)
+      expect(refuse).toBeGreaterThan(done)
+      expect(readMacHostRefusal(script.split('\n'))).toBeNull()
+      expect(readMacHostRefusal(['CUIREFUSED keepawake'])).toBe('keepawake')
+    })
+  })
+
+  // 2026-10-10: "suddenly we open the sheet and do wake display too". A keeper still
+  // waiting for the off notification must end at once, not hold the PC for 12 h.
+  it('tells a waiting keeper to stop before it turns the display on', () => {
+    const script = windowsHostScript('wake-display')
+    const signal = script.indexOf(`[Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)`)
+    const set = script.indexOf('$w.Set()')
+    const on = script.indexOf('[IntPtr]0xF170,[IntPtr](-1)')
+    expect(signal).toBeGreaterThan(-1)
+    expect(set).toBeGreaterThan(signal)
+    expect(on).toBeGreaterThan(set)
+  })
+
+  // 2026-10-10: "there must be no timer". The power plan is never touched.
+  it('never touches the power plan', () => {
+    for (const script of [...ACTIONS.map(windowsHostScript), WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT]) {
+      expect(script).not.toMatch(/ActiveScheme|ValueIndex|powercfg|VIDEOIDLE|3c0bc021/i)
+    }
+  })
+
+  it("keeps Sleep display under cmd.exe's 8,191 characters with the keeper inside it", () => {
+    expect(buildWindowsHostCommand('sleep-display').length).toBeLessThan(8191)
   })
 
   // 2026-09-24 review: adding the display read took the probe to 8,438
@@ -90,6 +157,7 @@ describe('the Windows host commands', () => {
   it('keeps the C# inside a single-quoted PowerShell string', () => {
     expect(WINDOWS_AUDIO_TYPE).not.toContain("'")
     expect(WINDOWS_DISPLAY_TYPE).not.toContain("'")
+    expect(WINDOWS_DISPLAY_OFF_KEEPER_MEMBERS).not.toContain("'")
   })
 })
 
@@ -259,6 +327,20 @@ describe('the Windows scripts under a real PowerShell', () => {
     const unique = [...new Set(declarations)]
     const out = powershell(`$ErrorActionPreference='Stop'\n${unique.join('\n')}\n'compiled'`)
     expect(out.trim()).toBe('compiled')
+  })
+
+  // The keeper runs on its own, from the base64 the sleep script builds on the PC,
+  // so its text is parsed and its C# compiled here as well. Its calls (named
+  // events, the power request) need Windows and are not run.
+  run('parses the display-off keeper and compiles its type', () => {
+    const errors = powershell(
+      `$e=$null;[void][System.Management.Automation.Language.Parser]::ParseInput(@'\n${WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT}\n'@,[ref]$null,[ref]$e);$e.Count`
+    )
+    expect(errors.trim()).toBe('0')
+    const out = powershell(
+      `$ErrorActionPreference='Stop'\n${WINDOWS_DISPLAY_OFF_KEEPER_SCRIPT.split('\n')[0]}\n[bool]('CodeUI.Keeper' -as [type])`
+    )
+    expect(out.trim()).toBe('True')
   })
 
   run('compiles the display power type the probe asks', () => {

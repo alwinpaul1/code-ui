@@ -77,18 +77,16 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
  *  (MAC_SCREEN_LOCK_GATE); this keeps the row from asking for that in the first place. */
 function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction[] {
   const lock: MacHostAction[] = canUnlock && state.lock === 'locked' ? ['unlock'] : ['lock']
-  // A PC with Modern Standby goes to sleep when its display turns off (2026-10-08,
-  // Danny's laptop), and the phone then loses it, so Sleep display is never offered.
+  // A PC with Modern Standby (state.sleepsWithDisplay) gets the same rows: its Sleep
+  // display holds the PC awake before turning the display off
+  // (windows-display-off-keeper.ts). It was hidden from 2026-10-08, when the plain
+  // display-off slept Danny's laptop, until he asked for it back on 2026-10-10.
   const display: MacHostAction[] =
     state.display === 'off'
       ? ['wake-display']
       : state.display === 'on'
-        ? state.sleepsWithDisplay
-          ? []
-          : ['sleep-display']
-        : state.sleepsWithDisplay
-          ? ['wake-display']
-          : ['sleep-display', 'wake-display']
+        ? ['sleep-display']
+        : ['sleep-display', 'wake-display']
   const mute: MacHostAction[] =
     state.mute === 'muted' ? ['unmute'] : state.mute === 'unmuted' ? ['mute'] : ['mute', 'unmute']
   return [...lock, ...display, ...mute]
