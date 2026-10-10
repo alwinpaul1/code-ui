@@ -74,14 +74,16 @@ const CLEAR_PASSWORD_FIELD_DELETES = 40
 
 /** A command saying it did nothing, and why: the Mac unlock's two (the screen was
  *  not locked, or it could not tell), and the Windows Sleep display's one (on a PC
- *  with Modern Standby the keeper could not hold the PC awake, so the display was
- *  never turned off; windows-display-off-keeper.ts). */
+ *  with Modern Standby the display did not report off in time, or the keeper could
+ *  not hold the PC awake first, and the keeper put the display timeout back;
+ *  windows-display-off-keeper.ts). The word stays `keepawake` from when holding the
+ *  PC was the only way it could fail. */
 export type MacHostRefusal = 'unlocked' | 'unconfirmed' | 'keepawake'
 
 export const MAC_HOST_REFUSAL_REASONS: Record<MacHostRefusal, string> = {
   unlocked: "The Mac isn't locked, so nothing was typed.",
   unconfirmed: "Couldn't confirm the Mac is locked, so nothing was typed.",
-  keepawake: "Couldn't keep this PC awake with its display off, so the display was left on."
+  keepawake: 'The display did not turn off, so nothing was changed.'
 }
 
 const ON_CONSOLE_KEY = '"kCGSSessionOnConsoleKey"=Yes'
