@@ -31,6 +31,7 @@ import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -83,6 +84,8 @@ export type MobileNativeChatViewProps = {
   /** The chat's banner, or its toast: where a failed Stop is said once the
    *  tasks sheet is not showing it (use-sheet-failure.ts). */
   reportBackgroundTaskFailure?: (message: string) => void
+  /** The host connection: the Background tasks sheet's rows read "Status unknown" while it is down. */
+  hostConnection?: BackgroundTasksConnection
   /** Claude Code's spinner line as its screen paints it, for the status line. */
   spinner?: ClaudeSpinner | null
   /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */

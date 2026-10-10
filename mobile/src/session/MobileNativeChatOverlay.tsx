@@ -421,7 +421,7 @@ export function MobileNativeChatOverlay({
             ? stopBackgroundTask
             : undefined
         }
-        reportBackgroundTaskFailure={onSendFailure}
+        reportBackgroundTaskFailure={onSendFailure} hostConnection={controller.nativeChatHostConnection}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

@@ -21,12 +21,16 @@ import {
 export function MobileBackgroundTaskCard({
   task,
   onStop,
-  stopHeld = false
+  stopHeld = false,
+  statusUnknown = false
 }: {
   task: BackgroundTask
   onStop?: (taskId: string) => void
   /** A Stop is on its way, or the host confirmed it and the row has not left yet (Orca #26780). */
   stopHeld?: boolean
+  /** No connection to the host: a running row cannot say it runs, so its time reads "Status
+   *  unknown" and it takes no Stop. */
+  statusUnknown?: boolean
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
@@ -58,7 +62,11 @@ export function MobileBackgroundTaskCard({
           <Txt variant="caption" tone="secondary">
             {backgroundTaskKindLabel(task.kind)}
           </Txt>
-          {running ? (
+          {running && statusUnknown ? (
+            <Txt variant="caption" tone="muted">
+              Status unknown
+            </Txt>
+          ) : running ? (
             elapsed ? (
               <Txt variant="caption" tone="muted">
                 {elapsed}
@@ -71,7 +79,7 @@ export function MobileBackgroundTaskCard({
           )}
         </View>
       </View>
-      {onStop && running && task.stoppable !== false ? (
+      {onStop && running && !statusUnknown && task.stoppable !== false ? (
         <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
       ) : null}
     </View>

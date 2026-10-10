@@ -41,6 +41,7 @@ import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-tur
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -132,6 +133,8 @@ export type MobileNativeChatController = {
     taskId: string,
     report?: (message: string) => void
   ) => Promise<boolean>
+  /** The host connection, for the Background tasks sheet's "Status unknown" and its re-read. */
+  nativeChatHostConnection: BackgroundTasksConnection
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean

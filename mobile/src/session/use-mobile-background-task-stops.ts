@@ -22,15 +22,28 @@ export function useMobileBackgroundTaskStops(args: {
   /** Ids the sheet lists as running now. */
   runningIds: readonly string[]
   stop: MobileBackgroundTaskStop | undefined
+  /** The host connection the presses go out on. A new one lets every hold go: an answer that
+   *  arrives for a Stop sent on the old connection no longer holds a row. */
+  connection?: number | null
 }): {
   holding: ReadonlySet<string>
   /** Sends one Stop; resolves as `stop` does, or false when it was not sent (held, no handler). */
   onStop: MobileBackgroundTaskStop
 } {
   const { runningIds, stop } = args
+  const connection = args.connection ?? null
   const [inFlight, setInFlight] = useState<ReadonlySet<string>>(NO_TASKS)
   const inFlightRef = useRef<ReadonlySet<string>>(NO_TASKS)
   const [confirmed, setConfirmed] = useState<ReadonlySet<string>>(NO_TASKS)
+  const connectionRef = useRef(connection)
+  const [heldOn, setHeldOn] = useState(connection)
+  if (heldOn !== connection) {
+    setHeldOn(connection)
+    setConfirmed(NO_TASKS)
+    inFlightRef.current = NO_TASKS
+    setInFlight(NO_TASKS)
+  }
+  connectionRef.current = connection
   const listed = new Set(runningIds)
   const stillListed = new Set([...confirmed].filter((id) => listed.has(id)))
   if (!sameSet(stillListed, confirmed)) {
@@ -48,9 +61,10 @@ export function useMobileBackgroundTaskStops(args: {
         return false
       }
       updateInFlight(new Set([...inFlightRef.current, taskId]))
+      const sentOn = connectionRef.current
       try {
         const done = await stop(taskId, report)
-        if (done) {
+        if (done && connectionRef.current === sentOn) {
           setConfirmed((held) => new Set([...held, taskId]))
         }
         return done

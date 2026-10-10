@@ -21,6 +21,9 @@ import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-ba
 
 /** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
  *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
+/** Whether the sheet's host is reachable, and which connection it is on. */
+export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
+
 export type BackgroundTaskStopHandler = (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
@@ -42,6 +45,7 @@ export function MobileBackgroundTasksSheet({
   onStopTask,
   reportStopFailure,
   scopeKey = null,
+  connection,
   onClose
 }: {
   visible: boolean
@@ -56,6 +60,7 @@ export function MobileBackgroundTasksSheet({
    *  the Stop no reporter, and the lane says a failure on the banner. */
   reportStopFailure?: SheetFailureReport
   scopeKey?: string | null
+  connection?: BackgroundTasksConnection
   onClose: () => void
 }) {
   // Why the sheet says a failed Stop itself: it draws in its own native window,
@@ -102,6 +107,7 @@ export function MobileBackgroundTasksSheet({
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
         onStopAllFailed={reportStopAll}
+        connection={connection}
       />
     </BottomDrawer>
   )
@@ -136,7 +142,8 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
-  onStopAllFailed
+  onStopAllFailed,
+  connection
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
@@ -145,9 +152,16 @@ export function MobileBackgroundTasksSheetBody({
   onStopTask?: (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
   /** Where a Stop all names the tasks that did not stop: the sheet's failure line. */
   onStopAllFailed?: (text: string) => void
+  /** The host connection. Absent reads as connected (a caller that cannot tell). */
+  connection?: BackgroundTasksConnection
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
+  // Disconnected, nothing here is current: running rows say so and take no Stop. A NEW connection
+  // (its `lastConnectedAt`) re-reads at once, by itself (CLAUDE.md, nothing stays stale).
+  const disconnected = connection?.connected === false
+  const connectedAt = connection?.lastConnectedAt ?? null
+  useEffect(() => setNow(Date.now()), [connectedAt])
   // A roster subagent's time is the run the phone watched begin, never the
   // host's first-observed age (2026-09-20, "13h 16m" beside the desk's "1m 23s").
   const subagentRuns = useSubagentRunClock(agentStatus)
@@ -171,7 +185,7 @@ export function MobileBackgroundTasksSheetBody({
         : undefined,
     [onStopTask]
   )
-  const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne })
+  const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne, connection: connectedAt })
   const stopAllTasks = useMemo(() => stopAllTargets(running, stops.holding), [running, stops.holding])
   const stopAll = useMobileBackgroundTasksStopAll({
     targets: stopAllTasks,
@@ -193,8 +207,13 @@ export function MobileBackgroundTasksSheetBody({
         title="Running"
         open={runningOpen}
         onToggle={() => setRunningOpen((open) => !open)}
-        action={stopOne && stopAllTasks.length > 0 ? <StopAllButton onPress={stopAll} /> : null}
+        action={stopOne && !disconnected && stopAllTasks.length > 0 ? <StopAllButton onPress={stopAll} /> : null}
       >
+        {disconnected && running.length > 0 ? (
+          <Txt variant="caption" tone="muted">
+            Status unknown — reconnecting
+          </Txt>
+        ) : null}
         {/* One flat list. The per-kind headings ("Shells · 4", "Agents · 2")
             were removed at the user's request on 2026-09-15 — the row's own
             count already says how much is running, and the labels were noise
@@ -205,8 +224,9 @@ export function MobileBackgroundTasksSheetBody({
             <BackgroundTaskCard
               key={task.id}
               task={task}
-              onStop={stopOne ? (taskId) => void stops.onStop(taskId) : undefined}
+              onStop={stopOne && !disconnected ? (taskId) => void stops.onStop(taskId) : undefined}
               stopHeld={stops.holding.has(task.id)}
+              statusUnknown={disconnected}
             />
           ))
         ) : (

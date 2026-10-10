@@ -12,7 +12,11 @@ import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
-import { MobileBackgroundTasksSheet, type BackgroundTaskStopHandler } from './MobileBackgroundTasksSheet'
+import {
+  MobileBackgroundTasksSheet,
+  type BackgroundTaskStopHandler,
+  type BackgroundTasksConnection
+} from './MobileBackgroundTasksSheet'
 import {
   NativeChatAgentRunsContext,
   NativeChatRunSheetContext,
@@ -37,6 +41,7 @@ export function MobileNativeChatTasksProvider({
   onStopTask,
   reportStopFailure,
   scopeKey,
+  hostConnection,
   children
 }: {
   /** The UNFILTERED transcript: the notifications that retire a task are
@@ -55,6 +60,8 @@ export function MobileNativeChatTasksProvider({
    *  Stop goes when the sheet is not showing it. */
   reportStopFailure?: (message: string) => void
   scopeKey?: string | null
+  /** The host connection; see MobileBackgroundTasksSheet's `connection`. */
+  hostConnection?: BackgroundTasksConnection
   children: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -158,6 +165,7 @@ export function MobileNativeChatTasksProvider({
           onStopTask={onStopTask}
           reportStopFailure={reportStopFailure}
           scopeKey={scopeKey}
+          connection={hostConnection}
           onClose={() => setSheetOpen(false)}
         />
         </NativeChatRunSheetContext.Provider>

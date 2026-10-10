@@ -822,3 +822,21 @@ nothing stopped and no words had already ended, and is not named. A row the host
 `stoppable: false` and a finished row are never stopped. Upstream's strip offers its Stop all only
 to a host with no per-row stop; this one is the user's own ask and works over the per-row stops.
 
+## While the relay is down (2026-10-10)
+
+With no connection to the desktop nothing on the sheet is current, so a running row does not keep
+saying it runs: its time reads "Status unknown" (muted), it offers no Stop and the Running section
+offers no Stop all (a Stop could not be sent), and the section says "Status unknown —
+reconnecting". A finished row stays as it was: that is a fact already received. The connection is
+the controller's `connState` and `useLastConnectedAt(hostId)`, handed down as
+`nativeChatHostConnection` through the overlay, the view and the provider.
+
+When the connection returns, the new `lastConnectedAt` re-reads the sheet at once, by itself: the
+clock jumps to now (not the next tick) and every Stop hold from the old connection is let go, since
+an answer for a Stop sent on a connection that is gone no longer holds a row
+(`use-mobile-background-task-stops.ts`). The roster itself comes back on the lanes' own reconnect
+paths (the structured subscribe re-attaches with a snapshot; the terminal lane re-reads its
+transcript and the host status), so the sheet holds no load of its own that could fail and need
+`shouldRefetchAfterReconnect`. Not changed: the status line's "N running tasks" count, which still
+reads the last roster while disconnected.
+
