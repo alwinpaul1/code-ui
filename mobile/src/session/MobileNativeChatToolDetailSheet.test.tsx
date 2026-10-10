@@ -14,6 +14,7 @@ import { ToolDetailBody, ToolDetailHeader } from './MobileNativeChatToolDetailSh
 // body's one gesture is the output text's own (mocked below).
 vi.mock('react-native', () => ({
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: {
     create: <T,>(styles: T) => styles,
     hairlineWidth: 1
@@ -32,6 +33,7 @@ vi.mock('../components/MobileMarkdown', async () => {
       h('MobileMarkdown', { content: props.content, textScale: props.textScale })
   }
 })
+vi.mock('./MobileNativeChatDiffCard', () => ({ MobileNativeChatDiffCard: 'DiffCard' }))
 vi.mock('../components/DraggableDetailSheet', () => ({
   DraggableDetailSheet: 'DraggableDetailSheet'
 }))
@@ -189,8 +191,9 @@ describe('tool detail body: Inputs and Output', () => {
   it('lists every input by name, alphabetically, the evidenced SendMessage order', () => {
     renderer = renderTree(createElement(ToolDetailBody, { pair: SEND_MESSAGE_PAIR }))
     const names = renderer.root
-      .findAllByProps({ testID: 'tool-detail-input-row' })
+      .findAllByProps({ testID: 'tool-detail-section' })
       .map((row) => row.findAllByType('Text' as never)[0]!.props.children)
+      .filter((name) => name !== 'Output')
     expect(names).toEqual(['content', 'message', 'recipient', 'summary', 'to', 'type'])
   })
 
@@ -227,7 +230,9 @@ describe('tool detail body: Inputs and Output', () => {
       result: { type: 'tool-result', output: 'ok' }
     }
     renderer = renderTree(createElement(ToolDetailBody, { pair: noArgs }))
-    expect(renderer.root.findAllByProps({ testID: 'tool-detail-input-row' })).toHaveLength(0)
+    expect(
+      renderer.root.findAllByProps({ testID: 'tool-detail-section' }).map((row) => row.findAllByType('Text' as never)[0]!.props.children)
+    ).toEqual(['Output'])
   })
 
   it('renders no Output section for a call still running with no result yet', () => {
@@ -247,7 +252,7 @@ describe('tool detail body: Inputs and Output', () => {
     }
     renderer = renderTree(createElement(ToolDetailBody, { pair: huge }))
     const value = renderer.root
-      .findByProps({ testID: 'tool-detail-input-row' })
+      .findAllByProps({ testID: 'tool-detail-section' })[0]!
       .findAllByType('Text' as never)[1]!.props.children as string
     expect(value).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(value.endsWith('…')).toBe(true)

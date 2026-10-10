@@ -1,8 +1,8 @@
 import { isEditToolName, editFilesFromToolPair } from '../../../src/shared/native-chat-edit-normalize'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
-import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { sendMessageAddressee, toolCallKind, toolRunSentence } from './mobile-native-chat-tool-sentence'
+import { mcpToolIdentity } from '../../../src/shared/native-chat-tool-identity'
+import { sendMessageAddressee, toolCallKind } from './mobile-native-chat-tool-sentence'
 
 /** "Completed" / "Failed" / "Running" for ONE call, the way the Claude app's
  *  sheet states it under the title. A result settles the call regardless of
@@ -25,31 +25,23 @@ export function toolDetailStatus(pair: NativeChatToolPair): ToolDetailStatus {
   return 'Running'
 }
 
-/** The sheet's title: the row's own sentence, reused for one call instead of
- *  a whole run so "Ran a command" stays one source of truth with the
- *  collapsed row (`toolRunSentence`) rather than a second wording invented
- *  for the sheet. A SendMessage is the exception: the Claude app titles its
- *  sheet "Messaged @<recipient>" alone and keeps the message preview for the
- *  row (2026-09-26 screenshots). Falls back to the bare tool name when the
- *  call is nameless or the pair is a result with no call at all. */
+/** The sheet's title: the tool's own name, the way the Claude app titles it
+ *  ("Bash" over "Completed", 2026-10-10 screenshots). It was the row's
+ *  sentence ("Ran a command"), which only repeated the row just tapped. An MCP
+ *  tool reads as its row names it ("Gmail / search threads"). A SendMessage
+ *  keeps "Messaged @<recipient>", the Claude app's title for that sheet
+ *  (2026-09-26 screenshots). A result with no call to name is a "Tool call". */
 export function toolDetailTitle(pair: NativeChatToolPair): string {
   if (pair.call && toolCallKind(pair.call.name) === 'message') {
     const to = sendMessageAddressee(pair.call.input)
     return to ? `Messaged ${to}` : 'Messaged an agent'
   }
-  const blocks: NativeChatBlock[] = []
-  if (pair.call) {
-    blocks.push(pair.call)
-  }
-  if (pair.result) {
-    blocks.push(pair.result)
-  }
-  const sentence = toolRunSentence(blocks)
-  if (sentence) {
-    return sentence
-  }
   const name = pair.call?.name?.trim()
-  return name && name.length > 0 ? name : 'Tool call'
+  if (!name) {
+    return 'Tool call'
+  }
+  const mcp = mcpToolIdentity(name, pair.call?.mcpIdentity)
+  return mcp ? `${mcp.server} / ${mcp.tool}` : name
 }
 
 /** Whether this pair already has a specialised inline card (an edit's diff
@@ -166,7 +158,8 @@ function formatInputValue(value: unknown): { value: string; isObject: boolean } 
  *  @…" sheet lists `content, message, recipient, summary, to, type`, which is
  *  alphabetical, not the order SendMessage's schema declares them in. A call
  *  whose input is not a named record (a bare string, an array, a number)
- *  still gets one row rather than an empty Inputs section. */
+ *  still gets one row rather than none. The sheet lists a SendMessage this
+ *  way (mobile-native-chat-tool-detail-sections.ts). */
 export function toolDetailInputRows(input: unknown, toolName?: string | null): ToolDetailInputRow[] {
   const record = normalizeInputRecord(input)
   if (record) {

@@ -48,6 +48,7 @@ vi.mock('react-native', () => ({
     timing: () => ({ start: vi.fn(), stop: vi.fn() })
   },
   Pressable: 'Pressable',
+  ScrollView: 'ScrollView',
   StyleSheet: { create: <T,>(styles: T) => styles },
   Text: 'Text',
   View: 'View',
