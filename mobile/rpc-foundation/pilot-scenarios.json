@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "baseline": "4b0f13638aeae55587cd25e4d8507257df8c3d98",
+  "baseline": "7228b50774c56be7c10533606ec06875cf1a551c",
   "scenarios": [
     {
       "id": "b1",
@@ -22221,7 +22221,7 @@
         {
           "complete": "preflight.detectAgents#1",
           "params": {
-            "$undefined": true
+            "worktreeId": "repo-1::/folder"
           },
           "reply": {
             "ok": true,
