@@ -71,7 +71,7 @@ describe('a Stop pressed on the background tasks sheet', () => {
 
   function body(state: AgentSessionBackgroundTaskState, scheme: 'light' | 'dark' = 'light') {
     return createElement(
-      ThemeProvider,
+      ThemeProvider as never,
       { initialPreference: scheme },
       createElement(MobileBackgroundTasksSheetBody, {
         messages: [],
@@ -95,7 +95,7 @@ describe('a Stop pressed on the background tasks sheet', () => {
 
   function stopButton(title: string): ReactTestInstance {
     const found = renderer!.root
-      .findAllByType('Pressable')
+      .findAllByType('Pressable' as never)
       .find((node) => node.props.accessibilityLabel === `Stop ${title}`)
     if (!found) {
       throw new Error(`no Stop for ${title}`)

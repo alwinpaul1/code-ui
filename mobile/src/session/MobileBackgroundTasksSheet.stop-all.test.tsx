@@ -12,7 +12,7 @@ import { darkColors, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheet, MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 
-const alert = vi.hoisted(() => vi.fn())
+const alert = vi.hoisted(() => vi.fn((..._args: unknown[]) => undefined))
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -86,7 +86,7 @@ describe('Stop all on the background tasks sheet', () => {
     await act(async () => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          ThemeProvider as never,
           { initialPreference: scheme },
           createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state, onStopTask })
         )
@@ -107,7 +107,7 @@ describe('Stop all on the background tasks sheet', () => {
 
   for (const scheme of ['light', 'dark'] as const) {
     it(`confirms before stopping more than one, then stops each through its own Stop (${scheme})`, async () => {
-      const onStopTask = vi.fn(async () => true)
+      const onStopTask = vi.fn(async (_taskId: string) => true)
       await mountBody(roster([{ id: 'dev' }, { id: 'watch' }, { id: 'fg', stoppable: false }], ['old']), onStopTask, scheme)
       const button = stopAll()!
       expect(button).toBeDefined()
@@ -134,7 +134,7 @@ describe('Stop all on the background tasks sheet', () => {
   }
 
   it('cancelling the confirmation stops nothing', async () => {
-    const onStopTask = vi.fn(async () => true)
+    const onStopTask = vi.fn(async (_taskId: string) => true)
     await mountBody(roster([{ id: 'dev' }, { id: 'watch' }]), onStopTask)
     await act(async () => {
       stopAll()!.props.onPress()
@@ -147,7 +147,7 @@ describe('Stop all on the background tasks sheet', () => {
   })
 
   it('stops a single running task at once, with no confirmation', async () => {
-    const onStopTask = vi.fn(async () => true)
+    const onStopTask = vi.fn(async (_taskId: string) => true)
     await mountBody(roster([{ id: 'dev' }, { id: 'fg', stoppable: false }]), onStopTask)
     await act(async () => {
       stopAll()!.props.onPress()
@@ -179,7 +179,7 @@ describe('Stop all on the background tasks sheet', () => {
     await act(async () => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          ThemeProvider as never,
           { initialPreference: 'light' },
           createElement(MobileBackgroundTasksSheet, {
             visible: true,

@@ -45,7 +45,7 @@ describe('Stop on a structured roster, per agent', () => {
     await act(async () => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          ThemeProvider as never,
           { initialPreference: 'light' },
           createElement(MobileBackgroundTasksSheetBody, {
             messages: [],
@@ -59,13 +59,13 @@ describe('Stop on a structured roster, per agent', () => {
 
   const stopLabels = () =>
     renderer!.root
-      .findAllByType('Pressable')
+      .findAllByType('Pressable' as never)
       .map((node) => String(node.props.accessibilityLabel ?? ''))
       .filter((label) => label.startsWith('Stop ') && label !== 'Stop all running tasks')
 
   async function pressStop(title: string) {
     const button = renderer!.root
-      .findAllByType('Pressable')
+      .findAllByType('Pressable' as never)
       .find((node) => node.props.accessibilityLabel === `Stop ${title}`)
     await act(async () => {
       button!.props.onPress()

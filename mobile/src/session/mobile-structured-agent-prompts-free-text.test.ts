@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalFreeTextInput } from '../../../src/shared/agent-session-journal-types'
-import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
+import { formatQuestionFreeTextAnswer, type MobileChatQuestion } from './mobile-native-chat-question'
 import {
   projectStructuredQuestion,
   structuredQuestionResponseTarget,
@@ -67,5 +67,20 @@ describe('mobile structured free-text questions', () => {
       )
     ).toMatchObject({ answers: [{ other: 'draft' }] })
     expect(structuredQuestionResponseTarget('', current)).toBeNull()
+  })
+
+  // Moved from mobile-native-chat-question.test.ts (its line cap); upstream #25851 added it there.
+  it('encodes empty and whitespace answers only when allowed', () => {
+    const withInput: MobileChatQuestion = {
+      question: 'Pick one',
+      options: ['A', 'B'],
+      multiSelect: false,
+      optionTokens: ['1', '2'],
+      freeTextToken: 'target',
+      freeTextInput: { allowEmpty: true }
+    }
+    expect(formatQuestionFreeTextAnswer(withInput, '')).toBe('target:')
+    expect(formatQuestionFreeTextAnswer(withInput, '  \n ')).toBe(`target:${encodeURIComponent('  \n ')}`)
+    expect(formatQuestionFreeTextAnswer({ ...withInput, freeTextInput: undefined }, '  \n ')).toBe('')
   })
 })

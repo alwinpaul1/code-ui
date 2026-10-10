@@ -71,7 +71,7 @@ describe('the background tasks sheet across a disconnect', () => {
 
   function body(connection: Connection, scheme: 'light' | 'dark' = 'light') {
     return createElement(
-      ThemeProvider,
+      ThemeProvider as never,
       { initialPreference: scheme },
       createElement(MobileBackgroundTasksSheetBody, {
         messages: [],
@@ -169,7 +169,7 @@ describe('the background tasks sheet across a disconnect', () => {
     })
     const withRoster = (state: AgentSessionBackgroundTaskState, connection: Connection) =>
       createElement(
-        ThemeProvider,
+        ThemeProvider as never,
         { initialPreference: 'light' },
         createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state, onStopTask, connection })
       )
@@ -213,7 +213,7 @@ describe('the background tasks sheet across a disconnect', () => {
         statusUnknown: true
       })
       await act(async () => {
-        renderer = create(createElement(ThemeProvider, { initialPreference: scheme }, card))
+        renderer = create(createElement(ThemeProvider as never, { initialPreference: scheme }, card))
       })
       expect(texts()).toContain('Status unknown')
       expect(texts()).not.toContain('1m 1s')

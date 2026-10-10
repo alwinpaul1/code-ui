@@ -136,7 +136,6 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
       sourceIdentity: 'host-a\0workspace-a',
       enabled: true,
       connected: true,
-      agent: 'claude',
       onSendError: screen
     } as never)
     return (
@@ -144,7 +143,6 @@ describe("a background task's Stop that fails says so inside the sheet", () => {
         <MobileBackgroundTasksSheet
           visible={sheetOpen}
           messages={[]}
-          agent="claude"
           hostBackgroundTasks={ROSTER}
           onStopTask={session.stopBackgroundTask}
           reportStopFailure={screen}

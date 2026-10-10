@@ -116,7 +116,7 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
     await act(async () => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          ThemeProvider as never,
           { initialPreference: scheme },
           createElement(MobileBackgroundTasksSheetBody, { messages: [], ...props } as never)
         )

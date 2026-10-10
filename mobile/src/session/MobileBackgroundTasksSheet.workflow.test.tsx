@@ -130,7 +130,6 @@ describe('a running workflow in the background tasks sheet', () => {
         <ThemeProvider initialPreference={scheme}>
           <MobileBackgroundTasksSheetBody
             messages={messages}
-            agent="claude"
             agentStatus={{ state: 'working', subagents }}
             backgroundTaskReport={REPORT}
           />
@@ -258,7 +257,6 @@ describe('a running workflow in the background tasks sheet', () => {
         <ThemeProvider initialPreference="light">
           <MobileBackgroundTasksSheetBody
             messages={[...workflowLaunchMessages(), ...second]}
-            agent="claude"
             agentStatus={{ state: 'working', subagents: lanes(1) }}
             backgroundTaskReport={{ ...REPORT, stopRunningTaskIds: [WORKFLOW_TASK_ID, 'wdocs0001'] }}
           />

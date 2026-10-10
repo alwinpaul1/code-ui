@@ -77,7 +77,7 @@ describe('per-task token counts on the background tasks sheet', () => {
       await act(async () => {
         renderer = create(
           createElement(
-            ThemeProvider,
+            ThemeProvider as never,
             { initialPreference: scheme },
             createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: ROSTER })
           )
@@ -101,7 +101,7 @@ describe('per-task token counts on the background tasks sheet', () => {
     await act(async () => {
       renderer = create(
         createElement(
-          ThemeProvider,
+          ThemeProvider as never,
           { initialPreference: 'light' },
           createElement(MobileBackgroundTasksSheetBody, {
             messages: [],
