@@ -120,17 +120,19 @@ const SCRIPTS: Record<WindowsHostAction, string[]> = {
   // Monitor power on alone is unreliable since Windows 8, so the script also resets the
   // display idle timer (ES_DISPLAY_REQUIRED, as `caffeinate -u` does on the Mac) and
   // nudges the pointer one pixel and back, which any monitor treats as activity.
-  // First it sets the keeper's wake event, when a keeper is running (2026-10-10: a
+  // Then it sets the keeper's wake event, when a keeper is running (2026-10-10: a
   // Wake right after Sleep must end the keeper at once, even before the display has
-  // reported off). The display coming on ends the keeper anyway; so does mouse or
+  // reported off). Last, not first: told first, the keeper let go of the PC while the
+  // display was still off, the one moment a Modern Standby laptop can slip into
+  // standby (review, 2026-10-10). The display coming on ends the keeper anyway; so does mouse or
   // keyboard at the PC, as on the Mac. No keeper, no event, nothing to do.
   'wake-display': [
     WAKE_TYPE,
-    `$w=$null;if([Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)){[void]$w.Set()}`,
     '[void][CodeUI.Wake]::PostMessage([IntPtr]0xFFFF,0x0112,[IntPtr]0xF170,[IntPtr](-1))',
     '[void][CodeUI.Wake]::SetThreadExecutionState(2)',
     '[CodeUI.Wake]::mouse_event(1,1,0,0,[UIntPtr]::Zero)',
-    '[CodeUI.Wake]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)'
+    '[CodeUI.Wake]::mouse_event(1,-1,0,0,[UIntPtr]::Zero)',
+    `$w=$null;if([Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)){[void]$w.Set()}`
   ],
   mute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($true)'],
   unmute: [`Add-Type -IgnoreWarnings -TypeDefinition '${WINDOWS_AUDIO_TYPE}'`, '[CodeUI.Audio]::SetMute($false)']

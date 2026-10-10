@@ -122,14 +122,17 @@ describe('the Windows host commands', () => {
 
   // 2026-10-10: "suddenly we open the sheet and do wake display too". A keeper still
   // waiting for the off notification must end at once, not hold the PC for 12 h.
-  it('tells a waiting keeper to stop before it turns the display on', () => {
+  // The display goes on FIRST and the keeper is told after (review, 2026-10-10):
+  // the other order left a moment with the display off and no request held, which
+  // on a Modern Standby laptop is the moment it can slip into standby.
+  it('turns the display on, then tells a waiting keeper to stop', () => {
     const script = windowsHostScript('wake-display')
     const signal = script.indexOf(`[Threading.EventWaitHandle]::TryOpenExisting('${DISPLAY_WAKE_EVENT}',[ref]$w)`)
     const set = script.indexOf('$w.Set()')
     const on = script.indexOf('[IntPtr]0xF170,[IntPtr](-1)')
-    expect(signal).toBeGreaterThan(-1)
+    expect(on).toBeGreaterThan(-1)
+    expect(signal).toBeGreaterThan(on)
     expect(set).toBeGreaterThan(signal)
-    expect(on).toBeGreaterThan(set)
   })
 
   // 2026-10-10: "there must be no timer". The power plan is never touched.
