@@ -665,6 +665,8 @@
             // the reason it now gives; the other holds its heal until the lease
             // comes back and then sends. The relay re-dial cases have their own
             // suite (use-mobile-native-chat-image-attachments-relay-reconnect).
+            // 2026-10-10: the #26392 port took `contentFingerprint` back out, so
+            // the #20133 expectation is short again; the cap is left as is.
             "max": 884,
             "skipBlankLines": true,
             "skipComments": true
