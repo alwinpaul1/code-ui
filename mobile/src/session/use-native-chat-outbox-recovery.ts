@@ -65,7 +65,7 @@ export type NativeChatOutboxRecoveryArgs = {
 
 /**
  * Finds the messages a chat's sends left in the outbox and sees each one through
- * (native-chat-outbox-recovery-plan.ts says how): their bubble comes back saying "Sending…",
+ * (native-chat-outbox-recovery-plan.ts says how): their bubble comes back as a plain sent message,
  * a message that landed is dropped without a word, one that did not is sent once more when it
  * is safe, and only one that truly cannot be sent goes back into the composer with a notice.
  * A resend the desktop refuses leaves its bubble saying "Not sent", with Retry and Edit.
