@@ -135,3 +135,23 @@ describe('tapping a PDF the phone draws itself, in the session worktree', () => 
     expect(onOpenFailed).toHaveBeenCalledWith({ kind: 'not-openable', fileKind: 'binary' })
   })
 })
+
+// 2026-10-10: the phone plays video and music itself since the #26148 port, but a
+// path tapped in the chat still went to the desktop's files.open, which answers
+// `binary`, so the tap said "binary files don't open on the phone".
+describe('tapping a video or music file the phone plays itself, in the session worktree', () => {
+  it.each(['media/demo.mp4', 'media/clip.MOV', 'audio/voice.m4a', 'audio/song.mp3'])(
+    'opens %s in the phone player without asking the desktop for a tab',
+    async (path) => {
+      const { client, pushPreviewRoute, onOpenFailed } = tap(path)
+      await settle()
+
+      expect(pushPreviewRoute).toHaveBeenCalledWith({
+        pathname: '/h/[hostId]/files/preview/[worktreeId]',
+        params: expect.objectContaining({ worktreeId: 'wt-1', source: 'worktree', relativePath: path })
+      })
+      expect(client.sendRequest).not.toHaveBeenCalledWith('files.open', expect.anything(), expect.anything())
+      expect(onOpenFailed).not.toHaveBeenCalled()
+    }
+  )
+})

@@ -3,6 +3,7 @@ import type {
   RuntimeTerminalPathResolution
 } from '../../../src/shared/runtime-types'
 import { filesystemPathToFileUri } from '../../../src/shared/file-uri-path'
+import { mobileFileMediaMime } from '../files/mobile-file-media'
 import { createMobileFilePreviewHref } from '../files/mobile-file-preview-route'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
 import { refusalFailure, thrownFailure, type FileTapOpenFailure } from './mobile-file-tap-failure'
@@ -263,8 +264,10 @@ function scheduleOpenedWorktreeTabActivation<T extends FileTapSessionTab>(
  * the phone shows as text keep the desktop tab too; a genuinely binary one (.zip) still reaches
  * the honest refusal.
  */
+/** A PDF the phone draws, or video and music it plays (the #26148 port): the
+ *  desktop answers files.open for these as `binary`, so they open on the phone. */
 function phoneShowsItself(path: string): boolean {
-  return classifyMobileArtifact(path) === 'pdf'
+  return classifyMobileArtifact(path) === 'pdf' || mobileFileMediaMime(path) !== null
 }
 
 function displayNameFromPath(path: string): string | undefined {
