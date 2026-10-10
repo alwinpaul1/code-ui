@@ -4,8 +4,7 @@ import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
-import { withoutSubagentGroupTwins } from '../../../src/shared/native-chat-subagent-summary'
-import { withDrawableSubagentGroups } from './mobile-native-chat-subagent-group-blocks'
+import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { copyFailedNotice } from '../components/use-copy-to-clipboard'
@@ -259,7 +258,8 @@ function MobileNativeChatMessageImpl({
   // the terminal, which shows the true order). The user's own messages still
   // get a soft bubble so they stand apart from agent prose.
   // A roster the row can draw replaces the frozen sentence the host wrote beside it (#26125).
-  const segments = splitTurnIntoSegments(withoutSubagentGroupTwins(withDrawableSubagentGroups(message.blocks)))
+  const drawn = drawnNativeChatBlocks(message.blocks)
+  const segments = splitTurnIntoSegments(drawn)
   // Still needed whole: the active call is chosen across the turn, and whether
   // any work ran at all decides the settled-tools rule below.
   const { tools } = splitNativeChatBlocks(message.blocks)
@@ -280,7 +280,7 @@ function MobileNativeChatMessageImpl({
   // Whether there is any prose to copy, without parsing it: only a tap pays
   // for the Markdown-to-text pass. Text that draws as nothing (an image-only
   // Markdown line) still passes this and copies nothing when tapped.
-  const hasProse = nativeChatMessageText(message.blocks) !== ''
+  const hasProse = nativeChatMessageText(drawn) !== ''
   // The Copy under a turn's end copies the whole reply, as the Claude app's
   // does: one Copy under a text, tool, text turn copied only "Done." (review,
   // 2026-10-09), and the earlier words had no Copy of their own any more.
@@ -292,8 +292,8 @@ function MobileNativeChatMessageImpl({
     const text = copiesTurn
       ? copyTurnText(message.id)
       : isUser && !promptsAsMarkdown
-        ? nativeChatMessageText(message.blocks)
-        : nativeChatReplyPlainText(message.blocks)
+        ? nativeChatMessageText(drawn)
+        : nativeChatReplyPlainText(drawn)
     if (!text) {
       return
     }

@@ -115,8 +115,9 @@ export function MobileNativeChatSubagentGroup({
             numberOfLines={1}
             testID="subagent-group-headline"
           />
-          {/* The verdict ellipsizes before the headline or the chevron leaves a phone row. */}
-          <Text style={[own.verdict, tone === 'failed' ? own.verdictFailed : null]} numberOfLines={1}>
+          {/* Wraps under itself rather than cutting the live clock or pushing the headline or the
+              chevron out of a phone row, as upstream's does. */}
+          <Text style={[own.verdict, tone === 'failed' ? own.verdictFailed : null]}>
             {verdict}
             {alert === null ? null : ` +${alert}`}
             {clockStartedAt !== null ? (

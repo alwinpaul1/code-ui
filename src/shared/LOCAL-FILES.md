@@ -292,8 +292,11 @@ entry; re-vendoring it at an EARLIER one silently reverts the hunk.
 - `native-chat-tool-fold.ts` — the allocation work from Orca #19468
   (44eb95fc6), in `dropUnattributableToolResults` and `pairToolBlocks`. The file
   cannot be re-vendored whole at that commit: the same range carries #18773's
-  subagent-roster fold, which reads `isSubagentGroupBlock` from a block type
-  this fork does not vendor. Both hunks are marked
+  subagent-roster fold, which reads `isSubagentGroupBlock`. The block type is
+  vendored since #26125 (see the end of this file), but the fold is still not
+  taken: it moves later tool calls above a roster row, a reordering of its own
+  to port and pin. A roster mid-turn therefore still splits the tool run, as its
+  sentence did before. Both hunks are marked
   `CODE UI HAND-APPLIED UPSTREAM HUNK` in the source, and both are byte-equal to
   upstream's — the file differs from 44eb95fc6 only by the absent #18773 code
   and those two markers.

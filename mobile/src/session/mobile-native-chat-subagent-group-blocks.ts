@@ -1,4 +1,5 @@
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
+import { withoutSubagentGroupTwins } from '../../../src/shared/native-chat-subagent-summary'
 
 /**
  * A message's blocks less any `subagent-group` roster too malformed to draw.
@@ -15,6 +16,12 @@ export function withDrawableSubagentGroups(blocks: NativeChatBlock[]): NativeCha
   return blocks.some((block) => block.type === 'subagent-group' && !isWellFormedRoster(block))
     ? blocks.filter((block) => block.type !== 'subagent-group' || isWellFormedRoster(block))
     : blocks
+}
+
+/** The blocks a row draws, which is also what its Copy may give: a drawable roster replaces its
+ *  frozen sentence, so neither the row nor a Copy of it carries the sentence (Orca #26125). */
+export function drawnNativeChatBlocks(blocks: NativeChatBlock[]): NativeChatBlock[] {
+  return withoutSubagentGroupTwins(withDrawableSubagentGroups(blocks))
 }
 
 function isWellFormedRoster(block: object): boolean {

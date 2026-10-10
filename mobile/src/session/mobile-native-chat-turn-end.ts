@@ -1,6 +1,7 @@
 import { isTextBlock, type NativeChatMessage, type NativeChatRole } from '../../../src/shared/native-chat-types'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { nativeChatMessageText, nativeChatReplyPlainText } from './mobile-native-chat-message-text'
+import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { isRenderableNativeChatNotice } from './mobile-native-chat-notice-kind'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 
@@ -72,7 +73,8 @@ export function agentTurnsByEnd(messages: readonly NativeChatMessage[]): Map<str
         turns.set(end.id, {
           firstIndex: first,
           replyRows,
-          hasProse: replyRows.some((row) => nativeChatMessageText(row.blocks) !== '')
+          // What the rows draw: a roster's frozen sentence is not on screen (#26125).
+          hasProse: replyRows.some((row) => nativeChatMessageText(drawnNativeChatBlocks(row.blocks)) !== '')
         })
       }
       first = -1
@@ -92,7 +94,7 @@ export function messageIdsEndingATurn(messages: readonly NativeChatMessage[]): S
  *  oldest first, a blank line apart. Empty when no row has words. */
 export function agentTurnPlainText(turn: AgentTurn): string {
   return turn.replyRows
-    .map((row) => nativeChatReplyPlainText(row.blocks))
+    .map((row) => nativeChatReplyPlainText(drawnNativeChatBlocks(row.blocks)))
     .filter((text) => text !== '')
     .join('\n\n')
 }

@@ -154,3 +154,40 @@ describe('the turn a turn-end row closes', () => {
     expect(agentTurnsByEnd([row('u1', 'user', [text('go')]), row('r1', 'reasoning', [text('hmm')])]).size).toBe(0)
   })
 })
+
+// Review of the #26125 port: a roster row draws its live group in place of the frozen sentence,
+// so the turn's Copy must not hand over that sentence either.
+describe('a turn ending on a subagent roster row', () => {
+  const user: NativeChatMessage = {
+    id: 'u',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'go' }],
+    timestamp: null,
+    source: 'transcript'
+  }
+  const spawn: NativeChatMessage = {
+    id: 'spawn',
+    role: 'system',
+    blocks: [
+      { type: 'text', text: 'Kicked off 2 subagents' },
+      { type: 'subagent-group', groupId: 'g', agents: [{ id: 'a', label: 'review', state: 'working' }] }
+    ],
+    timestamp: null,
+    source: 'transcript'
+  }
+
+  it('has no words to copy when the roster is all it holds', () => {
+    const turn = agentTurnsByEnd([user, spawn]).get('spawn')
+    expect(turn?.hasProse).toBe(false)
+    expect(turn ? agentTurnPlainText(turn) : null).toBe('')
+  })
+
+  it('keeps the sentence where no group can draw', () => {
+    const childless: NativeChatMessage = {
+      ...spawn,
+      blocks: [spawn.blocks[0]!, { type: 'subagent-group', groupId: 'g', agents: [] }]
+    }
+    const turn = agentTurnsByEnd([user, childless]).get('spawn')
+    expect(turn ? agentTurnPlainText(turn) : null).toBe('Kicked off 2 subagents')
+  })
+})

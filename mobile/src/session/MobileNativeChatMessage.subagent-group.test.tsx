@@ -215,6 +215,12 @@ describe('mobile transcript roster row', () => {
     }
   })
 
+  // Review of the port: the hidden sentence is not offered to Copy either.
+  it('offers no Copy for the sentence the row no longer draws', () => {
+    const tree = render(roster(WORKING))
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Copy message')).toEqual([])
+  })
+
   it('keeps real text beside a group', () => {
     expect(markdown(render(roster(WORKING, 'Delegating the review.')))).toEqual([
       'Delegating the review.'

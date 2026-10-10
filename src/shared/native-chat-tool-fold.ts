@@ -44,8 +44,9 @@ function isInterruptionBoundary(message: NativeChatMessage): boolean {
 
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #19468, 44eb95fc6) — see below and
 // in `pairToolBlocks`. The file cannot be re-vendored whole at that commit: the
-// same range carries #18773's subagent-roster fold, which needs a block type
-// this fork does not vendor. See src/shared/LOCAL-FILES.md.
+// same range carries #18773's subagent-roster fold, which is not taken (the
+// block type is vendored since #26125; the fold's reordering is not). See
+// src/shared/LOCAL-FILES.md.
 /** Drop tool results the renderer cannot pair within their folded message. */
 function dropUnattributableToolResults(message: NativeChatMessage): NativeChatMessage | null {
   let blocks: NativeChatBlock[] | undefined
