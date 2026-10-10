@@ -14,6 +14,7 @@ import {
   offerOutboxAdoption,
   outboxReleasedThisRun,
   patchOutboxEntry,
+  mountOutboxRecovery,
   registerOutboxRecovery,
   retireOutboxSend,
   takeOutboxAdoption
@@ -102,10 +103,13 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       cancelled = true
     }
   }, [])
-  // Only a chat that can tell whether a send landed takes an expired hold over (releaseOutboxSend).
+  // A chat shown is where a held send that ran out goes to be seen through; one with a settled
+  // transcript is the only one that can tell whether it landed (releaseOutboxSend).
   const { transcriptSettled } = args
+  useEffect(() => mountOutboxRecovery(), [])
+  useEffect(() => (draftKey && lane ? registerOutboxRecovery(draftKey) : undefined), [draftKey, lane])
   useEffect(
-    () => (draftKey && lane && transcriptSettled ? registerOutboxRecovery(draftKey) : undefined),
+    () => (draftKey && lane && transcriptSettled ? registerOutboxRecovery(draftKey, true) : undefined),
     [draftKey, lane, transcriptSettled]
   )
 

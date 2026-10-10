@@ -17,7 +17,9 @@
 //   which doubles it when the user does what the notice says.
 //
 // A photo send the process died with must still come back after the restart, whether or not its
-// chat had closed first (review of the first fix, 2026-10-11).
+// chat had closed first (review of the first fix, 2026-10-11). And a TEXT send whose hold runs out
+// while its chat view is hidden says nothing: it waits in the outbox and is sent once when the chat
+// is next shown, unless its row shows it landed (the user's call: "Message must be sent anyway").
 //
 // Drives the REAL draft store, the REAL structured send bridge and the REAL outbox recovery.
 
@@ -25,6 +27,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
@@ -42,6 +45,9 @@ const DELIVERY_UNCONFIRMED = 'Delivery unconfirmed — check chat before retryin
 const connectedClient = { getState: () => 'connected', notifyForeground: vi.fn() } as unknown as RpcClient
 
 let settled = true
+/** The chat view is on screen for its tab (the drafts and the send stay mounted either way). */
+let shown = true
+let messages: NativeChatMessage[] = []
 /** How the host answers; by default every acknowledgement is lost. */
 let outcomeFor: (text: string) => Promise<MobileNativeChatSendOutcome> = async () => 'unknown'
 
@@ -56,6 +62,8 @@ describe('an unconfirmed send whose hold runs out or whose chat closes under it'
     errors.length = 0
     requests.length = 0
     settled = true
+    shown = true
+    messages = []
     outcomeFor = async () => 'unknown'
     resetAppForegroundClockForTests()
     resetNativeChatOutboxForTests()
@@ -85,7 +93,7 @@ describe('an unconfirmed send whose hold runs out or whose chat closes under it'
       worktreeId: 'w',
       tabId: 'tab-s',
       sessionId: 'session-s',
-      messages: [],
+      messages,
       transcriptSettled: settled
     })
     bridge = useMobileStructuredNativeChatSendBridge({
@@ -105,10 +113,10 @@ describe('an unconfirmed send whose hold runs out or whose chat closes under it'
       worktreeId: 'w',
       tabId: 'tab-s',
       sessionId: 'session-s',
-      showNativeChat: true,
+      showNativeChat: shown,
       structured: true,
       terminalChat: false,
-      messages: [],
+      messages,
       transcriptSettled: settled,
       receipts: [],
       inputSendable: true,
@@ -277,6 +285,45 @@ describe('an unconfirmed send whose hold runs out or whose chat closes under it'
 
     expect(drafts!.composerText).toBe(TEXT)
     expect(errors.some((message) => message.includes('Attach the files'))).toBe(true)
+  })
+
+  describe('a text send whose hold runs out while its chat view is hidden (the user: "Message must be sent anyway")', () => {
+    async function expireWhileHidden(): Promise<void> {
+      shown = false
+      mount()
+      await pressText()
+      await advance(25_000)
+    }
+
+    it('says nothing when it runs out, and sends it exactly once when the chat is shown again', async () => {
+      vi.useFakeTimers()
+      await expireWhileHidden()
+      expect(errors).toEqual([])
+      expect(requests).toEqual([TEXT])
+
+      outcomeFor = async () => 'accepted'
+      shown = true
+      rerender()
+      await advance(5_000)
+      expect(requests).toEqual([TEXT, TEXT])
+      await advance(60_000)
+      expect(requests).toEqual([TEXT, TEXT])
+      expect(errors).toEqual([])
+      expect(nativeChatOutboxEntries()).toEqual([])
+    })
+
+    it('sends nothing and says nothing when the chat shows its row landed', async () => {
+      vi.useFakeTimers()
+      await expireWhileHidden()
+      messages = [{ id: 'u-1', role: 'user', blocks: [{ type: 'text', text: TEXT }], timestamp: null, source: 'transcript' }]
+      shown = true
+      rerender()
+      await advance(60_000)
+
+      expect(requests).toEqual([TEXT])
+      expect(errors).toEqual([])
+      expect(nativeChatOutboxEntries()).toEqual([])
+    })
   })
 
   it('control: with a settled transcript a text send is still seen through by the recovery, without the notice', async () => {
