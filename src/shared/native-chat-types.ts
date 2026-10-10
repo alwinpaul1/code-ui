@@ -120,11 +120,54 @@ export type NativeChatImageRefBlock = {
   alt?: string
 }
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #18773, 0252fe5c3; at 2460068883, taken for #26125): a
+// spawn group's roster block, which the phone now draws as its live group row. Upstream's
+// `background-task` block beside it is not taken. See src/shared/LOCAL-FILES.md.
+/** Lifecycle of one spawned child agent, as the display collapses it.
+ *  `unverifiable` is the repo's loss-of-contact verdict (see
+ *  docs/reference/ssh-execution-boundary.md): the child stopped reporting and
+ *  nothing proves it exited. Every in-flight provider state collapses to
+ *  `working`; `idle` is a child that exists but is not currently working. */
+export const NATIVE_CHAT_SUBAGENT_STATES = [
+  'working',
+  'idle',
+  'completed',
+  'failed',
+  'stopped',
+  'unverifiable'
+] as const
+export type NativeChatSubagentState = (typeof NATIVE_CHAT_SUBAGENT_STATES)[number]
+
+/** One child agent in a spawn group. */
+export type NativeChatSubagentEntry = {
+  /** Provider's child id (Codex: the child thread id). The roster key. */
+  id: string
+  /** Row label — the provider's task name, disambiguated by ordinal on collision. */
+  label: string
+  state: NativeChatSubagentState
+  /** Latest total tokens the provider reported FOR THIS CHILD, never a running sum. */
+  tokens?: number
+  /** Epoch ms the child's latest run started; a resumed child restarts it. */
+  startedAt?: number
+  /** Epoch ms the entry latched terminal. */
+  settledAt?: number
+}
+
+/** One spawn group's roster, revised in place as its children report activity.
+ *  Provider-agnostic on purpose: the Codex and Claude lanes both feed this. */
+export type NativeChatSubagentGroupBlock = {
+  type: 'subagent-group'
+  /** Stable group key — the parent turn that spawned these children. */
+  groupId: string
+  agents: NativeChatSubagentEntry[]
+}
+
 export type NativeChatBlock =
   | NativeChatTextBlock
   | NativeChatToolCallBlock
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
+  | NativeChatSubagentGroupBlock
 
 // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #23605, e8e144bf3c): which agent produced a projected
 // row, as the journal row says. Only the structured projection sets it; the phone draws every
@@ -213,4 +256,11 @@ export function isInterruptedStatusMessage(message: NativeChatMessage): boolean 
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #18773; taken for #26125) — see the block type above.
+export function isSubagentGroupBlock(
+  block: NativeChatBlock
+): block is NativeChatSubagentGroupBlock {
+  return block.type === 'subagent-group'
 }

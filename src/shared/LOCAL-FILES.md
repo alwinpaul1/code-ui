@@ -545,3 +545,15 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   `ReadVisualParams` import, hand-kept from 1617ff32ef (marked `CODE UI HAND-KEPT`). The phone sends
   it from `mobile/src/session/mobile-native-chat-visual-read.ts`; a 1.4.205 host's mobile gate
   refuses it, which the read latches per client (orca-mobile-rpc-allowlist.test.ts, `fails-open`).
+
+## Subagent groups in the transcript (taken for the phone's Orca #26125, 2460068883)
+
+- `native-chat-subagent-summary.ts` and `native-chat-subagent-group-header.ts` and their tests,
+  taken whole at 2460068883 (the #26125 merge).
+- `native-chat-types.ts` — #18773's roster block (`NATIVE_CHAT_SUBAGENT_STATES`,
+  `NativeChatSubagentState`, `NativeChatSubagentEntry`, `NativeChatSubagentGroupBlock`, its
+  member of `NativeChatBlock`, `isSubagentGroupBlock`), hand-applied at its 2460068883 form and
+  marked in the source. Upstream's `background-task` block beside it is not taken.
+  `agent-session-journal-schemas.ts` is NOT changed: the phone does not validate journal rows
+  against it (only the host does), so the roster stays an admissible unknown type there, and the
+  phone drops a malformed roster itself (`mobile/src/session/mobile-native-chat-subagent-group-blocks.ts`).

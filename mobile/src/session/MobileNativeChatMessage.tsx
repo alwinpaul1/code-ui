@@ -4,6 +4,8 @@ import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { selectActiveToolCall } from '../../../src/shared/native-chat-tool-activity'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
+import { withoutSubagentGroupTwins } from '../../../src/shared/native-chat-subagent-summary'
+import { withDrawableSubagentGroups } from './mobile-native-chat-subagent-group-blocks'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { copyFailedNotice } from '../components/use-copy-to-clipboard'
@@ -138,7 +140,9 @@ function MobileNativeChatMessageImpl({
   endsTurn = true,
   turnHasProse,
   turnStartIndex,
-  copyTurnText
+  copyTurnText,
+  subagentGroupsOpen,
+  onToggleSubagentGroup
 }: {
   message: NativeChatMessage
   /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
@@ -195,6 +199,10 @@ function MobileNativeChatMessageImpl({
   /** The whole reply this row ends, as Copy gives it, asked for only on a tap.
    *  Absent, Copy copies this row alone (a subagent's transcript). */
   copyTurnText?: (messageId: string) => string
+  /** The spawn groups the reader opened, held by the transcript so a remounted row keeps them;
+   *  only a row holding a roster gets it (Orca #26125). */
+  subagentGroupsOpen?: ReadonlySet<string>
+  onToggleSubagentGroup?: (groupId: string) => void
 }) {
   const styles = useChatMessageStyles()
   const { colors } = useTheme()
@@ -250,7 +258,8 @@ function MobileNativeChatMessageImpl({
   // words lost their place relative to the work (reported 2026-09-15 against
   // the terminal, which shows the true order). The user's own messages still
   // get a soft bubble so they stand apart from agent prose.
-  const segments = splitTurnIntoSegments(message.blocks)
+  // A roster the row can draw replaces the frozen sentence the host wrote beside it (#26125).
+  const segments = splitTurnIntoSegments(withoutSubagentGroupTwins(withDrawableSubagentGroups(message.blocks)))
   // Still needed whole: the active call is chosen across the turn, and whether
   // any work ran at all decides the settled-tools rule below.
   const { tools } = splitNativeChatBlocks(message.blocks)
@@ -354,7 +363,9 @@ function MobileNativeChatMessageImpl({
                       // this names the block for its markdown.
                       identity: `${message.id}:${segmentIndex}:${index}`,
                       renderVisual,
-                      holdPendingVisual: group.type === 'block' && group.block === growingBlock
+                      holdPendingVisual: group.type === 'block' && group.block === growingBlock,
+                      subagentGroupsOpen,
+                      onToggleSubagentGroup
                     })}
                   </View>
                 ))}

@@ -472,7 +472,7 @@ src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.22
 src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
 src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
 src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
+src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #18773's subagent-group roster block at its 2460068883 form (taken for #26125), hand-applied, see LOCAL-FILES.md; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus the status row through structuredAgentSessionStatusBlock (#23116) and producer linkage on a projected row (#23605), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
@@ -509,3 +509,7 @@ src/shared/native-chat-visual-height-governor.ts: 1617ff32ef (#26103, new; taken
 src/shared/native-chat-visual-height-governor.test.ts: 1617ff32ef (new)
 src/shared/rpc-contract/agent-session-visual-params.ts: 1617ff32ef (#26103, new; taken for #26071)
 src/shared/rpc-contract/structured-agent-session-identifiers.ts: 1617ff32ef (new; imported by agent-session-visual-params.ts)
+src/shared/native-chat-subagent-summary.ts: 2460068883 (#26125, new)
+src/shared/native-chat-subagent-summary.test.ts: 2460068883 (new)
+src/shared/native-chat-subagent-group-header.ts: 2460068883 (#26125, new)
+src/shared/native-chat-subagent-group-header.test.ts: 2460068883 (new)
