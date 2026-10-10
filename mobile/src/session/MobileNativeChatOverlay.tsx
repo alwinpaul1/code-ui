@@ -356,7 +356,7 @@ export function MobileNativeChatOverlay({
   )
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void) =>
-      void controller.handleNativeChatStopBackgroundTask(taskId, report),
+      controller.handleNativeChatStopBackgroundTask(taskId, report),
     [controller]
   )
   const streaming = useMobileNativeChatStreamingBubble(

@@ -78,7 +78,8 @@ export type MobileNativeChatViewProps = {
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   /** Stops one named background task; omitted when the host accepts no stop.
    *  `report` is the tasks sheet's own place to say a Stop failed. */
-  onStopBackgroundTask?: (taskId: string, report?: (message: string) => void) => void
+  /** Resolves true only when the host confirmed the task stopped (the sheet holds its row's Stop). */
+  onStopBackgroundTask?: (taskId: string, report?: (message: string) => void) => Promise<boolean>
   /** The chat's banner, or its toast: where a failed Stop is said once the
    *  tasks sheet is not showing it (use-sheet-failure.ts). */
   reportBackgroundTaskFailure?: (message: string) => void

@@ -18,6 +18,11 @@ import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
+import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
+
+/** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
+ *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
+export type BackgroundTaskStopHandler = (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -55,7 +60,7 @@ export function MobileBackgroundTasksSheet({
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   /** `report` is where this Stop's failure is said: the sheet, while open. */
-  onStopTask?: (taskId: string, report?: SheetFailureReport) => void
+  onStopTask?: BackgroundTaskStopHandler
   /** The chat's banner, or its toast, and the tab it belongs to: where a failed
    *  Stop goes once the sheet is not showing it. Without it the sheet hands
    *  the Stop no reporter, and the lane says a failure on the banner. */
@@ -76,7 +81,7 @@ export function MobileBackgroundTasksSheet({
     onStopTask && reportStopFailure
       ? (taskId: string) => {
           failure.clear()
-          onStopTask(taskId, failure.reporter())
+          return onStopTask(taskId, failure.reporter())
         }
       : onStopTask
   return (
@@ -143,7 +148,7 @@ export function MobileBackgroundTasksSheetBody({
   parentTranscriptPath?: string | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string) => void
+  onStopTask?: (taskId: string) => Promise<boolean> | void
 }) {
   const { space } = useTheme()
   // Where the parent transcript is: the session the chat reads, else the
@@ -170,6 +175,12 @@ export function MobileBackgroundTasksSheetBody({
       deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]
   )
+  const runningIds = useMemo(() => running.map((task) => task.id), [running])
+  const stopOne = useMemo(
+    () => (onStopTask ? async (taskId: string) => (await onStopTask(taskId)) === true : undefined),
+    [onStopTask]
+  )
+  const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne })
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -196,7 +207,8 @@ export function MobileBackgroundTasksSheetBody({
             <BackgroundTaskCard
               key={task.id}
               task={task}
-              onStop={onStopTask}
+              onStop={stopOne ? (taskId) => void stops.onStop(taskId) : undefined}
+              stopHeld={stops.holding.has(task.id)}
               onOpen={openTranscript(task)}
             />
           ))

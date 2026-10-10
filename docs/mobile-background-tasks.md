@@ -82,9 +82,20 @@ all, and hides their Stop). Absent means stoppable, as every older host meant
 it. It sends `agentSession.cancel` with
 `{ turnId: 'background-tasks', scope: 'background-tasks', taskId }` — the
 `turnId` there is the host's scope marker, not a real turn, because a
-background task outlives the turn that launched it. Codex reports
-`supportsStopAll: false` (it exposes no honest stop: `turn/interrupt` on a
-child ends its turn and leaves the shell running), so no stop is drawn for it.
+background task outlives the turn that launched it. Codex used to report no
+task stop (`turn/interrupt` on a child ends its turn and leaves the shell
+running), so no stop was drawn for it. Since Orca #26780 a host whose Codex is
+0.140 or newer stops a backgrounded command through Codex's own
+`thread/backgroundTerminals/terminate` and reports `supportsTaskStop: true`,
+and #27026 adds a Codex sub-agent's Stop; the sheet reads only the flags, so
+those rows get a Stop with no phone change. Grok's commands and sub-agents
+(#27022) arrive the same way.
+
+**A Stop holds its button** from the press until the answer, and, when the
+host confirmed it (`cancelled: true`), until the row leaves the Running list
+(`use-mobile-background-task-stops.ts`, Orca #26780). A failed, unconfirmed or
+nothing-stopped answer gives the button back at once, and so does a row that
+leaves and comes back. There is no timer.
 
 **Not ported:** the wire's `totalTokens` per task. Upstream's desktop strip
 renders it as "18.1k · 2m"; the phone sheet has no place for it yet, so it is

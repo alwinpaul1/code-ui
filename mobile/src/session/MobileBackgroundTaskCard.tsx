@@ -21,10 +21,13 @@ import {
 export function MobileBackgroundTaskCard({
   task,
   onStop,
+  stopHeld = false,
   onOpen
 }: {
   task: BackgroundTask
   onStop?: (taskId: string) => void
+  /** A Stop is on its way, or the host confirmed it and the row has not left yet (Orca #26780). */
+  stopHeld?: boolean
   onOpen?: () => void
 }) {
   const { colors, radius, space } = useTheme()
@@ -89,8 +92,10 @@ export function MobileBackgroundTaskCard({
           accessibilityRole="button"
           accessibilityLabel={`Stop ${task.title}`}
           onPress={() => onStop(task.id)}
+          disabled={stopHeld}
+          accessibilityState={{ disabled: stopHeld }}
           hitSlop={10}
-          style={({ pressed }) => ({ alignSelf: 'center', opacity: pressed ? 0.6 : 1 })}
+          style={({ pressed }) => ({ alignSelf: 'center', opacity: stopHeld ? 0.4 : pressed ? 0.6 : 1 })}
         >
           <CircleStop size={22} color={colors.textSecondary} />
         </Pressable>

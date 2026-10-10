@@ -121,7 +121,7 @@ export async function requestMobileStructuredBackgroundTaskStop(args: {
 }): Promise<boolean> {
   // The host reads `turnId: 'background-tasks'` as the scope marker, not as
   // a real turn — a background task outlives the turn that launched it.
-  const result = await args.mutate(
+  const result = await args.mutate<AgentSessionCancelResult>(
     'agentSession.cancel',
     'agentSession.cancel',
     { turnId: 'background-tasks', scope: 'background-tasks', taskId: args.taskId },
@@ -130,5 +130,7 @@ export async function requestMobileStructuredBackgroundTaskStop(args: {
   if (result.status === 'unknown') {
     args.onSendError('Stop unconfirmed — check chat before retrying')
   }
-  return result.status === 'accepted'
+  // Confirmed only when the host says it stopped the task: an accepted answer with nothing
+  // stopped leaves the row's Stop pressable again (Orca #26780's hold).
+  return result.status === 'accepted' && result.value.cancelled === true
 }
