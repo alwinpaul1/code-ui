@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
+import { spentSendBudgetRefusal } from './mobile-native-chat-send-budget-refusal'
 import { useMobileStructuredRewind } from './mobile-structured-agent-rewind'
 import { structuredAgentSessionSendBody } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
@@ -159,7 +160,8 @@ export function useMobileStructuredAgentSession(args: {
       }
       const timeoutMs = timeoutForDeadline(deadline)
       if (timeoutMs === null) {
-        onSendError('Message not sent')
+        // A spent budget: say whether the app's time away spent it (review, 2026-10-10).
+        onSendError((deadline !== undefined && spentSendBudgetRefusal('Message', deadline)) || 'Message not sent')
         return 'rejected'
       }
       if (attachments === undefined && images !== undefined && images.length > 0) {
