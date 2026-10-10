@@ -9,11 +9,14 @@ import type { MobileMarkdownBlock } from './mobile-markdown-parser'
 // code stays code: up to three spaces, then three or more backticks or tildes; a closer uses the
 // opener's character, is at least as long and carries nothing after it. Upstream's line parser only
 // knew ``` fences (Orca #26071); this fork parses with marked, so a ~~~ or ```` fence counts too.
-const FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})/
+// A backtick opener whose info string holds a backtick is not a fence (```npm i``` is inline
+// code), the same rule as the shared module's FENCE_OPEN.
+const FENCE_OPENER = /^ {0,3}(`{3,}(?=[^`]*$)|~{3,})/
 const FENCE_TERMINATOR = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
 // Private-use delimiters, as the preview normalizer's own placeholders use.
 const PLACEHOLDER_PREFIX = '\uE000ORCA_VISUAL_'
 const PLACEHOLDER = /^\uE000ORCA_VISUAL_(\d+)\uE000$/
+const ANY_PLACEHOLDER = /\uE000ORCA_VISUAL_(\d+)\uE000/g
 
 /** A native-chat visual directive; `index` is its position in the protected directive list. */
 export type MobileMarkdownVisualBlock = { type: 'visual'; index: number }
@@ -25,6 +28,9 @@ export type MobileMarkdownVisualLines = {
   /** The content with each recognized directive line replaced by a placeholder paragraph. */
   text: string
   directives: NativeChatVisualDirective[]
+  /** Each directive's line as written, to put back where marked kept a placeholder inside some
+   *  other block (an HTML block, a fence the line scan could not see). */
+  lines: string[]
 }
 
 function placeholderFor(index: number): string {
@@ -41,10 +47,11 @@ function placeholderFor(index: number): string {
 export function protectMobileMarkdownVisualLines(content: string): MobileMarkdownVisualLines {
   // Text that already spells a placeholder would alias a real one; it renders no visuals at all.
   if (content.includes(PLACEHOLDER_PREFIX)) {
-    return { text: content, directives: [] }
+    return { text: content, directives: [], lines: [] }
   }
   const lines = content.replace(/\r\n?/g, '\n').split('\n')
   const directives: NativeChatVisualDirective[] = []
+  const sources: string[] = []
   let fence: string | null = null
   const next = lines.map((line) => {
     if (fence !== null) {
@@ -67,10 +74,11 @@ export function protectMobileMarkdownVisualLines(content: string): MobileMarkdow
       return line
     }
     directives.push(directive)
+    sources.push(line)
     // Blank lines around it make the directive its own block, splitting any paragraph it was in.
     return `\n${placeholderFor(directives.length - 1)}\n`
   })
-  return { text: next.join('\n'), directives }
+  return { text: next.join('\n'), directives, lines: sources }
 }
 
 /** The directive index a parsed line stands for, or null for any other line. */
@@ -83,24 +91,46 @@ export function mobileMarkdownVisualPlaceholderIndex(line: string, count: number
   return index < count ? index : null
 }
 
+/** A parsed value with every placeholder in its strings put back to the directive line it was. */
+function restoreLines<T>(value: T, lines: readonly string[]): T {
+  if (typeof value === 'string') {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a string maps to a string.
+    return value.replace(ANY_PLACEHOLDER, (whole, index: string) => lines[Number(index)] ?? whole) as T
+  }
+  if (Array.isArray(value)) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: element-wise, same shape.
+    return value.map((item: unknown) => restoreLines(item, lines)) as T
+  }
+  if (typeof value === 'object' && value !== null) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: field-wise, same shape.
+    return Object.fromEntries(
+      Object.entries(value).map(([key, field]) => [key, restoreLines(field, lines)])
+    ) as T
+  }
+  return value
+}
+
 /**
  * The parsed blocks with each placeholder paragraph turned back into its visual. A separate pass
  * rather than a parser argument: the parser caches its blocks by source text
  * (`parseMobileMarkdown`), and a count in its signature would let one source answer for two.
- * With no directives, the parser's own array comes back untouched.
+ * Where marked kept a placeholder inside another block (an unclosed HTML block, a fence opened
+ * inside a list item), the directive's own line is put back, as the reader saw it before
+ * visuals existed, never the placeholder. With no directives, the parser's own array comes back.
  */
 export function withMobileMarkdownVisualBlocks(
   blocks: readonly MobileMarkdownBlock[],
-  count: number
+  lines: readonly string[]
 ): readonly MobileMarkdownRenderBlock[] {
-  if (count === 0) {
+  if (lines.length === 0) {
     return blocks
   }
   return blocks.map((block) => {
-    if (block.type !== 'paragraph') {
-      return block
+    const index =
+      block.type === 'paragraph' ? mobileMarkdownVisualPlaceholderIndex(block.text, lines.length) : null
+    if (index !== null) {
+      return { type: 'visual', index }
     }
-    const index = mobileMarkdownVisualPlaceholderIndex(block.text, count)
-    return index === null ? block : { type: 'visual', index }
+    return JSON.stringify(block).includes(PLACEHOLDER_PREFIX) ? restoreLines(block, lines) : block
   })
 }

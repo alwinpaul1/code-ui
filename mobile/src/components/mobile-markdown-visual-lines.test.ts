@@ -10,12 +10,12 @@ import {
 
 /** The same steps MobileMarkdown runs when a transcript renders visuals (use-mobile-markdown-blocks). */
 function blocksOf(content: string) {
-  const { text, directives } = protectMobileMarkdownVisualLines(markdownDocumentSource(content))
+  const { text, directives, lines } = protectMobileMarkdownVisualLines(markdownDocumentSource(content))
   return {
     directives,
     blocks: withMobileMarkdownVisualBlocks(
       parseMobileMarkdown(normalizeMobileMarkdownPreviewHtml(text)),
-      directives.length
+      lines
     )
   }
 }
@@ -73,6 +73,25 @@ describe('native-chat visual lines in mobile markdown', () => {
     expect(blocksOf('```\n~~~\n::orca-visual{file="a.html"}\n```').directives).toEqual([])
   })
 
+  // Review of the port (2026-10-10): a line opening with inline triple-backtick code is not a fence.
+  it('keeps recognizing directives after a line that opens with inline triple-backtick code', () => {
+    const { directives, blocks } = blocksOf('```npm i``` first\n\n::orca-visual{file="a.html" title="A"}\n\nafter')
+    expect(directives).toEqual([{ file: 'a.html', title: 'A' }])
+    expect(blocks.map((block) => block.type)).toEqual(['paragraph', 'visual', 'paragraph'])
+  })
+
+  // Review of the port: where marked keeps a placeholder inside another block, the reader sees the
+  // directive line as before, never the private-use placeholder.
+  it('never draws a placeholder where marked folds the line into another block', () => {
+    for (const content of [
+      '<!-- todo\n\n::orca-visual{file="a.html"}',
+      '- step\n  ```\n::orca-visual{file="a.html"}\n  ```\ntext\n::orca-visual{file="b.html"}'
+    ]) {
+      const { blocks } = blocksOf(content)
+      expect(JSON.stringify(blocks), content).not.toContain('ORCA_VISUAL')
+    }
+  })
+
   it('resumes recognizing directives after a fence closes', () => {
     const { directives } = blocksOf('```\ncode\n```\n::orca-visual{file="after.html"}')
     expect(directives).toEqual([{ file: 'after.html', title: null }])
@@ -117,8 +136,8 @@ describe('native-chat visual lines in mobile markdown', () => {
 
   it('never treats a placeholder-looking line as a visual when none were protected', () => {
     const blocks = parseMobileMarkdown('\uE000ORCA_VISUAL_0\uE000')
-    expect(withMobileMarkdownVisualBlocks(blocks, 0)).toBe(blocks)
-    expect(withMobileMarkdownVisualBlocks(blocks, 0)).toEqual([
+    expect(withMobileMarkdownVisualBlocks(blocks, [])).toBe(blocks)
+    expect(withMobileMarkdownVisualBlocks(blocks, [])).toEqual([
       { type: 'paragraph', text: '\uE000ORCA_VISUAL_0\uE000' }
     ])
   })

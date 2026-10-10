@@ -9,6 +9,7 @@ import {
 } from './mobile-markdown-visual-lines'
 
 const NO_DIRECTIVES: NativeChatVisualDirective[] = []
+const NO_LINES: string[] = []
 
 /** The blocks MobileMarkdown draws, from its document source; with `visuals`, directive lines
  *  become `visual` blocks (Orca #26071). Without it, every surface parses exactly as before. */
@@ -25,9 +26,10 @@ export function useMobileMarkdownBlocks(
     [visualLines, text]
   )
   const directives = visualLines?.directives ?? NO_DIRECTIVES
+  const lines = visualLines?.lines ?? NO_LINES
   const blocks = useMemo(
-    () => withMobileMarkdownVisualBlocks(parseMobileMarkdown(previewText), directives.length),
-    [previewText, directives.length]
+    () => withMobileMarkdownVisualBlocks(parseMobileMarkdown(previewText), lines),
+    [previewText, lines]
   )
   return { blocks, directives }
 }
