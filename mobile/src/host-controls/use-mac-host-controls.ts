@@ -14,6 +14,7 @@ import { macHostSheetState, type MacHostSheetOptions } from './mac-host-sheet-ac
 import { UNKNOWN_MAC_HOST_STATE, type MacHostState } from './mac-host-state'
 import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-password-store'
 import { probeMacHostState } from './probe-mac-host-state'
+import { connectedAtOf, useKnownHostStates } from './use-known-host-states'
 import { WINDOWS_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
 import {
   WINDOWS_HOST_ACTION_PROGRESS,
@@ -58,6 +59,9 @@ export function useMacHostControls(args: {
   // Tagged with the host it came from: the one answer slot is shared by every
   // host's sheet, and an untagged answer could be drawn under another host.
   const [probed, setProbed] = useState<{ hostId: string; state: MacHostState } | null>(null)
+  // Per host: the last answer, and after an action that finished OK, the state it
+  // left behind, which the next open draws at once (use-known-host-states.ts).
+  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor } = useKnownHostStates(args.clients)
   const [toast, setToast] = useState<string | null>(null)
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
   // Hosts whose action is running or settling; their menu waits before asking.
@@ -203,7 +207,10 @@ export function useMacHostControls(args: {
 
   // Why on every open and never persisted: the Mac may have been locked or woken from
   // its own keyboard since last time, and a remembered answer would offer Lock to an
-  // already-locked Mac.
+  // already-locked Mac. An action that finished OK in the last two minutes, on this
+  // connection, is the one exception to drawing: its menu shows the state that action
+  // left behind at once, instead of "Checking", and this probe still runs behind it
+  // and replaces it (mac-host-expected-state.ts, 2026-10-10).
   //
   // Why keyed on these values and not on the home screen's objects: the home
   // screen replaces its worktree info whenever it fetches a host's workspaces
@@ -219,9 +226,12 @@ export function useMacHostControls(args: {
   // reopened straight after Sleep display would read the display before it slept,
   // and keep that answer. It says "Checking" until the host has settled, or for
   // MENU_WAIT_MAX_MS at most, and the probe then gets what is left of its budget.
+  // Once the action has finished OK, its expected rows are drawn through the settle
+  // instead; while it still runs, "Checking" (a disabled row) stays, so no second
+  // run can start over it.
   useEffect(() => {
     // Forget the last answer at every change, so no render shows what an earlier
-    // open, or an earlier connection, said.
+    // open, or an earlier connection, said. An expectation is drawn from `known`.
     setProbed(null)
     if (!openHostId || !hasHostControls(openPlatform) || openHostConnection !== 'connected') {
       gateWaitRef.current = null
@@ -247,6 +257,7 @@ export function useMacHostControls(args: {
       setProbed({ hostId: openHostId, state: UNKNOWN_MAC_HOST_STATE })
       return
     }
+    const connectedAt = connectedAtOf(client)
     let stale = false
     void probeMacHostState({
       client,
@@ -256,12 +267,13 @@ export function useMacHostControls(args: {
     }).then((state) => {
       if (!stale) {
         setProbed({ hostId: openHostId, state })
+        recordProbe(openHostId, state, connectedAt)
       }
     })
     return () => {
       stale = true
     }
-  }, [openHostId, openHostConnection, openPlatform, openWorktreeId, openHostGated])
+  }, [openHostId, openHostConnection, openPlatform, openWorktreeId, openHostGated, recordProbe])
 
   const run = useCallback(
     async (hostId: string, action: MacHostAction, command: string) => {
@@ -283,6 +295,7 @@ export function useMacHostControls(args: {
         windows && action !== 'unlock' ? WINDOWS_HOST_ACTION_PROGRESS[action] : MAC_HOST_ACTION_PROGRESS[action]
       )
       const token = beginSettling(hostId)
+      actionStarted(hostId)
       let finished = false
       try {
         const outcome = await runMacHostCommand({
@@ -295,6 +308,12 @@ export function useMacHostControls(args: {
           ...(windows ? { timeoutMs: WINDOWS_HOST_COMMAND_TIMEOUT_MS, hostNoun: 'PC' } : {})
         })
         finished = outcome.ok
+        if (outcome.ok && mountedRef.current) {
+          // Only an action that finished OK says what the host is now; a failed,
+          // unfinished or thrown one forgets what was known (finally, below), and
+          // the next open asks behind "Checking".
+          recordAction(hostId, action, platforms[hostId], clientsRef.current.find((c) => c.hostId === hostId)?.client)
+        }
         if (!outcome.ok) {
           // The reason comes from the host's own error text, never from the command.
           showToast(outcome.reason)
@@ -310,10 +329,13 @@ export function useMacHostControls(args: {
         // open, and its answer could land in another host's menu (2026-09-26). A
         // finished action gets its settle; a failed, unfinished or thrown one has
         // nothing to wait for.
+        if (!finished) {
+          actionFailed(hostId) // a no-op once unmounted
+        }
         endSettling(hostId, token, finished ? ACTION_SETTLE_MS : 0)
       }
     },
-    [beginSettling, endSettling, platforms, showToast, worktreeIdForHost]
+    [actionFailed, actionStarted, beginSettling, endSettling, platforms, recordAction, showToast, worktreeIdForHost]
   )
 
   const onAction = useCallback(
@@ -342,14 +364,14 @@ export function useMacHostControls(args: {
     [platforms, run, showToast]
   )
 
+  const openExpected = expectedFor(openHostId, args.clients.find((entry) => entry.hostId === openHostId)?.client)
+
   const macOptions: MacHostSheetOptions | undefined = openHostId
     ? {
         hostPlatform: platforms[openHostId] ?? null,
         worktreeId: worktreeIdForHost(openHostId),
-        state: macHostSheetState(
-          openHostConnection,
-          probed && probed.hostId === openHostId ? probed.state : 'checking'
-        ),
+        // An expectation already holds the probe's answer laid over it.
+        state: macHostSheetState(openHostConnection, openExpected ?? (probed?.hostId === openHostId ? probed.state : 'checking')),
         onAction: (action) => onAction(openHostId, action),
         onForgetUnlockPassword: () => {
           void clearMacUnlockPassword(openHostId)
