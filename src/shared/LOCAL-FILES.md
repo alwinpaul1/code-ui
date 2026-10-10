@@ -580,3 +580,30 @@ failure-words `commandRefused` hunk, the coalescer and params hunks.
 - `agent-session-write-notice-copy.ts`: the nine /clear and /compact sentences and the switch of
   four sentences to the shared constants, by hand (the import hunk did not apply).
 - `agent-session-failure-copy.ts` and `agent-session-write-failure.ts`: upstream's hunks as written.
+
+## /clear keeps the conversation (Orca #26579, bb44f74d00)
+
+What the phone needs to read a 1.4.224 host's clear boundary. The host-side clear (provider
+handle chain, record boundary, queue pause, Codex/ACP restarts) is `src/main` and not vendored.
+
+- `agent-session-provider-context.ts` (new): `AgentSessionProviderContextBoundary` and
+  `isAgentSessionProviderContextBoundary` only. `activeProviderContext` is left out: it reads
+  `providerContextBoundary` on the session record, which this fork's `agent-session-record.ts`
+  does not have (host-only).
+- `agent-session-context-clear.ts` (new): whole except `agentSessionCurrentContextRows`, which
+  filters on `AgentJournalSubmission.acceptedSequence` (not in this fork's journal types) and
+  whose one caller is the host's status projection.
+- `agent-session-journal-types.ts`, `native-chat-types.ts`: the optional `contextClear` field.
+  `agent-session-journal-schemas.ts` is not changed: the phone does not validate journal rows.
+- `structured-agent-session-status-block.ts`: carries `contextClear` onto the projected block.
+- `structured-agent-session-live-turn.ts`: the boundary stops `activeStructuredAgentSessionTurnId`,
+  `newestStructuredAgentSessionTurnBySequence`, `isStructuredAgentSessionThinking` and
+  `statusStructuredAgentSessionToolCall`. This copy has no `liveStructuredAgentSessionTurnScope`
+  or `latestStructuredAgentSessionTurn`, so those two hunks have nothing to land on.
+- `agent-session-conversation-command.ts` (`runtimeFence >= 0`) and
+  `structured-agent-session-composer.ts` (the picker line): upstream's hunks as written.
+- Not taken: `structured-agent-session-message-projection.ts` (its clear-scoped dedupe lives in
+  `structuredAgentSessionRejectedShownInPlace`, which this copy does not have),
+  `structured-agent-session-projection.ts` (host status), both context-usage modules (not
+  vendored; the phone's context ring reads the beacon), record, rewind, thread-goal, wire,
+  owed-work and retry-run hunks (host).

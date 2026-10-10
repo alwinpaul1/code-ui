@@ -4,7 +4,7 @@ Files re-vendored past that base (path: commit). A single hash stops being true
 once one file moves ahead, so every exception is listed here by name.
 
 src/shared/protocol-version.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #21606's ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY, hand-applied in the v1.4.209 shared halves; plus #21924's AGENT_SESSION_TURN_COMPLETION_RUNTIME_CAPABILITY (constant and entry only), hand-applied in the v1.4.209..v1.4.210 shared halves; plus #22216's AGENT_SESSION_MUSE_RESUME_RUNTIME_CAPABILITY (constant and entry), hand-applied in the v1.4.210..v1.4.211 shared halves; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #23837 (6f2a7d05c9) WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY (constant and the Electron client list entry), hand-applied, see LOCAL-FILES.md; plus #24203 (757736628f) STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY (constant and RUNTIME_CAPABILITIES entry) and the Electron client list moved out to electron-remote-runtime-client-capabilities.ts, hand-applied, see LOCAL-FILES.md; plus #22614 (0b79720c2e) AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY (import and RUNTIME_CAPABILITIES entry), hand-applied, see LOCAL-FILES.md; plus #24301 (7176648759) the stop capabilities move to agent-session-stop-capabilities.ts (export * and the host list spread), hand-applied, see LOCAL-FILES.md
-src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md; plus `failure?` on a status row (#23116, a68d62911e) as one optional member, hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
+src/shared/agent-session-journal-types.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba (plus forward-ported and hand-applied hunks, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change add99c908b), see LOCAL-FILES.md; plus #19869's callId hunk (journal item, schema x2, call block) hand-applied for #22619, see LOCAL-FILES.md; plus #24477 (e2c5414f76) header comment merged by 3-way; plus the turn `outcome` hunk (journal types and schemas, readAgentJournalTurnOutcome) hand-applied from v1.4.217 for #23467, see LOCAL-FILES.md; plus `failure?` on a status row (#23116, a68d62911e) as one optional member, hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md; plus #26579 (bb44f74d00) `contextClear` on a status row, hand-applied, see LOCAL-FILES.md
 src/shared/structured-agent-session-mutation.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
@@ -54,9 +54,9 @@ src/shared/structured-agent-session-dispatch-rejection.ts: f55b7ba68
 src/shared/structured-agent-session-send-disposition.ts: 8999a0028
 src/shared/structured-agent-session-send-disposition.test.ts: 6ae6ed08bb (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-record.ts: 231e805b1 (plus a local hunk, see LOCAL-FILES.md); plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md; plus #24006 (5cda0f4508) hunks merged by 3-way (doc comments and one Pick<> narrowing); its agent-session-operation-ledger.ts comments are not taken, the fork's copy lacks the launch/rewind fields they describe
-src/shared/agent-session-conversation-command.ts: f1d854502
+src/shared/agent-session-conversation-command.ts: f1d854502; plus #26579 (bb44f74d00) a record at runtime fence 0 admitted, hand-applied, see LOCAL-FILES.md
 src/shared/agent-session-operation-ledger.ts: f1d854502; plus the v1.4.211..v1.4.217 shared halves by hand (last upstream change 067975bfd1), see LOCAL-FILES.md
-src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode); plus #25704 (4735ecefac) StructuredAgentSessionCommandRefusalCause, refusedWhile and isLoneStructuredAgentSessionConversationCommand, hand-applied, see LOCAL-FILES.md
+src/shared/structured-agent-session-composer.ts: 563dd5487f (v1.4.210..v1.4.211 shared halves; #22377's goal mode); plus #25704 (4735ecefac) StructuredAgentSessionCommandRefusalCause, refusedWhile and isLoneStructuredAgentSessionConversationCommand, hand-applied, see LOCAL-FILES.md; plus #26579 (bb44f74d00) /clear's picker line "Clear conversation context", hand-applied, see LOCAL-FILES.md
 src/shared/native-chat-diff.ts: 0d4d059ae
 src/shared/native-chat-tool-icon.ts: d15a6df22497ce7d444e669ea3cc015f77e73388; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/native-chat-tool-icon.test.ts: d15a6df22497ce7d444e669ea3cc015f77e73388; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
@@ -72,7 +72,7 @@ src/shared/native-chat-tool-run-outcome.test.ts: 68ea3b92e
 src/shared/native-chat-tool-activity.test.ts: c1e15c400
 src/shared/native-chat-turn-status.ts: 533b0bd02; plus #23467 (24edf0f64b) verdict hunks merged by hand (the fork keeps its `thinking` row; no queue-until hunk)
 src/shared/native-chat-turn-status.test.ts: 533b0bd02; plus #23467 (24edf0f64b) tests merged by hand
-src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves); plus #24218 (3ab3c9239f) comment hunk merged by 3-way; the behaviour hunk lives in the fork's own mobile/src/session/mobile-native-chat-turn-activity.ts
+src/shared/structured-agent-session-live-turn.ts: 98584332a3 (v1.4.211..v1.4.217 shared halves); plus #24218 (3ab3c9239f) comment hunk merged by 3-way; the behaviour hunk lives in the fork's own mobile/src/session/mobile-native-chat-turn-activity.ts; plus #26579 (bb44f74d00) the clear boundary in the four live-turn readers this copy has, hand-applied, see LOCAL-FILES.md
 src/shared/structured-agent-session-live-turn.test.ts: 8757e40063 (v1.4.210..v1.4.211 shared halves; #22299, #22349)
 src/shared/native-chat-tool-summary.ts: 91e6e1f355 (v1.4.209..v1.4.210 shared halves; except countToolCalls, kept at its c1e15c400 form — #20328's array-free rewrite was skipped, unreachable from mobile; #22029 did not touch it; see LOCAL-FILES.md)
 src/shared/native-chat-tool-summary.test.ts: c1e15c400
@@ -472,7 +472,7 @@ src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.22
 src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
 src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
 src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
-src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #18773's subagent-group roster block at its 2460068883 form (taken for #26125), hand-applied, see LOCAL-FILES.md; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
+src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #18773's subagent-group roster block at its 2460068883 form (taken for #26125), hand-applied, see LOCAL-FILES.md; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md; plus #26579 (bb44f74d00) `contextClear` on a text block, hand-applied, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus the status row through structuredAgentSessionStatusBlock (#23116) and producer linkage on a projected row (#23605), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
 src/shared/codex-collab-agent-tools.ts: cb363444f3 (#22619, new)
@@ -497,7 +497,7 @@ src/shared/agent-session-write-failure.test.ts: 59b746ff3c (new)
 src/shared/agent-session-wire-refusals.ts: a68d62911e (new; the module #19695 moved the refusal codes into, at v1.4.220)
 src/shared/agent-session-wire-refusals.test.ts: a68d62911e (new)
 src/shared/agent-session-rewind.ts: 134a22077d (new, at v1.4.220; reads AgentJournalTurnScopeSchema, hand-applied to journal-schemas)
-src/shared/structured-agent-session-status-block.ts: a68d62911e (#23116, new; v1.4.220 equals it)
+src/shared/structured-agent-session-status-block.ts: a68d62911e (#23116, new; v1.4.220 equals it); plus #26579 (bb44f74d00) `contextClear` carried onto the block, hand-applied, see LOCAL-FILES.md
 src/shared/native-chat-provider-retry-runs.ts: b4b708c2c4 (#23684, new; the rule the phone's in-place collapse is pinned to, mobile-structured-transcript.test.ts). Its test is not vendored: it imports native-chat-transcript-projection.ts, which this fork does not have
 src/shared/agent-main-agent-verdict.ts: 24edf0f64b (new; #22944 85067494a1, then #23467; v1.4.217..v1.4.219 chat chain)
 src/shared/agent-main-agent-verdict.test.ts: 24edf0f64b (new)
@@ -517,3 +517,5 @@ src/shared/native-chat-subagent-group-header.test.ts: 2460068883 (new)
 src/shared/native-chat-question-auto-advance.ts: 7c88ab7dd5 (#26288, new)
 src/shared/returned-draft-text.ts: 4735ecefac (#25704, whole file)
 src/shared/returned-draft-text.test.ts: 4735ecefac (#25704, whole file)
+src/shared/agent-session-context-clear.ts: bb44f74d00 (#26579, new; less agentSessionCurrentContextRows, see LOCAL-FILES.md)
+src/shared/agent-session-provider-context.ts: bb44f74d00 (#26579, new; the boundary type and guard only, see LOCAL-FILES.md)

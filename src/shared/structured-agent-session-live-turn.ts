@@ -23,6 +23,7 @@ import type {
 } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
 import { readAgentJournalTurn } from './agent-session-turn-record'
+import { isAgentSessionContextClear } from './agent-session-context-clear'
 import type { NativeChatToolCallBlock } from './native-chat-types'
 import {
   isRunningStructuredAgentSessionToolAction,
@@ -35,6 +36,9 @@ export function activeStructuredAgentSessionTurnId(
   items: readonly AgentJournalRenderItem[]
 ): string | null {
   for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (isAgentSessionContextClear(items[index]?.body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(items[index]?.body)
     if (turn) {
       return turn.state === 'running' ? turn.turnId : null
@@ -53,6 +57,11 @@ export function newestStructuredAgentSessionTurnBySequence(
   let newest: AgentJournalTurnLifecycle | null = null
   for (const item of items) {
     if (item.sequence < newestSequence) {
+      continue
+    }
+    if (isAgentSessionContextClear(item.body)) {
+      newestSequence = item.sequence
+      newest = null
       continue
     }
     const turn = readAgentJournalTurn(item.body)
@@ -107,6 +116,9 @@ export function isStructuredAgentSessionThinking(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
+    if (isAgentSessionContextClear(body)) {
+      return false
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       return turn.state === 'running' && newestContentIsReasoning === true
@@ -141,6 +153,9 @@ export function statusStructuredAgentSessionToolCall(
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body
+    if (isAgentSessionContextClear(body)) {
+      return null
+    }
     const turn = readAgentJournalTurn(body)
     if (turn) {
       const named = turn.state === 'running' ? (running ?? newest) : null
