@@ -47,7 +47,10 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
       if (!client) {
         return
       }
-      setMarkdownDocs((prev) => new Map(prev).set(tab.id, { status: 'loading' }))
+      // Why: the object identity is this read's claim on the slot. A close (or a newer read) replaces
+      // or removes it, and a late reply then finds a different value and leaves the map alone.
+      const loading = { status: 'loading' } as const
+      setMarkdownDocs((prev) => new Map(prev).set(tab.id, loading))
       try {
         const response = await markdownTabRead.request(client, {
           worktree: `id:${worktreeId}`,
@@ -56,16 +59,18 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         if (response.ok) {
           const result = markdownTabRead.interpret(response)
           setMarkdownDocs((prev) =>
-            new Map(prev).set(tab.id, {
-              status: 'ready',
-              content: result.content,
-              localContent: result.content,
-              baseVersion: result.version,
-              isDirty: false,
-              editable: result.editable === true,
-              stale: result.isDirty,
-              readOnlyReason: result.readOnlyReason
-            })
+            prev.get(tab.id) === loading
+              ? new Map(prev).set(tab.id, {
+                  status: 'ready',
+                  content: result.content,
+                  localContent: result.content,
+                  baseVersion: result.version,
+                  isDirty: false,
+                  editable: result.editable === true,
+                  stale: result.isDirty,
+                  readOnlyReason: result.readOnlyReason
+                })
+              : prev
           )
           return
         }
@@ -96,23 +101,27 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
         }
         const fileResult = fallback.value
         setMarkdownDocs((prev) =>
-          new Map(prev).set(
-            tab.id,
-            buildMarkdownDiskFallbackDoc({
-              content: fileResult.content,
-              truncated: fileResult.truncated,
-              tabIsDirty: tab.isDirty,
-              ...(headless ? {} : { desktopRefusal: desktopReason })
-            })
-          )
+          prev.get(tab.id) === loading
+            ? new Map(prev).set(
+                tab.id,
+                buildMarkdownDiskFallbackDoc({
+                  content: fileResult.content,
+                  truncated: fileResult.truncated,
+                  tabIsDirty: tab.isDirty,
+                  ...(headless ? {} : { desktopRefusal: desktopReason })
+                })
+              )
+            : prev
         )
       } catch (err) {
         const reason = err instanceof Error ? err.message : ''
         setMarkdownDocs((prev) =>
-          new Map(prev).set(tab.id, {
-            status: 'error',
-            message: reason ? `Couldn't load markdown (${reason})` : "Couldn't load markdown"
-          })
+          prev.get(tab.id) === loading
+            ? new Map(prev).set(tab.id, {
+                status: 'error',
+                message: reason ? `Couldn't load markdown (${reason})` : "Couldn't load markdown"
+              })
+            : prev
         )
       }
     },

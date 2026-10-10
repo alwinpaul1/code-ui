@@ -228,7 +228,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-08: the terminal subscribe's stream handler holds each attach snapshot for the
 // startup-frame reader (noteAttachSnapshot), above its return for a covered handle. Only
 // that body moved. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '5e5e0f9f137c307f2d7cf3b70d7e818b2eca78585d78b8451fba27f356889a5f'
+// 2026-10-10 (Orca #26159 ported): readMarkdownTab's writes land only while their own loading
+// record is the tab's current one, and an accepted Markdown tab close deletes its clean document.
+// The bodies of readMarkdownTab and handleCloseSessionTab moved. Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '9fc107e757e803caf1fd43cf8b37db96771dd61ecf067a210c50b9963cf8c577'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -315,8 +318,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // still 13.
 // 2026-10-06 (Orca #24655 ported): handleCloseSessionTab's body gains the file-tab document release.
 // Same 13 functions. The #24655 follow-up adds the read cache's forget to the same body.
+// 2026-10-10 (Orca #26159 ported): the same body also deletes an accepted Markdown tab's clean
+// document. Same 13 functions.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'ad0d59f4f0ef6c7799aa3747176288b01f99d78cde065d3bb0d400044acd1753'
+  '9e3c043a52efdeb7ac0cb76087ac3f191b82a83cc63642d6d050d60b6989a58f'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -415,8 +420,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // now calls `tabPillDotState(status, now, leadTurnEnded)` and holds no other literal of it.
 // 671 since 2026-10-06 (Orca #24655 ported): the `'file'` check before an accepted file-tab close
 // releases that tab's document; no other literal moved.
+// 673 since 2026-10-10 (Orca #26159 ported): the 'markdown' check and the 'ready' test in the
+// close action that releases a closed Markdown tab's document; the readers' guard compares object
+// identity and adds no literal. No other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1b367405f456cd52d5285cb36a3484b6e23e4d26bd22b5e0b79c8e7187336db1'
+  '1e4af74fb288b0c45b766ca8408d74f197942a7e5264a62ed862237c60d3eb54'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1108,7 +1116,8 @@ describe('mobile session route extraction parity', () => {
     // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
     // 670 since 2026-10-04: the tab pill's 'idle' moved to session-tab-activity.ts.
     // 671 since 2026-10-06: the 'file' check before a closed file tab's document is released (Orca #24655).
-    expect(strings).toHaveLength(671)
+    // 673 since 2026-10-10: the close action's 'markdown' and 'ready' (Orca #26159).
+    expect(strings).toHaveLength(673)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
