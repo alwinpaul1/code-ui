@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { routeMarkdownHref } from './markdown-href-routing'
+import {
+  createNativeChatFileHref,
+  routeNativeChatHref
+} from '../../../src/shared/native-chat-href-routing'
 
 describe('routeMarkdownHref', () => {
   it('routes web and mail links to the system handler', () => {
@@ -44,6 +48,30 @@ describe('routeMarkdownHref', () => {
     expect(routeMarkdownHref('docs/release%20notes.md')).toEqual({
       kind: 'file',
       pathText: 'docs/release notes.md'
+    })
+  })
+
+  it('preserves the existing wrapped reply-location contract', () => {
+    expect(routeMarkdownHref(createNativeChatFileHref(' docs/report.md:12:4 '))).toEqual({
+      kind: 'file',
+      pathText: 'docs/report.md:12:4'
+    })
+  })
+
+  // Code UI guard for the vendored #26511 half (upstream's shared test is not run here). The
+  // phone joins a line back onto the path, so a literal tool path opens the same file either
+  // way; what the shared router must keep is that the literal wrapper is never re-read as a
+  // location or a scheme.
+  it('reads a literal tool path as a file name with no line', () => {
+    expect(routeNativeChatHref(createNativeChatFileHref('/repo/report:12', 'literal'))).toEqual({
+      kind: 'file',
+      pathText: '/repo/report:12',
+      line: null,
+      pathKind: 'literal'
+    })
+    expect(routeMarkdownHref(createNativeChatFileHref('https:notes.md', 'literal'))).toEqual({
+      kind: 'file',
+      pathText: 'https:notes.md'
     })
   })
 
