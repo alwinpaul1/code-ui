@@ -6,6 +6,7 @@ import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileSubagentTranscriptModal } from './MobileSubagentTranscriptModal'
+import { MobileSubagentActivityFeeds } from './MobileSubagentActivityFeeds'
 import { useHostMobileCapability } from '../transport/host-mobile-capabilities'
 import { useTheme, useThemedStyles } from '../theme/theme-context'
 import { Button } from '../ui/Button'
@@ -364,6 +365,7 @@ export function MobileSessionActiveContent({
       {/* Opened from a subagent row in the background-tasks sheet, through its
           store; mounted here because this is the screen that knows the host. */}
       <MobileSubagentTranscriptModal hostId={hostId} worktreeId={worktreeId} />
+      <MobileSubagentActivityFeeds hostId={hostId} worktreeId={worktreeId} />
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
           <Text style={styles.toastText}>{toastMessage}</Text>

@@ -801,9 +801,16 @@ call, took the vouch from the real agent, which was then dropped from the count.
 
 The footer's "· N shells" counts a subagent's shells too. Once the named list is
 fitted to it, what is left over while a subagent runs is drawn as one muted
-line in the Running section ("+2 shells in subagents"). A count only: nothing
-stock Orca sends names those shells or an agent's latest step. Probe, captured
+line in the Running section ("+2 shells in subagents"). Probe, captured
 screens and limits: `docs/subagent-task-visibility.md`.
+
+Later the same day the sheet started reading each running agent's own
+transcript while it is open (`mobile-subagent-activity.ts`,
+`MobileSubagentActivityFeeds.tsx`): the agent's row is titled with its latest
+step ("Running cd /private/tmp && ls | head -3") and the shells it started are
+listed as rows of their own, under it while running, in Finished once over.
+The count line then holds only what is still unlisted. See "Reading the
+subagents' own transcripts" in `docs/subagent-task-visibility.md`.
 
 ## The card, laid out like the Claude app (2026-10-10)
 

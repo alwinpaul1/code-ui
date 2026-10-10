@@ -89,6 +89,11 @@ export function MobileNativeChatTasksProvider({
     },
     [agent, parentTranscriptPath]
   )
+  // The sheet reads each running agent's own transcript while it is open.
+  const subagentSource = useMemo(
+    () => (agent === 'claude' ? { agent, parentTranscriptPath } : null),
+    [agent, parentTranscriptPath]
+  )
   const subagents = agentStatus?.subagents
   const agentRuns = useMemo(
     () => ({
@@ -166,6 +171,7 @@ export function MobileNativeChatTasksProvider({
           reportStopFailure={reportStopFailure}
           scopeKey={scopeKey}
           connection={hostConnection}
+          subagentSource={subagentSource}
           onClose={() => setSheetOpen(false)}
         />
         </NativeChatRunSheetContext.Provider>

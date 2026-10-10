@@ -41,6 +41,7 @@ vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }
 vi.mock('./TerminalPaneView', () => ({ TerminalPaneView: () => null }))
 vi.mock('./MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
 vi.mock('./MobileSubagentTranscriptModal', () => ({ MobileSubagentTranscriptModal: () => null }))
+vi.mock('./MobileSubagentActivityFeeds', () => ({ MobileSubagentActivityFeeds: () => null }))
 vi.mock('../transport/host-mobile-capabilities', () => ({ useHostMobileCapability: () => false }))
 vi.mock('./use-mobile-native-chat-created-file-counts', () => ({
   useMobileNativeChatCreatedFileCounts: () => new Map()

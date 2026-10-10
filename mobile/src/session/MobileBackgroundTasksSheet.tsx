@@ -17,6 +17,7 @@ import { projectStructuredBackgroundTasks } from './mobile-structured-background
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
+import { useSubagentActivityWatch, type SubagentActivitySource } from './use-subagent-activity-watch'
 import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
 import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
 
@@ -47,6 +48,7 @@ export function MobileBackgroundTasksSheet({
   reportStopFailure,
   scopeKey = null,
   connection,
+  subagentSource = null,
   onClose
 }: {
   visible: boolean
@@ -62,6 +64,9 @@ export function MobileBackgroundTasksSheet({
   reportStopFailure?: SheetFailureReport
   scopeKey?: string | null
   connection?: BackgroundTasksConnection
+  /** Where the running agents' own transcripts are (a Claude tab): read only
+   *  while the sheet is open, for each agent's latest step and its shells. */
+  subagentSource?: SubagentActivitySource | null
   onClose: () => void
 }) {
   // Why the sheet says a failed Stop itself: it draws in its own native window,
@@ -109,6 +114,7 @@ export function MobileBackgroundTasksSheet({
         onStopTask={stop}
         onStopAllFailed={reportStopAll}
         connection={connection}
+        subagentSource={visible ? subagentSource : null}
       />
     </BottomDrawer>
   )
@@ -144,7 +150,8 @@ export function MobileBackgroundTasksSheetBody({
   hostBackgroundTasks,
   onStopTask,
   onStopAllFailed,
-  connection
+  connection,
+  subagentSource = null
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
@@ -155,6 +162,9 @@ export function MobileBackgroundTasksSheetBody({
   onStopAllFailed?: (text: string) => void
   /** The host connection. Absent reads as connected (a caller that cannot tell). */
   connection?: BackgroundTasksConnection
+  /** Read the running agents' transcripts while this is set (the sheet passes
+   *  it only while open). Null reads nothing. */
+  subagentSource?: SubagentActivitySource | null
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -172,12 +182,20 @@ export function MobileBackgroundTasksSheetBody({
   // Re-derived on each tick rather than caching elapsed separately: the walk is
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
-  const { running, finished, shellsInSubagents } = useMemo(
-    () =>
-      projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
-      deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns),
-    [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]
-  )
+  const lane = useMemo(() => {
+    const structured = projectStructuredBackgroundTasks(hostBackgroundTasks, now)
+    return structured
+      ? { tasks: structured, structured: true }
+      : { tasks: deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns), structured: false }
+  }, [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns])
+  // A structured lane has the provider's own roster; only a transcript-read
+  // (terminal) lane gets its agents' steps and shells from their transcripts.
+  const { running, finished, shellsInSubagents } = useSubagentActivityWatch({
+    tasks: lane.tasks,
+    source: lane.structured ? null : subagentSource,
+    report: backgroundTaskReport,
+    now
+  })
   const runningIds = useMemo(() => running.map((task) => task.id), [running])
   const stopOne = useMemo(
     () =>
@@ -235,8 +253,9 @@ export function MobileBackgroundTasksSheetBody({
             Nothing running.
           </Txt>
         )}
-        {/* A count only: the footer says these shells exist, and nothing the
-            phone receives names them (docs/subagent-task-visibility.md). */}
+        {/* What the footer counts beyond the lead and the listed subagent
+            shells: shells no transcript the phone reads names
+            (docs/subagent-task-visibility.md). */}
         {shellsInSubagents ? (
           <Txt variant="caption" tone="muted">
             {subagentShellsLabel(shellsInSubagents)}

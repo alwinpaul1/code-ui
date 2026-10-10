@@ -27,7 +27,7 @@ export type HeldShellCount = { count: number; at: number }
 
 /** Longer than the idle screen poll (5 s), so a launch the footer has not yet
  *  been re-read with is not retired by its count. */
-const COUNT_RETIRE_GRACE_MS = 10_000
+export const COUNT_RETIRE_GRACE_MS = 10_000
 
 export type ShellCountFit = {
   /** The footer's count as the screen shows it now; null when it is not on

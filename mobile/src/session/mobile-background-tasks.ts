@@ -189,6 +189,10 @@ export type BackgroundTask = {
   /** Cumulative tokens the provider reported for this task, where the host states them (a
    *  structured roster's `totalTokens`). Absent is unknown, and nothing is shown for it. */
   totalTokens?: number
+  /** A running subagent's latest tool step, read off its own transcript while
+   *  the sheet is open ("Running cd /private/tmp && ls"), drawn as the row's
+   *  title over `title` (`mobile-subagent-activity.ts`). Absent: unknown. */
+  latestStep?: string
 }
 
 export type BackgroundTasks = {

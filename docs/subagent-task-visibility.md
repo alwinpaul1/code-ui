@@ -185,3 +185,69 @@ shell's `description` alongside its id (`background_tasks` carries it), and a
 SubagentStop hook on the phone's launch flag would refresh it when an agent
 ends. That names subagent shells only at turn and agent boundaries, not live,
 and still not which agent owns which shell.
+
+## Reading the subagents' own transcripts (built 2026-10-10, later)
+
+Route 2 above, taken. While the Background tasks sheet is open on a
+terminal-driven Claude tab, the phone subscribes to each RUNNING agent's own
+transcript (`nativeChat.subscribe`, session `agent-<id>`, path
+`<session>/subagents/agent-<id>.jsonl`), at most six at once, through the same
+data layer the removed "View transcript" viewer used. Nothing is written on the
+host and no terminal is opened. A read starts when the sheet opens or an agent
+starts, and stops when the sheet closes, unmounts, or the agent leaves the
+roster. A finished agent is never read. The reads are not kept in the chats'
+warm-start cache (twelve entries), so they never push a chat out of it.
+
+Pieces: `mobile-subagent-activity.ts` (pure: targets, the step label, the
+merge), `subagent-activity-store.ts` (the sheet's request and the reads'
+results), `MobileSubagentActivityFeeds.tsx` (mounted by the session content,
+one `useMobileNativeChatSession` per target), `use-subagent-activity-watch.ts`
+(the sheet's side). Not used on a structured tab, which has the provider's own
+roster, nor on a Codex tab.
+
+What the rows show, verified against a second throwaway run (**Claude Code
+2.1.296**, `tmux -L cuisub`, session 59454ec6; agents "Sleep probe A" and
+"Sleep probe B", records in `fixtures/claude-subagent-transcript-probe-*-2.1.296.json`):
+
+- **An agent's title is its latest tool call.** For a shell call, "Running"
+  and the command's first line ("Running cd /private/tmp && ls | head -3");
+  for any other tool, the chat's running-call words ("Running ToolSearch
+  select:TaskStop"), without a JSON preview ("Running TaskStop"). The spawn
+  description stays as the screen reader's label and on the Stop. Before the
+  agent's first call, or when the read is refused or fails (an older host),
+  the row keeps the description and nothing says an error.
+- **A subagent's background shells are rows** ("Start a 120-second background
+  sleep", "Shell  1m 20s"), timed from the launching record. They carry no
+  Stop: a terminal tab has no stop path at all (the Stop is offered only where
+  the structured host says `supportsTaskStop`), so a button would be dead.
+- **The "+N shells in subagents" line** takes the listed running ones out, and
+  is dropped when every shell the footer counts outside the lead is listed.
+  The pill's "N running tasks" count is unchanged.
+
+**The finding that shapes the shell rows.** A subagent's shell completion is
+delivered to the SUBAGENT (Claude resumes it with the notification), and
+2.1.296 writes that `<task-notification>` as a `user` record with
+`isMeta: true` in the subagent's file. Orca's reader keeps only the tool results
+of an isMeta user record (confirmed in the installed Orca 1.4.224 bundle:
+`` isMeta===!0||…isSynthetic===!0||…isCompactSummary===!0)?…:d.filter(e=>e.type===`tool-result`) ``),
+so the completion never reaches the phone. B's `sleep 30` ended at 18:45:46,
+after its hand-back; A's `sleep 120` ended at 18:47:16, a minute and a half
+after A handed back, and resumed A (the lead's second "Agent finished" line).
+So a subagent shell is moved to Finished only by evidence that does arrive:
+
+1. a `TaskStop` the subagent made, once its answer says it went through
+   (B's `bnj50z9e4`);
+2. the lead's Stop-hook `run=` list (every task in the process), once it
+   postdates the launch and no longer names the shell;
+3. the footer counting fewer shells outside the lead than are listed: the
+   oldest go first, as `finished` (over, outcome unseen), never one launched in
+   the last 10 s, the same rule the lead's own fit uses.
+
+**Limits.** A subagent shell that ends with none of those (the footer paints
+no count at zero, so the LAST shell's end is never seen there) stays a running
+row until its agent finishes, when the read stops and the row leaves; the
+footer count line then covers it as before. A shell launched before the first
+window the read gets (40 records) is not listed. A shell that outlives its
+agent (A's) is not listed once the agent finishes, since finished agents are
+not read; the count line still counts it. Shells of an agent's own nested
+agents are not read.

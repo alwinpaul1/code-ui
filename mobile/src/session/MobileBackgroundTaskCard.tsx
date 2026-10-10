@@ -56,8 +56,16 @@ export function MobileBackgroundTaskCard({
         <BackgroundTaskGlyph kind={task.kind} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Txt variant="body" weight="medium" numberOfLines={2}>
-          {task.title}
+        {/* A running agent's latest step is its title, as the Claude app's
+            rows read ("Running cd /private/tmp/…"); the spawn description
+            stays in what a screen reader says, and on the Stop. */}
+        <Txt
+          variant="body"
+          weight="medium"
+          numberOfLines={2}
+          accessibilityLabel={task.latestStep ? `${task.title}, ${task.latestStep}` : undefined}
+        >
+          {task.latestStep ?? task.title}
         </Txt>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Txt variant="caption" tone="secondary">
