@@ -355,13 +355,17 @@ function ToolRunView({
 
   function renderBody(): React.JSX.Element {
     // Keyed by the call, not its place (Orca #26968): an opened line stays with its command when
-    // rows before it go or move, and a repeated provider id keeps one row per occurrence.
+    // rows before it go or move, and a repeated provider id keeps one row per occurrence. A row
+    // with no call id is keyed by its content, not upstream's object identity
+    // (`preserveAnonymousObject`): structured diff rows carry no id, and the projection cache hands
+    // out new blocks whenever an item is replaced, which collapsed an open edit card on every
+    // running-to-completed update (review, 2026-10-10).
     const seen = new Map<string, number>()
     return (
       <View style={styles.toolRunBody}>
         {pairs.map((pair, i) => (
           <ToolLine
-            key={nativeChatToolLineIdentity((pair.call ?? pair.result)!, seen, true)}
+            key={nativeChatToolLineIdentity((pair.call ?? pair.result)!, seen)}
             pair={pair}
             taskList={taskLists[i] ?? null}
             // A call "Show N more" revealed opens on its own tap (diffLineLimit).

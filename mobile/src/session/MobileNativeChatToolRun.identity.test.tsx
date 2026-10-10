@@ -141,3 +141,23 @@ it('keeps a single-row run working: an empty and a one-line run draw without a k
   show(edit('only', 'one.ts'))
   expect(lines().length).toBeLessThanOrEqual(1)
 })
+
+// Review, 2026-10-10: structured diff rows and some structured calls carry no call id, and the
+// projection cache hands out new block objects whenever the reducer replaces an item (a
+// running-to-completed update, a resync). Keyed by object identity, as upstream's
+// `preserveAnonymousObject` does, an open edit card collapsed on every such refresh.
+function anonymousEdit(file: string): NativeChatBlock[] {
+  return edit('drop', file).map((block) => {
+    const { callId: _callId, ...rest } = block as NativeChatBlock & { callId?: string }
+    return rest as NativeChatBlock
+  })
+}
+
+it('keeps an opened edit with no call id open when the same history is re-read as new objects', () => {
+  show([...anonymousEdit('a.ts'), ...anonymousEdit('b.ts')])
+  act(() => line('b.ts').props.onPress())
+  expect(isOpen(line('b.ts'))).toBe(true)
+  show(structuredClone([...anonymousEdit('a.ts'), ...anonymousEdit('b.ts')]))
+  expect(isOpen(line('b.ts'))).toBe(true)
+  expect(isOpen(line('a.ts'))).toBe(false)
+})
