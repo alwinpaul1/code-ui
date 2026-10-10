@@ -780,3 +780,11 @@ workflow` rows are not folded: the wire gives them a name and a description only
 A workflow-lane row is also never allowed to vouch for a foreground `Agent` call
 (`callStarted`): it came up beside the call and, with no `subagent_type` on the
 call, took the vouch from the real agent, which was then dropped from the count.
+
+## Shells inside subagents (2026-10-10)
+
+The footer's "· N shells" counts a subagent's shells too. Once the named list is
+fitted to it, what is left over while a subagent runs is drawn as one muted
+line in the Running section ("+2 shells in subagents"). A count only: nothing
+stock Orca sends names those shells or an agent's latest step. Probe, captured
+screens and limits: `docs/subagent-task-visibility.md`.

@@ -9,6 +9,7 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { BackgroundTaskHostStatus, BackgroundTask } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
+import { subagentShellsLabel } from './mobile-background-task-footer'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
@@ -164,7 +165,7 @@ export function MobileBackgroundTasksSheetBody({
   // Re-derived on each tick rather than caching elapsed separately: the walk is
   // linear over the loaded window and only runs while the sheet is open, and
   // one source of truth beats a second, staler copy of the same number.
-  const { running, finished } = useMemo(
+  const { running, finished, shellsInSubagents } = useMemo(
     () =>
       projectStructuredBackgroundTasks(hostBackgroundTasks, now) ??
       deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns),
@@ -200,11 +201,18 @@ export function MobileBackgroundTasksSheetBody({
               onOpen={openTranscript(task)}
             />
           ))
-        ) : (
+        ) : shellsInSubagents ? null : (
           <Txt variant="caption" tone="muted">
             Nothing running.
           </Txt>
         )}
+        {/* A count only: the footer says these shells exist, and nothing the
+            phone receives names them (docs/subagent-task-visibility.md). */}
+        {shellsInSubagents ? (
+          <Txt variant="caption" tone="muted">
+            {subagentShellsLabel(shellsInSubagents)}
+          </Txt>
+        ) : null}
       </BackgroundTasksSection>
       {finished.length > 0 ? (
         <BackgroundTasksSection

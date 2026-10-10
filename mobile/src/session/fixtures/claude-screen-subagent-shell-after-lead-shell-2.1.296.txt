@@ -1,0 +1,50 @@
+
+
+⏺ Probe C has stopped, with its sleep 101 still running in the background. It may notify again when that
+  finishes. My own sleep 100 is also still running.
+
+  session:ok
+
+✻ Brewed for 12s · done 6:27 PM · 1 shell still running
+
+⏺ Background command "Sleep 100 seconds in background" completed (exit code 0)
+
+⏺ My sleep 100 finished with exit code 0. Probe C's sleep 101 may still be running.
+
+  session:ok
+
+✻ Worked for 1s · done 6:28 PM · 1 shell still running
+
+❯ Launch exactly 1 subagent with the Agent tool, run_in_background true, description "Probe D", telling it:
+  first run Bash "sleep 120" with run_in_background true; then run, in the foreground (not background), the
+  Bash command "ping -c 45 127.0.0.1" and wait for it to finish; then reply "done". Then reply "launched" and
+  end your turn without waiting.
+
+⏺ Agent(Probe D)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 2 background agents to finish
+
+⏺ Agent "Probe C" finished · 1m 45s
+
+⏺ Probe C has stopped again, this time with no background work left, so its sleep 101 is done. Probe D is
+  still running.
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 7%   ◷ 5h 8% │ 9:20 PM   ▦ 7d 65% │ Wed 7:00 PM 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  probe-status
+  ⏵⏵ auto mode on · 1 shell · ← for agents
+
+  ⏺ main
+  ◯ general-purpose  Probe D                                                            37s · ↓ 47.2k tokens
