@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider, useTheme } from '../theme/theme-context'
 import { darkColors, lightColors, type ThemePreference } from '../theme/tokens'
 import { MobileSourceControlContent } from './MobileSourceControlContent'
+import { gitStatusHostPayloadSchema } from './git-status-reply-schema'
 import * as branchFormat from './mobile-branch-entry-format'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
@@ -339,5 +340,23 @@ describe('committed branch files during commit-message typing', () => {
     expect(chevron()).toBe(darkColors.textMuted)
     act(() => switchTheme?.('light'))
     expect(chevron()).toBe(lightColors.textMuted)
+  })
+
+  // A capped listing can show only staged rows while unstaged ones sit past the cap.
+  it('keeps Stage All enabled when a capped listing shows nothing stageable', () => {
+    const stageAllDisabled = () =>
+      renderer?.root
+        .findAll(
+          (node) =>
+            String(node.type) === 'Pressable' &&
+            node.findAll((child) => child.children.includes('Stage All')).length > 0
+        )
+        .at(-1)?.props.disabled
+    render()
+    expect(stageAllDisabled()).toBe(true)
+    patch({ status: gitStatusHostPayloadSchema.parse({ entries: [], didHitLimit: true }) })
+    expect(stageAllDisabled()).toBe(false)
+    patch({ status: gitStatusHostPayloadSchema.parse({ entries: [], didHitLimit: false }) })
+    expect(stageAllDisabled()).toBe(true)
   })
 })

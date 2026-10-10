@@ -1,9 +1,6 @@
 import { Platform } from 'react-native'
-import type {
-  DeviceCredentialInstalled,
-  MobileRelayEndpoint
-} from '../../../src/shared/mobile-relay-credential-contract'
 import { connect, type ConnectOptions } from './rpc-client'
+import { assertCommittedInstall, relayHost } from './pre-profile-pairing-relay-host'
 import { resolvePairingHostIdentity, saveHost } from './host-store'
 import type { HostProfile, PairingOffer } from './types'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
@@ -17,9 +14,11 @@ import {
 } from './mobile-relay-pairing-journal'
 import {
   clearMobileRelayPairingJournal,
+  releaseMobileRelayPairingJournal,
   saveMobileRelayPairingJournal,
   updateMobileRelayPairingJournal
 } from './mobile-relay-pairing-journal-store'
+import { settleMobileRelayPairingRecovery } from './mobile-relay-pairing-recovery'
 import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
@@ -50,6 +49,8 @@ type Dependencies = {
   saveJournal: typeof saveMobileRelayPairingJournal
   updateJournal: typeof updateMobileRelayPairingJournal
   clearJournal: typeof clearMobileRelayPairingJournal
+  releaseJournal: typeof releaseMobileRelayPairingJournal
+  recoverPendingJournal: () => Promise<void>
   writeCredentialBundle: typeof writeMobileRelayCredentialBundle
   now: () => number
   platform: string
@@ -64,10 +65,16 @@ const defaultDependencies: Dependencies = {
   saveJournal: saveMobileRelayPairingJournal,
   updateJournal: updateMobileRelayPairingJournal,
   clearJournal: clearMobileRelayPairingJournal,
+  releaseJournal: releaseMobileRelayPairingJournal,
+  recoverPendingJournal: () => settleMobileRelayPairingRecovery(PENDING_RECOVERY_WAIT_MS),
   writeCredentialBundle: writeMobileRelayCredentialBundle,
   now: Date.now,
   platform: Platform.OS
 }
+
+// How long a new scan lets a previous attempt's recovery publish a committed
+// install before the new journal supersedes it.
+const PENDING_RECOVERY_WAIT_MS = 8_000
 
 export function startPreProfilePairing(args: {
   offer: PairingOffer
@@ -101,7 +108,17 @@ export function startPreProfilePairing(args: {
     dispose()
   }, args.timeoutMs)
 
-  const result = runPairing(args.offer, args.connectOptions, dependencies, clients, () => disposed)
+  let savedJournalId: string | null = null
+  const result = runPairing(
+    args.offer,
+    args.connectOptions,
+    dependencies,
+    clients,
+    () => disposed,
+    (journalId) => {
+      savedJournalId = journalId
+    }
+  )
     .catch((error: unknown) => {
       if (timedOut) {
         throw new Error('mobile pairing timed out')
@@ -109,6 +126,9 @@ export function startPreProfilePairing(args: {
       throw error
     })
     .finally(() => {
+      if (savedJournalId) {
+        dependencies.releaseJournal(savedJournalId)
+      }
       if (timer) {
         clearTimeout(timer)
         timer = null
@@ -133,7 +153,8 @@ async function runPairing(
   connectOptions: ConnectOptions | undefined,
   dependencies: Dependencies,
   clients: Set<PairingCandidateClient>,
-  isDisposed: () => boolean
+  isDisposed: () => boolean,
+  onJournalSaved: (journalId: string) => void
 ): Promise<{ hostId: string }> {
   const now = dependencies.now()
   // Why: every pairing artifact must share the preserved host id so re-pairing
@@ -145,6 +166,10 @@ async function runPairing(
   assertActive(isDisposed)
   let journal: MobileRelayPairingJournal | null = null
   if (offer.relay && dependencies.platform !== 'web') {
+    // Why: a new scan always wins over a stale journal, but first gives its
+    // recovery a bounded chance to publish an install that already committed.
+    await dependencies.recoverPendingJournal()
+    assertActive(isDisposed)
     journal = createMobileRelayPairingJournal({
       offer: { ...offer, relay: offer.relay },
       hostId,
@@ -152,6 +177,7 @@ async function runPairing(
       now
     })
     await dependencies.saveJournal(journal)
+    onJournalSaved(journal.metadata.journalId)
     assertActive(isDisposed)
   }
 
@@ -262,43 +288,6 @@ function baseHost(
     deviceToken: offer.deviceToken,
     publicKeyB64: offer.publicKeyB64,
     lastConnected
-  }
-}
-
-function relayHost(journal: MobileRelayPairingJournal, relay: MobileRelayEndpoint): HostProfile {
-  const host = journal.metadata.host
-  return {
-    ...host,
-    deviceToken: journal.secrets.deviceToken,
-    endpoints: [
-      { id: 'direct-primary', kind: 'lan', url: host.endpoint },
-      { id: 'relay-primary', kind: 'relay', url: relayWebSocketUrl(relay) }
-    ],
-    relayHostId: relay.relayHostId,
-    relay
-  }
-}
-
-function relayWebSocketUrl(relay: MobileRelayEndpoint): string {
-  const url = new URL(relay.cellUrl)
-  url.protocol = 'wss:'
-  url.pathname = `/v1/connect/${encodeURIComponent(relay.relayHostId)}`
-  return url.toString()
-}
-
-function assertCommittedInstall(
-  status:
-    | { state: 'not-found' }
-    | { state: 'committed'; result: DeviceCredentialInstalled }
-    | undefined,
-  installed: DeviceCredentialInstalled
-): void {
-  if (
-    !status ||
-    status.state !== 'committed' ||
-    JSON.stringify(status.result) !== JSON.stringify(installed)
-  ) {
-    throw new Error('relay credential install was not authoritatively reconciled')
   }
 }
 

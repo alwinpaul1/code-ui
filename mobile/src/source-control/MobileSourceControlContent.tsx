@@ -49,6 +49,7 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
     openingBranchPath,
     sections,
     hasVisibleChanges,
+    status,
     stageablePaths,
     unstageablePaths,
     stagedCount,
@@ -63,6 +64,8 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
     runGitAction
   } = state
   const ioBusy = busyAction !== null || openingPath !== null || openingBranchPath !== null
+  // Why: a capped listing can hide unstaged rows behind an all-staged prefix.
+  const canStageAll = stageablePaths.length > 0 || status?.didHitLimit === true
   const refreshControl = pullToRefresh ? (
     <RefreshControl
       refreshing={pullToRefresh.refreshing}
@@ -135,11 +138,11 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
           <Pressable
             style={({ pressed }) => [
               styles.bulkButton,
-              (stageablePaths.length === 0 || ioBusy) && styles.bulkButtonDisabled,
+              (!canStageAll || ioBusy) && styles.bulkButtonDisabled,
               pressed && styles.bulkButtonPressed
             ]}
             onPress={() => void stageAll()}
-            disabled={ioBusy || stageablePaths.length === 0}
+            disabled={ioBusy || !canStageAll}
           >
             {busyAction === 'stage-all' ? (
               <ActivityIndicator size="small" color={colors.text} />

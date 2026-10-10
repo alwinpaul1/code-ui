@@ -148,7 +148,7 @@ export function connectMobileRelayForPairing(args: {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, undefined, true)
     }
     if (parsed.data.credentialKind !== (args.expectedCredentialKind ?? 'invite')) {
       throw new Error('relay credential resolved as an unexpected credential kind')

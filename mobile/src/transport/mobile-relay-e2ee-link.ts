@@ -18,9 +18,11 @@ export class RelayOuterError extends Error {
   // `detail` is the transport's own words for why the outer socket died. On
   // Android that is OkHttp's "Expected HTTP 101 response but was '503 Service
   // Unavailable'", the only place the cell's HTTP status survives.
+  // `rejectedByRelayHello`: the relay refused in a relay-hello frame, not just a close code.
   constructor(
     readonly code: number,
-    readonly detail?: string
+    readonly detail?: string,
+    readonly rejectedByRelayHello = false
   ) {
     super(detail ? `relay_outer_${code} (${detail})` : `relay_outer_${code}`)
   }
@@ -179,7 +181,7 @@ export class MobileRelayE2eeLink {
       throw new Error('invalid relay hello')
     }
     if (!parsed.data.ok) {
-      throw new RelayOuterError(parsed.data.code)
+      throw new RelayOuterError(parsed.data.code, undefined, true)
     }
     if (parsed.data.credentialKind !== this.options.expectedCredentialKind) {
       throw new Error('relay credential resolved as an unexpected credential kind')
