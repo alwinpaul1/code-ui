@@ -607,3 +607,8 @@ handle chain, record boundary, queue pause, Codex/ACP restarts) is `src/main` an
   `structured-agent-session-projection.ts` (host status), both context-usage modules (not
   vendored; the phone's context ring reads the beacon), record, rewind, thread-goal, wire,
   owed-work and retry-run hunks (host).
+
+## In-page links in a chat visual (Orca #26729, 7b91405547)
+
+- `native-chat-visual-shell.ts` and its test, taken whole at 7b91405547 (they equalled #26729's parent,
+  the 1617ff32ef copy above).
