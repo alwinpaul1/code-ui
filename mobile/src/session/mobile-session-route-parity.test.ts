@@ -562,7 +562,9 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // 2026-10-04 (xterm only): <TerminalPaneView> loses its `engine` prop, the phone draws every pane
 // with the WebView now. Same 73 records; only that record moved.
 // 2026-10-10 (Orca #26148 ported): one new leaf record, <MobileFileMediaPreview media client title /> in FileReader's media arm.
-const HEAD_LEAF_JSX_SHA256 = 'dc60dcbbffcecfbcde5d2a00f32e8dbfb2577a622c58a2c183ce4a59e0907b59'
+// 2026-10-10 (later): one new leaf record, <MobileSubagentActivityFeeds hostId worktreeId /> beside the
+// subagent transcript modal in the session content.
+const HEAD_LEAF_JSX_SHA256 = '5d29b8a9ff3f59a8dc154f15e079c4372b0e58df8414eb95d2439049479f2a9f'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1149,7 +1151,9 @@ describe('mobile session route extraction parity', () => {
     // moved from the static `mobile-theme` palette to the live `colors` (e.g. `colors.textPrimary`
     // -> `colors.text`), so their captured expressions changed without changing the count.
     // 74 since 2026-10-10: FileReader mounts MobileFileMediaPreview for a video or music tab (Orca #26148).
-    expect(jsx.leaf).toHaveLength(74)
+    // 75 since 2026-10-10 (later): the session content mounts MobileSubagentActivityFeeds, the
+    // Background tasks sheet's reads of its running agents' transcripts.
+    expect(jsx.leaf).toHaveLength(75)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

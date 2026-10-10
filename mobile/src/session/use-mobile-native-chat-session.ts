@@ -1,6 +1,9 @@
 import { sharedNativeChatTranscriptRetention } from './mobile-native-chat-transcript-cache'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
+import {
+  encodeNativeChatTranscriptIdentity,
+  type NativeChatTranscriptRetention
+} from '../../../src/shared/native-chat-transcript-retention'
 import {
   createNativeChatMerger,
   replaceList
@@ -98,6 +101,10 @@ export function useMobileNativeChatSession(args: {
   /** Moves on each NEW host connection. A transcript that failed while the
    *  relay was down is re-subscribed when this changes — see the effect below. */
   lastConnectedAt?: number | null
+  /** Where settled reads are kept for a warm start. Defaults to the shared,
+   *  persisted cache (12 entries); a reader that must not evict the chats'
+   *  own entries (the sheet's subagent feeds) passes one that keeps nothing. */
+  retention?: NativeChatTranscriptRetention
 }): MobileNativeChatSession {
   const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const lastConnectedAt = args.lastConnectedAt ?? null
@@ -199,7 +206,7 @@ export function useMobileNativeChatSession(args: {
   const [whole] = useState(() => createWholeSessionTracker(lastConnectedAt))
   useEffect(() => whole.connected(lastConnectedAt), [whole, lastConnectedAt])
   // Why shared: see mobile-native-chat-transcript-cache — a revisited project paints its last transcript at once.
-  const transcriptRetentionRef = useRef(sharedNativeChatTranscriptRetention)
+  const transcriptRetentionRef = useRef(args.retention ?? sharedNativeChatTranscriptRetention)
   const settledReady = settled?.status === 'ready'
   useEffect(() => {
     if (settledReady) {
