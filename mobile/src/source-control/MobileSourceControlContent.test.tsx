@@ -191,20 +191,20 @@ function ThemeSwitcher(): null {
 function Fixture({ initial }: { initial: MobileSourceControlState }) {
   const [state, setState] = useState(initial)
   controls.patch = (patch) => setState((previous) => ({ ...previous, ...patch }))
-  return createElement(
-    ThemeProvider,
-    { initialPreference: 'light', children: null },
-    createElement(ThemeSwitcher),
-    createElement(MobileSourceControlContent, {
-      state: {
-        ...state,
-        setCommitMessage: (next) =>
-          setState((previous) => ({
-            ...previous,
-            commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
-          }))
-      }
-    })
+  return (
+    <ThemeProvider initialPreference="light">
+      <ThemeSwitcher />
+      <MobileSourceControlContent
+        state={{
+          ...state,
+          setCommitMessage: (next) =>
+            setState((previous) => ({
+              ...previous,
+              commitMessage: typeof next === 'function' ? next(previous.commitMessage) : next
+            }))
+        }}
+      />
+    </ThemeProvider>
   )
 }
 
