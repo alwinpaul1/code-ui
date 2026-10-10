@@ -828,3 +828,16 @@ re-vendored and UPSTREAM.txt is unchanged. No golden moved.
 |---|---|---|
 | e347aa4e67 #25301 | phone | **done** (69909856c). Code UI already honoured `showPinnedWorktreesInGroups` (#15494) through its own `use-host-show-pinned-in-groups.ts`, so the placement half was in. Taken: lineage children follow a pinned parent into Pinned (walked over the unfiltered list, so search hiding a middle row does not strand a grandchild), the Pinned section nests by lineage, and the setting moves into `HostScreenState`, resets on a host switch and is re-read on connect, focus and mount through the typed `showPinnedWorktreesInGroupsRead`. The fork's hook and its port-inventory row are gone. **Stock Orca does not project the key**: `RuntimeClientSettings` (`src/main/runtime/runtime-client-settings.ts`) omits it as of 3e27e62f43, so the phone always reads the desktop default (off) until upstream adds it. Added beyond upstream: degenerate sizes (empty, nothing pinned, one pinned row, a pinned child under an unpinned parent, a lineage cycle) and the refused or rejected read. |
 | 0971479866 #25300 | phone | **done** (a813cbd72). Copy fitted to Code UI: "Synced with your desktop" under Sort By and Group By, and "Synced with your desktop, except Show archived" under Filter (the fork's Show archived row is phone-local). Manual reads "Desktop drag order". Heading `flexShrink: 1` taken. Upstream shipped no test; five cases added to `host-screen-overlays.theme.test.tsx`, run in light and dark. |
+
+
+## #26165, #26170 and #26392 (2026-10-10)
+
+Ported in upstream merge order. Nothing under `src/shared/` was re-vendored: #26170 adds
+`serializeStructuredAgentSessionFingerprintPayload` to `structured-agent-session-mutation.ts` and #26392
+takes it out again three hours later, so the file at #26392's merge commit (a747c1c013) differs from the
+vendored copy only by an unrelated provider-handle change this fork has not taken. UPSTREAM.txt is unchanged.
+
+| PR | Class | Status / note |
+|---|---|---|
+| 0d246a68d1 #26165 | phone | **done** (5a935b279). `encodeBase64Bytes` returns `''` for an empty or detached view and uses `Uint8Array.prototype.toBase64` where the engine has it. Node 26 has it, so the fork's own chunk-per-call guard now hides it on its view to keep testing the fallback, and the two E2EE large-frame tests only require btoa to have run where `toBase64` is absent. |
+| f4c7121545 #26170 | phone | **skip: undone upstream by #26392.** Its only consumer was the send journal #26392 deletes, and #26392 removes every line it added (both fingerprint modules and the web test, the `web-overrides.json` entry, the `fingerprintImage` upload dependency, the shared serializer). Porting it would add a `.web.ts` override and touch vendored `src/shared` twice for no net change. |
