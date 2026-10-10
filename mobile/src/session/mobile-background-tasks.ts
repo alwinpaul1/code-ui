@@ -48,7 +48,7 @@ import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 import { applyAgentResumes, createResumeTracker, trackCall, trackMessage, trackResult } from './mobile-background-task-resumes'
 import { captionOf, elapsedSince, isFailureStatus } from './mobile-background-task-captions'
 import { foldWorkflowAgents, oldestTimestamp, verdictFor, type WorkflowDetail } from './mobile-background-task-workflows'
-import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
+import { fitToOnScreenShellCount, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
   isTeammateLifecycleId,
@@ -191,6 +191,10 @@ export type BackgroundTask = {
 export type BackgroundTasks = {
   running: BackgroundTask[]
   finished: BackgroundTask[]
+  /** Shells the agent's footer counts beyond the lead's own: running inside
+   *  its subagents, where nothing the phone receives names them
+   *  (`shellsOutsideLead`). Absent when there are none or it cannot tell. */
+  shellsInSubagents?: number
 }
 
 /** How long the desk's bare `monitoring` state may stand in for a shell the
@@ -328,13 +332,15 @@ export function deriveBackgroundTasks(
     ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
   })
   const fitted = fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
-  return foldWorkflowAgents(fitted, hostStatus?.subagents, {
+  const shellsInSubagents = shellsOutsideLead(fitted, live)
+  const folded = foldWorkflowAgents(fitted, hostStatus?.subagents, {
     hostDone: hostStatus?.state === 'done',
     beaconRunning: options.stopRunningTaskIds ?? null,
     beaconAt: options.stopRunningTaskIdsAt ?? null,
     windowOldestAt: oldestTimestamp(messages),
     launchedIds: new Set(launches.keys())
   })
+  return shellsInSubagents > 0 ? { ...folded, shellsInSubagents } : folded
 }
 
 type SplitContext = {

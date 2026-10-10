@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Sonnet 5.5 · Claude Max
+ ▝▝   ▝▝   /…/0954729d-6205-4368-8185-7c630268f2d0/scratchpad/probe/work · /rc
+
+⚠ Your login expires in 1 day · run /login to renew
+
+❯ Launch exactly 2 subagents with the Agent tool, both with run_in_background true, in one message. Tell each
+  subagent: run the Bash command "sleep 150" with run_in_background true, then run Bash "sleep 20" in the
+  foreground, then reply "done" and stop. After launching both, reply "launched" and end your turn without
+  waiting for them.
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Sleep probe A
+   └ Sleep probe B
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 2 background agents to finish
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 6%   ◷ 5h 7% │ 9:20 PM   ▦ 7d 64% │ Wed 7:00 PM 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  probe-status
+  ⏵⏵ auto mode on · 2 shells · ← for agents
+
+  ⏺ main
+  ◯ general-purpose  Sleep probe A                                                      24s · ↓ 47.2k tokens
+  ◯ general-purpose  Sleep probe B                                                      24s · ↓ 46.9k tokens

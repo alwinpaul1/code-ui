@@ -135,3 +135,27 @@ function pad(tasks: BackgroundTasks, missing: number): BackgroundTasks {
   }))
   return { running: [...tasks.running, ...filler], finished: tasks.finished }
 }
+
+/** How many of the shells the footer counts are not the lead's, once the
+ *  named list has been fitted to it: shells running inside subagents (a
+ *  reviewer's included, as the footer counts them), which only those agents'
+ *  own transcripts name. Claude Code 2.1.296, 2026-10-10: two background
+ *  agents each running a `sleep 150` painted "· 2 shells" while the lead had
+ *  started none (docs/subagent-task-visibility.md).
+ *
+ *  Zero whenever the footer is not on screen, or a monitor runs (the pill's
+ *  wording is then unknown, as above). While no subagent runs the fit pads
+ *  the lead up to the footer, so nothing is left over. A count only: nothing
+ *  the phone receives names these shells or says what they run. */
+export function shellsOutsideLead(fitted: BackgroundTasks, live: number | null): number {
+  if (live === null || fitted.running.some((task) => task.kind === 'monitor')) {
+    return 0
+  }
+  const leadShells = fitted.running.filter((task) => task.kind === 'shell').length
+  return Math.max(0, live - leadShells)
+}
+
+/** The sheet's muted line for those shells. */
+export function subagentShellsLabel(count: number): string {
+  return `+${count} ${count === 1 ? 'shell' : 'shells'} in subagents`
+}
