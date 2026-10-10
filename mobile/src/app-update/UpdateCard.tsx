@@ -1,12 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Animated, Easing, LayoutAnimation, StyleSheet } from 'react-native'
+import { Animated, Easing, LayoutAnimation } from 'react-native'
 
-import { useTheme } from '../../theme/theme-context'
-import { ALERT_CROSSFADE_MS, ALERT_SPRING, alertScaleRange, springFromAppleParams } from './alert-motion'
-import { useAlertMotion } from './use-alert-motion'
+import { useTheme } from '../theme/theme-context'
+import {
+  ALERT_CROSSFADE_MS,
+  ALERT_SPRING,
+  alertScaleRange,
+  springFromAppleParams
+} from '../ui/alert/alert-motion'
+import { useAlertMotion } from '../ui/alert/use-alert-motion'
 
-/** UIAlertController's card: 270 wide whatever the screen, never full-bleed. */
-export const ALERT_CARD_WIDTH = 270
+/** The card fills the phone's width less the wrapper's gutter, up to this, so
+ *  on a tablet or a landscape phone it stays a card and not a banner. */
+export const UPDATE_CARD_MAX_WIDTH = 400
 
 type Props = {
   children: ReactNode
@@ -16,10 +22,12 @@ type Props = {
 }
 
 /**
- * The card of a system-style alert: a fixed 270 material with a 14 corner
- * that materialises on a critically damped spring, scale and opacity on the
- * same value so it arrives as one surface rather than fading in place. Under
- * reduced motion the scale range collapses to 1 and the reveal is a short
+ * The update card (2026-10-10 redesign: "not glass, premium and modern"). A
+ * SOLID panel, no translucency and no blur: the panel colour, a 1px border
+ * and a soft shadow give it its elevation in both schemes. Up to 400
+ * wide with a 24 corner. It materialises on a critically damped spring, scale
+ * and opacity on the same value so it arrives as one surface rather than
+ * fading in place. Under reduced motion the scale range collapses to 1 and the reveal is a short
  * timing: a cross-fade, no travel, no overshoot.
  *
  * It holds at reveal 0 until `useAlertMotion` has an answer, so the OS's
@@ -34,7 +42,7 @@ type Props = {
  * is never animated either: native-driver opacity on a window-filling view let
  * a held press fall through the Modal on the same phone.
  */
-export function AlertCard({ children, morphKey }: Props) {
+export function UpdateCard({ children, morphKey }: Props) {
   const { colors, radius } = useTheme()
   const motion = useAlertMotion()
   const reveal = useRef(new Animated.Value(0)).current
@@ -79,18 +87,24 @@ export function AlertCard({ children, morphKey }: Props) {
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
       style={{
-        width: ALERT_CARD_WIDTH,
+        width: '100%',
+        maxWidth: UPDATE_CARD_MAX_WIDTH,
         // Never taller than the wrapper that centres it, so on a small screen
         // or at a large font size the column inside shrinks (its scroll
-        // region gives way) and the action rows stay on screen.
+        // region gives way) and the action bar stays on screen.
         maxHeight: '100%',
-        // radius.md is 14, UIAlertController's corner.
-        borderRadius: radius.md,
-        // So a pressed bottom row is clipped to the corners.
+        borderRadius: radius.xl,
+        // So a pressed button and the scrolling notes are clipped to the corners.
         overflow: 'hidden',
-        backgroundColor: colors.alertMaterial,
-        borderWidth: StyleSheet.hairlineWidth,
+        // Opaque, from the theme: nothing of the page shows through.
+        backgroundColor: colors.bgPanel,
+        borderWidth: 1,
         borderColor: colors.border,
+        shadowColor: colors.shadow,
+        shadowOpacity: 1,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 12,
         opacity: reveal,
         transform: [
           {

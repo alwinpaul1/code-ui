@@ -3,8 +3,8 @@
  * Features, Improvements, and Security & Bug Fixes, so someone about to install can tell what
  * changed since their build. Each release carries a committed file, mobile/release-notes/<version>.md,
  * of `### <title>` lines with `- ` changes under them, in this order. A section with nothing in it is
- * left out. The card renders each title as a bold line with its changes under it
- * (release-notes-markdown.ts turns a heading into a bold line).
+ * left out. The card draws each section as a group under a marker icon of its own, its changes
+ * as a list (release-notes-groups.ts, since the 2026-10-10 redesign).
  *
  * scripts/release-notes-body.ts checks the file before a release builds and writes the release body
  * from it; the release workflow and a local release both go through it.

@@ -30,11 +30,11 @@ export function springFromAppleParams({ dampingRatio, response }: AppleSpring): 
 /** The alert's spring: Apple's default UI spring, in the middle of its range. */
 export const ALERT_SPRING: AppleSpring = { dampingRatio: 1, response: 0.35 }
 
-/** A UIAlertController arrives from slightly LARGER than rest. It comes
- *  toward the reader, not up from the page like a sheet. 1.1 is a visible
- *  arrival at 270 wide (27 px of travel) without the card ever looking like
- *  a different size. */
-export const ALERT_ENTER_SCALE = 1.1
+/** The card arrives from slightly LARGER than rest: it comes toward the
+ *  reader, not up from the page like a sheet. 1.1 was right for the 270-wide
+ *  alert (27 px of travel); the update card is up to 400 wide since the
+ *  2026-10-10 redesign, where 1.1 read as a zoom, so it is 1.04 (about 16 px). */
+export const ALERT_ENTER_SCALE = 1.04
 
 /** Reduced motion: an opacity cross-fade with no travel. Short enough not to
  *  read as a wait, long enough to see the card arrive rather than pop. */

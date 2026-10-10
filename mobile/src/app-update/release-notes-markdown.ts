@@ -2,14 +2,16 @@ import { trimAutolinkTrailingPunctuation } from '../components/markdown-inline-t
 import { markdownHeadingText } from '../text/markdown-heading-text'
 
 // GitHub's generated release body is Markdown ("## What's changed", "- fix: …
-// by @x in https://…/pull/12", "**Full Changelog**: …"). The update alert
+// by @x in https://…/pull/12", "**Full Changelog**: …"). The update card
 // renders it AS markdown, through the same renderer the .md tab and the chat
 // use, so bullets, emphasis and links survive. What this does is reshape it
-// for a 270-wide alert card:
+// for the update card:
 //
-// - A heading becomes a bold line. The card's message column is 13px; a
-//   19–22px section heading would eat a third of the notes' 220px cap for one
-//   word, and weight alone is how a compact alert shows a section. Emphasis
+// - A heading becomes a bold line. The notes are set at 14; a 19–22px
+//   section heading would eat a large share of the notes' scroll cap for one
+//   word, and weight alone is how the card shows an unknown section. (The
+//   three known section titles are drawn by the card itself, with markers:
+//   release-notes-groups.ts splits on them.) Emphasis
 //   already inside the heading is unwrapped first: "**Bold** and `code`"
 //   wrapped again would give the renderer "****Bold** and `code`**", which it
 //   reads as a stray "**", the wrong span bold, and a trailing "**".
@@ -59,16 +61,39 @@ function unwrapEmphasis(text: string): string {
     .replace(/(^|[^\w_])_([^_\s](?:[^_]*[^_\s])?)_(?=[^\w_]|$)/g, '$1$2')
 }
 
+/** One line of the reshaped body. `heading` is the text of a heading the
+ *  reshaper turned into a bold line, so release-notes-groups.ts can split on
+ *  the SAME headings the reshaper saw, never on one inside a comment, a fence
+ *  or an indented code block (review, 2026-10-10). */
+export type ReshapedReleaseNoteLine = { text: string; heading: string | null }
+
 export function releaseNotesMarkdown(body: string | null | undefined): string {
+  return joinReshapedReleaseNotes(reshapeReleaseNoteLines(body).map((line) => line.text))
+}
+
+/** Reshaped lines back into one body: a dropped line leaves its blank
+ *  neighbours behind, and more than one blank line in a row is a taller gap in
+ *  the card for nothing. */
+export function joinReshapedReleaseNotes(lines: readonly string[]): string {
+  return lines
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+export function reshapeReleaseNoteLines(body: string | null | undefined): ReshapedReleaseNoteLine[] {
   if (!body) {
-    return ''
+    return []
   }
-  const lines: string[] = []
+  const out: ReshapedReleaseNoteLine[] = []
+  const push = (text: string) => {
+    out.push({ text, heading: null })
+  }
   let fence: { char: string; length: number } | null = null
   let inComment = false
   for (const raw of body.split(/\r?\n/)) {
     if (fence) {
-      lines.push(raw)
+      push(raw)
       const close = FENCE_CLOSE.exec(raw)
       if (close && close[1]![0] === fence.char && close[1]!.length >= fence.length) {
         fence = null
@@ -97,11 +122,11 @@ export function releaseNotesMarkdown(body: string | null | undefined): string {
     const opener = FENCE_OPEN.exec(line)
     if (opener) {
       fence = { char: opener[1]![0]!, length: opener[1]!.length }
-      lines.push(line.trimEnd())
+      push(line.trimEnd())
       continue
     }
     if (INDENTED_CODE.test(line)) {
-      lines.push(line)
+      push(line)
       continue
     }
     line = line.trimEnd()
@@ -114,7 +139,7 @@ export function releaseNotesMarkdown(body: string | null | undefined): string {
       const text = markdownHeadingText(heading[1]!)
       // "## ##" is an empty heading; wrapped, it would draw a literal "****".
       if (text) {
-        lines.push(`**${unwrapEmphasis(text)}**`)
+        out.push({ text: `**${unwrapEmphasis(text)}**`, heading: text })
       }
       continue
     }
@@ -122,16 +147,11 @@ export function releaseNotesMarkdown(body: string | null | undefined): string {
     if (changelog) {
       const { url, trailing } = trimAutolinkTrailingPunctuation(changelog[1]!)
       if (!/[()]/.test(url)) {
-        lines.push(`[Full changelog](${url})${trailing}`)
+        push(`[Full changelog](${url})${trailing}`)
         continue
       }
     }
-    lines.push(line.replace(MERGED_PR_TAIL, '$1'))
+    push(line.replace(MERGED_PR_TAIL, '$1'))
   }
-  // A dropped line leaves its blank neighbours behind; more than one blank
-  // line in a row is a taller gap in the card for nothing.
-  return lines
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return out
 }

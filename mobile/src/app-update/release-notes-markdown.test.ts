@@ -4,7 +4,7 @@ import { releaseNotesMarkdown } from './release-notes-markdown'
 
 // What the card shows is the release body AS MARKDOWN, not a plain-text
 // excerpt of it: bullets stay bullets, bold stays bold, a link stays tappable.
-// The body is reshaped for a 270-wide alert card, nothing more.
+// The body is reshaped for the update card, nothing more.
 
 /** GitHub's API body for mobile-android-v0.6.4, CRLF line endings included. */
 const RELEASE_0_6_4 = [
@@ -18,7 +18,7 @@ const RELEASE_0_6_4 = [
   ''
 ].join('\r\n')
 
-describe('a generated GitHub release body, reshaped for a 270 card', () => {
+describe('a generated GitHub release body, reshaped for the update card', () => {
   it('keeps the bullets as markdown and turns the section heading into a bold line', () => {
     expect(releaseNotesMarkdown(RELEASE_0_6_4)).toBe(
       [
