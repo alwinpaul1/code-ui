@@ -562,6 +562,8 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // 2026-10-04 (xterm only): <TerminalPaneView> loses its `engine` prop, the phone draws every pane
 // with the WebView now. Same 73 records; only that record moved.
 // 2026-10-10 (Orca #26148 ported): one new leaf record, <MobileFileMediaPreview media client title /> in FileReader's media arm.
+// 2026-10-10 (later): one new leaf record, <MobileSubagentActivityFeeds hostId worktreeId /> beside the
+// subagent transcript modal in the session content.
 const HEAD_LEAF_JSX_SHA256 = '5d29b8a9ff3f59a8dc154f15e079c4372b0e58df8414eb95d2439049479f2a9f'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
