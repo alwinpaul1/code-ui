@@ -317,6 +317,14 @@ async function open(element: () => ReactElement): Promise<void> {
   await act(async () => {
     renderer = create(render(), { createNodeMock })
   })
+  // The device's first layout pass reports the box it laid out; the open
+  // waits for it (use-drawer-enter-gate.ts).
+  const box = (sheetStyle().height as number | undefined) ?? 300
+  act(() => {
+    ;(sheetNode().props.onLayout as (event: unknown) => void)({
+      nativeEvent: { layout: { x: 0, y: 0, width: 384, height: box } }
+    })
+  })
   // Past the 180 ms enter: the sheet stands at its rest.
   clock.now = 1000
   rerender()

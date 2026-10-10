@@ -4,8 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Reported from the phone on 2026-09-26: "the sheet to upload media files opens
 // slow". The composer's + flips one state and the Add context sheet mounts in
-// the same commit; nothing is awaited first (no clipboard probe, no media or
-// permission query, no thumbnails). What was slow was the slide itself: the
+// the same commit; no data is awaited first (no clipboard probe, no media or
+// permission query, no thumbnails). The open itself waits only for the sheet's
+// window and first layout (use-drawer-enter-gate.ts, 2026-10-10). What was slow was the slide itself: the
 // sheet travelled the whole window height on Reanimated's default ease-in-out,
 // so a ~280 dp sheet on a ~950 dp window was still below the screen edge more
 // than halfway through its 180 ms open. These tests play that open back frame
@@ -167,18 +168,39 @@ function onScreenHeight(): number {
   return Math.max(0, SHEET_HEIGHT - translateY)
 }
 
-/** The + tap: MobileNativeChatAttachButton flips its `sheetOpen`, and the sheet lays itself out. */
-async function tapPlus(scheme: 'light' | 'dark'): Promise<void> {
+/** The sheet's first layout reaching JS (`onLayout`). */
+function reportLayout(): void {
+  const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 412, height: SHEET_HEIGHT } } }
+  act(() => {
+    ;(sheetNode().props.onLayout as ((event: typeof layout) => void) | undefined)?.(layout)
+  })
+}
+
+/** The Modal's Dialog window coming up (`onShow`, from Android's OnShowListener). */
+function reportWindowShown(): void {
+  const [modal] = renderer!.root.findAll((node) => String(node.type) === 'Modal')
+  expect(modal, 'the attach sheet has no Modal window').toBeDefined()
+  act(() => {
+    ;(modal!.props.onShow as (() => void) | undefined)?.()
+  })
+}
+
+/** The + tap with the button's `sheetOpen` flipped, before the device reports anything back. */
+async function mountOpen(scheme: 'light' | 'dark'): Promise<void> {
   await act(async () => {
     renderer = create(sheetIn(scheme, false))
   })
   await act(async () => {
     renderer!.update(sheetIn(scheme, true))
   })
-  const layout = { nativeEvent: { layout: { x: 0, y: 0, width: 412, height: SHEET_HEIGHT } } }
-  act(() => {
-    ;(sheetNode().props.onLayout as ((event: typeof layout) => void) | undefined)?.(layout)
-  })
+}
+
+/** The + tap: MobileNativeChatAttachButton flips its `sheetOpen`, and the sheet lays itself
+ *  out in a window that is up, both at once (the best case a device can give). */
+async function tapPlus(scheme: 'light' | 'dark'): Promise<void> {
+  await mountOpen(scheme)
+  reportWindowShown()
+  reportLayout()
 }
 
 /** Paint the frame `ms` after the open started. */
@@ -229,3 +251,62 @@ describe('the Add context sheet before it has measured itself', () => {
     expect(transform.find((entry) => 'translateY' in entry)?.translateY).toBe(WINDOW_HEIGHT)
   })
 })
+
+// Reported from the phone on 2026-10-10 (S23 Ultra, release build): "Clicking the
+// + button on the input, the sheet opens slowly or stutters and then opens." The
+// + sheet is mounted fresh on every tap, so it never knows its height when its
+// open starts. On the device the height reaches JS a task after the commit that
+// mounts the sheet, behind whatever the keyboard leaving queued, and the Dialog
+// window comes up at mount on the UI thread. The open used to start in that
+// commit's effect anyway, travelling the whole window height until the layout
+// landed, and then shrink its travel by two thirds in one frame. These play the
+// open at 120 Hz with the window and the layout arriving late, as they do there.
+describe.each(['light', 'dark'] as const)(
+  'the Add context sheet in %s mode, when its window and height arrive late',
+  (scheme) => {
+    /** The S23 Ultra's refresh rate. */
+    const FRAME_120_MS = 1000 / 120
+    /** When the Dialog reports itself shown, and when the height reaches JS: late, not worst case. */
+    const WINDOW_SHOWN_MS = 25
+    const LAYOUT_MS = 60
+
+    async function playOpen(): Promise<number[]> {
+      await mountOpen(scheme)
+      const heights: number[] = []
+      let shown = false
+      let laidOut = false
+      for (let ms = 0; ms <= 500; ms += FRAME_120_MS) {
+        if (!shown && ms >= WINDOW_SHOWN_MS) {
+          clock.now = ms
+          reportWindowShown()
+          shown = true
+        }
+        if (!laidOut && ms >= LAYOUT_MS) {
+          clock.now = ms
+          reportLayout()
+          laidOut = true
+        }
+        await frameAt(scheme, ms)
+        heights.push(onScreenHeight())
+      }
+      return heights
+    }
+
+    it('rises without jumping up when its height arrives mid-open', async () => {
+      const heights = await playOpen()
+      const steps = heights.slice(1).map((height, index) => height - heights[index]!)
+      // The steepest frame of the open's own curve, over the sheet's own travel
+      // (280 dp + the 24 dp margin), is about 3 x 8.3/180 x 304 = 42 dp at 120 Hz.
+      expect(Math.max(...steps), `frame-by-frame on-screen heights: ${heights.map(Math.round).join(', ')}`).toBeLessThan(50)
+    })
+
+    it('plays its whole open once it can be seen, rather than appearing already most of the way up', async () => {
+      const heights = await playOpen()
+      const firstSeen = heights.findIndex((height) => height > 0)
+      expect(firstSeen).toBeGreaterThanOrEqual(0)
+      // A frame or two into a visible open, most of the sheet is still below the edge.
+      expect(heights[firstSeen]!).toBeLessThan(SHEET_HEIGHT * 0.5)
+      expect(heights[heights.length - 1]).toBe(SHEET_HEIGHT)
+    })
+  }
+)

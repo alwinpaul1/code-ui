@@ -32,6 +32,7 @@ import { useExpandableBottomDrawer } from './use-expandable-bottom-drawer'
 import { useBottomDrawerDrag } from './use-bottom-drawer-drag'
 import { useDrawerCloseRequest } from './use-drawer-close-request'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
+import { useDrawerEnterGate } from './use-drawer-enter-gate'
 
 const SHOW_DURATION = 180
 // Why: a sheet enters from just below its own bottom edge, not from a whole
@@ -159,18 +160,30 @@ export function MountedBottomDrawer({
   }, [interactive, visible])
 
   // Stands the sheet at its rest (0, or an expandable sheet's opening offset)
-  // and animates it in: an open, and a close its parent refused.
+  // and animates it in: an open, and a close its parent refused. A sheet just
+  // mounted waits for its window and its height first (use-drawer-enter-gate.ts);
+  // one that has both, as a refused close does, plays at once.
+  const enterGate = useDrawerEnterGate({
+    windowAlreadyShown: insideModalHost,
+    enter: () => {
+      progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
+    }
+  })
   const showSheet = () => {
     drag.resetList()
     sheet.reset()
-    progress.value = withTiming(1, { duration: SHOW_DURATION, easing: enterEasing })
+    enterGate.request()
   }
   restoreRef.current = showSheet
 
   useEffect(() => {
     if (visible) {
       showSheet()
-    } else if (leftScreenRef.current) {
+      return
+    }
+    // Closed before its open could start: nothing is left to play in.
+    enterGate.cancel()
+    if (leftScreenRef.current) {
       // Its own exit animation has run to its end (use-drawer-close-request.ts).
       Keyboard.dismiss()
       setKeyboardInset(0)
@@ -260,12 +273,19 @@ export function MountedBottomDrawer({
       return
     }
     Keyboard.dismiss()
+    // An open still waiting for its window and height (a tap on the backdrop,
+    // or Back, in the first frames) would start over this exit when they land
+    // and cut it short: the sheet opened anyway and the tap was lost. A drag
+    // cannot close a sheet in that state: it is still below the screen edge.
+    // A close the parent refuses comes back through `restore`, which plays at
+    // once because both signals have arrived by then.
+    enterGate.cancel()
     progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
       if (finished) {
         runOnJS(requestClose)()
       }
     })
-  }, [requestClose, progress, visible])
+  }, [requestClose, progress, visible, enterGate.cancel])
 
   // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
   // a claim the shell hands one press over on. Every session sheet renders through this component,
@@ -440,6 +460,9 @@ export function MountedBottomDrawer({
             testID="bottom-drawer-sheet"
             onLayout={(event) => {
               sheetLayoutHeight.value = event.nativeEvent.layout.height
+              if (event.nativeEvent.layout.height > 0) {
+                enterGate.layoutMeasured()
+              }
             }}
             style={[
               styles.drawer,
@@ -492,7 +515,17 @@ export function MountedBottomDrawer({
   }
 
   return (
-    <Modal visible transparent animationType="none" statusBarTranslucent onRequestClose={dismiss}>
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={dismiss}
+      // The open waits for this: on Android the Dialog window is built at mount,
+      // on the UI thread, and an open started before it is up spends its first
+      // frames where nothing can see them.
+      onShow={enterGate.windowShown}
+    >
       {overlay}
     </Modal>
   )

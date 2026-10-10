@@ -95,6 +95,14 @@ async function render(element: ReturnType<typeof createElement>) {
   await act(async () => {
     renderer = create(element)
   })
+  // The device lays the sheet out and reports it; a bottom sheet's open waits
+  // for that (use-drawer-enter-gate.ts). The right drawer has no such wait.
+  const [bottomSheet] = renderer!.root.findAll(
+    (node) => typeof node.type === 'string' && node.props.testID === 'bottom-drawer-sheet'
+  )
+  act(() => {
+    bottomSheet?.props.onLayout?.({ nativeEvent: { layout: { x: 0, y: 0, width: 440, height: 300 } } })
+  })
   // A clone, not the same element: identical props bail out of the render.
   await act(async () => {
     renderer!.update(cloneElement(element))

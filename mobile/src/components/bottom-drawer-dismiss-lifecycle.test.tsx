@@ -142,7 +142,22 @@ function render(props: Parameters<typeof drawer>[0]): ReactTestRenderer {
   act(() => {
     renderer = create(drawer(props))
   })
+  reportShownAndLaidOut()
   return renderer!
+}
+
+/** What the device reports once the sheet is mounted: its Modal window is up
+ *  (`onShow`) and the sheet has laid out (`onLayout`). The open waits for both
+ *  (use-drawer-enter-gate.ts). */
+function reportShownAndLaidOut(): void {
+  const modal = renderer!.root.findAll((node) => String(node.type) === 'Modal')[0]
+  const sheet = renderer!.root.findAll(
+    (node) => typeof node.type === 'string' && node.props.testID === 'bottom-drawer-sheet'
+  )[0]
+  act(() => {
+    modal?.props.onShow?.()
+    sheet?.props.onLayout?.({ nativeEvent: { layout: { x: 0, y: 0, width: 440, height: 300 } } })
+  })
 }
 
 function tapBackdrop(): void {
@@ -194,6 +209,7 @@ describe('a bottom sheet closed by a backdrop tap, Back or a drag', () => {
     act(() => {
       renderer = create(createElement(Parent))
     })
+    reportShownAndLaidOut()
 
     tapBackdrop()
     const exits = () => seam.timings.filter((timing) => timing.to === 0 && timing.done).length
@@ -232,12 +248,49 @@ describe('a bottom sheet closed by a backdrop tap, Back or a drag', () => {
     act(() => {
       renderer = create(createElement(Parent))
     })
+    reportShownAndLaidOut()
     tapBackdrop()
     act(() => lastHide().done!(true))
     act(() => {
       vi.advanceTimersByTime(150)
     })
     expect(seam.timings.filter((timing) => timing.to === 1).length, 'only the opening animation').toBe(1)
+  })
+})
+
+// A + sheet tapped away (or Back pressed) in the frames between its mount and
+// its window and height arriving: the open is still waiting then
+// (use-drawer-enter-gate.ts). The signals landing during the exit must not
+// start the open over it, or the tap is lost and the sheet opens anyway.
+describe('a bottom sheet dismissed before its open could start', () => {
+  function mountUnreported(onClose: () => void): void {
+    act(() => {
+      renderer = create(drawer({ visible: true, onClose, onHidden: vi.fn() }))
+    })
+  }
+  const opens = () => seam.timings.filter((timing) => timing.to === 1).length
+
+  it('stays dismissed when its window and height arrive during the exit', () => {
+    const onClose = vi.fn()
+    mountUnreported(onClose)
+    tapBackdrop()
+    const exit = lastHide()
+    reportShownAndLaidOut()
+    expect(opens(), 'an open started over the exit').toBe(0)
+    act(() => exit.done!(true))
+    act(() => {
+      vi.advanceTimersByTime(150)
+    })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it("stays dismissed when the open's fallback timer runs out during the exit", () => {
+    mountUnreported(vi.fn())
+    tapBackdrop()
+    act(() => {
+      vi.advanceTimersByTime(300)
+    })
+    expect(opens(), 'an open started over the exit').toBe(0)
   })
 })
 
