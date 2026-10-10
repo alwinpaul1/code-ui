@@ -70,7 +70,7 @@ it('names the channel on the trigger, which is the only place Android reads it',
   await showLocalNotification(event, 'host-1')
 
   expect(scheduled).toHaveLength(1)
-  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-quiet' })
+  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-lockscreen' })
   // Anything left in content is dropped on the floor by expo.
   expect(scheduled[0]!.contentChannelId).toBeUndefined()
 })
@@ -83,7 +83,7 @@ it('names the channel on the deduplicated path too', async () => {
   await showLocalNotification({ ...event, notificationId: 'n-1' }, 'host-1')
 
   expect(scheduled).toHaveLength(1)
-  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-quiet' })
+  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-lockscreen' })
   expect(scheduled[0]!.contentChannelId).toBeUndefined()
 })
 
@@ -101,7 +101,7 @@ it('waits for the channel it is about to name', async () => {
 
   resolveChannel?.()
   await posting
-  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-quiet' })
+  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-lockscreen' })
 })
 
 it('creates the channel once however many notifications arrive', async () => {
@@ -111,10 +111,10 @@ it('creates the channel once however many notifications arrive', async () => {
   const second = showLocalNotification({ ...event, source: 'terminal-bell' }, 'host-1')
   resolveChannel?.()
   await Promise.all([first, second])
-  expect(channelCalls).toEqual(['orca-desktop-quiet'])
+  expect(channelCalls).toEqual(['orca-desktop-lockscreen'])
   expect(scheduled.map((entry) => entry.trigger)).toEqual([
-    { channelId: 'orca-desktop-quiet' },
-    { channelId: 'orca-desktop-quiet' }
+    { channelId: 'orca-desktop-lockscreen' },
+    { channelId: 'orca-desktop-lockscreen' }
   ])
 })
 
@@ -128,5 +128,5 @@ it('still posts when the channel call fails, rather than dropping the alert', as
   configureNotificationChannel()
   await showLocalNotification(event, 'host-1')
   expect(scheduled).toHaveLength(1)
-  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-quiet' })
+  expect(scheduled[0]!.trigger).toEqual({ channelId: 'orca-desktop-lockscreen' })
 })

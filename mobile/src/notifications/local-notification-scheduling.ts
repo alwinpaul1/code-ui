@@ -89,11 +89,11 @@ export function setScheduledNotificationsMaxForTests(max?: number): void {
  *  id changes only its name. `orca-desktop` vibrated (`[0, 250]`); the user
  *  asked for silence (2026-09-21), so this is a new, silent channel and the
  *  old one is deleted on every install that has it. */
-export const ANDROID_NOTIFICATION_CHANNEL_ID = 'orca-desktop-quiet'
+export const ANDROID_NOTIFICATION_CHANNEL_ID = 'orca-desktop-lockscreen'
 /** Channels earlier builds created, deleted so their locked settings go with
  *  them. Android keeps a deleted channel's id reserved with its old settings,
  *  which is why a retired id is never reused. */
-export const RETIRED_ANDROID_NOTIFICATION_CHANNEL_IDS = ['orca-desktop'] as const
+export const RETIRED_ANDROID_NOTIFICATION_CHANNEL_IDS = ['orca-desktop', 'orca-desktop-quiet'] as const
 const ANDROID_CHANNEL_TRIGGER = { channelId: ANDROID_NOTIFICATION_CHANNEL_ID } as const
 
 export function notificationTrigger(): { channelId: string } | null {
@@ -119,6 +119,11 @@ export function ensureNotificationChannel(): Promise<void> {
     name: 'Desktop Notifications',
     importance: Notifications.AndroidImportance.HIGH,
     enableVibrate: false,
+    // PUBLIC (1): the lock screen and Always On Display show the app icon with
+    // the text, like a chat app. The user can still hide content in One UI.
+    // Literal, not the enum: other suites mock expo-notifications without it.
+    lockscreenVisibility: 1 as Notifications.AndroidNotificationVisibility,
+    showBadge: true,
     lightColor: '#6366f1'
   })
     .then(
@@ -178,7 +183,12 @@ async function presentedNotificationContent(
     agent: uniqueWorktreeLaunchAgent(event.worktreeId)
   })
   const data = buildLocalNotificationData(event, hostId)
-  const content = { ...presented, data: statusIcon ? { ...data, statusIcon } : data }
+  // priority is what pre-O phones read for heads-up; the channel carries it on O+.
+  const content = {
+    ...presented,
+    priority: 'high' as Notifications.AndroidNotificationPriority,
+    data: statusIcon ? { ...data, statusIcon } : data
+  }
   // Why here and not at the caller: every path that shows a banner goes through
   // this, and a permission ask arriving with the previous command's stdout as
   // its caption — or a question arriving as "Using AskUserQuestion" — was the
