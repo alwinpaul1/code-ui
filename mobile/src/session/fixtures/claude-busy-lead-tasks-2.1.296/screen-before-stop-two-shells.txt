@@ -1,0 +1,50 @@
+
+⏺ Background command "Lead shell A" completed (exit code 0)
+
+⏺ Noted.
+
+  session:ok
+
+⏺ Agent "Probe agent two" finished · 1m 15s
+
+⏺ Noted.
+
+  session:ok
+
+✻ Crunched for 1m 27s · done 12:54 AM · 2 shells still running
+
+⏺ Background command "Lead shell B" completed (exit code 0)
+
+⏺ Noted.
+
+  session:ok
+
+✻ Churned for 2s · done 12:54 AM · 2 shells still running
+
+❯ In one response, in parallel, without waiting: (1) Bash "sleep 300" with run_in_background true and
+  description "Long lead shell"; (2) Agent with run_in_background true, description "Long probe agent",
+  telling it: run Bash "sleep 240" with run_in_background true and description "Long agent shell", then run
+  Bash "ping -c 200 127.0.0.1" in the foreground, then reply "done". Then reply "launched" and end your turn.
+  Reply to later notifications with one word.
+
+  Ran 1 shell command
+
+⏺ Agent(Long probe agent)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 7%   ◷ 5h 20% │ 2:20 AM   ▦ 7d 73% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 94% · misses 0
+  ⏵⏵ bypass permissions on · 2 shells · ← for agents
+
+  ⏺ main
+  ◯ general-purpose  Long probe agent                                                    9s · ↓ 46.6k tokens

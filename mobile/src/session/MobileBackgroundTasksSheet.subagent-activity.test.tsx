@@ -187,7 +187,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     act(() => subscription.emit({ type: 'snapshot', messages, hasMore: false }))
   }
 
-  it('titles agent A with its latest step and lists its background sleep as "Shell 1m 20s"', async () => {
+  it('titles agent A with the step it is in and lists its background sleep as "Shell 1m 20s"', async () => {
     await mount({ open: true, footer: 2 })
     answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
     answer(PROBE_B_AGENT, orcaTranscriptRows(recordsThrough(probeBRecords(), '1f61a477')))
@@ -197,8 +197,10 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(labels).toContain('Sleep probe A, Running cd /private/tmp && ls | head -3')
     expect(texts).toContain('Start a 120-second background sleep')
     expect(texts).toContain('1m 20s')
-    // B's latest step was its TaskStop; the shell it stopped is in Finished.
-    expect(texts).toContain('Running TaskStop')
+    // B's TaskStop has answered and no call is in flight: B reads its description.
+    // The shell it stopped is in Finished.
+    expect(texts).not.toContain('Running TaskStop')
+    expect(texts).toContain('Sleep probe B')
     expect(texts).toContain('Start 200s sleep in background')
     // Both footer shells are listed now: no "+N shells in subagents" left over.
     expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
@@ -207,7 +209,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
   })
 
   it("moves A's shell out of Running once the status line reports it finished, with no footer count", async () => {
-    // The footer is gone (it paints no count at zero); the beacon's done= names A's shell.
+    // No footer reading at all; the beacon's done= names A's shell.
     await mount({ open: true, footer: null, finished: [PROBE_A_SHELL] })
     answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
     const { texts } = readTree(renderer!)

@@ -29,8 +29,9 @@ import { orcaTranscriptRows, recordsThrough, type RawSubagentRecord } from './fi
 //  - the subagents' own files got the notification only when each ping
 //    returned (20:11:35, 20:11:47), as `attachment` records Orca's reader
 //    never decodes;
-//  - the footer dropped its count at the second end: "· 1 shell" became no
-//    count at all (screen-no-shell-count.txt), so the footer cannot say zero.
+//  - the footer dropped its count at the second end: "· 1 shell" became the
+//    mode row with "(shift+tab to cycle)" back in the pill's place
+//    (screen-no-shell-count.txt), which the phone reads as zero since 2026-10-11.
 
 const here = (name: string) => fileURLToPath(new URL(`./fixtures/claude-subagent-shell-finish-2.1.296/${name}`, import.meta.url))
 const records = (name: string) => JSON.parse(readFileSync(here(name), 'utf8')) as RawSubagentRecord[]
@@ -92,10 +93,14 @@ describe("a subagent's last shell, ending while the subagent still works", () =>
     }
   })
 
-  it('cannot be read off the screen: the footer paints no count once the last shell ends', () => {
+  it('reads zero off the screen once the last shell ends: the pill goes and "(shift+tab to cycle)" comes back', () => {
+    // Read as "no count" (null) until 2026-10-11, which left a hand-started tab, with no
+    // beacon, nothing to retire these shells by (claude-footer-shell-count.ts).
     const rows = readFileSync(here('screen-no-shell-count.txt'), 'utf8').split('\n')
     expect(rows.some((row) => row.includes('Finish probe C'))).toBe(true)
-    expect(parseClaudeRunningShellCount(rows)).toBeNull()
+    expect(parseClaudeRunningShellCount(rows)).toBe(0)
+    const merged = mergeSubagentActivity(leadTasks(), feeds(), { now: NOW, liveShellCount: parseClaudeRunningShellCount(rows) })
+    expect(shellIds(merged.running)).toEqual([])
   })
 
   it('leaves Running for Finished once the real beacon names it, though nothing else does', () => {

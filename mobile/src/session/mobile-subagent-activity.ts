@@ -1,7 +1,7 @@
 // ─── What a running subagent is doing, read off its own transcript ──────────
 //
-// The Claude app's Background tasks sheet titles each running agent with its
-// latest step ("Running cd /private/tmp/…") and lists the shells its
+// The Claude app's Background tasks sheet titles a running agent with the step
+// it is in ("Running cd /private/tmp/…"), its description otherwise, and lists the shells its
 // subagents started as rows of their own ("Shell  1m 20s"). Nothing on the
 // session-tab snapshot carries either (docs/subagent-task-visibility.md):
 // Orca keeps a subagent's tool activity off the lead's status on purpose. The
@@ -26,9 +26,10 @@
 // transcript, the lead's Stop-hook `run=` list (it names every shell in the
 // process) once it postdates the launch, or the agent's footer counting fewer
 // shells beyond the lead's than are listed (the oldest go first, as the lead's
-// own fit does, `mobile-background-task-footer.ts`). A shell that ends with
-// none of those keeps its row until its agent finishes, when the row leaves
-// with the read.
+// own fit does, `mobile-background-task-footer.ts`; its zero is the mode row's
+// "(shift+tab to cycle)" hint with no pill, `claude-footer-shell-count.ts`). A
+// shell that ends with none of those keeps its row until its agent finishes,
+// when the row leaves with the read.
 
 import {
   describeActiveToolCall,
@@ -36,7 +37,12 @@ import {
   isCommandToolName
 } from '../../../src/shared/native-chat-tool-activity'
 import { mcpToolIdentity } from '../../../src/shared/native-chat-tool-identity'
-import { isToolCallBlock, type NativeChatMessage, type NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
+import {
+  isToolCallBlock,
+  isToolResultBlock,
+  type NativeChatMessage,
+  type NativeChatToolCallBlock
+} from '../../../src/shared/native-chat-types'
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
 import { COUNT_RETIRE_GRACE_MS, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
 import { foldWhitespace, readString } from './mobile-background-task-transcript'
@@ -69,15 +75,31 @@ export function subagentStepLabel(call: NativeChatToolCallBlock): string {
   return formatActiveToolLabel({ ...descriptor, toolName, preview, key: preview ? 'runningNamedPreview' : 'runningNamed' })
 }
 
-/** The newest tool call in the transcript, as a row title; null before the
- *  agent has made one. */
-export function subagentLatestStep(messages: readonly NativeChatMessage[]): string | null {
+/** The agent's tool call still waiting for its result, as a row title; null
+ *  while none is in flight (before its first call, between calls, after its
+ *  hand-back). The row then reads the agent's description, as Claude Code's own
+ *  panel and the Claude app do: on 2026-10-11 the sheet titled three running
+ *  agents "Running cd /private/tmp/…", calls that had answered minutes before,
+ *  and they read as finished work.
+ *
+ *  Orca's transcript rows carry no id on a result, so calls and results pair
+ *  first in, first out (`pairToolBlocks`): walking back from the end, each
+ *  result answers the nearest unanswered call before it, and the newest call
+ *  left over is the one in flight. A result whose call sits above the loaded
+ *  window answers nothing here. */
+export function subagentStepInFlight(messages: readonly NativeChatMessage[]): string | null {
+  let unclaimedResults = 0
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const blocks = messages[index]!.blocks
     for (let at = blocks.length - 1; at >= 0; at -= 1) {
       const block = blocks[at]!
-      if (isToolCallBlock(block)) {
-        return subagentStepLabel(block)
+      if (isToolResultBlock(block)) {
+        unclaimedResults += 1
+      } else if (isToolCallBlock(block)) {
+        if (unclaimedResults === 0) {
+          return subagentStepLabel(block)
+        }
+        unclaimedResults -= 1
       }
     }
   }
@@ -124,12 +146,12 @@ export type SubagentActivityContext = {
    *  shell's completion is queued in the LEAD's transcript as a
    *  `queue-operation` record the moment the shell ends, whoever launched it
    *  (Claude Code 2.1.296), and the status line beacons its id within one
-   *  heartbeat. This is what retires the last subagent shell, which the footer
-   *  cannot (it paints no count at zero). */
+   *  heartbeat. The footer's zero says it too, but only while the footer is
+   *  on screen and wide enough to draw its hint. */
   finishedTaskIds?: readonly string[]
 }
 
-/** The sheet's tasks with each read agent's latest step on its row and the
+/** The sheet's tasks with each read agent's in-flight step on its row and the
  *  shells its transcript shows as rows of their own: running ones right
  *  under their agent, finished ones at the head of Finished. With no feed it
  *  returns `tasks` itself. A shell gets no Stop: a terminal tab has no stop
@@ -152,7 +174,7 @@ export function mergeSubagentActivity(
       running.push(task)
       continue
     }
-    const step = subagentLatestStep(messages)
+    const step = subagentStepInFlight(messages)
     running.push(step ? { ...task, latestStep: step } : task)
     const shells = subagentShells(messages, context)
     for (const shell of shells.running) {
@@ -209,8 +231,8 @@ function subagentShells(messages: readonly NativeChatMessage[], context: Subagen
  *  launched before the grace; a held one (the footer under a dialog) only the
  *  shells launched before it was read, so a shell retired by the footer is not
  *  put back to running while a dialog covers it. Nothing while a monitor runs
- *  (the pill's wording is then unknown) or with no reading at all. The footer
- *  paints nothing at zero, so the LAST shell's end is never read here. */
+ *  (the pill's wording is then unknown) or with no reading at all. A zero
+ *  (no pill, `claude-footer-shell-count.ts`) retires every graced row. */
 function retiredByFooter(
   tasks: BackgroundTasks,
   rows: readonly BackgroundTask[],

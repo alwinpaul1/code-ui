@@ -4,7 +4,7 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 import {
   mergeSubagentActivity,
   SUBAGENT_WATCH_CAP,
-  subagentLatestStep,
+  subagentStepInFlight,
   subagentWatchTargets
 } from './mobile-subagent-activity'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
@@ -45,7 +45,7 @@ const bAfterStop = () => orcaTranscriptRows(recordsThrough(probeBRecords(), '1f6
 
 const feeds = (entries: [string, NativeChatMessage[]][]) => new Map(entries)
 
-describe("a background agent's row shows its latest step, as the Claude app does", () => {
+describe("a background agent's row shows the step it is in, as the Claude app does", () => {
   it('titles a running agent "Running cd /private/tmp && ls | head -3" while that command runs', () => {
     const now = Date.parse('2026-10-10T18:45:18.200Z')
     const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now })
@@ -63,10 +63,10 @@ describe("a background agent's row shows its latest step, as the Claude app does
       source: 'transcript',
       blocks: [{ type: 'tool-call', name, input }]
     })
-    expect(subagentLatestStep([call('Bash', { command: 'cd /private/tmp\nls -la', description: 'List' })])).toBe('Running cd /private/tmp')
-    expect(subagentLatestStep([call('ToolSearch', { query: 'select:TaskStop', max_results: 5 })])).toBe('Running ToolSearch select:TaskStop')
+    expect(subagentStepInFlight([call('Bash', { command: 'cd /private/tmp\nls -la', description: 'List' })])).toBe('Running cd /private/tmp')
+    expect(subagentStepInFlight([call('ToolSearch', { query: 'select:TaskStop', max_results: 5 })])).toBe('Running ToolSearch select:TaskStop')
     // B's real TaskStop: no JSON in a title.
-    expect(subagentLatestStep([call('TaskStop', { task_id: 'bnj50z9e4' })])).toBe('Running TaskStop')
+    expect(subagentStepInFlight([call('TaskStop', { task_id: 'bnj50z9e4' })])).toBe('Running TaskStop')
   })
 
   it("keeps the description when the agent's transcript is unread, refused, or holds no call yet", () => {

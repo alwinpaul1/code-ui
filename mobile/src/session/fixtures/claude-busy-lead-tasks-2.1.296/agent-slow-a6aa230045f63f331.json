@@ -1,0 +1,58 @@
+[
+ {
+  "type": "user",
+  "uuid": "37b21f39-54b5-4923-9128-c71c7edf0d9f",
+  "timestamp": "2026-10-10T23:04:10.607Z",
+  "content": "Run Bash \"ping -c 50 127.0.0.1\" in the foreground with description \"Slow agent ping\". Then reply \"slow done\"."
+ },
+ {
+  "type": "assistant",
+  "uuid": "2be5402f-154c-448e-af27-dbd40a7315bb",
+  "timestamp": "2026-10-10T23:04:12.399Z",
+  "content": [
+   {
+    "type": "tool_use",
+    "id": "toolu_01Bq1Hf4u1Ggze2De4r9bNFp",
+    "name": "Bash",
+    "input": {
+     "command": "ping -c 50 127.0.0.1",
+     "description": "Slow agent ping",
+     "timeout": 120000
+    }
+   }
+  ]
+ },
+ {
+  "type": "user",
+  "uuid": "a2296a5b-334c-48e5-94f6-8320e4079ff2",
+  "timestamp": "2026-10-10T23:05:01.992Z",
+  "content": [
+   {
+    "type": "tool_result",
+    "tool_use_id": "toolu_01Bq1Hf4u1Ggze2De4r9bNFp",
+    "content": "PING 127.0.0.1 (127.0.0.1): 56 data bytes\n64 bytes from 127.0.0.1: icmp_seq=0 ttl=64 time=0.393 ms\n64 bytes from 127.0.0.1: icmp_seq=1 ttl=64 time=0.746 ms\n64 bytes from 127.0.0.1: icmp_seq=2 ttl=64 time=1.431 ms\n64 bytes from 127.0.0.1: icmp_seq=3 ttl=64 time=2.500 ms\n64 bytes from 127.0.0.1: icmp_seq=4 ttl=64 time=0.981 ms\n64 bytes from 127.0.0.1: icmp_seq=5 ttl=64 time=1.239 ms\n64 bytes from 127.0.0.1: icmp_seq=6 ttl=64 time=1.321 ms\n64 bytes from 127.0.0.1: icmp_seq=7 ttl=64 time=1.782 ms\n64 bytes from 127.0.0.1: icmp_seq=8 ttl=64 time=1.853 ms\n64 bytes from 127.0.0.1: icmp_seq=9 ttl=64 time=0.603 ms\n64 bytes from 127.0.0.1: icmp_seq=10 ttl=64 time=1.547 ms\n64 bytes from 127.0.0.1: icmp_seq=11 ttl=64 time=1.085 ms\n64 bytes from 127.0.0.1: icmp_seq=12 ttl=64 time=1.556 ms\n64 bytes from 127.0.0.1: icmp_seq=13 ttl=64 time=1.120 ms\n64 bytes from 127.0.0.1: icmp_seq=14 ttl=64 time=1.159 ms\n64 bytes from 127.0.0.1: icmp_seq=15 ttl=64 time=0.979 ms\n64 bytes from 127.0.0.1: icmp_seq=16 ttl=64 time=0.814 ms\n64 bytes from 127.0.0.1: icmp_seq=17 ttl=64 time=1.042 ms\n64 bytes from 127.0.0.1: icmp_seq=18 ttl=64 time=1.203 ms\n64 bytes from 127.0.0.1: icmp_seq=19 ttl=64 time=1.032 ms\n64 bytes from 127.0.0.1: icmp_seq=20 ttl=64 time=1.878 ms\n64 bytes from 127.0.0.1: icmp_seq=21 ttl=64 time=1.620 ms\n64 bytes from 127.0.0.1: icmp_seq=22 ttl=64 time=2.024 ms\n64 bytes from 127.0.0.1: icmp_seq=23 ttl=64 time=0.710 ms\n64 bytes from 127.0.0.1: icmp_seq=24 ttl=64 time=1.386 ms\n64 bytes from 127.0.0.1: icmp_seq=25 ttl=64 time=1.935 ms\n64 bytes from 127.0.0.1: icmp_seq=26 ttl=64 time=20.246 ms\n64 bytes from 127.0.0.1: icmp_seq=27 ttl=64 time=2.179 ms\n64 bytes from 127.0.0.1: icmp_seq=28 ttl=64 time=1.656 ms\n64 bytes from 127.0.0.1: icmp_seq=29 ttl=64 time=1.258 ms\n64 bytes from 127.0.0.1: icmp_seq=30 ttl=64 time=0.909 ms\n64 bytes from 127.0.0.1: icmp_seq=31 ttl=64 time=1.083 ms\n64 bytes from 127.0.0.1: icmp_seq=32 ttl=64 time=1.089 ms\n64 bytes from 127.0.0.1: icmp_seq=33 ttl=64 time=1.094 ms\n64 bytes from 127.0.0.1: icmp_seq=34 ttl=64 time=1.052 ms\n64 bytes from 127.0.0.1: icmp_seq=35 ttl=64 time=0.700 ms\n64 bytes from 127.0.0.1: icmp_seq=36 ttl=64 time=0.986 ms\n64 bytes from 127.0.0.1: icmp_seq=37 ttl=64 time=2.018 ms\n64 bytes from 127.0.0.1: icmp_seq=38 ttl=64 time=1.165 ms\n64 bytes from 127.0.0.1: icmp_seq=39 ttl=64 time=1.287 ms\n64 bytes from 127.0.0.1: icmp_seq=40 ttl=64 time=1.538 ms\n64 bytes from 127.0.0.1: icmp_seq=41 ttl=64 time=1.798 ms\n64 bytes from 127.0.0.1: icmp_seq=42 ttl=64 time=0.972 ms\n64 bytes from 127.0.0.1: icmp_seq=43 ttl=64 time=1.142 ms\n64 bytes from 127.0.0.1: icmp_seq=44 ttl=64 time=1.079 ms\n64 bytes from 127.0.0.1: icmp_seq=45 ttl=64 time=1.546 ms\n64 bytes from 127.0.0.1: icmp_seq=46 ttl=64 time=1.134 ms\n64 bytes from 127.0.0.1: icmp_seq=47 ttl=64 time=0.644 ms\n64 bytes from 127.0.0.1: icmp_seq=48 ttl=64 time=1.208 ms\n64 bytes from 127.0.0.1: icmp_seq=49 ttl=64 time=0.932 ms\n\n--- 127.0.0.1 ping statistics ---\n50 packets transmitted, 50 packets received, 0.0% packet loss\nround-trip min/avg/max/stddev = 0.393/1.653/20.246/2.692 ms"
+   }
+  ]
+ },
+ {
+  "type": "assistant",
+  "uuid": "af90a3a8-bc77-477a-8227-702aecc3740c",
+  "timestamp": "2026-10-10T23:05:04.305Z",
+  "content": [
+   {
+    "type": "thinking"
+   }
+  ]
+ },
+ {
+  "type": "assistant",
+  "uuid": "b54cd902-74c9-449b-95ae-735ef5e44783",
+  "timestamp": "2026-10-10T23:05:04.318Z",
+  "content": [
+   {
+    "type": "text",
+    "text": "slow done\n\nThe ping ran in the foreground. All 50 packets reached 127.0.0.1 with 0% loss. Average round-trip was 1.65 ms and the slowest was 20.2 ms.\n\nsession:ok"
+   }
+  ]
+ }
+]

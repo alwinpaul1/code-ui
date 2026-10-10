@@ -1,0 +1,50 @@
+
+⏺ Agent "Long probe agent" finished · 3m 26s
+
+⏺ Noted.
+
+  session:ok
+
+✻ Crunched for 3m 31s · done 12:59 AM · 3 shells still running
+
+❯ Say "ok" and nothing else.
+
+⏺ ok
+
+  session:ok
+
+✻ Brewed for 1s · done 1:01 AM · 3 shells still running
+
+❯ In one response, in parallel, no waiting: Bash with run_in_background true, description "Count to a very
+  large number slowly for the probe", command "cd /tmp && for i in $(seq 1 400); do sleep 1; done"; Bash with
+  run_in_background true, description "Second waiter", command "cd /tmp && for i in $(seq 1 400); do sleep
+  1; done"; Agent with run_in_background true, description "A rather long agent description that will surely
+  be truncated somewhere", telling it to run Bash "ping -c 300 127.0.0.1" in the foreground then reply done.
+  Then reply "launched".
+
+  Ran 2 shell commands
+
+⏺ Agent(A rather long agent description that will surely be truncated somewhere)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 7%   ◷ 5h 20% │ 2:20 AM   ▦ 7d 73% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Background
+  3 active shells · 1 active agent
+
+    Shells (3)
+  ❯ ⏺ cd /tmp && for i in $(seq 1 400); do sleep 1; done   running
+    ⏺ cd /tmp && for i in $(seq 1 400); do sleep 1; done   running
+    ⏺ sleep 200                                            running
+
+    Local agents (1)
+    ⏺ A rather long agent description that will surely …   running · Opus 5.5
+
+  ↑/↓ to select · Enter to view · x to stop · Esc to close

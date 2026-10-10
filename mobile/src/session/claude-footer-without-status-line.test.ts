@@ -119,8 +119,10 @@ describe('a Claude footer with no status line above it', () => {
       permissionModeSeen: 'auto',
       runningShellCount: 4
     })
-    // A footer that states none leaves the field out, so the caller keeps its own count.
-    expect(parseTerminalHudObservation(AUTO_2_1_281)).not.toHaveProperty('runningShellCount')
+    // A mode row with "(shift+tab to cycle)" and no pill states zero: Claude draws
+    // that hint only while the row holds no pill (claude-footer-shell-count.ts,
+    // fixtures/claude-busy-lead-tasks-2.1.296).
+    expect(parseTerminalHudObservation(AUTO_2_1_281)?.runningShellCount).toBe(0)
   })
 
   it('reads the verb of the spinner above a bare footer', () => {

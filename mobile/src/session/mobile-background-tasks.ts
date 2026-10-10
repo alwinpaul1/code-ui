@@ -189,9 +189,10 @@ export type BackgroundTask = {
   /** Cumulative tokens the provider reported for this task, where the host states them (a
    *  structured roster's `totalTokens`). Absent is unknown, and nothing is shown for it. */
   totalTokens?: number
-  /** A running subagent's latest tool step, read off its own transcript while
-   *  the sheet is open ("Running cd /private/tmp && ls"), drawn as the row's
-   *  title over `title` (`mobile-subagent-activity.ts`). Absent: unknown. */
+  /** A running subagent's tool call still in flight, read off its own
+   *  transcript while the sheet is open ("Running cd /private/tmp && ls"),
+   *  drawn as the row's title over `title` (`mobile-subagent-activity.ts`).
+   *  Absent: no call in flight, or unknown; the row reads `title`. */
   latestStep?: string
 }
 
@@ -408,7 +409,8 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       row !== undefined && !isTeammateLifecycleId(launch.id) && notification?.timestamp != null && row.startedAt <= notification.timestamp
     const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? row !== undefined && !endedThisRun : null
     if (rosterSaysRunning === true) {
-      running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
+      const startedAt = currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id))
+      running.push({ ...launch, startedAt, status: 'running', elapsedMs: elapsedSince(startedAt, now) })
       continue
     }
     if (notification) {
@@ -539,6 +541,25 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)
   return { running, finished: finished.map((entry) => entry.task) }
+}
+
+/** A launch the run clock saw stop and come back is more than this after
+ *  its launch; a first run's roster row starts a moment after the launch call
+ *  (SubagentStart 0.1 to 1 s later, fixtures/claude-busy-lead-tasks-2.1.296). */
+const RESUMED_RUN_MIN_GAP_MS = 10_000
+
+/** When a launched agent's CURRENT run began: its launch, unless the run clock
+ *  (`mobile-subagent-runs.ts`) watched it stop and come back later. An agent
+ *  that handed back and was woken (its own shell or reviewer finished, a
+ *  message reached it) is timed from the wake, as Claude Code's panel and the
+ *  Claude app time it: on 2026-10-11 the sheet read "56m 3s" for an agent the
+ *  Claude app showed at "50s", and the row looked like a finished one. An
+ *  unknown run start (null, absent) keeps the launch. */
+function currentRunStart(launchedAt: number | null, runStart: number | null | undefined): number | null {
+  if (typeof runStart !== 'number') {
+    return launchedAt
+  }
+  return launchedAt === null || runStart - launchedAt > RESUMED_RUN_MIN_GAP_MS ? runStart : launchedAt
 }
 
 /** How many background tasks are still in flight. The chat view reads this
