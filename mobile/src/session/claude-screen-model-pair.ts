@@ -105,9 +105,12 @@ export function subscribeScreenModelRecords(listener: () => void): () => void {
   }
 }
 
-/** The command pair as a key, null when there is none. */
+/** The command pair as a key, null when there is none. A pair read from rows
+ *  older than the chat's window (`probed`) keys as none too: it was written
+ *  before anything on screen, so a statement noted before it was filed still
+ *  stands over it (review of 1bd638852, 2026-10-11). */
 export function sessionCommandPairKey(command: SessionCommandPair | null): string | null {
-  return command === null ? null : JSON.stringify([command.at, command.label, command.effort])
+  return command === null || command.probed === true ? null : JSON.stringify([command.at, command.label, command.effort])
 }
 
 /** The newest assistant row's time in `messages` (the host's clock), or null. */

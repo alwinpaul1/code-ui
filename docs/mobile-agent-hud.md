@@ -1273,7 +1273,9 @@ live pair for every tab that carried no beacon.
    (`claude-screen-model-pair.ts`).
 3. The session's own last answer to `/model`, `/effort` or `/fast`, or the
    harness's fallback notice, read from rows the transcript already holds
-   (`claude-session-command-pair.ts`).
+   (`claude-session-command-pair.ts`), and, when the loaded rows hold none,
+   from further back in the same file (`claude-transcript-effort-probe.ts`,
+   below, "Older rows than the chat loaded").
 4. The session's own startup frame, below (`claude-startup-frame.ts`). It sits
    under tier 3 and under the scan whenever the scan names another model.
 5. The model the host's transcript scan last read for this session
@@ -1677,7 +1679,7 @@ opens with "Switched to X because" is prose, not the harness (review, 2026-10-05
 | `Current model: \`X\`` [`(this session only)`] [`(effort: high)`] | X | the level, else null |
 | `↯ Fast mode ON · model set to \`X\``, only when `/fast` promoted the model | X | null |
 | `Switched to X due to high demand for Y` / `… because Y is not available` / `… returned an error …` | X | null |
-| `Set effort level to high (…)` (captured on 2.1.278), `Current effort level: high`, `Effort level: auto (currently high)`, `Effort 'max' exceeds the cap …; set to 'high' instead`, `CLAUDE_CODE_EFFORT_LEVEL=high overrides this session`, `… Effort stays high` | unchanged | the level |
+| `Set effort level to high (…)` (captured on 2.1.278 and 2.1.296), `Current effort level: high`, `Effort level: auto (currently high)`, `Effort 'max' exceeds the cap …; set to 'high' instead`, `CLAUDE_CODE_EFFORT_LEVEL=high overrides this session`, `… Effort stays high` | unchanged | the level |
 | `Effort level set to auto …` | unchanged | null |
 
 The levels are `low`, `medium`, `high`, `xhigh`, `max`; `auto` is no level.
@@ -1695,6 +1697,43 @@ host's clock and `freshAsOf` the phone's; the skew is the one
 kept in memory so a reconnect that replaces the ~40 loaded rows does not lose a
 command typed further back. A phone pick not yet confirmed by a scan shows
 nothing, and an older command row does not bring a figure back (2026-09-18).
+
+### Older rows than the chat loaded (2026-10-11)
+
+Reported on Claude Code 2.1.296: a tab with no beacon drew "Opus 5.5" with no
+effort. The model came from the scan (tier 5), and the `/model ... with
+\`medium\` effort` row that stated the effort was older than the 40 rows the
+chat loads, so tier 3 never saw it. The user's decision that day: "read the
+effort from the transcript". Claude Code's own answer in the session's own file
+is the agent's word, like the beacon; the phone's tracked record that caused
+2026-09-18 still is not.
+
+`claude-transcript-effort-probe.ts` reads the file backwards with
+`nativeChat.readSession` (`limit` 200, then `beforeOffset`), the Orca read the
+chat already uses to page older history: no terminal, nothing written on the
+host. It runs only when there is no live pair (beacon or badge), the chat's own first
+read has settled, and neither the loaded rows nor the session's kept pair state
+a command answer; at most 10
+pages, once per session per app run, and a failed read once more per NEW
+connection, logging which session and why. The newest answer it finds is filed
+in the same per-session memory as a loaded row's
+(`rememberProbedSessionCommandPair`), marked `probed`: never seen after a beacon
+(`seenAt` -Infinity), and keyed as no command for the screen's ordering
+(`sessionCommandPairKey`), because it was written before anything the screen
+showed. Without that key, a toast or spinner noted while no command was held
+lost to the old row the moment the probe filed it (review of 1bd638852). So it
+is tier 3 exactly: the beacon and the screen beat it, it beats the frame and the
+scan, an effort-only answer binds to the scan's model as of when it is filed, and a scan taken after a
+later reply naming another model still drops it. It stops at the newest answer,
+so an `/effort` names no model and the model stays the scan's; a `/model` answer
+names one, as a loaded row's already did.
+
+What it cannot find: an effort no command set. Claude Code 2.1.296 writes the
+effort into no transcript record (its record types, read from the binary, have
+none; `/effort` and `/model` answers are user rows, captured on 2.1.296), so a
+session that kept the settings default still shows no effort unless the screen
+or the startup frame states it. `/clear` starts a new session id, and therefore
+a new file; `/compact` keeps the file, and the effort with it.
 
 ### Ways the effort changes for one session
 
