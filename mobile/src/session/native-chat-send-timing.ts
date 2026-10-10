@@ -1,8 +1,10 @@
 import { connectionLogStore } from '../transport/persisted-connection-log-store'
 
 /**
- * One line in the host's connection log (Settings → Connection log) per composer send, with how
- * long each stage took, so a send the user found slow can be read back from the phone afterwards.
+ * One line in the host's connection log (Settings → Connection log) for a composer send that was
+ * slow (over NATIVE_CHAT_SLOW_SEND_MS), not sent, or not confirmed, with how long each stage
+ * took, so a send the user found slow can be read back from the phone afterwards. A fast send the
+ * desktop took writes nothing.
  *
  * Why: "sometimes a message takes too long to send" (2026-10-10) named no stage, and nothing on
  * the phone kept the timings. The stages are the ones a send actually waits on: the chips still
@@ -141,7 +143,7 @@ export function describeNativeChatSendTiming(timing: {
   return { slow, dominant, detail: parts.join(' · ') }
 }
 
-/** Ends the send and writes its line to its host's connection log. */
+/** Ends the send and writes its line to its host's connection log, when it has one (slow, refused or unconfirmed). */
 export function finishNativeChatSendTiming(handle: NativeChatSendTiming, outcome?: string, now = Date.now()): void {
   const index = open.findIndex((timing) => timing.id === handle.id)
   if (index === -1) {
@@ -157,6 +159,12 @@ export function finishNativeChatSendTiming(handle: NativeChatSendTiming, outcome
   }
   const said = timing.outcome ?? outcome ?? 'unknown'
   const { slow, detail } = describeNativeChatSendTiming(timing, now)
+  // A fast send the desktop took leaves nothing: the log keeps 200 entries per host and is saved
+  // whole on each append, so a line per send pushed the connection events this screen exists for
+  // out after about 200 sends, and cost every send a full save (0.9.127).
+  if (!slow && said === 'accepted') {
+    return
+  }
   connectionLogStore.append(hostId, {
     id: `chat-send-${timing.startedAt}-${timing.id}`,
     ts: now,
@@ -167,7 +175,7 @@ export function finishNativeChatSendTiming(handle: NativeChatSendTiming, outcome
   })
 }
 
-/** Times a whole composer send from its tap and writes its line when it settles, whatever way. */
+/** Times a whole composer send from its tap and, when it settles slow or not sent, writes its line. */
 export async function withNativeChatSendTiming(
   draftKey: string | null,
   sizes: { chars: number; images?: number },
