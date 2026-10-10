@@ -290,6 +290,11 @@ export type AgentSessionModelOption = {
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26962, c8b8997762): the speeds a model lists.
+  /** Service tiers the provider lists for this model besides its standard one, each valued by the
+   *  provider's own tier id. Absent means unknown; a client that reads it offers one speed choice
+   *  (`default` for standard) in place of the Fast toggle. */
+  serviceTiers?: AgentSessionOptionChoice[]
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
@@ -372,6 +377,9 @@ export type AgentSessionOptionsResult = {
     effort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
+    // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26962, c8b8997762).
+    /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */
+    serviceTier?: string
     /** Provider-reported effective routing, distinct from the next-turn preference. */
     fastModeState?: AgentSessionFastModeState
     /**

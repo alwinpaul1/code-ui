@@ -160,4 +160,20 @@ describe('a background task Stop that may not have landed says so', () => {
     expect(await stopTask()).toBe(true)
     expect(onSendError).not.toHaveBeenCalled()
   })
+
+  // Orca #26780: only a Stop the host confirmed holds the row's button; an accepted answer that
+  // stopped nothing gives it back.
+  it('reports a Stop as confirmed only when the host says it stopped the task', async () => {
+    cancelReply = async () =>
+      ok({
+        ok: true,
+        replayed: false,
+        fence: 3,
+        cursor: { epoch: 'epoch-1', sequence: 1 },
+        value: { cancelled: false }
+      })
+    await mountSession()
+
+    expect(await stopTask()).toBe(false)
+  })
 })

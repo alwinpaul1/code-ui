@@ -24,7 +24,19 @@ export const AGENT_SESSION_FAILURE_COPY = {
   terminalAgentHoldsChat: TERMINAL_AGENT_HOLDS_CHAT,
   quitTerminalAgent: QUIT_TERMINAL_AGENT,
   startNewChat: START_NEW_CHAT,
-  notSignedIn: '{{agent}} is not signed in for the selected account.',
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26544, ff4a51c872): sign-in guidance for every native
+  // chat agent. The account-less forms only: this build's failure fact carries no `account`, so the
+  // managed-account sentences are not taken. See src/shared/LOCAL-FILES.md.
+  notSignedIn: '{{agent}} is not signed in.',
+  claudeSystemNotSignedIn:
+    "Claude isn't signed in. Run `{{loginCommand}}`, or choose an account in Claude Accounts settings.",
+  codexSystemNotSignedIn: "Codex isn't signed in. Run `{{loginCommand}}`.",
+  agentCommandNotSignedIn:
+    'Sign in to {{agent}} with `{{loginCommand}}` on the computer running this chat.',
+  interactiveAgentNotSignedIn:
+    'Sign in to {{agent}} by running `{{loginCommand}}` and using `{{slashCommand}}` on the computer running this chat.',
+  agentNotSignedIn: 'Sign in to {{agent}}.',
+  thenSendAgain: 'Then send your message again.',
   signInFirst: 'Sign in first.',
   signInThenRunCommand: 'Sign in, then run /{{command}} again.',
   signInThenSend: 'Sign in, then send your message again.',
@@ -104,6 +116,9 @@ export type AgentSessionFailureCopyId = keyof typeof AGENT_SESSION_FAILURE_COPY
 export type AgentSessionFailureCopyValues = {
   agent?: string
   command?: string
+  /** Hand-applied with the sign-in copy (Orca #26544). */
+  loginCommand?: string
+  slashCommand?: string
   detail?: string
   limit?: string
   size?: string

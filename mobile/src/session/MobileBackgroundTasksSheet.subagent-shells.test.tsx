@@ -104,7 +104,6 @@ describe("the sheet's line for shells running inside subagents", () => {
         <ThemeProvider initialPreference={scheme}>
           <MobileBackgroundTasksSheetBody
             messages={twoAgentLaunches()}
-            agent="claude"
             agentStatus={agentStatus}
             backgroundTaskReport={report(footerCount)}
           />

@@ -41,6 +41,9 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
   const [agentSessionRepeatedStopSupported, setAgentSessionRepeatedStopSupported] = useState<
     boolean | null
   >(null)
+  // Orca #27196's host capability (`preflight.other-runtime-refusal.v1`), from the same probe: such a
+  // host refuses agent detection for a workspace another Orca server owns instead of answering.
+  const [hostRefusesOtherRuntime, setHostRefusesOtherRuntime] = useState(false)
   // Why: stable callbacks (handleFileTap) read the live value via this ref, since
   // the capability probe resolves after the callbacks are created.
   const browserScreencastSupportedRef = useRef(browserScreencastSupported)
@@ -139,6 +142,8 @@ export function useMobileSessionFeedbackCapabilities(scope: MobileSessionTermina
     setAgentSessionPromptCancelSupported,
     agentSessionRepeatedStopSupported,
     setAgentSessionRepeatedStopSupported,
+    hostRefusesOtherRuntime,
+    setHostRefusesOtherRuntime,
     browserScreencastSupportedRef,
     reconciledCreateWarningState,
     createWarning,

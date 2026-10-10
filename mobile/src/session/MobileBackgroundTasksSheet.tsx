@@ -7,18 +7,25 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { BackgroundTaskHostStatus, BackgroundTask } from './mobile-background-tasks'
+import type { BackgroundTaskHostStatus } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { subagentShellsLabel } from './mobile-background-task-footer'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
-import { subagentTranscriptTarget } from './mobile-subagent-transcript'
-import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
+import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
+import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
+
+/** Whether the sheet's host is reachable, and which connection it is on. */
+export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
+
+/** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
+ *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
+export type BackgroundTaskStopHandler = (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -33,35 +40,28 @@ const TICK_MS = 1000
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
-  agent,
   agentStatus,
-  parentTranscriptPath,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
   reportStopFailure,
   scopeKey = null,
+  connection,
   onClose
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
-  /** The tab's agent. Only a Claude subagent row opens a transcript viewer;
-   *  Codex has no subagents, and an unknown agent gets no tap target. */
-  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
-  /** The transcript of the session the chat reads, where a subagent's sits
-   *  beside it. Given, it outranks the status's (a nested agent's status
-   *  names another session, native-chat-kept-session.ts). */
-  parentTranscriptPath?: string | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   /** `report` is where this Stop's failure is said: the sheet, while open. */
-  onStopTask?: (taskId: string, report?: SheetFailureReport) => void
+  onStopTask?: BackgroundTaskStopHandler
   /** The chat's banner, or its toast, and the tab it belongs to: where a failed
    *  Stop goes once the sheet is not showing it. Without it the sheet hands
    *  the Stop no reporter, and the lane says a failure on the banner. */
   reportStopFailure?: SheetFailureReport
   scopeKey?: string | null
+  connection?: BackgroundTasksConnection
   onClose: () => void
 }) {
   // Why the sheet says a failed Stop itself: it draws in its own native window,
@@ -75,11 +75,20 @@ export function MobileBackgroundTasksSheet({
   })
   const stop =
     onStopTask && reportStopFailure
-      ? (taskId: string) => {
-          failure.clear()
-          onStopTask(taskId, failure.reporter())
+      ? (taskId: string, report?: SheetFailureReport) => {
+          if (!report) {
+            failure.clear()
+          }
+          return onStopTask(taskId, report ?? failure.reporter())
         }
       : onStopTask
+  // Stop all names every task that did not stop on the sheet's own line.
+  const reportStopAll = reportStopFailure
+    ? (text: string) => {
+        failure.clear()
+        failure.reporter()(text)
+      }
+    : undefined
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     // The title rides above the list rather than in it, so it stays in view
@@ -94,12 +103,12 @@ export function MobileBackgroundTasksSheet({
     >
       <MobileBackgroundTasksSheetBody
         messages={messages}
-        agent={agent}
         agentStatus={agentStatus ?? null}
-        parentTranscriptPath={parentTranscriptPath}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
+        onStopAllFailed={reportStopAll}
+        connection={connection}
       />
     </BottomDrawer>
   )
@@ -130,32 +139,30 @@ export function MobileBackgroundTasksSheetHeader({
  *  drawer's gesture/animation stack. */
 export function MobileBackgroundTasksSheetBody({
   messages,
-  agent = null,
   agentStatus,
-  parentTranscriptPath: readTranscriptPath,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask
+  onStopTask,
+  onStopAllFailed,
+  connection
 }: {
   messages: readonly NativeChatMessage[]
-  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
-  /** See MobileBackgroundTasksSheet's prop of the same name. */
-  parentTranscriptPath?: string | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string) => void
+  onStopTask?: (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
+  /** Where a Stop all names the tasks that did not stop: the sheet's failure line. */
+  onStopAllFailed?: (text: string) => void
+  /** The host connection. Absent reads as connected (a caller that cannot tell). */
+  connection?: BackgroundTasksConnection
 }) {
   const { space } = useTheme()
-  // Where the parent transcript is: the session the chat reads, else the
-  // agent's own hook. Null leaves the host to find a subagent's file by its
-  // session key.
-  const parentTranscriptPath = readTranscriptPath ?? agentStatus?.providerSession?.transcriptPath ?? null
-  const openTranscript = (task: BackgroundTask): (() => void) | undefined => {
-    const target = subagentTranscriptTarget({ agent, task, parentTranscriptPath })
-    return target ? () => openSubagentTranscript(target, task.status === 'running') : undefined
-  }
   const [now, setNow] = useState(() => Date.now())
+  // Disconnected, nothing here is current: running rows say so and take no Stop. A NEW connection
+  // (its `lastConnectedAt`) re-reads at once, by itself (CLAUDE.md, nothing stays stale).
+  const disconnected = connection?.connected === false
+  const connectedAt = connection?.lastConnectedAt ?? null
+  useEffect(() => setNow(Date.now()), [connectedAt])
   // A roster subagent's time is the run the phone watched begin, never the
   // host's first-observed age (2026-09-20, "13h 16m" beside the desk's "1m 23s").
   const subagentRuns = useSubagentRunClock(agentStatus)
@@ -171,6 +178,21 @@ export function MobileBackgroundTasksSheetBody({
       deriveReportedBackgroundTasks(messages, now, agentStatus, backgroundTaskReport, subagentRuns),
     [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns]
   )
+  const runningIds = useMemo(() => running.map((task) => task.id), [running])
+  const stopOne = useMemo(
+    () =>
+      onStopTask
+        ? async (taskId: string, report?: SheetFailureReport) => (await onStopTask(taskId, report)) === true
+        : undefined,
+    [onStopTask]
+  )
+  const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne, connection: connectedAt })
+  const stopAllTasks = useMemo(() => stopAllTargets(running, stops.holding), [running, stops.holding])
+  const stopAll = useMobileBackgroundTasksStopAll({
+    targets: stopAllTasks,
+    onStop: stops.onStop,
+    onFailed: onStopAllFailed
+  })
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -186,7 +208,13 @@ export function MobileBackgroundTasksSheetBody({
         title="Running"
         open={runningOpen}
         onToggle={() => setRunningOpen((open) => !open)}
+        action={stopOne && !disconnected && stopAllTasks.length > 0 ? <StopAllButton onPress={stopAll} /> : null}
       >
+        {disconnected && running.length > 0 ? (
+          <Txt variant="caption" tone="muted">
+            Status unknown — reconnecting
+          </Txt>
+        ) : null}
         {/* One flat list. The per-kind headings ("Shells · 4", "Agents · 2")
             were removed at the user's request on 2026-09-15 — the row's own
             count already says how much is running, and the labels were noise
@@ -197,8 +225,9 @@ export function MobileBackgroundTasksSheetBody({
             <BackgroundTaskCard
               key={task.id}
               task={task}
-              onStop={onStopTask}
-              onOpen={openTranscript(task)}
+              onStop={stopOne && !disconnected ? (taskId) => void stops.onStop(taskId) : undefined}
+              stopHeld={stops.holding.has(task.id)}
+              statusUnknown={disconnected}
             />
           ))
         ) : shellsInSubagents ? null : (
@@ -222,7 +251,7 @@ export function MobileBackgroundTasksSheetBody({
           onToggle={() => setFinishedOpen((open) => !open)}
         >
           {finished.slice(0, finishedShown).map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} onOpen={openTranscript(task)} />
+            <BackgroundTaskCard key={task.id} task={task} />
           ))}
           {finished.length > finishedShown ? (
             <LoadMoreFinished onPress={() => setFinishedShown((shown) => shown + FINISHED_PAGE)} />
@@ -238,36 +267,59 @@ function BackgroundTasksSection({
   count,
   open,
   onToggle,
+  action = null,
   children
 }: {
   title: string
   count?: number
   open: boolean
   onToggle: () => void
+  /** Drawn at the header's right, beside the title row (Running's Stop all). */
+  action?: ReactNode
   children: ReactNode
 }) {
   const { colors, space } = useTheme()
   const heading = count === undefined ? title : `${title} ${count}`
   return (
     <View style={{ gap: space.sm, paddingTop: space.xs }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
-        onPress={onToggle}
-        hitSlop={10}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
-      >
-        <Txt variant="label" tone="muted">
-          {heading}
-        </Txt>
-        {open ? (
-          <ChevronDown size={16} color={colors.textMuted} />
-        ) : (
-          <ChevronRight size={16} color={colors.textMuted} />
-        )}
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
+          onPress={onToggle}
+          hitSlop={10}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
+        >
+          <Txt variant="label" tone="muted">
+            {heading}
+          </Txt>
+          {open ? (
+            <ChevronDown size={16} color={colors.textMuted} />
+          ) : (
+            <ChevronRight size={16} color={colors.textMuted} />
+          )}
+        </Pressable>
+        {action}
+      </View>
       {open ? <View style={{ gap: space.sm }}>{children}</View> : null}
     </View>
+  )
+}
+
+/** Running's "Stop all", a quiet text button at the header's right so the cards keep their look. */
+function StopAllButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Stop all running tasks"
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => ({ minHeight: 28, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+    >
+      <Txt variant="caption" weight="semibold" tone="secondary">
+        Stop all
+      </Txt>
+    </Pressable>
   )
 }
 

@@ -28,7 +28,8 @@ export const NativeChatSessionOptionPick = z.union([
   z
     .object({
       ...NativeChatSessionOptionPickBase,
-      optionId: z.enum(['model', 'effort']),
+      // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26962, c8b8997762).
+      optionId: z.enum(['model', 'effort', 'serviceTier']),
       value: z.string().trim().min(1).max(512)
     })
     .strict(),

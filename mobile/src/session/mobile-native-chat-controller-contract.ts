@@ -44,6 +44,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-turn-status'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -137,6 +138,8 @@ export type MobileNativeChatController = {
     taskId: string,
     report?: (message: string) => void
   ) => Promise<boolean>
+  /** The host connection, for the Background tasks sheet's "Status unknown" and its re-read. */
+  nativeChatHostConnection: BackgroundTasksConnection
   nativeChatStreamingText?: string
   /** Agent mid-turn, regardless of whether chat is the visible view. */
   nativeChatStreamLive: boolean
@@ -292,7 +295,8 @@ export type MobileNativeChatControllerArgs = {
   /** `agent-session.repeated-stop.v1` from the same probe: a 1.4.220 host, which takes every
    *  chat action press as its own action (Orca #24301). */
   agentSessionRepeatedStopSupported?: boolean | null
-  /** Forwarded to the session lane, a refused command's cause with it (Orca #25704). */
+  /** Forwarded to the session lane, with a refused command's cause (Orca #25704) or a rejected
+   *  send's failure fact (Orca #26544). */
   onSendError: MobileNativeChatSendErrorReporter
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */

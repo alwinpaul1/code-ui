@@ -242,6 +242,14 @@ export const WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY =
 // would re-show that row as a normal workspace, so the host leaves such rows out of its listings.
 export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
   'worktree.background-removal.v1' as const
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #27196, 0ba67e1181): the two constants the phone reads.
+// Upstream also lists the capability in RUNTIME_CAPABILITIES (what a host advertises); not taken.
+// Why: an older host answers its own agents for a workspace another runtime owns; one with this
+// refuses with WORKSPACE_ON_OTHER_RUNTIME, so a client may let it decide for a shared repo id.
+export const PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY =
+  'preflight.other-runtime-refusal.v1' as const
+/** What such a host answers, instead of probing itself, for another runtime's workspace. */
+export const WORKSPACE_ON_OTHER_RUNTIME = 'workspace_on_other_runtime'
 // Why: older hosts drop automation.list's selector and answer with the whole authority, so a scoped client must not read that as one host's rows.
 export const AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY =
   'automation.list-host-scope.v1' as const

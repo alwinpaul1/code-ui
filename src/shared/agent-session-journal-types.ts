@@ -154,6 +154,16 @@ export type AgentJournalPromptOption = {
   description?: string
 }
 
+// CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #25851, c71601f51c): the free-text input shape a
+// question may carry (empty allowed, multiline, a prefill, a placeholder), on a question and on
+// the item. Types only; the schemas are not changed (the phone does not validate journal rows).
+export type AgentJournalFreeTextInput = {
+  allowEmpty?: boolean
+  multiline?: boolean
+  initialValue?: string
+  placeholder?: string
+}
+
 export type AgentJournalQuestion = {
   id: string
   question: string
@@ -162,6 +172,7 @@ export type AgentJournalQuestion = {
   options: AgentJournalPromptOption[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
 }
 
 export type AgentJournalApprovalMatchedAskRule = {
@@ -197,6 +208,7 @@ export type AgentJournalQuestionItem = {
   questions?: AgentJournalQuestion[]
   /** Present when the provider accepts an answer outside the offered options. */
   freeTextQuestionId?: string
+  freeTextInput?: AgentJournalFreeTextInput
   resolution: AgentJournalResolution
 }
 
@@ -377,6 +389,10 @@ export type AgentJournalSubmission = {
   providerItemId: string | null
   /** Terminal reason on `rejected`. */
   reason: string | null
+  // CODE UI HAND-APPLIED UPSTREAM HUNK (Orca #26544's base, as at ff4a51c872): the typed cause of
+  // a rejection, which the phone reads for the sign-in banner (use-mobile-native-chat-send-error.ts).
+  /** On `rejected`, why, typed; absent on rows from older hosts. */
+  rejection?: UnreadAgentSessionFailureFact
   submittedAt: number
   resolvedAt: number | null
   /** Set when crash reconciliation resolved the dispatch, not the provider. A live

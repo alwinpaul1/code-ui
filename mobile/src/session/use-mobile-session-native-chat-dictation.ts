@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
@@ -20,7 +20,7 @@ import {
 import { useMobileNativeChatController } from './use-mobile-native-chat-controller'
 import { useMobileNativeChatReadability } from './use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './use-mobile-native-chat-input-lease'
-import { useMobileNativeChatSendError } from './use-mobile-native-chat-send-error'
+import { useMobileNativeChatSendError, mobileNativeChatSendErrorMessage } from './use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
@@ -90,6 +90,9 @@ export function useMobileSessionNativeChatDictation(
     onSendResolved: nativeChatSendError.clear
   })
   const { toggleTabChatView, showNativeChat, showNativeChatRef } = nativeChatController
+  // A sign-in rejection's guidance steps aside once the chat's own row says it (Orca #26544).
+  const { message: sendErrorText, failure: sendErrorFailure } = nativeChatSendError, chatMessages = nativeChatController.nativeChatSession.messages
+  const sendErrorMessage = useMemo(() => mobileNativeChatSendErrorMessage({ message: sendErrorText, failure: sendErrorFailure }, chatMessages), [sendErrorText, sendErrorFailure, chatMessages])
   nativeChatSendError.bannerMountedRef.current = showNativeChat
   nativeChatSendError.keepWhile(nativeChatController.nativeChatCommandRefusalCauses)
   const nativeChatOverlayInputLockReason =
@@ -314,7 +317,7 @@ export function useMobileSessionNativeChatDictation(
   }, [diffComments])
   return {
     nativeChatScopeKey,
-    nativeChatSendError,
+    nativeChatSendError: { ...nativeChatSendError, message: sendErrorMessage },
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     nativeChatInputLeaseReadyRef,

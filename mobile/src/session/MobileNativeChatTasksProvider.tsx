@@ -12,7 +12,11 @@ import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
-import { MobileBackgroundTasksSheet } from './MobileBackgroundTasksSheet'
+import {
+  MobileBackgroundTasksSheet,
+  type BackgroundTaskStopHandler,
+  type BackgroundTasksConnection
+} from './MobileBackgroundTasksSheet'
 import {
   NativeChatAgentRunsContext,
   NativeChatRunSheetContext,
@@ -37,6 +41,7 @@ export function MobileNativeChatTasksProvider({
   onStopTask,
   reportStopFailure,
   scopeKey,
+  hostConnection,
   children
 }: {
   /** The UNFILTERED transcript: the notifications that retire a task are
@@ -50,11 +55,13 @@ export function MobileNativeChatTasksProvider({
   sessionIdentity?: NativeChatSessionIdentity | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string, report?: (message: string) => void) => void
+  onStopTask?: BackgroundTaskStopHandler
   /** The chat's banner, or its toast, and the tab it belongs to: where a failed
    *  Stop goes when the sheet is not showing it. */
   reportStopFailure?: (message: string) => void
   scopeKey?: string | null
+  /** The host connection; see MobileBackgroundTasksSheet's `connection`. */
+  hostConnection?: BackgroundTasksConnection
   children: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -152,14 +159,13 @@ export function MobileNativeChatTasksProvider({
         <MobileBackgroundTasksSheet
           visible={sheetOpen}
           messages={messages}
-          agent={agent}
           agentStatus={agentStatus ?? null}
-          parentTranscriptPath={parentTranscriptPath}
           backgroundTaskReport={backgroundTaskReport}
           hostBackgroundTasks={hostBackgroundTasks}
           onStopTask={onStopTask}
           reportStopFailure={reportStopFailure}
           scopeKey={scopeKey}
+          connection={hostConnection}
           onClose={() => setSheetOpen(false)}
         />
         </NativeChatRunSheetContext.Provider>

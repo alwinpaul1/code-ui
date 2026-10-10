@@ -5,12 +5,12 @@ import type {
 import {
   dispatchStructuredAgentSessionComposerCommand,
   isStructuredAgentSessionComposerCommand,
-  type StructuredAgentSessionCommandRefusalCause,
   type StructuredAgentSessionComposerOptions
 } from '../../../src/shared/structured-agent-session-composer'
 import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
 import {
   requestStructuredAgentSessionMutation,
   retainStructuredSessionOperationId
@@ -47,7 +47,7 @@ export async function dispatchMobileStructuredCommand(input: {
   busy: () => 'working' | 'prompt' | null
   /** `refusedWhile`: what the phone showed the refused command waiting on, so its line goes
    *  once that ends (use-mobile-native-chat-send-error.ts). */
-  onError: (message: string, refusedWhile?: StructuredAgentSessionCommandRefusalCause) => void
+  onError: MobileNativeChatSendErrorReporter
   timeoutMs: number
 }): Promise<MobileNativeChatSendOutcome | null> {
   if (input.pending.current) {
@@ -121,7 +121,10 @@ export async function dispatchMobileStructuredCommand(input: {
     }
   })
   if (outcome.error) {
-    input.onError(outcome.error, outcome.refusedWhile)
+    input.onError(
+      outcome.error,
+      outcome.refusedWhile ? { refusedWhile: outcome.refusedWhile } : undefined
+    )
   }
   return unknown ? 'unknown' : outcome.accepted ? 'accepted' : 'rejected'
 }

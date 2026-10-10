@@ -634,3 +634,82 @@ handle chain, record boundary, queue pause, Codex/ACP restarts) is `src/main` an
   that rows need (`native-chat-turn-row-attribution.ts`, the `native-chat-turn-membership.ts`
   hunks; that module is not vendored here, and the phone's turn grouping keys on the message ids
   the fold would invent). `native-chat-types.ts`'s `unpairedToolResults` field goes with it.
+
+## Provider free-text dialogs (the phone half of Orca #25851, c71601f51c)
+
+- `agent-session-question-answer.ts` taken whole at c71601f51c, and its new test
+  `agent-session-question-free-text.test.ts` with it. Taking it whole also brings
+  `AGENT_SESSION_RESPONSE_OPTION_ID_MAX_LENGTH` (an earlier upstream export nothing here reads).
+- `agent-session-journal-types.ts` — `AgentJournalFreeTextInput` and `freeTextInput?` on a question
+  and on a question item, hand-applied and marked in the source. `agent-session-journal-schemas.ts`
+  is NOT changed: the phone does not validate journal rows against it (only the host does).
+- Not taken: `PI_STRUCTURED_DIALOGS_RUNTIME_CAPABILITY` and its home
+  `structured-agent-session-surface-capabilities.ts`. A host sends Pi's dialogs only to a client that
+  advertises it, and only Pi chats carry them; Pi reaches a client only through the registered-agents
+  reader (`agent-session.structured.registered-agents.v1`), which this phone does not have. So the
+  phone does not advertise it, and the input shape stays latent until it does.
+
+## Sign-in guidance for every native chat agent (Orca #26544, ff4a51c872)
+
+- `agent-session-sign-in.ts` taken whole (each agent's login command, Pi's `/login`).
+- `agent-session-failure-copy.ts` — `notSignedIn` loses "for the selected account"; new
+  `claudeSystemNotSignedIn`, `codexSystemNotSignedIn`, `agentCommandNotSignedIn`,
+  `interactiveAgentNotSignedIn`, `agentNotSignedIn`, `thenSendAgain`, and the `loginCommand` /
+  `slashCommand` values. Hand-applied and marked. The managed-account sentences are not taken.
+- `agent-session-failure-words.ts` — `notSignedIn` now uses upstream's `notSignedInSentence` and
+  `agentSessionSignInCopyId`, folded into this file without `fact.account` (this build's fact has
+  none), plus `messageSubmitted?` on the words context. Marked in the source. Upstream's
+  `agent-session-availability.ts` and `agent-session-availability-sentences.ts` are not vendored:
+  both read `fact.account` and `AgentSessionAccountKind`, which arrive with the account-fact PRs
+  this fork never took.
+- `structured-agent-session-status-block.ts` — reads the row's fact with
+  `readWholeAgentSessionFailureFact`, so a newer host's fact (one naming an `account`) is not
+  re-worded here and the row keeps the host's sentence.
+- `agent-session-journal-types.ts` — `rejection?: UnreadAgentSessionFailureFact` on
+  `AgentJournalSubmission` (from upstream's type at ff4a51c872), which the phone reads for the
+  sign-in banner. Marked in the source.
+- Upstream's `agent-session-visible-failures.ts` is not vendored: its `sameAgentSessionFailureFact`
+  compares `account`. The phone's banner compares the remaining fields itself
+  (`mobile/src/session/use-mobile-native-chat-send-error.ts`).
+
+## Every agent's structured picker (Orca #26407, 6ba86414bf), partial
+
+- `structured-agent-session-seed-catalog.ts` taken whole: the one fallback rule for every agent's
+  structured picker (a built-in list for the handle providers, the live-only empty catalog for the
+  rest), which the phone's options hook now reads.
+- Not taken: #26407's re-vendor of `structured-agent-session-options.ts` (the `builtin` catalog
+  source, the host-catalog application with `newLaunch`, the provider-default placeholder),
+  `structured-agent-session-option-view.ts`, the `agentSession.modelCatalog` wire and params changes
+  (`savedOnly`, `waitForListing`, `listingNamesConfiguredModel`, `defaultHoldsInEveryWorkspace`) and
+  the catalog-types field. All of it serves the host model-catalog read, which this phone has never
+  ported (deferred since the v1.4.217 notes in docs/upstream-port-inventory.md).
+
+## Workspace-scoped agent detection (Orca #27054, d3e3b173e6)
+
+- `rpc-contract/preflight-params.ts` taken whole (adds `PreflightAgentDetection`).
+- `rpc-contract/rpc-params-catalog.generated.ts` — `preflight.detectAgents` and
+  `preflight.refreshAgents` take `PreflightAgentDetection`, with its import; hand-kept and marked.
+- Not taken: `PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY` in `protocol-version.ts` (a host
+  capability; upstream's phone does not read it either) and `getWorkspaceRuntimePreference` in
+  `project-execution-runtime.ts` (host side, and it needs `wsl-paths.ts`).
+
+## Codex Ultrafast as a speed choice (Orca #26962, c8b8997762)
+
+- `structured-agent-session-discovered-model.ts` taken whole (a listed model's picker options, now
+  with the Speed choice in place of the Fast toggle where the model lists `serviceTiers`).
+- `native-chat-session-options.ts` taken whole (`isDefaultServiceTier`); it matched #26962's parent.
+- Hand-applied and marked: `agent-session-wire.ts` (`serviceTiers` on a model option,
+  `serviceTier` on the options result's `current`), `native-chat-session-option-defaults.ts`
+  (`serviceTier` seeds a launch), `rpc-contract/client-settings-params.ts` (`serviceTier` is a
+  string pick), `structured-agent-session-options.ts` (the three local option builders replaced by
+  the new module's `discoveredModel`; `serviceTier` cleared and applied like `fastMode`). The rest of
+  the merge versions of those files carry earlier upstream changes this fork has not taken
+  (`parseStructuredLaunchSeedOptions`, the any-TUI-agent pick schema, `zcodePlanSite`, #26407's
+  catalog sources), so they are not taken whole.
+
+## Workspaces another runtime owns (Orca #27196, 0ba67e1181)
+
+- `protocol-version.ts` — `PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY` and
+  `WORKSPACE_ON_OTHER_RUNTIME`, hand-applied and marked; the phone reads both. Not taken: the
+  capability's entry in `RUNTIME_CAPABILITIES` (the list a host advertises), nor #27054's
+  `PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY` beside it.

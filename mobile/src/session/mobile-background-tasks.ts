@@ -186,6 +186,9 @@ export type BackgroundTask = {
   /** A Workflow's card: description, phases, its running agents, and the
    *  totals once it has finished (`mobile-background-task-workflows.ts`). */
   workflow?: WorkflowDetail
+  /** Cumulative tokens the provider reported for this task, where the host states them (a
+   *  structured roster's `totalTokens`). Absent is unknown, and nothing is shown for it. */
+  totalTokens?: number
 }
 
 export type BackgroundTasks = {

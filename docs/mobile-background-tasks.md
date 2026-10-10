@@ -82,13 +82,29 @@ all, and hides their Stop). Absent means stoppable, as every older host meant
 it. It sends `agentSession.cancel` with
 `{ turnId: 'background-tasks', scope: 'background-tasks', taskId }` — the
 `turnId` there is the host's scope marker, not a real turn, because a
-background task outlives the turn that launched it. Codex reports
-`supportsStopAll: false` (it exposes no honest stop: `turn/interrupt` on a
-child ends its turn and leaves the shell running), so no stop is drawn for it.
+background task outlives the turn that launched it. Codex used to report no
+task stop (`turn/interrupt` on a child ends its turn and leaves the shell
+running), so no stop was drawn for it. Since Orca #26780 a host whose Codex is
+0.140 or newer stops a backgrounded command through Codex's own
+`thread/backgroundTerminals/terminate` and reports `supportsTaskStop: true`,
+and #27026 adds a Codex sub-agent's Stop; the sheet reads only the flags, so
+those rows get a Stop with no phone change. Grok's commands and sub-agents
+(#27022) arrive the same way.
 
-**Not ported:** the wire's `totalTokens` per task. Upstream's desktop strip
-renders it as "18.1k · 2m"; the phone sheet has no place for it yet, so it is
-read off the wire by the equality check and then dropped.
+**A Stop holds its button** from the press until the answer, and, when the
+host confirmed it (`cancelled: true`), until the row leaves the Running list
+(`use-mobile-background-task-stops.ts`, Orca #26780). A failed, unconfirmed or
+nothing-stopped answer gives the button back at once, and so does a row that
+leaves and comes back. There is no timer.
+
+**Tokens per task (2026-10-10).** The wire's `totalTokens` (provider-reported,
+cumulative) is drawn on the card's meta line after the time or the ending, in
+this app's own figure format ("18K tokens", "1.3M tokens", as the Workflow card
+writes them; upstream's strip writes "18.1k"). A row without the field, or with
+a value that is not a positive finite number, shows no figure, never a guess.
+A running row's figure goes with its time while the relay is down. A terminal
+tab's rows carry none: the transcript reader has no per-task usage (a
+Workflow's totals stay on its own card).
 
 **Not verified against a live host.** The shared contract and the projection
 are covered by tests, but no structured session on a real desktop has been
@@ -788,3 +804,52 @@ fitted to it, what is left over while a subagent runs is drawn as one muted
 line in the Running section ("+2 shells in subagents"). A count only: nothing
 stock Orca sends names those shells or an agent's latest step. Probe, captured
 screens and limits: `docs/subagent-task-visibility.md`.
+
+## The card, laid out like the Claude app (2026-10-10)
+
+From the user's screenshot of the Claude Android app's Background tasks sheet (dark):
+
+- **The card** (`MobileBackgroundTaskCard.tsx`) is darker than the sheet (`bgSunken` on the
+  drawer's `bgPanel`, in both themes), leads with the kind's glyph (a console for a shell, the
+  hollow diamond for an agent, Activity for a monitor, ListTree for a workflow), puts the title in
+  body text (two lines, then an ellipsis), and under it the kind and its live time ("Shell  41s",
+  "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone).
+- **Stop** (`MobileBackgroundTaskStopButton.tsx`): a round button at the card's top right, a circle
+  outline holding a filled square in the muted foreground, about 24 dp, on a running card only,
+  through the same per-task stop path. The workflow card uses the same button.
+- **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
+  (with the chevron on a finished one), were this fork's own addition and are gone at the user's
+  request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
+  conversation) is a different surface and is unchanged.
+
+## Stop all (2026-10-10)
+
+The Running section's header carries a quiet "Stop all" at its right while at least one running
+row takes a Stop and is not already stopping (`use-mobile-background-tasks-stop-all.ts`). Each task
+goes through the same per-task stop as its own button, so the holds (Orca #26780) and the host's
+answers are the ones a single press gets. More than one task is confirmed first (a system dialog,
+"Stop N background tasks?", Cancel or Stop all); one task stops at once. A task whose Stop said why
+it failed (a refusal, "Stop unconfirmed — check chat before retrying") is named on the sheet's
+failure line, one line per task under "N of M tasks didn't stop."; a task the host answered with
+nothing stopped and no words had already ended, and is not named. A row the host marks
+`stoppable: false` and a finished row are never stopped. Upstream's strip offers its Stop all only
+to a host with no per-row stop; this one is the user's own ask and works over the per-row stops.
+
+## While the relay is down (2026-10-10)
+
+With no connection to the desktop nothing on the sheet is current, so a running row does not keep
+saying it runs: its time reads "Status unknown" (muted), it offers no Stop and the Running section
+offers no Stop all (a Stop could not be sent), and the section says "Status unknown —
+reconnecting". A finished row stays as it was: that is a fact already received. The connection is
+the controller's `connState` and `useLastConnectedAt(hostId)`, handed down as
+`nativeChatHostConnection` through the overlay, the view and the provider.
+
+When the connection returns, the new `lastConnectedAt` re-reads the sheet at once, by itself: the
+clock jumps to now (not the next tick) and every Stop hold from the old connection is let go, since
+an answer for a Stop sent on a connection that is gone no longer holds a row
+(`use-mobile-background-task-stops.ts`). The roster itself comes back on the lanes' own reconnect
+paths (the structured subscribe re-attaches with a snapshot; the terminal lane re-reads its
+transcript and the host status), so the sheet holds no load of its own that could fail and need
+`shouldRefetchAfterReconnect`. Not changed: the status line's "N running tasks" count, which still
+reads the last roster while disconnected.
+

@@ -1,3 +1,7 @@
+import {
+  PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY,
+  WORKSPACE_ON_OTHER_RUNTIME
+} from '../../../src/shared/protocol-version'
 import { newTabSettingsRead } from '../transport/settings-read-operations'
 import {
   type MobileRuntimeRepoSummary,
@@ -21,14 +25,34 @@ export function isFolderWorkspaceWorktreeId(worktreeId: string): boolean {
   return getRepoIdFromMobileWorktreeId(worktreeId).startsWith(FOLDER_WORKSPACE_REPO_PREFIX)
 }
 
+const WORKSPACE_ON_OTHER_RUNTIME_MESSAGE =
+  'This workspace runs on another Orca server. Pair that server directly to see its agents.'
+
+/** The paired host does not own this workspace, so its agents are unverifiable from here (Orca
+ *  #27196). */
+export class MobileWorkspaceOnOtherRuntimeError extends Error {
+  constructor() {
+    super(WORKSPACE_ON_OTHER_RUNTIME_MESSAGE)
+    this.name = 'MobileWorkspaceOnOtherRuntimeError'
+  }
+}
+
+export function hostRefusesOtherRuntimeWorkspace(
+  hostCapabilities: readonly string[] | null | undefined
+): boolean {
+  return hostCapabilities?.includes(PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY) === true
+}
+
 export async function loadMobileNewTabAgentOptions(args: {
   client: RpcClient
   worktreeId: string
+  /** Whether the host refuses, rather than answers for, a workspace another runtime owns. */
+  hostRefusesOtherRuntime?: boolean
 }): Promise<MobileNewTabAgentOption[]> {
   const { client, worktreeId } = args
   // Started before the settings read, not inside the array: the detection request goes on the wire
   // first, and the recorded sender order is what says so.
-  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId)
+  const detectedAgentsRequest = loadDetectedAgents(client, worktreeId, args.hostRefusesOtherRuntime)
   const [settingsResponse, detectedAgents] = await Promise.all([
     newTabSettingsRead.request(client),
     detectedAgentsRequest
@@ -36,7 +60,7 @@ export async function loadMobileNewTabAgentOptions(args: {
   const readSettings = newTabSettingsRead.interpret(settingsResponse)
   // Interpreted after the group, not inside it: whichever peer failed first must not decide the
   // error the sheet shows, and main raised the detection refusal only once settings had settled.
-  const detected = detectedAgents.interpret(detectedAgents.reply)
+  const detected = interpretDetectedAgents(detectedAgents)
   return buildMobileNewTabAgentOptions(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
     readSettings() as MobileNewTabAgentSettings | undefined,
@@ -52,7 +76,8 @@ type DetectedAgentsReply = {
 
 async function loadDetectedAgents(
   client: RpcClient,
-  worktreeId: string
+  worktreeId: string,
+  hostRefusesOtherRuntime = false
 ): Promise<DetectedAgentsReply> {
   // Why: the floating workspace and folder workspaces run on the paired host and
   // have no repo to resolve — a folder workspace's `folder-workspace:<group>`
@@ -73,6 +98,24 @@ async function loadDetectedAgents(
   if (!repo) {
     throw new Error('worktree_repo_not_found')
   }
+  // Orca #27196. A prefix test, as upstream's (parseExecutionHostId would split a web chunk there).
+  const runtimeOwned = repos
+    .filter((candidate) => candidate.id === repoId)
+    .map((candidate) => {
+      const host: unknown = candidate.executionHostId
+      return typeof host === 'string' && host.startsWith('runtime:')
+    })
+  if (runtimeOwned.includes(true)) {
+    // Why: rows on several hosts can share a repo id, and then only a host that refuses another
+    // runtime's workspace may decide; the first row's connection could name this host's SSH target.
+    if (!hostRefusesOtherRuntime || !runtimeOwned.includes(false)) {
+      throw new MobileWorkspaceOnOtherRuntimeError()
+    }
+    return {
+      reply: await preflightDetectAgentsRead.request(client, { worktreeId }),
+      interpret: preflightDetectAgentsRead.interpret
+    }
+  }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId
     ? {
@@ -80,7 +123,22 @@ async function loadDetectedAgents(
         interpret: preflightDetectRemoteAgentsRead.interpret
       }
     : {
-        reply: await preflightDetectAgentsRead.request(client),
+        // Why the workspace (Orca #27054): the host resolves its project runtime (a WSL distro on
+        // Windows). An older host discards the params and answers with its own default, as it
+        // always has.
+        reply: await preflightDetectAgentsRead.request(client, { worktreeId }),
         interpret: preflightDetectAgentsRead.interpret
       }
+}
+
+function interpretDetectedAgents(detected: DetectedAgentsReply): unknown[] {
+  try {
+    return detected.interpret(detected.reply)
+  } catch (error) {
+    // A host with the refusal answers it for a workspace another runtime owns.
+    if (error instanceof Error && error.message === WORKSPACE_ON_OTHER_RUNTIME) {
+      throw new MobileWorkspaceOnOtherRuntimeError()
+    }
+    throw error
+  }
 }

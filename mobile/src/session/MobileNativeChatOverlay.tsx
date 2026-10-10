@@ -356,7 +356,7 @@ export function MobileNativeChatOverlay({
   )
   const stopBackgroundTask = useCallback(
     (taskId: string, report?: (message: string) => void) =>
-      void controller.handleNativeChatStopBackgroundTask(taskId, report),
+      controller.handleNativeChatStopBackgroundTask(taskId, report),
     [controller]
   )
   const streaming = useMobileNativeChatStreamingBubble(
@@ -421,7 +421,7 @@ export function MobileNativeChatOverlay({
             ? stopBackgroundTask
             : undefined
         }
-        reportBackgroundTaskFailure={onSendFailure}
+        reportBackgroundTaskFailure={onSendFailure} hostConnection={controller.nativeChatHostConnection}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}
         ask={controller.nativeChatAsk}

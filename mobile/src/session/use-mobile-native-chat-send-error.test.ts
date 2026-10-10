@@ -3,8 +3,10 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   useMobileNativeChatSendError,
+  mobileNativeChatSendErrorMessage,
   type MobileNativeChatCommandRefusalCauses
 } from './use-mobile-native-chat-send-error'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 type HookApi = ReturnType<typeof useMobileNativeChatSendError>
 
@@ -66,7 +68,7 @@ describe('useMobileNativeChatSendError', () => {
     const line = "The agent is still working. Run /clear when it's done."
     await render()
     await showing({ working: true, prompt: false })
-    await act(async () => api().show(line, 'working'))
+    await act(async () => api().show(line, { refusedWhile: 'working' }))
     expect(api().message).toBe(line)
     await showing({ working: true, prompt: false })
     expect(api().message).toBe(line)
@@ -82,7 +84,9 @@ describe('useMobileNativeChatSendError', () => {
     await render()
     await showing({ working: false, prompt: true })
     await act(async () =>
-      api().show("Answer the agent's question or approval, then run /clear.", 'prompt')
+      api().show("Answer the agent's question or approval, then run /clear.", {
+        refusedWhile: 'prompt'
+      })
     )
     await showing({ working: false, prompt: false })
     expect(api().message).toBeNull()
@@ -93,9 +97,98 @@ describe('useMobileNativeChatSendError', () => {
     await act(async () => api().show('Message not sent'))
     await showing({ working: false, prompt: false })
     expect(api().message).toBe('Message not sent')
-    await act(async () => api().show('Background tasks are still running.', 'background'))
+    await act(async () => api().show('Background tasks are still running.', { refusedWhile: 'background' }))
     await showing({ working: false, prompt: false })
     expect(api().message).toBe('Background tasks are still running.')
+  })
+
+  it('a refusal that also carries a failure fact goes with its fact when the cause ends', async () => {
+    const failure = { kind: 'notSignedIn' } as const
+    await render()
+    await showing({ working: true, prompt: false })
+    await act(async () => api().show('Sign in', { failure, refusedWhile: 'working' }))
+    expect(api().failure).toEqual(failure)
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBeNull()
+    expect(api().failure).toBeUndefined()
+  })
+
+  it('a failure fact with no refused cause is not dropped by what the chat shows', async () => {
+    const failure = { kind: 'notSignedIn' } as const
+    await render()
+    await act(async () => api().show('Sign in', { failure }))
+    await showing({ working: false, prompt: false })
+    expect(api().message).toBe('Sign in')
+    expect(api().failure).toEqual(failure)
+  })
+
+  // Orca #26544, adapted: this build's failure fact has no `account`, and its generic rejection
+  // notice is "Message was not sent." (upstream: "Your message was not sent.").
+  it('holds the fact with its message, and clears it on another failure or expiry', async () => {
+    const fact = { kind: 'notSignedIn' } as const
+    await render()
+    await act(async () => api().show('Sign in', { failure: fact }))
+    expect(api().failure).toEqual(fact)
+    await act(async () => api().show('Stop failed'))
+    expect(api().failure).toBeUndefined()
+    await act(async () => api().show('Sign in', { failure: fact }))
+    await act(async () => {
+      vi.advanceTimersByTime(4000)
+    })
+    expect(api().failure).toBeUndefined()
+    expect(api().message).toBeNull()
+  })
+
+  it('says the sign-in guidance once: steps aside only for the same failure on a visible row', () => {
+    const failure = {
+      kind: 'notSignedIn',
+      detail: { text: 'Key expired.', audience: 'person' }
+    } as const
+    const messages: NativeChatMessage[] = [
+      {
+        id: 'auth',
+        role: 'system',
+        timestamp: 1,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'Host guidance', failure }]
+      }
+    ]
+    expect(mobileNativeChatSendErrorMessage({ message: 'Stop failed' }, messages)).toBe('Stop failed')
+    expect(mobileNativeChatSendErrorMessage({ message: 'Sign in', failure }, messages)).toBe(
+      'Message was not sent.'
+    )
+    expect(
+      mobileNativeChatSendErrorMessage(
+        { message: 'Sign in', failure: { ...failure, detail: { ...failure.detail, text: 'Other key.' } } },
+        messages
+      )
+    ).toBe('Sign in')
+    expect(mobileNativeChatSendErrorMessage({ message: 'Sign in', failure }, [])).toBe('Sign in')
+  })
+
+  it('keeps sign-in guidance when only a hidden child states the failure', () => {
+    const failure = { kind: 'notSignedIn' } as const
+    const visible: NativeChatMessage = {
+      id: 'parent-auth',
+      role: 'system',
+      timestamp: 1,
+      source: 'transcript',
+      blocks: [{ type: 'text', text: 'Sign in to Codex', failure }]
+    }
+    const child = { ...visible, id: 'child-auth', agentId: 'codex-child' }
+    const error = { message: 'Sign in to Codex', failure }
+    expect(mobileNativeChatSendErrorMessage(error, [child])).toBe(error.message)
+    expect(mobileNativeChatSendErrorMessage(error, [child, visible])).toBe('Message was not sent.')
+  })
+
+  it('drops a held failure fact with its message when the scope changes', async () => {
+    await render('terminal-1')
+    await act(async () => api().show('a', { failure: { kind: 'notSignedIn' } }))
+    await act(async () => {
+      renderer?.update(createElement(Harness, { scopeKey: 'terminal-2' }))
+    })
+    expect(api().message).toBeNull()
+    expect(api().failure).toBeUndefined()
   })
 
   it('holds a failure for four seconds, then drops it', async () => {

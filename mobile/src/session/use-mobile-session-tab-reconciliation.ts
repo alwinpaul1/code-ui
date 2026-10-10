@@ -16,6 +16,7 @@ import { PendingTerminalHandleRecoveryContextCache } from './pending-terminal-ha
 import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-records'
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
+import { hostRefusesOtherRuntimeWorkspace } from './mobile-new-tab-agent-loader'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
@@ -38,6 +39,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported,
     setAgentSessionPromptCancelSupported,
     setAgentSessionRepeatedStopSupported,
+    setHostRefusesOtherRuntime,
     setQuickCommandsSupported,
     nativeChatStream,
     fetchTerminals,
@@ -161,6 +163,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionHistorySupported(null)
       setAgentSessionPromptCancelSupported(null)
       setAgentSessionRepeatedStopSupported(null)
+      setHostRefusesOtherRuntime(false)
       setQuickCommandsSupported(null)
       setShowQuickCommands(false)
       hostQueryReplyInputSupportedRef.current = false
@@ -173,6 +176,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     setAgentSessionHistorySupported(null)
     setAgentSessionPromptCancelSupported(null)
     setAgentSessionRepeatedStopSupported(null)
+    setHostRefusesOtherRuntime(false)
     setQuickCommandsSupported(null)
     setShowQuickCommands(false)
     hostQueryReplyInputSupportedRef.current = false
@@ -191,6 +195,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
       setAgentSessionRepeatedStopSupported(
         capabilities.includes(AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY)
       )
+      setHostRefusesOtherRuntime(hostRefusesOtherRuntimeWorkspace(capabilities))
       setQuickCommandsSupported(supportsMobileQuickCommands(capabilities))
       // Why: hosts without this capability strip inputKind from terminal.send,
       // so a forwarded xterm reply would become floor-stealing shell input.

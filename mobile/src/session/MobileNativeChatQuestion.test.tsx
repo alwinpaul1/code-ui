@@ -288,4 +288,56 @@ describe('the question card between the tap and the agent taking the answer', ()
     await act(async () => rows()[1]!.props.onPress())
     expect(onAnswer).toHaveBeenCalledTimes(2)
   })
+
+  // Orca #25851: a provider's editor/input dialog (Pi's) prefills, keeps whitespace, and may send empty.
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`prefills an editor and sends its whitespace unchanged (${scheme})`, async () => {
+      const onAnswer = vi.fn(async () => true)
+      renderer = renderQuestion(
+        {
+          question: 'Edit the draft',
+          options: [],
+          multiSelect: false,
+          optionTokens: [],
+          freeTextToken: 'editor-token',
+          freeTextInput: {
+            allowEmpty: true,
+            multiline: true,
+            initialValue: '  draft\n',
+            placeholder: 'Write here'
+          }
+        },
+        onAnswer,
+        scheme
+      )
+      const input = renderer.root.findByType('TextInput' as never)
+      expect(input.props).toMatchObject({ value: '  draft\n', placeholder: 'Write here', multiline: true })
+      await act(async () => input.props.onChangeText('  \n '))
+      const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+      expect(send.props.disabled).toBe(false)
+      await act(async () => send.props.onPress())
+      expect(onAnswer).toHaveBeenCalledWith(`editor-token:${encodeURIComponent('  \n ')}`)
+    })
+  }
+
+  it('sends an empty allowed answer and still disables an empty legacy answer', async () => {
+    const onAnswer = vi.fn(async () => true)
+    const question = {
+      question: 'Input',
+      options: [],
+      multiSelect: false,
+      optionTokens: [],
+      freeTextToken: 'input-token'
+    }
+    renderer = renderQuestion({ ...question, freeTextInput: { allowEmpty: true, multiline: false } }, onAnswer)
+    const send = renderer.root.findByProps({ accessibilityLabel: 'Send reply' })
+    expect(renderer.root.findByType('TextInput' as never).props.multiline).toBe(false)
+    expect(send.props.disabled).toBe(false)
+    await act(async () => send.props.onPress())
+    expect(onAnswer).toHaveBeenCalledWith('input-token:')
+
+    renderer.unmount()
+    renderer = renderQuestion(question, onAnswer)
+    expect(renderer.root.findByProps({ accessibilityLabel: 'Send reply' }).props.disabled).toBe(true)
+  })
 })

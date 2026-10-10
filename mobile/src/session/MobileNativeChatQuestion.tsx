@@ -36,7 +36,7 @@ export function MobileNativeChatQuestion({
   const { height: windowHeight } = useWindowDimensions()
   const choicesMaxHeight = Math.max(160, Math.round(windowHeight * 0.34))
   const [selectedOptionIndexes, setSelectedOptionIndexes] = useState<number[]>([])
-  const [freeText, setFreeText] = useState('')
+  const [freeText, setFreeText] = useState(() => question.freeTextInput?.initialValue ?? '')
   const [sending, setSending] = useState(false)
   // Accepted: this card has no dismissal and stays up until the hook row moves
   // on, so it keeps every control dead from here. A second tap would type a
@@ -47,7 +47,8 @@ export function MobileNativeChatQuestion({
   const allowOther = question.allowOther !== false
 
   const hasOptions = question.options.length > 0
-  const trimmedFreeText = freeText.trim()
+  // A provider's editor (Orca #25851) keeps its whitespace and may send nothing at all.
+  const answerText = question.freeTextInput?.allowEmpty ? freeText : freeText.trim()
 
   // Keyed by position, not by label: an agent may repeat a label inside one
   // question, and label-keyed selection makes both rows toggle as one.
@@ -96,8 +97,8 @@ export function MobileNativeChatQuestion({
       return
     }
     const answer =
-      question.freeTextToken && trimmedFreeText.length > 0
-        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
+      question.freeTextToken && answerText.length > 0
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, answerText)
         : formatQuestionAnswerByIndexes(question, selectedOptionIndexes)
     if (await sendAnswer(answer)) {
       setFreeText('')
@@ -105,20 +106,21 @@ export function MobileNativeChatQuestion({
   }
 
   const submitFreeText = async (): Promise<void> => {
-    if (trimmedFreeText.length === 0) {
+    if (!allowOther || (answerText.length === 0 && !question.freeTextInput?.allowEmpty)) {
       return
     }
     const answer =
       question.multiSelect && question.freeTextToken && selectedOptionIndexes.length > 0
-        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, trimmedFreeText)
-        : formatQuestionFreeTextAnswer(question, trimmedFreeText)
+        ? formatQuestionAnswerWithOtherByIndexes(question, selectedOptionIndexes, answerText)
+        : formatQuestionFreeTextAnswer(question, answerText)
     if (await sendAnswer(answer)) {
       setFreeText('')
     }
   }
 
   const canSubmitMulti = selectedOptionIndexes.length > 0 && !locked
-  const canSendFreeText = allowOther && trimmedFreeText.length > 0 && !locked
+  const canSendFreeText =
+    allowOther && (answerText.length > 0 || question.freeTextInput?.allowEmpty === true) && !locked
 
   // Stable keys for option rows even if an agent repeats a label.
   const optionRows = useMemo(
@@ -265,12 +267,15 @@ export function MobileNativeChatQuestion({
             value={freeText}
             onChangeText={setFreeText}
             editable={!locked}
-            placeholder={hasOptions ? 'Or type a reply…' : 'Type your reply…'}
+            placeholder={
+              question.freeTextInput?.placeholder ??
+              (hasOptions ? 'Or type a reply…' : 'Type your reply…')
+            }
             placeholderTextColor={colors.textMuted}
             selectionColor={colors.accent}
             onSubmitEditing={submitFreeText}
             returnKeyType="send"
-            multiline
+            multiline={question.freeTextInput?.multiline ?? true}
           />
           <Pressable
             accessibilityLabel="Send reply"

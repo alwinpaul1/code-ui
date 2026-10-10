@@ -109,19 +109,19 @@ describe('mobile structured conversation commands', () => {
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /clear when it's done.",
-      'working'
+      { refusedWhile: 'working' }
     )
     input.busy = () => 'prompt'
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "Answer the agent's question or approval, then run /clear.",
-      'prompt'
+      { refusedWhile: 'prompt' }
     )
     input.busy = () => 'working'
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
-      'working'
+      { refusedWhile: 'working' }
     )
     expect(sendRequest).not.toHaveBeenCalled()
   })

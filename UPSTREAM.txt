@@ -10,7 +10,7 @@ src/shared/structured-agent-session-mutation.test.ts: 8999a0028
 src/shared/agent-session-host-authority.ts: 8999a0028
 src/shared/agent-session-definitive-refusal.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/agent-session-definitive-refusal.test.ts: d443320af2 (v1.4.211..v1.4.217 shared halves)
-src/shared/agent-session-question-answer.ts: add99c908b (v1.4.211..v1.4.217 shared halves)
+src/shared/agent-session-question-answer.ts: c71601f51c (#25851; before it add99c908b, v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-question-answer.test.ts: d07c47593d2461a0bd63cc99d2b8062c04288dba
 src/shared/structured-agent-session-create.ts: f0b3f44f10 (v1.4.211..v1.4.217 shared halves)
 src/shared/agent-session-provider-handle.test.ts: eb746a6d32 (v1.4.211..v1.4.217 shared halves)
@@ -524,3 +524,13 @@ src/shared/agent-session-provider-context.ts: bb44f74d00 (#26579, new; the bound
 src/shared/native-chat-tool-pairs.ts: 8452fc3315 (#26968, new)
 src/shared/native-chat-tool-line-identity.ts: 8452fc3315 (#26968, new)
 src/shared/native-chat-tool-line-identity.test.ts: 8452fc3315 (#26968, new)
+src/shared/agent-session-question-free-text.test.ts: c71601f51c (#25851, new)
+src/shared/agent-session-sign-in.ts: ff4a51c872 (#26544, new). Its test is not vendored (its managed-account case needs `account` on the failure fact); mobile/src/session/mobile-sign-in-guidance.test.ts carries the rest
+src/shared/agent-session-failure-copy.ts, agent-session-failure-words.ts, structured-agent-session-status-block.ts, agent-session-journal-types.ts: plus #26544 (ff4a51c872) hunks hand-applied, see LOCAL-FILES.md
+src/shared/structured-agent-session-seed-catalog.ts: 6ba86414bf (#26407, new)
+src/shared/rpc-contract/preflight-params.ts: d3e3b173e6 (#27054; byte-identical to its parent before)
+src/shared/rpc-contract/rpc-params-catalog.generated.ts: plus #27054's preflight.detectAgents / preflight.refreshAgents rows and import, hand-kept (CODE UI HAND-KEPT), see LOCAL-FILES.md
+src/shared/structured-agent-session-discovered-model.ts: c8b8997762 (#26962, new)
+src/shared/native-chat-session-options.ts: c8b8997762 (#26962; byte-identical to its parent before, was c287a5d9b)
+src/shared/agent-session-wire.ts, native-chat-session-option-defaults.ts, rpc-contract/client-settings-params.ts, structured-agent-session-options.ts: plus #26962 (c8b8997762) hunks hand-applied, see LOCAL-FILES.md
+src/shared/protocol-version.ts: plus #27196's (0ba67e1181) PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY and WORKSPACE_ON_OTHER_RUNTIME constants, hand-applied, see LOCAL-FILES.md
