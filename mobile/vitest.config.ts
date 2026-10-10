@@ -43,6 +43,10 @@ export default defineConfig({
   // otherwise fails before Vitest can run the test modules.
   oxc: vitestOxcConfig,
   test: {
+    // Why: stock Node worker threads (Orca #26899). The tty sandbox below needs no fork: the workers
+    // inherit this process's environment either way, and the terminal-ancestor check runs in the
+    // global setup, in this process, before any worker starts.
+    pool: 'threads',
     environment: 'node',
     // Why: the tty sandbox (a ps that sees nothing, every tty override on a temp
     // file) is set before any worker starts; see vitest.global-setup.ts.
