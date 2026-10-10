@@ -1,3 +1,4 @@
+import { mobileFileMediaOfRequest } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
 import type { RpcFailure, RpcResponse } from '../transport/types'
@@ -148,6 +149,11 @@ export async function loadMobileFilePreview(
   relativePath?: string,
   options: TerminalArtifactRetryOptions = {}
 ): Promise<MobileFilePreviewResult> {
+  // Video and music never take a whole-file read: the player streams them in chunks (Orca #26148).
+  const media = mobileFileMediaOfRequest(worktreeIdOrSource, relativePath)
+  if (media) {
+    return { status: 'ready', kind: 'media', media }
+  }
   let source = worktreeIdOrSource
   // CODE UI: a worktree PDF never reaches the preview read; see mobile-file-preview-pdf.ts.
   const pdf = await loadMobileWorktreePdfPreview(client, source, relativePath)
@@ -309,6 +315,7 @@ function terminalArtifactPreviewMatchesBase(
   return (
     preview.status === 'ready' &&
     preview.kind !== 'image' &&
+    preview.kind !== 'media' &&
     preview.kind !== 'pdf' &&
     preview.content === baseContent
   )

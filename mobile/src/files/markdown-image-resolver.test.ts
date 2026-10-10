@@ -44,6 +44,13 @@ describe('images a markdown document names', () => {
     })
   })
 
+  it('settles a video a document links as no figure, without reading a byte of it', async () => {
+    const h = host({})
+    const resolve = createMarkdownImageResolver({ client: h.client, worktreeId: 'wt', documentRelativePath: DOC })
+    await expect(resolve('fig/demo.mp4')).resolves.toBeNull()
+    expect(h.calls).toEqual([])
+  })
+
   it('reads an SVG as text, since Image cannot draw one', async () => {
     const xml = '<svg viewBox="0 0 10 5"><rect width="10" height="5"/></svg>'
     const h = host({

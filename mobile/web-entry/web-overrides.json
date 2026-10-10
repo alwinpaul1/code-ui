@@ -180,6 +180,14 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The compat wall runs in the tasks page closure, which has no update checker and no AsyncStorage. The native file reads the release the checker already found, to name and open it; this one answers none, so the wall falls back to this app's releases list."
+    },
+    {
+      "file": "src/files/MobileMediaPlayback.web.tsx",
+      "reason": "The browser and hybrid shell play cached Blob URLs with HTML media controls. The native sibling uses the existing WebView to play its private cache file."
+    },
+    {
+      "file": "src/files/mobile-media-preview-cache.web.ts",
+      "reason": "The page has no native filesystem. This cache creates a temporary Blob URL from bounded chunks and revokes it when the preview closes; native builds write the chunks to a cache file."
     }
   ]
 }

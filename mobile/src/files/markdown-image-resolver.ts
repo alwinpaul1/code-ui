@@ -40,13 +40,14 @@ async function readImage(
       }
       if (
         preview.kind !== 'pdf' &&
+        preview.kind !== 'media' &&
         isSvgPath(path) &&
         !preview.truncated &&
         /<svg[\s>]/i.test(preview.content)
       ) {
         return { source: { kind: 'svg', xml: preview.content }, settled: true }
       }
-      // A PDF, a text file, a cut SVG: the file is there and is not a figure.
+      // A PDF, a video, a text file, a cut SVG: the file is there and is not a figure.
       return NO_IMAGE
     }
     if (preview.status === 'empty' || isFileOwnPreviewError(preview)) {

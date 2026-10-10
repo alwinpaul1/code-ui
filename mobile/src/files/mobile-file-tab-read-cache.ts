@@ -36,6 +36,9 @@ function docChars(doc: MobileFileTabDoc): number {
       return doc.dataUri.length
     case 'pdf':
       return doc.uri.length
+    case 'media':
+      // A descriptor only: the bytes are streamed by the player and never held here.
+      return doc.media.relativePath.length
     case 'diff':
       return doc.lines.reduce((sum, line) => sum + line.text.length, 0)
     case 'file':

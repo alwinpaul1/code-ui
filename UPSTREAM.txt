@@ -501,3 +501,4 @@ src/shared/structured-agent-session-status-block.ts: a68d62911e (#23116, new; v1
 src/shared/native-chat-provider-retry-runs.ts: b4b708c2c4 (#23684, new; the rule the phone's in-place collapse is pinned to, mobile-structured-transcript.test.ts). Its test is not vendored: it imports native-chat-transcript-projection.ts, which this fork does not have
 src/shared/agent-main-agent-verdict.ts: 24edf0f64b (new; #22944 85067494a1, then #23467; v1.4.217..v1.4.219 chat chain)
 src/shared/agent-main-agent-verdict.test.ts: 24edf0f64b (new)
+src/shared/media-file-extensions.ts: 25e0a29701 (new; #26120, the mime table for video and music previews; ported with #26148)

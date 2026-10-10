@@ -1,3 +1,4 @@
+import type { MobileFileMedia } from './mobile-file-media'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { cutWholeCharacters } from '../text/whole-character-cut'
 import type { RpcFailure } from '../transport/types'
@@ -8,6 +9,7 @@ import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
 export type MobileFilePreviewTextKind = 'html' | 'markdown' | 'text'
 
 export type MobileFilePreviewResult =
+  | { status: 'ready'; kind: 'media'; media: MobileFileMedia }
   | {
       status: 'loading'
       message: string

@@ -13,6 +13,7 @@ export function isEditableMobileTerminalArtifactPreview(
   return (
     (preview.status === 'ready' &&
       preview.kind !== 'image' &&
+      preview.kind !== 'media' &&
       preview.kind !== 'pdf' &&
       !preview.truncated) ||
     preview.status === 'empty'
