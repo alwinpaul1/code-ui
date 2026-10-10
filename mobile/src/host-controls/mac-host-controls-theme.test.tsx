@@ -98,6 +98,7 @@ describe('the Mac controls in both themes', () => {
   })
 
   // 2026-09-26: a PC's sheet shows no lock status; its lock half is one Lock PC row.
+  // 2026-10-10: and no display row, Sleep display having been removed from Windows.
   it("draws a PC's rows from the live theme in both schemes, with Lock PC and no lock status", () => {
     const pcRows = () =>
       createElement(ActionSheetContent, {
@@ -114,7 +115,7 @@ describe('the Mac controls in both themes', () => {
       const labels = renderer.root
         .findAll((node) => String(node.type) === 'Text')
         .flatMap((node) => node.children.filter((child): child is string => typeof child === 'string'))
-      expect(labels).toEqual(['Windows', 'Lock PC', 'Sleep display', 'Unmute PC'])
+      expect(labels).toEqual(['Windows', 'Lock PC', 'Unmute PC'])
     }
     expect(backgroundsOf(dark)).not.toEqual(backgroundsOf(light))
   })

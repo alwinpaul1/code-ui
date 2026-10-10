@@ -462,7 +462,8 @@ const HOSTS = [
   {
     platform: 'win32',
     noun: 'PC',
-    marker: (mute: boolean, display: 'on' | 'off') => `CUIWIN mute=${mute} display=${display} standby=classic`
+    // A PC reports no display (Sleep display was removed from Windows, 2026-10-10).
+    marker: (mute: boolean, _display: 'on' | 'off') => `CUIWIN mute=${mute} end`
   }
 ] as const
 
@@ -516,21 +517,22 @@ describe('the host menu reopened after one of its rows finished', () => {
       expect(rows()).toContain(`Unmute ${noun}`)
     })
 
-    it(`shows Wake display at once after Sleep display finished on a ${noun}`, async () => {
-      const host = fakeHost('host', platform)
-      const props = propsFor(host)
-      host.answer = marker(false, 'on')
-      host.afterAction = marker(false, 'off')
-      await runFromMenu(host, props, 'sleep-display')
-      reopen(host, props)
-      expect(states).not.toContain('checking')
-      expect(rows()).toContain('Wake display')
-      expect(rows()).not.toContain('Sleep display')
-      // What the menu knew before about the sound is still drawn.
-      expect(rows()).toContain(`Mute ${noun}`)
-      expect(rows()).not.toContain(`Unmute ${noun}`)
-    })
   }
+
+  it('shows Wake display at once after Sleep display finished on a Mac', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = HOSTS[0].marker(false, 'on')
+    host.afterAction = HOSTS[0].marker(false, 'off')
+    await runFromMenu(host, props, 'sleep-display')
+    reopen(host, props)
+    expect(states).not.toContain('checking')
+    expect(rows()).toContain('Wake display')
+    expect(rows()).not.toContain('Sleep display')
+    // What the menu knew before about the sound is still drawn.
+    expect(rows()).toContain('Mute Mac')
+    expect(rows()).not.toContain('Unmute Mac')
+  })
 
   it('lets what the host says next replace the rows it expected', async () => {
     const host = fakeHost('host', 'darwin')
@@ -648,7 +650,7 @@ describe('the host menu reopened after one of its rows finished', () => {
     await runFromMenu(host, props, 'lock')
     reopen(host, props)
     expect(states).not.toContain('checking')
-    expect(rows()).toEqual(['Lock PC', 'Sleep display', 'Mute PC'])
+    expect(rows()).toEqual(['Lock PC', 'Mute PC'])
   })
 
   it('never offers Unlock from what it expects without a Lock behind it', async () => {
@@ -668,18 +670,32 @@ describe('the host menu reopened after one of its rows finished', () => {
   })
 })
 
-// 2026-10-10: on a PC with Modern Standby, Sleep display dims every screen and covers
-// it with black instead of turning it off (windows-display-dim-keeper.ts). The toast
-// says so, and says how to bring the screens back, since Windows never slept them.
-describe('Sleep display on a Windows PC with Modern Standby', () => {
-  const MODERN = 'CUIWIN mute=false display=on standby=modern'
-  const CLASSIC = 'CUIWIN mute=false display=on standby=classic'
+// 2026-10-10, the user removed Sleep display and Wake display from Windows. The
+// sheet offers neither on a PC; one that reaches the hook anyway (a stale sheet, a
+// future caller) runs nothing on the PC and says nothing, as Unlock always did there.
+describe('Sleep display and Wake display on a Windows PC', () => {
+  for (const action of ['sleep-display', 'wake-display', 'unlock'] as const) {
+    it(`runs nothing on the PC when ${action} reaches it anyway`, async () => {
+      const host = fakeHost('pc', 'win32')
+      host.answer = 'CUIWIN mute=false end'
+      const props = propsFor(host)
+      render({ ...props, openHostId: null })
+      await elapse(10)
+      render({ ...props, openHostId: host.hostId })
+      await elapse(600)
+      expect(rows()).toEqual(['Lock PC', 'Mute PC'])
+      const onAction = latest?.macOptions?.onAction
+      render({ ...props, openHostId: null })
+      act(() => onAction?.(action))
+      await elapse(2000)
+      expect(host.created.filter((command) => !isProbe(command))).toEqual([])
+      expect(latest?.toast).toBeNull()
+    })
+  }
 
-  async function sleepFrom(answer: string, screen: string[] | null) {
+  it('still runs Mute on the PC', async () => {
     const host = fakeHost('pc', 'win32')
-    host.answer = answer
-    host.actionScreen = screen
-    host.actionDoneAfterMs = 1500
+    host.answer = 'CUIWIN mute=false end'
     const props = propsFor(host)
     render({ ...props, openHostId: null })
     await elapse(10)
@@ -687,31 +703,9 @@ describe('Sleep display on a Windows PC with Modern Standby', () => {
     await elapse(600)
     const onAction = latest?.macOptions?.onAction
     render({ ...props, openHostId: null })
-    act(() => onAction?.('sleep-display'))
+    act(() => onAction?.('mute'))
     await elapse(10)
-    const progress = latest?.toast
-    await elapse(2500)
-    return { progress, done: latest?.toast }
-  }
-
-  it('says it is dimming the displays, then that the screens are off and how to bring them back', async () => {
-    const { progress, done } = await sleepFrom(MODERN, ['CUIDIMMED 1 covered=1', 'CUIDONE ok'])
-    expect(progress).toBe('Dimming the displays…')
-    expect(done).toBe('Screens off. Tap Wake display or touch the PC to turn them back on.')
-  })
-
-  it('says how many displays it dimmed when the screens could not be covered', async () => {
-    const { done } = await sleepFrom(MODERN, ['CUIDIMMED 2 covered=0', 'CUIDONE ok'])
-    expect(done).toBe('2 displays dimmed. Tap Wake display or touch the PC to restore.')
-  })
-
-  it('says nothing could be dimmed when nothing was', async () => {
-    const { done } = await sleepFrom(MODERN, ['CUIREFUSED nodim'])
-    expect(done).toBe("This PC's displays can't be dimmed from here, so nothing was changed.")
-  })
-
-  it('keeps the classic wording on a PC whose display really turns off', async () => {
-    const { progress } = await sleepFrom(CLASSIC, null)
-    expect(progress).toBe('Putting the display to sleep…')
+    expect(latest?.toast).toBe('Muting the PC…')
+    expect(host.created.filter((command) => !isProbe(command))).toHaveLength(1)
   })
 })

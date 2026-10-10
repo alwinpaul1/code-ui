@@ -112,12 +112,5 @@ export function useKnownHostStates(clients: { hostId: string; client: RpcClient;
   const expectedFor = (hostId: string | null, client: RpcClient | undefined): MacHostState | null =>
     hostId ? expectedHostStateForRender(known[hostId], connectedAtOf(client)) : null
 
-  /** Whether the last answer from `hostId` said it has Modern Standby, drawn or not.
-   *  Only words a progress line (windowsHostActionProgress); the script asks again. */
-  const sleepsWithDisplayFor = useCallback(
-    (hostId: string): boolean => known[hostId]?.state.sleepsWithDisplay === true,
-    [known]
-  )
-
-  return { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, sleepsWithDisplayFor }
+  return { recordProbe, recordAction, actionStarted, actionFailed, expectedFor }
 }

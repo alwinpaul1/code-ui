@@ -16,9 +16,9 @@ import { clearMacUnlockPassword, readMacUnlockPassword } from './mac-unlock-pass
 import { probeMacHostState } from './probe-mac-host-state'
 import { connectedAtOf, useKnownHostStates } from './use-known-host-states'
 import { WINDOWS_HOST_COMMAND_TIMEOUT_MS, runMacHostCommand } from './run-mac-host-command'
-import { buildWindowsHostCommand, windowsDimDoneToast, windowsHostActionProgress } from './windows-host-commands'
+import { WINDOWS_HOST_ACTION_PROGRESS, buildWindowsHostCommand, isWindowsHostAction } from './windows-host-commands'
 
-/** The hosts the group appears on: a Mac, and a Windows PC without Unlock. */
+/** The hosts the group appears on: a Mac, and a Windows PC with Lock and Mute only. */
 function hasHostControls(platform: NodeJS.Platform | null | undefined): boolean {
   return platform === 'darwin' || platform === 'win32'
 }
@@ -58,8 +58,7 @@ export function useMacHostControls(args: {
   const [probed, setProbed] = useState<{ hostId: string; state: MacHostState } | null>(null)
   // Per host: the last answer, and after an action that finished OK, the state it
   // left behind, which the next open draws at once (use-known-host-states.ts).
-  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor, sleepsWithDisplayFor } =
-    useKnownHostStates(args.clients)
+  const { recordProbe, recordAction, actionStarted, actionFailed, expectedFor } = useKnownHostStates(args.clients)
   const [toast, setToast] = useState<string | null>(null)
   const [passwordHostId, setPasswordHostId] = useState<string | null>(null)
   // Hosts whose action is running or settling; their menu waits before asking.
@@ -289,10 +288,7 @@ export function useMacHostControls(args: {
         showToast(windows ? 'Open a workspace on this PC first' : 'Open a workspace on this Mac first')
         return
       }
-      // A Modern Standby PC dims and covers its screens instead of turning them off
-      // (windows-display-dim-keeper.ts); the last answer says which PC this is.
-      const progress = windows && action !== 'unlock' ? windowsHostActionProgress(action, sleepsWithDisplayFor(hostId)) : null
-      showToast(progress ?? MAC_HOST_ACTION_PROGRESS[action])
+      showToast(windows && isWindowsHostAction(action) ? WINDOWS_HOST_ACTION_PROGRESS[action] : MAC_HOST_ACTION_PROGRESS[action])
       const token = beginSettling(hostId)
       actionStarted(hostId)
       let finished = false
@@ -316,9 +312,6 @@ export function useMacHostControls(args: {
         if (!outcome.ok) {
           // The reason comes from the host's own error text, never from the command.
           showToast(outcome.reason)
-        } else if (outcome.dim) {
-          // The screens stay lit for Windows, so the toast says how to bring them back.
-          showToast(windowsDimDoneToast(outcome.dim))
         }
       } catch {
         // Nothing thrown here may be shown: it can carry the command, and the
@@ -338,14 +331,15 @@ export function useMacHostControls(args: {
       }
     },
     // prettier-ignore
-    [actionFailed, actionStarted, beginSettling, endSettling, platforms, recordAction, showToast, sleepsWithDisplayFor, worktreeIdForHost]
+    [actionFailed, actionStarted, beginSettling, endSettling, platforms, recordAction, showToast, worktreeIdForHost]
   )
 
   const onAction = useCallback(
     (hostId: string, action: MacHostAction) => {
       if (platforms[hostId] === 'win32') {
-        // Windows has no Unlock row (windows-host-commands.ts); refuse one that arrives anyway.
-        if (action !== 'unlock') {
+        // Windows has no Unlock, Sleep display or Wake display row
+        // (windows-host-commands.ts); refuse one that arrives anyway.
+        if (isWindowsHostAction(action)) {
           void run(hostId, action, buildWindowsHostCommand(action))
         }
         return

@@ -105,7 +105,9 @@ export function nextHostExpectationExpiry(known: Readonly<Record<string, KnownHo
  * becomes 'unknown' instead, which draws Lock alone until the probe says again.
  *
  * Windows reports no lock state and always offers Lock (windows-host-state.ts), so
- * its Lock leaves the lock as it was.
+ * its Lock leaves the lock as it was. It has no display actions either
+ * (windows-host-commands.ts), and its probe reports no display, so a PC's display
+ * stays unknown and picks no row.
  */
 export function expectedStateAfterAction(args: {
   /** What was known before; used only while it is still current. */
@@ -136,12 +138,7 @@ export function expectedStateAfterAction(args: {
     action === 'sleep-display' ? 'off' : action === 'wake-display' ? 'on' : before.display
   const mute = action === 'mute' ? 'muted' : action === 'unmute' ? 'unmuted' : before.mute
   return {
-    state: {
-      lock,
-      display,
-      mute,
-      ...(before.sleepsWithDisplay ? { sleepsWithDisplay: true as const } : {})
-    },
+    state: { lock, display, mute },
     connectedAt: args.connectedAt,
     at: args.now,
     drawUntil: args.now + EXPECTED_HOST_STATE_FRESH_MS,
@@ -171,16 +168,13 @@ export function knownAfterProbe(args: {
  * expectation unchanged.
  */
 export function mergeProbeIntoExpected(expected: KnownHostState, probed: MacHostState): KnownHostState {
-  const answered = probed.lock !== 'unknown' || probed.display !== 'unknown' || probed.mute !== 'unknown'
-  const sleepsWithDisplay = answered ? probed.sleepsWithDisplay : expected.state.sleepsWithDisplay
   const lock = probed.lock === 'unknown' ? expected.state.lock : probed.lock
   return {
     ...expected,
     state: {
       lock,
       display: probed.display === 'unknown' ? expected.state.display : probed.display,
-      mute: probed.mute === 'unknown' ? expected.state.mute : probed.mute,
-      ...(sleepsWithDisplay ? { sleepsWithDisplay: true as const } : {})
+      mute: probed.mute === 'unknown' ? expected.state.mute : probed.mute
     },
     lockedByAction: expected.lockedByAction && probed.lock === 'unknown' && lock === 'locked'
   }

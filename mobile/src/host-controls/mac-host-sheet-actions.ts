@@ -42,6 +42,9 @@ type HostControlCopy = {
    *  takes a password only at its own sign-in screen (windows-host-commands.ts), so a
    *  PC always gets Lock and its probe does not ask the lock state at all. */
   canUnlock: boolean
+  /** Whether Sleep display and Wake display exist. Removed from Windows by the user
+   *  on 2026-10-10 (windows-host-commands.ts), so a PC's display state picks no row. */
+  hasDisplayRows: boolean
 }
 
 const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
@@ -52,7 +55,8 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
     checkingLabel: 'Checking the Mac…',
     offlineLabel: 'Mac offline · connect first',
     connectingLabel: 'Waiting for the Mac to connect…',
-    canUnlock: true
+    canUnlock: true,
+    hasDisplayRows: true
   },
   win32: {
     group: 'Windows',
@@ -61,7 +65,8 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
     checkingLabel: 'Checking the PC…',
     offlineLabel: 'PC offline · connect first',
     connectingLabel: 'Waiting for the PC to connect…',
-    canUnlock: false
+    canUnlock: false,
+    hasDisplayRows: false
   }
 }
 
@@ -75,17 +80,11 @@ const HOST_CONTROL_COPY: Partial<Record<NodeJS.Platform, HostControlCopy>> = {
  *  Mac said it is locked, and an unknown lock gets Lock alone, which does nothing to
  *  a Mac that is locked already. The command checks again before it types
  *  (MAC_SCREEN_LOCK_GATE); this keeps the row from asking for that in the first place. */
-function actionsForState(state: MacHostState, canUnlock: boolean): MacHostAction[] {
-  const lock: MacHostAction[] = canUnlock && state.lock === 'locked' ? ['unlock'] : ['lock']
-  // A PC with Modern Standby (state.sleepsWithDisplay) gets the same rows. An instant
-  // display-off starts standby there even with the PC held awake: Danny's laptop
-  // slept on 2026-10-08, and again on 0.9.122 with a keeper holding it, and the row
-  // was hidden. 2026-10-10: back, and there Sleep display turns nothing off: it
-  // dims every screen and covers each with black while the display is held on
-  // (windows-display-dim-keeper.ts). The probe reads a running keeper as off, so the
-  // sheet offers Wake display while the screens are dark.
-  const display: MacHostAction[] =
-    state.display === 'off'
+function actionsForState(state: MacHostState, copy: HostControlCopy): MacHostAction[] {
+  const lock: MacHostAction[] = copy.canUnlock && state.lock === 'locked' ? ['unlock'] : ['lock']
+  const display: MacHostAction[] = !copy.hasDisplayRows
+    ? []
+    : state.display === 'off'
       ? ['wake-display']
       : state.display === 'on'
         ? ['sleep-display']
@@ -152,7 +151,7 @@ export function getMacHostSheetActions(
     ]
   }
   const disabled = options.worktreeId === null
-  const rows: ActionSheetAction[] = actionsForState(options.state, copy.canUnlock).map((action) => ({
+  const rows: ActionSheetAction[] = actionsForState(options.state, copy).map((action) => ({
     label: copy.labels[action] ?? MAC_HOST_ACTION_LABELS[action],
     icon: MAC_ACTION_ICONS[action],
     ...(disabled ? { disabled: true, hint: copy.noWorktreeHint } : {}),

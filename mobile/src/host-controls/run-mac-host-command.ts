@@ -5,11 +5,8 @@ import {
   type MacHostRefusal
 } from './mac-host-commands'
 import { watchThrowawayTerminal, type ThrowawayTerminalClient } from './throwaway-terminal'
-import { readWindowsDimReport, type WindowsDimReport } from './windows-host-commands'
 
-/** `dim`: what Sleep display did on a Windows PC with Modern Standby, which dims and
- *  covers the screens instead of turning them off (windows-display-dim-keeper.ts). */
-export type MacHostCommandOutcome = { ok: true; dim?: WindowsDimReport } | { ok: false; reason: string }
+export type MacHostCommandOutcome = { ok: true } | { ok: false; reason: string }
 
 /** Long enough for `osascript` to finish typing at the login window; after this the
  *  tab is closed whether or not the shell said it was done. */
@@ -32,7 +29,7 @@ export async function runMacHostCommand(args: {
   /** How the host is named in the one failure this can report. */
   hostNoun?: string
 }): Promise<MacHostCommandOutcome> {
-  const outcome = await watchThrowawayTerminal<MacHostRefusal | 'done' | WindowsDimReport>({
+  const outcome = await watchThrowawayTerminal<MacHostRefusal | 'done'>({
     client: args.client,
     worktreeId: args.worktreeId,
     command: args.command,
@@ -41,17 +38,11 @@ export async function runMacHostCommand(args: {
     ...(args.hostNoun ? { hostNoun: args.hostNoun } : {}),
     // A refusal is the command saying it did nothing (mac-host-commands.ts); it
     // ends the watch as the done marker does.
-    // The dim report is printed just before the done marker, so a screen with the
-    // marker has it too.
     read: (lines) =>
-      readMacHostRefusal(lines) ??
-      (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? (readWindowsDimReport(lines) ?? 'done') : null)
+      readMacHostRefusal(lines) ?? (lines.some((line) => MAC_HOST_COMMAND_DONE_PATTERN.test(line)) ? 'done' : null)
   })
   if (!outcome.ok) {
     return outcome
-  }
-  if (outcome.answer !== null && typeof outcome.answer === 'object') {
-    return { ok: true, dim: outcome.answer }
   }
   if (outcome.answer !== null && outcome.answer !== 'done') {
     // A fixed line chosen by the marker, never the host's text: the unlock's screen

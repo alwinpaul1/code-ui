@@ -147,16 +147,16 @@ describe('asking a Windows PC what state it is in', () => {
   }
 
   it('runs the Windows probe, not the Mac one, and reads its marker', async () => {
-    const { state, calls } = await runWindowsProbe([[], ['CUIWIN mute=false display=off standby=classic']])
+    const { state, calls } = await runWindowsProbe([[], ['CUIWIN mute=false end']])
     expect(calls[0]?.params).toMatchObject({ command: WINDOWS_HOST_STATE_PROBE_COMMAND })
-    expect(state).toEqual({ lock: 'unknown', display: 'off', mute: 'unmuted' })
+    expect(state).toEqual({ lock: 'unknown', display: 'unknown', mute: 'unmuted' })
   })
 
   // The Windows marker carries no lock, so a rule that waited for a lock answer
-  // before ending the watch would hold the display and mute rows for all 15 s.
-  it('answers as soon as the PC has said display and mute, with no lock to wait for', async () => {
-    const { state, methods } = await runWindowsProbe([[], ['CUIWIN mute=true display=on standby=classic'], ['never read']])
-    expect(state).toEqual({ lock: 'unknown', display: 'on', mute: 'muted' })
+  // before ending the watch would hold the mute rows for all 15 s.
+  it('answers as soon as the PC has said mute, with no lock to wait for', async () => {
+    const { state, methods } = await runWindowsProbe([[], ['CUIWIN mute=true end'], ['never read']])
+    expect(state).toEqual({ lock: 'unknown', display: 'unknown', mute: 'muted' })
     expect(methods().filter((method) => method === 'terminal.read')).toHaveLength(2)
   })
 
@@ -168,7 +168,7 @@ describe('asking a Windows PC what state it is in', () => {
   it('waits longer than the Mac, for a cold powershell start', async () => {
     // A marker painted after the Mac's budget but inside the Windows one still counts.
     const reads = Math.floor(MAC_HOST_STATE_PROBE_TIMEOUT_MS / MAC_HOST_STATE_PROBE_INTERVAL_MS) + 2
-    const screens: string[][] = [...Array.from({ length: reads }, () => []), ['CUIWIN mute=true display=unknown standby=classic']]
+    const screens: string[][] = [...Array.from({ length: reads }, () => []), ['CUIWIN mute=true end']]
     const { state } = await runWindowsProbe(screens)
     expect(state).toEqual({ lock: 'unknown', display: 'unknown', mute: 'muted' })
   })

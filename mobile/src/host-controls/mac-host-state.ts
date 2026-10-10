@@ -8,12 +8,6 @@ export type MacHostState = {
   lock: MacLockState
   display: MacDisplayState
   mute: MacMuteState
-  /** Set only when the host said its display going off puts it to sleep: a Windows
-   *  PC with Modern Standby (windows-host-state.ts). The sheet offers the same rows
-   *  there (2026-10-10): its Sleep display dims and covers the screens with the
-   *  display held on (windows-display-dim-keeper.ts). The phone words that
-   *  action's progress from it (windowsHostActionProgress). */
-  sleepsWithDisplay?: true
 }
 
 export const UNKNOWN_MAC_HOST_STATE: MacHostState = {
