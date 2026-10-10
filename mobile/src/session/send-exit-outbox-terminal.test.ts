@@ -301,7 +301,7 @@ describe('a chat message the app was closed under', () => {
     expect(nativeChatOutboxEntries()).toEqual([])
   })
 
-  it('draws the message as "Sending…" as the box empties, not after the whole send', async () => {
+  it('draws the message bubble as the box empties, not after the whole send', async () => {
     mount(desktop('hang').client)
     await typeAndTap(TEXT, 300)
 
@@ -310,7 +310,7 @@ describe('a chat message the app was closed under', () => {
     expect(Object.values(outbox!.deliveries)).toEqual(['sending'])
   })
 
-  it('takes the "Sending…" bubble down and puts the words back when the desktop refuses', async () => {
+  it('takes the early bubble down and puts the words back when the desktop refuses', async () => {
     const tab = desktop()
     mount(tab.client)
     tab.client.sendRequest = vi.fn(async (method: string, params: { enter?: boolean }) =>
@@ -453,6 +453,51 @@ describe('a chat message the app was closed under', () => {
     } finally {
       setItem.mockRestore()
       warn.mockRestore()
+    }
+  })
+
+  // 2026-10-10, the user: "send it as fast as possible". The outbox write runs beside the send,
+  // never in front of it: a storage write that never answers must not hold the first RPC back by
+  // a single tick of the clock.
+  it('sends at once while the outbox write to storage has not landed', async () => {
+    const never = new Promise<never>(() => {})
+    const setItem = vi.spyOn(AsyncStorage, 'setItem').mockImplementation(async (key: string) => {
+      if (key === 'orca:chatOutbox') {
+        await never
+      }
+    })
+    try {
+      const tab = desktop()
+      mount(tab.client)
+      await act(async () => {
+        drafts!.setComposerText(TEXT)
+      })
+      vi.useFakeTimers()
+      await advance(300)
+      // When each write to the terminal went out: the send proper, not a look at the screen.
+      const writesAt: number[] = []
+      const answer = tab.client.sendRequest.bind(tab.client)
+      tab.client.sendRequest = ((...args: Parameters<RpcClient['sendRequest']>) => {
+        if (args[0] === 'terminal.send') {
+          writesAt.push(Date.now())
+        }
+        return answer(...args)
+      }) as RpcClient['sendRequest']
+      const tappedAt = Date.now()
+      let sending: Promise<boolean> | null = null
+      await act(async () => {
+        sending = images!.sendNativeChat(TEXT)
+        await vi.advanceTimersByTimeAsync(0)
+      })
+      // The send has gone out on the wire in the tap's own tick, the outbox write still pending.
+      expect(writesAt[0]).toBe(tappedAt)
+      expect(nativeChatOutboxEntries()).toHaveLength(1)
+      await advance(2_000)
+      expect(await sending!).toBe(true)
+      expect(tab.submittedBodies).toEqual([TEXT])
+      expect(setItem).toHaveBeenCalledWith('orca:chatOutbox', expect.any(String))
+    } finally {
+      setItem.mockRestore()
     }
   })
 

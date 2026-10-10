@@ -67,7 +67,7 @@ export function useMobileNativeChatMessageSend(args: {
    *  at send time so the pre-clear can be sized to every line it occupies. */
   readSeededLaunchDraftSeed: () => MobileNativeChatLaunchDraftSeed | null
   clearDraftForSend: (origin: MobileNativeChatSendOrigin, text: string) => void
-  /** `showSendingEcho` draws a text send's "Sending…" bubble as its box empties (showSendingEchoWith). */
+  /** `showSendingEcho` draws a text send's bubble as its box empties (showSendingEchoWith). */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void; showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[]) => void
   holdUnconfirmedSend: (

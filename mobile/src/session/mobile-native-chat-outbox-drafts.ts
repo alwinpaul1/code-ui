@@ -47,10 +47,11 @@ export function keepRefusedSendInOutbox(origin: MobileNativeChatSendOrigin): boo
 }
 
 /**
- * Draws a text send's bubble the moment its box empties, saying "Sending…" until the desktop has
- * it, as a chat app does. Until 2026-10-10 the bubble waited for the whole send: the clear, the
- * body, its Enter and Claude's check that it took the words, a couple of seconds over the relay
- * with an empty box and nothing in the chat ("it leaves the input and takes time to land"). Only
+ * Draws a text send's bubble the moment its box empties, as a plain sent message with no label
+ * (MobileNativeChatOutboxStatus.tsx draws nothing while it is on its way). Until 2026-10-10 the
+ * bubble waited for the whole send: the clear, the body, its Enter and Claude's check that it took
+ * the words, a couple of seconds over the relay with an empty box and nothing in the chat ("it
+ * leaves the input and takes time to land"). Only
  * for a send the outbox holds and a chat with a session; the origin is marked so acceptance keeps
  * this bubble and a refusal takes it down.
  */

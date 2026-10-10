@@ -148,7 +148,7 @@ export type MobileNativeChatSendOrigin = {
   /** A recovery resend of an entry already in the outbox: its bubble is already drawn, and a
    *  refusal marks the bubble "Not sent" instead of putting the words in the composer. */
   outboxRecovery?: boolean
-  /** Its "Sending…" bubble was drawn when the box emptied (showSendingEchoWith), under the
+  /** Its bubble was drawn when the box emptied (showSendingEchoWith), under the
    *  entry's own id: acceptance keeps that one, a refusal takes it down. */
   echoDrawn?: boolean
 }

@@ -316,16 +316,21 @@ export function useMobileNativeChatImageAttachments({
                   return refuse(!healed ? notSent() : follow && !follow.tabChanged() ? SEND_TERMINAL_RESTARTED : 'Message not sent')
                 }
               }
-              // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
-              const sent = await baseSend(text, undefined, deadline, undefined, follow ?? undefined)
-              if (follow?.reminted) {
-                return SEND_REMINTED
-              }
-              const accepted = sent !== 'rejected'
-              if (accepted && pendingFiles.length > 0) {
+              // A file chip (a document, or a clipboard screenshot: the picker names it "Pasted
+              // image") rides in the words, so it leaves with them once the link is up, and comes
+              // back with them on a refusal (a remint retakes it). It left only when the send
+              // settled, so under 0.9.127's early bubble it sat below a sent message (2026-10-10).
+              if (pendingFiles.length > 0) {
+                if (!(await sendGate.wait(deadline, () => scopeKeyRef.current !== scope))) { return false }
                 clearSent()
               }
-              return accepted
+              // Text-only sends paste nothing first, so 'unknown' leaves no stale input.
+              // A throw puts the file chips back too, and still rejects as it always did.
+              const sent = await baseSend(text, undefined, deadline, undefined, follow ?? undefined).catch((error: unknown) => ({ error }))
+              const accepted = typeof sent === 'string' && sent !== 'rejected' && !follow?.reminted
+              if (!accepted && pendingFiles.length > 0 && scope) { restoreSentAttachments(scope, pendingAll) }
+              if (typeof sent !== 'string') { throw sent.error }
+              return follow?.reminted ? SEND_REMINTED : accepted
             }
             const handle = terminal
             if (!handle || !follow) {

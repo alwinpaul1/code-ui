@@ -41,7 +41,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     onUnconfirmed: () => void
   ) => void
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
-  /** Draws a text send's "Sending…" bubble as its box empties (showSendingEchoWith). */
+  /** Draws a text send's bubble as its box empties (showSendingEchoWith). */
   showSendingEcho?: (origin: MobileNativeChatSendOrigin) => void
   onSendError: (message: string) => void
 }): {

@@ -18,10 +18,11 @@ import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured
 import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'
 import { clearNativeChatDraftStores } from './native-chat-draft-store.test-support'
 import { resetLiveNativeChatDraftsForTests } from './mobile-native-chat-live-drafts'
-import { nativeChatOutboxEntries, resetNativeChatOutboxForTests } from '../storage/native-chat-outbox'
+import { nativeChatOutboxEntries, nativeChatOutboxWritesSettled, resetNativeChatOutboxForTests } from '../storage/native-chat-outbox'
 import { resetOutboxSendsForTests } from './native-chat-outbox-sends'
 import { resetNativeChatSendTimingForTests } from './native-chat-send-timing'
 import { OUTBOX_ECHO_PREFIX } from './mobile-native-chat-outbox-drafts'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const TEXT = 'run the migration again'
 const connectedClient = { getState: () => 'connected', notifyForeground: vi.fn() } as unknown as RpcClient
@@ -211,7 +212,7 @@ describe('a structured-session message the app was closed under', () => {
     expect(nativeChatOutboxEntries()).toEqual([])
   })
 
-  it('draws the message as "Sending…" the moment the box empties, before the host answers', async () => {
+  it('draws the message bubble the moment the box empties, before the host answers', async () => {
     vi.useFakeTimers()
     mount(host('hang'))
     await press(TEXT)
@@ -220,6 +221,35 @@ describe('a structured-session message the app was closed under', () => {
     const bubbles = drafts!.pending.filter((item) => item.id.startsWith(OUTBOX_ECHO_PREFIX))
     expect(bubbles.map((item) => item.text)).toEqual([TEXT])
     expect(outbox!.deliveries[bubbles[0]!.id]).toBe('sending')
+  })
+
+  // "Send it as fast as possible" (2026-10-10): the outbox write runs beside the send, never in
+  // front of it, so a storage write that never answers leaves the session's send where it was.
+  it('hands the press to the session at once while the outbox write has not landed', async () => {
+    const setItem = vi.spyOn(AsyncStorage, 'setItem').mockImplementation(async (key: string) => {
+      if (key === 'orca:chatOutbox') {
+        await new Promise<never>(() => {})
+      }
+    })
+    try {
+      vi.useFakeTimers()
+      // An answer still out keeps the entry, so the outbox has a list to write.
+      const desk = host('hang')
+      mount(desk)
+      await press(TEXT)
+
+      expect(desk.requests.map((request) => request.text)).toEqual([TEXT])
+      // ...while the outbox's write is still out.
+      let written = false
+      void nativeChatOutboxWritesSettled().then(() => {
+        written = true
+      })
+      await advance(1_000)
+      expect(written).toBe(false)
+      expect(setItem).toHaveBeenCalledWith('orca:chatOutbox', expect.any(String))
+    } finally {
+      setItem.mockRestore()
+    }
   })
 
   it('gives a new press of the same words a new operation id (#26392)', async () => {
