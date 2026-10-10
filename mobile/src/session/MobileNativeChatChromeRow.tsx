@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native'
-import { ChevronsDownUp, ChevronsUpDown, Square } from 'lucide-react-native'
+import { Square } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
@@ -7,16 +7,15 @@ import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ChatViewStyles } from './mobile-native-chat-view-styles'
 
 /** Chrome row above the composer: the status line (what the agent is doing,
- *  how many tasks run) and the global tool-calls toggle on the left, Stop in the far corner, and
- *  the send-failure banner beneath. */
+ *  how many tasks run) on the left, Stop in the far corner, and the send-failure
+ *  banner beneath. It draws nothing, and takes no height, when all three are
+ *  absent. (Expanding tool calls is a Settings switch, not a control here.) */
 export function MobileNativeChatChromeRow({
   agentWorking,
   canStop,
   showWorkingIndicator = true,
   spinner = null,
   onStop,
-  toolsExpanded,
-  onToggleTools,
   sendErrorMessage,
   styles
 }: {
@@ -32,8 +31,6 @@ export function MobileNativeChatChromeRow({
   /** The agent's own spinner line, read off its screen, when one is up. */
   spinner?: ClaudeSpinner | null
   onStop?: () => void
-  toolsExpanded: boolean
-  onToggleTools: () => void
   sendErrorMessage?: string | null
   styles: ChatViewStyles
 }) {
@@ -41,26 +38,10 @@ export function MobileNativeChatChromeRow({
   return (
     <>
       {/* Empty stretches of this row pass touches through to the list beneath
-          (see the dock in MobileNativeChatView); the toggle and Stop keep theirs. */}
+          (see the dock in MobileNativeChatView); Stop keeps its own. */}
       <View style={styles.chromeRow} pointerEvents="box-none">
         <View style={styles.chromeLeft} pointerEvents="box-none">
           <MobileNativeChatStatusLine working={agentWorking === true && showWorkingIndicator} spinner={spinner} />
-          <Pressable
-            style={({ pressed }) => [styles.chromeToggle, pressed && styles.pressed]}
-            onPress={onToggleTools}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={toolsExpanded ? 'Collapse tool calls' : 'Expand tool calls'}
-          >
-            {toolsExpanded ? (
-              <ChevronsDownUp size={14} color={colors.textMuted} strokeWidth={2} />
-            ) : (
-              <ChevronsUpDown size={14} color={colors.textMuted} strokeWidth={2} />
-            )}
-            <Txt variant="caption" weight="semibold" tone="muted">
-              {toolsExpanded ? 'Collapse' : 'Tools'}
-            </Txt>
-          </Pressable>
         </View>
         {(canStop ?? agentWorking) ? (
           <Pressable

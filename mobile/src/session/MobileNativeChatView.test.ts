@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
   resetSessionViewPreferenceMemoryForTests,
+  saveChatExpandTools,
   saveChatFocusView
 } from '../storage/session-view-preferences'
 import { MobileNativeChatView } from './MobileNativeChatView'
@@ -678,6 +679,38 @@ describe('MobileNativeChatView', () => {
           await saveChatFocusView(false)
         })
         expect(rowProps('a1').focusView).toBe(false)
+      })
+    })
+
+    // Expand tool calls was a "Tools" button on the chrome row; it is a device
+    // preference now, so every row gets it and an open chat follows Settings.
+    describe('Expand tool calls', () => {
+      beforeEach(() => resetSessionViewPreferenceMemoryForTests())
+      afterEach(() => resetSessionViewPreferenceMemoryForTests())
+
+      it('is closed for every row by default', async () => {
+        const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+        await render({ messages: folded, folded })
+        expect(rowProps('u1').toolsExpanded).toBe(false)
+        expect(rowProps('a1').toolsExpanded).toBe(false)
+      })
+
+      it('opens every row when the preference is on, and follows a Settings toggle without a remount', async () => {
+        const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+        await act(async () => {
+          await saveChatExpandTools(true)
+        })
+        await render({ messages: folded, folded })
+        expect(rowProps('u1').toolsExpanded).toBe(true)
+        expect(rowProps('a1').toolsExpanded).toBe(true)
+        await act(async () => {
+          await saveChatExpandTools(false)
+        })
+        expect(rowProps('a1').toolsExpanded).toBe(false)
+        await act(async () => {
+          await saveChatExpandTools(true)
+        })
+        expect(rowProps('a1').toolsExpanded).toBe(true)
       })
     })
 

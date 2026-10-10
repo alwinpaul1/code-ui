@@ -22,6 +22,43 @@
   "overrides": [
     {
       "files": [
+        "src/storage/session-view-preferences.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-10-10: 330. Expand tool calls (the chat's old "Tools" button,
+            // now a Settings switch) is a second device preference in the
+            // shape of Focus view: memory copy, write barrier, save counter,
+            // subscribers, load/save/peek, and its line in the app-start warm.
+            "max": 330,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "src/session/MobileNativeChatView.test.ts"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-10-10: 816. +16 over the 800 test ceiling for the Expand
+            // tool calls cases (default closed, opens with the preference,
+            // follows a Settings toggle while mounted).
+            "max": 816,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-session-terminal-subscription.ts"
       ],
       "rules": {

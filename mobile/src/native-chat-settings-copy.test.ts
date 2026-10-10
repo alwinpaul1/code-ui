@@ -37,6 +37,11 @@ vi.mock('./session/use-mobile-chat-focus-view', () => ({
   useMobileChatFocusViewPreference: () => ({ focusView: false, setFocusView })
 }))
 
+const setExpandTools = vi.fn()
+vi.mock('./session/use-mobile-chat-expand-tools', () => ({
+  useMobileChatExpandToolsPreference: () => ({ expandTools: false, setExpandTools })
+}))
+
 vi.mock('./session/desktop-hud-launch-preference', () => ({
   loadDesktopHudLaunchEnabled: async () => true,
   saveDesktopHudLaunchEnabled: async () => undefined
@@ -110,5 +115,23 @@ describe('Chat UI settings copy', () => {
     expect(toggle.props.value).toBe(false)
     act(() => toggle.props.onValueChange(true))
     expect(setFocusView).toHaveBeenCalledWith(true)
+  })
+
+  // 2026-10-10: the chat's "Tools" button became this switch, like Focus view
+  // beside it: off by default, saved through the preference hook.
+  it('offers Expand tool calls under Focus view, wired to the preference', async () => {
+    await act(async () => {
+      renderer = create(createElement(NativeChatSettingsScreen))
+      await Promise.resolve()
+    })
+    const text = collectText(renderer!)
+    expect(text).toContain('Expand tool calls')
+    expect(text.indexOf('Expand tool calls')).toBeGreaterThan(text.indexOf('Focus view'))
+    const toggle = renderer!.root.find(
+      (node) => node.type === 'Switch' && node.props.accessibilityLabel === 'Expand tool calls'
+    )
+    expect(toggle.props.value).toBe(false)
+    act(() => toggle.props.onValueChange(true))
+    expect(setExpandTools).toHaveBeenCalledWith(true)
   })
 })

@@ -8,6 +8,7 @@ export type MobileSessionView = 'terminal' | 'chat'
 const DEFAULT_SESSION_VIEW_KEY = 'orca:defaultSessionView'
 const NATIVE_CHAT_TABS_PREFIX = 'orca:nativeChatTabs:'
 const CHAT_FOCUS_VIEW_KEY = 'orca:chatFocusView'
+const CHAT_EXPAND_TOOLS_KEY = 'orca:chatExpandTools'
 
 // Why (Code UI): sessions open in the chat-style layer by default — that is the
 // whole point of this app (a Claude-app view over the terminal). Chat-ineligible
@@ -22,6 +23,10 @@ const overrideUpdateBarriers = new Map<string, Promise<void>>()
  *  calls folds to one "N tool calls" row, so only the conversation shows. Off
  *  is today's chat exactly. */
 export const DEFAULT_CHAT_FOCUS_VIEW = false
+
+/** Expand tool calls: every tool call opens with its details. Off is the
+ *  chat as it was, with each call folded to its one-line summary. */
+export const DEFAULT_CHAT_EXPAND_TOOLS = false
 
 function sessionViewOverridesKey(hostId: string, worktreeId: string): string {
   return `${NATIVE_CHAT_TABS_PREFIX}${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`
@@ -125,6 +130,69 @@ export function saveChatFocusView(enabled: boolean): Promise<void> {
   return write
 }
 
+// Expand tool calls: the same shape as Focus view above (memory copy, one write
+// barrier, a save counter, subscribers), under its own key.
+let expandToolsMemory: boolean | null = null
+let expandToolsWriteBarrier: Promise<void> | null = null
+let expandToolsSaveGeneration = 0
+const expandToolsListeners = new Set<() => void>()
+
+function setExpandToolsMemory(value: boolean): void {
+  if (expandToolsMemory === value) {
+    return
+  }
+  expandToolsMemory = value
+  for (const listener of expandToolsListeners) {
+    listener()
+  }
+}
+
+/** The last loaded or saved Expand tool calls value, or null before the first read. */
+export function peekChatExpandTools(): boolean | null {
+  return expandToolsMemory
+}
+
+export function subscribeChatExpandTools(listener: () => void): () => void {
+  expandToolsListeners.add(listener)
+  return () => {
+    expandToolsListeners.delete(listener)
+  }
+}
+
+/** Reads the stored value into memory; storage trouble reads as off. */
+export async function loadChatExpandTools(): Promise<boolean> {
+  await expandToolsWriteBarrier
+  const generation = expandToolsSaveGeneration
+  let raw: string | null = null
+  try {
+    raw = await AsyncStorage.getItem(CHAT_EXPAND_TOOLS_KEY)
+  } catch {
+    raw = null
+  }
+  if (generation !== expandToolsSaveGeneration && expandToolsMemory !== null) {
+    return expandToolsMemory
+  }
+  const value = readFocusViewWord(raw) ?? DEFAULT_CHAT_EXPAND_TOOLS
+  setExpandToolsMemory(value)
+  return value
+}
+
+export function saveChatExpandTools(enabled: boolean): Promise<void> {
+  expandToolsSaveGeneration += 1
+  setExpandToolsMemory(enabled)
+  const write = (expandToolsWriteBarrier ?? Promise.resolve()).then(() =>
+    AsyncStorage.setItem(CHAT_EXPAND_TOOLS_KEY, enabled ? 'on' : 'off')
+  )
+  const barrier = barrierAfterWrite(write, 'Expand tool calls', 'save')
+  expandToolsWriteBarrier = barrier
+  void barrier.then(() => {
+    if (expandToolsWriteBarrier === barrier) {
+      expandToolsWriteBarrier = null
+    }
+  })
+  return write
+}
+
 /** The last loaded or saved device default, or null before the first read. */
 export function peekDefaultSessionView(): MobileSessionView | null {
   return defaultViewMemory
@@ -154,6 +222,7 @@ export async function hydrateSessionViewPreferences(): Promise<void> {
     const rows = await AsyncStorage.multiGet([
       DEFAULT_SESSION_VIEW_KEY,
       CHAT_FOCUS_VIEW_KEY,
+      CHAT_EXPAND_TOOLS_KEY,
       ...overrideKeys
     ])
     for (const [key, raw] of rows) {
@@ -166,6 +235,12 @@ export async function hydrateSessionViewPreferences(): Promise<void> {
       if (key === CHAT_FOCUS_VIEW_KEY) {
         if (focusViewMemory === null) {
           setFocusViewMemory(readFocusViewWord(raw) ?? DEFAULT_CHAT_FOCUS_VIEW)
+        }
+        continue
+      }
+      if (key === CHAT_EXPAND_TOOLS_KEY) {
+        if (expandToolsMemory === null) {
+          setExpandToolsMemory(readFocusViewWord(raw) ?? DEFAULT_CHAT_EXPAND_TOOLS)
         }
         continue
       }
@@ -202,6 +277,10 @@ export function resetSessionViewPreferenceMemoryForTests(): void {
   focusViewWriteBarrier = null
   focusViewSaveGeneration = 0
   focusViewListeners.clear()
+  expandToolsMemory = null
+  expandToolsWriteBarrier = null
+  expandToolsSaveGeneration = 0
+  expandToolsListeners.clear()
 }
 
 export async function readDefaultSessionViewPreference(): Promise<DefaultSessionViewPreference> {

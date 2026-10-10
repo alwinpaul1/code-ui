@@ -53,6 +53,7 @@ import {
 import { readSessionOptionRecord, writeSessionOptionRecord } from './session-option-records'
 import {
   resetSessionViewPreferenceMemoryForTests,
+  saveChatExpandTools,
   saveChatFocusView,
   saveDefaultSessionView,
   updateSessionViewOverride
@@ -233,6 +234,12 @@ describe('a refused session view preference write', () => {
     failWrites = true
     await expect(saveChatFocusView(true)).rejects.toBe(refusal)
     expectOneLine('Focus view', 'save')
+  })
+
+  it('leaves one line when the Expand tool calls switch cannot be saved', async () => {
+    failWrites = true
+    await expect(saveChatExpandTools(true)).rejects.toBe(refusal)
+    expectOneLine('Expand tool calls', 'save')
   })
 
   it('leaves one line when the default session view cannot be saved', async () => {

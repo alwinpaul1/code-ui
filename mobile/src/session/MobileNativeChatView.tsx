@@ -1,6 +1,6 @@
 import { FlashList } from '@shopify/flash-list'
 import { MobileNativeChatQueueEditor } from './MobileNativeChatQueueEditor'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import { ActivityIndicator, useWindowDimensions, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -11,6 +11,7 @@ import { buildMobileNativeChatTransientData } from './mobile-native-chat-render-
 import { mobileNativeChatEmptyState } from './mobile-native-chat-empty-state'
 import { useMobileNativeChatPinchGesture } from './use-mobile-native-chat-pinch-gesture'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
+import { useMobileChatExpandTools } from './use-mobile-chat-expand-tools'
 import { useMobileChatFocusView } from './use-mobile-chat-focus-view'
 import { MobileNativeChatListHeader } from './MobileNativeChatListHeader'
 import {
@@ -140,7 +141,8 @@ export function MobileNativeChatView({
   // Which rows are on screen, so a running row's shimmer stops a screen away
   // and while a pushed route covers this one.
   const rowVisibility = useChatRowVisibility()
-  const [toolsExpanded, setToolsExpanded] = useState(false)
+  // Expand tool calls is a device preference too (Settings → Chat UI).
+  const toolsExpanded = useMobileChatExpandTools()
   // Focus view is a device preference (Settings → Chat UI); the store notifies,
   // so a toggle made while this chat was open lands on its rows at once.
   const focusView = useMobileChatFocusView()
@@ -440,8 +442,6 @@ export function MobileNativeChatView({
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
         onStop={onStop}
-        toolsExpanded={toolsExpanded}
-        onToggleTools={() => setToolsExpanded((v) => !v)}
         sendErrorMessage={sendErrorMessage}
         styles={styles}
       />

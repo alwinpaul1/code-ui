@@ -9,6 +9,7 @@ import { Surface } from '../src/ui/Surface'
 import { Txt } from '../src/ui/Txt'
 import { useMobileDefaultSessionViewPreference } from '../src/session/use-mobile-default-session-view-preference'
 import { useMobileChatFocusViewPreference } from '../src/session/use-mobile-chat-focus-view'
+import { useMobileChatExpandToolsPreference } from '../src/session/use-mobile-chat-expand-tools'
 import {
   loadDesktopHudLaunchEnabled,
   saveDesktopHudLaunchEnabled
@@ -25,6 +26,7 @@ export default function NativeChatSettingsScreen() {
   const { defaultView, setDefaultView } = useMobileDefaultSessionViewPreference()
   const chatDefault = defaultView === 'chat'
   const { focusView, setFocusView } = useMobileChatFocusViewPreference()
+  const { expandTools, setExpandTools } = useMobileChatExpandToolsPreference()
   const [desktopHud, setDesktopHud] = useState(true)
   useEffect(() => {
     void loadDesktopHudLaunchEnabled().then(setDesktopHud)
@@ -106,6 +108,33 @@ export default function NativeChatSettingsScreen() {
             accessibilityLabel="Focus view"
             value={focusView}
             onValueChange={setFocusView}
+            trackColor={{ false: colors.borderStrong, true: colors.accent }}
+            thumbColor={colors.bgPanel}
+          />
+        </Surface>
+        <Surface
+          rounded="lg"
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: space.md,
+            paddingVertical: space.md,
+            paddingHorizontal: space.lg,
+            marginTop: space.sm
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Txt variant="body" weight="medium">
+              Expand tool calls
+            </Txt>
+            <Txt variant="caption" tone="muted" style={{ marginTop: 2 }}>
+              {expandTools ? 'On: every tool call opens with its details' : 'Off'}
+            </Txt>
+          </View>
+          <Switch
+            accessibilityLabel="Expand tool calls"
+            value={expandTools}
+            onValueChange={setExpandTools}
             trackColor={{ false: colors.borderStrong, true: colors.accent }}
             thumbColor={colors.bgPanel}
           />
