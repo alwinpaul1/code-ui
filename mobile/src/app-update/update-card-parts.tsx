@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
+import { UPDATE_PRIMARY_PRESSED_OPACITY } from './update-card-metrics'
 
 // The building blocks of the update card (2026-10-10 redesign: solid, not
 // glass). A header that is either a version hero or an icon + title, a scroll
@@ -69,21 +70,26 @@ export function UpdateHero({
           {eyebrow}
         </Txt>
       </View>
-      <Txt
-        testID="update-hero-version"
-        accessibilityLabel={`Version ${version}`}
-        style={{
-          fontFamily: fonts.bold,
-          fontSize: HERO_SIZE,
-          lineHeight: HERO_LINE_HEIGHT,
-          letterSpacing: -1.2,
-          fontVariant: ['tabular-nums'],
-          color: colors.text,
-          marginTop: 2
-        }}
-      >
-        {version}
-      </Txt>
+      {/* No version is known in one corner (a cold start that found a
+          downloaded update before any check ran): no hero then, rather than
+          an empty 46-high line read out as "Version". */}
+      {version ? (
+        <Txt
+          testID="update-hero-version"
+          accessibilityLabel={`Version ${version}`}
+          style={{
+            fontFamily: fonts.bold,
+            fontSize: HERO_SIZE,
+            lineHeight: HERO_LINE_HEIGHT,
+            letterSpacing: -1.2,
+            fontVariant: ['tabular-nums'],
+            color: colors.text,
+            marginTop: 2
+          }}
+        >
+          {version}
+        </Txt>
+      ) : null}
       <Txt variant="label" tone="muted">
         {meta}
       </Txt>
@@ -243,7 +249,8 @@ export function UpdateActionBar({
             justifyContent: 'center',
             paddingHorizontal: space.lg,
             borderRadius: radius.pill,
-            backgroundColor: pressed ? colors.accentText : colors.accent
+            backgroundColor: colors.accentText,
+            opacity: pressed ? UPDATE_PRIMARY_PRESSED_OPACITY : 1
           })}
         >
           <Txt variant="body" weight="semibold" align="center" style={{ color: colors.onAccent }}>

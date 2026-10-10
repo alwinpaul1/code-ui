@@ -16,7 +16,9 @@ import { downloadProgressPercent } from './download-progress'
  * when the file is in.
  *
  * Percent only, no megabytes: the updater reports a fraction and never the
- * file's size. No Cancel either: neither engine has a way to stop a download
+ * file's size. No live region: the text changes every percent, and TalkBack
+ * would read up to a hundred updates; the progressbar value is read on focus.
+ * No Cancel either: neither engine has a way to stop a download
  * once it is handed over (DownloadManager carries it outside the app).
  */
 export function HomeUpdateDownloadCard() {
@@ -46,7 +48,6 @@ export function HomeUpdateDownloadCard() {
         accessibilityRole="progressbar"
         accessibilityLabel={`Downloading ${name}`}
         accessibilityValue={{ min: 0, max: 100, now: percent, text: `${percent} percent` }}
-        accessibilityLiveRegion="polite"
         testID="home-update-download-card"
         style={{
           width: '100%',

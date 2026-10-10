@@ -225,7 +225,7 @@ describe.each(SCHEMES)('the update card in %s', (scheme, colors: ThemeColors) =>
     const bar = update.parent!
     expect(flattenStyle(bar.props.style).flexShrink).toBe(0)
     expect(flattenStyle(bar.props.style).borderTopColor).toBe(colors.border)
-    expect(flattenStyle(update.props.style({ pressed: false })).backgroundColor).toBe(colors.accent)
+    expect(flattenStyle(update.props.style({ pressed: false })).backgroundColor).toBe(colors.accentText)
     expect(flattenStyle(update.findByType('Text' as never).props.style).color).toBe(colors.onAccent)
     expect(buttonLabels(root)).toEqual(['Update now', 'Later'])
   })
@@ -238,7 +238,7 @@ describe.each(SCHEMES)('the update card in %s', (scheme, colors: ThemeColors) =>
     expect(textOf(root)).toContain('Update downloaded')
     expect(buttonLabels(root)).toEqual(['Install', 'Later'])
     expect(flattenStyle(button(root, 'Install').props.style({ pressed: false })).backgroundColor).toBe(
-      colors.accent
+      colors.accentText
     )
   })
 
@@ -274,6 +274,18 @@ describe.each(SCHEMES)('the update card in %s', (scheme, colors: ThemeColors) =>
     )
     expect(textOf(root)).toContain('Code UI 0.9.126 is the latest version.')
     expect(buttonLabels(root)).toEqual(['Done'])
+  })
+})
+
+describe('a downloaded update whose version nobody knows yet', () => {
+  // A cold start can find a downloaded APK before any check has run, with no
+  // version on the native state either (review, 2026-10-10).
+  it('draws no hero rather than an empty line read out as "Version"', async () => {
+    useApkInstallStore.setState({ phase: 'ready', version: null })
+    const root = await renderBody({ kind: 'ready' }, 'light')
+    expect(root.findAll((node) => node.props.testID === 'update-hero-version')).toHaveLength(0)
+    expect(textOf(root)).toContain('Update downloaded')
+    expect(buttonLabels(root)).toEqual(['Install', 'Later'])
   })
 })
 

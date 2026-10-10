@@ -5,7 +5,7 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { useTheme } from '../theme/theme-context'
 import type { ThemeColors } from '../theme/tokens'
 import { Txt } from '../ui/Txt'
-import type { ReleaseNoteGroup, ReleaseNoteSection } from './release-notes-groups'
+import { hasReleaseNoteSections, type ReleaseNoteGroup, type ReleaseNoteSection } from './release-notes-groups'
 import { UpdateScrollRegion } from './update-card-parts'
 
 /** Prose at 14 on the renderer's 15 base: a step under the card's body text,
@@ -69,7 +69,7 @@ export function AppUpdateReleaseNotes({
   groups: readonly ReleaseNoteGroup[]
 }) {
   const { space } = useTheme()
-  const sectioned = groups.some((group) => group.section !== null)
+  const sectioned = hasReleaseNoteSections(groups)
   return (
     <UpdateScrollRegion>
       {sectioned ? (

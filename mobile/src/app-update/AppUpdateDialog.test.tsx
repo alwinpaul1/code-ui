@@ -154,6 +154,7 @@ import { AppUpdateDialog } from './AppUpdateDialog'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
 import { resetAppUpdateDialogPresenterForTests } from './app-update-dialog-presenter'
+import { UPDATE_PRIMARY_PRESSED_OPACITY } from './update-card-metrics'
 import { UPDATE_SCROLL_REGION_MAX_HEIGHT } from './update-card-parts'
 import { UPDATE_CARD_MAX_WIDTH } from './UpdateCard'
 
@@ -336,7 +337,7 @@ describe('the card', () => {
       expect(style.borderRadius).toBe(radius.pill)
     }
     expect(flattenStyle(actionRow(root, 'Update now').props.style({ pressed: false })).backgroundColor).toBe(
-      lightColors.accent
+      lightColors.accentText
     )
     expect(flattenStyle(actionRow(root, 'Later').props.style({ pressed: false })).backgroundColor).toBe(
       'transparent'
@@ -350,8 +351,8 @@ describe('the card', () => {
     // A style FUNCTION is the only way a Pressable paints on press-in rather
     // than on release; a static style is release-only feedback.
     expect(typeof row.props.style).toBe('function')
-    expect(flattenStyle(row.props.style({ pressed: true })).backgroundColor).toBe(lightColors.accentText)
-    expect(flattenStyle(row.props.style({ pressed: false })).backgroundColor).toBe(lightColors.accent)
+    expect(flattenStyle(row.props.style({ pressed: true })).opacity).toBe(UPDATE_PRIMARY_PRESSED_OPACITY)
+    expect(flattenStyle(row.props.style({ pressed: false })).opacity).toBe(1)
     const later = actionRow(root, 'Later')
     expect(flattenStyle(later.props.style({ pressed: true })).backgroundColor).toBe(lightColors.bgRaised)
   })

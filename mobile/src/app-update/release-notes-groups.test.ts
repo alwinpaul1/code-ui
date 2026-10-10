@@ -56,6 +56,30 @@ describe('a notes body in the section format', () => {
   })
 })
 
+// Review of a997d5e4a: the splitter matched titles on raw lines, without the
+// comment, fence and indented-code rules the reshaper applies, so a hidden
+// draft drew as a section and a change moved into the wrong one.
+describe('a section title the reshaper would not treat as one', () => {
+  it('inside an HTML comment stays hidden, and the change after it stays in its section', () => {
+    expect(releaseNoteGroups('### Features\n- a\n<!--\n### Improvements\nhidden draft\n-->\n- b')).toEqual([
+      { section: 'Features', markdown: '- a\n- b' }
+    ])
+  })
+
+  it('inside a fence that a ```js line does not close is code, not a section', () => {
+    const groups = releaseNoteGroups('### Features\n```\nx\n```js\n### Improvements\ny\n```\n- b')
+    expect(groups.map((group) => group.section)).toEqual(['Features'])
+    expect(groups[0]!.markdown).toContain('### Improvements')
+    expect(groups[0]!.markdown.endsWith('- b')).toBe(true)
+  })
+
+  it('on an indented code line is code, not a section', () => {
+    const groups = releaseNoteGroups('### Features\n- a\n\n    ### Improvements')
+    expect(groups.map((group) => group.section)).toEqual(['Features'])
+    expect(groups[0]!.markdown).toContain('    ### Improvements')
+  })
+})
+
 describe('a body that is not in the section format', () => {
   it("is one untitled group, reshaped as before: GitHub's generated list", () => {
     const groups = releaseNoteGroups("## What's changed\r\n\r\n- One\r\n- Two")

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { contrastRatio } from '../test/contrast'
+import { UPDATE_PRIMARY_PRESSED_OPACITY } from '../app-update/update-card-metrics'
 import { darkColors, lightColors } from './tokens'
 
 // These two cases measured the static dark palette in mobile-theme.ts until it was deleted
@@ -128,19 +129,22 @@ describe('the update card stays readable on its own solid surface', () => {
     expect(darkColors.alertScrim).toBe(lightColors.alertScrim)
   })
 
-  it('shows a pressed pill in both schemes: the press differs from the resting accent', () => {
-    for (const [scheme, palette] of [
-      ['light', lightColors],
-      ['dark', darkColors]
-    ] as const) {
-      expect(palette.accentText, `${scheme}: pressed pill must not look like a resting one`).not.toBe(
-        palette.accent
-      )
-      // The label stays at least as readable while pressed as at rest.
-      expect(contrastRatio(palette.onAccent, palette.accentText)).toBeGreaterThanOrEqual(
-        contrastRatio(palette.onAccent, palette.accent) * 0.9
-      )
-    }
+  // Review of a997d5e4a: the pill sat on `accent`, and white on the light
+  // accent is 3.90:1, under AA for a 15pt label; the check here only compared
+  // the press with the rest, so it passed. The pill now rests on `accentText`
+  // and shows a press by fading to 90% over the panel.
+  it.each([
+    ['light', lightColors],
+    ['dark', darkColors]
+  ] as const)('%s: the update pill label clears AA at rest and while pressed', (scheme, palette) => {
+    const pressed = toHex(
+      over({ ...parseColor(palette.accentText), a: UPDATE_PRIMARY_PRESSED_OPACITY }, parseColor(palette.bgPanel))
+    )
+    expect(contrastRatio(palette.onAccent, palette.accentText), `${scheme}: at rest`).toBeGreaterThanOrEqual(
+      WCAG_AA_BODY
+    )
+    expect(contrastRatio(palette.onAccent, pressed), `${scheme}: pressed`).toBeGreaterThanOrEqual(WCAG_AA_BODY)
+    expect(pressed, `${scheme}: a press must look different from rest`).not.toBe(palette.accentText.toLowerCase())
   })
 })
 

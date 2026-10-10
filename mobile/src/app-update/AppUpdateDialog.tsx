@@ -132,7 +132,7 @@ export function AppUpdateDialog() {
               justifyContent: 'center',
               alignItems: 'center',
               paddingHorizontal: space.lg,
-              paddingVertical: space.xxl
+              paddingVertical: space.xl
             }}
           >
             <UpdateCard morphKey={state.kind}>

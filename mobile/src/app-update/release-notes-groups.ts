@@ -1,4 +1,4 @@
-import { releaseNotesMarkdown } from './release-notes-markdown'
+import { joinReshapedReleaseNotes, reshapeReleaseNoteLines } from './release-notes-markdown'
 import { RELEASE_NOTE_SECTIONS } from './release-notes-sections'
 
 // The update card draws a release's notes as groups, one per section the
@@ -14,6 +14,12 @@ import { RELEASE_NOTE_SECTIONS } from './release-notes-sections'
 // the first section title. The "**Full Changelog**" line GitHub appends goes
 // into an untitled group of its own at the end, so it never reads as the last
 // change of the last section.
+//
+// The split runs on the reshaper's OWN output, not on the raw body: a title
+// inside an HTML comment, a fenced block or an indented code line is not a
+// heading to the reshaper, so it is not a section here either. Splitting the
+// raw lines first drew a commented-out draft as a section and moved the next
+// change into it (review, 2026-10-10).
 
 export type ReleaseNoteSection = (typeof RELEASE_NOTE_SECTIONS)[number]
 
@@ -24,9 +30,9 @@ export type ReleaseNoteGroup = {
   markdown: string
 }
 
-const SECTION_TITLE = /^#{1,6}\s+(.+?)\s*#*\s*$/
-const FULL_CHANGELOG_LINE = /^\*\*full changelog\*\*/i
-const FENCE = /^\s*(`{3,}|~{3,})/
+// The reshaper's link for GitHub's "**Full Changelog**: <url>" line, or the
+// line as written when the URL has parentheses and it left it alone.
+const FULL_CHANGELOG_LINE = /^(\[Full changelog\]\(|\*\*full changelog\*\*)/i
 
 function sectionNamed(title: string): ReleaseNoteSection | null {
   const wanted = title.trim().toLowerCase()
@@ -34,45 +40,26 @@ function sectionNamed(title: string): ReleaseNoteSection | null {
 }
 
 export function releaseNoteGroups(body: string | null | undefined): ReleaseNoteGroup[] {
-  if (!body) {
-    return []
-  }
-  const raw: { section: ReleaseNoteSection | null; lines: string[] }[] = []
+  const groups: { section: ReleaseNoteSection | null; lines: string[] }[] = []
   const trailer: string[] = []
   let current: { section: ReleaseNoteSection | null; lines: string[] } = { section: null, lines: [] }
-  raw.push(current)
-  let fence: string | null = null
-  for (const line of body.split(/\r?\n/)) {
-    if (fence !== null) {
-      current.lines.push(line)
-      const close = FENCE.exec(line)
-      if (close && close[1]![0] === fence[0] && close[1]!.length >= fence.length) {
-        fence = null
-      }
-      continue
-    }
-    const open = FENCE.exec(line)
-    if (open) {
-      fence = open[1]!
-      current.lines.push(line)
-      continue
-    }
-    const title = SECTION_TITLE.exec(line.trim())
-    const section = title ? sectionNamed(title[1]!) : null
+  groups.push(current)
+  for (const line of reshapeReleaseNoteLines(body)) {
+    const section = line.heading === null ? null : sectionNamed(line.heading)
     if (section !== null) {
       current = { section, lines: [] }
-      raw.push(current)
+      groups.push(current)
       continue
     }
-    if (FULL_CHANGELOG_LINE.test(line.trim())) {
-      trailer.push(line)
+    if (line.heading === null && FULL_CHANGELOG_LINE.test(line.text.trim())) {
+      trailer.push(line.text)
       continue
     }
-    current.lines.push(line)
+    current.lines.push(line.text)
   }
-  raw.push({ section: null, lines: trailer })
-  return raw
-    .map((group) => ({ section: group.section, markdown: releaseNotesMarkdown(group.lines.join('\n')) }))
+  groups.push({ section: null, lines: trailer })
+  return groups
+    .map((group) => ({ section: group.section, markdown: joinReshapedReleaseNotes(group.lines) }))
     .filter((group) => group.markdown.length > 0)
 }
 
