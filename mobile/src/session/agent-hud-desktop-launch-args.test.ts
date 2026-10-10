@@ -78,7 +78,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
   it("sweeps out 0.2.77's visible status lines wherever they are still found", () => {
     expect(withoutAgentHudDesktopFlag('claude', `--verbose ${oldClaudeFlag}`)).toBe('--verbose')
     expect(withoutAgentHudDesktopFlag('codex', `--search ${oldCodexFlag}`)).toBe('--search')
-    // Turning the switch ON must not leave the old visible one behind either.
+    // Writing the new flag must not leave the old visible one behind either.
     expect(withAgentHudDesktopFlag('codex', `--search ${oldCodexFlag}`, 'darwin')).toBe(
       `--search ${agentHudLaunchFlag('codex', 'darwin')}`
     )
@@ -100,7 +100,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
   it('writes once, then leaves an already-correct host alone', async () => {
     const host = fakeHost({ claude: '--verbose' })
 
-    const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
+    const written = await syncAgentHudDesktopLaunchArgs(host.client)
     expect(written).toEqual({
       claude: `--verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
       codex: `${getTuiAgentDefaultArgs('codex')} ${agentHudLaunchFlag('codex', 'darwin')}`
@@ -108,7 +108,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
     expect(host.sendRequest.mock.calls.map(([m]) => m)).toContain('settings.update')
 
     host.sendRequest.mockClear()
-    expect(await syncAgentHudDesktopLaunchArgs(host.client, true)).toBeNull()
+    expect(await syncAgentHudDesktopLaunchArgs(host.client)).toBeNull()
     expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
   })
 
@@ -117,9 +117,9 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
   // double quotes inside an argument it hands a native program, so the
   // settings JSON reached Claude Code without them. The Windows path had never
   // run on Windows. Until an encoding survives 5.1, a Windows host gets no flag.
-  it('writes no beacon flag to a Windows host, even with the switch on', async () => {
+  it('writes no beacon flag to a Windows host', async () => {
     const host = fakeHost({}, 'win32')
-    expect(await syncAgentHudDesktopLaunchArgs(host.client, true)).toBeNull()
+    expect(await syncAgentHudDesktopLaunchArgs(host.client)).toBeNull()
     expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
     expect(host.stored()).toEqual({})
   })
@@ -132,7 +132,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
       },
       'win32'
     )
-    const written = await syncAgentHudDesktopLaunchArgs(host.client, true)
+    const written = await syncAgentHudDesktopLaunchArgs(host.client)
     expect(written?.claude).toBe('--verbose')
     expect(host.stored()).toEqual({ claude: '--verbose', codex: '' })
   })
@@ -144,16 +144,13 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
   // saved. Deleting a key our strip had emptied turned permission prompts off
   // for every Windows user in ask mode, on their next connect, by itself.
   it('keeps an agent asking for permission when the flag comes out, instead of handing it the skip-permissions default', async () => {
-    for (const [hostPlatform, enabled] of [
-      ['win32', true],
-      ['darwin', false]
-    ] as const) {
+    for (const hostPlatform of ['win32'] as const) {
       const flagOnly = {
         claude: agentHudLaunchFlag('claude', hostPlatform),
         codex: agentHudLaunchFlag('codex', hostPlatform)
       }
       const host = fakeHost(flagOnly, hostPlatform)
-      await syncAgentHudDesktopLaunchArgs(host.client, enabled)
+      await syncAgentHudDesktopLaunchArgs(host.client)
       expect(host.stored()).toEqual({ claude: '', codex: '' })
       expect(resolveTuiAgentLaunchArgs('claude', host.stored())).toBe('')
       expect(resolveTuiAgentLaunchArgs('codex', host.stored())).toBe('')
@@ -162,11 +159,10 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
 
   it('keeps what Orca would launch an agent with when it has no saved args, flag in and flag out', async () => {
     const host = fakeHost({}, 'darwin')
-    await syncAgentHudDesktopLaunchArgs(host.client, true)
+    await syncAgentHudDesktopLaunchArgs(host.client)
     expect(host.stored().claude).toBe(`${getTuiAgentDefaultArgs('claude')} ${agentHudLaunchFlag('claude', 'darwin')}`)
-    await syncAgentHudDesktopLaunchArgs(host.client, false)
-    expect(resolveTuiAgentLaunchArgs('claude', host.stored())).toBe(getTuiAgentDefaultArgs('claude'))
-    expect(resolveTuiAgentLaunchArgs('codex', host.stored())).toBe(getTuiAgentDefaultArgs('codex'))
+    expect(withoutAgentHudDesktopFlag('claude', host.stored().claude)).toBe(getTuiAgentDefaultArgs('claude'))
+    expect(withoutAgentHudDesktopFlag('codex', host.stored().codex)).toBe(getTuiAgentDefaultArgs('codex'))
   })
 
   // Same review: a failed `status.get` read as "not Windows", so the sync put
@@ -175,21 +171,22 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
   it('touches nothing when the host will not say what platform it is', async () => {
     const saved = { claude: `--verbose ${agentHudLaunchFlag('claude', 'win32')}` }
     for (const hostPlatform of ['rejects', null] as const) {
-      for (const enabled of [true, false]) {
-        const host = fakeHost(saved, hostPlatform)
-        expect(await syncAgentHudDesktopLaunchArgs(host.client, enabled)).toBeNull()
-        expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
-        expect(host.stored()).toEqual(saved)
-      }
+      const host = fakeHost(saved, hostPlatform)
+      expect(await syncAgentHudDesktopLaunchArgs(host.client)).toBeNull()
+      expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
+      expect(host.stored()).toEqual(saved)
     }
   })
 
-  it('gives the profile back exactly as it was when the switch is turned off', async () => {
-    const host = fakeHost({
-      claude: `--verbose ${agentHudLaunchFlag('claude', 'darwin')}`,
-      codex: agentHudLaunchFlag('codex', 'darwin')
-    })
-    expect(await syncAgentHudDesktopLaunchArgs(host.client, false)).toEqual({ claude: '--verbose', codex: '' })
+  it('gives a Windows profile back exactly as it was without our flag', async () => {
+    const host = fakeHost(
+      {
+        claude: `--verbose ${agentHudLaunchFlag('claude', 'win32')}`,
+        codex: agentHudLaunchFlag('codex', 'win32')
+      },
+      'win32'
+    )
+    expect(await syncAgentHudDesktopLaunchArgs(host.client)).toEqual({ claude: '--verbose', codex: '' })
     // codex had nothing but our flag, so it goes back to launching with none,
     // not to Orca's defaults, which a missing key would mean.
     expect(host.stored()).toEqual({ claude: '--verbose', codex: '' })
@@ -199,7 +196,7 @@ describe('the desktop launch profile carries the beacon flags and nothing else',
 // Review of 2026-09-30: the flags were recognised by SHAPE, so a user's own
 // `--settings '{"statusLine":…}'`, `-c 'notify=[…]'` or
 // `-c 'tui.status_line=[…]'` in Orca's launch profile was deleted from their
-// desktop settings by the next connect, switch on or off, and never came back.
+// desktop settings by the next connect, and never came back.
 // Our Codex notify only delegates to a notify in config.toml, so a `-c` one
 // was simply gone: no more completion notifications.
 const userClaudeBar = `--settings '{"statusLine":{"type":"command","command":"~/bar.sh"}}'`
@@ -207,7 +204,7 @@ const userCodexFooter = `-c 'tui.status_line=["model","git-branch"]'`
 const userCodexNotify = `-c 'notify=["terminal-notifier","-message","codex done"]'`
 
 describe("the user's own launch flags stay theirs", () => {
-  it("keeps the user's own Claude status line and Codex footer when the switch is off", () => {
+  it("keeps the user's own Claude status line and Codex footer ", () => {
     expect(withoutAgentHudDesktopFlag('claude', userClaudeBar)).toBe(userClaudeBar)
     expect(withoutAgentHudDesktopFlag('codex', userCodexFooter)).toBe(userCodexFooter)
     expect(withoutAgentHudDesktopFlag('codex', `--yolo ${userCodexNotify}`)).toBe(`--yolo ${userCodexNotify}`)
@@ -260,8 +257,8 @@ describe("the user's own launch flags stay theirs", () => {
       expect(withoutAgentHudDesktopFlag('claude', saved)).toBe(saved)
     }
     expect(withoutAgentHudDesktopFlag('codex', undefined)).toBe('')
-    const host = fakeHost({ claude: '  --verbose  ', codex: `--search ${userCodexFooter}` })
-    expect(await syncAgentHudDesktopLaunchArgs(host.client, false)).toBeNull()
+    const host = fakeHost({ claude: '  --verbose  ', codex: `--search ${userCodexFooter}` }, 'win32')
+    expect(await syncAgentHudDesktopLaunchArgs(host.client)).toBeNull()
     expect(host.sendRequest.mock.calls.map(([m]) => m)).not.toContain('settings.update')
   })
 
@@ -271,14 +268,14 @@ describe("the user's own launch flags stay theirs", () => {
     expect(withAgentHudDesktopFlag('claude', unclosed, 'darwin')).toBe(unclosed)
   })
 
-  it("round-trips a profile with the user's flags and 0.2.77's, and says once why an agent got no beacon", async () => {
+  it("round-trips a profile with the user's flags and 0.2.77's, and says once per connect why an agent got no beacon", async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     try {
       const host = fakeHost({
         claude: `--verbose ${userClaudeBar} ${oldClaudeFlag}`,
         codex: `--search ${userCodexFooter} ${oldCodexFlag} ${userCodexNotify}`
       })
-      await syncAgentHudDesktopLaunchArgs(host.client, true)
+      await syncAgentHudDesktopLaunchArgs(host.client)
       expect(host.stored()).toEqual({
         claude: `--verbose ${userClaudeBar}`,
         codex: `--search ${userCodexFooter} ${userCodexNotify}`
@@ -289,12 +286,13 @@ describe("the user's own launch flags stay theirs", () => {
       expect(lines[1]).toMatch(/^\[hud-desktop-args\] codex: .*notify/)
 
       warn.mockClear()
-      expect(await syncAgentHudDesktopLaunchArgs(host.client, false)).toBeNull()
+      expect(await syncAgentHudDesktopLaunchArgs(host.client)).toBeNull()
       expect(host.stored()).toEqual({
         claude: `--verbose ${userClaudeBar}`,
         codex: `--search ${userCodexFooter} ${userCodexNotify}`
       })
-      expect(warn).not.toHaveBeenCalled()
+      // Said again on each new connection, never more than once per agent.
+      expect(warn.mock.calls.map((call) => String(call[0]))).toEqual(lines)
     } finally {
       warn.mockRestore()
     }
@@ -303,13 +301,13 @@ describe("the user's own launch flags stay theirs", () => {
   it('round-trips a profile of the user\'s own arguments: the flag on, then exactly theirs back', async () => {
     const saved = { claude: `--verbose --add-dir "$HOME/notes"`, codex: `--search ${userCodexFooter}` }
     const host = fakeHost(saved)
-    await syncAgentHudDesktopLaunchArgs(host.client, true)
+    await syncAgentHudDesktopLaunchArgs(host.client)
     expect(host.stored()).toEqual({
       claude: `${saved.claude} ${agentHudLaunchFlag('claude', 'darwin')}`,
       codex: `${saved.codex} ${agentHudLaunchFlag('codex', 'darwin')}`
     })
-    await syncAgentHudDesktopLaunchArgs(host.client, false)
-    expect(host.stored()).toEqual(saved)
+    expect(withoutAgentHudDesktopFlag('claude', host.stored().claude!)).toBe(saved.claude)
+    expect(withoutAgentHudDesktopFlag('codex', host.stored().codex!)).toBe(saved.codex)
   })
 
   it("keeps the user's own flags on a Windows host while taking ours out, and writes none", async () => {
@@ -320,7 +318,7 @@ describe("the user's own launch flags stay theirs", () => {
       },
       'win32'
     )
-    await syncAgentHudDesktopLaunchArgs(host.client, true)
+    await syncAgentHudDesktopLaunchArgs(host.client)
     expect(host.stored()).toEqual({ claude: userClaudeBar, codex: userCodexNotify })
     // What a launch there starts with before that write lands.
     expect(withoutStaleWindowsHudFlag('codex', `${userCodexFooter} ${agentHudLaunchFlag('codex', 'win32')}`, 'win32')).toBe(

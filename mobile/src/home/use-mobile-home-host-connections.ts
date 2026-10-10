@@ -2,8 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { decodeAccountsSnapshot } from '../components/AccountUsage'
 import { subscribeToDesktopNotifications } from '../notifications/mobile-notifications'
 import { offerPushTokenToHost } from '../notifications/push-offer'
-import { syncAgentHudDesktopLaunchArgs } from '../session/agent-hud-desktop-launch-args'
-import { loadDesktopHudLaunchEnabled } from '../session/desktop-hud-launch-preference'
+import { syncDesktopHudOnConnect } from '../session/desktop-hud-connect-sync'
 import { usePrimeHosts } from '../transport/client-context'
 import { createHostConnectRefetchGate } from '../transport/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/home-host-auto-connect'
@@ -48,10 +47,8 @@ function wireMobileHomeHostSubscriptions(
       // HUD beacon flags if Orca's launch profile has them, and the profile is
       // the host's, not the phone's. One settings.get, and a write only when
       // something actually changes — including sweeping out 0.2.77's visible
-      // status lines, whatever the switch says.
-      void loadDesktopHudLaunchEnabled()
-        .then((desktopHud) => syncAgentHudDesktopLaunchArgs(entry.client, desktopHud))
-        .catch(() => null)
+      // status lines. Always on: there is no switch any more.
+      void syncDesktopHudOnConnect(entry.client).catch(() => null)
       unsubscribeNotifications ??= subscribeToDesktopNotifications(entry.client, entry.hostId)
       // Why on every connect rather than once: the desktop keeps a registration
       // only until it expires, and a host restart drops it entirely. Off by

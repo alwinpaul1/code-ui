@@ -316,8 +316,10 @@ has reported it since its 2026-08-13 builds, so a missing one is a failed
   flag is added over the user's own `--settings` or `-c notify=`, and the same
   pass strips 0.2.77's visible `tui.status_line` flag wherever a host still
   carries it.
-  The switch is Settings → Chat UI → "Desktop agents report model and context",
-  default on; turning it off removes the flags again.
+  Always on since 2026-10-10: the "Desktop agents report model and context"
+  switch was removed. Every connect syncs the flags (a Windows host gets none
+  and loses one saved earlier), so a user who had turned the switch off gets
+  them back, and the stored `desktopHudLaunchArgsEnabled` value is deleted.
 - **A key is never deleted.** Orca reads a missing `agentDefaultArgs` key as
   "launch with the defaults", which are the skip-permissions flags, and an
   empty one as "no flags", which is how its ask-permissions mode is saved. So

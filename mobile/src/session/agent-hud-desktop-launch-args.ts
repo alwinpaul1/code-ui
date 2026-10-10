@@ -11,7 +11,7 @@ import { readHudLaunchFlags, withOurFlagLast, withoutSpans } from './agent-hud-l
  * (`agentDefaultArgs`), which Orca appends to every agent it launches. Orca
  * manages that field itself (its yolo mode writes it too) and lets a paired
  * phone update it over `settings.update`. So the phone puts one flag per agent
- * there and takes it away again when the switch is turned off. Nothing else on
+ * there and takes a Windows host's back off. Nothing else on
  * the host is touched: no file of the user's, no plugin, no script.
  *
  * Nothing appears in the user's terminal either. Claude Code draws no status
@@ -64,7 +64,7 @@ export function withoutAgentHudDesktopFlag(
   return stripped(agent, current, hostPlatform)
 }
 
-/** Why the switch cannot put the beacon flag on for this agent, or null. */
+/** Why the flag cannot put the beacon flag on for this agent, or null. */
 export function agentHudDesktopFlagRefusal(
   agent: HudAgent,
   current: string,
@@ -107,14 +107,13 @@ function resultOf(response: unknown): Record<string, unknown> | null {
 }
 
 /**
- * Bring the host's launch profile in line with the switch. Reads the current
+ * Bring the host's launch profile in line with the flags this app always wants. Reads the current
  * profile first and writes only when something changes, so a reconnect on an
  * already-correct host costs one `settings.get` plus one `status.get` and
  * nothing else. Returns what was written, or null.
  */
 export async function syncAgentHudDesktopLaunchArgs(
-  client: RpcClient,
-  enabled: boolean
+  client: RpcClient
 ): Promise<Partial<Record<TuiAgent, string>> | null> {
   const [settingsResponse, statusResponse] = await Promise.all([
     client.sendRequest('settings.get').catch(() => null),
@@ -133,8 +132,8 @@ export async function syncAgentHudDesktopLaunchArgs(
     return null
   }
   // A Windows host takes no flag, and one this app already saved there is
-  // taken back out even while the switch is on: it stops Claude from starting.
-  const writeFlag = enabled && hostTakesAgentHudFlag(hostPlatform)
+  // taken back out: it stops Claude from starting.
+  const writeFlag = hostTakesAgentHudFlag(hostPlatform)
   const current = ((settings as HostSettingsLike).agentDefaultArgs ?? {}) as Partial<
     Record<TuiAgent, string>
   >
