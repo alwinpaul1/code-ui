@@ -1,9 +1,10 @@
-import { Pressable, View } from 'react-native'
-import { Activity, ChevronRight, CircleStop, Diamond, ListTree, Terminal } from 'lucide-react-native'
+import { View } from 'react-native'
+import { Activity, Diamond, ListTree, Terminal } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
 import { MobileWorkflowCard } from './MobileWorkflowCard'
+import { MobileBackgroundTaskStopButton } from './MobileBackgroundTaskStopButton'
 import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
@@ -11,52 +12,40 @@ import {
 } from './mobile-background-task-labels'
 
 /**
- * One task, as the Claude app's Background tasks sheet draws it (2026-09-24):
- * a raised card with the kind's glyph, the title, then the kind and its live
- * time ("Agent  39s") or how it ended ("Shell  Completed"). A running agent
- * says "View transcript" in the link colour; a finished one carries a chevron.
- * Either way the card opens what the agent did (`onOpen`); a shell has nothing
- * behind it to open. Stop is its own button, and only where the host takes one.
+ * One task, as the Claude Android app's Background tasks sheet draws it (screenshot, 2026-10-10): a
+ * card darker than the sheet with the kind's glyph, the title in body text (two lines at most), then
+ * the kind and its live time ("Shell  41s") or how it ended ("Shell  Completed"). A running card
+ * carries a round Stop at its top right where the host takes one; a finished card has none. The card
+ * itself opens nothing: the fork's "View transcript" link is gone (2026-10-10, not in Orca).
  */
 export function MobileBackgroundTaskCard({
   task,
   onStop,
-  stopHeld = false,
-  onOpen
+  stopHeld = false
 }: {
   task: BackgroundTask
   onStop?: (taskId: string) => void
   /** A Stop is on its way, or the host confirmed it and the row has not left yet (Orca #26780). */
   stopHeld?: boolean
-  onOpen?: () => void
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
-    return <MobileWorkflowCard task={task} onStop={onStop} />
+    return <MobileWorkflowCard task={task} onStop={onStop} stopHeld={stopHeld} />
   }
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'
-  const frame = (pressed: boolean) => ({
-    flexDirection: 'row' as const,
-    alignItems: 'flex-start' as const,
-    gap: space.md,
-    paddingVertical: space.md,
-    paddingHorizontal: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: pressed ? colors.bgSunken : colors.bgRaised
-  })
-  const Shell = onOpen ? Pressable : View
   return (
-    <Shell
-      {...(onOpen
-        ? {
-            accessibilityRole: 'button' as const,
-            accessibilityLabel: `Open ${task.title}`,
-            accessibilityHint: 'Shows what this agent did',
-            onPress: onOpen,
-            style: ({ pressed }: { pressed: boolean }) => frame(pressed)
-          }
-        : { style: frame(false) })}
+    <View
+      testID="background-task-card"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: space.md,
+        paddingVertical: space.md,
+        paddingHorizontal: space.md,
+        borderRadius: radius.lg,
+        backgroundColor: colors.bgSunken
+      }}
     >
       <View style={{ height: 22, justifyContent: 'center' }}>
         <BackgroundTaskGlyph kind={task.kind} />
@@ -81,36 +70,16 @@ export function MobileBackgroundTaskCard({
             </Txt>
           )}
         </View>
-        {onOpen && running ? (
-          <Txt variant="caption" style={{ color: colors.info, marginTop: space.xs }}>
-            View transcript
-          </Txt>
-        ) : null}
       </View>
       {onStop && running && task.stoppable !== false ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`Stop ${task.title}`}
-          onPress={() => onStop(task.id)}
-          disabled={stopHeld}
-          accessibilityState={{ disabled: stopHeld }}
-          hitSlop={10}
-          style={({ pressed }) => ({ alignSelf: 'center', opacity: stopHeld ? 0.4 : pressed ? 0.6 : 1 })}
-        >
-          <CircleStop size={22} color={colors.textSecondary} />
-        </Pressable>
+        <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
       ) : null}
-      {onOpen && !running ? (
-        <View style={{ alignSelf: 'center' }}>
-          <ChevronRight size={18} color={colors.textMuted} />
-        </View>
-      ) : null}
-    </Shell>
+    </View>
   )
 }
 
-/** One glyph per kind, so a monitor and a workflow do not both read as a
- *  shell. Plain markers in the secondary ink, as the Claude app draws them. */
+/** One glyph per kind: a console for a shell, the hollow diamond for an agent, and their own for a
+ *  monitor and a workflow, so neither reads as a shell. Plain markers in the secondary ink. */
 function BackgroundTaskGlyph({ kind }: { kind: BackgroundTaskKind }) {
   const { colors } = useTheme()
   switch (kind) {

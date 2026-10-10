@@ -791,3 +791,21 @@ workflow` rows are not folded: the wire gives them a name and a description only
 A workflow-lane row is also never allowed to vouch for a foreground `Agent` call
 (`callStarted`): it came up beside the call and, with no `subagent_type` on the
 call, took the vouch from the real agent, which was then dropped from the count.
+
+## The card, laid out like the Claude app (2026-10-10)
+
+From the user's screenshot of the Claude Android app's Background tasks sheet (dark):
+
+- **The card** (`MobileBackgroundTaskCard.tsx`) is darker than the sheet (`bgSunken` on the
+  drawer's `bgPanel`, in both themes), leads with the kind's glyph (a console for a shell, the
+  hollow diamond for an agent, Activity for a monitor, ListTree for a workflow), puts the title in
+  body text (two lines, then an ellipsis), and under it the kind and its live time ("Shell  41s",
+  "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone).
+- **Stop** (`MobileBackgroundTaskStopButton.tsx`): a round button at the card's top right, a circle
+  outline holding a filled square in the muted foreground, about 24 dp, on a running card only,
+  through the same per-task stop path. The workflow card uses the same button.
+- **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
+  (with the chevron on a finished one), were this fork's own addition and are gone at the user's
+  request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
+  conversation) is a different surface and is unchanged.
+

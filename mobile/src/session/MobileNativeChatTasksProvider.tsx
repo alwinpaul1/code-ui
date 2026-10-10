@@ -152,9 +152,7 @@ export function MobileNativeChatTasksProvider({
         <MobileBackgroundTasksSheet
           visible={sheetOpen}
           messages={messages}
-          agent={agent}
           agentStatus={agentStatus ?? null}
-          parentTranscriptPath={parentTranscriptPath}
           backgroundTaskReport={backgroundTaskReport}
           hostBackgroundTasks={hostBackgroundTasks}
           onStopTask={onStopTask}

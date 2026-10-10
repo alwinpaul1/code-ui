@@ -1,5 +1,5 @@
-import { Pressable, View } from 'react-native'
-import { CircleStop } from 'lucide-react-native'
+import { View } from 'react-native'
+import { MobileBackgroundTaskStopButton } from './MobileBackgroundTaskStopButton'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask } from './mobile-background-tasks'
@@ -25,7 +25,15 @@ import {
  * show they are this workflow's. The totals (agents, tokens, failures, time)
  * come from the workflow's own completion notification.
  */
-export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onStop?: (taskId: string) => void }) {
+export function MobileWorkflowCard({
+  task,
+  onStop,
+  stopHeld = false
+}: {
+  task: BackgroundTask
+  onStop?: (taskId: string) => void
+  stopHeld?: boolean
+}) {
   const { colors, radius, space } = useTheme()
   const detail = task.workflow
   if (!detail) {
@@ -35,22 +43,14 @@ export function MobileWorkflowCard({ task, onStop }: { task: BackgroundTask; onS
   const dot = running ? colors.info : task.status === 'failed' ? colors.danger : colors.textMuted
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs ?? detail.usage?.durationMs ?? null)
   return (
-    <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.bgRaised }}>
+    <View style={{ gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.bgSunken }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
         <Txt variant="body" weight="medium" numberOfLines={2} style={{ flex: 1 }}>
           {task.title}
         </Txt>
         {onStop && running && task.stoppable !== false ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Stop ${task.title}`}
-            onPress={() => onStop(task.id)}
-            hitSlop={10}
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-          >
-            <CircleStop size={22} color={colors.textSecondary} />
-          </Pressable>
+          <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
         ) : null}
       </View>
       <Facts>

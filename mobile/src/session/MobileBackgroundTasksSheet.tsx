@@ -7,14 +7,12 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { BackgroundTaskHostStatus, BackgroundTask } from './mobile-background-tasks'
+import type { BackgroundTaskHostStatus } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
-import { subagentTranscriptTarget } from './mobile-subagent-transcript'
-import { openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
@@ -37,9 +35,7 @@ const TICK_MS = 1000
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
-  agent,
   agentStatus,
-  parentTranscriptPath,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
@@ -49,14 +45,7 @@ export function MobileBackgroundTasksSheet({
 }: {
   visible: boolean
   messages: readonly NativeChatMessage[]
-  /** The tab's agent. Only a Claude subagent row opens a transcript viewer;
-   *  Codex has no subagents, and an unknown agent gets no tap target. */
-  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
-  /** The transcript of the session the chat reads, where a subagent's sits
-   *  beside it. Given, it outranks the status's (a nested agent's status
-   *  names another session, native-chat-kept-session.ts). */
-  parentTranscriptPath?: string | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   /** `report` is where this Stop's failure is said: the sheet, while open. */
@@ -98,9 +87,7 @@ export function MobileBackgroundTasksSheet({
     >
       <MobileBackgroundTasksSheetBody
         messages={messages}
-        agent={agent}
         agentStatus={agentStatus ?? null}
-        parentTranscriptPath={parentTranscriptPath}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
@@ -134,31 +121,18 @@ export function MobileBackgroundTasksSheetHeader({
  *  drawer's gesture/animation stack. */
 export function MobileBackgroundTasksSheetBody({
   messages,
-  agent = null,
   agentStatus,
-  parentTranscriptPath: readTranscriptPath,
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask
 }: {
   messages: readonly NativeChatMessage[]
-  agent?: string | null
   agentStatus?: BackgroundTaskHostStatus | null
-  /** See MobileBackgroundTasksSheet's prop of the same name. */
-  parentTranscriptPath?: string | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: (taskId: string) => Promise<boolean> | void
 }) {
   const { space } = useTheme()
-  // Where the parent transcript is: the session the chat reads, else the
-  // agent's own hook. Null leaves the host to find a subagent's file by its
-  // session key.
-  const parentTranscriptPath = readTranscriptPath ?? agentStatus?.providerSession?.transcriptPath ?? null
-  const openTranscript = (task: BackgroundTask): (() => void) | undefined => {
-    const target = subagentTranscriptTarget({ agent, task, parentTranscriptPath })
-    return target ? () => openSubagentTranscript(target, task.status === 'running') : undefined
-  }
   const [now, setNow] = useState(() => Date.now())
   // A roster subagent's time is the run the phone watched begin, never the
   // host's first-observed age (2026-09-20, "13h 16m" beside the desk's "1m 23s").
@@ -209,7 +183,6 @@ export function MobileBackgroundTasksSheetBody({
               task={task}
               onStop={stopOne ? (taskId) => void stops.onStop(taskId) : undefined}
               stopHeld={stops.holding.has(task.id)}
-              onOpen={openTranscript(task)}
             />
           ))
         ) : (
@@ -226,7 +199,7 @@ export function MobileBackgroundTasksSheetBody({
           onToggle={() => setFinishedOpen((open) => !open)}
         >
           {finished.slice(0, finishedShown).map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} onOpen={openTranscript(task)} />
+            <BackgroundTaskCard key={task.id} task={task} />
           ))}
           {finished.length > finishedShown ? (
             <LoadMoreFinished onPress={() => setFinishedShown((shown) => shown + FINISHED_PAGE)} />
