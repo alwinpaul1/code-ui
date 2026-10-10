@@ -258,3 +258,163 @@ window the read gets (40 records) is not listed. A shell that outlives its
 agent (A's) is not listed once the agent finishes, since finished agents are
 not read; the count line still counts it. Shells of an agent's own nested
 agents are not read.
+
+## The last subagent shell's end (2026-10-10, later still)
+
+The limit above, a subagent's last shell staying "running" until its agent
+finishes, had a route with stock Orca and no new flag: **Claude Code records
+every background task's completion in the LEAD's transcript the moment it
+ends, whoever launched it**, and the phone's status line already reads that.
+The phone simply never applied those ids to subagent shells.
+
+Verified against **Claude Code 2.1.296**, Orca upstream `stablyai/orca` at
+`4f03c237` (main, 2026-10-10) and tag `v1.4.224` (`2bb20586`); the 19 files on
+the paths below are byte-identical between the two.
+
+### How it was measured
+
+Two throwaway sessions in a scratch directory, in their own tmux server
+(`tmux -L cuifinish`, 110×50), `env -i`, a scratch `--settings` that appended
+every hook payload (PreToolUse, PostToolUse, PostToolUseFailure,
+PostToolBatch, Notification, UserPromptSubmit, SessionStart, SessionEnd, Stop,
+StopFailure, SubagentStart, SubagentStop, TaskCreated, TaskCompleted,
+TeammateIdle) and every status-line payload to a file, plus a 1 s watcher of
+the lead and subagent transcripts and of the screen. The second session ran
+the phone's real `--settings` (built by `buildClaudeHudSettingsJson('darwin')`)
+with those logging hooks added and `CUIHUD_TTY` pointed at a scratch file, so
+the beacon frames it wrote were captured byte for byte. Nothing was written
+to the user's configuration; the tmux server was killed afterwards.
+
+1. Session d602731a: agents "Finish probe A" (`sleep 20` in the background,
+   then a foreground `sleep 60`, which the harness refused, so A handed back
+   at once) and "Finish probe B" (`sleep 25` in the background, then four
+   foreground `sleep 10`).
+2. Session 3a763800: agents "Finish probe C" (`sleep 15` in the background,
+   blrzd991j, then a 40 s foreground `ping`) and "Finish probe D" (`sleep 20`,
+   bchgdtvqt, then a 50 s `ping`). Both shells end inside the pings.
+
+### Where the completion lands, and when
+
+Session 3a763800 (epoch seconds, `…63` prefix dropped):
+
+| time | what |
+|---|---|
+| 055.56 | C's PostToolUse: `"backgroundTaskId":"blrzd991j"` |
+| 070.88 | lead transcript gains `<task-id>blrzd991j</task-id>`; footer `· 2 shells` → `· 1 shell` |
+| 074.10 | lead transcript gains bchgdtvqt; footer drops the count entirely |
+| next 5 s tick | beacon `done=blrzd991j`, then `done=blrzd991j,bchgdtvqt` |
+| 095.64 | C's own file gains blrzd991j (its ping returned at 095.04) |
+| 107.44 | D's own file gains bchgdtvqt (its ping returned at 107.32) |
+
+The lead's records are `queue-operation` enqueues, written within half a
+second of the shell's end (fixture
+`mobile/src/session/fixtures/claude-subagent-shell-finish-2.1.296/3a763800-….jsonl`):
+
+```json
+{"type":"queue-operation","operation":"enqueue","timestamp":"2026-10-10T20:11:10.526Z","sessionId":"3a763800-2942-4c7b-8951-6525fd388abc",
+ "content":"<task-notification>\n<task-id>blrzd991j</task-id>\n…<status>completed</status>\n<summary>Background command \"Sleep 15 seconds in background\" completed (exit code 0)</summary>\n</task-notification>"}
+```
+
+Session d602731a shows the same for both delivery cases: B's bd38s001c was
+enqueued in the lead at 20:03:01.944 while B sat in a foreground `sleep 10`
+(and `remove`d at 20:03:12.868 when B took it); A's blm04hqbv, which ended
+after A had handed back, was enqueued at 20:02:56.917 and resumed A.
+
+The subagent's own file gets the notice in one of two shapes, neither of which
+Orca's reader decodes:
+
+- **subagent busy** (B, C, D): an `attachment` record, written only when the
+  current tool call returns, but stamped with the enqueue time:
+  `{"type":"attachment","attachment":{"type":"queued_command","prompt":"<task-notification>\n<task-id>bd38s001c</task-id>…","commandMode":"task-notification","origin":{"kind":"task-notification","producer":"session-task"},…,"timestamp":"2026-10-10T20:03:01.944Z"}}`
+  (B's file did not contain it until 20:03:13.9);
+- **subagent idle or handed back** (A): a `user` record with `"isMeta":true`
+  and `"origin":{"kind":"task-notification"}`, written at once as it resumes
+  the agent.
+
+The beacon frame, as written by the unchanged status line at the first tick
+after bchgdtvqt ended (decoded from the captured bytes):
+
+```
+CUIHUD1 agent=claude hk=1 hb=5 sid=3a763800-2942-4c7b-8951-6525fd388abc model=claude-opus-5-5 name=Opus%205.5 effort=medium used=60919 win=1000000 pct=6 h5=5:1791678000 d7=69:1791997200 done=blrzd991j,bchgdtvqt live=
+```
+
+The status line's scan (`grep -F "<status>"` over the lead's last 4 MiB,
+skipping assistant records) was written for the lead's own shells; it matches
+a `queue-operation` record just as well. `done=` keeps an id the lead did not
+launch only while it is among the last 32 finished, and the phone remembers
+every id it has seen named for the session (`mobile-finished-task-id-memory.ts`,
+512), so one tick is enough.
+
+### Each path to the phone
+
+| path | carries a subagent shell's end? | field, latency |
+|---|---|---|
+| Orca native-chat reader (`transcript-line-decoders-claude.ts`, `decodeClaudeTranscriptLine`) | **No.** Only `user`/`assistant` records are decoded (`if (role !== 'user' && role !== 'assistant') return null`), so `attachment` and `queue-operation` records never are; an `isMeta`/`isSynthetic`/`isCompactSummary` user record keeps only tool results. A subagent file can be read (`nativeChat.readSession`/`subscribe` with its `transcriptPath`), with the notice dropped. | none |
+| Orca hook server (`/hook/claude`, `claude-events.ts`, `claude-lifecycle-events.ts`, `claude-background-task-inventory.ts`) | **No.** `background_tasks` is read only from a main-agent Stop (`eventAgentId === undefined`); SubagentStop goes to the lifecycle normalizer, which never reads it. Shell ids stay in Orca (`claudeRunningNonAgentTask`, a boolean, is stripped by `pickParsedAgentStatusPayload`); `AgentSubagentSnapshot` is agents only. A shell end resumes a handed-back agent, which flips its roster row back to `working`, indistinguishable from any other resume. `Notification` is not an installed event. | none (the pane's `working`/`monitoring` state at best) |
+| Orca status-line route (`/statusline/claude`) | **No.** Posts only payloads containing `rate_limits`, to the rate-limit service. | none |
+| Terminal stream (`terminal.subscribe`/`multiplex`) | **Only as painted**: the footer count and the beacon bytes. | footer ≤ 1 s, but no count at zero; beacon ≤ 5 s |
+| `agentSession.*` | Structured sessions only; a terminal-driven tab is not one. | n/a |
+| Mobile RPC allowlist | No hook-inventory or `background_tasks` method. | n/a |
+| **Phone's status line (beacon)** | **Yes**: `done=<shell id>` from the lead's `queue-operation` record. | one heartbeat (5 s) after the end |
+| Phone's Stop hook | `run=` from `background_tasks`, which lists subagent shells, but only at the lead's turn end. | turn end |
+
+### Hook events in 2.1.296
+
+The hook list in the binary is: PreToolUse, PostToolUse, PostToolUseFailure,
+PostToolBatch, Notification, UserPromptSubmit, UserPromptExpansion,
+SessionStart, SessionEnd, Stop, StopFailure, SubagentStart, SubagentStop,
+PreCompact, PostCompact, PreModelSwitch, PostModelSwitch, PermissionRequest,
+PermissionDenied, Setup, TeammateIdle, TaskCreated, TaskCompleted,
+Elicitation, ElicitationResult, ConfigChange, WorktreeCreate, WorktreeRemove,
+InstructionsLoaded, CwdChanged, FileChanged, DirectoryAdded, MessageDisplay.
+
+Only **Stop** and **SubagentStop** carry `background_tasks` ("In-flight
+background work (running/pending + backgrounded) registered in this
+session"). No hook fires when a background shell ends: in session 3a763800
+nothing at all fired between D's PreToolUse for its ping (057.02) and the
+next SubagentStop at 081.91 (a side agent). `TaskCreated`/`TaskCompleted` are the task-list
+tool's (`task_subject`), not background tasks.
+
+SubagentStop does fire mid-turn for Claude Code's own side agents (the auto
+mode classifier, prompt suggestions: ids such as `ac7bb13252763963e` that no
+Agent call launched), each with a fresh `background_tasks`: in session
+d602731a, `ac7bb…` at 582.64 no longer listed bd38s001c, which ended at 582.
+Those fire only when auto mode or suggestions run, so they are not a clock
+to build on. A SubagentStop hook on the phone's flag was therefore not
+added: the status line already says it sooner and on a fixed beat.
+
+The status-line payload still has no task field.
+
+### The screen
+
+The footer drops the count when the last shell ends, at once, but paints
+nothing in its place (`'  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'`
+with both agents still listed under it; fixture `screen-no-shell-count.txt`).
+"No count" is also what a footer under a narrow width or another hint looks
+like, so the phone does not read it as zero. The turn summary's
+"N shells still running" and "Waiting for N background agents" lines are
+repainted only around the lead's turns.
+
+### What was built
+
+The phone applies the `done=` ids it already remembers to subagent shells:
+`mergeSubagentActivity` takes `finishedTaskIds` and passes them to the same
+`deriveBackgroundTasks` call that judges each subagent's shells, and
+`useSubagentActivityWatch` hands it the tab report's `finishedTaskIds`. A
+named shell moves to Finished as `completed`. No beacon, flag or Orca change.
+
+Tests: `mobile-subagent-shell-finish.test.ts` (the real status-line script
+under sh, bash and dash over the real lead records, the real frame, the real
+subagent records as Orca serves them, the real footer-less screen, one shell
+then two, an empty `done=`, a Codex beacon), plus cases in
+`mobile-subagent-activity.test.ts` and
+`MobileBackgroundTasksSheet.subagent-activity.test.tsx` (the wiring).
+
+**Limits.** Up to one heartbeat (5 s) late, and only while the status line is
+mounted: under a dialog or picker Claude does not run it, so the row moves
+when the dialog closes. A lead transcript growing more than 4 MiB between the
+shell's end and the next tick would push the record out of the scan; the
+Stop hook's `run=` still corrects it at the turn end. Windows hosts get no
+flag at all, as before. If a future Claude Code stops enqueueing subagent
+notifications in the lead's file, the fixture test still passes (it replays
+2.1.296's records), so re-check this against a live session after an update.

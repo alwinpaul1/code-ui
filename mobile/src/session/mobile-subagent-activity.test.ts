@@ -202,3 +202,29 @@ describe('which agents the sheet reads', () => {
     expect(subagentWatchTargets({ agent: 'claude', running: [placeholder], parentTranscriptPath: parent })).toEqual([])
   })
 })
+
+describe("a subagent's last shell leaves Running when the status line says it finished", () => {
+  it('moves B\'s shell to Finished from the beacon\'s done= ids, with no footer count and B still running', () => {
+    // B's whole transcript as Orca serves it: the completion is not in it.
+    const rows = orcaTranscriptRows(probeBRecords())
+    const now = Date.parse('2026-10-10T18:45:50.000Z')
+    const unread = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_B_AGENT, rows]]), { now, liveShellCount: null })
+    expect(unread.running.map((task) => task.id)).toContain(PROBE_B_SHELL)
+    const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_B_AGENT, rows]]), {
+      now,
+      liveShellCount: null,
+      finishedTaskIds: [PROBE_B_SHELL]
+    })
+    expect(merged.running.map((task) => task.id)).toEqual([PROBE_A_AGENT, PROBE_B_AGENT])
+    expect(merged.finished.find((task) => task.id === PROBE_B_SHELL)).toMatchObject({ kind: 'shell', status: 'completed', stoppable: false })
+  })
+
+  it('leaves a shell running when the finished ids name other tasks, or none', () => {
+    const rows = orcaTranscriptRows(probeBRecords())
+    const now = Date.parse('2026-10-10T18:45:50.000Z')
+    for (const finishedTaskIds of [[], [PROBE_A_SHELL, PROBE_A_AGENT]]) {
+      const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_B_AGENT, rows]]), { now, finishedTaskIds })
+      expect(merged.running.map((task) => task.id)).toContain(PROBE_B_SHELL)
+    }
+  })
+})

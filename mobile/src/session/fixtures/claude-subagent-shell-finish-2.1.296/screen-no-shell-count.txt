@@ -1,0 +1,50 @@
+
+ ▐▛███▛█   Claude Code v2.1.296
+▝▜██████▀  Opus 5.5 with medium effort · Claude Max
+ ▝▝   ▝▝   /…/0954729d-6205-4368-8185-7c630268f2d0/scratchpad/finish/work · /rc
+
+⚠ Your login expires in 1 day · run /login to renew
+
+❯ Launch two background agents now, in one message, with the Agent tool (subagent_type general-purpose,
+  run_in_background true). Agent "Finish probe C": use the Bash tool with run_in_background true to run sleep
+  15, then use the Bash tool in the foreground to run ping -c 40 127.0.0.1 > /dev/null (it takes 40
+  seconds), then reply "C done". Agent "Finish probe D": use the Bash tool with run_in_background true to run
+  sleep 20, then in the foreground run ping -c 50 127.0.0.1 > /dev/null (50 seconds), then reply "D done".
+  Do not start any shell yourself and do not wait for the agents; end your turn right after launching them.
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Finish probe C
+   └ Finish probe D
+
+⏺ Both probes, C and D, are running in the background. The Agent tool here has no run_in_background option,
+  but subagents run in the background by default, so nothing changes. I haven't started any shell myself, and
+  I'll be notified when each probe finishes.
+
+  session:ok
+
+✻ Waiting for 2 background agents to finish
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                          [-]
+  Opus 5.5 medium │ ◔ 6%   ◷ 5h 5% │ Sun 2:20 AM   ▦ 7d 69% │ Wed 7:00 PM 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ are C and D done yet?
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 74% · misses 0
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents
+
+  ⏺ main
+  ◯ general-purpose  Finish probe C                                                     24s · ↓ 41.9k tokens
+  ◯ general-purpose  Finish probe D                                                     24s · ↓ 47.0k tokens

@@ -15,13 +15,20 @@
 // 2026-10-10 against fixtures/claude-subagent-transcripts-2.1.296.ts): a
 // subagent shell's `<task-notification>` is written to the SUBAGENT's file as
 // an `isMeta` user record, and Orca's reader keeps only the tool results of an
-// isMeta record, so the completion never arrives. A shell is therefore
-// retired by what does arrive: a TaskStop in the subagent's transcript, the
-// lead's Stop-hook `run=` list (it names every shell in the process) once it
-// postdates the launch, or the agent's footer counting fewer shells beyond
-// the lead's than are listed (the oldest go first, as the lead's own fit does,
-// `mobile-background-task-footer.ts`). A shell that ends with none of those
-// keeps its row until its agent finishes, when the row leaves with the read.
+// isMeta record (an `attachment` record while the subagent is busy, written
+// only when its current tool call returns), and Orca's reader decodes
+// neither, so the completion never arrives through the read. A shell is
+// therefore retired by what does arrive: the lead's status-line `done=` ids
+// (Claude Code queues every task's notification in the LEAD's transcript as a
+// `queue-operation` the moment it ends, whoever launched it, and the status
+// line beacons it on its next tick; verified 2026-10-10,
+// mobile-subagent-shell-finish.test.ts), a TaskStop in the subagent's
+// transcript, the lead's Stop-hook `run=` list (it names every shell in the
+// process) once it postdates the launch, or the agent's footer counting fewer
+// shells beyond the lead's than are listed (the oldest go first, as the lead's
+// own fit does, `mobile-background-task-footer.ts`). A shell that ends with
+// none of those keeps its row until its agent finishes, when the row leaves
+// with the read.
 
 import {
   describeActiveToolCall,
@@ -112,6 +119,14 @@ export type SubagentActivityContext = {
   /** The lead's last Stop-hook `run=` and when it came: every running task in
    *  the process, a subagent's shells included. */
   stopRunning?: { ids: readonly string[]; at: number | null } | null
+  /** Task ids the lead's status line reports finished (`done=`, remembered
+   *  for the session; `use-active-tab-finished-task-ids.ts`). A subagent
+   *  shell's completion is queued in the LEAD's transcript as a
+   *  `queue-operation` record the moment the shell ends, whoever launched it
+   *  (Claude Code 2.1.296), and the status line beacons its id within one
+   *  heartbeat. This is what retires the last subagent shell, which the footer
+   *  cannot (it paints no count at zero). */
+  finishedTaskIds?: readonly string[]
 }
 
 /** The sheet's tasks with each read agent's latest step on its row and the
@@ -175,12 +190,14 @@ export function mergeSubagentActivity(
 }
 
 /** One subagent's shells, judged by its own transcript (launches, TaskStop
- *  answers) and by the lead's Stop-hook list. */
+ *  answers), by the lead's Stop-hook list, and by the ids the lead's status
+ *  line reports finished. */
 function subagentShells(messages: readonly NativeChatMessage[], context: SubagentActivityContext): BackgroundTasks {
   const stop = context.stopRunning ?? null
   const derived = deriveBackgroundTasks(messages, context.now, null, {
     runningTaskIds: stop?.ids ?? null,
-    runningTaskIdsAt: stop?.at ?? null
+    runningTaskIdsAt: stop?.at ?? null,
+    ...(context.finishedTaskIds ? { finishedTaskIds: context.finishedTaskIds } : {})
   })
   const shell = (task: BackgroundTask) => task.kind === 'shell'
   const own = (task: BackgroundTask): BackgroundTask => ({ ...task, stoppable: false })
