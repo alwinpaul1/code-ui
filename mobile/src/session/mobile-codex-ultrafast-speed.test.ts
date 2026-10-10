@@ -9,10 +9,10 @@ import type {
   PersistedNativeChatSessionOptions,
   SessionOptionDescriptor
 } from '../../../src/shared/native-chat-session-options'
-import { NativeChatSessionOptionPick } from '../../../src/shared/rpc-contract/client-settings-params'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState,
+  structuredAgentSessionOptionPicks,
   structuredAgentSessionOptionSnapshot
 } from '../../../src/shared/structured-agent-session-options'
 import { mobileOptionsPillLabel } from './mobile-native-chat-session-option-labels'
@@ -71,7 +71,7 @@ describe('Codex Ultrafast as a speed choice', () => {
     expect(mobileOptionsPillLabel(options(speedSnapshot('default')))).toBe('')
   })
 
-  it('seeds a saved service tier into the next chat, and the settings write takes it', () => {
+  it('seeds a saved service tier into the next chat, and remembers a Speed pick', () => {
     const persisted = {
       codex: { model: 'gpt-5.6-sol', valuesByModel: { 'gpt-5.6-sol': { serviceTier: 'ultrafast' } } }
     } as unknown as PersistedNativeChatSessionOptions
@@ -79,12 +79,14 @@ describe('Codex Ultrafast as a speed choice', () => {
       model: 'gpt-5.6-sol',
       serviceTier: 'ultrafast'
     })
-    expect(
-      NativeChatSessionOptionPick.safeParse({
-        modelId: 'gpt-5.6-sol',
-        optionId: 'serviceTier',
-        value: 'ultrafast'
-      }).success
-    ).toBe(true)
+    // A Speed pick is remembered for the next chat, as model and effort picks are.
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      { models: [{ id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol', isDefault: true, efforts: [] }], current: { model: 'gpt-6.1-sol' } }
+    )
+    expect(structuredAgentSessionOptionPicks(state, { serviceTier: 'ultrafast' })).toEqual([
+      { modelId: 'gpt-6.1-sol', optionId: 'serviceTier', value: 'ultrafast' }
+    ])
   })
 })

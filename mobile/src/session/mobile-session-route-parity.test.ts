@@ -116,7 +116,7 @@ const HOST_COMPONENT_NAMES = new Set([
 // prompt-cancel one in the feedback capabilities, which the status probe sets.
 // 307 since 2026-10-06 (Orca #24759 ported): the feedback hook's mountedRef (useRef) and its
 // effect (useEffect) join the family.
-const HEAD_MAIN_HOOK_SHA256 = '090cc40fd4a219699215880baf1f967aa90b41f99e0c877afda4d45c5cfc417a'
+const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd345cdb28a61a7f31'
 // 2026-09-22: the caret and insert-range refs bind into the dictation start.
 // 2026-09-24: gestureOutputWindowsRef binds in the terminal input.
 // 2026-09-24: reportDictationFailure and softKeyboard bind (Orca #22256, #22252).
@@ -127,7 +127,7 @@ const HEAD_MAIN_HOOK_SHA256 = '090cc40fd4a219699215880baf1f967aa90b41f99e0c877af
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
-const HEAD_HOOK_BINDING_SHA256 = '43e1a34ae749466e370fd4aa37a730e337427be6022ae23ce95607daca520f05'
+const HEAD_HOOK_BINDING_SHA256 = '224da2a3ecf3c5177590b5df92761111b78c3f312faf99cb31d1f536100b98dc'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -251,7 +251,7 @@ const HEAD_CALLBACK_BODY_SHA256 = '9fc107e757e803caf1fd43cf8b37db96771dd61ecf067
 // useSoftKeyboard, visibility and height (26).
 // 2026-10-04 (Orca #24301): the capability probe effect also clears and sets
 // agent-session.repeated-stop.v1 beside prompt-cancel. Only that effect's body moved; still 26.
-const HEAD_EFFECT_SHA256 = 'f17512e385d4cd804c40f8876c03e40215c4f75fc85999371880e02ae9826faa'
+const HEAD_EFFECT_SHA256 = 'f75ed0e978b9f65b056ed8e0e73b13eb68af72ecb2e98d30100da9121a50105d'
 // 21 since 2026-09-18: FileReader's line-selection mode ("Ask about lines",
 // Alt+K parity) adds useTheme's colors binding, the lineSelection state pair,
 // the relativePath-keyed reset effect, and the range/highlight-style memos —
@@ -426,7 +426,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 674 since 2026-10-10 (Orca #26148 ported): FileReader's `doc.kind === 'media'` arm, which plays a
 // video or music tab through MobileFileMediaPreview; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '43a04be2793cfc3cabaf22cf0c053598b7a638db1722d476f3058cdeaae83bdd'
+  '153078c3168c89ac8fc25ce91e916f8903e986e745dc6b1aa4abc2b78e44120d'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -580,7 +580,9 @@ const HEAD_IDENTITY_FIELD_SHA256 =
 // rules, project memory), each session-menu entries alongside Agent History.
 const HEAD_NAVIGATION_SHA256 = '3a02dc91d91dffc6fe7f20a88a03f6a1f131badc4a85b4b16bbd2234f3079f96'
 // 2026-10-04 (Orca #24301): agent-session.repeated-stop.v1 joins prompt-cancel in the probe.
-const HEAD_CAPABILITY_SHA256 = 'f383f0560334f563fb3c2be792c1c68c166dd4735885d8962705d729901f5a11'
+// 2026-10-10 (Orca #27196): the probe also sets hostRefusesOtherRuntime, read through
+// hostRefusesOtherRuntimeWorkspace rather than a constant here, so the count stays 7.
+const HEAD_CAPABILITY_SHA256 = '0b95987daa60482d3a6aad0b03b1006ad40a06e20039e64667a3ab8214a0de9b'
 
 type Definition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 type HookFacts = {
@@ -995,7 +997,9 @@ describe('mobile session route extraction parity', () => {
     // when no field on screen can take it.
     // 305 since 2026-10-04: the repeated-stop capability's useState beside the prompt-cancel one
     // (Orca #24301; agent-session.repeated-stop.v1 from the same status probe).
-    expect(main.hooks).toHaveLength(307)
+    // 309 since 2026-10-10: the native-chat banner's useMemo (Orca #26544, sign-in guidance steps
+    // aside once the transcript says it) and the hostRefusesOtherRuntime useState (Orca #27196).
+    expect(main.hooks).toHaveLength(309)
     expect(hash(main.hooks)).toBe(HEAD_MAIN_HOOK_SHA256)
     expect(hash(main.bindings)).toBe(HEAD_HOOK_BINDING_SHA256)
     // 82 since 2026-09-19 (night): terminalHandlesFor in the document readers.
@@ -1121,7 +1125,9 @@ describe('mobile session route extraction parity', () => {
     // 671 since 2026-10-06: the 'file' check before a closed file tab's document is released (Orca #24655).
     // 673 since 2026-10-10: the close action's 'markdown' and 'ready' (Orca #26159).
     // 674 since 2026-10-10: FileReader's 'media' arm (Orca #26148).
-    expect(strings).toHaveLength(674)
+    // 667 since 2026-10-10 (later): the create-tab and send-notes drawers' no-agent rows moved to
+    // mobile-new-tab-agent-status-rows.ts (Orca #27196), taking their literals with them.
+    expect(strings).toHaveLength(667)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
