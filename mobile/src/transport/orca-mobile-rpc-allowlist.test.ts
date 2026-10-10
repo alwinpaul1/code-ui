@@ -121,6 +121,11 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     why: 'The `/` menu\'s installed-skills read. A refusal leaves the list empty, which is what an old host already did; use-mobile-native-chat-skills.ts latches the gate\'s refusal so it is asked once per client, not every 3 s.'
   },
   {
+    method: 'files.stat',
+    guard: 'fails-open',
+    why: 'The size and mtime a video or music preview checks before and after it streams the file (Orca #26148, which adds files.stat to the host allowlist; 1.4.205 refuses it). A refusal ends the download with "Update Orca on your desktop to preview media files on mobile": mobile-file-media-download.ts reads the gate\'s refusal (isMobileScopeRefusal) and asks nothing further; the preview\'s Retry is the user asking again, and the row it opens from is a read, never a write.'
+  },
+  {
     method: 'agent.launch',
     guard: 'capability',
     capability: protocolVersion.AGENT_LAUNCH_RUNTIME_CAPABILITY,

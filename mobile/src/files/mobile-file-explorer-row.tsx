@@ -1,3 +1,4 @@
+import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import {
   ChevronDown,
@@ -87,12 +88,14 @@ function TreeRow(props: {
   const styles = useThemedStyles(fileExplorerStyles)
   const isDirectory = item.kind === 'directory'
   const isExpanded = expanded.has(item.relativePath)
-  // Images render in the mobile viewer (via files.readPreview), so a binary
-  // image is openable; only non-previewable binaries are unavailable.
+  // Images and PDFs render in the mobile viewer, and video and music play in its media player, so
+  // those binaries are openable; only non-previewable binaries are unavailable. The picture icon
+  // stays with images and PDFs; a media file gets the plain file icon.
   const previewable =
     item.kind !== 'directory' &&
     canPreviewMobileFileRow({ kind: item.kind, relativePath: item.relativePath })
-  const isImage = item.kind === 'binary' && previewable
+  const artifactKind = item.kind === 'binary' ? classifyMobileArtifact(item.relativePath) : null
+  const isImage = artifactKind === 'image' || artifactKind === 'pdf'
   const disabled = item.kind === 'binary' && !previewable
   const markdown = item.kind === 'text' && isMarkdownPath(item.relativePath)
 

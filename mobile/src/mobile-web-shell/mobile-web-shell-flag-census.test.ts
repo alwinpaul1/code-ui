@@ -4,15 +4,15 @@ import { describe, expect, it } from 'vitest'
 import { censusSourceFiles } from '../test-support/census-source-files'
 
 /**
- * The hybrid shell flag is the whole of what keeps this feature dark in a native build, so who
- * touches it is a product invariant rather than a convention. A second reader is how a dark feature
- * stops being dark: a launch-time sweep, a prefetch or a menu item that consults the flag would run
- * in a native store build the moment anything flipped it, and none of those would fail a type
- * check.
+ * The build alone decides whether the hybrid shell is used (Orca #26825 removed the Troubleshoot
+ * toggle and its stored flag), and that is what keeps the feature dark in a native build. So who
+ * asks the build is a product invariant rather than a convention: a second reader is how a dark
+ * feature stops being dark, and none would fail a type check.
  *
- * The build-kind fact is the same shape of invariant one level up. `EXPO_PUBLIC_MOBILE_SHELL` is
- * what a release workflow sets to build the OTA binary, and a second module spelling it would be a
- * second answer to "is this the page's build" that no type check would catch either.
+ * `EXPO_PUBLIC_MOBILE_SHELL` is what a release workflow sets to build the OTA binary, and a second
+ * module spelling it would be a second answer to "is this the page's build" that no type check
+ * would catch either. The old stored key must also stay gone: nothing reads it, and a reader that
+ * came back would let a value an earlier install left behind turn the shell on.
  */
 const MOBILE_ROOT = join(import.meta.dirname, '..', '..')
 const FLAG_KEY = 'orca:mobileWebShellEnabled'
@@ -21,9 +21,7 @@ const BUILD_SWITCH_READ = 'process.env.EXPO_PUBLIC_'
 /** The other spelling Expo's plugin inlines, which is how the rule above would be evaded. */
 const BUILD_SWITCH_BRACKET_READ = "process.env['EXPO_PUBLIC_"
 const DEFINITION = 'src/storage/preferences.ts'
-/** The one product reader, which only the shared switch decision asks. */
-const FLAG_HOOK = 'src/mobile-web-shell/use-mobile-web-shell-enabled.ts'
-/** The one caller of that hook: every route asks this instead, so its list is the whole census. */
+/** Every route asks this instead of the build, so its list is the whole census. */
 const DECISION = 'src/mobile-web-shell/shell-switch-decision.ts'
 const ROUTE = 'app/h/[hostId]/web.tsx'
 const HOST_ROUTE = 'app/h/[hostId]/index.tsx'
@@ -36,8 +34,6 @@ const REVIEW_ROUTE = 'app/h/[hostId]/review/[worktreeId].tsx'
 const SESSION_ROUTE = 'app/h/[hostId]/session/[worktreeId].tsx'
 /** The one switch with no native screen behind it; its route file only re-exports this body. */
 const CATCH_ALL_ROUTE = 'src/mobile-web-shell/catch-all-page-route.tsx'
-/** What a switch paints while the decision is `pending`, and the third thing every switch names. */
-const PENDING_SCREEN = 'src/mobile-web-shell/ShellSwitchPendingScreen.tsx'
 /** One entry per screen the flag can switch to the page, which is what a review reads. */
 const SWITCHED_ROUTES = [
   HOST_ROUTE,
@@ -50,8 +46,7 @@ const SWITCHED_ROUTES = [
   SESSION_ROUTE,
   CATCH_ALL_ROUTE
 ]
-const DEVELOPER_ROW = 'src/diagnostics/mobile-web-shell-dev-row.tsx'
-/** The one screen that decides whether that row mounts, which is a build-kind question. Code UI
+/** The one screen that decides whether the update-failure row mounts, which is a build-kind question. Code UI
  *  keeps the whole Troubleshoot screen in the route file rather than upstream's TroubleshootView. */
 const TROUBLESHOOT_ROUTE = 'app/troubleshoot.tsx'
 /** Every tree that ships in the app bundle, with the floor each must clear. `modules` is two files,
@@ -100,18 +95,15 @@ function matchesOf(needle: string): string {
     .join('\n')
 }
 
-describe('who touches the hybrid shell flag', () => {
+describe('who asks the build whether the hybrid shell is used', () => {
   it('reaches every shipped tree, so the absence assertions below cannot pass vacuously', () => {
     const paths = SOURCES.map((file) => file.path)
     expect(paths).toContain(DEFINITION)
-    expect(paths).toContain(FLAG_HOOK)
     expect(paths).toContain(DECISION)
-    expect(paths).toContain(PENDING_SCREEN)
     expect(paths).toContain(ROUTE)
     for (const route of SWITCHED_ROUTES) {
       expect(paths).toContain(route)
     }
-    expect(paths).toContain(DEVELOPER_ROW)
     expect(paths).toContain(TROUBLESHOOT_ROUTE)
     expect(paths).toContain(SHELL_VIEW)
     const trees = Object.keys(TREES)
@@ -121,8 +113,8 @@ describe('who touches the hybrid shell flag', () => {
     expect(paths.filter((path) => !trees.some((tree) => path.startsWith(`${tree}/`)))).toEqual([])
   })
 
-  it('keeps the storage key itself in one module', () => {
-    expect(filesContaining(FLAG_KEY)).toEqual([DEFINITION])
+  it('keeps the removed storage key out of the product', () => {
+    expect(filesContaining(FLAG_KEY), matchesOf(FLAG_KEY)).toEqual([])
   })
 
   it('reads the build-time switch in one module', () => {
@@ -140,69 +132,34 @@ describe('who touches the hybrid shell flag', () => {
     ).toEqual([])
   })
 
-  it('answers the build kind through one named function, asked by the flag and the row label', () => {
+  it('answers the build kind through one named function, asked by the decision and the row gate', () => {
     expect(filesContaining('mobileShellBuildKind'), matchesOf('mobileShellBuildKind')).toEqual(
-      [DEFINITION, DEVELOPER_ROW].sort()
+      [DEFINITION, DECISION, TROUBLESHOOT_ROUTE].sort()
     )
-  })
-
-  it('is read by one hook and by the developer row that writes it, and nowhere else', () => {
-    expect(filesContaining('loadMobileWebShellEnabled')).toEqual(
-      [DEFINITION, DEVELOPER_ROW, FLAG_HOOK].sort()
-    )
-  })
-
-  it('is read by the shared switch decision and by nothing else', () => {
-    // The narrowest this has ever been, and the reason the rule below is total: a route cannot
-    // hold a private opinion about the flag — including about the window where it is still `null`
-    // — without reading it, and this is the only place that reads it.
-    expect(
-      filesContaining('useMobileWebShellEnabled'),
-      matchesOf('useMobileWebShellEnabled')
-    ).toEqual([DECISION, FLAG_HOOK].sort())
   })
 
   it('reaches the switched routes through that decision and no others', () => {
-    // Each switched route is a screen the flag decides the renderer of, and one more is one more
+    // Each switched route is a screen the build decides the renderer of, and one more is one more
     // place a dark feature could turn itself on. The list grows once per domain series, in the PR
     // that switches the route file to MobileWebShellScreen, and never as a side effect of anything
     // else. A switched route is inert until MOBILE_WEB_PAGE_ROUTES lists it as well, so an entry
     // here can land a PR ahead of that one.
-    expect(filesContaining('useShellSwitchDecision'), matchesOf('useShellSwitchDecision')).toEqual(
+    expect(filesContaining('shellSwitchDecision'), matchesOf('shellSwitchDecision')).toEqual(
       [DECISION, ROUTE, ...SWITCHED_ROUTES].sort()
     )
   })
 
-  it('gives every one of them the same neutral state to paint while the flag is unresolved', () => {
-    // The rule a sixth switch would otherwise regress past. Reading the flag through the decision
-    // is not on its own enough: a switch that ignored `pending` and fell through to its native
-    // screen would satisfy the rule above and still flash native in front of a flag-on user. This
-    // one says every switch names the neutral screen, which is existence rather than shape — where
-    // it names it is the route test's business, and `shell-switch-null-flag.test.tsx` drives all
-    // nine through the states themselves.
-    expect(
-      filesContaining('ShellSwitchPendingScreen'),
-      matchesOf('ShellSwitchPendingScreen')
-    ).toEqual([PENDING_SCREEN, ROUTE, ...SWITCHED_ROUTES].sort())
-  })
-
-  it('fences the build kind in one place, which the read, the hook and the row gate ask', () => {
-    // The test that makes a native store build unable to turn the flag on: `__DEV__`, or a binary
-    // built with the switch set to `ota`. The hook starts its state on it so a native release
-    // build never reaches the neutral state, which is the same answer `loadMobileWebShellEnabled`
-    // gives one render later — and two spellings of one build-kind test are two things to keep
-    // true, where this feature's darkness rests on exactly one.
-    //
-    // The Troubleshoot route asks the same question to decide whether to mount the toggle, which
-    // is the one place a user can switch an OTA build back to the native screens. Asking it rather
-    // than re-deriving it is why that row and the flag can never disagree about the build.
-    expect(
-      filesContaining('mobileWebShellFlagCanBeOn'),
-      matchesOf('mobileWebShellFlagCanBeOn')
-    ).toEqual([DEFINITION, FLAG_HOOK, TROUBLESHOOT_ROUTE].sort())
-  })
-
-  it('is written only by the developer row', () => {
-    expect(filesContaining('saveMobileWebShellEnabled')).toEqual([DEFINITION, DEVELOPER_ROW].sort())
+  it('has no stored flag, hook or neutral frame left to read', () => {
+    for (const gone of [
+      'loadMobileWebShellEnabled',
+      'saveMobileWebShellEnabled',
+      'mobileWebShellFlagCanBeOn',
+      'useMobileWebShellEnabled',
+      'useShellSwitchDecision',
+      'ShellSwitchPendingScreen',
+      'MobileWebShellDevRow'
+    ]) {
+      expect(filesContaining(gone), matchesOf(gone)).toEqual([])
+    }
   })
 })

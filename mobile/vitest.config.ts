@@ -3,8 +3,22 @@ import { defineConfig } from 'vitest/config'
 
 const vitestOxcConfig = { tsconfig: false } as never
 
+// Why: expo-file-system needs globalThis.expo at import; see src/test/expo-file-system-mock.ts. Not an
+// `alias` entry: those match by prefix, so 'expo-file-system/legacy' (which tests mock by that exact
+// name) would resolve under the stand-in's path and no longer be found. This matches the bare name only.
+const expoFileSystemStandIn = {
+  name: 'expo-file-system-stand-in',
+  enforce: 'pre' as const,
+  resolveId(source: string) {
+    return source === 'expo-file-system'
+      ? fileURLToPath(new URL('./src/test/expo-file-system-mock.ts', import.meta.url))
+      : null
+  }
+}
+
 export default defineConfig({
   root: import.meta.dirname,
+  plugins: [expoFileSystemStandIn],
   resolve: {
     alias: {
       // Why: component tests mock 'react-native' to a few string tags; the real
@@ -15,6 +29,10 @@ export default defineConfig({
       ),
       // Why: react-native-pdf is a native view with no Node entry.
       'react-native-pdf': fileURLToPath(new URL('./src/test/react-native-pdf-mock.ts', import.meta.url)),
+      // Why: react-native-webview needs react-native's EventEmitter at import; see the mock's note.
+      'react-native-webview': fileURLToPath(
+        new URL('./src/test/react-native-webview-mock.ts', import.meta.url)
+      ),
       // Why: the rich-paste module imports `expo`, which has no Node entry either.
       '@codeui/expo-rich-paste': fileURLToPath(
         new URL('./src/test/expo-rich-paste-mock.ts', import.meta.url)
@@ -43,6 +61,10 @@ export default defineConfig({
   // otherwise fails before Vitest can run the test modules.
   oxc: vitestOxcConfig,
   test: {
+    // Why: stock Node worker threads (Orca #26899). The tty sandbox below needs no fork: the workers
+    // inherit this process's environment either way, and the terminal-ancestor check runs in the
+    // global setup, in this process, before any worker starts.
+    pool: 'threads',
     environment: 'node',
     // Why: the tty sandbox (a ps that sees nothing, every tty override on a temp
     // file) is set before any worker starts; see vitest.global-setup.ts.

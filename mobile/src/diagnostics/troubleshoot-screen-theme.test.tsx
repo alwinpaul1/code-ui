@@ -81,10 +81,7 @@ vi.mock('../transport/client-context', () => ({
 }))
 vi.mock('expo', () => ({ requireOptionalNativeModule: () => null }))
 vi.mock('../storage/preferences', () => ({
-  mobileWebShellFlagCanBeOn: () => true,
-  loadMobileWebShellEnabled: async () => true,
-  mobileShellBuildKind: () => 'ota',
-  saveMobileWebShellEnabled: async () => undefined
+  mobileShellBuildKind: () => 'ota'
 }))
 vi.mock('../mobile-web-shell/process-generation-store', () => ({
   processGenerationStore: () => ({ readUpdateFailures: async () => doubles.failures })

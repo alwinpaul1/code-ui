@@ -103,13 +103,14 @@ vi.mock('../transport/client-context', () => ({
   })
 }))
 vi.mock('../storage/preferences', () => ({
-  mobileWebShellFlagCanBeOn: () => false,
-  loadMobileWebShellEnabled: async () => false,
-  mobileShellBuildKind: () => 'ota',
-  saveMobileWebShellEnabled: async () => undefined
+  mobileShellBuildKind: () => 'native'
 }))
-// Why: these pull the shell's file-system store, which needs Expo's native runtime. Neither row is
-// mounted with the shell flag off.
+// Why: the bundle probe row mounts in every development build (the flag that used to gate it with
+// the toggle is gone, Orca #26825) and reads the host list itself, which this file's failing-store
+// cases would reject into an unhandled rejection. These tests are about the paired-hosts check.
+vi.mock('./mobile-web-bundle-probe-row', () => ({ MobileWebBundleProbeRow: () => null }))
+// Why: this pulls the shell's file-system store, which needs Expo's native runtime. The update
+// failure row is not mounted in a native build.
 vi.mock('../mobile-web-shell/process-generation-store', () => ({
   processGenerationStore: () => ({ readUpdateFailures: async () => [] })
 }))

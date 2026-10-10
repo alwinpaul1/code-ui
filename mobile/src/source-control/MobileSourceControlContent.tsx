@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   ActivityIndicator,
   Pressable,
@@ -73,20 +74,36 @@ export function MobileSourceControlContent({ state, pullToRefresh }: Props) {
   const shouldShowGenerateButton = stagedCount > 0 || generatingMessage
   const createPrHeroActive =
     createPrAction.visible && !createPrAction.disabled && !createPrAction.pushFirst
-  const branchCompareFooter = (
-    <BranchCompareFooter
-      state={{
-        shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
-        branchCompareSummaryText: state.branchCompareSummaryText,
-        branchEntries: state.branchEntries,
-        branchCompareState: state.branchCompareState,
-        branchCompareResult: state.branchCompareResult,
-        busyAction,
-        openBranchDiff,
-        openingBranchPath,
-        openingPath
-      }}
-    />
+  // Why: every keystroke in the commit message re-renders this component, and a fresh footer element
+  // made the list revisit every committed-on-branch row (formatting each one) per character typed.
+  // The footer reads only these inputs, so it is rebuilt only when one of them changes.
+  const branchCompareFooter = useMemo(
+    () => (
+      <BranchCompareFooter
+        state={{
+          shouldShowBranchCompareSection: state.shouldShowBranchCompareSection,
+          branchCompareSummaryText: state.branchCompareSummaryText,
+          branchEntries: state.branchEntries,
+          branchCompareState: state.branchCompareState,
+          branchCompareResult: state.branchCompareResult,
+          busyAction,
+          openBranchDiff,
+          openingBranchPath,
+          openingPath
+        }}
+      />
+    ),
+    [
+      state.shouldShowBranchCompareSection,
+      state.branchCompareSummaryText,
+      state.branchEntries,
+      state.branchCompareState,
+      state.branchCompareResult,
+      busyAction,
+      openBranchDiff,
+      openingBranchPath,
+      openingPath
+    ]
   )
 
   return (

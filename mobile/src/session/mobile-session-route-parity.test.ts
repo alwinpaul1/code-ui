@@ -228,7 +228,10 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-08: the terminal subscribe's stream handler holds each attach snapshot for the
 // startup-frame reader (noteAttachSnapshot), above its return for a covered handle. Only
 // that body moved. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '5e5e0f9f137c307f2d7cf3b70d7e818b2eca78585d78b8451fba27f356889a5f'
+// 2026-10-10 (Orca #26159 ported): readMarkdownTab's writes land only while their own loading
+// record is the tab's current one, and an accepted Markdown tab close deletes its clean document.
+// The bodies of readMarkdownTab and handleCloseSessionTab moved. Same callbacks.
+const HEAD_CALLBACK_BODY_SHA256 = '9fc107e757e803caf1fd43cf8b37db96771dd61ecf067a210c50b9963cf8c577'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -315,8 +318,10 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // still 13.
 // 2026-10-06 (Orca #24655 ported): handleCloseSessionTab's body gains the file-tab document release.
 // Same 13 functions. The #24655 follow-up adds the read cache's forget to the same body.
+// 2026-10-10 (Orca #26159 ported): the same body also deletes an accepted Markdown tab's clean
+// document. Same 13 functions.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'ad0d59f4f0ef6c7799aa3747176288b01f99d78cde065d3bb0d400044acd1753'
+  '9e3c043a52efdeb7ac0cb76087ac3f191b82a83cc63642d6d050d60b6989a58f'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -415,8 +420,13 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // now calls `tabPillDotState(status, now, leadTurnEnded)` and holds no other literal of it.
 // 671 since 2026-10-06 (Orca #24655 ported): the `'file'` check before an accepted file-tab close
 // releases that tab's document; no other literal moved.
+// 673 since 2026-10-10 (Orca #26159 ported): the 'markdown' check and the 'ready' test in the
+// close action that releases a closed Markdown tab's document; the readers' guard compares object
+// identity and adds no literal. No other literal moved.
+// 674 since 2026-10-10 (Orca #26148 ported): FileReader's `doc.kind === 'media'` arm, which plays a
+// video or music tab through MobileFileMediaPreview; no other literal moved.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '1b367405f456cd52d5285cb36a3484b6e23e4d26bd22b5e0b79c8e7187336db1'
+  '43a04be2793cfc3cabaf22cf0c053598b7a638db1722d476f3058cdeaae83bdd'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -551,7 +561,8 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // pane (native-chat-kept-session.ts). Same 73 records; only that record moved.
 // 2026-10-04 (xterm only): <TerminalPaneView> loses its `engine` prop, the phone draws every pane
 // with the WebView now. Same 73 records; only that record moved.
-const HEAD_LEAF_JSX_SHA256 = 'b66d13b81b0f8bea994b46aca2e938aef716d5c7f05b964ae6993a5f9cb8f738'
+// 2026-10-10 (Orca #26148 ported): one new leaf record, <MobileFileMediaPreview media client title /> in FileReader's media arm.
+const HEAD_LEAF_JSX_SHA256 = 'dc60dcbbffcecfbcde5d2a00f32e8dbfb2577a622c58a2c183ce4a59e0907b59'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1108,7 +1119,9 @@ describe('mobile session route extraction parity', () => {
     // live-terminal-dictation.ts (see HEAD_RUNTIME_STRING_SHA256).
     // 670 since 2026-10-04: the tab pill's 'idle' moved to session-tab-activity.ts.
     // 671 since 2026-10-06: the 'file' check before a closed file tab's document is released (Orca #24655).
-    expect(strings).toHaveLength(671)
+    // 673 since 2026-10-10: the close action's 'markdown' and 'ready' (Orca #26159).
+    // 674 since 2026-10-10: FileReader's 'media' arm (Orca #26148).
+    expect(strings).toHaveLength(674)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
@@ -1129,7 +1142,8 @@ describe('mobile session route extraction parity', () => {
     // Same leaf record COUNT (73) since 2026-09-27 (theme sweep): several leaf icon `color` props
     // moved from the static `mobile-theme` palette to the live `colors` (e.g. `colors.textPrimary`
     // -> `colors.text`), so their captured expressions changed without changing the count.
-    expect(jsx.leaf).toHaveLength(73)
+    // 74 since 2026-10-10: FileReader mounts MobileFileMediaPreview for a video or music tab (Orca #26148).
+    expect(jsx.leaf).toHaveLength(74)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

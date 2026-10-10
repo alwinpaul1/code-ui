@@ -18,6 +18,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     terminalsRef,
     setSessionTabs,
     setFileDocs,
+    setMarkdownDocs,
     sessionTabsRef,
     reconcileBufferedDraftsRef,
     closedTabTombstonesRef,
@@ -142,6 +143,19 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted) {
+        if (tab.type === 'markdown') {
+          // The tab is gone on the host, so its document (up to megabytes of text) has no owner.
+          // An unsaved phone draft stays: it is the user's text, not a cache.
+          setMarkdownDocs((prev) => {
+            const doc = prev.get(tab.id)
+            if (!doc || (doc.status === 'ready' && doc.isDirty)) {
+              return prev
+            }
+            const next = new Map(prev)
+            next.delete(tab.id)
+            return next
+          })
+        }
         if (tab.type === 'file') {
           // The read cache keeps a copy for the next open of this path; the tab is gone, so it goes too.
           forgetFileTabDoc(worktreeId, tab.relativePath)
