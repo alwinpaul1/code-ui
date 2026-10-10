@@ -20,9 +20,12 @@ vi.mock('./mac-unlock-password-store', () => ({
   clearMacUnlockPassword: vi.fn(async () => undefined)
 }))
 
+import type { MacHostAction } from './mac-host-commands'
+import { EXPECTED_HOST_STATE_FRESH_MS } from './mac-host-expected-state'
 import { MAC_HOST_STATE_PROBE_COMMAND, type MacHostState } from './mac-host-state'
 import { MAC_HOST_STATE_PROBE_TIMEOUT_MS } from './probe-mac-host-state'
-import type { MacHostSheetState } from './mac-host-sheet-actions'
+import { getMacHostSheetActions, type MacHostSheetState } from './mac-host-sheet-actions'
+import { WINDOWS_HOST_STATE_PROBE_COMMAND } from './windows-host-state'
 import { useMacHostControls } from './use-mac-host-controls'
 
 type Props = Parameters<typeof useMacHostControls>[0]
@@ -52,8 +55,11 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
     actionDoneAfterMs: 0,
     afterActionLagMs: 1000,
     liveWorktree: `${hostId}-wt`,
+    /** What the client says getLastConnectedAt is; a new value is a reconnect. */
+    connectedAt: 1 as number | null,
     created,
     client: {
+      getLastConnectedAt: () => host.connectedAt,
       sendRequest: vi.fn(async (method: string, params?: unknown) => {
         const args = (params ?? {}) as { command?: string; terminal?: string; worktree?: string }
         if (method === 'host.platform') {
@@ -63,7 +69,7 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
           if (args.worktree !== `id:${host.liveWorktree}`) {
             return { id: '1', ok: false as const, error: { code: 'not_found', message: 'worktree_not_found' } }
           }
-          if (host.actionMode === 'throw' && args.command !== MAC_HOST_STATE_PROBE_COMMAND) {
+          if (host.actionMode === 'throw' && !isProbe(args.command)) {
             return undefined
           }
           const terminal = `${hostId}-term-${created.length + 1}`
@@ -74,7 +80,7 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
         }
         if (method === 'terminal.read') {
           const command = commandByTerminal.get(args.terminal ?? '') ?? ''
-          if (command === MAC_HOST_STATE_PROBE_COMMAND) {
+          if (isProbe(command)) {
             return ok({ terminal: { lines: host.answer ? [host.answer] : [] } })
           }
           const createdAt = createdAtByTerminal.get(args.terminal ?? '') ?? 0
@@ -98,9 +104,13 @@ function fakeHost(hostId: string, platform: NodeJS.Platform) {
         return ok({})
       })
     } as unknown as RpcClient,
-    probes: () => created.filter((command) => command === MAC_HOST_STATE_PROBE_COMMAND).length
+    probes: () => created.filter(isProbe).length
   }
   return host
+}
+
+function isProbe(command: string | undefined): boolean {
+  return command === MAC_HOST_STATE_PROBE_COMMAND || command === WINDOWS_HOST_STATE_PROBE_COMMAND
 }
 
 function infoFor(hostId: string, worktreeId = `${hostId}-wt`): HostWorktreeInfo {
@@ -304,6 +314,13 @@ describe('the host menu after one of its rows ran', () => {
     const waited = await checkingFor(20_000)
     expect(waited).not.toBeNull()
     expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS)
+    // The Unlock that finished is drawn first, as Lock alone; the check then says
+    // what the Mac is.
+    expect(latest?.macOptions?.state).toMatchObject({ lock: 'unknown' })
+    // Stepped, so the gate falling renders and starts the check inside the wait.
+    for (let step = 0; step < MAC_HOST_STATE_PROBE_TIMEOUT_MS; step += 500) {
+      await elapse(500)
+    }
     expect(latest?.macOptions?.state).toEqual({ lock: 'unlocked', display: 'on', mute: 'muted' })
   })
 
@@ -341,13 +358,23 @@ describe('the host menu after one of its rows ran', () => {
     render({ ...props, openHostId: null })
     act(() => onAction?.('mute'))
     render({ ...props, openHostId: 'mac' })
-    // The host never answers the check that follows.
+    // The host never answers the check that follows. The rows Mute left behind are
+    // drawn meanwhile (2026-10-10), so the budget is read off the check's own tab:
+    // the third one opened, closed when the check gives up.
     mac.answer = null
-    const waited = await checkingFor(20_000)
-    expect(waited).not.toBeNull()
+    const probeClosed = () =>
+      vi.mocked(mac.client.sendRequest).mock.calls.some(
+        ([method, params]) => method === 'session.tabs.close' && (params as { tabId?: string }).tabId === 'mac-term-3-tab'
+      )
+    let waited = 0
+    while (!probeClosed() && waited <= 20_000) {
+      await elapse(100)
+      waited += 100
+    }
+    expect(probeClosed()).toBe(true)
     // One screen read may be in flight when the budget runs out.
-    expect(waited!).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS + 300)
-    expect(latest?.macOptions?.state).toEqual({ lock: 'unknown', display: 'unknown', mute: 'unknown' })
+    expect(waited).toBeLessThanOrEqual(MAC_HOST_STATE_PROBE_TIMEOUT_MS + 300)
+    expect(latest?.macOptions?.state).toEqual({ lock: 'unlocked', display: 'on', mute: 'muted' })
   })
 
   it('does not leave the menu checking for good when an action throws', async () => {
@@ -419,4 +446,224 @@ describe('the host menu when an Unlock typed nothing', () => {
       expect(latest?.toast).not.toContain('fake-pw-not-real')
     })
   }
+})
+
+// Aravind, 2026-10-10 (Windows): after every row he ran, reopening the menu sat on
+// "Checking the PC…" for several seconds before the rows came back. Every open
+// forgot the last answer and asked again in a new PowerShell. An action that
+// finished OK now leaves its state behind, drawn at once, while the check runs
+// behind it.
+const HOSTS = [
+  {
+    platform: 'darwin',
+    noun: 'Mac',
+    marker: (mute: boolean, display: 'on' | 'off') => `CUIMAC lock=0 mute=${mute} display=${display} end`
+  },
+  {
+    platform: 'win32',
+    noun: 'PC',
+    marker: (mute: boolean, display: 'on' | 'off') => `CUIWIN mute=${mute} display=${display} standby=classic`
+  }
+] as const
+
+type FakeHost = ReturnType<typeof fakeHost>
+type MenuProps = Omit<Props, 'openHostId'>
+
+function rows(): string[] {
+  return getMacHostSheetActions(latest?.macOptions).map((row) => row.label)
+}
+
+function propsFor(host: FakeHost): MenuProps {
+  return { clients: clientsOf(host), worktreeInfo: { [host.hostId]: infoFor(host.hostId) } }
+}
+
+/** Opens the host's menu, lets the host answer, closes it and runs `action` from it. */
+async function runFromMenu(host: FakeHost, props: MenuProps, action: MacHostAction) {
+  render({ ...props, openHostId: null })
+  await elapse(10)
+  render({ ...props, openHostId: host.hostId })
+  await elapse(600)
+  expect(latest?.macOptions?.state).not.toBe('checking')
+  const onAction = latest?.macOptions?.onAction
+  render({ ...props, openHostId: null })
+  act(() => onAction?.(action))
+  await elapse(600)
+}
+
+function reopen(host: FakeHost, props: MenuProps) {
+  states.length = 0
+  render({ ...props, openHostId: host.hostId })
+}
+
+describe('the host menu reopened after one of its rows finished', () => {
+  for (const { platform, noun, marker } of HOSTS) {
+    it(`shows Unmute at once, with no checking row, after Mute finished on a ${noun}`, async () => {
+      const host = fakeHost('host', platform)
+      const props = propsFor(host)
+      host.answer = marker(false, 'on')
+      host.afterAction = marker(true, 'on')
+      await runFromMenu(host, props, 'mute')
+      reopen(host, props)
+      expect(states).not.toContain('checking')
+      expect(rows()).toContain(`Unmute ${noun}`)
+      expect(rows()).not.toContain(`Mute ${noun}`)
+      // The check still runs, once, after the host has settled, behind the rows.
+      expect(host.probes()).toBe(1)
+      await elapse(3500)
+      await elapse(1000)
+      expect(host.probes()).toBe(2)
+      expect(states).not.toContain('checking')
+      expect(rows()).toContain(`Unmute ${noun}`)
+    })
+
+    it(`shows Wake display at once after Sleep display finished on a ${noun}`, async () => {
+      const host = fakeHost('host', platform)
+      const props = propsFor(host)
+      host.answer = marker(false, 'on')
+      host.afterAction = marker(false, 'off')
+      await runFromMenu(host, props, 'sleep-display')
+      reopen(host, props)
+      expect(states).not.toContain('checking')
+      expect(rows()).toContain('Wake display')
+      expect(rows()).not.toContain('Sleep display')
+      // What the menu knew before about the sound is still drawn.
+      expect(rows()).toContain(`Mute ${noun}`)
+      expect(rows()).not.toContain(`Unmute ${noun}`)
+    })
+  }
+
+  it('lets what the host says next replace the rows it expected', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    // Someone unmuted it again at the desk.
+    host.afterAction = UNLOCKED_AWAKE
+    await runFromMenu(host, props, 'mute')
+    reopen(host, props)
+    expect(rows()).toContain('Unmute Mac')
+    await elapse(3500)
+    await elapse(1000)
+    expect(rows()).toContain('Mute Mac')
+    expect(rows()).not.toContain('Unmute Mac')
+    expect(states).not.toContain('checking')
+  })
+
+  it('keeps the expected rows when the check that follows gets no answer', async () => {
+    const host = fakeHost('host', 'win32')
+    const props = propsFor(host)
+    host.answer = HOSTS[1].marker(false, 'on')
+    await runFromMenu(host, props, 'mute')
+    host.answer = null
+    reopen(host, props)
+    await elapse(20_000)
+    expect(host.probes()).toBe(2)
+    expect(states).not.toContain('checking')
+    expect(rows()).toContain('Unmute PC')
+    expect(rows()).not.toContain('Mute PC')
+  })
+
+  it('says it is checking again when reopened after a row that did not finish', async () => {
+    const host = fakeHost('host', 'win32')
+    const props = propsFor(host)
+    host.answer = HOSTS[1].marker(false, 'on')
+    host.actionMode = 'stuck'
+    await runFromMenu(host, props, 'mute')
+    await elapse(16_000)
+    expect(latest?.toast).toBe('The PC did not finish that. Check the desktop.')
+    reopen(host, props)
+    expect(latest?.macOptions?.state).toBe('checking')
+  })
+
+  // Review, 2026-10-10: the rows the last action left behind stayed drawn, and
+  // tappable, while the next action was still running, so a second Unlock could
+  // overlap the first one.
+  it('says it is checking while the next row is still running', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    await runFromMenu(host, props, 'mute')
+    reopen(host, props)
+    expect(rows()).toContain('Unmute Mac')
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    host.actionMode = 'stuck'
+    act(() => onAction?.('sleep-display'))
+    await elapse(300)
+    reopen(host, props)
+    expect(latest?.macOptions?.state).toBe('checking')
+  })
+
+  it('says it is checking after a row failed, even when the one before it finished', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    await runFromMenu(host, props, 'mute')
+    reopen(host, props)
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    host.actionMode = 'stuck'
+    act(() => onAction?.('unmute'))
+    await elapse(11_000)
+    expect(latest?.toast).toBe('The Mac did not finish that. Check the desktop.')
+    reopen(host, props)
+    expect(latest?.macOptions?.state).toBe('checking')
+  })
+
+  it('says it is checking again once the row ran two minutes ago', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    await runFromMenu(host, props, 'mute')
+    await elapse(EXPECTED_HOST_STATE_FRESH_MS)
+    reopen(host, props)
+    expect(latest?.macOptions?.state).toBe('checking')
+  })
+
+  it('says it is checking again after the host reconnected', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    await runFromMenu(host, props, 'mute')
+    host.connectedAt = 2
+    reopen(host, props)
+    expect(latest?.macOptions?.state).toBe('checking')
+  })
+
+  it('offers Unlock at once after Lock finished on a Mac', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = UNLOCKED_AWAKE
+    host.afterAction = 'CUIMAC lock=1 mute=false display=on end'
+    await runFromMenu(host, props, 'lock')
+    reopen(host, props)
+    expect(states).not.toContain('checking')
+    expect(rows()).toContain('Unlock Mac')
+    expect(rows()).not.toContain('Lock Mac')
+  })
+
+  it('keeps offering Lock PC after Lock finished on a PC, which has no Unlock', async () => {
+    const host = fakeHost('host', 'win32')
+    const props = propsFor(host)
+    host.answer = HOSTS[1].marker(false, 'on')
+    await runFromMenu(host, props, 'lock')
+    reopen(host, props)
+    expect(states).not.toContain('checking')
+    expect(rows()).toEqual(['Lock PC', 'Sleep display', 'Mute PC'])
+  })
+
+  it('never offers Unlock from what it expects without a Lock behind it', async () => {
+    const host = fakeHost('host', 'darwin')
+    const props = propsFor(host)
+    host.answer = LOCKED_MUTED
+    host.afterAction = 'CUIMAC lock=1 mute=false display=off end'
+    await runFromMenu(host, props, 'unmute')
+    reopen(host, props)
+    expect(states).not.toContain('checking')
+    expect(rows()).toContain('Lock Mac')
+    expect(rows()).not.toContain('Unlock Mac')
+    // Once the Mac itself says it is locked, Unlock is back.
+    await elapse(3500)
+    await elapse(1000)
+    expect(rows()).toContain('Unlock Mac')
+  })
 })
