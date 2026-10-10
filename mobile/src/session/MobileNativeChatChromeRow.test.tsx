@@ -19,15 +19,12 @@ vi.mock('./MobileNativeChatStatusLine', () => ({
   MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
 }))
 vi.mock('lucide-react-native', () => ({
-  ChevronsDownUp: 'ChevronsDownUp',
-  ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
 
 const styles = {
   chromeRow: {},
   chromeLeft: {},
-  chromeToggle: {},
   pressed: {},
   stopButton: {},
   sendError: {}
@@ -71,8 +68,6 @@ describe('the Stop button above the composer', () => {
           { initialPreference: scheme },
           createElement(MobileNativeChatChromeRow, {
             ...props,
-            toolsExpanded: false,
-            onToggleTools: () => {},
             styles
           })
         )

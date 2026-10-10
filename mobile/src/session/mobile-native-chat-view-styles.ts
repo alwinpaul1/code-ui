@@ -13,7 +13,6 @@ export function makeChatViewStyles(theme: Theme) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: 30,
       paddingHorizontal: space.md
     },
     chromeLeft: {
@@ -47,13 +46,6 @@ export function makeChatViewStyles(theme: Theme) {
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.bgPanel
-    },
-    chromeToggle: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-      paddingVertical: 4,
-      paddingHorizontal: space.xs
     },
     pressed: {
       opacity: 0.6

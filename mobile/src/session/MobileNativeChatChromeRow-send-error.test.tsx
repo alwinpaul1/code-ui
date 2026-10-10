@@ -18,8 +18,6 @@ vi.mock('./MobileNativeChatStatusLine', () => ({
   MobileNativeChatStatusLine: 'MobileNativeChatStatusLine'
 }))
 vi.mock('lucide-react-native', () => ({
-  ChevronsDownUp: 'ChevronsDownUp',
-  ChevronsUpDown: 'ChevronsUpDown',
   Square: 'Square'
 }))
 
@@ -33,8 +31,6 @@ const message = "Couldn't open reports/draft.pdf: binary files don't open on the
 function Row() {
   const theme = useTheme()
   return createElement(MobileNativeChatChromeRow, {
-    toolsExpanded: false,
-    onToggleTools: () => {},
     sendErrorMessage: message,
     styles: makeChatViewStyles(theme)
   })

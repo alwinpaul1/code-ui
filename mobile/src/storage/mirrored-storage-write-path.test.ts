@@ -91,7 +91,7 @@ const MIRRORED_WRITERS = [
       'LIVE_TRANSCRIPTION_KEY'
     ]
   },
-  { file: 'src/storage/session-view-preferences.ts', unmirrored: ['CHAT_FOCUS_VIEW_KEY'] },
+  { file: 'src/storage/session-view-preferences.ts', unmirrored: ['CHAT_FOCUS_VIEW_KEY', 'CHAT_EXPAND_TOOLS_KEY'] },
   { file: 'src/terminal/terminal-accessory-layout.ts', unmirrored: [] },
   { file: 'src/components/CustomKeyModal.tsx', unmirrored: [] },
   { file: 'src/session/mobile-structured-send-operation-journal.ts', unmirrored: [] },
