@@ -105,4 +105,74 @@ describe('a new phone send after an acknowledgement was lost', () => {
       expect(storage.setItem).not.toHaveBeenCalled()
     }
   )
+
+  // The other half (2026-10-10): an AUTOMATIC retry of one press, which the outbox makes after
+  // the app was closed under it, is the same message. It carries the press's stored id, so the
+  // ledger answers it from the first attempt and the agent gets the message once.
+  it('sends an outbox retry of one press under that press id, so the host never posts it twice', async () => {
+    const ids: string[] = []
+    const delivered: string[] = []
+    const ledger = new Set<string>()
+    const sendRequest = vi.fn<RpcClient['sendRequest']>(async (_method, params) => {
+      const envelope = fieldsOf(fieldsOf(params).envelope)
+      const id = String(envelope.clientOperationId)
+      ids.push(id)
+      const replayed = ledger.has(id)
+      if (!replayed) {
+        ledger.add(id)
+        delivered.push(id)
+        throw markRpcDeliveryUnknown(new Error('Connection closed after dispatch'))
+      }
+      return {
+        id: 'response',
+        ok: true,
+        result: {
+          ok: true,
+          replayed,
+          fence: 3,
+          cursor: { epoch: 'epoch', sequence: 1 },
+          value: {
+            clientMessageId: id,
+            submission: {
+              clientMessageId: id,
+              fence: 3,
+              payloadFingerprint: String(envelope.payloadFingerprint),
+              dispatchState: 'accepted',
+              providerItemId: null,
+              reason: null,
+              submittedAt: Date.now(),
+              resolvedAt: null
+            }
+          }
+        }
+      }
+    })
+    const client: RpcClient = {
+      sendRequest,
+      subscribe: vi.fn(() => vi.fn()),
+      updateTerminalSubscriptionViewport: () => {},
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => null,
+      onStateChange: () => () => {},
+      notifyForeground: () => {},
+      close: () => {}
+    }
+    const operationId = `${Date.now()}-${'a'.repeat(32)}`
+    const send = () =>
+      sendMobileStructuredAgentSessionMessage({
+        client,
+        sessionId: 'session',
+        expectedRuntimeFence: 3,
+        text: 'please continue',
+        attachments: [],
+        operationId,
+        onError: vi.fn()
+      })
+
+    expect(await send()).toBe('unknown')
+    expect(await send()).toBe('accepted')
+    expect(ids).toEqual([operationId, operationId])
+    expect(delivered).toEqual([operationId])
+  })
 })

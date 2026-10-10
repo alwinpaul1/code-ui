@@ -34,6 +34,7 @@ import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-l
 import { MobileNativeChatDraftEditGenerations } from './mobile-native-chat-draft-edit-generations'
 import { appendComposerMentionWith } from './mobile-native-chat-draft-mention-append-action'
 import { dropNativeChatPendingEverywhere, liveNativeChatDrafts, useLiveNativeChatDrafts } from './mobile-native-chat-live-drafts'
+import { keepRefusedSendInOutbox, originOutboxFields, outboxEchoId, showOutboxEchoIn, showSendingEchoWith, type NativeChatOutboxEntry } from './mobile-native-chat-outbox-drafts'; import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
 export type { MobileNativeChatPendingMessage, MobileNativeChatSendOrigin }
 
@@ -107,6 +108,7 @@ export function useMobileNativeChatDrafts(args: {
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
   removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
+  showOutboxEcho: (entry: NativeChatOutboxEntry) => void; showSendingEcho: (origin: MobileNativeChatSendOrigin) => void // outbox bubbles
 } {
   const {
     hostId,
@@ -195,7 +197,8 @@ export function useMobileNativeChatDrafts(args: {
         // Only a settled read makes this a boundary. Anything else — hydrating,
         // or a read that failed — hands back an empty list that reads as "the
         // conversation was empty", which lets any row claim this send later.
-        baselineResolved: transcriptSettled
+        baselineResolved: transcriptSettled,
+        ...originOutboxFields(draftKey, normalizedText)
       }
     },
     [draftKey, pendingKey, transcriptSettled]
@@ -218,6 +221,7 @@ export function useMobileNativeChatDrafts(args: {
   }, [own])
 
   const restoreRejectedDraft = useCallback((origin: MobileNativeChatSendOrigin, text: string) => {
+    if (keepRefusedSendInOutbox(origin)) { return } else if (origin.echoDrawn && origin.outboxId) { dropNativeChatPendingEverywhere(own, outboxEchoId(origin.outboxId)) } // a recovery resend's bubble says "Not sent" instead
     // Appended, so typing done while the send was in flight stays and the returned text isn't dropped.
     liveNativeChatDrafts(origin.draftKey, own).setDrafts((previous) => {
       const current = previous[origin.draftKey] ?? ''
@@ -231,6 +235,7 @@ export function useMobileNativeChatDrafts(args: {
       if (!origin.pendingKey && !images?.length) {
         return null
       }
+      if ((origin.outboxRecovery || origin.echoDrawn) && origin.outboxId) { return outboxEchoId(origin.outboxId) } // its bubble is already drawn
       pendingCounter += 1
       const id = `pending-${Date.now()}-${pendingCounter}`
       const key = origin.pendingKey
@@ -256,9 +261,7 @@ export function useMobileNativeChatDrafts(args: {
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) {
-        return
-      }
+      if (!mountedRef.current) { releaseOutboxSend(origin.outboxId); return } // the chat closed under it: the next chat of its tab sees it through
       const entry = parkUnconfirmedSend({
         origin,
         text,
@@ -294,7 +297,7 @@ export function useMobileNativeChatDrafts(args: {
     const landedSet = new Set(landed)
     unconfirmedRef.current = unconfirmedRef.current.filter((entry) => !landedSet.has(entry))
     for (const entry of landed) {
-      clearTimeout(entry.deadline ?? undefined)
+      clearTimeout(entry.deadline ?? undefined); void retireOutboxSend(entry.outboxId)
     }
     // The transcript is the evidence the send arrived, so any failure notice
     // still on screen is describing something that did not happen.
@@ -307,7 +310,7 @@ export function useMobileNativeChatDrafts(args: {
     return () => {
       mountedRef.current = false
       for (const entry of unconfirmedRef.current) {
-        clearTimeout(entry.deadline ?? undefined)
+        clearTimeout(entry.deadline ?? undefined); releaseOutboxSend(entry.outboxId) // the next chat of its tab looks for it
       }
       unconfirmedRef.current = []
     }
@@ -374,6 +377,7 @@ export function useMobileNativeChatDrafts(args: {
   const drawnPreviews = useMemo(() => previewsAsDrawn(storedPreviews, pendingKey, messages, landed, written), [landed, messages, pendingKey, storedPreviews, written])
 
   const removePending = useCallback((id: string) => dropNativeChatPendingEverywhere(own, id), [own])
+  const showOutboxEcho = useCallback((entry: NativeChatOutboxEntry) => { const live = liveNativeChatDrafts(entry.draftKey, own); showOutboxEchoIn(entry, live.setPendingBySession, live.setPendingWaitingForSession) }, [own]); const showSendingEcho = useCallback((origin: MobileNativeChatSendOrigin) => showSendingEchoWith(origin, showOutboxEcho), [showOutboxEcho])
 
   const clearDraftAtSendStart = useCallback((text: string, images?: string[], imagePaths?: string[]) => clearDraftAtSendStartWith({ captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending }, text, images, imagePaths), [captureSendOrigin, clearDraftForSend, restoreRejectedDraft, acceptSend, removePending])
 
@@ -387,11 +391,10 @@ export function useMobileNativeChatDrafts(args: {
     imagePreviewsByMessageId: drawnPreviews,
     captureSendOrigin,
     readSeededLaunchDraft, readSeededLaunchDraftSeed, rememberEcho, takeSends,
-    clearDraftForSend,
-    restoreRejectedDraft,
+    clearDraftForSend, restoreRejectedDraft,
     acceptSend,
     clearDraftAtSendStart,
     holdUnconfirmedSend,
-    removePending
+    removePending, showOutboxEcho, showSendingEcho
   }
 }

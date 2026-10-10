@@ -65,6 +65,7 @@ export type ConnectionDiagnosticCode =
   | 'relay-credential-unavailable'
   | 'host-open-failed'
   | 'app-paused'
+  | 'chat-send-timing'
 
 export type ConnectionLogEntry = {
   id: string

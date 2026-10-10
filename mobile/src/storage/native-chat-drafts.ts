@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { barrierAfterWrite } from './refused-write-log'
+import { nativeChatOutboxWritesSettled } from './native-chat-outbox'
 
 const DRAFT_PREFIX = 'orca:chatDraft:'
 
@@ -37,9 +38,17 @@ const barriers = new Map<string, Promise<void>>()
  *  An empty draft removes the entry. */
 export function writeNativeChatDraft(scopeKey: string, text: string): Promise<void> {
   const key = draftStorageKey(scopeKey)
-  const write = (barriers.get(scopeKey) ?? Promise.resolve()).then(() =>
-    text ? AsyncStorage.setItem(key, text) : AsyncStorage.removeItem(key)
-  )
+  // An erase waits for the outbox: the box empties for a send as the send is written there,
+  // and the stored draft is the words' only copy on disk until that write lands
+  // (native-chat-outbox.ts). That wait never rejects, so it cannot fail this erase.
+  const write = (barriers.get(scopeKey) ?? Promise.resolve()).then(async () => {
+    if (text) {
+      await AsyncStorage.setItem(key, text)
+      return
+    }
+    await nativeChatOutboxWritesSettled()
+    await AsyncStorage.removeItem(key)
+  })
   const barrier = barrierAfterWrite(write, 'chat draft', text ? 'save' : 'erase')
   barriers.set(scopeKey, barrier)
   void barrier.then(() => {

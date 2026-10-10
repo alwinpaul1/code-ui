@@ -5,6 +5,7 @@ import {
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { appForegroundSince } from './app-foreground-clock'
+import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
 /** How long an ack-lost send waits for evidence before the view says the
  *  delivery is unconfirmed: time with the app in the foreground (foregroundTimeStillOwed). */
@@ -42,10 +43,12 @@ export function parkUnconfirmedSend(args: {
     normalizedText: origin.normalizedText,
     baselineTailMessageId: origin.baselineTailMessageId,
     deadline: null,
-    ...(origin.knownReceiptNonces ? { knownReceiptNonces: origin.knownReceiptNonces } : {})
+    ...(origin.knownReceiptNonces ? { knownReceiptNonces: origin.knownReceiptNonces } : {}),
+    ...(origin.outboxId ? { outboxId: origin.outboxId } : {})
   }
   // Why: the transcript event can beat the lost RPC acknowledgement.
   if (isActiveTranscript && findLandedUnconfirmedSends(messages, [entry]).length > 0) {
+    void retireOutboxSend(entry.outboxId)
     return null
   }
   const arm = (delayMs: number): void => {
@@ -57,7 +60,12 @@ export function parkUnconfirmedSend(args: {
         return
       }
       onExpire(entry)
-      onUnconfirmed()
+      // Its time is up with no sign of it. A chat's outbox recovery, when one is mounted for
+      // its tab, takes it over: it looks again and sends it once, safely, or says it was not
+      // sent and offers Retry. With none mounted it says what it always said.
+      if (!releaseOutboxSend(entry.outboxId)) {
+        onUnconfirmed()
+      }
     }, delayMs)
   }
   arm(UNCONFIRMED_SEND_DEADLINE_MS)

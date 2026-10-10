@@ -35,7 +35,7 @@ import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
-import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
+import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -231,7 +231,8 @@ export function useMobileNativeChatImageAttachments({
       // (use-mobile-native-chat-send-chips.ts). It waits before it takes the
       // terminal, so a card tapped meanwhile is not refused (2026-09-26 review).
       const tap = { scope, deadline, text: composerText }
-      return settleSendChips(tap, async (pendingAll) => {
+      const tappedAt = Date.now() // one connection-log line per send, by stage (native-chat-send-timing.ts)
+      return withNativeChatSendTiming(scope, { chars: composerText.length, images: attachments.length }, () => settleSendChips(tap, async (pendingAll) => { if (pendingAll.length > 0) { noteSendStage('upload', Date.now() - tappedAt) }
         const refuse = (message: string): false => {
           onError?.()
           onSendError(message)
@@ -369,16 +370,14 @@ export function useMobileNativeChatImageAttachments({
               // one VISUAL line (Claude Code 2.1.266), so the survivors would submit
               // glued to this photo's caption — size the clear for whatever is there.
               const residue = mobileNativeChatInputResidue(handle)
-              const pasted = await pasteMobileNativeChatImagePaths({
-                client: pasteClient,
-                terminal: handle,
-                agent,
+              const pasted = await timeSendStage('paste', () => pasteMobileNativeChatImagePaths({
+                client: pasteClient, terminal: handle, agent,
                 deviceToken: deviceTokenRef.current,
                 imagePaths: pendingImages.map((attachment) => attachment.path),
                 followedByText: text.trim().length > 0,
                 deadline,
                 clearInput: buildMobileNativeChatClearInputForText(seededLaunchDraft, residue, text)
-              })
+              }))
               if (!pasted) {
                 // Put the chips and text back so the user can retry; the failed paste never submitted.
                 restoreOptimistic()
@@ -392,9 +391,9 @@ export function useMobileNativeChatImageAttachments({
               // Enter that lands while a pasted path is still being read, so its settle
               // looks for the chips (mobile-native-chat-image-send-settle.ts). The preview
               // URIs ride along to baseSend so the sent bubble shows the photo at once.
-              const settled = await settleAfterImagePaste({
+              const settled = await timeSendStage('paste', () => settleAfterImagePaste({
                 client: pasteClient, terminal: handle, agent, expected: pendingImages.length, deadline, sleep
-              })
+              }))
               const textDeadline = settled.textDeadline
               // The paste above targeted `handle`; a tab switch during the settle would
               // route the text + Enter to a different terminal than the images. Abort —
@@ -431,10 +430,11 @@ export function useMobileNativeChatImageAttachments({
             }
             }
         )
-      })
+      }))
     },
     [
       activeHandleRef,
+      attachments.length,
       baseSend,
       beforeImagePaste,
       beginImageSend,

@@ -143,6 +143,14 @@ export type MobileNativeChatSendOrigin = {
   /** Prompt-receipt nonces already reported when this send left the phone, so a
    *  receipt older than the send cannot later be read as its confirmation. */
   knownReceiptNonces?: ReadonlySet<string>
+  /** The outbox entry this send is written under (native-chat-outbox-sends.ts). */
+  outboxId?: string
+  /** A recovery resend of an entry already in the outbox: its bubble is already drawn, and a
+   *  refusal marks the bubble "Not sent" instead of putting the words in the composer. */
+  outboxRecovery?: boolean
+  /** Its "Sending…" bubble was drawn when the box emptied (showSendingEchoWith), under the
+   *  entry's own id: acceptance keeps that one, a refusal takes it down. */
+  echoDrawn?: boolean
 }
 
 /** Where and when a send leaves the phone: how often its text already shows,

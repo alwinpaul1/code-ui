@@ -45,6 +45,7 @@ import type { NativeChatSettledTurns } from '../../../src/shared/native-chat-tur
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import type { BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
+import type { OutboxDelivery } from './use-native-chat-outbox-recovery'
 
 export type MobileNativeChatController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
@@ -76,6 +77,12 @@ export type MobileNativeChatController = {
   requestComposerFocus: () => void
   getChatComposerEditGeneration: () => number
   chatPending: MobileNativeChatPendingMessage[]
+  /** What each recovered outbox bubble says under it, by row id: "Sending…" or "Not sent"
+   *  (use-native-chat-outbox-recovery.ts). Optional: a stub controller has none. */
+  nativeChatOutboxDeliveries?: Readonly<Record<string, OutboxDelivery>>
+  retryNativeChatOutbox?: (rowId: string) => void
+  /** Puts a "Not sent" bubble's words back in the composer and drops it. */
+  editNativeChatOutbox?: (rowId: string) => void
   /** The phone's photo sends the draft store has not read back yet for this
    *  chat (waitingPhotoSends): the hook's copies of them are not drawn. */
   chatWaitingPhotoSends?: readonly MobileNativeChatPendingMessage[]

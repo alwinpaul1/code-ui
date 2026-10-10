@@ -24,7 +24,7 @@ import {
   useMobileNativeChatTaskProgress
 } from './mobile-native-chat-composer-tasks'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
@@ -129,7 +129,7 @@ export function MobileNativeChatView({
   permission,
   onRespondPermission,
   onRespondPermissionWithComment, terminalWait, onOpenTerminal,
-  onCancelQueued,
+  onCancelQueued, outboxDeliveries, onRetryOutbox, onEditOutbox,
   onRewindToMessage,
   onOpenFile,
   onRevertHunk,
@@ -279,7 +279,7 @@ export function MobileNativeChatView({
         // another turn's status.
         {...turns.resolveRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
-        />
+        />{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
       </ChatRowOnScreenScope>
     ),
     [
@@ -292,7 +292,7 @@ export function MobileNativeChatView({
       focusView,
       turnEndProps,
       agentWorking,
-      onCancelQueued,
+      onCancelQueued, outboxDeliveries, onRetryOutbox, onEditOutbox,
       rewindable,
       requestRewind,
       structuredActivityUi,

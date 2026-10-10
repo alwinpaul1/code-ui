@@ -20,6 +20,9 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   text: string
   attachments: readonly StructuredAgentSessionAttachment[]
   deadline?: number
+  /** An outbox entry's id for this message, the same on each of its attempts; absent, a new
+   *  one is minted for this call. */
+  operationId?: string
   onError: MobileNativeChatSendErrorReporter
 }): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs = timeoutForDeadline(input.deadline)
@@ -32,7 +35,9 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   // per press. A later press of the same words is a new message, so an earlier attempt the host
   // still holds as unknown can no longer answer for it ("Delivery unconfirmed" on every retry).
   // The trade, as upstream states it: if that earlier attempt did reach the agent, a deliberate
-  // later Send can put a second copy in front of it.
+  // later Send can put a second copy in front of it. An AUTOMATIC retry of one press is not a
+  // new action: the outbox hands every attempt of the press its one stored id
+  // (native-chat-outbox-sends.ts), so the ledger answers a retry instead of posting it twice.
   const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
     client: input.client,
     method: 'agentSession.send',
@@ -40,6 +45,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     sessionId: input.sessionId,
     expectedRuntimeFence: input.expectedRuntimeFence,
     fields: { body: structuredAgentSessionSendBody(input.text, input.attachments) },
+    ...(input.operationId !== undefined ? { clientOperationId: input.operationId } : {}),
     timeoutMs
   })
   const delivery = mobileStructuredSendDelivery(result)
