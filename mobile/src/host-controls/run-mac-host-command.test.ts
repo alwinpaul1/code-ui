@@ -193,16 +193,33 @@ describe('running a Mac control on the host', () => {
     expect(fake.calls.at(-1)?.method).toBe('session.tabs.close')
   })
 
-  // 2026-10-10, Danny: on a Modern Standby PC the display goes off by Windows' own
-  // idle timeout while a keeper holds the PC awake. When the display never reported
-  // off (or the keeper could not hold the PC), the keeper put the timeout back and
-  // the script refuses; the toast must say what happened, not "did not finish".
-  it('says the display did not turn off and nothing changed, when the Windows script refuses for that', async () => {
+  // 2026-10-10: on a Modern Standby PC Sleep display dims and covers the screens
+  // (windows-display-dim-keeper.ts). A keeper that never answered was told to put
+  // everything back, and the script refuses; the toast must say what happened, not
+  // "did not finish".
+  it('says the screens did not go off and nothing changed, when the keeper never answered', async () => {
     const fake = fakeClient([['PS C:\\>', 'CUIREFUSED keepawake']])
     expect(await run(fake)).toEqual({
       ok: false,
-      reason: 'The display did not turn off, so nothing was changed.'
+      reason: 'The PC did not turn its screens off, so nothing was changed.'
     })
+  })
+
+  it('says the displays cannot be dimmed from here when neither dimming nor covering worked', async () => {
+    const fake = fakeClient([['PS C:\\>', 'CUIREFUSED nodim']])
+    expect(await run(fake)).toEqual({
+      ok: false,
+      reason: "This PC's displays can't be dimmed from here, so nothing was changed."
+    })
+  })
+
+  it('reports what Sleep display dimmed and covered on a Modern Standby PC', async () => {
+    const covered = fakeClient([['PS C:\\>', 'CUIDIMMED 2 covered=1', 'CUIDONE ok']])
+    expect(await run(covered)).toEqual({ ok: true, dim: { dimmed: 2, covered: true } })
+    const dimmedOnly = fakeClient([['PS C:\\>', 'CUIDIMMED 1 covered=0', 'CUIDONE ok']])
+    expect(await run(dimmedOnly)).toEqual({ ok: true, dim: { dimmed: 1, covered: false } })
+    // A classic PC prints no report: plain success, as before.
+    expect(await run(fakeClient([['CUIDONE ok']]))).toEqual({ ok: true })
   })
 
   it("does not take the unlock's own echo of its refusal for a refusal", async () => {

@@ -667,3 +667,51 @@ describe('the host menu reopened after one of its rows finished', () => {
     expect(rows()).toContain('Unlock Mac')
   })
 })
+
+// 2026-10-10: on a PC with Modern Standby, Sleep display dims every screen and covers
+// it with black instead of turning it off (windows-display-dim-keeper.ts). The toast
+// says so, and says how to bring the screens back, since Windows never slept them.
+describe('Sleep display on a Windows PC with Modern Standby', () => {
+  const MODERN = 'CUIWIN mute=false display=on standby=modern'
+  const CLASSIC = 'CUIWIN mute=false display=on standby=classic'
+
+  async function sleepFrom(answer: string, screen: string[] | null) {
+    const host = fakeHost('pc', 'win32')
+    host.answer = answer
+    host.actionScreen = screen
+    host.actionDoneAfterMs = 1500
+    const props = propsFor(host)
+    render({ ...props, openHostId: null })
+    await elapse(10)
+    render({ ...props, openHostId: host.hostId })
+    await elapse(600)
+    const onAction = latest?.macOptions?.onAction
+    render({ ...props, openHostId: null })
+    act(() => onAction?.('sleep-display'))
+    await elapse(10)
+    const progress = latest?.toast
+    await elapse(2500)
+    return { progress, done: latest?.toast }
+  }
+
+  it('says it is dimming the displays, then that the screens are off and how to bring them back', async () => {
+    const { progress, done } = await sleepFrom(MODERN, ['CUIDIMMED 1 covered=1', 'CUIDONE ok'])
+    expect(progress).toBe('Dimming the displays…')
+    expect(done).toBe('Screens off. Tap Wake display or touch the PC to turn them back on.')
+  })
+
+  it('says how many displays it dimmed when the screens could not be covered', async () => {
+    const { done } = await sleepFrom(MODERN, ['CUIDIMMED 2 covered=0', 'CUIDONE ok'])
+    expect(done).toBe('2 displays dimmed. Tap Wake display or touch the PC to restore.')
+  })
+
+  it('says nothing could be dimmed when nothing was', async () => {
+    const { done } = await sleepFrom(MODERN, ['CUIREFUSED nodim'])
+    expect(done).toBe("This PC's displays can't be dimmed from here, so nothing was changed.")
+  })
+
+  it('keeps the classic wording on a PC whose display really turns off', async () => {
+    const { progress } = await sleepFrom(CLASSIC, null)
+    expect(progress).toBe('Putting the display to sleep…')
+  })
+})
