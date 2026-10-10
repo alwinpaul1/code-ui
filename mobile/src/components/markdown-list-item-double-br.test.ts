@@ -62,15 +62,20 @@ describe('a double <br> inside a chat list item', () => {
   })
 
   it('keeps a quote one quote across a double <br>', () => {
-    expect(blocks('> a<br><br>b')).toEqual([{ type: 'quote', text: 'a\n\nb' }])
+    expect(blocks('> a<br><br>b')).toEqual([{ type: 'quote', members: [{ type: 'paragraph', text: 'a\n\nb' }] }])
   })
 
-  // A list or a heading inside a quote is drawn as its source in the quote's
-  // text (mobile-markdown-quote-blocks.ts), so a <br> kept on a quote's line
-  // has to be a line break there too, never the stand-in the HTML pass left.
+  // A list or a heading inside a quote is drawn as a list or a heading inside
+  // its bar (mobile-markdown-quote-blocks.ts), and a link definition as its
+  // source, so a <br> kept on a quote's line has to be a line break there
+  // too, never the stand-in the HTML pass left.
   it('draws a <br> in a list or a heading inside a quote as a break, never its stand-in', () => {
-    expect(blocks('> - a<br>b\n> - c')).toEqual([{ type: 'quote', text: '- a\nb\n- c' }])
-    expect(blocks('> [a]: https://x.dev<br>')).toEqual([{ type: 'quote', text: '[a]: https://x.dev' }])
+    expect(blocks('> - a<br>b\n> - c')).toEqual([
+      { type: 'quote', members: [{ type: 'list', ordered: false, items: [bullet('a\nb'), bullet('c')] }] }
+    ])
+    expect(blocks('> [a]: https://x.dev<br>')).toEqual([
+      { type: 'quote', members: [{ type: 'paragraph', text: '[a]: https://x.dev' }] }
+    ])
     for (const text of ['> - a<br><br>b\n> - c', '> # T<br>sub', '> 1. a<br>2. b', '> | a | b |\n> | - | - |\n> | x<br>y | z |']) {
       expect(JSON.stringify(blocks(text)), text).not.toContain('\uE000')
       expect(markdownPlainText(text), text).not.toContain('\uE000')
@@ -111,7 +116,7 @@ describe('a <br> before a block marker inside a chat item or quote', () => {
   it('keeps the words after it in the item or the quote', () => {
     expect(blocks('- a<br>- b')).toEqual([{ type: 'list', ordered: false, items: [bullet('a\n- b')] }])
     expect(blocks('1. a<br>2. b')).toEqual([{ type: 'list', ordered: true, items: [numbered('a\n2. b', 1)] }])
-    expect(blocks('> a<br>- b')).toEqual([{ type: 'quote', text: 'a\n- b' }])
+    expect(blocks('> a<br>- b')).toEqual([{ type: 'quote', members: [{ type: 'paragraph', text: 'a\n- b' }] }])
     expect(blocks('- a<br># h')).toEqual([{ type: 'list', ordered: false, items: [bullet('a\n# h')] }])
     expect(markdownPlainText('- a<br>- b')).toBe('• a\n  - b')
   })

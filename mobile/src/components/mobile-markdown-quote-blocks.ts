@@ -1,5 +1,5 @@
 import type { Token, Tokens } from 'marked'
-import type { MobileMarkdownBlock } from './mobile-markdown-parser'
+import type { MobileMarkdownBlock, MobileMarkdownQuoteMember } from './mobile-markdown-parser'
 import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
 
 /**
@@ -25,83 +25,64 @@ import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
  * blocks it is cut into. Two quotes a blank line apart are two quotes, as they
  * always were.
  *
- * A quote inside this one is read the same way, so a fence in it comes out
- * too. Its words keep the `>` they were drawn with (they are the inner
- * quote's), and fill the width as the outer quote's always have. Any other
- * child (a heading, a list, a table) is still its raw source in the quote's
- * text, as before.
+ * What the quote holds is Markdown of its own (2026-10-10, an email draft
+ * quoted in a reply, beside the Claude app): paragraphs, headings, rules and
+ * lists are the same blocks they are outside a quote, drawn inside the bar the
+ * way they are drawn outside it, bullets hanging and all. The quote kept them
+ * as one text before, a list as its raw `- ` lines and every paragraph
+ * filled into one line, so the email's list read "- IRMER training", its
+ * details ran together and its sign-off was one line. Inside a quote every
+ * newline is a line break (breakProse in mobile-markdown-prose-fill.ts).
  *
- * Except a list with a fence under one of its items (decided 2026-10-01: draw
- * it as code, as GitHub and marked do). That list goes through the parser's
- * own list conversion, which takes the fence out after its item; the list's
- * rows stay quote text, written back as lines (listAsQuoteText), and the fence
- * is a quoted code block between them. A list with no fence is its raw source,
- * as before. So is one whose conversion holds a block the bar cannot hold (a
- * table, a quote).
+ * A quote inside this one is a member with members of its own and a bar of
+ * its own; a fence in it still comes out, as a quoted code block. A list with
+ * a fence under one of its items (decided 2026-10-01: draw it as code, as
+ * GitHub and marked do) goes through the parser's own list conversion, which
+ * takes the fence out after its item. A list whose conversion holds a block
+ * the bar cannot hold (a table, a quote) is its raw source, as is a table,
+ * an HTML block or a link definition.
  */
 
-type QuotePart = { prose: string } | { code: Extract<MobileMarkdownBlock, { type: 'code' }> }
-type ListBlock = Extract<MobileMarkdownBlock, { type: 'list' }>
+/** How many bars deep a quote is drawn. Each bar insets the text by its
+ *  width and is a View of its own, so twenty levels left no width at all
+ *  (review, 2026-10-10); a quote deeper than this is its source, `>` and all,
+ *  inside the deepest bar, as every inner quote was drawn before. */
+export const MAX_QUOTE_BARS = 4
 
-/** Whether a fence sits anywhere under the list's items, nested lists too. */
-function holdsFence(tokens: readonly Token[] | undefined): boolean {
-  return (tokens ?? []).some(
-    (token) =>
-      token.type === 'code' ||
-      (token.type === 'list' && (token as Tokens.List).items.some((item) => holdsFence(item.tokens)))
-  )
-}
-
-/** A converted list's rows as the lines its source would draw in the quote:
- *  each at its depth, with its marker and box, and a row that goes on after a
- *  fence at the item's indent with no marker. */
-function listAsQuoteText(list: ListBlock): string {
-  return list.items
-    .map((item) => {
-      const pad = '  '.repeat(item.depth)
-      const marker = item.continuation
-        ? ''
-        : item.number !== undefined
-          ? `${item.number}. `
-          : '- '
-      const box = item.checked === undefined ? '' : item.checked ? '[x] ' : '[ ] '
-      const indent = pad + ' '.repeat(item.continuation ? 2 : marker.length)
-      const [first = '', ...rest] = item.text.split('\n')
-      const head = item.continuation ? indent : pad + marker + box
-      return [head + first, ...rest.map((line) => indent + line)].join('\n')
-    })
-    .join('\n')
-}
-
-/** An inner quote's words as its source marked them, blank lines as a bare `>`. */
-function markedAsQuoted(text: string): string {
-  return text
-    .split('\n')
-    .map((line) => (line ? `> ${line}` : '>'))
-    .join('\n')
-}
+type QuotePart = { members: MobileMarkdownQuoteMember[] } | { code: Extract<MobileMarkdownBlock, { type: 'code' }> }
 
 function quoteParts(
   token: Tokens.Blockquote,
   reflow: (text: string) => string,
-  convert: (tokens: Token[]) => MobileMarkdownBlock[]
+  convert: (tokens: Token[]) => MobileMarkdownBlock[],
+  bars = 1
 ): QuotePart[] {
   const parts: QuotePart[] = []
-  const prose: string[] = []
+  let members: MobileMarkdownQuoteMember[] = []
   const flush = (): void => {
-    if (prose.length > 0) {
-      parts.push({ prose: prose.join('\n\n') })
-      prose.length = 0
+    if (members.length > 0) {
+      parts.push({ members })
+      members = []
     }
   }
-  const addProse = (text: string): void => {
+  /** Its source, with each `<br>` the HTML pass kept on the quote's lines
+   *  (markBlockLineBreaks) a newline, as one was before the pass kept it. */
+  const addSource = (raw: string): void => {
+    const text = inlineBreaksAsNewlines(raw).replace(/\n+$/, '')
     if (text.trim()) {
-      prose.push(text)
+      members.push({ type: 'paragraph', text })
     }
   }
   for (const child of token.tokens) {
     if (child.type === 'paragraph') {
-      addProse(reflow((child as Tokens.Paragraph).text))
+      const text = reflow((child as Tokens.Paragraph).text)
+      if (text.trim()) {
+        members.push({ type: 'paragraph', text })
+      }
+    } else if (child.type === 'heading') {
+      members.push({ type: 'heading', level: (child as Tokens.Heading).depth, text: reflow((child as Tokens.Heading).text) })
+    } else if (child.type === 'hr') {
+      members.push({ type: 'rule' })
     } else if (child.type === 'code') {
       flush()
       for (const block of convert([child])) {
@@ -109,7 +90,7 @@ function quoteParts(
           parts.push({ code: block })
         }
       }
-    } else if (child.type === 'list' && holdsFence((child as Tokens.List).items.flatMap((item) => item.tokens))) {
+    } else if (child.type === 'list') {
       const blocks = convert([child])
       if (blocks.every((block) => block.type === 'list' || block.type === 'code')) {
         for (const block of blocks) {
@@ -117,25 +98,25 @@ function quoteParts(
             flush()
             parts.push({ code: block })
           } else if (block.type === 'list') {
-            addProse(listAsQuoteText(block))
+            members.push(block)
           }
         }
       } else {
-        addProse(inlineBreaksAsNewlines(child.raw).replace(/\n+$/, ''))
+        addSource(child.raw)
       }
+    } else if (child.type === 'blockquote' && bars >= MAX_QUOTE_BARS) {
+      addSource(child.raw)
     } else if (child.type === 'blockquote') {
-      for (const part of quoteParts(child as Tokens.Blockquote, reflow, convert)) {
-        if ('prose' in part) {
-          addProse(markedAsQuoted(part.prose))
+      for (const part of quoteParts(child as Tokens.Blockquote, reflow, convert, bars + 1)) {
+        if ('members' in part) {
+          members.push({ type: 'quote', members: part.members })
         } else {
           flush()
           parts.push(part)
         }
       }
-    } else {
-      // Its source, with each `<br>` the HTML pass kept on the quote's lines
-      // (markBlockLineBreaks) a newline, as one was before the pass kept it.
-      addProse(inlineBreaksAsNewlines(child.raw).replace(/\n+$/, ''))
+    } else if (child.type !== 'space') {
+      addSource(child.raw)
     }
   }
   flush()
@@ -143,8 +124,8 @@ function quoteParts(
 }
 
 /**
- * A blockquote's blocks: its words as quote blocks, and each fence in it as a
- * code block between them. `reflow` and `convert` are the parser's own prose
+ * A blockquote's blocks: its Markdown as quote blocks, and each fence in it as
+ * a code block between them. `reflow` and `convert` are the parser's own prose
  * fill and block conversion, passed in so this module needs nothing from the
  * parser at run time.
  */
@@ -157,12 +138,12 @@ export function quoteBlocks(
   for (const part of quoteParts(token, reflow, convert)) {
     const joins = blocks.length > 0 ? { continuesQuote: true } : null
     blocks.push(
-      'prose' in part
-        ? { type: 'quote', text: part.prose, ...joins }
+      'members' in part
+        ? { type: 'quote', members: part.members, ...joins }
         : { ...part.code, quoted: true, ...joins }
     )
   }
   // A quote with nothing in it (a lone `>`) is still the empty quote block it
   // always was.
-  return blocks.length > 0 ? blocks : [{ type: 'quote', text: '' }]
+  return blocks.length > 0 ? blocks : [{ type: 'quote', members: [] }]
 }

@@ -19,9 +19,12 @@
 // window, where an 80-column source line fits one display line. At the ~40
 // columns a phone has, the same document wraps every source line AND breaks
 // after it, which is the ragged column the user reported. The phone reflows.
+// Except inside a quote, where every newline is a break as on the desktop and
+// in the Claude app (breakProse, decided 2026-10-10).
 import { marked, type Token, type Tokens } from 'marked'
 import { quoteBlocks } from './mobile-markdown-quote-blocks'
-import { inlineBreaksAsLines, inlineBreaksAsNewlines } from './markdown-inline-breaks'
+import { inlineBreaksAsNewlines } from './markdown-inline-breaks'
+import { breakProse, reflowProse } from './mobile-markdown-prose-fill'
 
 export type MobileMarkdownListItem = {
   text: string
@@ -43,7 +46,9 @@ export type MobileMarkdownBlock =
   | { type: 'heading'; level: number; text: string }
   | {
       type: 'quote'
-      text: string
+      /** What the quote holds, drawn inside its bar as Markdown of its own
+       *  (mobile-markdown-quote-blocks.ts). */
+      members: MobileMarkdownQuoteMember[]
       /** The rest of the quote the block above is part of, after a fence in
        *  it: its bar joins that one's (mobile-markdown-quote-blocks.ts). */
       continuesQuote?: boolean
@@ -63,49 +68,17 @@ export type MobileMarkdownBlock =
   | { type: 'table'; headers: string[]; rows: string[][] }
   | { type: 'rule' }
 
+/** A block inside a quote's bar: prose the way it is drawn outside one, or a
+ *  quote inside this one, with a bar of its own. A fence comes out of the
+ *  quote as a code block between its parts instead. */
+export type MobileMarkdownQuoteMember =
+  | Extract<MobileMarkdownBlock, { type: 'paragraph' | 'heading' | 'list' | 'rule' }>
+  | { type: 'quote'; members: MobileMarkdownQuoteMember[] }
+
 const MARKED_OPTIONS = { gfm: true, breaks: false } as const
 
 const FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})/
 const FENCE_TERMINATOR = /^ {0,3}(`{3,}|~{3,})[ \t]*$/
-
-/** How many backslashes a line ends with. Only an ODD run ends in an
- *  UNESCAPED one, and only an unescaped one is a hard break: `C:\\` at the end
- *  of a line is an escaped backslash followed by a soft break, which
- *  CommonMark renders as a space. */
-function trailingBackslashes(line: string): number {
-  let count = 0
-  while (count < line.length && line[line.length - 1 - count] === '\\') {
-    count += 1
-  }
-  return count
-}
-
-/** Fill prose to the phone's width: a soft newline becomes a space, and the two
- *  deliberate hard breaks (two trailing spaces, an unescaped trailing
- *  backslash) stay. Line by line rather than by regex, because telling an
- *  escaped backslash from an unescaped one means counting the run. */
-function reflowProse(value: string): string {
-  const lines = value.split('\n')
-  let filled = ''
-  for (let index = 0; index < lines.length; index += 1) {
-    const line = index > 0 ? lines[index]!.replace(/^[ \t]+/, '') : lines[index]!
-    if (index === lines.length - 1) {
-      filled += line.replace(/[ \t]+$/, '')
-      break
-    }
-    if (trailingBackslashes(line) % 2 === 1) {
-      filled += `${line.slice(0, -1)}\n`
-    } else if (/ {2,}$/.test(line)) {
-      filled += `${line.replace(/[ \t]+$/, '')}\n`
-    } else {
-      filled += `${line.replace(/[ \t]+$/, '')} `
-    }
-  }
-  // A `<br>` the HTML pass kept for a list item, a quote or a heading, or for
-  // a table row that marked read as prose, is a line break here, and two a
-  // gap inside the block (markdown-inline-breaks.ts).
-  return inlineBreaksAsLines(filled.trim())
-}
 
 /** The info string's first word: ```` ```ts title="x" ```` is a TypeScript fence,
  *  the same reading rehype-highlight gives it on the desktop. */
@@ -181,7 +154,8 @@ function flattenList(
   depth: number,
   items: MobileMarkdownListItem[],
   out: MobileMarkdownBlock[],
-  ordered: boolean
+  ordered: boolean,
+  reflow: (text: string) => string
 ): void {
   const start = typeof token.start === 'number' ? token.start : 1
   const flush = (): void => {
@@ -216,16 +190,16 @@ function flattenList(
     for (const child of item.tokens) {
       if (child.type === 'list') {
         emit()
-        flattenList(child as Tokens.List, depth + 1, items, out, ordered)
+        flattenList(child as Tokens.List, depth + 1, items, out, ordered, reflow)
       } else if (child.type === 'text' || child.type === 'paragraph') {
-        own.push(reflowProse((child as Tokens.Text).text))
+        own.push(reflow((child as Tokens.Text).text))
       } else if (child.type !== 'space' && child.type !== 'checkbox') {
         // `checkbox` is dropped because `item.checked` already carries it and
         // the renderer draws the box. Everything else is a block in its own
         // right: a fence, a table, a quote inside an item.
         emit()
         flush()
-        out.push(...toBlocks([child]))
+        out.push(...toBlocks([child], reflow))
       }
     }
     emit()
@@ -239,7 +213,9 @@ function flattenList(
   }
 }
 
-function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
+/** `reflow` fills a paragraph's soft newlines: reflowProse at the top, and
+ *  breakProse for what sits in a quote. */
+function toBlocks(tokens: Token[], reflow: (text: string) => string = reflowProse): MobileMarkdownBlock[] {
   const blocks: MobileMarkdownBlock[] = []
   // True while the previous token was also a link reference definition, so a
   // block of them lands in one paragraph instead of one paragraph each.
@@ -273,7 +249,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         blocks.push({
           type: 'heading',
           level: (token as Tokens.Heading).depth,
-          text: reflowProse((token as Tokens.Heading).text)
+          text: reflow((token as Tokens.Heading).text)
         })
         break
       case 'code': {
@@ -290,14 +266,14 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
       }
       case 'blockquote':
         // A quote can come back as several blocks: a fence inside it is drawn
-        // as code between them rather than as the quote's text.
-        blocks.push(...quoteBlocks(token as Tokens.Blockquote, reflowProse, toBlocks))
+        // as code between them rather than inside the quote's members.
+        blocks.push(...quoteBlocks(token as Tokens.Blockquote, breakProse, (inner) => toBlocks(inner, breakProse)))
         break
       case 'list': {
         const list = token as Tokens.List
         // A list can come back as several blocks: any fence or table inside an
         // item is drawn between them rather than swallowed by it.
-        flattenList(list, 0, [], blocks, list.ordered)
+        flattenList(list, 0, [], blocks, list.ordered, reflow)
         break
       }
       case 'table': {
@@ -315,7 +291,7 @@ function toBlocks(tokens: Token[]): MobileMarkdownBlock[] {
         break
       case 'paragraph': {
         const paragraph = token as Tokens.Paragraph
-        blocks.push(standaloneImage(paragraph) ?? { type: 'paragraph', text: reflowProse(paragraph.text) })
+        blocks.push(standaloneImage(paragraph) ?? { type: 'paragraph', text: reflow(paragraph.text) })
         break
       }
       default:

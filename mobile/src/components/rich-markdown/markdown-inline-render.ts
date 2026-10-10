@@ -73,7 +73,7 @@ function renderMarks(text: string, inLabel: boolean): string {
   // Every token opens on one of these, so words without one are text. Most of what a token holds
   // is such words, and making a matcher for each drew a paragraph of 15,000 short italics four
   // times slower.
-  if (!/[*_~`[<]|https?:\/\//.test(text)) {
+  if (!/[*_~`[<@]|https?:\/\//.test(text)) {
     return entityTextHtml(text)
   }
   // Images, a label that holds one, and escapes, as the chat reads them (markdown-inline-matcher.ts).

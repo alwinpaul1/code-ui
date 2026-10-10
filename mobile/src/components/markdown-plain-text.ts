@@ -10,7 +10,7 @@ import { unescapeMarkdownText } from './markdown-inline-escapes'
 import { isRemoteImageUrl } from './markdown-image-source'
 import { markdownLinkDestination } from './markdown-link-destination'
 import { listMarker } from './mobile-markdown-list-marker'
-import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
+import { parseMobileMarkdown, type MobileMarkdownBlock, type MobileMarkdownQuoteMember } from './mobile-markdown-parser'
 import { markdownDocumentSource, normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 
 // A reply's Copy put its Markdown SOURCE on the clipboard, so a pasted reply
@@ -117,11 +117,30 @@ function cellPlainText(cell: string): string {
 /** Two spaces a level, the way the screen steps a nested item in. */
 const LIST_INDENT = '  '
 
+/** A quote's insides as their blocks' plain text, a blank line apart, the way
+ *  they are drawn inside its bar. The outer quote's lines take no `>`, as they
+ *  never did; a quote inside it keeps its `>` on each line, so a paste still
+ *  says which words were the inner quote's. */
+function quotePlainText(members: readonly MobileMarkdownQuoteMember[]): string {
+  return members
+    .map((member) =>
+      member.type === 'quote'
+        ? quotePlainText(member.members)
+            .split('\n')
+            .map((line) => (line ? `> ${line}` : '>'))
+            .join('\n')
+        : blockPlainText(member)
+    )
+    .filter((text) => text.trim() !== '' && text !== '>')
+    .join('\n\n')
+}
+
 function blockPlainText(block: MobileMarkdownBlock): string {
   switch (block.type) {
+    case 'quote':
+      return quotePlainText(block.members)
     case 'paragraph':
     case 'heading':
-    case 'quote':
       return markdownInlinePlainText(block.text)
     case 'code':
       return block.text

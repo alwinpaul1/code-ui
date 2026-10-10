@@ -38,7 +38,8 @@ import {
   markdownZoomedLine,
   type MarkdownTypography
 } from './mobile-markdown-prose-scale'
-import { buildProseRuns } from './mobile-markdown-prose-runs'
+import { buildProseRuns, type ProseBlock } from './mobile-markdown-prose-runs'
+import { drawMarkdownQuote } from './mobile-markdown-quote-view'
 import {
   markdownDocumentKey,
   useMarkdownCodePillRuns,
@@ -335,6 +336,115 @@ function MobileMarkdownInner({
     (url) => isRemoteImageUrl(url) || resolveImage !== undefined
   )
 
+  /**
+   * A prose run (or the prose inside a quote's bar): Android's native view
+   * where the transcript draws one, a React Native Text everywhere else. `width`
+   * is the run's rounded width, for its pills; `nativeProseWidth` the unrounded
+   * one the native view measures at. A quote draws its insides through here
+   * too (`quoted`), inset by its bar, so a list in it hangs as one outside does.
+   */
+  const drawProse = (prose: ProseBlock[], key: number | string, pillKey: string, width: number,
+    nativeProseWidth: number, quoted = false): ReactNode => {
+    // The run as a React Native Text: everywhere but Android's
+    // transcript, and there for a run the native view cannot draw (one
+    // with an image in it) or before the document has a width.
+    const proseText = () => {
+      const pills = pillRuns(pillKey, width, false)
+      const lastMember = prose.length - 1
+      const members = prose.map((member, memberIndex) => {
+        // The newline that ends a member is the member's own, set in its
+        // line height; the blank line after it is the prose's, or the
+        // gap's (blockGapLine), a paragraph of its own either way. Android
+        // lays a paragraph out at every line height its spans carry, and
+        // RN places a pill from a layout that reads them in another order
+        // than the one the words are drawn from, deep in a long Text
+        // (mobile-markdown-pill-rows.test-support.ts). A heading ended by
+        // the prose's newline was drawn at its own height and placed at
+        // the prose's, and every pill below it rose by the difference,
+        // half a line by the third heading (2026-09-28, HANDOVER.md).
+        const end = memberIndex < lastMember ? '\n' : null
+        return (
+          <Fragment key={memberIndex}>
+            {memberIndex === 0 ? null : blockGapLine ? <Text style={blockGapLine}>{'\n'}</Text> : '\n'}
+            {member.type === 'heading' ? (
+              <Text style={headingStyle(styles, member.level, textScale)}>
+                {renderInline(styles, member.text, onOpenFile, pills)}
+                {end}
+              </Text>
+            ) : member.type === 'rule' ? (
+              <Text style={styles.ruleText}>{RULE_TEXT}</Text>
+            ) : member.type === 'list' ? (
+              member.items.map((item, itemIndex) => {
+                const marker = listMarker(item)
+                return (
+                  <Fragment key={itemIndex}>
+                    {itemIndex > 0 ? '\n' : null}
+                    {LIST_INDENT_TEXT.repeat(item.depth)}
+                    {marker ? (
+                      <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
+                    ) : null}
+                    {renderInline(styles, item.text, onOpenFile, pills)}
+                  </Fragment>
+                )
+              })
+            ) : member.type === 'image' ? (
+              <MobileMarkdownImage
+                alt={markdownInlinePlainText(member.alt)}
+                url={member.url}
+                width={contentWidth}
+                resolve={resolveImage}
+                onOpen={() => openMarkdownHref(member.url, onOpenFile)}
+                styles={styles}
+              />
+            ) : (
+              // One inline pass over the WHOLE paragraph. Matching line by
+              // line left `**bold` on one source line and `text**` on the
+              // next as literal asterisks on the phone (reported from the
+              // device); the parser has already reflowed soft wraps, so
+              // any newline left here is a deliberate hard break.
+              renderInline(styles, member.text, onOpenFile, pills)
+            )}
+            {member.type === 'heading' ? null : end}
+          </Fragment>
+        )
+      })
+      return (
+        // `simple` is greedy breaking, as the Claude app lays out: a line
+        // takes all that fits. Android's default balances lines, which
+        // could break before a pill that fits and re-break the lines above
+        // one. Only where a pill may be (a backtick); plain prose keeps
+        // the default.
+        <Text
+          key={pills.keyFor(key)}
+          selectable={selectable}
+          style={[quoted ? styles.quoteText : styles.paragraph, proseScale]}
+          textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
+          onTextLayout={pills.layoutReader()}
+        >
+          {members}
+        </Text>
+      )
+    }
+    const model = nativeProse ? buildNativeProseModel(prose, { typography, opensFiles: !!onOpenFile }) : null
+    if (model && nativeProseWidth > 0) {
+      return (
+        <NativeProseText
+          key={`native:${key}`}
+          model={model}
+          typography={typography}
+          textScale={textScale}
+          width={nativeProseWidth}
+          selectable={selectable}
+          onLink={(link: NativeProseLink) =>
+            link.kind === 'href' ? openMarkdownHref(link.href, onOpenFile) : onOpenFile?.(link.path)
+          }
+          onRefused={refuseNative}
+        />
+      )
+    }
+    return proseText()
+  }
+
   const drawn = (
     <View
       style={styles.root}
@@ -367,105 +477,7 @@ function MobileMarkdownInner({
           ) : null
         }
         if (run.prose) {
-          const prose = run.prose
-          const model = nativeProse ? buildNativeProseModel(prose, { typography, opensFiles: !!onOpenFile }) : null
-          // The run as a React Native Text: everywhere but Android's
-          // transcript, and there for a run the native view cannot draw (one
-          // with an image in it) or before the document has a width.
-          const proseText = () => {
-            const pills = pillRuns(`run:${index}`, contentWidth, false)
-            const lastMember = prose.length - 1
-            const members = prose.map((member, memberIndex) => {
-              // The newline that ends a member is the member's own, set in its
-              // line height; the blank line after it is the prose's, or the
-              // gap's (blockGapLine), a paragraph of its own either way. Android
-              // lays a paragraph out at every line height its spans carry, and
-              // RN places a pill from a layout that reads them in another order
-              // than the one the words are drawn from, deep in a long Text
-              // (mobile-markdown-pill-rows.test-support.ts). A heading ended by
-              // the prose's newline was drawn at its own height and placed at
-              // the prose's, and every pill below it rose by the difference,
-              // half a line by the third heading (2026-09-28, HANDOVER.md).
-              const end = memberIndex < lastMember ? '\n' : null
-              return (
-                <Fragment key={memberIndex}>
-                  {memberIndex === 0 ? null : blockGapLine ? <Text style={blockGapLine}>{'\n'}</Text> : '\n'}
-                  {member.type === 'heading' ? (
-                    <Text style={headingStyle(styles, member.level, textScale)}>
-                      {renderInline(styles, member.text, onOpenFile, pills)}
-                      {end}
-                    </Text>
-                  ) : member.type === 'rule' ? (
-                    <Text style={styles.ruleText}>{RULE_TEXT}</Text>
-                  ) : member.type === 'list' ? (
-                    member.items.map((item, itemIndex) => {
-                      const marker = listMarker(item)
-                      return (
-                        <Fragment key={itemIndex}>
-                          {itemIndex > 0 ? '\n' : null}
-                          {LIST_INDENT_TEXT.repeat(item.depth)}
-                          {marker ? (
-                            <Text style={styles.listMarkerInline}>{`${marker}  `}</Text>
-                          ) : null}
-                          {renderInline(styles, item.text, onOpenFile, pills)}
-                        </Fragment>
-                      )
-                    })
-                  ) : member.type === 'image' ? (
-                    <MobileMarkdownImage
-                      alt={markdownInlinePlainText(member.alt)}
-                      url={member.url}
-                      width={contentWidth}
-                      resolve={resolveImage}
-                      onOpen={() => openMarkdownHref(member.url, onOpenFile)}
-                      styles={styles}
-                    />
-                  ) : (
-                    // One inline pass over the WHOLE paragraph. Matching line by
-                    // line left `**bold` on one source line and `text**` on the
-                    // next as literal asterisks on the phone (reported from the
-                    // device); the parser has already reflowed soft wraps, so
-                    // any newline left here is a deliberate hard break.
-                    renderInline(styles, member.text, onOpenFile, pills)
-                  )}
-                  {member.type === 'heading' ? null : end}
-                </Fragment>
-              )
-            })
-            return (
-              // `simple` is greedy breaking, as the Claude app lays out: a line
-              // takes all that fits. Android's default balances lines, which
-              // could break before a pill that fits and re-break the lines above
-              // one. Only where a pill may be (a backtick); plain prose keeps
-              // the default.
-              <Text
-                key={pills.keyFor(index)}
-                selectable={selectable}
-                style={[styles.paragraph, proseScale]}
-                textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
-                onTextLayout={pills.layoutReader()}
-              >
-                {members}
-              </Text>
-            )
-          }
-          if (model && nativeWidth > 0) {
-            return (
-              <NativeProseText
-                key={`native:${index}`}
-                model={model}
-                typography={typography}
-                textScale={textScale}
-                width={nativeWidth}
-                selectable={selectable}
-                onLink={(link: NativeProseLink) =>
-                  link.kind === 'href' ? openMarkdownHref(link.href, onOpenFile) : onOpenFile?.(link.path)
-                }
-                onRefused={refuseNative}
-              />
-            )
-          }
-          return proseText()
+          return drawProse(run.prose, index, `run:${index}`, contentWidth, nativeWidth)
         }
         if (block.type === 'image') {
           return (
@@ -482,26 +494,20 @@ function MobileMarkdownInner({
           )
         }
         if (block.type === 'quote') {
-          // One bar down the whole quote, text indented beside it, as the Claude
-          // app draws it; see mobile-markdown-prose-runs.ts for why it is a View.
-          // A quote a fence cut in two joins its bar to the one above
+          // See mobile-markdown-prose-runs.ts for why a quote is a View. A
+          // quote a fence cut in two joins its bar to the one above
           // (mobile-markdown-quote-blocks.ts).
-          const quoteWidth = contentWidth - styles.quoteBlock.borderLeftWidth - styles.quoteBlock.paddingLeft
-          const pills = pillRuns(`quote:${index}`, Math.max(0, quoteWidth), false)
-          const quoted = renderInline(styles, block.text, onOpenFile, pills)
-          return (
-            <View key={index} style={block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock}>
-              <Text
-                key={pills.keyFor('quote')}
-                selectable={selectable}
-                style={[styles.quoteText, proseScale]}
-                textBreakStrategy={pills.mayHoldPills() ? 'simple' : undefined}
-                onTextLayout={pills.layoutReader()}
-              >
-                {quoted}
-              </Text>
-            </View>
-          )
+          const inset = styles.quoteBlock.borderLeftWidth + styles.quoteBlock.paddingLeft
+          return drawMarkdownQuote({
+            members: block.members,
+            key: String(index),
+            style: block.continuesQuote ? [styles.quoteBlock, styles.quoteJoin] : styles.quoteBlock,
+            styles,
+            width: contentWidth - inset,
+            nativeProseWidth: nativeWidth - inset,
+            drawProse: (prose, at, width, nativeProseWidth) =>
+              drawProse(prose, at, `quote:${at}`, width, nativeProseWidth, true)
+          })
         }
         if (block.type === 'code') {
           return renderMarkdownCodeBlock({

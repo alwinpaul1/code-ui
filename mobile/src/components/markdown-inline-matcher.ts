@@ -1,7 +1,7 @@
 import { createMarkdownCodeSpanFinder, maskMarkdownCodeSpans, type MarkdownCodeSpan } from './markdown-code-spans'
 import { maskMarkdownEscapes } from './markdown-inline-escapes'
 import { createMarkdownLinkFinder } from './markdown-inline-links'
-import { EMAIL_AUTOLINK_SOURCE, emphasisSource } from './markdown-inline-token-rules'
+import { BARE_EMAIL_AUTOLINK_SOURCE, EMAIL_AUTOLINK_SOURCE, emphasisSource } from './markdown-inline-token-rules'
 
 export type MarkdownInlineMatch = {
   0: string
@@ -37,7 +37,10 @@ export type MarkdownInlineMatch = {
  *  An italic span may hold whole bold spans the same way, on one line:
  *  `*a **b** c*` is italic around `**b**`, and `***x** y*` italic around
  *  `**x**`. An italic that could hold no star drew b not bold, and drew
- *  `***x** y*` as `*`, bold x, ` y*` (review, 2026-09-30). The same rules:
+ *  `***x** y*` as `*`, bold x, ` y*` (review, 2026-09-30). An italic crosses a
+ *  line break as a bold does: inside a quote every newline is a break
+ *  (mobile-markdown-prose-fill.ts), and `*italic\ncontinued*` drew its stars
+ *  (review, 2026-10-10). The same rules:
  *  an inner bold starts on a character that is not a space, and a bold is
  *  still tried first where one opens, so `***x***` stays bold around italic.
  *  So a token's first characters no longer say what it is: `***x** y*` is
@@ -49,7 +52,8 @@ export type MarkdownInlineMatch = {
  *  either bracket: it ran on through `>`, so `<https://x.dev/a>` drew its
  *  brackets and opened `https://x.dev/a>` (review, 2026-09-30). So are
  *  `<mailto:…>` and an email address, `<noreply@anthropic.com>`; an address
- *  of any other scheme stays as written. */
+ *  of any other scheme stays as written. A bare email address is a link too,
+ *  as GFM reads one (BARE_EMAIL_AUTOLINK_SOURCE). */
 export function markdownInlineTokenPattern(): RegExp {
   return new RegExp(INLINE_TOKEN_SOURCE, 'g')
 }
@@ -57,8 +61,8 @@ export function markdownInlineTokenPattern(): RegExp {
 const INLINE_TOKEN_SOURCE = [
   /(~~[^~]+~~)/.source,
   `(${emphasisSource('\\*', 2, true)}|${emphasisSource('_', 2, true)})`,
-  `(${emphasisSource('\\*', 1, false)}|${emphasisSource('_', 1, false)})`,
-  `(${/<https?:\/\/[^\s<>]+>|<mailto:[^\s<>]+>/.source}|<${EMAIL_AUTOLINK_SOURCE}>|${/https?:\/\/[^\s<>]+/.source})`
+  `(${emphasisSource('\\*', 1, true)}|${emphasisSource('_', 1, true)})`,
+  `(${/<https?:\/\/[^\s<>]+>|<mailto:[^\s<>]+>/.source}|<${EMAIL_AUTOLINK_SOURCE}>|${/https?:\/\/[^\s<>]+/.source}|${BARE_EMAIL_AUTOLINK_SOURCE})`
 ].join('|')
 
 /** The capture groups of markdownInlineTokenPattern() a bold token and a

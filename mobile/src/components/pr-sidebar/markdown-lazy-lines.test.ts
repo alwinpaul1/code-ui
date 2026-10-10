@@ -198,8 +198,10 @@ describe('a wrapped line at the margin under a PR comment’s quote', () => {
     expect(parseMarkdownBlocks('> first line\nsecond line')).toEqual([
       { kind: 'quote', text: 'first line\nsecond line' }
     ])
+    // Inside a quote the chat breaks every newline now (2026-10-10), so it
+    // reads the PR comment's two lines too.
     expect(parseMobileMarkdown('> first line\nsecond line')).toMatchObject([
-      { type: 'quote', text: 'first line second line' }
+      { type: 'quote', members: [{ type: 'paragraph', text: 'first line\nsecond line' }] }
     ])
   })
 
