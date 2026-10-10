@@ -10,6 +10,7 @@ import {
 } from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
+import { mobileNewTabAgentStatusRows } from './mobile-new-tab-agent-status-rows'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
   const {
@@ -57,26 +58,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
               void handleCreateTerminal(option.agent)
             }
           }))
-        : createTabAgentLoadState === 'loaded'
-          ? [
-              {
-                label: 'No Enabled Agents',
-                icon: Bot,
-                disabled: true,
-                onPress: () => {}
-              }
-            ]
-          : createTabAgentLoadState === 'error'
-            ? [
-                {
-                  label: 'Agent Presets Unavailable',
-                  hint: 'Check the host connection',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : []
+        : mobileNewTabAgentStatusRows(createTabAgentLoadState, 'Check the host connection')
   const sendDiffNotesAgentActions =
     pendingDiffNotesDelivery === null
       ? []
@@ -107,26 +89,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
                 })
               }
             }))
-          : createTabAgentLoadState === 'loaded'
-            ? [
-                {
-                  label: 'No Enabled Agents',
-                  icon: Bot,
-                  disabled: true,
-                  onPress: () => {}
-                }
-              ]
-            : createTabAgentLoadState === 'error'
-              ? [
-                  {
-                    label: 'Agent Presets Unavailable',
-                    hint: 'Copy notes instead',
-                    icon: Bot,
-                    disabled: true,
-                    onPress: () => {}
-                  }
-                ]
-              : []
+          : mobileNewTabAgentStatusRows(createTabAgentLoadState, 'Copy notes instead')
 
   // Panel-icon taps route through the dock-vs-push decision (U1): dock-capable rows dock, constrained rows push.
   const handleSessionContentRowLayout = useCallback((event: LayoutChangeEvent) => {

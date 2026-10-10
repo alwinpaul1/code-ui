@@ -632,3 +632,10 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   the merge versions of those files carry earlier upstream changes this fork has not taken
   (`parseStructuredLaunchSeedOptions`, the any-TUI-agent pick schema, `zcodePlanSite`, #26407's
   catalog sources), so they are not taken whole.
+
+## Workspaces another runtime owns (Orca #27196, 0ba67e1181)
+
+- `protocol-version.ts` — `PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY` and
+  `WORKSPACE_ON_OTHER_RUNTIME`, hand-applied and marked; the phone reads both. Not taken: the
+  capability's entry in `RUNTIME_CAPABILITIES` (the list a host advertises), nor #27054's
+  `PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY` beside it.

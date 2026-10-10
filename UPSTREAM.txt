@@ -523,3 +523,4 @@ src/shared/rpc-contract/rpc-params-catalog.generated.ts: plus #27054's preflight
 src/shared/structured-agent-session-discovered-model.ts: c8b8997762 (#26962, new)
 src/shared/native-chat-session-options.ts: c8b8997762 (#26962; byte-identical to its parent before, was c287a5d9b)
 src/shared/agent-session-wire.ts, native-chat-session-option-defaults.ts, rpc-contract/client-settings-params.ts, structured-agent-session-options.ts: plus #26962 (c8b8997762) hunks hand-applied, see LOCAL-FILES.md
+src/shared/protocol-version.ts: plus #27196's (0ba67e1181) PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY and WORKSPACE_ON_OTHER_RUNTIME constants, hand-applied, see LOCAL-FILES.md

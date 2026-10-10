@@ -32,7 +32,12 @@ export const sessionTerminalListRead = bindDeferredRpcOperation(
   })
 )
 
-export type MobileRuntimeRepoSummary = { id: string; connectionId?: string | null }
+export type MobileRuntimeRepoSummary = {
+  id: string
+  connectionId?: string | null
+  /** `runtime:<id>` when another Orca server owns the repo (Orca #27196). */
+  executionHostId?: string | null
+}
 
 const repoListReader = rpcResultVariant('runtime-repo-list', runtimeRepoListSchema)
 
