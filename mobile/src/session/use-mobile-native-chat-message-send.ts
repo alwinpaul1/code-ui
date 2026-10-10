@@ -219,12 +219,13 @@ export function useMobileNativeChatMessageSend(args: {
       // Why: empty the composer at send time, not on the ack — over relay the
       // round trip is visible, and a lost ack must not strand the sent prompt
       // in the box. Only a definite rejection puts the text back.
+      const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
       if (syncComposer) {
-        recordOutboxSend(origin, draftText, { hasAttachments: Boolean(images?.length) }) // before the box empties (native-chat-outbox-sends.ts); fail-open
+        // Before the box empties (native-chat-outbox-sends.ts); fail-open. Chat only: a command writes no row, so nothing could tell it ran, and a resend would run it twice.
+        if (classification === 'chat') { recordOutboxSend(origin, draftText, { hasAttachments: Boolean(images?.length) }) }
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
-      const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
       if (syncComposer && classification === 'chat' && !images?.length) { showSendingEcho?.(origin) }
       const typesCodexCommand =
         agent === 'codex' &&

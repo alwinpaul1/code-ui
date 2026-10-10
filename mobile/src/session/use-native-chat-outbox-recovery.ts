@@ -18,6 +18,7 @@ import {
   takeOutboxAdoption
 } from './native-chat-outbox-sends'
 import { beginNativeChatSendTiming, finishNativeChatSendTiming } from './native-chat-send-timing'
+import { structuredSessionOperationId } from './structured-session-operation-id'
 import {
   OUTBOX_GIVE_BACK,
   outboxEntryLanding,
@@ -241,7 +242,9 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
     const id = outboxEntryIdOfEcho(rowId)
     if (id) {
       userRetry.current.add(id)
-      void patchOutboxEntry(id, { failed: undefined })
+      // A tap on Retry is a new press (#26392): a new operation id, so a ledger row the earlier
+      // attempts left unresolved or refused cannot answer it. Its own automatic attempts share it.
+      void patchOutboxEntry(id, { failed: undefined, operationId: structuredSessionOperationId(), autoAttempts: 0 })
     }
   }, [])
   const edit = useCallback(

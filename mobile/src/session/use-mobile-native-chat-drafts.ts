@@ -261,9 +261,7 @@ export function useMobileNativeChatDrafts(args: {
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) {
-        return
-      }
+      if (!mountedRef.current) { releaseOutboxSend(origin.outboxId); return } // the chat closed under it: the next chat of its tab sees it through
       const entry = parkUnconfirmedSend({
         origin,
         text,

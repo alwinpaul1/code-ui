@@ -103,7 +103,10 @@ export function useMobileStructuredNativeChatSendBridge(args: {
       const sendStructured = latestSendStructured.current
       const isHostCommand = isStructuredAgentSessionComposerCommand(text, agent)
       // Written down before the box empties (native-chat-outbox-sends.ts). Fail-open.
-      recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length || attachments?.length) })
+      // Not a host command: it writes no row, so nothing could tell it ran, and a resend would run it again.
+      if (!isHostCommand) {
+        recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length || attachments?.length) })
+      }
       clearDraftForSend(origin, text)
       if (!isHostCommand && !images?.length && !attachments?.length) {
         showSendingEcho?.(origin)
