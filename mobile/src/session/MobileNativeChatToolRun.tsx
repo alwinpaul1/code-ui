@@ -22,6 +22,7 @@ import { ToolRunDiffChip } from './MobileNativeChatToolRunDiffChip'
 import { toolPairOpensDetailSheet } from './mobile-native-chat-tool-detail'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { pairToolBlocks } from '../../../src/shared/native-chat-tool-fold'
+import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool-line-identity'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
@@ -353,11 +354,14 @@ function ToolRunView({
   )
 
   function renderBody(): React.JSX.Element {
+    // Keyed by the call, not its place (Orca #26968): an opened line stays with its command when
+    // rows before it go or move, and a repeated provider id keeps one row per occurrence.
+    const seen = new Map<string, number>()
     return (
       <View style={styles.toolRunBody}>
         {pairs.map((pair, i) => (
           <ToolLine
-            key={i}
+            key={nativeChatToolLineIdentity((pair.call ?? pair.result)!, seen, true)}
             pair={pair}
             taskList={taskLists[i] ?? null}
             // A call "Show N more" revealed opens on its own tap (diffLineLimit).

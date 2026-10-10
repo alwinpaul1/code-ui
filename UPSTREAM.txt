@@ -471,7 +471,7 @@ src/shared/commit-message-prompt.test.ts: 2caa79e097 (#24005; v1.4.219..v1.4.220
 src/shared/orchestration-caller-status.ts: 6e7e964705 (#22636; v1.4.219..v1.4.220 shared halves; new, pulled in because runtime-session-contracts.ts imports it)
 src/shared/telemetry-ssh-runtime-event-schemas.ts: 53fd2dea0b (#24133; v1.4.219..v1.4.220 shared halves; new, pulled in because telemetry-event-registry.ts imports it)
 src/shared/ssh-types.ts: hand-merged, v1.4.219..v1.4.220 shared halves: the net of #24129, #24133, #24147 and #24559 (which reverted #24453 and #24463), so SshRemoteRuntime, SshRemoteRuntimeResolution and SshPlainSshMode; the fork stays without the v1.4.219 SshTargetSummary additions
-src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
+src/shared/native-chat-tool-fold.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus #26968 (8452fc3315) pairToolBlocks and NativeChatToolPair moved to native-chat-tool-pairs.ts (re-exported), hand-applied; the fold's unpaired-result rows not taken, see LOCAL-FILES.md
 src/shared/native-chat-types.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #18773's subagent-group roster block at its 2460068883 form (taken for #26125), hand-applied, see LOCAL-FILES.md; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus `failure?` on NativeChatTextBlock (#23116, a68d62911e) and AgentJournalProducerLinkage on NativeChatMessage (#23605, e8e144bf3c), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md; plus #26579 (bb44f74d00) `contextClear` on a text block, hand-applied, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.ts: vendor base (plus hand-applied upstream hunks, see LOCAL-FILES.md); plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port; plus the status row through structuredAgentSessionStatusBlock (#23116) and producer linkage on a projected row (#23605), hand-applied, v1.4.217..v1.4.219 chat chain, see LOCAL-FILES.md
 src/shared/structured-agent-session-projection.test.ts: vendor base; plus #22619 (cb363444f3) hunks merged by 3-way, v1.4.220 port
@@ -519,3 +519,6 @@ src/shared/returned-draft-text.ts: 4735ecefac (#25704, whole file)
 src/shared/returned-draft-text.test.ts: 4735ecefac (#25704, whole file)
 src/shared/agent-session-context-clear.ts: bb44f74d00 (#26579, new; less agentSessionCurrentContextRows, see LOCAL-FILES.md)
 src/shared/agent-session-provider-context.ts: bb44f74d00 (#26579, new; the boundary type and guard only, see LOCAL-FILES.md)
+src/shared/native-chat-tool-pairs.ts: 8452fc3315 (#26968, new)
+src/shared/native-chat-tool-line-identity.ts: 8452fc3315 (#26968, new)
+src/shared/native-chat-tool-line-identity.test.ts: 8452fc3315 (#26968, new)

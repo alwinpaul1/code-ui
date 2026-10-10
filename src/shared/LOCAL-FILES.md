@@ -612,3 +612,15 @@ handle chain, record boundary, queue pause, Codex/ACP restarts) is `src/main` an
 
 - `native-chat-visual-shell.ts` and its test, taken whole at 7b91405547 (they equalled #26729's parent,
   the 1617ff32ef copy above).
+
+## Tool results with the right command (Orca #26968, 8452fc3315)
+
+- `native-chat-tool-pairs.ts`, `native-chat-tool-line-identity.ts` and the identity test, taken
+  whole. `native-chat-tool-fold.ts` drops its own `pairToolBlocks`, `NativeChatToolPair` and
+  `answeredToolCallIndex` and re-exports the first two from the pairs module (marked in the
+  source); the answers are the same, pinned by `mobile/src/session/native-chat-tool-pairs-order.test.ts`.
+- Not taken: the fold's change from dropping a result it cannot pair to drawing it as its own
+  `unpairedToolResults` row (`native-chat-folded-tool-results.ts`), and the turn-placement half
+  that rows need (`native-chat-turn-row-attribution.ts`, the `native-chat-turn-membership.ts`
+  hunks; that module is not vendored here, and the phone's turn grouping keys on the message ids
+  the fold would invent). `native-chat-types.ts`'s `unpairedToolResults` field goes with it.
