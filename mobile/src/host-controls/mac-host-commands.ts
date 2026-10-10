@@ -73,14 +73,15 @@ export function buildMacHostCommand(action: MacHostPasswordlessAction): string {
 const CLEAR_PASSWORD_FIELD_DELETES = 40
 
 /** A command saying it did nothing, and why: the Mac unlock's two (the screen was
- *  not locked, or it could not tell), and the Windows Sleep display's one (a PC with
- *  Modern Standby goes to sleep with its display, windows-host-commands.ts). */
-export type MacHostRefusal = 'unlocked' | 'unconfirmed' | 'standby'
+ *  not locked, or it could not tell), and the Windows Sleep display's one (on a PC
+ *  with Modern Standby the keeper could not hold the PC awake, so the display was
+ *  never turned off; windows-display-off-keeper.ts). */
+export type MacHostRefusal = 'unlocked' | 'unconfirmed' | 'keepawake'
 
 export const MAC_HOST_REFUSAL_REASONS: Record<MacHostRefusal, string> = {
   unlocked: "The Mac isn't locked, so nothing was typed.",
   unconfirmed: "Couldn't confirm the Mac is locked, so nothing was typed.",
-  standby: 'This PC goes to sleep when its display turns off, so the display was left on.'
+  keepawake: "Couldn't keep this PC awake with its display off, so the display was left on."
 }
 
 const ON_CONSOLE_KEY = '"kCGSSessionOnConsoleKey"=Yes'
@@ -111,14 +112,14 @@ export const MAC_SCREEN_LOCK_GATE =
   '(*) printf unconfirmed ;; esac'
 
 // Anchored, and a `%s` in the command: its own echo on the screen must not match.
-const REFUSED_PATTERN = /^CUIREFUSED (unlocked|unconfirmed|standby)\b/
+const REFUSED_PATTERN = /^CUIREFUSED (unlocked|unconfirmed|keepawake)\b/
 
 /** The refusal a command printed, or null while there is none. */
 export function readMacHostRefusal(lines: string[]): MacHostRefusal | null {
   for (const line of lines) {
     const match = REFUSED_PATTERN.exec(line)
     if (match) {
-      return match[1] === 'unlocked' || match[1] === 'standby' ? match[1] : 'unconfirmed'
+      return match[1] === 'unlocked' || match[1] === 'keepawake' ? match[1] : 'unconfirmed'
     }
   }
   return null
