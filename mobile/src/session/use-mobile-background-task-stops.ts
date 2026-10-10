@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react'
 
 /** One Stop as the sheet sends it: resolves true only when the host confirmed the task stopped
- *  (`cancelled: true`), false for a refusal, a lost answer or nothing stopped. */
-export type MobileBackgroundTaskStop = (taskId: string) => Promise<boolean>
+ *  (`cancelled: true`), false for a refusal, a lost answer or nothing stopped. `report`, when given,
+ *  is where this Stop's failure is said (Stop all collects them per task). */
+export type MobileBackgroundTaskStop = (taskId: string, report?: (message: string) => void) => Promise<boolean>
 
 const NO_TASKS: ReadonlySet<string> = new Set()
 
@@ -24,7 +25,7 @@ export function useMobileBackgroundTaskStops(args: {
 }): {
   holding: ReadonlySet<string>
   /** Sends one Stop; resolves as `stop` does, or false when it was not sent (held, no handler). */
-  onStop: (taskId: string) => Promise<boolean>
+  onStop: MobileBackgroundTaskStop
 } {
   const { runningIds, stop } = args
   const [inFlight, setInFlight] = useState<ReadonlySet<string>>(NO_TASKS)
@@ -41,14 +42,14 @@ export function useMobileBackgroundTaskStops(args: {
     setInFlight(next)
   }
   const onStop = useCallback(
-    async (taskId: string): Promise<boolean> => {
+    async (taskId: string, report?: (message: string) => void): Promise<boolean> => {
       // The ref closes the same-frame double tap that state alone would let through.
       if (!stop || inFlightRef.current.has(taskId)) {
         return false
       }
       updateInFlight(new Set([...inFlightRef.current, taskId]))
       try {
-        const done = await stop(taskId)
+        const done = await stop(taskId, report)
         if (done) {
           setConfirmed((held) => new Set([...held, taskId]))
         }

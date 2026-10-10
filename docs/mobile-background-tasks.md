@@ -809,3 +809,16 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
   request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
   conversation) is a different surface and is unchanged.
 
+## Stop all (2026-10-10)
+
+The Running section's header carries a quiet "Stop all" at its right while at least one running
+row takes a Stop and is not already stopping (`use-mobile-background-tasks-stop-all.ts`). Each task
+goes through the same per-task stop as its own button, so the holds (Orca #26780) and the host's
+answers are the ones a single press gets. More than one task is confirmed first (a system dialog,
+"Stop N background tasks?", Cancel or Stop all); one task stops at once. A task whose Stop said why
+it failed (a refusal, "Stop unconfirmed — check chat before retrying") is named on the sheet's
+failure line, one line per task under "N of M tasks didn't stop."; a task the host answered with
+nothing stopped and no words had already ended, and is not named. A row the host marks
+`stoppable: false` and a finished row are never stopped. Upstream's strip offers its Stop all only
+to a host with no per-row stop; this one is the user's own ask and works over the per-row stops.
+

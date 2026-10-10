@@ -386,7 +386,7 @@ describe('a structured tab reading its background tasks from the host', () => {
       const stops = renderer!.root
         .findAllByType('Pressable')
         .map((node) => String(node.props.accessibilityLabel ?? ''))
-        .filter((label) => label.startsWith('Stop '))
+        .filter((label) => label.startsWith('Stop ') && label !== 'Stop all running tasks')
       expect(stops).toEqual(['Stop Audit the release notes', 'Stop Watch the build log'])
       await press(renderer!, 'Stop Audit the release notes')
       expect(stopped).toEqual(['task-live'])

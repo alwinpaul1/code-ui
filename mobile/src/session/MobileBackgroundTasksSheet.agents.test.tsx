@@ -61,7 +61,7 @@ describe('Stop on a structured roster, per agent', () => {
     renderer!.root
       .findAllByType('Pressable')
       .map((node) => String(node.props.accessibilityLabel ?? ''))
-      .filter((label) => label.startsWith('Stop '))
+      .filter((label) => label.startsWith('Stop ') && label !== 'Stop all running tasks')
 
   async function pressStop(title: string) {
     const button = renderer!.root

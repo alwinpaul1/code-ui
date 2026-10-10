@@ -17,6 +17,7 @@ import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-ta
 import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
+import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
 
 /** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
  *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
@@ -68,11 +69,20 @@ export function MobileBackgroundTasksSheet({
   })
   const stop =
     onStopTask && reportStopFailure
-      ? (taskId: string) => {
-          failure.clear()
-          return onStopTask(taskId, failure.reporter())
+      ? (taskId: string, report?: SheetFailureReport) => {
+          if (!report) {
+            failure.clear()
+          }
+          return onStopTask(taskId, report ?? failure.reporter())
         }
       : onStopTask
+  // Stop all names every task that did not stop on the sheet's own line.
+  const reportStopAll = reportStopFailure
+    ? (text: string) => {
+        failure.clear()
+        failure.reporter()(text)
+      }
+    : undefined
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     // The title rides above the list rather than in it, so it stays in view
@@ -91,6 +101,7 @@ export function MobileBackgroundTasksSheet({
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
+        onStopAllFailed={reportStopAll}
       />
     </BottomDrawer>
   )
@@ -124,13 +135,16 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask
+  onStopTask,
+  onStopAllFailed
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string) => Promise<boolean> | void
+  onStopTask?: (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
+  /** Where a Stop all names the tasks that did not stop: the sheet's failure line. */
+  onStopAllFailed?: (text: string) => void
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -151,10 +165,19 @@ export function MobileBackgroundTasksSheetBody({
   )
   const runningIds = useMemo(() => running.map((task) => task.id), [running])
   const stopOne = useMemo(
-    () => (onStopTask ? async (taskId: string) => (await onStopTask(taskId)) === true : undefined),
+    () =>
+      onStopTask
+        ? async (taskId: string, report?: SheetFailureReport) => (await onStopTask(taskId, report)) === true
+        : undefined,
     [onStopTask]
   )
   const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne })
+  const stopAllTasks = useMemo(() => stopAllTargets(running, stops.holding), [running, stops.holding])
+  const stopAll = useMobileBackgroundTasksStopAll({
+    targets: stopAllTasks,
+    onStop: stops.onStop,
+    onFailed: onStopAllFailed
+  })
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -170,6 +193,7 @@ export function MobileBackgroundTasksSheetBody({
         title="Running"
         open={runningOpen}
         onToggle={() => setRunningOpen((open) => !open)}
+        action={stopOne && stopAllTasks.length > 0 ? <StopAllButton onPress={stopAll} /> : null}
       >
         {/* One flat list. The per-kind headings ("Shells · 4", "Agents · 2")
             were removed at the user's request on 2026-09-15 — the row's own
@@ -215,36 +239,59 @@ function BackgroundTasksSection({
   count,
   open,
   onToggle,
+  action = null,
   children
 }: {
   title: string
   count?: number
   open: boolean
   onToggle: () => void
+  /** Drawn at the header's right, beside the title row (Running's Stop all). */
+  action?: ReactNode
   children: ReactNode
 }) {
   const { colors, space } = useTheme()
   const heading = count === undefined ? title : `${title} ${count}`
   return (
     <View style={{ gap: space.sm, paddingTop: space.xs }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
-        onPress={onToggle}
-        hitSlop={10}
-        style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
-      >
-        <Txt variant="label" tone="muted">
-          {heading}
-        </Txt>
-        {open ? (
-          <ChevronDown size={16} color={colors.textMuted} />
-        ) : (
-          <ChevronRight size={16} color={colors.textMuted} />
-        )}
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
+          onPress={onToggle}
+          hitSlop={10}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
+        >
+          <Txt variant="label" tone="muted">
+            {heading}
+          </Txt>
+          {open ? (
+            <ChevronDown size={16} color={colors.textMuted} />
+          ) : (
+            <ChevronRight size={16} color={colors.textMuted} />
+          )}
+        </Pressable>
+        {action}
+      </View>
       {open ? <View style={{ gap: space.sm }}>{children}</View> : null}
     </View>
+  )
+}
+
+/** Running's "Stop all", a quiet text button at the header's right so the cards keep their look. */
+function StopAllButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Stop all running tasks"
+      onPress={onPress}
+      hitSlop={10}
+      style={({ pressed }) => ({ minHeight: 28, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
+    >
+      <Txt variant="caption" weight="semibold" tone="secondary">
+        Stop all
+      </Txt>
+    </Pressable>
   )
 }
 
