@@ -110,7 +110,8 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
     const found = pair.call ? editFilesForToolCall(pair.call, pair.result ?? null) : null
     return found && found.length > 0 ? found : null
   }, [pair])
-  const sections = toolDetailSections(pair, { hasChanges: files !== null })
+  // Memoised on the pair: a running tool re-renders the sheet as it streams.
+  const sections = useMemo(() => toolDetailSections(pair, { hasChanges: files !== null }), [pair, files])
   const output = pair.result?.output ?? ''
   return (
     <View style={{ gap: 20 }}>
@@ -176,6 +177,11 @@ function Unwrapped({ children }: { children: ReactNode }) {
 
 function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind: 'changes' }> }) {
   const { syntax } = useTheme()
+  const code = section.kind === 'code' ? section : null
+  const segments = useMemo(
+    () => (code?.language ? highlightMobileCode(code.value, code.language).segments : null),
+    [code?.value, code?.language]
+  )
   switch (section.kind) {
     case 'prose':
       return <SelectableSheetText variant="body">{section.value}</SelectableSheetText>
@@ -185,8 +191,8 @@ function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind:
       return (
         <Unwrapped>
           <SelectableSheetText variant="mono">
-            {section.language ? (
-              <MobileSyntaxSegments segments={highlightMobileCode(section.value, section.language).segments} palette={syntax} />
+            {segments ? (
+              <MobileSyntaxSegments segments={segments} palette={syntax} />
             ) : (
               section.value
             )}

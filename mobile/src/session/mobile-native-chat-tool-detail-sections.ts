@@ -41,20 +41,38 @@ function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
-/** The whole command, unclipped: Claude's `command`, Codex's `cmd`, either as
- *  a string or as an argv array. */
-function commandOf(record: Record<string, unknown>): string | null {
+/** One argv word as a shell would need it typed: bare when it is safe, else
+ *  single-quoted. Joined by spaces alone, `["bash", "-lc", "echo 'a b'"]`
+ *  read as a different command (review, 2026-10-10). */
+function shellWord(word: string): string {
+  if (/^[\w@%+=:,./-]+$/.test(word)) {
+    return word
+  }
+  return `'${word.replace(/'/g, `'"'"'`)}'`
+}
+
+/** The whole command, unclipped, and the key it came from: Claude's
+ *  `command`, Codex's `cmd`, either as a string or as an argv array. */
+function commandOf(record: Record<string, unknown>): { command: string; key: string } | null {
   for (const key of ['command', 'cmd']) {
     const value = record[key]
     if (Array.isArray(value) && value.length > 0 && value.every((part) => typeof part === 'string')) {
-      return value.join(' ')
+      return { command: value.map(shellWord).join(' '), key }
     }
     const single = text(value)
     if (single) {
-      return single
+      return { command: single, key }
     }
   }
   return null
+}
+
+function indentedJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2) ?? String(value)
+  } catch {
+    return String(value)
+  }
 }
 
 const prose = (label: string, value: string | null): ToolDetailSection[] =>
@@ -97,51 +115,72 @@ export function toolDetailSections(
   return genericSections(call.input, record)
 }
 
+const PATH_KEYS = ['file_path', 'filePath', 'path', 'notebook_path'] as const
+
+/** The sections a known tool's input earns, then every input they did not
+ *  use, as indented JSON under "Options" (a Read's offset and limit, a Bash
+ *  call's timeout), so nothing the old name/value rows showed is lost (review,
+ *  2026-10-10). Null when the input is not the shape the tool's layout needs. */
 function knownSections(
   kind: ReturnType<typeof toolCallKind>,
   record: Record<string, unknown>,
   hasChanges: boolean
 ): ToolDetailSection[] | null {
+  const laid = layoutFor(kind, record, hasChanges)
+  if (!laid) {
+    return null
+  }
+  const rest = Object.fromEntries(Object.entries(record).filter(([key]) => !laid.used.includes(key)))
+  return Object.keys(rest).length > 0 ? [...laid.sections, ...code('Options', indentedJson(rest))] : laid.sections
+}
+
+function layoutFor(
+  kind: ReturnType<typeof toolCallKind>,
+  record: Record<string, unknown>,
+  hasChanges: boolean
+): { sections: ToolDetailSection[]; used: readonly string[] } | null {
   const command = commandOf(record)
   const path = toolFilePath(record)
   const pattern = text(record.pattern) ?? text(record.query)
-  // Codex keeps the raw command on a classified read/search/list row, which
-  // has no path or pattern of its own: it is a command, and reads as one.
-  if (command && (kind === 'command' || (!path && !pattern && (kind === 'read' || kind === 'search')))) {
-    return [...prose('Description', text(record.description)), ...code('Command', command, 'bash')]
+  // Codex keeps the raw command on a classified read/search/list row: it is a
+  // command, and reads as one, with its path among the Options.
+  if (command && (kind === 'command' || kind === 'read' || kind === 'search')) {
+    return {
+      sections: [...prose('Description', text(record.description)), ...code('Command', command.command, 'bash')],
+      used: [command.key, 'description']
+    }
   }
   if (kind === 'read' && path) {
-    return code('File', path)
+    return { sections: code('File', path), used: PATH_KEYS }
   }
-  if (kind === 'edit' && (path || hasChanges)) {
-    return [...code('File', path), ...(hasChanges ? [{ kind: 'changes' as const, label: 'Changes' }] : [])]
+  // Only an edit the diff card can draw: the card is the whole input. A
+  // NotebookEdit, or an edit that did not land, shows its whole Input instead.
+  if (kind === 'edit' && hasChanges) {
+    return { sections: [...code('File', path), { kind: 'changes', label: 'Changes' }], used: Object.keys(record) }
   }
   if (kind === 'search' && pattern) {
-    return [...code('Pattern', pattern), ...code('Path', text(record.path))]
+    return {
+      sections: [...code('Pattern', pattern), ...code('Path', text(record.path))],
+      used: ['pattern', 'query', 'path']
+    }
   }
   if (kind === 'agent' && (text(record.description) || text(record.prompt))) {
-    return [...prose('Description', text(record.description)), ...markdown('Prompt', text(record.prompt))]
+    return {
+      sections: [...prose('Description', text(record.description)), ...markdown('Prompt', text(record.prompt))],
+      used: ['description', 'prompt']
+    }
   }
   return null
 }
 
 function genericSections(input: unknown, record: Record<string, unknown> | null): ToolDetailSection[] {
   if (record) {
-    if (Object.keys(record).length === 0) {
-      return []
-    }
-    let json: string
-    try {
-      json = JSON.stringify(record, null, 2) ?? ''
-    } catch {
-      json = String(input)
-    }
-    return code('Input', json)
+    return Object.keys(record).length === 0 ? [] : code('Input', indentedJson(record))
   }
   if (input === null || input === undefined) {
     return []
   }
-  return code('Input', typeof input === 'string' ? input : String(input))
+  return code('Input', typeof input === 'string' ? input : indentedJson(input))
 }
 
 /** The output's first {@link TOOL_DETAIL_OUTPUT_LINE_CAP} lines, then the
@@ -153,6 +192,9 @@ export function capToolDetailOutput(output: string): { text: string; hiddenLines
   const total = lines.length - (lines.length > 1 && lines.at(-1) === '' ? 1 : 0)
   const kept = lines.length > TOOL_DETAIL_OUTPUT_LINE_CAP ? lines.slice(0, TOOL_DETAIL_OUTPUT_LINE_CAP).join('\n') : output
   const capped = truncateToolDetail(kept)
-  const shownLines = capped === output ? total : capped.split('\n').length
+  // A cap that cut right after a newline puts its ellipsis on a line of its
+  // own, which is not a line of the output.
+  const shownLines =
+    capped === output ? total : capped.split('\n').length - (capped.endsWith('\n…') ? 1 : 0)
   return { text: capped, hiddenLines: Math.max(0, total - shownLines) }
 }

@@ -168,7 +168,7 @@ describe('the tool detail sheet, laid out as the Claude app lays it out', () => 
 
   it('shows a Read as its File and Output', () => {
     const read: NativeChatToolPair = {
-      call: { type: 'tool-call', name: 'Read', input: { file_path: '/repo/src/app.ts', limit: 40 } },
+      call: { type: 'tool-call', name: 'Read', input: { file_path: '/repo/src/app.ts' } },
       result: { type: 'tool-result', output: '1\texport const a = 1' }
     }
     renderer = renderTree(createElement(ToolDetailBody, { pair: read }))
@@ -247,5 +247,73 @@ describe('the tool detail sheet, laid out as the Claude app lays it out', () => 
     for (const node of more) {
       expect(flat(node).color).toBe(lightColors.textMuted)
     }
+  })
+})
+
+// Review of 53e222ee1: the curated sections dropped inputs the old name/value
+// rows showed, a NotebookEdit kept only its path, and an argv lost its quoting.
+describe('the tool sheet shows everything the call carried', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+  })
+  const body = (pair: NativeChatToolPair) => {
+    renderer = renderTree(createElement(ToolDetailBody, { pair }))
+    return renderer
+  }
+
+  it("keeps a Read's offset and limit, and a Bash call's timeout, under Options", () => {
+    const tree = body({
+      call: { type: 'tool-call', name: 'Read', input: { file_path: '/a.ts', offset: 10, limit: 40 } },
+      result: { type: 'tool-result', output: 'x' }
+    })
+    expect(labels(tree)).toEqual(['File', 'Options', 'Output'])
+    expect(textOf(boxOf(sections(tree)[1]!))).toBe(JSON.stringify({ offset: 10, limit: 40 }, null, 2))
+    act(() => renderer!.unmount())
+    const bash = body({
+      call: { type: 'tool-call', name: 'Bash', input: { command: 'ls', description: 'List', timeout: 60000 } }
+    })
+    expect(labels(bash)).toEqual(['Description', 'Command', 'Options'])
+  })
+
+  it("shows a NotebookEdit's whole input, not only its path", () => {
+    const tree = body({
+      call: {
+        type: 'tool-call',
+        name: 'NotebookEdit',
+        input: { notebook_path: '/n.ipynb', cell_id: 'c1', new_source: 'print(1)' }
+      },
+      result: { type: 'tool-result', output: 'ok' }
+    })
+    expect(labels(tree)).toEqual(['Input', 'Output'])
+    expect(textOf(boxOf(sections(tree)[0]!))).toContain('print(1)')
+  })
+
+  it('prints an array input as JSON, not joined by commas', () => {
+    const tree = body({ call: { type: 'tool-call', name: 'CustomTool', input: [1, { a: 2 }] } })
+    expect(textOf(boxOf(sections(tree)[0]!))).toBe(JSON.stringify([1, { a: 2 }], null, 2))
+  })
+
+  it("keeps an argv's argument boundaries, and a Codex read's command beside its path", () => {
+    const tree = body({
+      call: { type: 'tool-call', name: 'exec_command', input: { cmd: ['bash', '-lc', "echo 'a b' && ls"] } }
+    })
+    expect(textOf(boxOf(sections(tree)[0]!))).toBe(`bash -lc 'echo '"'"'a b'"'"' && ls'`)
+    act(() => renderer!.unmount())
+    const read = body({ call: { type: 'tool-call', name: 'read', input: { cmd: 'sed -n 1,5p a.ts', path: 'a.ts' } } })
+    expect(labels(read)[0]).toBe('Command')
+  })
+
+  it('counts the line the character cap cut at a newline as hidden', () => {
+    // 3999 characters then a newline: the cap keeps the newline, and the line
+    // after it is not shown at all.
+    const output = `${'y'.repeat(3999)}\n${'z'.repeat(10)}`
+    const tree = body({
+      call: { type: 'tool-call', name: 'Bash', input: { command: 'x' } },
+      result: { type: 'tool-result', output }
+    })
+    const more = hostTexts(tree).filter((n) => n.props.testID === 'tool-detail-output-more')
+    expect(more.map((n) => textOf(n))).toEqual(['1 more line'])
   })
 })
