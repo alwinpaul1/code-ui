@@ -42,23 +42,6 @@ vi.mock('./session/use-mobile-chat-expand-tools', () => ({
   useMobileChatExpandToolsPreference: () => ({ expandTools: false, setExpandTools })
 }))
 
-vi.mock('./session/desktop-hud-launch-preference', () => ({
-  loadDesktopHudLaunchEnabled: async () => true,
-  saveDesktopHudLaunchEnabled: async () => undefined
-}))
-
-vi.mock('./session/agent-hud-desktop-launch-args', () => ({
-  syncAgentHudDesktopLaunchArgs: async () => undefined
-}))
-
-vi.mock('./transport/use-all-host-clients', () => ({
-  useAllHostClients: () => []
-}))
-
-vi.mock('./transport/host-store', () => ({
-  loadHostCatalog: async () => []
-}))
-
 function collectText(renderer: ReactTestRenderer): string {
   const parts: string[] = []
   const visit = (value: unknown): void => {
@@ -93,7 +76,14 @@ describe('Chat UI settings copy', () => {
     })
     const text = collectText(renderer!)
     expect(text).toContain('Open sessions in Chat UI')
-    expect(text).toContain('Desktop agents report model and context')
+    // 2026-10-10: the desktop beacon flags are always on; no switch, no section.
+    expect(text).not.toMatch(/Model and context on the desktop/)
+    expect(text).not.toMatch(/report model and context/)
+    expect(
+      renderer!.root.findAll(
+        (node) => node.type === 'Switch' && /model and context/i.test(String(node.props.accessibilityLabel))
+      )
+    ).toHaveLength(0)
     expect(text).not.toMatch(/Chat-capable agents/)
     expect(text).not.toMatch(/escape sequence/)
     expect(text).not.toMatch(/long-press away/)
