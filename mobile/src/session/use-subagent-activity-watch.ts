@@ -51,14 +51,16 @@ export function useSubagentActivityWatch(args: {
   const stopAt = report?.stopRunningTaskIdsAt ?? null
   const liveShellCount = report?.onScreenShellCount ?? null
   const heldShellCount = report?.heldOnScreenShellCount ?? null
+  const finishedTaskIds = report?.finishedTaskIds
   return useMemo(
     () =>
       mergeSubagentActivity(tasks, feeds, {
         now,
         liveShellCount,
         heldShellCount,
-        stopRunning: stopIds === null ? null : { ids: stopIds, at: stopAt }
+        stopRunning: stopIds === null ? null : { ids: stopIds, at: stopAt },
+        ...(finishedTaskIds ? { finishedTaskIds } : {})
       }),
-    [feeds, heldShellCount, liveShellCount, now, stopAt, stopIds, tasks]
+    [feeds, finishedTaskIds, heldShellCount, liveShellCount, now, stopAt, stopIds, tasks]
   )
 }

@@ -10,6 +10,7 @@ import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-ta
 import {
   orcaTranscriptRows,
   PROBE_A_AGENT,
+  PROBE_A_SHELL,
   PROBE_B_AGENT,
   probeARecords,
   probeBRecords,
@@ -88,8 +89,8 @@ const row = (id: string, description: string): AgentSubagentSnapshot => ({
 })
 const agentStatus = { state: 'working' as const, subagents: [row(PROBE_A_AGENT, 'Sleep probe A'), row(PROBE_B_AGENT, 'Sleep probe B')] }
 
-function report(onScreenShellCount: number | null): ActiveTabBackgroundTaskReport {
-  return { finishedTaskIds: [], runningTaskIds: null, runningTaskIdsAt: null, launchedTaskIds: [], onScreenShellCount }
+function report(onScreenShellCount: number | null, finishedTaskIds: string[] = []): ActiveTabBackgroundTaskReport {
+  return { finishedTaskIds, runningTaskIds: null, runningTaskIdsAt: null, launchedTaskIds: [], onScreenShellCount }
 }
 
 type Subscription = { params: { sessionId: string; transcriptPath?: string }; emit: (frame: unknown) => void; closed: boolean }
@@ -155,6 +156,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     messages?: NativeChatMessage[]
     status?: typeof agentStatus
     footer?: number | null
+    finished?: string[]
   }) {
     return (
       <ThemeProvider initialPreference={props.scheme ?? 'light'}>
@@ -162,7 +164,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
         <MobileBackgroundTasksSheetBody
           messages={props.messages ?? []}
           agentStatus={props.status ?? agentStatus}
-          backgroundTaskReport={report(props.footer ?? null)}
+          backgroundTaskReport={report(props.footer ?? null, props.finished)}
           subagentSource={props.open ? SOURCE : null}
         />
       </ThemeProvider>
@@ -202,6 +204,17 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
     // A subagent's shell has no Stop: nothing can reach it.
     expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop Start a 120-second background sleep')).toHaveLength(0)
+  })
+
+  it("moves A's shell out of Running once the status line reports it finished, with no footer count", async () => {
+    // The footer is gone (it paints no count at zero); the beacon's done= names A's shell.
+    await mount({ open: true, footer: null, finished: [PROBE_A_SHELL] })
+    answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
+    const { texts } = readTree(renderer!)
+    // Still listed, now as a finished row with no live clock.
+    expect(texts).toContain('Start a 120-second background sleep')
+    expect(texts).not.toContain('1m 20s')
+    expect(texts).toContain('Running cd /private/tmp && ls | head -3')
   })
 
   it('keeps the description when the read is refused or never answers', async () => {
