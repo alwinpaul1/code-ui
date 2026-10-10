@@ -532,3 +532,16 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
   as upstream's phone does; #22944's parity test (in `agent-row-display.test.ts`) pins the mirror to
   this module over every row. The tab pill (`tabPillDotState`, `mobile/src/session/session-tab-activity.ts`)
   no longer strips the legacy `interrupted` flag, so it draws the verdict the desktop tab draws.
+
+## Inline chat visuals (Orca #26103's shared half, taken for the phone's #26071, 1617ff32ef)
+
+- `native-chat-visual-directive.ts`, `native-chat-visual-shell.ts`,
+  `native-chat-visual-height-governor.ts` and their tests, and
+  `rpc-contract/agent-session-visual-params.ts`, taken whole at 1617ff32ef (the #26071 merge;
+  #26103 added them). `rpc-contract/structured-agent-session-identifiers.ts` is taken whole at the
+  same commit because the params module imports `SessionId` from it; its schemas are the ones
+  `structured-agent-session-params.ts` already defines here.
+- `rpc-contract/rpc-params-catalog.generated.ts` — the `agentSession.readVisual` row and its
+  `ReadVisualParams` import, hand-kept from 1617ff32ef (marked `CODE UI HAND-KEPT`). The phone sends
+  it from `mobile/src/session/mobile-native-chat-visual-read.ts`; a 1.4.205 host's mobile gate
+  refuses it, which the read latches per client (orca-mobile-rpc-allowlist.test.ts, `fails-open`).

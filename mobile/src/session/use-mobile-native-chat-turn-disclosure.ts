@@ -17,6 +17,9 @@ export type MobileNativeChatTurnRow = {
   /** Set only on a settled turn — the one row that has activity to disclose. */
   turnKey?: string
   activeTurnIsWorking: boolean
+  /** The newest assistant row of a live turn with no prompt open: its last text may still grow,
+   *  so a visual line still being typed at its tail is held back (Orca #26071). */
+  mayStillGrow: boolean
 }
 
 /** Owns the transcript's per-turn status rows and their disclosure state, and
@@ -103,6 +106,10 @@ export function useMobileNativeChatTurnDisclosure({
     })
   }, [enabled, messages])
 
+  const latestAssistantId = useMemo(
+    () => messages.findLast((row) => row.role === 'assistant')?.id ?? null,
+    [messages]
+  )
   const { active: liveActive, activeTurnKey, completedByTurn } = turnStatuses
   // Withheld, not settled: the timing state above still counts the turn.
   const active = awaitingInput ? null : liveActive
@@ -130,10 +137,12 @@ export function useMobileNativeChatTurnDisclosure({
           enabled &&
           isWorking &&
           (turnKey === activeTurnKey ||
-            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
+            (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY)),
+        // A prompt card waiting means the agent has stopped writing until it is answered.
+        mayStillGrow: !awaitingInput && message.id === latestAssistantId
       }
     },
-    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking]
+    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking, awaitingInput, latestAssistantId]
   )
 
   return {

@@ -1,4 +1,5 @@
 import type { MobileMarkdownBlock } from './mobile-markdown-parser'
+import type { MobileMarkdownRenderBlock } from './mobile-markdown-visual-lines'
 
 /**
  * How a document's blocks are grouped into selectable Texts.
@@ -39,6 +40,10 @@ import type { MobileMarkdownBlock } from './mobile-markdown-parser'
  * behind it is long, and a run that is very long breaks anyway; a short
  * section still joins the next one, so a selection crosses the heading
  * between them.
+ *
+ * A chat visual (Orca #26071) is a block of its own as well: it is a WebView,
+ * drawn between the runs around it, so on Android it sits between two native
+ * prose views and a selection stops at it, as at a figure.
  */
 export type ProseBlock = Extract<
   MobileMarkdownBlock,
@@ -47,9 +52,9 @@ export type ProseBlock = Extract<
 
 export type ProseRun = {
   start: number
-  blocks: MobileMarkdownBlock[]
+  blocks: MobileMarkdownRenderBlock[]
   /** The run's members when it is a prose run; null for a block that draws
-   *  itself (fence, table, drawn figure). */
+   *  itself (fence, table, drawn figure, chat visual). */
   prose: ProseBlock[] | null
   chars: number
 }
@@ -76,10 +81,10 @@ function runMayGrow(run: ProseRun, block: ProseBlock): boolean {
 }
 
 export function buildProseRuns(
-  blocks: readonly MobileMarkdownBlock[],
+  blocks: readonly MobileMarkdownRenderBlock[],
   drawsImage: (url: string) => boolean
 ): ProseRun[] {
-  const isProse = (block: MobileMarkdownBlock): block is ProseBlock =>
+  const isProse = (block: MobileMarkdownRenderBlock): block is ProseBlock =>
     block.type === 'paragraph' ||
     block.type === 'heading' ||
     block.type === 'rule' ||

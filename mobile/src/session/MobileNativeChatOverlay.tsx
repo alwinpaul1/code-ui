@@ -407,6 +407,7 @@ export function MobileNativeChatOverlay({
         agentWorking={controller.nativeChatAgentWorking}
         canStop={controller.nativeChatCanStop}
         structuredActivityUi={controller.nativeChatStructured}
+        visualSource={controller.nativeChatVisualSource}
         turnActivity={controller.nativeChatTurnActivity}
         turnThinking={controller.nativeChatTurnThinking}
         workingStartedAt={controller.nativeChatWorkingStartedAt}

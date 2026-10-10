@@ -50,7 +50,9 @@
             // 2026-10-10: 816. +16 over the 800 test ceiling for the Expand
             // tool calls cases (default closed, opens with the preference,
             // follows a Settings toggle while mounted).
-            "max": 816,
+            // 2026-10-10, later: 817 for the one-line mock of the inline-visual
+            // provider (Orca #26071), which imports a WebView Node cannot load.
+            "max": 817,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -117,7 +119,11 @@
             // "Small"): the typography prop threaded to the styles, pills and
             // table, and the context and branch for blocks drawn apart
             // (mobile-markdown-blocks-apart.tsx holds the drawing).
-            "max": 446,
+            // 2026-10-10: +9 for Orca #26071's chat visuals: the renderVisual
+            // prop, the blocks hook that lifts directive lines out
+            // (use-mobile-markdown-blocks.ts, mobile-markdown-visual-lines.ts)
+            // and the branch that draws a visual run between prose runs.
+            "max": 455,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -279,7 +285,11 @@
             // controller and the header's pair ride on existing lines. The scan,
             // its budget and the precedence live in use-claude-transcript-model.ts,
             // claude-transcript-model-scan.ts and claude-transcript-model.ts.
-            "max": 508,
+            // 2026-10-10: +1 for Orca #26071, the structured lane's visual
+            // source handed to the contract (nativeChatVisualSource); the
+            // reading and drawing live in mobile-native-chat-visual-read.ts and
+            // MobileNativeChatVisual.tsx.
+            "max": 509,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -414,7 +424,10 @@
             // 2026-10-10: the dock's ground and `dockClearance` were withdrawn
             // (the user wanted the row and the composer see-through again);
             // the cap stays, the file only shrank.
-            "max": 427,
+            // 2026-10-10, later: 428 for Orca #26071's chat visuals: the
+            // `visualSource` prop and the provider around the list that hands
+            // its rows the visual renderer (MobileNativeChatVisual.tsx).
+            "max": 428,
             "skipBlankLines": true,
             "skipComments": true
           }
@@ -475,6 +488,25 @@
     },
     {
       "files": [
+        "src/session/MobileNativeChatOverlay.tsx"
+      ],
+      "rules": {
+        "max-lines": [
+          "error",
+          {
+            // 2026-10-10: 401. The file sat exactly at the 400 tsx cap, and
+            // Orca #26071's chat visuals need one line here: the structured
+            // lane's visual source handed to the chat view, whose provider
+            // gives its rows the renderer (MobileNativeChatVisual.tsx).
+            "max": 401,
+            "skipBlankLines": true,
+            "skipComments": true
+          }
+        ]
+      }
+    },
+    {
+      "files": [
         "src/session/use-mobile-structured-agent-session.ts"
       ],
       "rules": {
@@ -485,7 +517,11 @@
             // `requestCancel` and the `cancelPrompt` it feeds. The dispatch
             // itself is mobile-structured-agent-session-cancel.ts; the hook
             // only threads the capability and the pending prompt's identity.
-            "max": 307,
+            // 2026-10-10: 309. Orca #26071's chat visuals: the memoized
+            // { client, sessionId } the transcript reads `::orca-visual` files
+            // with, and its returned field; the read is
+            // mobile-native-chat-visual-read.ts.
+            "max": 309,
             "skipBlankLines": true,
             "skipComments": true
           }

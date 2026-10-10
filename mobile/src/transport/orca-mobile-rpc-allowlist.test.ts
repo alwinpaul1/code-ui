@@ -121,6 +121,11 @@ const EXCEPTIONS: readonly AllowlistException[] = [
     why: 'The `/` menu\'s installed-skills read. A refusal leaves the list empty, which is what an old host already did; use-mobile-native-chat-skills.ts latches the gate\'s refusal so it is asked once per client, not every 3 s.'
   },
   {
+    method: 'agentSession.readVisual',
+    guard: 'fails-open',
+    why: 'An inline chat visual (Orca #26071), asked for only when an assistant reply carries an `::orca-visual` line. mobile-native-chat-visual-read.ts latches the gate\'s refusal (or method_not_found) per client, so that host is asked once, and the line then reads "Visualization unavailable" as plain text with no retry to tap.'
+  },
+  {
     method: 'agent.launch',
     guard: 'capability',
     capability: protocolVersion.AGENT_LAUNCH_RUNTIME_CAPABILITY,

@@ -1,4 +1,4 @@
-import { memo, useState, type ReactNode } from 'react'
+import { memo, useContext, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
 import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
@@ -31,6 +31,7 @@ import {
   MobileNativeChatNoticeRow
 } from './MobileNativeChatNoticeRow'
 import type { NativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
+import { MobileNativeChatVisualContext } from './mobile-native-chat-visual-context'
 
 /** A finger held this long is a copy, not a tap: Android's own long-press
  *  timeout, the one the chat's scroll gate already keys on. */
@@ -115,6 +116,7 @@ function AgentControls({
 
 function MobileNativeChatMessageImpl({
   message,
+  mayStillGrow = false,
   toolsExpanded = false,
   promptsAsMarkdown = false,
   fontScale = 1,
@@ -139,6 +141,8 @@ function MobileNativeChatMessageImpl({
   copyTurnText
 }: {
   message: NativeChatMessage
+  /** The newest assistant row of a live turn with no prompt open: its last text may still grow. */
+  mayStillGrow?: boolean
   toolsExpanded?: boolean
   /** A transcript whose user rows the lead agent wrote (a subagent's task),
    *  drawn as Markdown; the user's own prompts stay the plain text they typed. */
@@ -202,6 +206,12 @@ function MobileNativeChatMessageImpl({
   // A sent prompt shows its copy control only once tapped, so the bubble
   // stays clean; a queued echo keeps its Queued/Cancel row instead.
   const [promptControlsShown, setPromptControlsShown] = useState(false)
+  // A structured chat's `::orca-visual` lines, in assistant replies only (Orca #26071).
+  const transcriptVisuals = useContext(MobileNativeChatVisualContext) ?? undefined
+  const renderVisual = message.role === 'assistant' ? transcriptVisuals : undefined
+  // Structured replies grow in place: only the last block of the newest row may still be typing.
+  const growingBlock =
+    renderVisual && mayStillGrow && activeTurnIsWorking === true ? message.blocks.at(-1) : undefined
 
   if (isReasoning) {
     return <MobileNativeChatReasoningNote message={message} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
@@ -342,7 +352,9 @@ function MobileNativeChatMessageImpl({
                       styles,
                       // The list recycles a row's cell for other messages;
                       // this names the block for its markdown.
-                      identity: `${message.id}:${segmentIndex}:${index}`
+                      identity: `${message.id}:${segmentIndex}:${index}`,
+                      renderVisual,
+                      holdPendingVisual: group.type === 'block' && group.block === growingBlock
                     })}
                   </View>
                 ))}

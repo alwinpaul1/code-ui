@@ -4,7 +4,8 @@ import {
   clampFontScale,
   FONT_SCALE_MAX,
   FONT_SCALE_MIN,
-  nativeChatMessageText
+  nativeChatMessageText,
+  nativeChatReplyPlainText
 } from './mobile-native-chat-message-text'
 
 describe('nativeChatMessageText', () => {
@@ -42,5 +43,22 @@ describe('clampFontScale', () => {
 
   it('falls back to 1 for NaN', () => {
     expect(clampFontScale(Number.NaN)).toBe(1)
+  })
+})
+
+describe('nativeChatReplyPlainText', () => {
+  // Orca #26071: a visual line is not prose; only the transcript can draw it.
+  it('leaves a visual line out of the copied reply, but not one inside a code fence', () => {
+    const text =
+      'Chart:\n::orca-visual{file="usage.html"}\nDone.\n```\n::orca-visual{file="x.html"}\n```'
+    const copied = nativeChatReplyPlainText([{ type: 'text', text }])
+    expect(copied).not.toContain('usage.html')
+    expect(copied).toContain('Chart:')
+    expect(copied).toContain('Done.')
+    expect(copied).toContain('::orca-visual{file="x.html"}')
+  })
+
+  it('copies nothing for a reply that is only a visual', () => {
+    expect(nativeChatReplyPlainText([{ type: 'text', text: '::orca-visual{file="a.html"}' }])).toBe('')
   })
 })

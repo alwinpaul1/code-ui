@@ -88,6 +88,8 @@ vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQu
 
 // Stand-in composer: exposes the view's `handleSend` through a pressable, which is
 // the only composer behaviour these banner tests exercise.
+// The inline-visual provider imports a WebView; this view's rows draw no visuals here (#26071).
+vi.mock('./MobileNativeChatVisual', () => ({ MobileNativeChatVisualProvider: ({ children }: { children?: unknown }) => children }))
 vi.mock('./MobileNativeChatComposer', async () => {
   const React = await import('react')
   return {

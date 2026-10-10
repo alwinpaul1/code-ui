@@ -106,6 +106,10 @@ vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: 'MobileAgentI
 vi.mock('./MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
 vi.mock('./MobileNativeChatPermission', () => ({ MobileNativeChatPermission: 'ChatPermission' }))
 vi.mock('./MobileNativeChatQuestion', () => ({ MobileNativeChatQuestion: 'ChatQuestion' }))
+// The inline-visual provider imports a WebView; this view's rows draw no visuals here (#26071).
+vi.mock('./MobileNativeChatVisual', () => ({
+  MobileNativeChatVisualProvider: ({ children }: { children?: unknown }) => children
+}))
 vi.mock('./MobileNativeChatComposer', async () => {
   const React = await import('react')
   return {

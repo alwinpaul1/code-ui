@@ -543,6 +543,7 @@ export function useMobileNativeChatController(
     ),
     nativeChatSession,
     nativeChatStructured: activeChatStructured,
+    nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
     nativeChatTurnActivity: activeChatStructured ? structuredNativeChat.turnActivity : null,
     nativeChatTurnThinking: activeChatStructured ? structuredNativeChat.turnThinking : false,
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,

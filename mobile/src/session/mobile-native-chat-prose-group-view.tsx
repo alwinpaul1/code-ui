@@ -4,6 +4,7 @@ import { MobileNativeChatImageStrip } from './MobileNativeChatImageStrip'
 import { MobileNativeChatFileCardRow } from './MobileNativeChatFileCard'
 import type { ProseGroup } from './mobile-native-chat-prose-groups'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
 
 /** One prose group: a picture strip, a run of Claude Code's own file cards
  *  (docs/claude-app-parity.md item 9), or an ordinary text/image block. The
@@ -21,6 +22,10 @@ export function renderProseGroup(
     styles: ChatMessageStyles
     /** Which message block this is (MobileMarkdown's `identity`). */
     identity?: string
+    /** Assistant prose of a structured chat only: draws its `::orca-visual` lines. */
+    renderVisual?: MobileNativeChatVisualRender
+    /** The reply may still be growing: a directive still being typed at its tail is held back. */
+    holdPendingVisual?: boolean
   }
 ): ReactNode {
   switch (group.type) {
@@ -40,6 +45,8 @@ export function renderProseGroup(
           onOpenFile={options.onOpenFile}
           styles={options.styles}
           identity={options.identity}
+          renderVisual={options.renderVisual}
+          holdPendingVisual={options.holdPendingVisual}
         />
       )
     default: {

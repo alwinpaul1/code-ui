@@ -1,5 +1,6 @@
 import { isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { markdownPlainText } from '../components/markdown-plain-text'
+import { withoutNativeChatVisualDirectiveLines } from '../../../src/shared/native-chat-visual-directive'
 
 /** Concatenate a message's text blocks into a single copyable string. Tool
  *  calls/results and image refs are skipped — Copy is for the agent's prose. */
@@ -13,11 +14,13 @@ export function nativeChatMessageText(blocks: readonly NativeChatBlock[]): strin
 
 /** What a reply's Copy puts on the clipboard: each text block as the words
  *  MobileMarkdown draws for it, not its Markdown source. A sent prompt is
- *  drawn as typed, so its hold copies `nativeChatMessageText`. */
+ *  drawn as typed, so its hold copies `nativeChatMessageText`. A visual line
+ *  (`::orca-visual{...}`, Orca #26071) is not prose; only the transcript can
+ *  show it, so it is left out (one inside a code fence stays). */
 export function nativeChatReplyPlainText(blocks: readonly NativeChatBlock[]): string {
   return blocks
     .filter(isTextBlock)
-    .map((b) => markdownPlainText(b.text))
+    .map((b) => markdownPlainText(withoutNativeChatVisualDirectiveLines(b.text)))
     .filter((text) => text !== '')
     .join('\n\n')
 }

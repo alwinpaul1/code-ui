@@ -30,6 +30,7 @@ import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
+import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 
 /** Why the composer input is locked: the transport is disconnected, or the
  *  terminal subscription has not acknowledged its input lease yet. */
@@ -52,6 +53,9 @@ export type MobileNativeChatViewProps = {
   /** Structured lane: per-turn "Working for N" status plus live tool progress,
    *  in place of the bridge lane's status-line "Working" (desktop parity). */
   structuredActivityUi?: boolean
+  /** Structured lane with a live client: where the transcript's `::orca-visual` lines read their
+   *  HTML from (Orca #26071). Absent or null, those lines stay text. */
+  visualSource?: MobileNativeChatVisualSource | null
   /** Provider-authored copy for the live turn tail (Orca #19055). */
   turnActivity?: { kind: 'description'; text: string } | null
   /** Whether the live turn is reasoning right now (structured lane only). */

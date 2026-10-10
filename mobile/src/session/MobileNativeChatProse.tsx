@@ -9,6 +9,8 @@ import {
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
+import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
+import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
 import {
   TEXT_SIZE,
   USER_TEXT_LINE_HEIGHT,
@@ -25,7 +27,9 @@ export function Prose({
   fontScale,
   onOpenFile,
   styles,
-  identity
+  identity,
+  renderVisual,
+  holdPendingVisual = false
 }: {
   block: NativeChatBlock
   invert?: boolean
@@ -37,6 +41,10 @@ export function Prose({
   /** Which message block this is, so a recycled row's markdown tells one
    *  message from the next (MobileMarkdown's `identity`). */
   identity?: string
+  /** Assistant prose of a structured chat only (Orca #26071). */
+  renderVisual?: MobileNativeChatVisualRender
+  /** The reply may still be growing: a directive still being typed at its tail is held back. */
+  holdPendingVisual?: boolean
 }) {
   if (isTextBlock(block)) {
     if (invert && !markdownPrompt) {
@@ -56,9 +64,16 @@ export function Prose({
         </Text>
       )
     }
+    // A bubble (a prompt the lead wrote) never draws visuals; only a reply does.
+    const visuals = invert ? undefined : renderVisual
     return (
       <MobileMarkdown
-        content={block.text}
+        content={
+          holdPendingVisual && visuals
+            ? withoutPendingNativeChatVisualDirectiveTail(block.text)
+            : block.text
+        }
+        renderVisual={visuals}
         textScale={fontScale}
         onOpenFile={onOpenFile}
         identity={identity}
