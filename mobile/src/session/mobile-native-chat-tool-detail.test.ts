@@ -50,22 +50,22 @@ describe('tool detail status: Completed / Failed / Running under the sheet title
   })
 })
 
-describe('tool detail title: the row sentence, reused for one call', () => {
-  it('titles a lone command the same way the collapsed row would', () => {
+describe("tool detail title: the tool's own name", () => {
+  // 2026-10-10 Claude app screenshots: the sheet behind "Ran Read the gate and
+  // timing result ›" is titled "Bash", not the row's sentence again.
+  it('titles a lone command by its tool, "Bash"', () => {
     const pair: NativeChatToolPair = {
-      call: { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      call: { type: 'tool-call', name: 'Bash', input: { command: 'ls', description: 'List files' } },
       result: { type: 'tool-result', output: 'a.ts' }
     }
-    expect(toolDetailTitle(pair)).toBe('Ran a command')
+    expect(toolDetailTitle(pair)).toBe('Bash')
   })
 
-  it('falls back to the bare tool name when the sentence has nothing to say', () => {
-    const pair: NativeChatToolPair = {
-      call: { type: 'tool-call', name: 'CustomTool', input: {} }
-    }
-    // toolRunSentence classifies an unrecognised name as "other"/"used a tool";
-    // the title only needs to be non-empty and traceable to this call.
-    expect(toolDetailTitle(pair).length).toBeGreaterThan(0)
+  it('titles a tool it has no word for by its name, and an MCP tool by server and tool', () => {
+    expect(toolDetailTitle({ call: { type: 'tool-call', name: 'CustomTool', input: {} } })).toBe('CustomTool')
+    expect(
+      toolDetailTitle({ call: { type: 'tool-call', name: 'mcp__linear__create_issue', input: {} } })
+    ).toBe('Linear / create issue')
   })
 
   // 2026-09-26: the Claude app titles a SendMessage sheet "Messaged @<to>"

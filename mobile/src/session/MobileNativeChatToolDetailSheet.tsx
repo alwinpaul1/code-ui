@@ -1,27 +1,37 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Pressable, StyleSheet, View } from 'react-native'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
-import { truncateToolDetail } from '../../../src/shared/native-chat-tool-summary'
 import { DraggableDetailSheet } from '../components/DraggableDetailSheet'
 import { MobileMarkdown } from '../components/MobileMarkdown'
+import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { useTheme } from '../theme/theme-context'
+import type { TypeVariant } from '../theme/tokens'
 import { Txt } from '../ui/Txt'
+import { highlightMobileCode } from './mobile-file-syntax'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import {
   prettifyToolDetailOutput,
-  toolDetailInputRows,
   toolDetailOutputIsJson,
   toolDetailStatus,
   toolDetailTitle,
-  type ToolDetailInputRow,
   type ToolDetailStatus
 } from './mobile-native-chat-tool-detail'
+import {
+  capToolDetailOutput,
+  toolDetailSections,
+  type ToolDetailSection
+} from './mobile-native-chat-tool-detail-sections'
+import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 
 const STATUS_TONE: Record<ToolDetailStatus, 'secondary' | 'danger' | 'muted'> = {
   Completed: 'secondary',
   Failed: 'danger',
   Running: 'muted'
 }
+
+/** Diff rows the Changes section draws, the same bound as the output's lines. */
+const CHANGES_ROW_LIMIT = 400
 
 const styles = StyleSheet.create({
   pill: {
@@ -32,9 +42,10 @@ const styles = StyleSheet.create({
   }
 })
 
-/** The Claude-app tool-call detail sheet (2026-09-24 evidence): title, a
- *  Completed/Failed/Running status, Inputs as name -> value rows, and an
- *  Output block with a Prettify toggle when it parses as JSON. */
+/** The Claude-app tool-call detail sheet: the tool's name, a
+ *  Completed/Failed/Running status, then one labelled box per thing the call
+ *  carries (2026-10-10 screenshots: Description, Command, Output), with a
+ *  Prettify toggle on an Output that parses as JSON. */
 export function MobileNativeChatToolDetailSheet({
   pair,
   onClose
@@ -68,15 +79,23 @@ export function MobileNativeChatToolDetailSheet({
 /** Exported so a render test can mount the header/body directly, the way
  *  `MobileBackgroundTasksSheetBody` is tested apart from `BottomDrawer` — the
  *  drawer shell pulls in reanimated and the sheet's pans, which the content
- *  itself never touches (the body's only gesture is the output text's own). */
+ *  itself never touches (the body's only gestures are its texts' own). */
 export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
   const status = toolDetailStatus(pair)
-  // The Claude app's layout (2026-09-26): title centred on one line, status
-  // centred under it, close cross on the left. Equal room on both sides keeps
-  // the title centred on the sheet and clear of the cross.
+  // The Claude app's layout: the tool's name bold at the title size, centred
+  // on one line, the status centred under it, the close cross on the left.
+  // Equal room on both sides keeps the title centred on the sheet and clear of
+  // the cross.
   return (
     <View style={{ gap: 4, paddingHorizontal: 32 }}>
-      <Txt variant="heading" weight="semibold" align="center" numberOfLines={1} testID="tool-detail-title">
+      <Txt
+        variant="title"
+        weight="bold"
+        align="center"
+        numberOfLines={1}
+        accessibilityRole="header"
+        testID="tool-detail-title"
+      >
         {toolDetailTitle(pair)}
       </Txt>
       <Txt variant="label" tone={STATUS_TONE[status]} align="center" testID="tool-detail-status">
@@ -87,77 +106,145 @@ export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
 }
 
 export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
-  const rows = toolDetailInputRows(pair.call?.input, pair.call?.name)
-  const output = pair.result?.output ?? null
+  const files = useMemo(() => {
+    const found = pair.call ? editFilesForToolCall(pair.call, pair.result ?? null) : null
+    return found && found.length > 0 ? found : null
+  }, [pair])
+  // Memoised on the pair: a running tool re-renders the sheet as it streams.
+  const sections = useMemo(() => toolDetailSections(pair, { hasChanges: files !== null }), [pair, files])
+  const output = pair.result?.output ?? ''
   return (
     <View style={{ gap: 20 }}>
-      {rows.length > 0 ? (
-        <View style={{ gap: 12 }}>
-          <Txt variant="label" weight="medium" tone="muted">
-            Inputs
-          </Txt>
-          {rows.map((row) => (
-            <InputRow key={row.name} row={row} />
-          ))}
-        </View>
-      ) : null}
-      {output !== null ? (
+      {sections.map((section, index) => (
+        <Section key={`${section.label}:${index}`} label={section.label}>
+          {section.kind === 'changes' ? (
+            files?.map((file, fileIndex) => (
+              <MobileNativeChatDiffCard key={`${file.path}:${fileIndex}`} file={file} rowLimit={CHANGES_ROW_LIMIT} />
+            ))
+          ) : (
+            <Box>
+              <SectionValue section={section} />
+            </Box>
+          )}
+        </Section>
+      ))}
+      {output.trim().length > 0 ? (
         <OutputSection output={output} isError={pair.result?.isError === true} />
       ) : null}
     </View>
   )
 }
 
-function InputRow({ row }: { row: ToolDetailInputRow }) {
+/** A small muted label over its box. TalkBack can step from label to label
+ *  as headings. */
+function Section({ label, accessory, children }: { label: string; accessory?: ReactNode; children: ReactNode }) {
   return (
-    <View style={{ gap: 2 }} testID="tool-detail-input-row">
-      <Txt variant="caption" tone="muted">
-        {row.name}
-      </Txt>
-      {row.isMarkdown ? (
-        <MobileMarkdown content={row.value} />
-      ) : (
-        <Txt variant={row.isObject ? 'mono' : 'body'}>{row.value}</Txt>
-      )}
+    <View style={{ gap: 8 }} testID="tool-detail-section">
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Txt variant="label" weight="medium" tone="muted" accessibilityRole="header" testID="tool-detail-section-label">
+          {label}
+        </Txt>
+        {accessory}
+      </View>
+      {children}
     </View>
   )
+}
+
+/** The inset the Claude app draws each value in: darker than the sheet in
+ *  both schemes (bgSunken under bgPanel), a small radius. */
+function Box({ children }: { children: ReactNode }) {
+  const { colors, radius, space } = useTheme()
+  return (
+    <View
+      testID="tool-detail-box"
+      style={{ backgroundColor: colors.bgSunken, borderRadius: radius.xs, padding: space.lg }}
+    >
+      {children}
+    </View>
+  )
+}
+
+/** Code never wraps: one line of command stays one line, and a long line of
+ *  output scrolls sideways instead of folding into the next. */
+function Unwrapped({ children }: { children: ReactNode }) {
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {children}
+    </ScrollView>
+  )
+}
+
+function SectionValue({ section }: { section: Exclude<ToolDetailSection, { kind: 'changes' }> }) {
+  const { syntax } = useTheme()
+  const code = section.kind === 'code' ? section : null
+  const segments = useMemo(
+    () => (code?.language ? highlightMobileCode(code.value, code.language).segments : null),
+    [code?.value, code?.language]
+  )
+  switch (section.kind) {
+    case 'prose':
+      return <SelectableSheetText variant="body">{section.value}</SelectableSheetText>
+    case 'markdown':
+      return <MobileMarkdown content={section.value} />
+    case 'code':
+      return (
+        <Unwrapped>
+          <SelectableSheetText variant="mono">
+            {segments ? (
+              <MobileSyntaxSegments segments={segments} palette={syntax} />
+            ) : (
+              section.value
+            )}
+          </SelectableSheetText>
+        </Unwrapped>
+      )
+    default: {
+      const unhandled: never = section
+      return unhandled
+    }
+  }
 }
 
 function OutputSection({ output, isError }: { output: string; isError: boolean }) {
   const { colors } = useTheme()
   const isJson = toolDetailOutputIsJson(output)
   const [pretty, setPretty] = useState(false)
-  // Capped after prettifying, so both views stop at the same length (see boundedRow).
-  const text = truncateToolDetail(pretty && isJson ? prettifyToolDetailOutput(output) : output)
+  // Capped after prettifying, so both views stop at the same place.
+  const { text, hiddenLines } = capToolDetailOutput(pretty && isJson ? prettifyToolDetailOutput(output) : output)
+  const pill = isJson ? (
+    <Pressable
+      onPress={() => setPretty((value) => !value)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: pretty }}
+      testID="tool-detail-prettify"
+      style={[styles.pill, { borderColor: colors.border, backgroundColor: colors.bgSunken }]}
+    >
+      <Txt variant="caption" tone={pretty ? 'accent' : 'secondary'}>
+        {pretty ? 'Raw' : 'Prettify'}
+      </Txt>
+    </Pressable>
+  ) : null
   return (
-    <View style={{ gap: 8 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Txt variant="label" weight="medium" tone="muted">
-          Output
+    <Section label="Output" accessory={pill}>
+      <Box>
+        <Unwrapped>
+          <SelectableSheetText variant="mono" tone={isError ? 'danger' : 'primary'} testID="tool-detail-output">
+            {text}
+          </SelectableSheetText>
+        </Unwrapped>
+      </Box>
+      {hiddenLines > 0 ? (
+        <Txt variant="caption" tone="muted" testID="tool-detail-output-more">
+          {`${hiddenLines} more line${hiddenLines === 1 ? '' : 's'}`}
         </Txt>
-        {isJson ? (
-          <Pressable
-            onPress={() => setPretty((value) => !value)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: pretty }}
-            testID="tool-detail-prettify"
-            style={[styles.pill, { borderColor: colors.border, backgroundColor: colors.bgSunken }]}
-          >
-            <Txt variant="caption" tone={pretty ? 'accent' : 'secondary'}>
-              {pretty ? 'Raw' : 'Prettify'}
-            </Txt>
-          </Pressable>
-        ) : null}
-      </View>
-      <SelectableSheetText tone={isError ? 'danger' : 'primary'} testID="tool-detail-output">
-        {text}
-      </SelectableSheetText>
-    </View>
+      ) : null}
+    </Section>
   )
 }
 
 /**
- * Selectable mono text that lets go when the sheet's pan takes the touch.
+ * Selectable text that lets go when the sheet's pan takes the touch.
  *
  * Why the gesture: the sheet scrolls and drags under gesture-handler, and once
  * a pan activates, its root stops passing the touch to the Android views below
@@ -169,19 +256,21 @@ function OutputSection({ output, isError }: { output: string; isError: boolean }
  * pending long-press. A long-press that does not move still selects.
  */
 function SelectableSheetText({
-  tone,
+  variant,
+  tone = 'primary',
   testID,
   children
 }: {
-  tone: 'danger' | 'primary'
-  testID: string
-  children: string
+  variant: TypeVariant
+  tone?: 'danger' | 'primary'
+  testID?: string
+  children: ReactNode
 }) {
   const gesture = useMemo(() => Gesture.Native(), [])
   // The detector sets user-select: none on web unless told otherwise.
   return (
     <GestureDetector gesture={gesture} userSelect="text">
-      <Txt variant="mono" tone={tone} testID={testID} selectable>
+      <Txt variant={variant} tone={tone} testID={testID} selectable>
         {children}
       </Txt>
     </GestureDetector>

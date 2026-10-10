@@ -573,13 +573,14 @@ describe('MobileNativeChatMessage', () => {
     const longest = () => Math.max(...textIn(tree.root).map((text) => text.length))
     expect(longest()).toBeLessThan(MAX_TOOL_DETAIL_LENGTH)
     act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
-    const detail = textIn(tree.root).find((text) => text.startsWith('xxx'))
+    // An unknown tool's input is its indented JSON (2026-10-10), capped whole.
+    const detail = textIn(tree.root).find((text) => text.includes('"payload": "xxx'))
     expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
     expect(detail?.endsWith('…')).toBe(true)
     expect(longest()).toBe(MAX_TOOL_DETAIL_LENGTH + 1)
   })
 
-  it('opens a JSON-string tool input in the sheet as named fields', () => {
+  it('opens a JSON-string tool input in the sheet as its indented JSON', () => {
     const tree = render(
       toolMessage([
         {
@@ -593,8 +594,10 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root)).not.toContain('Inspect changes')
     act(() => tree.root.findByProps({ testID: 'tool-run-header' }).props.onPress())
     const shown = textIn(tree.root)
-    expect(shown).toEqual(expect.arrayContaining(['cmd', 'git status', 'description', 'Inspect changes']))
-    expect(shown.indexOf('cmd')).toBeLessThan(shown.indexOf('description'))
+    // Parsed, not drawn as the escaped string the wire carried.
+    expect(shown).toEqual(
+      expect.arrayContaining(['Input', JSON.stringify({ cmd: 'git status', description: 'Inspect changes' }, null, 2)])
+    )
   })
 
   it('does not echo the row label as detail when a row has nothing to expand', () => {
