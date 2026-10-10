@@ -597,3 +597,15 @@ rest of that range's chat work stay pending (`docs/upstream-port-inventory.md`).
 - Upstream's `agent-session-visible-failures.ts` is not vendored: its `sameAgentSessionFailureFact`
   compares `account`. The phone's banner compares the remaining fields itself
   (`mobile/src/session/use-mobile-native-chat-send-error.ts`).
+
+## Every agent's structured picker (Orca #26407, 6ba86414bf), partial
+
+- `structured-agent-session-seed-catalog.ts` taken whole: the one fallback rule for every agent's
+  structured picker (a built-in list for the handle providers, the live-only empty catalog for the
+  rest), which the phone's options hook now reads.
+- Not taken: #26407's re-vendor of `structured-agent-session-options.ts` (the `builtin` catalog
+  source, the host-catalog application with `newLaunch`, the provider-default placeholder),
+  `structured-agent-session-option-view.ts`, the `agentSession.modelCatalog` wire and params changes
+  (`savedOnly`, `waitForListing`, `listingNamesConfiguredModel`, `defaultHoldsInEveryWorkspace`) and
+  the catalog-types field. All of it serves the host model-catalog read, which this phone has never
+  ported (deferred since the v1.4.217 notes in docs/upstream-port-inventory.md).

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
-import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session-option-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../../src/shared/structured-agent-session-seed-catalog'
 import type {
   AgentSessionOptionResult,
   AgentSessionOptionsResult
@@ -83,8 +83,11 @@ export function useMobileStructuredAgentOptions(args: {
     commands: readonly AgentSessionConversationCommand[]
     rewind: StructuredRewindSupport | null
   } | null>(null)
+  // Every agent's seed (Orca #26407): a built-in list, or none for an agent whose structured session
+  // offers its options only live (Grok, OpenCode, Pi, OMP), so the live read runs for every agent.
+  // The state still starts with no catalog: the picker names nothing until the session answers.
   const optionCatalog = useMemo(
-    () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
+    () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
   )
 
@@ -172,7 +175,7 @@ export function useMobileStructuredAgentOptions(args: {
           // Only an accepted pick: an `unknown` outcome commits optimistically to the
           // visible record, and remembering one the provider refused would seed a
           // launch the user never chose.
-          if (agent === 'claude' || agent === 'codex') {
+          if (agent) {
             void persistMobileStructuredOptionPicks({
               client,
               agent,

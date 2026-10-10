@@ -517,3 +517,4 @@ src/shared/native-chat-subagent-group-header.test.ts: 2460068883 (new)
 src/shared/agent-session-question-free-text.test.ts: c71601f51c (#25851, new)
 src/shared/agent-session-sign-in.ts: ff4a51c872 (#26544, new). Its test is not vendored (its managed-account case needs `account` on the failure fact); mobile/src/session/mobile-sign-in-guidance.test.ts carries the rest
 src/shared/agent-session-failure-copy.ts, agent-session-failure-words.ts, structured-agent-session-status-block.ts, agent-session-journal-types.ts: plus #26544 (ff4a51c872) hunks hand-applied, see LOCAL-FILES.md
+src/shared/structured-agent-session-seed-catalog.ts: 6ba86414bf (#26407, new)
