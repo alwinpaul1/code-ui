@@ -31,7 +31,7 @@ import {
 import { mcpToolIdentity } from '../../../src/shared/native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatMessage, type NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
-import { COUNT_RETIRE_GRACE_MS, shellsOutsideLead } from './mobile-background-task-footer'
+import { COUNT_RETIRE_GRACE_MS, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
 import { foldWhitespace, readString } from './mobile-background-task-transcript'
 import { subagentTranscriptTarget, type SubagentTranscriptTarget } from './mobile-subagent-transcript'
 
@@ -106,6 +106,9 @@ export type SubagentActivityContext = {
   /** The agent's footer count of shells, read off the screen; null or absent
    *  when it is not on screen. */
   liveShellCount?: number | null
+  /** The last footer count, kept while the footer is off screen (a dialog
+   *  over it): it still caps the shells launched before it was read. */
+  heldShellCount?: HeldShellCount | null
   /** The lead's last Stop-hook `run=` and when it came: every running task in
    *  the process, a subagent's shells included. */
   stopRunning?: { ids: readonly string[]; at: number | null } | null
@@ -124,7 +127,6 @@ export function mergeSubagentActivity(
   if (feeds.size === 0) {
     return tasks
   }
-  const { now } = context
   const listed = new Set([...tasks.running, ...tasks.finished].map((task) => task.id))
   const running: BackgroundTask[] = []
   const shellRows: BackgroundTask[] = []
@@ -155,8 +157,7 @@ export function mergeSubagentActivity(
   if (shellRows.length === 0 && finishedShells.length === 0 && running.every((task, index) => task === tasks.running[index])) {
     return tasks
   }
-  const room = footerRoom(tasks, context.liveShellCount ?? null)
-  const retired = room === null ? new Set<string>() : surplusShells(shellRows, room, now)
+  const retired = retiredByFooter(tasks, shellRows, context)
   const keptRunning = running.filter((task) => !retired.has(task.id))
   const retiredRows = shellRows
     .filter((task) => retired.has(task.id))
@@ -186,30 +187,37 @@ function subagentShells(messages: readonly NativeChatMessage[], context: Subagen
   return { running: derived.running.filter(shell).map(own), finished: derived.finished.filter(shell).map(own) }
 }
 
-/** How many shells the footer counts beyond the lead's own, or null when it
- *  cannot say (off screen, or a monitor runs and the pill's wording is
- *  unknown). */
-function footerRoom(tasks: BackgroundTasks, live: number | null): number | null {
-  if (live === null || tasks.running.some((task) => task.kind === 'monitor')) {
-    return null
+/** The listed subagent shells the footer says are over: beyond what it counts
+ *  outside the lead, the oldest first. A live reading judges every shell
+ *  launched before the grace; a held one (the footer under a dialog) only the
+ *  shells launched before it was read, so a shell retired by the footer is not
+ *  put back to running while a dialog covers it. Nothing while a monitor runs
+ *  (the pill's wording is then unknown) or with no reading at all. The footer
+ *  paints nothing at zero, so the LAST shell's end is never read here. */
+function retiredByFooter(
+  tasks: BackgroundTasks,
+  rows: readonly BackgroundTask[],
+  context: SubagentActivityContext
+): Set<string> {
+  const live = context.liveShellCount ?? null
+  const held = context.heldShellCount ?? null
+  if (tasks.running.some((task) => task.kind === 'monitor')) {
+    return new Set()
   }
-  return shellsOutsideLead(tasks, live)
+  const now = context.now
+  if (live !== null) {
+    const graced = (task: BackgroundTask) => task.startedAt === null || now - task.startedAt >= COUNT_RETIRE_GRACE_MS
+    return oldestBeyond(rows, graced, rows.length - shellsOutsideLead(tasks, live))
+  }
+  if (held === null) {
+    return new Set()
+  }
+  const readBefore = (task: BackgroundTask) => task.startedAt === null || task.startedAt <= held.at - COUNT_RETIRE_GRACE_MS
+  return oldestBeyond(rows, readBefore, rows.filter(readBefore).length - shellsOutsideLead(tasks, held.count))
 }
 
-/** The oldest listed subagent shells beyond what the footer counts, never one
- *  launched within the grace (the footer may not have been re-read since). */
-function surplusShells(rows: readonly BackgroundTask[], room: number, now: number): Set<string> {
-  let surplus = rows.length - room
-  const retired = new Set<string>()
-  const oldestFirst = [...rows].sort((left, right) => (left.startedAt ?? 0) - (right.startedAt ?? 0))
-  for (const task of oldestFirst) {
-    if (surplus <= 0) {
-      break
-    }
-    if (task.startedAt === null || now - task.startedAt >= COUNT_RETIRE_GRACE_MS) {
-      retired.add(task.id)
-      surplus -= 1
-    }
-  }
-  return retired
+/** Up to `surplus` of the retirable rows, oldest launch first. */
+function oldestBeyond(rows: readonly BackgroundTask[], retirable: (task: BackgroundTask) => boolean, surplus: number): Set<string> {
+  const oldestFirst = rows.filter(retirable).sort((left, right) => (left.startedAt ?? 0) - (right.startedAt ?? 0))
+  return new Set(oldestFirst.slice(0, Math.max(0, surplus)).map((task) => task.id))
 }

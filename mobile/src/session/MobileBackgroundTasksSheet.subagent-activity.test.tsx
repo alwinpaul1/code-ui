@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
@@ -15,7 +16,14 @@ import {
   recordsThrough
 } from './fixtures/claude-subagent-transcripts-2.1.296'
 
-const fakes = vi.hoisted(() => ({ client: null as RpcClient | null }))
+const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, focused: true }))
+
+// The session screen's focus, as expo-router reports it: run on mount while
+// focused, cleaned up on unmount.
+vi.mock('expo-router', () => ({
+  useFocusEffect: (effect: () => void | (() => void)) =>
+    useEffect(() => (fakes.focused ? effect() : undefined), [effect])
+}))
 
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('react-native', () => ({
@@ -121,6 +129,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     resetSubagentActivityForTests()
     resetNativeChatTranscriptCacheForTests()
     subscriptions = []
+    fakes.focused = true
     fakes.client = {
       subscribe: vi.fn((_method: string, params: Subscription['params'], onData: (frame: unknown) => void) => {
         const subscription: Subscription = { params, emit: onData, closed: false }
@@ -224,6 +233,22 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     // The sheet closes: nothing is left reading.
     await act(async () => renderer!.update(tree({ open: false, status: onlyA })))
     expect(live()).toHaveLength(0)
+  })
+
+  it('keeps the step and the shell rows through a read that fails after it answered', async () => {
+    await mount({ open: true })
+    answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
+    const subscription = live().find((entry) => entry.params.sessionId === `agent-${PROBE_A_AGENT}`)!
+    act(() => subscription.emit({ type: 'error', error: 'connection lost' }))
+    const { texts } = readTree(renderer!)
+    expect(texts).toContain('Running cd /private/tmp && ls | head -3')
+    expect(texts).toContain('Start a 120-second background sleep')
+  })
+
+  it('a session screen that is not in focus reads nothing, even with the sheet open', async () => {
+    fakes.focused = false
+    await mount({ open: true })
+    expect(subscriptions).toHaveLength(0)
   })
 
   it('stops every read when the sheet unmounts', async () => {

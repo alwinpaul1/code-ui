@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { useFocusEffect } from 'expo-router'
+import { useCallback, useEffect, useState } from 'react'
 import {
   encodeNativeChatTranscriptIdentity,
   EMPTY_NATIVE_CHAT_TRANSCRIPT,
@@ -26,6 +27,11 @@ const KEEP_NOTHING: NativeChatTranscriptRetention = {
  * used (`nativeChat.subscribe`, session `agent-<id>`): no file written on the
  * host, no terminal opened. Each read is torn down as soon as the sheet closes
  * or the agent leaves the request. Renders nothing.
+ *
+ * Only the session screen in focus reads: the request is the app's one open
+ * sheet, and a second session screen left mounted under a pushed one (the
+ * notification route can, across hosts) would otherwise read it again, on its
+ * own host's connection.
  */
 export function MobileSubagentActivityFeeds({
   hostId,
@@ -37,7 +43,14 @@ export function MobileSubagentActivityFeeds({
   const request = useSubagentActivityRequest()
   const { client } = useHostClient(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
-  if (!request) {
+  const [focused, setFocused] = useState(false)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      return () => setFocused(false)
+    }, [])
+  )
+  if (!request || !focused) {
     return null
   }
   return (
@@ -76,9 +89,17 @@ function SubagentActivityFeed({
     retention: KEEP_NOTHING
   })
   // Only a settled read speaks. A refused or failed read (an older host, a
-  // file it will not serve) says nothing, and the agent's row stays as it was.
-  const messages = session.status === 'ready' ? session.messages : null
-  useEffect(() => publishSubagentFeed(target.agentId, messages), [target.agentId, messages])
+  // file it will not serve) says nothing, and the agent's row stays as it was;
+  // a read that answered and then failed or re-reads (a reconnect) keeps what
+  // it last said, so the rows do not blink back to the description and out.
+  // What it said leaves with the feed itself (the agent finished, the sheet
+  // closed).
+  const ready = session.status === 'ready'
+  useEffect(() => {
+    if (ready) {
+      publishSubagentFeed(target.agentId, session.messages)
+    }
+  }, [ready, target.agentId, session.messages])
   useEffect(() => () => publishSubagentFeed(target.agentId, null), [target.agentId])
   return null
 }

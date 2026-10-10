@@ -35,6 +35,10 @@ export function watchSubagentActivity(owner: object, targets: readonly SubagentT
   if (request?.owner === owner && sameTargets(request.targets, targets)) {
     return
   }
+  // Asking for nothing withdraws only this owner's own request.
+  if (targets.length === 0 && (request === null || request.owner !== owner)) {
+    return
+  }
   request = targets.length === 0 ? null : { owner, targets }
   dropFeedsOutside(request?.targets ?? [])
   emit()

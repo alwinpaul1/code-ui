@@ -241,7 +241,14 @@ So a subagent shell is moved to Finished only by evidence that does arrive:
    postdates the launch and no longer names the shell;
 3. the footer counting fewer shells outside the lead than are listed: the
    oldest go first, as `finished` (over, outcome unseen), never one launched in
-   the last 10 s, the same rule the lead's own fit uses.
+   the last 10 s, the same rule the lead's own fit uses. While a dialog covers
+   the footer, its last reading still caps the shells launched before it, so
+   a retired shell does not come back as running under the dialog.
+
+A read that answered and then fails or re-reads (a reconnect) keeps what it
+last said, so the rows do not blink back to the description. Only the session
+screen in focus reads, so a session screen left mounted under a pushed one
+does not read the same agents again on its own host's connection.
 
 **Limits.** A subagent shell that ends with none of those (the footer paints
 no count at zero, so the LAST shell's end is never seen there) stays a running

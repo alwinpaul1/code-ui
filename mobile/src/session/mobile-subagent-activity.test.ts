@@ -7,6 +7,8 @@ import {
   subagentLatestStep,
   subagentWatchTargets
 } from './mobile-subagent-activity'
+import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
+import { SUBAGENT_SHELL_SCREEN, screenRows } from './fixtures/claude-subagent-shells-2.1.296'
 import {
   orcaTranscriptRows,
   PROBE_A_AGENT,
@@ -105,12 +107,36 @@ describe('shells started inside subagents are listed as their own rows', () => {
     const rows = orcaTranscriptRows(probeBRecords())
     expect(JSON.stringify(rows)).not.toContain('task-notification')
     const now = Date.parse('2026-10-10T18:45:50.000Z')
-    const unfitted = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_B_AGENT, rows]]), { now })
-    expect(unfitted.running.map((task) => task.id)).toContain(PROBE_B_SHELL)
-    // The footer counts no shell beyond the lead's: the listed one is over.
-    const fitted = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_B_AGENT, rows]]), { now, liveShellCount: 0 })
-    expect(fitted.running.map((task) => task.id)).not.toContain(PROBE_B_SHELL)
-    expect(fitted.finished.find((task) => task.id === PROBE_B_SHELL)?.status).toBe('finished')
+    const both = feeds([[PROBE_A_AGENT, aMidCommand()], [PROBE_B_AGENT, rows]])
+    const unfitted = mergeSubagentActivity(leadTasks(now), both, { now })
+    expect(unfitted.running.filter((task) => task.kind === 'shell').map((task) => task.id)).toEqual([PROBE_A_SHELL, PROBE_B_SHELL])
+    // A real footer reading "· 1 shell" (2.1.296): one of the two listed is
+    // over, and which is unknown, so the older one (A's, 18:45:15.616) goes.
+    const footer = parseClaudeRunningShellCount(screenRows(SUBAGENT_SHELL_SCREEN))
+    expect(footer).toBe(1)
+    const fitted = mergeSubagentActivity(leadTasks(now), both, { now, liveShellCount: footer })
+    expect(fitted.running.filter((task) => task.kind === 'shell').map((task) => task.id)).toEqual([PROBE_B_SHELL])
+    expect(fitted.finished.find((task) => task.id === PROBE_A_SHELL)?.status).toBe('finished')
+  })
+
+  it('keeps a shell the footer retired retired while a dialog covers the footer', () => {
+    const rows = orcaTranscriptRows(probeBRecords())
+    const now = Date.parse('2026-10-10T18:45:50.000Z')
+    const both = feeds([[PROBE_A_AGENT, aMidCommand()], [PROBE_B_AGENT, rows]])
+    // The footer read "1 shell" at 18:45:48 and has left the screen since.
+    const covered = mergeSubagentActivity(leadTasks(now), both, {
+      now,
+      liveShellCount: null,
+      heldShellCount: { count: 1, at: Date.parse('2026-10-10T18:45:48.000Z') }
+    })
+    expect(covered.running.filter((task) => task.kind === 'shell').map((task) => task.id)).toEqual([PROBE_B_SHELL])
+    // A held reading says nothing about a shell launched after it was taken.
+    const early = mergeSubagentActivity(leadTasks(now), both, {
+      now,
+      liveShellCount: null,
+      heldShellCount: { count: 0, at: Date.parse('2026-10-10T18:45:20.000Z') }
+    })
+    expect(early.running.filter((task) => task.kind === 'shell').map((task) => task.id)).toEqual([PROBE_A_SHELL, PROBE_B_SHELL])
   })
 
   it("retires a subagent shell the agent's Stop hook no longer lists, once that list postdates its launch", () => {
