@@ -61,8 +61,9 @@ export function parkUnconfirmedSend(args: {
       }
       onExpire(entry)
       // Its time is up with no sign of it. A chat's outbox recovery, when one is mounted for
-      // its tab, takes it over: it looks again and sends it once, safely, or says it was not
-      // sent and offers Retry. With none mounted it says what it always said.
+      // its tab with a settled transcript, takes it over: it looks again and sends it once,
+      // safely, or says it was not sent and offers Retry. A photo send, or one with no such
+      // recovery, says what it always said (releaseOutboxSend).
       if (!releaseOutboxSend(entry.outboxId)) {
         onUnconfirmed()
       }

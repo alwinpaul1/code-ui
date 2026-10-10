@@ -99,7 +99,12 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       cancelled = true
     }
   }, [])
-  useEffect(() => (draftKey && lane ? registerOutboxRecovery(draftKey) : undefined), [draftKey, lane])
+  // Only a chat that can tell whether a send landed takes an expired hold over (releaseOutboxSend).
+  const { transcriptSettled } = args
+  useEffect(
+    () => (draftKey && lane && transcriptSettled ? registerOutboxRecovery(draftKey) : undefined),
+    [draftKey, lane, transcriptSettled]
+  )
 
   const givingBack = useRef(new Set<string>())
   const giveBack = useCallback(async (entry: NativeChatOutboxEntry, reason: OutboxGiveBack | null) => {
