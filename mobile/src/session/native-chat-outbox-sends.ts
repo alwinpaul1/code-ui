@@ -25,10 +25,17 @@ import { noteSendStage } from './native-chat-send-timing'
 
 /** Entries a send in this process is still carrying. Module state: a send outlives its screen. */
 const live = new Set<string>()
-/** Chats whose recovery is mounted now, by draft key (counted: two screens can show one tab). */
+/** Chats whose recovery is mounted with the chat view on screen, by draft key (counted: two
+ *  screens can show one tab), and those of them whose transcript is a settled read. */
 const recoveries = new Map<string, number>()
+const settledRecoveries = new Map<string, number>()
+/** Outbox recoveries mounted anywhere in this process, chat view shown or not: whether anything
+ *  is there to see a waiting entry through when its tab is next shown. */
+let mountedRecoveries = 0
 type Adoption = { id: string; normalizedText: string; recovery: boolean }
 const adoptions = new Map<string, Adoption>()
+/** Entries whose send stopped in this process without knowing its fate (releaseOutboxSend). */
+const releasedThisRun = new Set<string>()
 
 export function newOutboxSendId(): string {
   return `send-${Date.now()}-${structuredSessionRandomUuid().slice(0, 12)}`
@@ -129,27 +136,63 @@ export function isOutboxSendLive(id: string): boolean {
 }
 
 /**
- * The send in this process has stopped carrying the entry without knowing its fate. Returns
- * whether a chat's recovery is mounted for its scope now to take it over; when none is, the
- * caller says what it always said, and the entry waits for the next chat that shows its tab.
+ * The send in this process has stopped carrying the entry without knowing its fate: an
+ * unconfirmed hold ran out, or its chat closed under it. Returns whether the outbox sees it
+ * through from here, so the caller says nothing; false means the caller says "Delivery
+ * unconfirmed" itself.
+ *
+ * - Its chat view is on screen with a settled transcript: that chat's recovery takes it over now.
+ * - Its chat view is on screen but its transcript is not settled (loading, reloading): false. The
+ *   recovery cannot tell whether it landed, and waiting for it left "Sending…" up for good.
+ * - Its chat view is not on screen (hidden, or another tab shown) while the chat controller's
+ *   recovery is mounted: it waits in the outbox for the next chat of its tab, which sends it once
+ *   after looking for its row (the user: "Message must be sent anyway"). With no recovery mounted
+ *   at all, nothing would, and the caller says so.
+ * - A photo send: false. The recovery resends no files. It stays in the outbox for a later chat or
+ *   process, marked as released in this run, so a recovery in this same run says delivery is
+ *   unconfirmed (outboxReleasedThisRun) instead of "the app closed", false in a process that
+ *   never closed.
  */
 export function releaseOutboxSend(id: string | undefined): boolean {
   if (!id) {
     return false
   }
   live.delete(id)
+  releasedThisRun.add(id)
   const entry = findOutboxEntry(id)
-  return entry !== undefined && (recoveries.get(entry.draftKey) ?? 0) > 0
+  if (entry === undefined || entry.hasAttachments) {
+    return false
+  }
+  if ((recoveries.get(entry.draftKey) ?? 0) > 0) {
+    return (settledRecoveries.get(entry.draftKey) ?? 0) > 0
+  }
+  return mountedRecoveries > 0
 }
 
-export function registerOutboxRecovery(draftKey: string): () => void {
-  recoveries.set(draftKey, (recoveries.get(draftKey) ?? 0) + 1)
+/** An outbox recovery is mounted (the chat controller's), whatever its tab shows. */
+export function mountOutboxRecovery(): () => void {
+  mountedRecoveries += 1
   return () => {
-    const left = (recoveries.get(draftKey) ?? 1) - 1
+    mountedRecoveries = Math.max(0, mountedRecoveries - 1)
+  }
+}
+
+/** The send carrying it stopped in this process (releaseOutboxSend), not with a process that died. */
+export function outboxReleasedThisRun(id: string): boolean {
+  return releasedThisRun.has(id)
+}
+
+/** A chat's recovery is mounted with its view on screen; `settled` when its transcript is a
+ *  settled read too (it registers both ways then). Returns the unregister. */
+export function registerOutboxRecovery(draftKey: string, settled = false): () => void {
+  const counts = settled ? settledRecoveries : recoveries
+  counts.set(draftKey, (counts.get(draftKey) ?? 0) + 1)
+  return () => {
+    const left = (counts.get(draftKey) ?? 1) - 1
     if (left > 0) {
-      recoveries.set(draftKey, left)
+      counts.set(draftKey, left)
     } else {
-      recoveries.delete(draftKey)
+      counts.delete(draftKey)
     }
   }
 }
@@ -158,5 +201,8 @@ export function registerOutboxRecovery(draftKey: string): () => void {
 export function resetOutboxSendsForTests(): void {
   live.clear()
   recoveries.clear()
+  settledRecoveries.clear()
+  mountedRecoveries = 0
   adoptions.clear()
+  releasedThisRun.clear()
 }

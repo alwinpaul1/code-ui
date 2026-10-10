@@ -12,7 +12,9 @@ import { outboxEchoId, outboxEntryIdOfEcho } from './mobile-native-chat-outbox-d
 import {
   isOutboxSendLive,
   offerOutboxAdoption,
+  outboxReleasedThisRun,
   patchOutboxEntry,
+  mountOutboxRecovery,
   registerOutboxRecovery,
   retireOutboxSend,
   takeOutboxAdoption
@@ -31,6 +33,8 @@ import {
 export type OutboxDelivery = 'sending' | 'failed'
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
+/** A photo send this run lost track of: it may have arrived, so the chat is the place to look. */
+const OUTBOX_UNCONFIRMED_NOTICE = 'Delivery unconfirmed — check chat before retrying'
 const TICK_MS = 1_000
 /** A gap between looks longer than this is time the app was not running: not waited. */
 const MAX_COUNTED_GAP_MS = 5_000
@@ -99,7 +103,15 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       cancelled = true
     }
   }, [])
+  // A chat shown is where a held send that ran out goes to be seen through; one with a settled
+  // transcript is the only one that can tell whether it landed (releaseOutboxSend).
+  const { transcriptSettled } = args
+  useEffect(() => mountOutboxRecovery(), [])
   useEffect(() => (draftKey && lane ? registerOutboxRecovery(draftKey) : undefined), [draftKey, lane])
+  useEffect(
+    () => (draftKey && lane && transcriptSettled ? registerOutboxRecovery(draftKey, true) : undefined),
+    [draftKey, lane, transcriptSettled]
+  )
 
   const givingBack = useRef(new Set<string>())
   const giveBack = useCallback(async (entry: NativeChatOutboxEntry, reason: OutboxGiveBack | null) => {
@@ -119,7 +131,10 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
     if (entry.echoId) {
       current.removeEcho(entry.echoId)
     }
-    if (reason) {
+    if (reason === 'attachments' && outboxReleasedThisRun(entry.id)) {
+      // The app never closed: its send stopped here without knowing whether it arrived.
+      current.onNotice(OUTBOX_UNCONFIRMED_NOTICE)
+    } else if (reason) {
       current.onNotice(`Message not sent: ${OUTBOX_GIVE_BACK[reason]}`)
     }
     void retireOutboxSend(entry.id)

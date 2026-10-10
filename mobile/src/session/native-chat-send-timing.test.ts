@@ -1,6 +1,7 @@
 // "Sometimes a message takes too long to send" (2026-10-10): the phone kept no timings, so a slow
-// send could not be read back afterwards. Each composer send now leaves one line in its host's
-// connection log with each stage's time, and names the stage that held a slow one. Never the
+// send could not be read back afterwards. A slow, refused or unconfirmed send now leaves one line in
+// its host's connection log with each stage's time, and names the stage that held a slow one (a fast
+// accepted one leaves none: native-chat-send-timing-log-budget.test.ts). Never the
 // words: only lengths, timings and the tab.
 //
 // Drives the REAL message send, the REAL image hook and the REAL draft store; the link to the
