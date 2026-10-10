@@ -128,7 +128,8 @@ function markedMarkdown(node: Element, marks: string, context: InlineContext): s
  */
 function autolinkMarkdown(node: Element, href: string, words: string): string | null {
   const written = node.getAttribute(AUTOLINK_ATTRIBUTE)
-  if (written === 'bare' && words === href) {
+  // A bare email address opens a `mailto:` its words do not spell (BARE_EMAIL_AUTOLINK_SOURCE).
+  if (written === 'bare' && (words === href || `mailto:${words}` === href)) {
     return sourceSpelling(node, words)
   }
   if (written === 'angle' && (words === href || `mailto:${words}` === href)) {

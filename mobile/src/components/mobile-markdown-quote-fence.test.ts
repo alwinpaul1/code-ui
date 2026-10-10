@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { parseMobileMarkdown } from './mobile-markdown-parser'
+import { parseMobileMarkdown, type MobileMarkdownQuoteMember } from './mobile-markdown-parser'
+
+// A quote holds Markdown of its own since 2026-10-10 (mobile-markdown-quote-blocks.ts):
+// its paragraphs, lists and inner quotes are members, drawn inside its bar.
+const para = (text: string) => ({ type: 'paragraph', text })
+const inner = (...members: MobileMarkdownQuoteMember[]) => ({ type: 'quote', members })
+const quoteOf = (members: object[], continuesQuote = false) =>
+  continuesQuote ? { type: 'quote', members, continuesQuote: true } : { type: 'quote', members }
+const bullets = (...items: object[]) => ({ type: 'list', ordered: false, items })
+const bullet = (text: string, depth = 0) => ({ text, depth, ordered: false })
 
 // Review, 2026-09-30: a fence inside a `>` quote stayed in the quote's TEXT as
 // raw source, so the inline matcher read ```` ``` ```` as a code span running
@@ -22,9 +31,9 @@ describe('a fenced code block written inside a quote', () => {
       ['> intro', '>', '> ```sh', '> ls *.ts', '> ```', '>', '> outro'].join('\n')
     )
     expect(blocks).toEqual([
-      { type: 'quote', text: 'intro' },
+      quoteOf([para('intro')]),
       { type: 'code', text: 'ls *.ts', language: 'sh', closed: true, quoted: true, continuesQuote: true },
-      { type: 'quote', text: 'outro', continuesQuote: true }
+      quoteOf([para('outro')], true)
     ])
   })
 
@@ -52,35 +61,34 @@ describe('a fenced code block written inside a quote', () => {
     ])
   })
 
-  it('keeps the inner quote’s marker on its words when the fence comes out of it', () => {
+  it('keeps the inner quote’s words in a quote of their own when the fence comes out of it', () => {
     const blocks = parseMobileMarkdown(
       ['> a', '>', '> > b', '> >', '> > ```', '> > x', '> > ```', '>', '> c'].join('\n')
     )
     expect(blocks).toEqual([
-      { type: 'quote', text: 'a\n\n> b' },
+      quoteOf([para('a'), inner(para('b') as MobileMarkdownQuoteMember)]),
       { type: 'code', text: 'x', language: undefined, closed: true, quoted: true, continuesQuote: true },
-      { type: 'quote', text: 'c', continuesQuote: true }
+      quoteOf([para('c')], true)
     ])
   })
 
-  it('leaves a quote inside a quote with no fence drawn as it was, marker and all', () => {
+  it('draws a quote inside a quote with no fence as a quote of its own inside the bar', () => {
     expect(parseMobileMarkdown(['> a', '>', '> > b', '>', '> c'].join('\n'))).toEqual([
-      { type: 'quote', text: 'a\n\n> b\n\nc' }
+      quoteOf([para('a'), inner(para('b') as MobileMarkdownQuoteMember), para('c')])
     ])
-    // Two paragraphs of the inner quote keep the blank `>` line between them.
+    // Two paragraphs of the inner quote stay two paragraphs.
     expect(parseMobileMarkdown(['> > b1', '> >', '> > b2'].join('\n'))).toEqual([
-      { type: 'quote', text: '> b1\n>\n> b2' }
+      quoteOf([inner(para('b1') as MobileMarkdownQuoteMember, para('b2') as MobileMarkdownQuoteMember)])
     ])
-    // Its words fill the width, as the outer quote's always have; its source
-    // lines used to be drawn as they were wrapped.
+    // Inside a quote every newline is a line break (breakProse).
     expect(parseMobileMarkdown(['> > inner', '> > more'].join('\n'))).toEqual([
-      { type: 'quote', text: '> inner more' }
+      quoteOf([inner(para('inner\nmore') as MobileMarkdownQuoteMember)])
     ])
   })
 
   it('keeps two quotes a blank line apart as two, so their bars do not join', () => {
     expect(parseMobileMarkdown(['> a', '', '> ```', '> x', '> ```'].join('\n'))).toEqual([
-      { type: 'quote', text: 'a' },
+      quoteOf([para('a')]),
       { type: 'code', text: 'x', language: undefined, closed: true, quoted: true }
     ])
   })
@@ -111,57 +119,59 @@ describe('a fenced code block written inside a quote', () => {
     })
 
     it('leaves a one-line prose quote one quote block, as it was', () => {
-      expect(parseMobileMarkdown('> quoted **text**')).toEqual([{ type: 'quote', text: 'quoted **text**' }])
+      expect(parseMobileMarkdown('> quoted **text**')).toEqual([quoteOf([para('quoted **text**')])])
     })
 
     it('leaves an empty quote the empty quote block it was', () => {
-      expect(parseMobileMarkdown('>')).toEqual([{ type: 'quote', text: '' }])
+      expect(parseMobileMarkdown('>')).toEqual([quoteOf([])])
     })
   })
 })
 
 // Decided 2026-10-01: a fence under a list item inside a quote is drawn as
 // code, as GitHub and marked both draw it. The quote kept the whole list as
-// its raw source, so the fence drew as backticks around words. The list's
-// lines are still the quote's text, as they were; only the fence comes out,
-// inside the bar, and a list with no fence in it is untouched.
+// its raw source, so the fence drew as backticks around words. The fence
+// comes out, inside the bar; since 2026-10-10 the list's rows are a list
+// inside the bar too, fence or no fence.
 describe('a fenced code block under a list item inside a quote', () => {
   const quote = (...lines: string[]) => parseMobileMarkdown(lines.map((line) => `> ${line}`.trimEnd()).join('\n'))
 
   it('comes out as code inside the quote, after the item', () => {
     expect(quote('- a', '  ```', '  code', '  ```')).toEqual([
-      { type: 'quote', text: '- a' },
+      quoteOf([bullets(bullet('a'))]),
       { type: 'code', text: 'code', language: undefined, closed: true, quoted: true, continuesQuote: true }
     ])
   })
 
   it('keeps a numbered item’s number and the fence’s language, and the item after it', () => {
     expect(quote('1. a', '   ```js', '   x = 1', '   ```', '2. b')).toEqual([
-      { type: 'quote', text: '1. a' },
+      quoteOf([{ type: 'list', ordered: true, items: [{ text: 'a', depth: 0, ordered: true, number: 1 }] }]),
       { type: 'code', text: 'x = 1', language: 'js', closed: true, quoted: true, continuesQuote: true },
-      { type: 'quote', text: '2. b', continuesQuote: true }
+      quoteOf([{ type: 'list', ordered: true, items: [{ text: 'b', depth: 0, ordered: true, number: 2 }] }], true)
     ])
   })
 
   it('draws the item’s words after the fence at its indent, with no second marker', () => {
     expect(quote('- a', '  ```', '  code', '  ```', '  after', '- b')).toEqual([
-      { type: 'quote', text: '- a' },
+      quoteOf([bullets(bullet('a'))]),
       { type: 'code', text: 'code', language: undefined, closed: true, quoted: true, continuesQuote: true },
-      { type: 'quote', text: '  after\n- b', continuesQuote: true }
+      quoteOf([bullets({ ...bullet('after'), continuation: true }, bullet('b'))], true)
     ])
   })
 
   it('takes a fence out of a nested item, and keeps a task’s box', () => {
     expect(quote('- a', '  - b', '    ```', '    c', '    ```')).toEqual([
-      { type: 'quote', text: '- a\n  - b' },
+      quoteOf([bullets(bullet('a'), bullet('b', 1))]),
       { type: 'code', text: 'c', language: undefined, closed: true, quoted: true, continuesQuote: true }
     ])
-    expect(quote('- [x] done', '  ```', '  log', '  ```')[0]).toEqual({ type: 'quote', text: '- [x] done' })
+    expect(quote('- [x] done', '  ```', '  log', '  ```')[0]).toEqual(
+      quoteOf([bullets({ ...bullet('done'), checked: true })])
+    )
   })
 
-  it('leaves a list with no fence in it the quote text it was, as written', () => {
-    expect(quote('- a', '  b', '- c')).toEqual([{ type: 'quote', text: '- a\n  b\n- c' }])
-    expect(quote('- a **x**', '  `code`', '- c')).toEqual([{ type: 'quote', text: '- a **x**\n  `code`\n- c' }])
+  it('draws a list with no fence in it as a list inside the bar, its lines broken where written', () => {
+    expect(quote('- a', '  b', '- c')).toEqual([quoteOf([bullets(bullet('a\nb'), bullet('c'))])])
+    expect(quote('- a **x**', '  `code`', '- c')).toEqual([quoteOf([bullets(bullet('a **x**\n`code`'), bullet('c'))])])
   })
 
   describe('at the degenerate sizes', () => {
@@ -173,7 +183,7 @@ describe('a fenced code block under a list item inside a quote', () => {
 
     it('reads an empty fence under an item as an empty code block', () => {
       expect(quote('- a', '  ```', '  ```')).toEqual([
-        { type: 'quote', text: '- a' },
+        quoteOf([bullets(bullet('a'))]),
         { type: 'code', text: '', language: undefined, closed: true, quoted: true, continuesQuote: true }
       ])
     })

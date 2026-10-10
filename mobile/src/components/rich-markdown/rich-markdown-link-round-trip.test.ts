@@ -32,11 +32,24 @@ describe('links and addresses in the shipped editor', () => {
     ['a link whose address holds parentheses', '[Foo](https://en.wikipedia.org/wiki/Foo_(bar)) now'],
     ['an address in angle brackets', '<https://x.dev/a> z'],
     ['a bare address in a list item', '- see https://x.dev/a now'],
-    ['an explicit link whose words are its address', '[https://x.dev/a](https://x.dev/a)']
+    ['an explicit link whose words are its address', '[https://x.dev/a](https://x.dev/a)'],
+    // A bare email address is a link since 2026-10-10 (GFM's autolink, as the Claude app draws one):
+    // it must still save back bare, not as `[a@b.co](mailto:a@b.co)`.
+    ['a bare email address', 'write to alex@example.com today.'],
+    ['a bare email address beside bold', '**Email:** alex@example.com'],
+    ['an explicit mail link whose words are its address', '[alex@example.com](mailto:alex@example.com)']
   ])('saves %s back as it was written', (_name, markdown) => {
     const editor = openShippedDocument()
     editor.setMarkdown(markdown, 1)
     expect(editor.currentMarkdown()).toBe(markdown)
+  })
+
+  it('draws a bare email address as a link that writes to it', () => {
+    const editor = openShippedDocument()
+    editor.setMarkdown('write to alex@example.com today.', 1)
+    expect(Array.from(document.querySelectorAll('#editor a')).map((link) => link.getAttribute('href'))).toEqual([
+      'mailto:alex@example.com'
+    ])
   })
 
   it('opens the repository from a badge and the bare address without its full stop', () => {

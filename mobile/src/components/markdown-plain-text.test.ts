@@ -151,13 +151,16 @@ describe('markdownPlainText', () => {
 
   it('copies an indented block after a quote that ends in no paragraph verbatim', () => {
     expect(markdownPlainText('> ```\n> x\n> ```\n    <b>x</b>')).toBe('x\n\n<b>x</b>')
-    expect(markdownPlainText('> # H\n    <b>x</b>')).toBe('# H\n\n<b>x</b>')
+    // A heading in a quote is drawn as a heading (2026-10-10), so its words copy without the `#`.
+    expect(markdownPlainText('> # H\n    <b>x</b>')).toBe('H\n\n<b>x</b>')
     expect(markdownPlainText('>\n    <b>x</b>')).toBe('<b>x</b>')
   })
 
   it('still copies a lazy line of a quote\'s paragraph as that paragraph', () => {
-    expect(markdownPlainText('> quoted text\n    <b>x</b>')).toBe('quoted text x')
-    expect(markdownPlainText('> quote\n    <b>1</b>\n>     <b>2</b>')).toBe('quote 1 2')
+    // Inside a quote every newline is a line break (2026-10-10, breakProse in
+    // mobile-markdown-prose-fill.ts), so the lazy line is the paragraph's next line.
+    expect(markdownPlainText('> quoted text\n    <b>x</b>')).toBe('quoted text\nx')
+    expect(markdownPlainText('> quote\n    <b>1</b>\n>     <b>2</b>')).toBe('quote\n1\n2')
     // The item's second paragraph sits under its words, as a line after a
     // <br> in an item does (markdown-br-line-breaks.test.ts).
     expect(markdownPlainText('- item\n<div>\n\n    <b>x</b>')).toBe('• item\n  x')

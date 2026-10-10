@@ -178,7 +178,9 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
     quoteBlock: {
       borderLeftWidth: 3,
       borderLeftColor: colors.borderStrong,
-      paddingLeft: space.md
+      paddingLeft: space.md,
+      // Between the runs inside it: prose, and a quote inside this one.
+      gap: blockGap
     },
     /** A block that carries on the quote above it (a fence cut the quote in
      *  two): it closes the document's gap so the bar runs on unbroken, and

@@ -1,11 +1,26 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
+import { parseMobileMarkdown, type MobileMarkdownBlock, type MobileMarkdownQuoteMember } from './mobile-markdown-parser'
 
 function parseWithDeadline(input: string): MobileMarkdownBlock[] {
   // A synchronous parser must fail without hanging the test worker.
   return runInNewContext('parse(input)', { parse: parseMobileMarkdown, input }, { timeout: 250 })
+}
+
+/** A quote's members as the words drawn inside its bar. */
+function quoteVisibleText(members: readonly MobileMarkdownQuoteMember[]): string {
+  return members
+    .map((member) =>
+      member.type === 'quote'
+        ? quoteVisibleText(member.members)
+        : member.type === 'list'
+          ? member.items.map((item) => item.text).join('\n')
+          : member.type === 'rule'
+            ? ''
+            : member.text
+    )
+    .join('\n')
 }
 
 /** Everything the reader ends up seeing, in order. */
@@ -13,8 +28,9 @@ function visibleText(blocks: MobileMarkdownBlock[]): string {
   return blocks
     .map((block) => {
       switch (block.type) {
-        case 'paragraph':
         case 'quote':
+          return quoteVisibleText(block.members)
+        case 'paragraph':
         case 'code':
           return block.text
         case 'heading':

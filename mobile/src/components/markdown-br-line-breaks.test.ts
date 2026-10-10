@@ -35,7 +35,7 @@ describe('a <br> outside a table in a chat reply', () => {
   })
 
   it('breaks the line in a quote and in an HTML paragraph', () => {
-    expect(blocks('> a<br>b')).toMatchObject([{ type: 'quote', text: 'a\nb' }])
+    expect(blocks('> a<br>b')).toMatchObject([{ type: 'quote', members: [{ type: 'paragraph', text: 'a\nb' }] }])
     expect(blocks('<p align="center">Bold<br/>subtitle</p>')).toEqual([{ type: 'paragraph', text: 'Bold\nsubtitle' }])
   })
 
@@ -73,13 +73,13 @@ describe('a <br> outside a table in a chat reply', () => {
     expect(markdownPlainText('a<br><br>b')).toBe('a\n\nb')
   })
 
-  // A proven limit, pinned: an italic does not cross a line break in the
-  // chat's emphasis grammar (markdownInlineTokenPattern), the same as around
-  // a two-space hard break already. The words and the break survive; the
-  // stars stay. A bold does cross one.
-  it('keeps the words and the break of an italic around a <br>, though not the italic', () => {
-    expect(markdownPlainText('*a<br>b*')).toBe('*a\nb*')
-    expect(markdownPlainText('*a  \nb*')).toBe('*a\nb*')
+  // Was a proven limit: an italic did not cross a line break, so its stars
+  // stayed. Lifted 2026-10-10, when every newline in a quote became a break
+  // and `> *italic\n> continued*` drew its stars (review of that change): an
+  // italic now crosses a break as a bold does, as CommonMark reads it.
+  it('keeps the words, the break and the italic around a <br>', () => {
+    expect(markdownPlainText('*a<br>b*')).toBe('a\nb')
+    expect(markdownPlainText('*a  \nb*')).toBe('a\nb')
     expect(markdownPlainText('**a<br>b**')).toBe('a\nb')
   })
 })

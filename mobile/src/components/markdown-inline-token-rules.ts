@@ -107,12 +107,28 @@ export function emphasisSource(mark: '\\*' | '_', width: 1 | 2, overLines: boole
 export const EMAIL_AUTOLINK_SOURCE =
   "[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*"
 
+/** A bare email address, as GFM's extended autolink reads one: `a.b+c@x.co`
+ *  with no brackets is a link that writes to it, as the Claude app draws it
+ *  (an email draft quoted in a reply, 2026-10-10). The domain holds at least
+ *  one dot and ends on a letter or digit, so a sentence's full stop is left
+ *  behind. Narrower than GFM in one place: the last label starts with a
+ *  letter and is two characters at least, because an agent writes package
+ *  versions (`react@18.3.1`) far more often than an address at a numeric
+ *  domain. Not after a character that would make it part of something else:
+ *  `ssh://git@host.dev`, `@scope/pkg@1.2.3` and `src/icon@2x.png` are not
+ *  addresses. */
+export const BARE_EMAIL_AUTOLINK_SOURCE =
+  '(?<![A-Za-z0-9._+\\-/:@])[A-Za-z0-9._+-]+@[A-Za-z0-9_-]+(?:\\.[A-Za-z0-9_-]+)*\\.[A-Za-z][A-Za-z0-9-]*[A-Za-z0-9]'
+
 /** An autolink as the address it opens, the words drawn for it, and the
  *  text drawn after it. An address in angle brackets opens whole, closing
  *  punctuation and all: CommonMark takes the brackets as its bounds. An email
- *  address in them is drawn as itself and opens a `mailto:`. A bare address
- *  leaves sentence punctuation behind. */
+ *  address in them is drawn as itself and opens a `mailto:`, and so does a
+ *  bare one. A bare web address leaves sentence punctuation behind. */
 export function autolinkParts(token: string): { url: string; words: string; trailing: string } {
+  if (!token.startsWith('<') && !/^https?:/i.test(token)) {
+    return { url: `mailto:${token}`, words: token, trailing: '' }
+  }
   if (!token.startsWith('<')) {
     const { url, trailing } = trimAutolinkTrailingPunctuation(token)
     return { url, words: url, trailing }

@@ -1,7 +1,7 @@
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
-import { parseMobileMarkdown, type MobileMarkdownBlock } from './mobile-markdown-parser'
+import { parseMobileMarkdown, type MobileMarkdownBlock, type MobileMarkdownQuoteMember } from './mobile-markdown-parser'
 import { fastestRunMs } from './markdown-parse-cost'
 
 // Every case here is a defect a review found in the marked migration that the
@@ -16,12 +16,28 @@ function parseWithDeadline(input: string): MobileMarkdownBlock[] {
   return runInNewContext('parse(input)', { parse: parseMobileMarkdown, input }, { timeout: 250 })
 }
 
+/** A quote's members as the words drawn inside its bar. */
+function quoteVisibleText(members: readonly MobileMarkdownQuoteMember[]): string {
+  return members
+    .map((member) =>
+      member.type === 'quote'
+        ? quoteVisibleText(member.members)
+        : member.type === 'list'
+          ? member.items.map((item) => item.text).join('\n')
+          : member.type === 'rule'
+            ? ''
+            : member.text
+    )
+    .join('\n')
+}
+
 function visibleText(blocks: MobileMarkdownBlock[]): string {
   return blocks
     .map((block) => {
       switch (block.type) {
-        case 'paragraph':
         case 'quote':
+          return quoteVisibleText(block.members)
+        case 'paragraph':
         case 'code':
         case 'heading':
           return block.text
