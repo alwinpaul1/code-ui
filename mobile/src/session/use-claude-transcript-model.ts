@@ -107,13 +107,17 @@ export function useClaudeTranscriptModel(args: {
    *  probe for an older /model or /effort answer reads the same file the chat
    *  does (claude-transcript-effort-probe.ts). */
   transcriptPath?: string | null
+  /** The chat's first read of its rows has settled. Before it, no rows says
+   *  nothing about the window, and a probe then would read the host's file for
+   *  a pair the window may hold. Absent: settled. */
+  rowsSettled?: boolean
   /** What the latest screen read showed of the spinner's effort and an alt+p
    *  toast (claude-screen-model-statement.ts); null while the screen is not
    *  read. Kept per session and laid over every tier below the live pair
    *  (claude-screen-model-pair.ts). */
   screenStatement?: ClaudeScreenModelStatement | null
 }): { fallback: ClaudeModelFallback; requestScan: () => void } {
-  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, transcriptPath = null, screenStatement = null } = args
+  const { client, hostId, worktreeId, tabId, sessionId, enabled, connected, liveModel, beacon, beaconHandle, beaconStoredAt, liveEffort, agentWorking, messages, transcriptPath = null, rowsSettled = true, screenStatement = null } = args
   const quiet = enabled && sessionId !== null && !liveModel && !beacon
   const lastConnectedAt = useLastConnectedAt(hostId)
   const [, setVersion] = useState(0)
@@ -217,7 +221,7 @@ export function useClaudeTranscriptModel(args: {
   // "read the effort from the transcript"). Only with no live pair: the beacon
   // and the badge always win, and a tab that has one asks the host nothing.
   const scanModelId = transcript?.model ?? null
-  const probe = quiet && connected && client !== null && sessionId !== null && messages !== undefined && command === null
+  const probe = quiet && connected && client !== null && sessionId !== null && messages !== undefined && rowsSettled && command === null
   useEffect(() => {
     if (probe && client && sessionId) {
       requestTranscriptEffortProbe({ client, hostId, sessionId, transcriptPath, connection: lastConnectedAt, boundModel: scanModelId })

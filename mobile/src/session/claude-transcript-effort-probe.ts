@@ -1,6 +1,7 @@
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { rememberProbedSessionCommandPair, sessionCommandPair, type SessionCommandPair } from './claude-session-command-pair'
+import { peekClaudeTranscriptModel } from './claude-transcript-model-scan'
 import { nativeChatSessionPageRead } from './mobile-session-read-operations'
 
 /**
@@ -132,8 +133,10 @@ export function requestTranscriptEffortProbe(args: {
   sessionId: string
   transcriptPath: string | null
   connection: number | null
-  /** The model the scan reads now: an effort-only pair is bound to it, as a
-   *  loaded row's is when it is first seen (sessionCommandPairFor). */
+  /** The model the scan read when the probe was asked for. An effort-only
+   *  pair is bound to the scan's model when the pair is FILED (the scan has
+   *  often answered by then on a cold open), else to this, as a loaded row's
+   *  is bound when first seen (sessionCommandPairFor). */
   boundModel: string | null
 }): void {
   const { client, hostId, sessionId, transcriptPath, connection, boundModel } = args
@@ -168,7 +171,7 @@ export function requestTranscriptEffortProbe(args: {
       )
       return
     }
-    if (outcome.kind === 'found' && rememberProbedSessionCommandPair(sessionId, outcome.pair, boundModel)) {
+    if (outcome.kind === 'found' && rememberProbedSessionCommandPair(sessionId, outcome.pair, peekClaudeTranscriptModel(hostId, sessionId)?.model ?? boundModel)) {
       for (const listener of Array.from(listeners)) {
         listener()
       }

@@ -77,6 +77,11 @@ export type SessionCommandPair = {
    *  phone's clock; this is what orders a command against a beacon.
    *  -Infinity: nothing was held when it was first seen, so it is never newer. */
   seenAt?: number
+  /** Read from rows older than the chat's window (the transcript probe): it
+   *  was written before anything the phone has seen on screen, so it never
+   *  orders above a screen statement (`sessionCommandPairKey` is null for it)
+   *  nor above a beacon (`seenAt` -Infinity). */
+  probed?: true
 }
 
 const LEVEL = '(low|medium|high|xhigh|max)'
@@ -208,7 +213,8 @@ export function rememberProbedSessionCommandPair(
   lastPairBySession.set(sessionId, {
     ...pair,
     ...(pair.label === null ? { boundModel } : {}),
-    seenAt: Number.NEGATIVE_INFINITY
+    seenAt: Number.NEGATIVE_INFINITY,
+    probed: true
   })
   return true
 }
@@ -254,7 +260,12 @@ export function sessionCommandPairFor(
     // from before the field has none; both stay "never".
     const sameAsHeld = held !== undefined && held.at === pair.at && held.label === pair.label && held.effort === pair.effort
     const heldSeen = typeof held?.seenAt === 'number' ? held.seenAt : Number.NEGATIVE_INFINITY
-    pair = { ...pair, seenAt: held === undefined ? Number.NEGATIVE_INFINITY : sameAsHeld ? heldSeen : Date.now() }
+    pair = {
+      ...pair,
+      seenAt: held === undefined ? Number.NEGATIVE_INFINITY : sameAsHeld ? heldSeen : Date.now(),
+      // The probed row itself, now paged into the window: still that old row.
+      ...(sameAsHeld && held?.probed === true ? { probed: true as const } : {})
+    }
   }
   if (pair !== null && held && held.at !== null && pair.at !== null && held.at > pair.at) {
     // Rows older than the pair already kept (a cached page shown first).

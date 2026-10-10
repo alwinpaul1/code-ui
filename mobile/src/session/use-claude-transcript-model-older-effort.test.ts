@@ -79,8 +79,8 @@ describe('a Claude chat with no beacon, whose /model or /effort answer is older 
   let renderer: ReactTestRenderer | null = null
   let latest: ClaudeModelFallback | null = null
 
-  type Props = { sessionId: string; liveModel?: string | null; liveEffort?: string | null; beacon?: boolean; client?: AnsweringClient['client'] | null }
-  function Harness({ sessionId, liveModel = null, liveEffort = null, beacon = false, client }: Props) {
+  type Props = { sessionId: string; liveModel?: string | null; liveEffort?: string | null; beacon?: boolean; client?: AnsweringClient['client'] | null; rowsSettled?: boolean }
+  function Harness({ sessionId, liveModel = null, liveEffort = null, beacon = false, client, rowsSettled }: Props) {
     latest = useClaudeTranscriptModel({
       client: client === undefined ? host.client : client,
       hostId: 'h',
@@ -94,7 +94,8 @@ describe('a Claude chat with no beacon, whose /model or /effort answer is older 
       beacon,
       agentWorking: false,
       // What the chat holds: the transcript's last 40 rows.
-      messages: file.slice(-WINDOW)
+      messages: file.slice(-WINDOW),
+      rowsSettled
     }).fallback
     return null
   }
@@ -192,6 +193,14 @@ describe('a Claude chat with no beacon, whose /model or /effort answer is older 
     expect(asked).toBeGreaterThan(0)
     await render({ sessionId: 's-none' })
     expect(pageReads()).toHaveLength(asked)
+  })
+
+  it('does not read the host before the chat’s own first read has settled', async () => {
+    file = [...decode(OPUS_MEDIUM_LINES), ...turns(300, T0)]
+    await render({ sessionId: 's-unsettled', rowsSettled: false })
+    expect(pageReads()).toEqual([])
+    await render({ sessionId: 's-unsettled', rowsSettled: true })
+    expect(latest).toMatchObject({ effort: 'medium' })
   })
 
   it('shows nothing for an empty transcript (a session before its first prompt)', async () => {

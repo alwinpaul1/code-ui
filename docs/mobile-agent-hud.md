@@ -1711,14 +1711,19 @@ is the agent's word, like the beacon; the phone's tracked record that caused
 `claude-transcript-effort-probe.ts` reads the file backwards with
 `nativeChat.readSession` (`limit` 200, then `beforeOffset`), the Orca read the
 chat already uses to page older history: no terminal, nothing written on the
-host. It runs only when there is no live pair (beacon or badge) and neither the
-loaded rows nor the session's kept pair state a command answer; at most 10
+host. It runs only when there is no live pair (beacon or badge), the chat's own first
+read has settled, and neither the loaded rows nor the session's kept pair state
+a command answer; at most 10
 pages, once per session per app run, and a failed read once more per NEW
 connection, logging which session and why. The newest answer it finds is filed
 in the same per-session memory as a loaded row's
-(`rememberProbedSessionCommandPair`), marked never seen after a beacon, so it is
-tier 3 exactly: the beacon and the screen beat it, it beats the frame and the
-scan, an effort-only answer binds to the scan's model, and a scan taken after a
+(`rememberProbedSessionCommandPair`), marked `probed`: never seen after a beacon
+(`seenAt` -Infinity), and keyed as no command for the screen's ordering
+(`sessionCommandPairKey`), because it was written before anything the screen
+showed. Without that key, a toast or spinner noted while no command was held
+lost to the old row the moment the probe filed it (review of 1bd638852). So it
+is tier 3 exactly: the beacon and the screen beat it, it beats the frame and the
+scan, an effort-only answer binds to the scan's model as of when it is filed, and a scan taken after a
 later reply naming another model still drops it. It stops at the newest answer,
 so an `/effort` names no model and the model stays the scan's; a `/model` answer
 names one, as a loaded row's already did.
