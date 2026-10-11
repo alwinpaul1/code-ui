@@ -66,10 +66,16 @@ function closeSession(tabs: MobileSessionTab[], activeId: string | null) {
   const toasts: string[] = []
   const switched: string[] = []
   const unsubscribed: string[] = []
+  const handleOf = (tab: MobileSessionTab | undefined) =>
+    tab?.type === 'terminal' ? tab.terminal : null
+  const activeHandleRef = { current: handleOf(tabs.find((tab) => tab.id === activeId)) }
+  let activeHandle = activeHandleRef.current
   const switchSessionTabRef = {
     current: (tab: MobileSessionTab) => {
       switched.push(tab.id)
       activeSessionTabIdRef.current = tab.id
+      activeHandleRef.current = handleOf(tab)
+      activeHandle = activeHandleRef.current
     }
   }
   let terminals = tabs.flatMap((tab) =>
@@ -98,7 +104,9 @@ function closeSession(tabs: MobileSessionTab[], activeId: string | null) {
         reconcileBufferedDraftsRef: { current: () => {} },
         closedTabTombstonesRef: { current: tombstones },
         clearTerminalLiveInputDefault: () => {},
-        setActiveHandle: () => {},
+        setActiveHandle: (value) => {
+          activeHandle = typeof value === 'function' ? value(activeHandle) : value
+        },
         setActiveSessionTabId: () => {},
         activeSessionTabIdRef,
         visitedSessionTabIdsRef: { current: [] },
@@ -106,7 +114,7 @@ function closeSession(tabs: MobileSessionTab[], activeId: string | null) {
         selectedSessionTabIdRef: { current: activeId },
         terminalRefs: { current: new Map() },
         initializedHandlesRef: { current: new Set() },
-        activeHandleRef: { current: null },
+        activeHandleRef,
         activeSessionTabTypeRef: { current: 'terminal' },
         pendingActiveTerminalHandleRef: { current: null },
         pendingBrowserFocusPageIdRef: { current: null },
@@ -125,6 +133,15 @@ function closeSession(tabs: MobileSessionTab[], activeId: string | null) {
     unsubscribed,
     tombstones,
     activeId: () => activeSessionTabIdRef.current,
+    activeHandle: () => ({ state: activeHandle, ref: activeHandleRef.current }),
+    terminalHandles: () => terminals.map((terminal) => terminal.handle),
+    closeTerminal(handle: string, title: string) {
+      const mounted = actions
+      if (!mounted) {
+        throw new Error('close actions not mounted')
+      }
+      return performHookAction(() => mounted.handleCloseTerminal({ handle, title, isActive: true }))
+    },
     strip: () => sessionTabsRef.current.map((tab) => tab.id),
     rendered: () => sessionTabs.map((tab) => tab.id),
     close(tab: MobileSessionTab) {
@@ -264,6 +281,28 @@ describe('closing a session tab from the phone', () => {
     await closing
     expect(session.strip()).toEqual(['p::l', 'p::r'])
     expect(session.toasts).toHaveLength(1)
+  })
+})
+
+describe('closing a terminal that has no session tab', () => {
+  it('drops the terminal at once and keeps the next one on screen', () => {
+    const session = open([terminalTab('a'), terminalTab('b')], 'a')
+    void session.closeTerminal('term-a', 'a')
+    expect(session.terminalHandles()).toEqual(['term-b'])
+    expect(session.activeHandle()).toEqual({ state: 'term-b', ref: 'term-b' })
+  })
+
+  it('puts a refused close of the only terminal back on screen, not just back in the list', async () => {
+    // Caught by the session-tab-close-refused-keeps-tab RPC golden: the record came back,
+    // but the active handle stayed null, so the pane showed nothing.
+    const session = open([terminalTab('a')], 'a')
+    const closing = session.closeTerminal('term-a', 'a')
+    expect(session.terminalHandles()).toEqual([])
+    session.replies[0].resolve(failed('runtime_error', 'No such terminal'))
+    await closing
+    expect(session.terminalHandles()).toEqual(['term-a'])
+    expect(session.activeHandle()).toEqual({ state: 'term-a', ref: 'term-a' })
+    expect(session.toasts).toEqual(["Couldn't close a: No such terminal"])
   })
 })
 

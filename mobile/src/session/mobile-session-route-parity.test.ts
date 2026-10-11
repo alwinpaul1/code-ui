@@ -326,7 +326,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // sendClose, closeTerminalOptimistically and selectAfterClose, and handleCloseSessionTab's body
 // takes the tab off the strip before it sends.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '7a93536432f3ad1d19e1dbfa91afcfd3dc3666a3c15036735e5b48245fe0ff52'
+  'e73fc8b3c162f1f61423af6b16dacb5e7a3de3a2ae51e1e14f87d8f0b1ad361f'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.

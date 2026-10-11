@@ -123,7 +123,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     const next = before.filter((terminal) => terminal.handle !== target.handle)
     setTerminals(next)
     terminalsRef.current = next
-    if (activeHandleRef.current === target.handle) {
+    const wasActive = activeHandleRef.current === target.handle
+    if (wasActive) {
       const replacement = next[0] ?? null
       activeHandleRef.current = replacement?.handle ?? null
       pendingActiveTerminalHandleRef.current = replacement?.handle ?? null
@@ -147,6 +148,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       const restored = restoreRefusedTerminalRecord(terminalsRef.current, record, index)
       terminalsRef.current = restored
       setTerminals(restored)
+    }
+    if (wasActive && activeHandleRef.current === null) {
+      // Nothing else took the screen while the close was out (it was the only terminal), so
+      // the one that came back is the one on screen again; a record alone draws an empty pane.
+      activeHandleRef.current = target.handle
+      pendingActiveTerminalHandleRef.current = target.handle
+      setActiveHandle(target.handle)
     }
     return verdict
   }
