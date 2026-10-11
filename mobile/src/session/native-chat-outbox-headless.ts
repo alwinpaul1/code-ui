@@ -102,9 +102,11 @@ function wordsMatch(entry: NativeChatOutboxEntry, prompt: string): boolean {
  */
 export function promptIsReceiptOf(entry: NativeChatOutboxEntry, prompt: string | undefined): boolean {
   const before = entry.route?.promptBefore
-  if (!prompt || entry.normalizedText === '' || before === undefined) {
-    return false
-  }
+  if (!prompt || before === undefined) { return false }
+  // A photo with no caption: its copy is chips alone, numbered anew, so a chips-only prompt other
+  // than the one the tab had when it left is a new photo prompt.
+  const chipsOnly = /\[Image\s+#\d+\]/.test(prompt) && prompt.replace(/\[Image\s+#\d+\]/g, '').trim() === ''
+  if (entry.normalizedText === '') { return entry.hasAttachments === true && chipsOnly && prompt !== before }
   return wordsMatch(entry, prompt) && (before === null || before === '' || !wordsMatch(entry, before))
 }
 

@@ -76,7 +76,7 @@ describe('checking that Claude ran a confirmed `!` message', () => {
 
   it('says sent when the command was seen in the bash box and the box is empty after', async () => {
     const s = scene([{ lines: bashBox('ls -la') }, { lines: EMPTY_COMPOSER }])
-    expect(await verify(s, '! ls -la')).toEqual({ kind: 'sent' })
+    expect(await verify(s, '! ls -la')).toEqual({ kind: 'sent', inputOnly: true })
   })
 
   it('compares the command with the `!` and its space taken off, as Claude draws it', async () => {
@@ -118,7 +118,7 @@ describe('checking that Claude ran a confirmed `!` message', () => {
 
   it('still sees the command in the bash box, whatever was drawn before', async () => {
     const s = scene([{ lines: bashBox('git status') }, { lines: EMPTY_COMPOSER }])
-    expect(await verify(s, '!git status', ['git status'])).toEqual({ kind: 'sent' })
+    expect(await verify(s, '!git status', ['git status'])).toEqual({ kind: 'sent', inputOnly: true })
   })
 
 })

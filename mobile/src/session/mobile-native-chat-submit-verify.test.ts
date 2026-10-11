@@ -114,7 +114,7 @@ describe('checking that Claude took a message the host acked', () => {
   it('calls the input sent once it is empty after a look saw the words in it', async () => {
     const s = scene([holding('hello'), empty])
 
-    await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'sent' })
+    await expect(verify(s, 'hello')).resolves.toEqual({ kind: 'sent', inputOnly: true })
   })
 
   it('takes the prompt in the queue box, mid-turn, for a message that was taken', async () => {
@@ -145,7 +145,7 @@ describe('checking that Claude took a message the host acked', () => {
     // to the composer, the Enter landed, and the user sent it twice.)
     const s = scene([holding('check the build'), empty])
 
-    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent' })
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent', inputOnly: true })
   })
 
   it('never says not sent because the words are still in the input: a late Enter looks the same', async () => {
@@ -175,7 +175,7 @@ describe('checking that Claude took a message the host acked', () => {
       'typed at the desk'
     ]) {
       const s = scene([holding('check the build'), { lines: composerWithTextInRows(other) }])
-      await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent' })
+      await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'sent', inputOnly: true })
     }
   })
 

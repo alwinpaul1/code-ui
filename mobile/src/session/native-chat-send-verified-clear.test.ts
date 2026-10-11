@@ -259,11 +259,10 @@ describe('a message sent from the chat while the desktop input holds a copy of i
 
     expect(host.submitted).toEqual([MESSAGE])
     expect(host.notice).toBeNull()
-    // No look, and a `!` command leaves no prompt copy: nothing of Claude's says it ran, so it is
-    // held for its transcript row, never called delivered (midturn-send-never-taken.test.ts).
-    expect(outcome).toBe('unknown')
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
+    // A `!` command keeps the rule it had (midturn-send-never-taken.test.ts): held, the outbox
+    // would run it again, so a send no look could check still stands.
+    expect(outcome).toBe('accepted')
+    expect(acceptSend).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a Codex tab on its own send: one look at its composer, no Claude clear-and-verify, the same bytes', async () => {

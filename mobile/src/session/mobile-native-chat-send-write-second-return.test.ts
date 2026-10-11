@@ -134,7 +134,8 @@ describe('the second Return after a dropped one', () => {
       }
       return answer
     }) as never
-    await expect(send(d.client)).resolves.toEqual({ kind: 'written', outcome: 'unknown' })
+    // A tab whose hook is heard (it gave a copy before), and none comes for this send.
+    await expect(send(d.client, () => [{ nonce: 'status:s:0', text: 'earlier' }])).resolves.toEqual({ kind: 'written', outcome: 'unknown' })
     expect(d.bareReturns()).toBe(1)
   })
 

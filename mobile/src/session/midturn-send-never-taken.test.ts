@@ -35,6 +35,8 @@ import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-st
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'
 import { parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
+import { promptIsReceiptOf } from './native-chat-outbox-headless'
+import type { NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import { normalizeReconcileText } from './mobile-native-chat-draft-reconcile'
 
 vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
@@ -43,6 +45,8 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
 }))
 
 const WORDS = 'Is all of asks done'
+/** The prompt copies the incident's tab had already given (Orca's hook on the tab status). */
+const HOOKED_COPIES: readonly BeaconPromptReceipt[] = [{ nonce: 'status:s:1:0', text: 'Fix the flicker' }]
 const BUSY = busyScreen('screen-busy-lead-mid.txt', { dropBlank: true })
 const COMPOSER_ROW = BUSY.findIndex((row, index) => row.startsWith('❯') && /─{3}/.test(BUSY[index - 1] ?? ''))
 
@@ -73,7 +77,7 @@ function workingTab(look: (afterBody: number) => string[] | 'fail') {
     const body = (params ?? {}) as { text?: string; enter?: boolean }
     if (method === 'terminal.send') {
       writes.push(body.text ?? '')
-      if (body.enter === true && (body.text ?? '') !== '') {
+      if (body.enter === true) {
         bodyWritten = true
       }
       return accepted
@@ -152,9 +156,12 @@ describe('a message sent while Claude works, that Claude never took', () => {
     vi.useRealTimers()
   })
 
+  // The incident's tab had Orca's prompt hook: the status carried its earlier prompts.
+  const HOOKED = HOOKED_COPIES
+
   it('is held, not drawn as delivered, when no look at the screen could be had', async () => {
     const tab = workingTab(() => 'fail')
-    mount(tab.client)
+    mount(tab.client, HOOKED)
 
     expect(await send()).toBe('unknown')
 
@@ -169,7 +176,7 @@ describe('a message sent while Claude works, that Claude never took', () => {
     // Something other than Claude's queue took them out (no `❯` row of them, no prompt copy):
     // the words leaving the input is the phone's reading, not Claude's record.
     const tab = workingTab((afterBody) => (afterBody === 0 ? busyWith(WORDS) : busyWith('')))
-    mount(tab.client)
+    mount(tab.client, HOOKED)
 
     expect(await send()).toBe('unknown')
 
@@ -179,7 +186,7 @@ describe('a message sent while Claude works, that Claude never took', () => {
 
   it('is held when the words never showed at all on screens the phone did read', async () => {
     const tab = workingTab(() => busyWith(''))
-    mount(tab.client)
+    mount(tab.client, HOOKED)
 
     expect(await send()).toBe('unknown')
 
@@ -196,13 +203,13 @@ describe('a message sent while Claude works, that Claude took', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  const write = (client: RpcClient, receipts: () => readonly BeaconPromptReceipt[]) =>
+  const write = (client: RpcClient, receipts: () => readonly BeaconPromptReceipt[], text = WORDS, hasImages = false) =>
     writeChatSend({
       agent: 'claude',
       client,
       terminal: 'codeui',
-      text: WORDS,
-      hasImages: false,
+      text,
+      hasImages,
       syncComposer: true,
       classification: 'chat',
       typesCodexCommand: false,
@@ -212,14 +219,25 @@ describe('a message sent while Claude works, that Claude took', () => {
       deviceToken: null,
       receipts
     })
+  /** The words in the input on the first look after the body, gone on every later one, and
+   *  nothing drawn above the box: the phone's reading alone. */
+  const leftInputOnly = (afterBody: number): string[] => (afterBody === 0 ? busyWith(WORDS) : busyWith(''))
 
   it('is delivered on the prompt copy Orca puts on the tab status at the enqueue', async () => {
-    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [WORDS])))
+    const tab = workingTab(leftInputOnly)
     const copies: BeaconPromptReceipt[] = [{ nonce: 'status:s:1:0', text: 'Fix the flicker' }]
     const sending = write(tab.client, () => copies)
-    // The hook's copy reaches the phone a moment after the body.
-    await vi.advanceTimersByTimeAsync(200)
+    // The hook's copy reaches the phone a moment after the words left the input.
+    await vi.advanceTimersByTimeAsync(1_500)
     copies.push({ nonce: 'status:s:2:1', text: WORDS })
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
+  it('is delivered on Claude drawing it in its queue box, with no copy (the queue row is Claude\'s)', async () => {
+    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [WORDS])))
+    const sending = write(tab.client, () => HOOKED_COPIES)
     await vi.runAllTimersAsync()
 
     expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
@@ -228,16 +246,15 @@ describe('a message sent while Claude works, that Claude took', () => {
   it('is delivered on its screen alone when it repeats the last status copy, which brings no new one', async () => {
     // The tab status keeps no second copy of the prompt it already holds, so "yes" twice can
     // bring Claude's copy only once. Held, the second would be typed a third time after the turn.
-    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [WORDS])))
-    const copies: BeaconPromptReceipt[] = [{ nonce: 'status:s:1:0', text: WORDS }]
-    const sending = write(tab.client, () => copies)
+    const tab = workingTab(leftInputOnly)
+    const sending = write(tab.client, () => [{ nonce: 'status:s:1:0', text: WORDS }])
     await vi.runAllTimersAsync()
 
     expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
   })
 
   it('is held when its words repeat an older copy that is not the last one on the status', async () => {
-    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [WORDS])))
+    const tab = workingTab(leftInputOnly)
     const copies: BeaconPromptReceipt[] = [
       { nonce: 'status:s:1:0', text: WORDS },
       { nonce: 'status:s:2:1', text: 'Fix the flicker' }
@@ -247,18 +264,76 @@ describe('a message sent while Claude works, that Claude took', () => {
 
     expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
   })
+
+  it('is held when it repeats the last status copy on a tab whose beacon gives every submission a copy', async () => {
+    const tab = workingTab(leftInputOnly)
+    const copies: BeaconPromptReceipt[] = [
+      { nonce: 'status:s:1:0', text: WORDS },
+      { nonce: '4242', text: WORDS }
+    ]
+    const sending = write(tab.client, () => copies)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('stands on its screen on a tab that has never given a prompt copy, where none can settle a hold', async () => {
+    // No hook heard at all (an older host, hooks off): a held mid-turn send would only be typed
+    // again by the outbox after Claude had taken it.
+    const tab = workingTab(leftInputOnly)
+    const sending = write(tab.client, () => [])
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
+  it('is delivered on a copy that came in while a screen read was out', async () => {
+    const copies: BeaconPromptReceipt[] = [...HOOKED_COPIES]
+    const tab = workingTab((afterBody) => {
+      if (afterBody === 0) {
+        copies.push({ nonce: 'status:s:2:1', text: WORDS })
+      }
+      return busyWith('')
+    })
+    const sending = write(tab.client, () => copies)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
+  it('is delivered on the new chips-only row Claude draws for a photo with no caption', async () => {
+    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('', ['[Image #2]']) : busyWith('', ['[Image #2]', '[Image #3]'])))
+    const sending = write(tab.client, () => HOOKED_COPIES, '', true)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
+  it('is held when the only chips-only row on screen is an older photo\'s', async () => {
+    const tab = workingTab((afterBody) =>
+      afterBody < 0 ? busyWith('', ['[Image #2]']) : afterBody === 0 ? busyWith('[Image #3]', ['[Image #2]']) : busyWith('', ['[Image #2]'])
+    )
+    const sending = write(tab.client, () => HOOKED_COPIES, '', true)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
 })
 
 describe('what a check of the screen alone settles', () => {
-  it('settles nothing: only a prompt copy or the transcript row is Claude\'s record', () => {
-    expect(chatSendOutcomeOfVerdict({ kind: 'sent' }, WORDS, [])).toBe('unknown')
+  it('settles it only where Claude drew it or copied it', () => {
+    expect(chatSendOutcomeOfVerdict({ kind: 'sent' }, WORDS, HOOKED_COPIES)).toBe('accepted')
+    expect(chatSendOutcomeOfVerdict({ kind: 'sent', byReceipt: true }, WORDS, HOOKED_COPIES)).toBe('accepted')
+    expect(chatSendOutcomeOfVerdict({ kind: 'sent', inputOnly: true }, WORDS, HOOKED_COPIES)).toBe('unknown')
+    expect(chatSendOutcomeOfVerdict({ kind: 'unverified' }, WORDS, HOOKED_COPIES)).toBe('unknown')
     expect(chatSendOutcomeOfVerdict({ kind: 'unverified' }, WORDS, [])).toBe('unknown')
-    expect(chatSendOutcomeOfVerdict({ kind: 'unknown' }, WORDS, [])).toBe('unknown')
-    expect(chatSendOutcomeOfVerdict({ kind: 'sent', byReceipt: true }, WORDS, [])).toBe('accepted')
+    expect(chatSendOutcomeOfVerdict({ kind: 'unknown' }, WORDS, HOOKED_COPIES)).toBe('unknown')
   })
 
-  it('takes a beacon copy of the same words as no bar to a new one (each submission has its own)', () => {
-    expect(chatSendOutcomeOfVerdict({ kind: 'sent' }, WORDS, [{ nonce: '4242', text: WORDS }])).toBe('unknown')
+  it('keeps a shell command on the rule it had: a hold would end with the outbox running it again', () => {
+    expect(chatSendOutcomeOfVerdict({ kind: 'unverified' }, '!ls', HOOKED_COPIES)).toBe('accepted')
+    expect(chatSendOutcomeOfVerdict({ kind: 'sent', inputOnly: true }, '!ls', HOOKED_COPIES)).toBe('accepted')
+    expect(chatSendOutcomeOfVerdict({ kind: 'unknown' }, '!ls', HOOKED_COPIES)).toBe('unknown')
   })
 })
 
@@ -322,5 +397,56 @@ describe('a held send whose prompt copy came in before the hold was parked', () 
     expect(held).not.toBeNull()
     clearTimeout(held!.deadline ?? undefined)
     vi.useRealTimers()
+  })
+})
+
+describe('a held photo with no caption', () => {
+  // Opus review of 573deb5b0: a caption-less photo held for Claude's copy could never be settled
+  // by one (an empty send matched no copy), so after the hold the drainer pasted it again.
+  const photoOrigin = (known: string[] | undefined) =>
+    ({
+      draftKey: 'k',
+      pendingKey: 'p',
+      normalizedText: '',
+      baselineTailMessageId: null,
+      ...(known ? { knownReceiptNonces: new Set(known) } : {})
+    }) as never
+  const park = (known: string[] | undefined, receipts: BeaconPromptReceipt[]) => {
+    vi.useFakeTimers()
+    const held = parkUnconfirmedSend({
+      origin: photoOrigin(known),
+      text: '',
+      messages: [],
+      receipts,
+      isActiveTranscript: true,
+      onUnconfirmed: vi.fn(),
+      onExpire: vi.fn()
+    })
+    if (held) {
+      clearTimeout(held.deadline ?? undefined)
+    }
+    vi.useRealTimers()
+    return held
+  }
+
+  it('is settled by a new copy of chips alone', () => {
+    expect(park(['status:s:1:0'], [{ nonce: 'status:s:1:0', text: 'Fix the flicker' }, { nonce: 'status:s:2:1', text: '[Image #3]' }])).toBeNull()
+  })
+
+  it('is not settled by a chips copy the phone already had, nor by a copy with words', () => {
+    expect(park(['status:s:1:0'], [{ nonce: 'status:s:1:0', text: '[Image #2]' }])).not.toBeNull()
+    expect(park([], [{ nonce: 'status:s:2:1', text: '[Image #3] what is this' }])).not.toBeNull()
+  })
+
+  it('degenerate: is not settled with no record of the copies it left with', () => {
+    expect(park(undefined, [{ nonce: 'status:s:2:1', text: '[Image #3]' }])).not.toBeNull()
+  })
+
+  it('is taken by the drainer as landed on a chips-only status prompt the tab did not have when it left', () => {
+    const entry = (promptBefore: string) =>
+      ({ normalizedText: '', hasAttachments: true, route: { promptBefore } }) as unknown as NativeChatOutboxEntry
+    expect(promptIsReceiptOf(entry('Fix the flicker'), '[Image #3]')).toBe(true)
+    expect(promptIsReceiptOf(entry('[Image #3]'), '[Image #3]')).toBe(false)
+    expect(promptIsReceiptOf(entry('Fix the flicker'), '[Image #3] with words')).toBe(false)
   })
 })

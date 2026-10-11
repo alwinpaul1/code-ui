@@ -38,7 +38,11 @@ export type SubmitVerdict =
   /** `byReceipt`: the agent's own prompt copy carried the words (the hook beacon's `up=`, or the
    *  prompt Orca's hook put on the tab status). Without it, `sent` is only what the phone's looks
    *  at the screen saw, which is not Claude's record (mobile-native-chat-send-write.ts). */
-  | { kind: 'sent'; byReceipt?: true }
+  /** `inputOnly`: the only sign was the words leaving the input after a look saw them there,
+   *  with nothing drawn above the box. Something other than Claude can take words out of its
+   *  input; only Claude draws a prompt it took above it (in the conversation, or in its queue
+   *  box, the same column-zero `❯ ` row since 2.1.277). */
+  | { kind: 'sent'; byReceipt?: true; inputOnly?: true }
   | { kind: 'not-sent'; message: string }
   /** `stillTyped`: the last look found the words still in Claude's input, never submitted. */
   | { kind: 'unknown'; stillTyped?: true }
@@ -76,6 +80,9 @@ const IMAGE_CHIP = /\[Image #\d+\]/g
 const folded = (text: string): string => text.replace(/\s+/g, ' ')
 const hasImageChip = (text: string): boolean => /\[Image #\d+\]/.test(folded(text))
 const withoutImageChips = (text: string): string => folded(text).replace(IMAGE_CHIP, '')
+/** Prompt rows that are photo chips and nothing else. */
+export const chipOnlyRows = (rows: readonly string[]): number =>
+  rows.filter((row) => hasImageChip(row) && withoutImageChips(row).trim() === '').length
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -139,6 +146,10 @@ export async function verifyClaudeSubmit(args: {
    *  as run only when the screen now holds more rows of it than it did then. `null`: no
    *  baseline could be had, so the echo row proves nothing (the bash box still does). */
   priorBashRows?: readonly string[] | null
+  /** A photo send with no caption: how many chips-only prompt rows the screen drew above the box
+   *  before it wrote anything. A new one is its row (Claude numbers each photo anew, but the
+   *  phone cannot know the number); `null` or absent, no baseline, so a chips row proves nothing. */
+  priorChipRows?: number | null
   /** The send's own budget: no look runs past it. */
   deadline?: number
   /** The words were seen in the input just before this check began (a second Return): their
@@ -179,11 +190,16 @@ export async function verifyClaudeSubmit(args: {
   let sawWords = args.wordsSeenInInput === true
   /** The last look that read the input found the words there. */
   let stillTyped = false
-  /** The send drawn above the composer: its prompt row, or one more `! cmd` row than before. */
+  /** The send drawn above the composer: its prompt row, one more chips-only row than before for
+   *  a photo with no caption, or one more `! cmd` row than before. */
   const drawnAbove = (lines: readonly string[]): boolean =>
     claudeSentPromptTexts(lines).some((row) =>
       photos ? words !== '' && heard(row) : words !== '' && dense(row).startsWith(words)
     ) ||
+    (photos &&
+      words === '' &&
+      typeof args.priorChipRows === 'number' &&
+      chipOnlyRows(claudeSentPromptTexts(lines)) > args.priorChipRows) ||
     (shell !== null &&
       args.priorBashRows !== null &&
       claudeSentBashTexts(lines).filter(heard).length > (args.priorBashRows ?? []).filter(heard).length)
@@ -213,18 +229,26 @@ export async function verifyClaudeSubmit(args: {
     // left in the input may be a placeholder (a prompt suggestion, the queue
     // hint, "Message @agent…") or text from the desk, neither of which is this
     // message.
-    return sawWords || drawnAbove(screen.lines) ? { kind: 'sent' } : null
+    if (drawnAbove(screen.lines)) {
+      return { kind: 'sent' }
+    }
+    return sawWords ? { kind: 'sent', inputOnly: true } : null
   }
   const beaconHeard = (): boolean =>
     shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text, photos)
   const heardByReceipt: SubmitVerdict = { kind: 'sent', byReceipt: true }
+  /** The words left the input with nothing drawn: the looks go on, for Claude's copy or its row,
+   *  until the window ends (the caller does not count this alone as delivered). */
+  let leftInputOnly = false
+  /** Two failed reads and not one picture: no more reads, but a copy can still say it went. */
+  let unreadable = false
   while (now() - startedAt < window) {
     await wait(TICK_MS)
     if (beaconHeard()) {
       return heardByReceipt
     }
     const elapsed = now() - startedAt
-    if (elapsed < SUBMIT_SETTLE_MS || elapsed - lastLookAt < SUBMIT_LOOK_GAP_MS) {
+    if (unreadable || elapsed < SUBMIT_SETTLE_MS || elapsed - lastLookAt < SUBMIT_LOOK_GAP_MS) {
       continue
     }
     lastLookAt = elapsed
@@ -235,17 +259,31 @@ export async function verifyClaudeSubmit(args: {
       ...(args.deadline === undefined ? {} : { deadline: Date.now() + (args.deadline - now()) })
     })
     if (!screen) {
-      // Two looks and not one picture of the screen: nothing here can be told,
-      // and waiting out the window would only delay a send that went.
+      // Two looks and not one picture of the screen: the screen can tell nothing. A shell
+      // command has no copy to wait for; anything else waits the window out for Claude's copy.
       failedLooks += 1
       if (!looked && failedLooks >= 2) {
-        return { kind: 'unverified' }
+        if (shell !== null || args.receipts === undefined) {
+          return { kind: 'unverified' }
+        }
+        unreadable = true
       }
       continue
     }
     const verdict = judge(screen)
+    // A copy that came in while the read was out settles it as Claude's record.
+    if (verdict?.kind === 'sent' && beaconHeard()) {
+      return heardByReceipt
+    }
+    if (verdict?.kind === 'sent' && verdict.inputOnly) {
+      leftInputOnly = true
+      continue
+    }
     if (verdict) {
       return verdict
+    }
+    if (stillTyped) {
+      leftInputOnly = false
     }
   }
   // The window ran out while the app was out of the foreground (2026-10-09): Android
@@ -276,6 +314,12 @@ export async function verifyClaudeSubmit(args: {
   // receipt the hold never sees again (it looks only when the copies change).
   if (beaconHeard()) {
     return heardByReceipt
+  }
+  if (leftInputOnly && !stillTyped) {
+    return { kind: 'sent', inputOnly: true }
+  }
+  if (unreadable && !looked) {
+    return { kind: 'unverified' }
   }
   return looked ? (stillTyped ? { kind: 'unknown', stillTyped: true } : { kind: 'unknown' }) : { kind: 'unverified' }
 }
