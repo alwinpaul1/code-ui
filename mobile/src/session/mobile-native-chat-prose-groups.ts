@@ -78,8 +78,7 @@ export function imageLeadsText(groups: readonly ProseGroup[], index: number): bo
   if (!group || !next || next.type !== 'block' || isImageRefBlock(next.block)) {
     return false
   }
-  return (
-    group.type === 'image-strip' ||
-    (group.type === 'block' && renderableImageUri(group.block) !== undefined)
-  )
+  // Any picture block, loaded or drawn as its "Image on Desktop" chip: the
+  // chip sat flush on the text under it (2026-10-11).
+  return group.type === 'image-strip' || (group.type === 'block' && isImageRefBlock(group.block))
 }

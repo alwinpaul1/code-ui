@@ -40,6 +40,21 @@ describe('groupProseBlocks', () => {
     expect(imageLeadsText(groupProseBlocks([text('a'), img('file:///a.png')]), 0)).toBe(false)
   })
 
+  // Reported 2026-10-11 (screenshot): the "Image on Desktop" chip for a
+  // screenshot pasted on the desktop sat flush on the text under it, while a
+  // loaded picture gets air below. The chip is a picture's stand-in and takes
+  // the same space. The path is the real shape Orca's paste writes.
+  it('spaces the "Image on Desktop" chip from the text under it, as a picture', () => {
+    const paste: NativeChatBlock = {
+      type: 'image-ref',
+      path: '/var/folders/0y/yflzxsjs0vv8_c7n0325kl3h0000gn/T/orca-paste-1791732965258-6359231d-420f-40ec-a8fa-696466c27fe2.png'
+    }
+    const groups = groupProseBlocks([paste, text('also fix this')], { isUser: true })
+    expect(imageLeadsText(groups, 0)).toBe(true)
+    expect(imageLeadsText(groupProseBlocks([paste], { isUser: true }), 0)).toBe(false)
+    expect(imageLeadsText(groupProseBlocks([paste, paste], { isUser: true }), 0)).toBe(false)
+  })
+
   // docs/claude-app-parity.md item 9: Claude Code's own `@"<path>"` file
   // mention, only read on the user's side of the turn.
   describe('a file mention in the text', () => {
