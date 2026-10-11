@@ -11,7 +11,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { NativeChatOutboxEntry } from '../storage/native-chat-outbox'
+import { nativeChatOutboxEntries, resetNativeChatOutboxForTests, type NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import {
   claimNonceForSend,
   claimRowForSend,
@@ -47,7 +47,7 @@ describe('one id per send', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    resetNativeChatSendClaimsForTests()
+    resetNativeChatSendClaimsForTests(); resetNativeChatOutboxForTests()
   })
 
   afterEach(async () => {
@@ -56,7 +56,7 @@ describe('one id per send', () => {
     state = null
     vi.useRealTimers()
     await clearNativeChatDraftStores()
-    resetNativeChatSendClaimsForTests()
+    resetNativeChatSendClaimsForTests(); resetNativeChatOutboxForTests()
   })
 
   function Harness({ messages, receipts }: { messages: NativeChatMessage[]; receipts?: readonly BeaconPromptReceipt[] }): null {
@@ -105,6 +105,22 @@ describe('one id per send', () => {
     expect(origin.outboxId).toBeDefined()
     expect(echoId).toBe(outboxEchoId(origin.outboxId!))
     expect(state!.pending.map((item) => item.id)).toEqual([outboxEchoId(origin.outboxId!)])
+  })
+
+  // Reported 2026-10-11: a message with two photos was drawn as a sent card and never reached
+  // Claude. A photo send draws its bubble the moment its box empties, before the paste; its
+  // outbox entry carries the delivery state the chat draws ("sending" dims it, a failure says
+  // "Not sent" with Retry and Edit), keyed by the entry's id. The photo bubble had an id of its
+  // own (`pending-<ms>-<n>`), so none of that ever reached it: a photo send the desktop never took
+  // looked delivered for good.
+  it('draws a photo send’s bubble at its start under the id its delivery state is keyed by', async () => {
+    await mount([])
+    act(() => {
+      state!.clearDraftAtSendStart('Claude showing the preview image', ['file:///a.jpg', 'file:///b.jpg'], ['/tmp/a.png', '/tmp/b.png'])
+    })
+    const [entry] = nativeChatOutboxEntries()
+    expect(entry?.text).toBe('Claude showing the preview image')
+    expect(state!.pending.map((item) => item.id)).toEqual([outboxEchoId(entry!.id)])
   })
 
   it('keeps a second ack-lost "yes" unconfirmed after the first one’s row settled the first', async () => {
