@@ -8,7 +8,7 @@ import {
   MessageSquare,
   Search,
   Sparkles,
-  SquareTerminal,
+  TextCursorInput,
   TriangleAlert,
   Wrench,
   type LucideIcon
@@ -24,7 +24,7 @@ import type { ToolRunKind } from './mobile-native-chat-tool-kind'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 
 const ICON_BY_KIND: Record<ToolRunKind, LucideIcon> = {
-  command: SquareTerminal,
+  command: TextCursorInput,
   read: Eye,
   edit: FileText,
   search: Search,
@@ -35,6 +35,10 @@ const ICON_BY_KIND: Record<ToolRunKind, LucideIcon> = {
   message: MessageSquare,
   other: Wrench
 }
+
+/** The Claude app's tool-run sheet opens with its top at about half the screen
+ *  and the chat above it (2026-10-11 screenshots); ours opened at 62%. */
+const RUN_SHEET_OPENING_SHARE = 0.5
 
 /**
  * The sheet behind a run's row: every call of the run as icon + verb +
@@ -75,6 +79,7 @@ export function MobileNativeChatRunSheet({
       dragContentToDismiss
       dismissKeyboardOnOpen
       expandable
+      openingShare={RUN_SHEET_OPENING_SHARE}
       header={<MobileSheetTitleBar title={title} onClose={onClose} wrap />}
     >
       <View style={{ paddingBottom: space.md, paddingLeft: ROW_ICON_INSET - space.md }} testID="run-sheet">
@@ -90,7 +95,12 @@ export function MobileNativeChatRunSheet({
                 }
               }}
             />
-            {index < rows.length - 1 ? <RowConnector /> : null}
+            {index < rows.length - 1 ? (
+              <>
+                <View style={{ height: ROW_GAP }} />
+                <RowConnector />
+              </>
+            ) : null}
           </View>
         ))}
         {rows.length === 0 ? (
@@ -121,12 +131,28 @@ const DETAIL_SHRINK = 1000
  *  (13) these had sat under the 15 prose above the sheet. */
 const ROW_TEXT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose
 
+/** The line between two icons, as the Claude app draws it (2026-10-11, 2.57
+ *  px/dp): 15 dp long and centred in the 28 dp between one icon's foot (25 dp
+ *  down a 34 dp row) and the next icon's head (53). Laid over the row's 10 dp
+ *  gap, so it moves nothing. Muted ink at 60%: ours was the faint border colour. */
+const CONNECTOR_HEIGHT = 15
+const CONNECTOR_TOP = 39 - CONNECTOR_HEIGHT / 2
+
 function RowConnector() {
   const { colors } = useTheme()
-  // A 1 dp line centred under the icon.
   return (
     <View
-      style={{ width: 1, height: 10, marginLeft: ROW_ICON_SIZE / 2 - 0.5, backgroundColor: colors.border }}
+      testID="run-sheet-connector"
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: CONNECTOR_TOP,
+        left: ROW_ICON_SIZE / 2 - 0.5,
+        width: 1,
+        height: CONNECTOR_HEIGHT,
+        backgroundColor: colors.textMuted,
+        opacity: 0.6
+      }}
     />
   )
 }
@@ -135,6 +161,7 @@ function RowConnector() {
  *  (114 px at 2.57 px/dp, 2026-10-09 screenshots); ours was 56. A row stays
  *  tappable at 44 through the slop its hit area gets above and below. */
 const ROW_HEIGHT = 34
+const ROW_GAP = 10
 const ROW_HIT_SLOP = { top: 5, bottom: 5 } as const
 
 function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => void }) {

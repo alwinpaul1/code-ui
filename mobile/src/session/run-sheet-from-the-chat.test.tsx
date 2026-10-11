@@ -40,7 +40,7 @@ vi.mock('lucide-react-native', () =>
   Object.fromEntries(
     [
       'ChevronDown', 'ChevronRight', 'Copy', 'Image', 'ListTodo', 'Eye', 'Globe', 'MessageSquare', 'Pencil',
-      'Search', 'SquareChevronRight', 'SquareTerminal', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle',
+      'Search', 'SquareChevronRight', 'SquareTerminal', 'TextCursorInput', 'Wrench', 'X', 'Undo2', 'Sparkles', 'AlertCircle',
       'AlertTriangle', 'Info', 'ArrowUp', 'Briefcase', 'FileText', 'TriangleAlert'
     ].map((name) => [name, name])
   )

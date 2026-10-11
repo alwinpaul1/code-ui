@@ -20,6 +20,8 @@ type Props = {
   interactive?: boolean
   /** Opens part way and drags up to full screen, like the Claude app's sheets. */
   expandable?: boolean
+  /** Share of the screen an expandable sheet opens at (0.62 when unset). */
+  openingShare?: number
   /** Pinned above the content, outside its scroll: a title that never scrolls away. */
   header?: ReactNode
   zIndex?: number
@@ -40,6 +42,7 @@ export function BottomDrawer({
   fillAvailable = false,
   interactive = true,
   expandable = false,
+  openingShare,
   header,
   zIndex,
   dismissKeyboardOnOpen = false
@@ -62,6 +65,7 @@ export function BottomDrawer({
       fillAvailable={fillAvailable}
       interactive={interactive}
       expandable={expandable}
+      openingShare={openingShare}
       header={header}
       zIndex={zIndex}
       dismissKeyboardOnOpen={dismissKeyboardOnOpen}

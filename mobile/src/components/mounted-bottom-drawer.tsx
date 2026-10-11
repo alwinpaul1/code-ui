@@ -61,6 +61,8 @@ export type MountedBottomDrawerProps = {
   interactive?: boolean
   /** Opens part way and drags up to full screen (bottom-drawer-expandable.ts). */
   expandable?: boolean
+  /** Share of the screen an expandable sheet opens at (0.62 when unset). */
+  openingShare?: number
   /** Drawn under the handle and above the content, outside its scroll, so a
    *  title and its close cross never scroll away. Dragging it moves the sheet,
    *  as the handle does. */
@@ -80,6 +82,7 @@ export function MountedBottomDrawer({
   fillAvailable = false,
   interactive = true,
   expandable = false,
+  openingShare,
   header,
   zIndex = 1000,
   dismissKeyboardOnOpen = false
@@ -118,7 +121,7 @@ export function MountedBottomDrawer({
     onHidden,
     restore: () => restoreRef.current()
   })
-  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, translateY, progress, close: requestClose })
+  const sheet = useExpandableBottomDrawer({ expandable, screenHeight, topInset: insets.top, openingShare, translateY, progress, close: requestClose })
   const drag = useBottomDrawerDrag({
     expandable,
     hasList: contentScrollable && dragContentToDismiss,

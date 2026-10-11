@@ -26,9 +26,14 @@ export function expandableSheetHeights(input: {
   screenHeight: number
   topInset: number
   topGap: number
+  /** The share of the screen it opens at; the Background tasks sheet's by default. */
+  openingShare?: number
 }): ExpandableSheetHeights {
   const full = Math.max(0, input.screenHeight - input.topInset - input.topGap)
-  return { collapsed: Math.min(full, Math.round(input.screenHeight * COLLAPSED_SHARE)), full }
+  return {
+    collapsed: Math.min(full, Math.round(input.screenHeight * (input.openingShare ?? COLLAPSED_SHARE))),
+    full
+  }
 }
 
 /** How far below full height the sheet stands at its opening height. */
