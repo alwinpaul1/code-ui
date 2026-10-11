@@ -27,8 +27,8 @@ import {
 // them. The same card morphs through checking → latest / available → ready →
 // error rather than stacking banners, the shape Orca desktop's UpdateCard
 // has. A download shows no dialog at all (2026-09-14): it runs in the store,
-// Home shows its progress on a card of its own (HomeUpdateDownloadCard), and
-// this card returns on its own when it is done. Transient states (checking,
+// nothing on Home shows its progress, and this card returns on its own when
+// it is done. Transient states (checking,
 // up to date) only show for a user-initiated "Check for updates".
 //
 // This file owns the window: the Modal, the touch shield behind the card and

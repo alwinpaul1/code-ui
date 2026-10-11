@@ -1,18 +1,11 @@
 import { AppUpdateDialog } from './AppUpdateDialog'
-import { HomeUpdateDownloadCard } from './HomeUpdateDownloadCard'
 import { useHomeUpdateCheck } from './use-home-update-check'
 
 export function HomeUpdateSurface() {
-  // Why: Home focus owns update polling; the card subscribes separately so the
-  // Home screen does not need update-specific state.
+  // Why: Home focus owns update polling. A download shows nothing here (the
+  // user removed the progress card 2026-10-11); the dialog returns with
+  // Install when the file is in.
   useHomeUpdateCheck()
 
-  // The two are never up together: a download hides the dialog, and the
-  // download card is gone the moment the download is.
-  return (
-    <>
-      <HomeUpdateDownloadCard />
-      <AppUpdateDialog />
-    </>
-  )
+  return <AppUpdateDialog />
 }

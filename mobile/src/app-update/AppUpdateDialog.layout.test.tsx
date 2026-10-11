@@ -8,7 +8,7 @@ import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 // The 2026-10-10 redesign of the update card and its install flow ("not
 // glass, premium and modern"), rendered in BOTH schemes: the version as the
 // hero, the notes in sections with markers, the action bar pinned under the
-// scroller, each install phase, and Home's download card. Every colour is
+// scroller, and each install phase. Every colour is
 // asserted against the scheme's token, so a literal colour, which would pass
 // in one scheme and be wrong in the other, fails here.
 
@@ -68,7 +68,6 @@ import { AppUpdateDialogBody } from './AppUpdateDialogBody'
 import { useAppUpdateStore } from './app-update-store'
 import { useApkInstallStore } from './apk-install-store'
 import type { DialogState } from './app-update-dialog-state'
-import { HomeUpdateDownloadCard } from './HomeUpdateDownloadCard'
 import { downloadProgressPercent } from './download-progress'
 import { UPDATE_SCROLL_REGION_MAX_HEIGHT } from './update-card-parts'
 
@@ -305,48 +304,6 @@ describe('notes that are not in the section format', () => {
     expect(root.findAllByType('ScrollView' as never)).toHaveLength(0)
     expect(textOf(root)).toContain('Fixes and improvements.')
     expect(flattenStyle(button(root, 'Update now').parent!.props.style).borderTopWidth).toBe(0)
-  })
-})
-
-describe.each(SCHEMES)("Home's download card in %s", (scheme, colors: ThemeColors) => {
-  it('shows the download as a determinate bar with its percent, for TalkBack too', async () => {
-    useApkInstallStore.setState({ phase: 'downloading', version: '0.9.127', progress: 0.42 })
-    const root = await render(createElement(HomeUpdateDownloadCard), scheme)
-    const card = byTestId(root, 'home-update-download-card')
-    expect(card.props.accessibilityRole).toBe('progressbar')
-    expect(card.props.accessibilityLabel).toBe('Downloading Code UI 0.9.127')
-    expect(card.props.accessibilityValue).toMatchObject({ min: 0, max: 100, now: 42 })
-    expect(textOf(byTestId(root, 'home-update-download-percent'))).toBe('42%')
-    const fill = byTestId(root, 'home-update-download-fill')
-    expect(flattenStyle(fill.props.style).width).toBe('42%')
-    expect(flattenStyle(fill.props.style).backgroundColor).toBe(colors.accent)
-    expect(flattenStyle(card.props.style).backgroundColor).toBe(colors.bgPanel)
-    expect(flattenStyle(card.props.style).borderColor).toBe(colors.border)
-  })
-
-  it('takes no touches, so Home stays usable under it', async () => {
-    useApkInstallStore.setState({ phase: 'downloading', version: '0.9.127', progress: 0.1 })
-    const root = await render(createElement(HomeUpdateDownloadCard), scheme)
-    expect(root.findAll((node) => node.props.pointerEvents === 'none').length).toBeGreaterThanOrEqual(1)
-    expect(buttonLabels(root)).toEqual([])
-  })
-})
-
-describe("Home's download card outside a download", () => {
-  it.each(['idle', 'ready', 'installing', 'failed'] as const)('%s: draws nothing', async (phase) => {
-    useApkInstallStore.setState({ phase, version: '0.9.127', progress: 1 })
-    const root = await render(createElement(HomeUpdateDownloadCard), 'light')
-    expect(root.findAll((node) => node.props.testID === 'home-update-download-card')).toHaveLength(0)
-  })
-
-  it('follows the store as the download moves', async () => {
-    useApkInstallStore.setState({ phase: 'downloading', version: '0.9.127', progress: 0 })
-    const root = await render(createElement(HomeUpdateDownloadCard), 'light')
-    expect(textOf(byTestId(root, 'home-update-download-percent'))).toBe('0%')
-    await act(async () => useApkInstallStore.setState({ progress: 0.995 }))
-    expect(textOf(byTestId(root, 'home-update-download-percent'))).toBe('100%')
-    await act(async () => useApkInstallStore.setState({ phase: 'ready' }))
-    expect(root.findAll((node) => node.props.testID === 'home-update-download-card')).toHaveLength(0)
   })
 })
 
