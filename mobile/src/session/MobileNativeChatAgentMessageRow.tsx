@@ -1,28 +1,35 @@
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { ChevronDown, ChevronRight } from 'lucide-react-native'
+import { ChevronRight } from 'lucide-react-native'
+import { BottomDrawer } from '../components/BottomDrawer'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import { MobileSheetTitleBar } from './MobileSheetTitleBar'
+import { receivedMessageHeading, receivedMessageSender, receivedMessageTitle } from './mobile-received-message-sender'
 
-/** What an opened row says when only the TUI's row reached the phone: the
+/** What the opened sheet says when only the TUI's row reached the phone: the
  *  sender, and no words (a tab launched without the prompt hook). */
 export const AGENT_MESSAGE_UNREAD_NOTE =
   'Only the sender reached the phone. To read the message, expand this row in the desktop terminal (ctrl+o).'
 
-/** What an opened row says under words that are only the start of the message
+/** What the opened sheet says under words that are only the start of the message
  *  (the hook's 2,000 bytes, the tab status's 200 characters). */
 export const AGENT_MESSAGE_CUT_NOTE =
   'Only the start of this message reached the phone. The rest is in the desktop terminal (ctrl+o).'
 
 /**
- * A message a subagent sent this session, folded like the desktop TUI folds
- * it ("› Message from @general-purpose (ctrl+o to expand)") and drawn like a
- * run of work: the same muted sentence and chevron, the same ruled body when
- * open. Not a bubble: the user did not write it, and neither did the agent
- * this chat is with (mobile-native-chat-agent-messages.ts).
+ * A message a subagent sent this session, drawn as the Claude app 1.261009.20
+ * draws a received message: one row, "Received message from <name>"
+ * (`ccr_received_message_from`), with the name in the strong ink and checked
+ * first (mobile-received-message-sender.ts), and the chevron of a finished
+ * run. A tap opens a sheet titled "Message" (`ccr_received_message_title`)
+ * headed "From: <name>", with the message under it. Not a bubble: the user did
+ * not write it, and neither did the agent this chat is with
+ * (mobile-native-chat-agent-messages.ts). A subagent's hand-back is never
+ * drawn at all (mobile-native-chat-agent-message-rows.ts).
  */
 export function MobileNativeChatAgentMessageRow({
   sender,
@@ -40,32 +47,44 @@ export function MobileNativeChatAgentMessageRow({
   onOpenFile?: (relativePath: string) => void
   styles: ChatMessageStyles
 }) {
-  const { colors } = useTheme()
+  const { colors, space } = useTheme()
   const [open, setOpen] = useState(false)
-  const title = `Message from ${sender}`
+  const name = receivedMessageSender(sender)
+  const title = receivedMessageTitle(name)
   return (
     <View style={styles.row} testID="native-chat-agent-message">
       <Pressable
         style={styles.toolRunToggle}
-        onPress={() => setOpen((shown) => !shown)}
+        onPress={() => setOpen(true)}
         hitSlop={6}
         accessibilityRole="button"
         accessibilityLabel={title}
-        accessibilityState={{ expanded: open }}
+        accessibilityHint="Opens the message"
       >
         {/* Hugs its words, as a finished run's sentence does, so the chevron
             follows them rather than sitting at the far end of the row. */}
         <Text style={[styles.toolRunLabel, styles.toolRunSentence]} numberOfLines={1}>
-          {title}
+          {name === null
+            ? title
+            : [
+                'Received message from ',
+                <Text key="name" style={{ color: colors.text }}>
+                  {name}
+                </Text>
+              ]}
         </Text>
-        {open ? (
-          <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
-        ) : (
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
-        )}
+        <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
       </Pressable>
-      {open ? (
-        <View style={styles.toolRunBody} testID="native-chat-agent-message-body">
+      <BottomDrawer
+        visible={open}
+        onClose={() => setOpen(false)}
+        dragContentToDismiss
+        header={<MobileSheetTitleBar title="Message" onClose={() => setOpen(false)} />}
+      >
+        <View style={{ gap: space.sm, paddingBottom: space.md }} testID="native-chat-agent-message-body">
+          <Txt variant="caption" tone="secondary" scale={fontScale}>
+            {receivedMessageHeading(name)}
+          </Txt>
           {body.trim().length > 0 ? (
             <>
               <MobileMarkdown
@@ -87,7 +106,7 @@ export function MobileNativeChatAgentMessageRow({
             </Txt>
           )}
         </View>
-      ) : null}
+      </BottomDrawer>
     </View>
   )
 }

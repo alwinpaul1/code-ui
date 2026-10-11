@@ -58,6 +58,14 @@ vi.mock('lucide-react-native', () => ({
   Undo2: 'Undo2',
   Wrench: 'Wrench'
 }))
+// The subagent message's sheet: a frame that draws its content while open.
+vi.mock('../components/BottomDrawer', async () => {
+  const React = await import('react')
+  return {
+    BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
+      visible ? React.createElement('BottomDrawer', null, children) : null
+  }
+})
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { agentMessageRow } from './mobile-native-chat-agent-messages'
@@ -133,7 +141,7 @@ describe('a code block in the chat', () => {
     expect(codeButtons(tree)).toHaveLength(0)
     act(() => {
       tree.root
-        .find((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Message from reviewer')
+        .find((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Received message from reviewer')
         .props.onPress()
     })
     const [button] = codeButtons(tree)

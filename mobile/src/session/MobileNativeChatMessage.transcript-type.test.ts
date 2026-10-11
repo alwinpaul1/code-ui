@@ -52,6 +52,14 @@ vi.mock('lucide-react-native', () => {
   })
 })
 vi.mock('../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+// The subagent message's sheet: a frame that draws its content while open.
+vi.mock('../components/BottomDrawer', async () => {
+  const React = await import('react')
+  return {
+    BottomDrawer: ({ visible, children }: { visible: boolean; children?: unknown }) =>
+      visible ? React.createElement('BottomDrawer', null, children) : null
+  }
+})
 vi.mock('../ui/use-reduced-motion', () => ({ useReducedMotion: () => true }))
 vi.mock('./MobileNativeChatToolDetailSheet', () => ({
   MobileNativeChatToolDetailSheet: 'MobileNativeChatToolDetailSheet'
@@ -158,7 +166,7 @@ describe('the chat transcript’s type', () => {
         styles
       })
     )
-    const toggle = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Message from @general-purpose')!
+    const toggle = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Received message from general-purpose')!
     act(() => toggle.props.onPress())
     const [markdown] = byType('MobileMarkdown')
     expect(markdown!.props.typography).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY)

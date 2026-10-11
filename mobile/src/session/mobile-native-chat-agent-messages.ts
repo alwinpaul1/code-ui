@@ -6,8 +6,9 @@ import { readLaunch, readString, takeAnsweredCall, type PendingCall } from './mo
 import { isPeerTrailingFrame } from './claude-peer-message-frames'
 
 /**
- * A message a subagent sent its lead, drawn the way the desktop TUI draws it:
- * a folded row, "Message from general-purpose", that opens to the message.
+ * A message a subagent sent its lead, drawn the way the Claude app draws a
+ * received message: one row, "Received message from general-purpose", that
+ * opens a sheet with the message (MobileNativeChatAgentMessageRow.tsx).
  *
  * Claude Code 2.1.283 delivers one as an `attachment`/`queued_command` whose
  * prompt is `<agent-message from="<agent id>">…`, or as an `isMeta` user row
