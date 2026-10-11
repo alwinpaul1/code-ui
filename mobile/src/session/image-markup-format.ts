@@ -7,7 +7,7 @@
  *  not flag alpha, so those are what is read here as opaque.
  *
  *  Pure and free of React Native: the editor reads the source's first bytes
- *  and hands them in (markup-source-traits.ts). */
+ *  and hands them in (markup-image-output.ts). */
 
 export type MarkupSourceTraits = {
   /** What the bytes are, read from their signature; null when unknown. */
@@ -110,7 +110,9 @@ const DATA_URL = /^data:[^,]*;base64,/i
 
 /** The leading bytes of a base64 string, or null when it is not base64. */
 export function base64HeadBytes(base64: string, maxChars = MARKUP_HEADER_BASE64_CHARS): Uint8Array | null {
-  const clean = base64.replace(/\s+/g, '').slice(0, maxChars)
+  // Cut first, then strip whitespace: the whole data URL can be megabytes,
+  // and this runs on every Done. Twice the window leaves room for line breaks.
+  const clean = base64.slice(0, maxChars * 2).replace(/\s+/g, '').slice(0, maxChars)
   const whole = clean.slice(0, clean.length - (clean.length % 4))
   try {
     const binary = atob(whole)

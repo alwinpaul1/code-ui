@@ -20,7 +20,9 @@ const pan = vi.hoisted(() => ({
 }))
 const svg = vi.hoisted(() => ({
   flatten: null as null | ((base64: string) => void),
-  size: null as unknown
+  size: null as unknown,
+  /** Set to make toDataURL throw instead of answering. */
+  throws: null as null | Error
 }))
 const manipulator = vi.hoisted(() => ({ compress: [] as number[], formats: [] as string[] }))
 
@@ -89,6 +91,9 @@ vi.mock('react-native-svg', async () => {
   }>('react')
   class Svg extends Base<{ children?: ReactNode }> {
     toDataURL(callback: (base64: string) => void, size: unknown): void {
+      if (svg.throws) {
+        throw svg.throws
+      }
       svg.size = size
       svg.flatten = callback
     }
@@ -157,6 +162,7 @@ beforeEach(() => {
   pan.onStart = pan.onUpdate = pan.onEnd = null
   svg.flatten = null
   svg.size = null
+  svg.throws = null
   manipulator.compress = []
   manipulator.formats = []
 })
@@ -164,7 +170,13 @@ beforeEach(() => {
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  vi.useRealTimers()
+  vi.restoreAllMocks()
 })
+
+function paths(): number {
+  return renderer!.root.findAll((node) => (node.type as unknown) === 'Path').length
+}
 
 function texts(): string[] {
   return renderer!.root
@@ -176,7 +188,11 @@ function button(label: string): ReactTestInstance {
   return renderer!.root.find((node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === label)
 }
 
-async function openOn(uri: string, scheme: 'light' | 'dark'): Promise<ImageMarkupResult[]> {
+async function openOn(
+  uri: string,
+  scheme: 'light' | 'dark',
+  receive?: (result: ImageMarkupResult) => void
+): Promise<ImageMarkupResult[]> {
   const done: ImageMarkupResult[] = []
   await act(async () => {
     renderer = create(
@@ -185,7 +201,14 @@ async function openOn(uri: string, scheme: 'light' | 'dark'): Promise<ImageMarku
       </ThemeProvider>
     )
   })
-  await act(async () => openImageMarkup(uri, { onDone: (result) => done.push(result) }))
+  await act(async () =>
+    openImageMarkup(uri, {
+      onDone: (result) => {
+        done.push(result)
+        receive?.(result)
+      }
+    })
+  )
   return done
 }
 
@@ -240,17 +263,88 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     await pressDone()
     expect(texts()).toContain('Mark up image')
     expect(texts()).toContain('Saving…')
-    for (const label of ['Close', 'Undo', 'Done']) {
+    for (const label of ['Close', 'Undo', 'Redo', 'Done']) {
       expect(button(label).props.accessibilityState, label).toEqual({ disabled: true })
       expect(button(label).props.onPress, label).toBeUndefined()
     }
     const modal = renderer!.root.find((node) => (node.type as unknown) === 'Modal')
     await act(async () => modal.props.onRequestClose())
     expect(peekImageMarkup(), 'Back closed the editor while it saved').not.toBeNull()
+    const drawnBefore = paths()
     await act(async () => pan.onStart!({ x: 50, y: 50 }))
+    await act(async () => pan.onUpdate!({ x: 80, y: 90 }))
+    expect(paths(), 'the pen drew while the picture was being written').toBe(drawnBefore)
     await act(async () => pan.onEnd!())
+    expect(paths(), 'a stroke was committed while the picture was being written').toBe(drawnBefore)
     await finishFlatten()
     expect(done).toHaveLength(1)
     expect(peekImageMarkup()).toBeNull()
+  })
+
+  // The gesture's callbacks run on the UI thread with the closures of the
+  // render they were built in. A drag that ends on its first sample sends its
+  // start and its end before the canvas re-renders, so an end that read the
+  // render's draft committed nothing and the dot was lost (Opus review).
+  it('keeps a one-point drag as a dot when its end lands before the canvas re-renders', async () => {
+    await openOn(OPAQUE_PHOTO, scheme)
+    await act(async () => {
+      pan.onStart!({ x: 30, y: 30 })
+      pan.onEnd!()
+    })
+    expect(paths()).toBe(1)
+    await act(async () => {
+      pan.onStart!({ x: 10, y: 10 })
+      pan.onUpdate!({ x: 20, y: 25 })
+      pan.onUpdate!({ x: 35, y: 30 })
+      pan.onEnd!()
+    })
+    expect(paths()).toBe(2)
+    const last = renderer!.root.findAll((node) => (node.type as unknown) === 'Path').at(-1)!
+    expect(String(last.props.d).match(/[MQL]/g)).toEqual(['M', 'Q', 'Q', 'L'])
+  })
+
+  // Saving holds Close and Back, so a flatten that never answers must not hold
+  // them for good: the screen would be a full-window trap (Opus review).
+  it('lets the editor be closed again when the flatten never answers, and ignores a late answer', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const done = await openOn(OPAQUE_PHOTO, scheme)
+    await drawAStroke()
+    vi.useFakeTimers()
+    await pressDone()
+    expect(texts()).toContain('Saving…')
+    await act(async () => {
+      vi.advanceTimersByTime(30_000)
+    })
+    expect(texts()).not.toContain('Saving…')
+    expect(button('Close').props.accessibilityState).toEqual({ disabled: false })
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('never answered'))).toBe(true)
+    vi.useRealTimers()
+    await finishFlatten()
+    expect(done, 'a flatten that answered after the editor gave up on it was still sent').toEqual([])
+    expect(peekImageMarkup()).not.toBeNull()
+  })
+
+  it('leaves Saving and says why when the flatten throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const done = await openOn(OPAQUE_PHOTO, scheme)
+    await drawAStroke()
+    svg.throws = new Error('bitmap allocation failed')
+    await pressDone()
+    expect(texts()).not.toContain('Saving…')
+    expect(button('Close').props.accessibilityState).toEqual({ disabled: false })
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('bitmap allocation failed'))).toBe(true)
+    expect(done).toEqual([])
+  })
+
+  it('leaves Saving and says why when whoever takes the picture throws', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    await openOn(ALPHA_SCREENSHOT, scheme, () => {
+      throw new Error('composer gone')
+    })
+    await drawAStroke()
+    await pressDone()
+    await finishFlatten()
+    expect(texts()).not.toContain('Saving…')
+    expect(warn.mock.calls.some((call) => String(call[0]).includes('composer gone'))).toBe(true)
   })
 })

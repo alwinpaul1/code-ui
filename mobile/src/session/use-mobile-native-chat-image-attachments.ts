@@ -100,7 +100,8 @@ export type MobileNativeChatImageAttachments = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
   /** An image file already on the phone (a keyboard paste's cache copy). */
   readonly attachImageFile: (uri: string) => Promise<void>
-  /** A PNG the phone drew: a picture from the chat marked up in the viewer. */
+  /** A picture the phone drew (JPEG or PNG, as the markup editor chose): one
+   *  from the chat marked up in the viewer. */
   readonly attachImageBase64: (base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>
   /** Any document via the file picker; described to the agent in the message text. */
   readonly attachDocument: () => Promise<void>

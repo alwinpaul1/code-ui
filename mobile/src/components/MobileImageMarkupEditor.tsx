@@ -46,6 +46,14 @@ import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
 type NaturalSize = { width: number; height: number }
 
+/** How long Done waits for the flatten and the JPEG write before it gives the
+ *  screen back; a 2000 px picture takes a second or two on a phone. */
+const SAVE_TIMEOUT_MS = 30_000
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 /** Full-screen markup editor: draw red pen strokes over an attached photo,
  *  undo/redo them, and either discard the marks or flatten them onto the
  *  photo on Done. Mounted once in the root layout; opened with
@@ -75,6 +83,12 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const [draftPoints, setDraftPoints] = useState<readonly MarkupPoint[]>([])
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
   const [saving, setSaving] = useState(false)
+  /** The stroke being drawn, kept current outside renders (endDraftStroke). */
+  const draftRef = useRef<readonly MarkupPoint[]>([])
+  /** The save in flight, so a flatten answering after it was given up on is
+   *  dropped; null while nothing saves. Read by the gesture too, which may
+   *  run with an older render's closures. */
+  const savingRef = useRef<object | null>(null)
 
   // A new session (even a reopen of the same photo) starts from a blank
   // canvas — keyed on `token`, not the uri, so picking the same photo twice
@@ -86,7 +100,13 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     setDraftPoints([])
     setConfirmingDiscard(false)
     setSaving(false)
+    draftRef.current = []
+    savingRef.current = null
   }, [session?.token])
+
+  useEffect(() => () => {
+    savingRef.current = null
+  }, [])
 
   useEffect(() => {
     if (!session) {
@@ -119,31 +139,32 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const drawn = containedSize(box, aspectRatio)
   const penWidth = natural ? markupPenWidth(natural.width, drawn.width) : 0
 
-  const commitDraft = useCallback((points: readonly MarkupPoint[]) => {
+  const addDraftPoint = useCallback(
+    (x: number, y: number, replace: boolean) => {
+      if (savingRef.current !== null || !natural || drawn.width <= 0 || drawn.height <= 0) {
+        return
+      }
+      const point = displayPointToNatural({ x, y }, drawn, natural)
+      draftRef.current = replace ? [point] : [...draftRef.current, point]
+      setDraftPoints(draftRef.current)
+    },
+    [natural, drawn.width, drawn.height]
+  )
+
+  // Commits from the ref, not from a render's draftPoints: the gesture's
+  // callbacks hold the closures of the render they were built in, and a drag
+  // that ends on its first sample sends its end before the canvas re-renders,
+  // so the render's draft was still empty and the dot was lost. Not through a
+  // setState updater either, which React may run more than once.
+  const endDraftStroke = useCallback(() => {
+    const points = draftRef.current
+    draftRef.current = []
     setDraftPoints([])
     if (points.length === 0) {
       return
     }
     setStrokeState((state) => commitMarkupStroke(state, { points }))
   }, [])
-
-  const addDraftPoint = useCallback(
-    (x: number, y: number, replace: boolean) => {
-      if (saving || !natural || drawn.width <= 0 || drawn.height <= 0) {
-        return
-      }
-      const point = displayPointToNatural({ x, y }, drawn, natural)
-      setDraftPoints((prev) => (replace ? [point] : [...prev, point]))
-    },
-    [saving, natural, drawn.width, drawn.height]
-  )
-
-  // Reads this render's draftPoints directly (not through a setState updater,
-  // which React may invoke more than once) so a finished stroke is committed
-  // exactly once.
-  const endDraftStroke = useCallback(() => {
-    commitDraft(draftPoints)
-  }, [commitDraft, draftPoints])
 
   const pan = Gesture.Pan()
     .maxPointers(1)
@@ -197,13 +218,42 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       return
     }
     const format = markupOutputFormat(loadMarkupSourceTraits(session.uri))
+    const attempt = {}
+    savingRef.current = attempt
     setSaving(true)
-    svg.toDataURL((png) => {
-      void encodeMarkupOutput(png, format).then((result) => {
-        session.onDone(result)
-        closeImageMarkup()
-      })
-    }, markupOutputSize(natural))
+    const current = (): boolean => savingRef.current === attempt
+    const giveUp = (why: string): void => {
+      clearTimeout(timer)
+      if (!current()) {
+        return
+      }
+      savingRef.current = null
+      setSaving(false)
+      console.warn(`[markup] the marked-up picture was not saved: ${why}; the editor is open again`)
+    }
+    // Saving holds Close and Back, so a flatten that never answers (react-
+    // native-svg can drop the callback) must not hold them for good.
+    const timer = setTimeout(() => giveUp(`the flatten never answered in ${SAVE_TIMEOUT_MS / 1000} s`), SAVE_TIMEOUT_MS)
+    const finish = async (png: string): Promise<void> => {
+      if (!current()) {
+        return
+      }
+      const result = await encodeMarkupOutput(png, format)
+      if (!current()) {
+        return
+      }
+      clearTimeout(timer)
+      session.onDone(result)
+      savingRef.current = null
+      closeImageMarkup()
+    }
+    try {
+      svg.toDataURL((png) => {
+        finish(png).catch((error: unknown) => giveUp(describeError(error)))
+      }, markupOutputSize(natural))
+    } catch (error) {
+      giveUp(describeError(error))
+    }
   }
 
   return (
@@ -297,6 +347,11 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
                     width={drawn.width}
                     height={drawn.height}
                     viewBox={`0 0 ${natural.width} ${natural.height}`}
+                    // The output size rounds width and height apart, so its
+                    // shape can differ from the viewBox by under a pixel;
+                    // letterboxing that left a transparent strip, black in a
+                    // JPEG (Opus review). Stretching it is invisible.
+                    preserveAspectRatio="none"
                   >
                     <SvgImage
                       href={session.uri}

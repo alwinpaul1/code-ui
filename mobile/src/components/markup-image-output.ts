@@ -1,4 +1,4 @@
-import { File as FsFile, Paths } from 'expo-file-system'
+import { FileMode, File as FsFile, Paths } from 'expo-file-system'
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator'
 import {
   markupSourceTraits,
@@ -20,7 +20,10 @@ const SOURCE_HEAD_BYTES = 96 * 1024
 export type ReadFileHead = (uri: string, length: number) => Uint8Array
 
 function readFileHead(uri: string, length: number): Uint8Array {
-  const handle = new FsFile(uri).open()
+  // Read-only: a mode-less open of a file:// path is read-write in
+  // expo-file-system 57, which creates a missing file and fails on one the
+  // app cannot write (Opus review).
+  const handle = new FsFile(uri).open(FileMode.ReadOnly)
   try {
     return handle.readBytes(length)
   } finally {

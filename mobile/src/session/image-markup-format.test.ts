@@ -60,6 +60,23 @@ describe('the format a marked-up picture is saved in', () => {
     expect(traits).toEqual({ mimeType: 'image/webp', hasAlpha: false })
   })
 
+  // The lossy and lossless WebP headers, built from the RIFF layout: a lossy
+  // VP8 chunk carries no alpha; a lossless VP8L one says so in bit 28 of the
+  // 32 bits after its 0x2f signature (byte 24, bit 4).
+  it('reads a lossy WebP as opaque and a lossless one by its alpha bit', () => {
+    const webp = (chunk: string, byte24 = 0): Uint8Array => {
+      const bytes = new Uint8Array(30)
+      bytes.set(Buffer.from(`RIFF\0\0\0\0WEBP${chunk}`, 'latin1'))
+      bytes[20] = 0x2f
+      bytes[24] = byte24
+      return bytes
+    }
+    expect(markupSourceTraits(webp('VP8 '))).toEqual({ mimeType: 'image/webp', hasAlpha: false })
+    expect(markupSourceTraits(webp('VP8L', 0x10))).toEqual({ mimeType: 'image/webp', hasAlpha: true })
+    expect(markupSourceTraits(webp('VP8L', 0x0f))).toEqual({ mimeType: 'image/webp', hasAlpha: false })
+    expect(markupOutputFormat(markupSourceTraits(webp('VP8L', 0x10))).format).toBe('png')
+  })
+
   it('reads the picture behind a data: URL, the way a pasted or marked-up photo arrives', () => {
     const jpeg = markupSourceTraitsFromDataUri(`data:image/jpeg;base64,${base64(fixture('opaque-photo.jpg'))}`)
     expect(markupOutputFormat(jpeg).format).toBe('jpeg')
