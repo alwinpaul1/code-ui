@@ -34,6 +34,7 @@ import { isPendingNativeChatFile } from './mobile-native-chat-file-attachment'
 import { withMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
 import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness'
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
+import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
 
@@ -65,9 +66,9 @@ type Args = {
    *  rather than opening a second one. */
   readonly beforeImagePaste?: () => Promise<void>
   /** Empties the composer as the send starts (the chips go with it) and returns
-   *  the undo. `images` also adds the optimistic bubble in this same call. */
-  /** `imagePaths` are the desktop paths pasted, one per preview in `images`. */
-  readonly beginImageSend?: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
+   *  the undo. `images` also adds the optimistic bubble in this same call.
+   *  `imagePaths` are the desktop paths pasted, one per preview in `images`. */
+  readonly beginImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   readonly baseSend: (
     text: string,
     imagePreviewUris?: string[],
@@ -276,6 +277,8 @@ export function useMobileNativeChatImageAttachments({
                 takeSentAttachments(scope, pendingAll)
               }
             }
+            // Words, bubble and chips come back together (refusal, reminted terminal, throw).
+            const undoSendStart = (undo: UndoNativeChatSendStart | null): void => { undo?.(); if (scope) { restoreSentAttachments(scope, pendingAll) } }
             if (structuredNativeChat && pendingImages.length > 0 && scope) {
               if (!(await sendGate.wait(deadline))) {
                 return false
@@ -287,10 +290,13 @@ export function useMobileNativeChatImageAttachments({
               const previewUris = pendingImages.map((attachment) => attachment.previewUri)
               const undoDraftClear = beginImageSend?.(text, previewUris) ?? null
               clearSent()
-              const outcome = await baseSend(text, previewUris, deadline, pendingImages)
+              // A throw puts all three back as a refusal does, and still rejects as it always did.
+              const outcome = await baseSend(text, previewUris, deadline, pendingImages).catch((error: unknown) => {
+                undoSendStart(undoDraftClear)
+                throw error
+              })
               if (outcome === 'rejected') {
-                undoDraftClear?.()
-                restoreSentAttachments(scope, pendingAll)
+                undoSendStart(undoDraftClear)
               }
               return outcome !== 'rejected'
             }
@@ -367,12 +373,7 @@ export function useMobileNativeChatImageAttachments({
               // The agent's row names each path pasted: how the echo finds its row.
               const undoDraftClear = beginImageSend?.(text, previewUris, pendingImages.map((image) => image.path)) ?? null
               clearSent()
-              restoreOptimistic = (): void => {
-                undoDraftClear?.()
-                if (scope) {
-                  restoreSentAttachments(scope, pendingAll)
-                }
-              }
+              restoreOptimistic = (): void => undoSendStart(undoDraftClear)
               const seededLaunchDraft = readSeededLaunchDraft()
               // A queue edit can leave the whole recalled queue on the agent, and the
               // draft mirror has typed this caption onto the line. One Ctrl+U clears

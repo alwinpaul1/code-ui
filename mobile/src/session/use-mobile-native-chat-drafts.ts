@@ -1,5 +1,5 @@
 import { stripMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
-import { clearDraftAtSendStartWith } from './mobile-native-chat-draft-send-start'
+import { clearDraftAtSendStartWith, type UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useMobileNativeChatDraftPersistence } from './use-mobile-native-chat-draft-persistence'
 import { useMobileNativeChatImagePreviewPersistence } from './use-mobile-native-chat-image-preview-persistence'
@@ -98,7 +98,7 @@ export function useMobileNativeChatDrafts(args: {
   /** Put the text back after a definite rejection, after whatever the composer holds now. */
   restoreRejectedDraft: (origin: MobileNativeChatSendOrigin, text: string) => void
   /** Clear the composer at send start; `images` also echoes at once — see clearDraftAtSendStartWith. */
-  clearDraftAtSendStart: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
+  clearDraftAtSendStart: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   /** Returns the new pending echo's id (for a later removePending), or null if none was added. */
   acceptSend: (origin: MobileNativeChatSendOrigin, text: string, images?: string[], imagePaths?: string[]) => string | null
   holdUnconfirmedSend: (

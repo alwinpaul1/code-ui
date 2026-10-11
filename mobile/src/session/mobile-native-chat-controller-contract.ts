@@ -1,3 +1,4 @@
+import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
@@ -225,7 +226,7 @@ export type MobileNativeChatController = {
    *  body share one budget instead of holding the composer for two. */
   /** Clears the composer as an image send starts; returns the undo for a
    *  failed paste. `images` also adds the optimistic bubble in this same call. */
-  beginNativeChatImageSend: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
+  beginNativeChatImageSend: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],
