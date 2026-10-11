@@ -176,7 +176,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(onEditAttachment).not.toHaveBeenCalled()
     expect(onRemoveAttachment).not.toHaveBeenCalled()
     expect(chipPictures(screenNow)).toEqual(['file:///a.jpg'])
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
   })
 
   it.each(SCHEMES)('opens the photo that was tapped, and marks up that one, among several (%s)', (scheme) => {
@@ -374,7 +374,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     expect(spinner?.props.color).toBe(PALETTE[scheme].text)
     // Nothing to mark up again while the marks upload, but the remove badge
     // stays, as the Claude app keeps it on a chip in every state (g330.b).
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
     tap(thumbnails(screenNow)[0])
     expect(pictureInViewer(screenNow)).toBe('data:image/png;base64,ZZZZ')
     expect(pressables(screenNow, 'Edit image')).toHaveLength(0)
@@ -385,7 +385,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
       await vi.waitFor(() => expect(uploadRings(screenNow)).toHaveLength(0))
     })
     expect(chipPictures(screenNow)).toEqual(['data:image/png;base64,ZZZZ'])
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(1)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(1)
     expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]).toEqual([
       expect.objectContaining({ id: 'img-1', path: '/tmp/a-marked.png', previewUri: 'data:image/png;base64,ZZZZ' })
     ])
@@ -522,8 +522,12 @@ describe('a chip whose upload failed', () => {
     expect(retry!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].danger })
     const icon = retry!.findAll((node) => String(node.type) === 'RotateCcw')[0]
     expect(icon?.props.color).toBe(PALETTE[scheme].onDanger)
-    expect(pressables(screenNow, 'Remove image')).toHaveLength(2)
+    expect(pressables(screenNow, 'Remove attachment')).toHaveLength(2)
     expect(screenNow.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(0)
+    // Read out as the Claude app reads its failed tile (ccr_upload_failed).
+    expect(
+      screenNow.root.findAll((node) => String(node.type) === 'View' && node.props.accessibilityLabel === 'Upload failed')
+    ).toHaveLength(1)
   })
 
   it('sends the picture again from the retry', () => {
@@ -535,7 +539,7 @@ describe('a chip whose upload failed', () => {
   it('takes it out of the strip from the remove badge', () => {
     const onRemoveAttachment = vi.fn()
     const screenNow = draw('dark', { attachments: [FAILED], onRemoveAttachment })
-    tap(pressables(screenNow, 'Remove image')[0])
+    tap(pressables(screenNow, 'Remove attachment')[0])
     expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-9')
   })
 
@@ -565,7 +569,7 @@ describe('a chip still uploading', () => {
       renderer = create(screen(scheme, { attachments: [UPLOADING], onRemoveAttachment }))
     })
     expect(renderer!.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(1)
-    const [remove] = pressables(renderer!, 'Remove image')
+    const [remove] = pressables(renderer!, 'Remove attachment')
     expect(remove).toBeDefined()
     expect(remove!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].text })
     tap(remove)

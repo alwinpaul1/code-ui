@@ -186,6 +186,7 @@ export function MobileNativeChatAttachmentChips({
               // itself is kept by chip id (mobile-native-chat-upload-retry.ts).
               <View
                 pointerEvents="box-none"
+                accessibilityLabel="Upload failed"
                 style={{
                   position: 'absolute',
                   top: 0,
@@ -221,7 +222,8 @@ export function MobileNativeChatAttachmentChips({
               // (g330.b): a photo on its way out can still be taken back. It
               // comes after the ring in the tree, so it paints over it.
               <Pressable
-                accessibilityLabel={isFile ? 'Remove file' : 'Remove image'}
+                // The Claude app's words for it (ccr_remove_attachment).
+                accessibilityLabel="Remove attachment"
                 // Inset inside the chip: Android drops touches outside the parent's
                 // bounds, so an overhanging badge would lose part of its tap target.
                 style={{

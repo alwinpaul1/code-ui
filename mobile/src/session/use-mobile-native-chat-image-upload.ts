@@ -153,6 +153,8 @@ export function useMobileNativeChatImageUpload(args: {
       // stopped early is only known then, and the note reads it off every frame.
       const uploadedImages: UploadedNativeChatImage[] = []
       let settledAny = false
+      // A picture's own upload failed and its chip stayed, failed, with a retry.
+      let chipFailed = false
       let uploadError: unknown = null
       try {
         await uploadMobileNativeChatImages(source, {
@@ -171,7 +173,10 @@ export function useMobileNativeChatImageUpload(args: {
             onImagesUploaded(scope, [{ ...image, batch }])
           },
           onImageFailed: onImageFailed
-            ? (image, _error, retry) => onImageFailed(scope, { ...image, batch }, retry)
+            ? (image, _error, retry) => {
+                chipFailed = true
+                onImageFailed(scope, { ...image, batch }, retry)
+              }
             : undefined,
           retryConnection: () => liveConnectionRef.current,
           // Counted live, so two picks landing together still stop at the limit.
@@ -267,16 +272,18 @@ export function useMobileNativeChatImageUpload(args: {
           // the same "too large" story stands, with a short reason (never the
           // raw native exception text) appended.
           showToast(
-            `File too large to attach (18 MB max) — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
+            `File size exceeds 18 MB limit — the video ${describeVideoFrameExtractionFailure(uploadError)}`,
             1500
           )
           return
         }
+        // The Claude app's words (chat_input_file_too_large, ccr_upload_failed),
+        // with Orca's own cap: its slot RPCs take 24 MiB of base64, 18 MB of file.
         if (message === CLIPBOARD_IMAGE_TOO_LARGE_ERROR) {
-          showToast('File too large to attach (18 MB max)', 1500)
+          showToast('File size exceeds 18 MB limit', 1500)
           return
         }
-        showToast('Attach failed', 1500)
+        showToast(chipFailed ? 'Upload failed' : 'Attach failed', 1500)
       }
     },
     [
