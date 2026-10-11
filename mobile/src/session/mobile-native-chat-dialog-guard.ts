@@ -2,6 +2,7 @@ import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
 import { claudeComposerLive } from './claude-composer-screen'
 import { codexComposerLive } from './codex-composer-screen'
 import { lookAtScreen } from './mobile-native-chat-screen-look'
+import { MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS } from './mobile-native-chat-send-readiness'
 import { replyIsScreen, terminalScreenLinesRead } from './mobile-terminal-ask-about-screen-operations'
 
 export const SEND_UNDER_DIALOG_REFUSAL = 'Not sent: a prompt is waiting. Answer it first.'
@@ -229,10 +230,52 @@ export async function readSendUnderDialogRefusal(args: {
   if (!wantsBox || !replyIsScreen(seen.reply)) {
     return null
   }
-  if (args.agent === 'codex') {
-    return codexComposerLive(seen.lines) ? null : SEND_WITHOUT_CODEX_COMPOSER_REFUSAL
+  const codex = args.agent === 'codex'
+  const live = codex ? codexComposerLive : claudeComposerLive
+  // A read can catch the agent between erasing its bottom area and drawing it again: with
+  // background agents Claude repaints it every second, and one such read refused a live box
+  // (2026-10-11, Claude Code 2.1.296). A shell or transcript mode stays; a repaint does not.
+  let lines = seen.lines
+  let looks = 1
+  const budgetEnd = (args.deadline ?? Date.now() + 15_000) - MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS
+  while (!live(lines) && looks < BOX_LOOKS && Date.now() + BOX_RELOOK_PAUSE_MS < budgetEnd) {
+    await new Promise((resolve) => setTimeout(resolve, BOX_RELOOK_PAUSE_MS))
+    const again = await lookAtScreen({ ...args, deadline: budgetEnd + MOBILE_NATIVE_CHAT_SEND_WRITE_RESERVE_MS }, false)
+    looks += 1
+    if (again.kind !== 'read' || !replyIsScreen(again.reply)) {
+      break
+    }
+    if (terminalDialogOnScreen(again.lines, args.agent)) {
+      return SEND_UNDER_DIALOG_REFUSAL
+    }
+    lines = again.lines
   }
-  return claudeComposerLive(seen.lines) ? null : SEND_WITHOUT_COMPOSER_REFUSAL
+  if (live(lines)) {
+    return null
+  }
+  // The one line a refusal leaves behind says what the screen showed (no words of it).
+  console.warn(`[send-look] no ${codex ? 'codex' : 'claude'} input box after ${looks} looks: ${describeScreenForLog(lines)}`)
+  return codex ? SEND_WITHOUT_CODEX_COMPOSER_REFUSAL : SEND_WITHOUT_COMPOSER_REFUSAL
+}
+
+/** How many reads a send gives a screen that shows no input box before it refuses. */
+const BOX_LOOKS = 3
+const BOX_RELOOK_PAUSE_MS = 400
+
+/**
+ * The shape of a screen with no input box, for the log: how many rows, where the input rows and
+ * rules are, and the rows at column 0 under the last rule. Glyphs and lengths only, never the
+ * words on screen (they are the user's conversation).
+ */
+export function describeScreenForLog(lines: readonly string[]): string {
+  const inputRows = lines.flatMap((row, index) => (/^[❯›!](?:\s|$)/.test(row) ? [index] : []))
+  const rules = lines.flatMap((row, index) => (/[─━]{3}/.test(row) ? [index] : []))
+  const lastRule = rules.at(-1) ?? -1
+  const unindented = lines
+    .slice(lastRule + 1)
+    .flatMap((row, offset) => (row.trim() !== '' && !row.startsWith('  ') ? [`${lastRule + 1 + offset}:${JSON.stringify(row.slice(0, 2))}/${row.length}`] : []))
+  const tail = lines.slice(-6).map((row) => (row.trim() === '' ? '_' : `${JSON.stringify(row.trimStart().slice(0, 1))}${row.length - row.trimStart().length}/${row.length}`))
+  return `${lines.length} rows; input rows [${inputRows.join(',')}]; rules [${rules.join(',')}]; column-0 rows under the last rule [${unindented.join(' ')}]; last rows ${tail.join(' ')}`
 }
 
 /** Runs `look`, says its refusal through `report`, and answers whether the
