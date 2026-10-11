@@ -1,5 +1,5 @@
 // S2 of docs/claude-app-parity-gaps.md: a send's bubble is dimmed (50%, the Claude app's
-// pending_message) while the desktop has not taken it, full strength once it has. No "Sending"
+// pending_message) until the desktop acks its write, full strength from then. No "Sending"
 // label: the user removed it on 2026-10-10 and has not asked for it back.
 
 import { readFileSync } from 'node:fs'
@@ -43,6 +43,8 @@ describe('a send’s bubble while the desktop has not taken it', () => {
   it.each(['light', 'dark'] as const)('is dimmed to half while on its way, and full once taken or failed (%s)', (scheme) => {
     expect(opacityOf('sending', scheme)).toBe(PENDING_SEND_DIM_OPACITY)
     expect(PENDING_SEND_DIM_OPACITY).toBe(0.5)
+    // Taken: the desktop acked its write and Claude's record is still out (S2, 2026-10-12).
+    expect(opacityOf('taken', scheme)).toBe(1)
     expect(opacityOf(undefined, scheme)).toBe(1)
     expect(opacityOf('failed', scheme)).toBe(1)
   })

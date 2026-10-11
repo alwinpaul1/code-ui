@@ -23,7 +23,8 @@ private const val TAG = "OrcaSelectionCopy"
  * A Text's own selection menu, with Copy and Share giving each code pill's words in place of its
  * U+FFFC (PillCopy.kt). Every other item, and Copy or Share of a selection that holds no pill,
  * goes to the Text's menu untouched, as does anything that fails here: the worst this can do is
- * the copy the Text would have made anyway.
+ * the copy the Text would have made anyway. The chat's menu shows no Share (ChatSelectionMenu.kt
+ * wraps this one); Share is kept for a menu that could not be trimmed.
  */
 internal class SelectionCopyActionModeCallback(
   private val textView: TextView,

@@ -24,7 +24,7 @@ import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { CLEAR_NOT_WRITTEN, writeChatSend } from './mobile-native-chat-send-write'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
-import { retireOutboxSend } from './native-chat-outbox-sends'; import { noteSendStage, timeSendWrites } from './native-chat-send-timing'
+import { noteOutboxSendAcked, retireOutboxSend } from './native-chat-outbox-sends'; import { noteSendStage, timeSendWrites } from './native-chat-send-timing'
 import { openSendGateOutbox } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
@@ -246,7 +246,9 @@ export function useMobileNativeChatMessageSend(args: {
         typesCodexCommand,
         seed: seededLaunchDraft,
         residue: mobileNativeChatInputResidue(handle),
-        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current, sendId: origin.outboxId
+        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current, sendId: origin.outboxId,
+        // The phone's ack: the bubble's dim ends here, not at Claude's record (S2).
+        onBodyAcked: () => noteOutboxSendAcked(origin.outboxId)
       }))
       if (written.kind === 'stopped') {
         // Refused before the body, or Claude declined it. Nothing more is typed,
@@ -282,8 +284,12 @@ export function useMobileNativeChatMessageSend(args: {
       // (its row, or its copy of the prompt) already shows the message. Never the screen.
       const raced = outcome === 'rejected' && syncComposer && classification === 'chat' && sendOnRecord?.(origin, text) === true
       if (outcome === 'rejected' && !raced) {
+        // Words back with a Retry, as the Claude app's snackbar offers on a failed POST. A Retry is
+        // a new press: its clear takes any of these words the refused write left on the line. A
+        // recovery resend's words stay out of the box ("Not sent" on its bubble), and a photo send's
+        // undo is its own (the image hook's), so neither offers one here.
         if (syncComposer) { restoreRejectedDraft(origin, draftText) }
-        report(notSent())
+        if (syncComposer && !origin.outboxRecovery && !images?.length) { report(notSent(), { retry: true }) } else { report(notSent()) }
         return 'rejected'
       }
       if (classification === 'chat') {

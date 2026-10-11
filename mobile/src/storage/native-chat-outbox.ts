@@ -67,6 +67,10 @@ export type NativeChatOutboxEntry = {
   /** Handed to the outbox by a refusal before anything was written (S4): until an automatic
    *  send of it starts (`lastAttemptAt`), it cannot have landed, whatever the transcript shows. */
   unwritten?: true
+  /** The desktop answered a write of it (the `terminal.send` of its body): its bubble is drawn
+   *  at full strength from here, as the Claude app's pending row is once its POST is acked. The
+   *  entry still waits for Claude's record of it to leave the outbox (delivery on record). */
+  hostAcked?: true
 }
 
 export type NativeChatOutboxRoute = {

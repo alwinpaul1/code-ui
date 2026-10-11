@@ -171,6 +171,18 @@ export function retireOutboxSend(id: string | undefined): Promise<boolean> {
   )
 }
 
+/**
+ * The desktop answered the send's write (S2): its bubble comes out of its dim now, as the Claude
+ * app's pending row does at its POST's ack, while the entry keeps waiting for Claude's record of
+ * it. Nothing for an entry that has already left, or was marked already.
+ */
+export function noteOutboxSendAcked(id: string | undefined): void {
+  const entry = findOutboxEntry(id)
+  if (entry && !entry.hostAcked) {
+    void patchOutboxEntry(entry.id, { hostAcked: true })
+  }
+}
+
 /** Merges `patch` into the entry; resolves whether it reached the disk. */
 export function patchOutboxEntry(id: string, patch: Partial<NativeChatOutboxEntry>): Promise<boolean> {
   return changeNativeChatOutbox((current) =>

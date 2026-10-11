@@ -1,12 +1,15 @@
 import { requireNativeViewManager, requireOptionalNativeModule } from 'expo-modules-core'
 import type { ComponentType, ReactNode } from 'react'
-import type { ViewProps } from 'react-native'
+import { processColor, type ViewProps } from 'react-native'
+import { useTheme } from '../theme/theme-context'
+import { chatSelectionColors } from './chat-selection-colors'
 import { encodePillCopyNativeId, SELECTION_COPY_MODULE } from './markdown-pill-copy-id'
 
 /**
  * Android (Metro picks this file over markdown-selection-copy.tsx): a Markdown document is wrapped
- * in modules/orca-selection-copy's view, whose Texts copy a code pill as its words instead of
- * U+FFFC (SelectionCopyRootView.kt). Each pill's View carries its span on its nativeID
+ * in modules/orca-selection-copy's view, whose Texts select as the Claude app's do: a menu of only
+ * Copy and Select all, handles and highlight in the theme's accent (chat-selection-colors.ts),
+ * and a code pill copied as its words instead of U+FFFC (SelectionCopyRootView.kt). Each pill's View carries its span on its nativeID
  * (markdown-pill-copy-id.ts), which is where that copy reads it.
  *
  * It wraps the document's own root View rather than stand in for it. expo-modules-core 57.0.16
@@ -19,20 +22,45 @@ import { encodePillCopyNativeId, SELECTION_COPY_MODULE } from './markdown-pill-c
  * The module ships in the same APK as this JavaScript. Were it ever missing, the document is not
  * wrapped, and a Copy keeps U+FFFC as before, rather than mount a view that is not there.
  */
-function selectionCopyView(): ComponentType<ViewProps> | null {
+type SelectionCopyViewProps = ViewProps & {
+  /** Android colour ints (processColor); absent, the platform's colours. */
+  selectionHandleColor?: number
+  selectionHighlightColor?: number
+}
+
+function selectionCopyView(): ComponentType<SelectionCopyViewProps> | null {
   if (requireOptionalNativeModule(SELECTION_COPY_MODULE) === null) {
     console.warn(
       `${SELECTION_COPY_MODULE} is not in this build: a Copy from a Markdown Text keeps U+FFFC for each code pill`
     )
     return null
   }
-  return requireNativeViewManager<ViewProps>(SELECTION_COPY_MODULE)
+  return requireNativeViewManager<SelectionCopyViewProps>(SELECTION_COPY_MODULE)
 }
 
 const SelectionCopyView = selectionCopyView()
 
+/** processColor gives an Android colour int for any colour the theme writes; anything it cannot
+ *  read is left out, and the native view keeps the platform's colour for it. */
+function colorInt(color: string | null): number | undefined {
+  const processed = color === null ? null : processColor(color)
+  return typeof processed === 'number' ? processed : undefined
+}
+
 export function MarkdownSelectionRoot({ children }: { children: ReactNode }): ReactNode {
-  return SelectionCopyView ? <SelectionCopyView>{children}</SelectionCopyView> : children
+  const { colors } = useTheme()
+  if (!SelectionCopyView) {
+    return children
+  }
+  const selection = chatSelectionColors(colors)
+  return (
+    <SelectionCopyView
+      selectionHandleColor={colorInt(selection.handle)}
+      selectionHighlightColor={colorInt(selection.highlight)}
+    >
+      {children}
+    </SelectionCopyView>
+  )
 }
 
 export function pillCopyNativeId(span: string, piece: number): string | undefined {
