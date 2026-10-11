@@ -1,4 +1,9 @@
-// The Background tasks sheet laid out like the Claude Android app's (user screenshot, 2026-10-10).
+// The Background tasks sheet laid out like the Claude Android app's (user screenshot, 2026-10-10;
+// re-measured against the Claude app beside Code UI 0.9.128 on 2026-10-11, same phone, same
+// moment: Claude's titles are smaller and semibold, its kind word is in the primary ink, its Stop
+// is a small 16 dp ring level with the title's first line, its shell glyph is a window with a
+// code mark, its cards sit further in from the edges, further apart, and its section headers are
+// caption-sized with a thin chevron).
 //
 // Each card is darker than the sheet, leads with the kind's glyph (a console for a shell, the hollow
 // diamond for an agent), puts the title in body text, and under it "Shell  41s" while running or
@@ -12,7 +17,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { darkColors, lightColors } from '../theme/tokens'
+import { darkColors, fontFamily, lightColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 
@@ -33,6 +38,7 @@ vi.mock('lucide-react-native', () => ({
   CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
@@ -157,7 +163,9 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
     it(`draws each card darker than the sheet, with the kind's glyph and its meta line (${scheme})`, async () => {
       await mount(scheme)
       expect(flatStyle(card('pnpm dev --port 8081')).backgroundColor).toBe(palette.bgSunken)
-      expect(card('pnpm dev --port 8081').findAllByType('SquareTerminal' as never)).toHaveLength(1)
+      // Claude's shell glyph is a window broken by a code mark: lucide's SquareCode is the nearest.
+      expect(card('pnpm dev --port 8081').findAllByType('SquareCode' as never)).toHaveLength(1)
+      expect(card('pnpm dev --port 8081').findAllByType('SquareTerminal' as never)).toHaveLength(0)
       expect(card('Audit the release notes').findAllByType('Diamond' as never)).toHaveLength(1)
       const all = texts()
       expect(all).toEqual(expect.arrayContaining(['Shell', '41s', 'Agent', '13m 18s', 'Completed', 'Failed']))
@@ -174,17 +182,53 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
       expect(stop).toBeDefined()
       expect(flatStyle(stop).alignSelf).toBe('flex-start')
       // A circle outline holding a filled square, in the muted foreground.
-      const ring = stop.findAll((node) => flatStyle(node).borderRadius === 12 && flatStyle(node).borderWidth !== undefined)
-      expect(ring.length).toBeGreaterThan(0)
-      expect(flatStyle(ring[0]!).borderColor).toBe(palette.textSecondary)
-      const square = stop.findAll((node) => flatStyle(node).backgroundColor === palette.textSecondary)
-      expect(square.length).toBeGreaterThan(0)
+      // A 16 dp ring holding a 6 dp square, in the title's ink, as Claude draws it.
+      const ring = stop.findAll((node) => flatStyle(node).borderWidth !== undefined)
+      expect(ring.length).toBe(1)
+      expect(flatStyle(ring[0]!)).toMatchObject({ width: 16, height: 16, borderRadius: 8, borderColor: palette.text })
+      const square = stop.findAll((node) => flatStyle(node).backgroundColor === palette.text)
+      expect(square.map((node) => [flatStyle(node).width, flatStyle(node).height])).toEqual([[6, 6]])
       await act(async () => {
         stop.props.onPress()
       })
       expect(onStopTask.mock.calls[0]?.[0]).toBe('sh-1')
       expect(stopOf('pnpm test')).toBeUndefined()
       expect(stopOf('pnpm lint')).toBeUndefined()
+    })
+
+    it(`draws Claude's smaller semibold title, the kind word in the title's ink, and the card's measured insets (${scheme})`, async () => {
+      await mount(scheme)
+      const title = renderer!.root.findAllByType('Text' as never).find((node) => node.props.children === 'pnpm dev --port 8081')!
+      expect(flatStyle(title)).toMatchObject({ fontSize: 14, lineHeight: 19, fontFamily: fontFamily.semibold, color: palette.text })
+      const kind = renderer!.root.findAllByType('Text' as never).find((node) => node.props.children === 'Shell')!
+      expect(flatStyle(kind)).toMatchObject({ fontSize: 12, color: palette.text })
+      const time = renderer!.root.findAllByType('Text' as never).find((node) => node.props.children === '41s')!
+      expect(flatStyle(time)).toMatchObject({ fontSize: 12, color: palette.textMuted })
+      expect(flatStyle(card('pnpm dev --port 8081'))).toMatchObject({
+        borderRadius: 14,
+        paddingTop: 16,
+        paddingBottom: 16,
+        paddingLeft: 16,
+        paddingRight: 24
+      })
+      // The cards stand 16 dp apart, and the list sits 12 dp in from the drawer's own edge.
+      let list: ReactTestInstance | null = card('pnpm dev --port 8081').parent
+      while (list && (typeof list.type !== 'string' || flatStyle(list).gap === undefined)) {
+        list = list.parent
+      }
+      expect(flatStyle(list!).gap).toBe(16)
+      expect(flatStyle(renderer!.root.findAllByType('View' as never)[0]!).paddingHorizontal).toBe(12)
+    })
+
+    it(`heads each section in the caption size and muted ink, with a thin chevron (${scheme})`, async () => {
+      await mount(scheme)
+      const heading = renderer!.root.findAllByType('Text' as never).find((node) => node.props.children === 'Running')!
+      expect(flatStyle(heading)).toMatchObject({ fontSize: 12, color: palette.textMuted, fontFamily: fontFamily.regular })
+      const chevrons = renderer!.root.findAllByType('ChevronDown' as never)
+      expect(chevrons.length).toBe(2)
+      for (const chevron of chevrons) {
+        expect(chevron.props).toMatchObject({ size: 16, strokeWidth: 1.5, color: palette.textMuted })
+      }
     })
 
     it(`shows no View transcript and no card tap on a running Claude subagent (${scheme})`, async () => {

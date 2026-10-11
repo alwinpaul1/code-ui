@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 
 /** One Stop as the sheet sends it: resolves true only when the host confirmed the task stopped
  *  (`cancelled: true`), false for a refusal, a lost answer or nothing stopped. `report`, when given,
- *  is where this Stop's failure is said (Stop all collects them per task). */
+ *  is where this Stop's failure is said. */
 export type MobileBackgroundTaskStop = (taskId: string, report?: (message: string) => void) => Promise<boolean>
 
 const NO_TASKS: ReadonlySet<string> = new Set()

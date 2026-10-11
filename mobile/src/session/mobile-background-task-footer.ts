@@ -16,9 +16,11 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 //
 // So it is a cap for the lead's named shells always (the lead's own can never
 // exceed the whole registry's), and a reading once taken keeps capping the
-// shells launched before it. It is the floor for the lead's shells while no
-// subagent runs; while one does, the floor is what the lead was last seen to
-// have alone, since those shells can only finish.
+// shells launched before it. It is never a floor: it also counts shells that
+// subagents leave running after they finish, which nothing the phone reads
+// names and the Claude app does not list (session 0954729d, 2026-10-11: four
+// such shells held the pill at "· 4 shells" for hours, and the phone padded a
+// nameless "Background shell" row and "+2 shells in subagents" out of them).
 
 /** A footer reading kept after the footer left the screen: at `at` (phone
  *  clock) no more than `count` shells were running, so no more than that many
@@ -35,21 +37,17 @@ export type ShellCountFit = {
   live: number | null
   /** The last reading, for while `live` is null. */
   held?: HeldShellCount | null
-  /** Whether any subagent is running, the session's own or not: then the
-   *  footer holds shells the phone can never name. */
-  subagentRunning: boolean
-  /** The last reading taken while no subagent ran, when every shell in it was
-   *  the lead's. While one runs, the lead's unnamed shells are those — they
-   *  can only finish — and no more than the footer still counts. */
-  leadOnly?: HeldShellCount | null
 }
 
-/** Fits the phone's named list to the agent's footer count, both ways.
+/** Fits the phone's named list DOWN to the agent's footer count.
  *
- *  Up (2026-09-14): a shell launched further back than the beacon's tail can
- *  reach, on a huge session, is shown as an unnamed running shell rather than
- *  dropped, so the count matches the desk. Only from a live reading, and
- *  while a subagent runs only up to what the lead was last seen to have.
+ *  Not up: from 2026-09-14 a footer counting more than the phone named padded
+ *  the list with nameless "Background shell" rows, for lead shells launched
+ *  above the beacon's tail. The pill counts every shell in the process, and a
+ *  subagent's timed-out command moved to the background runs on after its
+ *  agent hands back, so the padding was shells the lead never started and the
+ *  Claude app never lists. A row that names nothing is not drawn
+ *  (2026-10-11).
  *
  *  Down (2026-09-20): when the footer counts FEWER, some named shell finished
  *  unseen — every mid-turn completion on a hand-started tab, where there is no
@@ -75,8 +73,7 @@ export function fitToOnScreenShellCount(tasks: BackgroundTasks, now: number, fit
       // the row to finished and back a second later.
       return retireOldest(tasks, named - fit.live, (task) => task.startedAt === null || now - task.startedAt >= COUNT_RETIRE_GRACE_MS)
     }
-    const floor = fit.subagentRunning ? leadFloor(tasks, fit.leadOnly ?? null, fit.live) : fit.live
-    return named < floor ? pad(tasks, floor - named) : tasks
+    return tasks
   }
   const held = fit.held ?? null
   if (held === null) {
@@ -85,24 +82,6 @@ export function fitToOnScreenShellCount(tasks: BackgroundTasks, now: number, fit
   const readBefore = (task: BackgroundTask) => task.startedAt === null || task.startedAt <= held.at - COUNT_RETIRE_GRACE_MS
   const eligible = tasks.running.filter((task) => task.kind === 'shell' && readBefore(task)).length
   return eligible > held.count ? retireOldest(tasks, eligible - held.count, readBefore) : tasks
-}
-
-/** How many shells the lead can have running while a subagent runs: its
- *  named ones, plus at most the UNNAMED ones it had when the footer last
- *  counted its shells alone — those can only finish. That is the reading less
- *  every named shell launched before it, running or finished since (the
- *  footer paints nothing at 0, so a reading never learns they ended); a named
- *  shell that had already finished by then only makes the figure smaller.
- *  Never more than the footer counts now. None known, none padded. */
-function leadFloor(tasks: BackgroundTasks, leadOnly: HeldShellCount | null, live: number): number {
-  const named = tasks.running.filter((task) => task.kind === 'shell').length
-  if (leadOnly === null) {
-    return named
-  }
-  const namedBefore = [...tasks.running, ...tasks.finished].filter(
-    (task) => task.kind === 'shell' && !task.id.startsWith('onscreen-shell-') && task.startedAt !== null && task.startedAt <= leadOnly.at
-  ).length
-  return Math.min(live, named + Math.max(0, leadOnly.count - namedBefore))
 }
 
 function retireOldest(tasks: BackgroundTasks, surplus: number, retirable: (task: BackgroundTask) => boolean): BackgroundTasks {
@@ -124,18 +103,6 @@ function retireOldest(tasks: BackgroundTasks, surplus: number, retirable: (task:
   return { running, finished: [...retired.toReversed(), ...tasks.finished] }
 }
 
-function pad(tasks: BackgroundTasks, missing: number): BackgroundTasks {
-  const filler: BackgroundTask[] = Array.from({ length: missing }, (_unused, index) => ({
-    id: `onscreen-shell-${index}`,
-    kind: 'shell',
-    title: 'Background shell',
-    status: 'running',
-    startedAt: null,
-    elapsedMs: null
-  }))
-  return { running: [...tasks.running, ...filler], finished: tasks.finished }
-}
-
 /** How many of the shells the footer counts are not the lead's, once the
  *  named list has been fitted to it: shells running inside subagents (a
  *  reviewer's included, as the footer counts them), which only those agents'
@@ -144,18 +111,14 @@ function pad(tasks: BackgroundTasks, missing: number): BackgroundTasks {
  *  started none (docs/subagent-task-visibility.md).
  *
  *  Zero whenever the footer is not on screen, or a monitor runs (the pill's
- *  wording is then unknown, as above). While no subagent runs the fit pads
- *  the lead up to the footer, so nothing is left over. A count only: nothing
- *  the phone receives names these shells or says what they run. */
+ *  wording is then unknown, as above). A count only, and an upper bound: it
+ *  also holds shells a finished subagent left running. It is used to retire
+ *  listed subagent shells beyond it (`mobile-subagent-activity.ts`), never
+ *  drawn: the sheet's "+N shells in subagents" line is gone (2026-10-11). */
 export function shellsOutsideLead(fitted: BackgroundTasks, live: number | null): number {
   if (live === null || fitted.running.some((task) => task.kind === 'monitor')) {
     return 0
   }
   const leadShells = fitted.running.filter((task) => task.kind === 'shell').length
   return Math.max(0, live - leadShells)
-}
-
-/** The sheet's muted line for those shells. */
-export function subagentShellsLabel(count: number): string {
-  return `+${count} ${count === 1 ? 'shell' : 'shells'} in subagents`
 }

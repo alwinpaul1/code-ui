@@ -203,7 +203,7 @@ describe('a remembered completion row and a later launch under the same descript
   it('retires nothing, and throws nothing, when there are no launches at all', () => {
     const tasks = deriveBackgroundTasks([], T + 150_000, pane, { screenCompletions: rowSeenAfterFirstRun })
     expect(tasks.finished).toEqual([])
-    expect(tasks.running.map((task) => task.id)).toEqual(['host-monitoring'])
+    expect(tasks.running).toEqual([])
   })
 
   it('retires nothing for a row still waiting for the launch it announced', () => {

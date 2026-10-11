@@ -35,6 +35,7 @@ vi.mock('lucide-react-native', () => ({
   CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
@@ -106,7 +107,7 @@ describe('the background tasks sheet across a disconnect', () => {
     it(`says "Status unknown" on running rows and offers no Stop while disconnected (${scheme})`, async () => {
       await show({ connected: true, lastConnectedAt: 1 }, scheme)
       expect(texts()).toEqual(expect.arrayContaining(['41s', '5s']))
-      expect(stopLabels()).toEqual(['Stop all running tasks', 'Stop pnpm dev', 'Stop pnpm watch'])
+      expect(stopLabels()).toEqual(['Stop pnpm dev', 'Stop pnpm watch'])
 
       await show({ connected: false, lastConnectedAt: 1 }, scheme)
       const all = texts()

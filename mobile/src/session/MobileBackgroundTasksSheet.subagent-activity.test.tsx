@@ -16,6 +16,15 @@ import {
   probeBRecords,
   recordsThrough
 } from './fixtures/claude-subagent-transcripts-2.1.296'
+import {
+  NESTED_AFTER_LAUNCH_UUID,
+  NESTED_AGENT,
+  NESTED_AGENT_TITLE,
+  NESTED_LAUNCHED_AT,
+  NESTED_PARENT_AGENT,
+  NESTED_PARENT_TITLE,
+  nestedParentRows
+} from './fixtures/claude-nested-agent-2.1.296'
 
 const fakes = vi.hoisted(() => ({ client: null as RpcClient | null, focused: true }))
 
@@ -57,6 +66,7 @@ vi.mock('lucide-react-native', () => ({
   ListTree: 'ListTree',
   Sparkles: 'Sparkles',
   Square: 'Square',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
@@ -71,6 +81,7 @@ vi.mock('../transport/client-context-connection-metrics', () => ({
 import { MobileBackgroundTasksSheetBody } from './MobileBackgroundTasksSheet'
 import { MobileSubagentActivityFeeds } from './MobileSubagentActivityFeeds'
 import { resetSubagentActivityForTests } from './subagent-activity-store'
+import { resetFinishedSubagentRowsForTests } from './use-subagent-activity-watch'
 import { resetNativeChatTranscriptCacheForTests } from './mobile-native-chat-transcript-cache'
 
 // The two background agents of a real Claude Code 2.1.296 run
@@ -90,8 +101,15 @@ const row = (id: string, description: string): AgentSubagentSnapshot => ({
 })
 const agentStatus = { state: 'working' as const, subagents: [row(PROBE_A_AGENT, 'Sleep probe A'), row(PROBE_B_AGENT, 'Sleep probe B')] }
 
-function report(onScreenShellCount: number | null, finishedTaskIds: string[] = []): ActiveTabBackgroundTaskReport {
-  return { finishedTaskIds, runningTaskIds: null, runningTaskIdsAt: null, launchedTaskIds: [], onScreenShellCount }
+function report(onScreenShellCount: number | null, finishedTaskIds: string[] = [], ownAgentIds?: string[]): ActiveTabBackgroundTaskReport {
+  return {
+    finishedTaskIds,
+    runningTaskIds: null,
+    runningTaskIdsAt: null,
+    launchedTaskIds: [],
+    onScreenShellCount,
+    ...(ownAgentIds ? { agentProvenance: { ownAgentIds, preexistingAgentIds: [] } } : {})
+  }
 }
 
 type Subscription = { params: { sessionId: string; transcriptPath?: string }; emit: (frame: unknown) => void; closed: boolean }
@@ -129,6 +147,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
     resetSubagentActivityForTests()
+    resetFinishedSubagentRowsForTests()
     resetNativeChatTranscriptCacheForTests()
     subscriptions = []
     fakes.focused = true
@@ -158,6 +177,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     status?: typeof agentStatus
     footer?: number | null
     finished?: string[]
+    ownAgentIds?: string[]
   }) {
     return (
       <ThemeProvider initialPreference={props.scheme ?? 'light'}>
@@ -165,7 +185,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
         <MobileBackgroundTasksSheetBody
           messages={props.messages ?? []}
           agentStatus={props.status ?? agentStatus}
-          backgroundTaskReport={report(props.footer ?? null, props.finished)}
+          backgroundTaskReport={report(props.footer ?? null, props.finished, props.ownAgentIds)}
           subagentSource={props.open ? SOURCE : null}
         />
       </ThemeProvider>
@@ -209,6 +229,24 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop Start a 120-second background sleep')).toHaveLength(0)
   })
 
+  it('lists the agent a running agent launched as its own row, titled by its description, while the roster holds it', async () => {
+    const nestedStatus = {
+      state: 'working' as const,
+      subagents: [row(NESTED_PARENT_AGENT, NESTED_PARENT_TITLE), { ...row(NESTED_AGENT, ''), startedAt: NESTED_LAUNCHED_AT + 400 }]
+    }
+    vi.setSystemTime(NESTED_LAUNCHED_AT + 30_000)
+    // The lead's transcript launched only the parent, so the lead's own reader
+    // leaves the reviewer out; the parent's transcript shows its launch.
+    await mount({ open: true, status: nestedStatus, ownAgentIds: [NESTED_PARENT_AGENT] })
+    expect(readTree(renderer!).texts).not.toContain(NESTED_AGENT_TITLE)
+    answer(NESTED_PARENT_AGENT, nestedParentRows(NESTED_AFTER_LAUNCH_UUID))
+    const { texts, labels } = readTree(renderer!)
+    expect(texts).toContain(NESTED_AGENT_TITLE)
+    expect(texts).toContain('30s')
+    // The parent is in its `sleep 1; echo waiting` at that record, so it reads its step.
+    expect(labels).toContain(`${NESTED_PARENT_TITLE}, Running sleep 1; echo waiting`)
+  })
+
   it("moves A's shell out of Running once the status line reports it finished, with no footer count", async () => {
     // No footer reading at all; the beacon's done= names A's shell.
     await mount({ open: true, footer: null, finished: [PROBE_A_SHELL] })
@@ -249,6 +287,16 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     // The sheet closes: nothing is left reading.
     await act(async () => renderer!.update(tree({ open: false, status: onlyA })))
     expect(live()).toHaveLength(0)
+  })
+
+  it("keeps B's finished shell in Finished after B leaves the roster and its read stops, as the Claude app does", async () => {
+    await mount({ open: true })
+    answer(PROBE_B_AGENT, orcaTranscriptRows(recordsThrough(probeBRecords(), '1f61a477')))
+    expect(readTree(renderer!).texts).toContain('Start 200s sleep in background')
+    const onlyA = { state: 'working' as const, subagents: [row(PROBE_A_AGENT, 'Sleep probe A')] }
+    await act(async () => renderer!.update(tree({ open: true, status: onlyA })))
+    expect(live().map((entry) => entry.params.sessionId)).toEqual([`agent-${PROBE_A_AGENT}`])
+    expect(readTree(renderer!).texts).toContain('Start 200s sleep in background')
   })
 
   it('keeps the step and the shell rows through a read that fails after it answered', async () => {

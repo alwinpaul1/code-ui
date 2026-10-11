@@ -95,8 +95,8 @@ export function useClaudeTerminalTaskStop(args: {
         report?.(STOP_NO_TARGET)
         return false
       }
-      // Stops on one terminal run one after another (Stop all presses them
-      // together); a send or an answer holding the terminal turns one away.
+      // Stops on one terminal run one after another (two rows pressed in quick
+      // succession); a send or an answer holding the terminal turns one away.
       return inTurn(terminal, async () => {
         if (!acquireMobileNativeChatTerminalWrite(terminal)) {
           report?.(STOP_TERMINAL_BUSY)

@@ -100,7 +100,7 @@ export function subagentTranscriptTarget(args: {
   if (agent !== 'claude' || task.kind !== 'agent' || !validAgentId(task.id)) {
     return null
   }
-  // Rows the phone pads in for an unnamed shell carry ids of its own making.
+  // Ids of the phone's own making, from the unnamed rows it padded in until 2026-10-11.
   if (task.id.startsWith('onscreen-shell-') || task.id === 'host-monitoring') {
     return null
   }

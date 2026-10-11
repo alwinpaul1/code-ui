@@ -320,4 +320,72 @@ export function takeAnsweredCall<Call extends PendingCall>(
   return index !== -1 ? pending.splice(index, 1)[0] : pending.shift()
 }
 
+/** A background task's output file, as Claude Code names it in the launch
+ *  result: `<session tmp>/tasks/<id>.output`. */
+const TASK_OUTPUT_FILE = /\/tasks\/([A-Za-z0-9_-]+)\.output\b/g
+/** The line Claude Code writes last into a background task's output file when
+ *  the task ends: `[exited with code N]`, or `[killed]` for one that was
+ *  stopped (Claude Code 2.1.295–2.1.296; every one of the 195 ended tasks'
+ *  files in session 0954729d ends so, and none of the 4 still running did,
+ *  2026-10-11). A whole line, after the line number a Read result puts in
+ *  front, so a command that merely prints the words is not one. */
+const OUTPUT_TRAILER = /^(?:\s*\d+(?:\t|→))?\[(?:exited with code (-?\d+)|(killed))\]\s*$/
+
+/** The task a read of its own output file proves ended, and how: a Bash or
+ *  Read call naming exactly one task's output file, whose answer holds the end
+ *  trailer as a line of its own. Why: on a tab with no beacon, a shell that
+ *  ends while the lead works is announced only by records Orca's reader drops
+ *  (a queue-operation and an attachment), and the lead reading the output a
+ *  moment later is often the one sign of it the phone receives (session
+ *  0954729d: the 7h "running" gate, and all four such shells in that
+ *  transcript). A call naming two files proves nothing: one `cat a; tail b`
+ *  shows a's trailer above b's running tail (fixtures/claude-lead-shell-output-read.ts).
+ *  A failed answer, or one with no trailer line, proves nothing either. */
+export function outputReadEnding(
+  call: PendingCall,
+  answer: Pick<NativeChatToolResultBlock, 'output' | 'isError'>
+): { id: string; status: string } | null {
+  if ((call.name !== 'Bash' && call.name !== 'Read') || isFailedAnswer(answer)) {
+    return null
+  }
+  const named = new Set<string>()
+  for (const key of ['command', 'file_path']) {
+    for (const match of (readString(call.input, key) ?? '').matchAll(TASK_OUTPUT_FILE)) {
+      named.add(match[1]!)
+    }
+  }
+  const [id] = named
+  if (named.size !== 1 || id === undefined) {
+    return null
+  }
+  const trailer = answer.output
+    .split('\n')
+    .map((line) => OUTPUT_TRAILER.exec(line))
+    .findLast((match) => match !== null)
+  if (!trailer) {
+    return null
+  }
+  const status = trailer[2] ? 'stopped' : Number(trailer[1]) === 0 ? 'completed' : 'failed'
+  return { id, status }
+}
+
+/** Whether an answer can be trusted as this call's for `outputReadEnding`:
+ *  it names its call (a structured chat's), or it is a transcript's answer
+ *  that came while this was the only Bash or Read call waiting. Transcript
+ *  answers pair first in, first out, and parallel answers land in any order,
+ *  so with two reads in flight the ended task's trailer can be handed to the
+ *  running one's call (review of 59494020b). `pending` is the waiting list
+ *  before the answer takes its call. */
+export function soleOutputRead(pending: readonly PendingCall[], answer: Pick<NativeChatToolResultBlock, 'callId'>): boolean {
+  return answer.callId !== undefined || pending.filter((call) => call.name === 'Bash' || call.name === 'Read').length === 1
+}
+
+/** Whether a task's own command reads another task's output file (`tail -f
+ *  …/tasks/X.output`, an `until grep …; cat …/X.output` wait): its own output
+ *  can then hold X's end trailer while it runs on, so a read of it proves
+ *  nothing about its end (review of 59494020b). */
+export function quotesAnotherTaskOutput(command: string | undefined, id: string): boolean {
+  return [...(command ?? '').matchAll(TASK_OUTPUT_FILE)].some((match) => match[1] !== id)
+}
+
 export { INTERRUPTED }

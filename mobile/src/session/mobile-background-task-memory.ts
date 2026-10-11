@@ -76,8 +76,6 @@ export type SessionTaskEvidence = {
   lastStatus: { status: AgentStatusEntry; at: number } | null
   /** The last footer count seen, and when (phone clock). */
   lastShellCount: HeldShellCount | null
-  /** The last footer count seen while no subagent ran. */
-  leadOnlyShellCount: HeldShellCount | null
   lastPane: { state: AgentStatusState; stateStartedAt: number } | null
   /** Undefined until the phone has seen the pane working. */
   runBoundaryAt: number | null | undefined
@@ -93,7 +91,6 @@ export const EMPTY_SESSION_TASK_EVIDENCE: SessionTaskEvidence = {
   retiredTaskIds: [],
   lastStatus: null,
   lastShellCount: null,
-  leadOnlyShellCount: null,
   lastPane: null,
   runBoundaryAt: undefined
 }
@@ -134,10 +131,6 @@ export function rememberTaskEvidence(previous: SessionTaskEvidence, seen: Seen):
     vouchedCallKeys: placed ? rememberFinishedTaskIds(previous.vouchedCallKeys, placed.vouched) : previous.vouchedCallKeys,
     lastStatus: agentStatus ? { status: agentStatus, at: now } : previous.lastStatus,
     lastShellCount: onScreenShellCount === null ? previous.lastShellCount : { count: onScreenShellCount, at: now },
-    leadOnlyShellCount:
-      onScreenShellCount !== null && working !== null && working.length === 0
-        ? { count: onScreenShellCount, at: now }
-        : previous.leadOnlyShellCount,
     ...nextPane(previous, agentStatus)
   }
 }

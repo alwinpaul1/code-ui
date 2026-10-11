@@ -805,39 +805,45 @@ call, took the vouch from the real agent, which was then dropped from the count.
 ## Shells inside subagents (2026-10-10)
 
 The footer's "· N shells" counts a subagent's shells too. Once the named list is
-fitted to it, what is left over while a subagent runs is drawn as one muted
-line in the Running section ("+2 shells in subagents"). Probe, captured
-screens and limits: `docs/subagent-task-visibility.md`.
+fitted to it, what is left over while a subagent runs was drawn as one muted
+line in the Running section ("+2 shells in subagents"), until 2026-10-11 (see
+"Stale rows, nested agents and the Claude look" below: the line is gone).
+Probe, captured screens and limits: `docs/subagent-task-visibility.md`.
 
 Later the same day the sheet started reading each running agent's own
 transcript while it is open (`mobile-subagent-activity.ts`,
 `MobileSubagentActivityFeeds.tsx`): the agent's row is titled with its latest
 step ("Running cd /private/tmp && ls | head -3") and the shells it started are
 listed as rows of their own, under it while running, in Finished once over.
-The count line then holds only what is still unlisted. See "Reading the
-subagents' own transcripts" in `docs/subagent-task-visibility.md`.
+See "Reading the subagents' own transcripts" in
+`docs/subagent-task-visibility.md`.
 
 ## The card, laid out like the Claude app (2026-10-10)
 
 From the user's screenshot of the Claude Android app's Background tasks sheet (dark):
 
 - **The card** (`MobileBackgroundTaskCard.tsx`) is darker than the sheet (`bgSunken` on the
-  drawer's `bgPanel`, in both themes), leads with the kind's glyph (a terminal window, lucide
-  `SquareTerminal`, for a shell since 2026-10-11; a bare `>_` before; the
-  hollow diamond for an agent, Activity for a monitor, ListTree for a workflow), puts the title in
-  body text (two lines, then an ellipsis), and under it the kind and its live time ("Shell  41s",
-  "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone).
-- **Stop** (`MobileBackgroundTaskStopButton.tsx`): a round button at the card's top right, a circle
-  outline holding a filled square in the muted foreground, about 24 dp, on a running card only,
-  through the same per-task stop path. The workflow card uses the same button.
+  drawer's `bgPanel`, in both themes), leads with the kind's glyph (for a shell, lucide
+  `SquareCode` since the second pass of 2026-10-11, `SquareTerminal` earlier that day, a bare `>_`
+  before; the hollow diamond for an agent, Activity for a monitor, ListTree for a workflow), puts
+  the title in two lines at most, and under it the kind and its live time ("Shell  41s",
+  "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone). Sizes as
+  re-measured on 2026-10-11 below.
+- **Stop** (`MobileBackgroundTaskStopButton.tsx`): a round button level with the title's first
+  line, a circle outline holding a filled square, on a running card only, through the same
+  per-task stop path. The workflow card uses the same button.
 - **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
   (with the chevron on a finished one), were this fork's own addition and are gone at the user's
   request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
   conversation) is a different surface and is unchanged.
 
-## Stop all (2026-10-10)
+## Stop all (2026-10-10, removed 2026-10-11)
 
-The Running section's header carries a quiet "Stop all" at its right while at least one running
+Removed at the user's request on 2026-10-11 ("stop all and view transcript remove those", beside
+screenshots of the Claude app, whose Running header has nothing at its right). Each running row
+keeps its own Stop. What it was, for the record:
+
+The Running section's header carried a quiet "Stop all" at its right while at least one running
 row takes a Stop and is not already stopping (`use-mobile-background-tasks-stop-all.ts`). Each task
 goes through the same per-task stop as its own button, so the holds (Orca #26780) and the host's
 answers are the ones a single press gets. More than one task is confirmed first (a system dialog,
@@ -851,8 +857,8 @@ to a host with no per-row stop; this one is the user's own ask and works over th
 ## While the relay is down (2026-10-10)
 
 With no connection to the desktop nothing on the sheet is current, so a running row does not keep
-saying it runs: its time reads "Status unknown" (muted), it offers no Stop and the Running section
-offers no Stop all (a Stop could not be sent), and the section says "Status unknown —
+saying it runs: its time reads "Status unknown" (muted), it offers no Stop (a Stop could not be
+sent), and the section says "Status unknown —
 reconnecting". A finished row stays as it was: that is a fact already received. The connection is
 the controller's `connState` and `useLastConnectedAt(hostId)`, handed down as
 `nativeChatHostConnection` through the overlay, the view and the provider.
@@ -940,8 +946,9 @@ slow repaint would land on the input box; review), never to the input box (there
 lead; in the dialog and on the pill it does not, checked live). Enter never goes to the input box
 (it would submit what is in it, a prompt suggestion included). Two rows that could both be the
 target (the same command twice, labels cut to one prefix) are refused. A drive holds the chat's
-terminal write lock, and Stops on one terminal run one after another (Stop all presses them
-together, agents first, since an agent's Stop needs the pill a running shell keeps up).
+terminal write lock, and Stops on one terminal run one after another (rows pressed in quick
+succession; an agent's Stop needs the pill a running shell keeps up, so an agent pressed after the
+last shell has stopped is refused and says why).
 
 Which rows draw a Stop (`terminal-background-task-stops.ts`): every running shell, the lead's and
 the subagents' (the dialog lists both), and every running agent while the footer shows a shells
@@ -958,3 +965,107 @@ session into a background daemon, seen live) and `/tasks` (typed into the input 
 Limits: at 40 columns the footer drops the "← for agents" hint (at 48 it was cut to "← for…", still
 read), and then nothing is driven (the Stop says why). A multi-line command's dialog row was not captured; the row is
 matched by its first line or as a cut prefix, else refused.
+
+## Stale rows, nested agents and the Claude look (2026-10-11, second pass)
+
+Reported with side-by-side screenshots of one session at one moment (session 0954729d, Claude Code
+2.1.296, a hand-started `claude -r codeui`, so no launch flag and no beacon). The Claude app listed
+two running agents; Code UI 0.9.128 listed a lead shell "cd "…/Code UI/mobile" && exp…" running for
+7h 18m, the agent "Reliable sends, never dropped", a nameless "Background shell" row, and
+"+2 shells in subagents", and did not list "Opus regression review of outbox drainer", an agent
+"Reliable sends" had launched.
+
+### Why the 7h shell never left Running
+
+The shell (b1ycnvrjn, the full gate) ended at 00:34:45 while the lead worked. Every path the phone
+had to that end was shut:
+
+- **The notification.** A mid-turn completion is a `queue-operation` enqueue and a
+  `queued_command` attachment in the lead's transcript. Orca's reader decodes only `user` and
+  `assistant` records, so neither reaches the phone.
+- **The beacon's `done=`.** A hand-started tab carries no launch flag, so there is no beacon.
+- **The footer.** It read "· 4 shells" for hours, so it never counted fewer shells than the phone
+  named and never showed its zero hint. The four were real, running shells (`ps` on the desk):
+  foreground commands of finished subagents that Claude Code had moved to the background at their
+  timeout (`until grep …` waits whose pattern never matched, and an `adb logcat` hung on no
+  device). Claude Code counts them in the pill, and its agent panel still listed agents with
+  frozen times beside them; the Claude app does not list them as running.
+- **The pane's `done`.** Orca holds the pane `working` while the lead's Stop lists any running
+  non-agent task, and those four were listed at every Stop.
+- **The screen's completion row.** Claude painted it at 00:34; the phone opened the tab hours later.
+
+The nameless "Background shell" row was the footer fit padding up to the pill's count, and
+"+2 shells in subagents" was the rest of that count: both were the four left-behind shells.
+
+### What changed
+
+- **A read of a task's own output file ends it.** Claude Code ends every background task's output
+  file with `[exited with code N]`, or `[killed]` for a stopped one (171 and 24 of this session's
+  199 files; the 4 still running had neither). The lead read b1ycnvrjn's output two seconds after
+  it ended, and that result does reach the phone. `outputReadEnding`
+  (`mobile-background-task-transcript.ts`) takes a Bash or Read call naming exactly one
+  `tasks/<id>.output` whose answer holds the trailer as a line of its own (after a Read result's
+  line number), and the reader and the session memory treat it as that task's end (exit 0
+  completed, else failed; killed stopped). In this transcript it ends all four lead shells whose
+  only notification was a queue-operation, and nothing that had not ended. A call naming two output
+  files proves nothing: a real `cat a; tail -2 b` showed a's trailer above b's running tail.
+  After the Opus review two more guards: the answer must be the one Bash or Read in flight when it
+  landed (or name its call), since transcript answers pair first in, first out and parallel
+  answers land in any order; and the task must be a shell the window launched whose own command
+  reads no other task's output file (a `tail -f …/X.output` or an `until grep …; cat X.output`
+  wait holds X's trailer while it runs on). All four still end in this transcript.
+  Fixtures: `fixtures/claude-lead-shell-output-read.ts`.
+- **No row that names nothing.** The footer count only caps the named shells now; it never pads
+  "Background shell" rows. The fresh-`monitoring` placeholder ("Background shell the desk is still
+  tracking") is gone for the same reason: left-behind shells hold the pane there. The
+  "+N shells in subagents" line is gone (the user's ask, and the count was the same shells). The
+  lead-only footer reading that fed the padding is gone with it.
+- **No Stop all** (above).
+- **An agent a subagent launched is a row.** While the sheet reads a running agent's transcript it
+  also takes the agents that transcript launched, judged by the host's roster alone: running while
+  Orca's roster holds the row, finished once it drops it (the reviewer's own end reaches its parent
+  as records Orca's reader drops). With no roster none is listed. In its first 30 s a launch the
+  roster does not list yet is not called finished (the tab snapshot carrying its row lags the
+  transcript). One level deep: the reviewer's own transcript is not read. Fixture:
+  `fixtures/claude-nested-agent-2.1.296.ts`.
+- **A subagent's finished rows stay.** The finished shells and agents a read showed are kept for the
+  session (`subagent-finished-rows.ts`, 200 rows, 8 sessions) and put back in Finished after the
+  agent hands back and its read stops. A row still running at the hand-back is not kept, since its
+  end was never seen, and a kept row that shows running again is dropped from the memory.
+- **The look, re-measured off the two screenshots** (same phone, about 2.68 px per dp): the list
+  24 dp in from the screen's edges (12 dp more than the drawer gives), 24 dp between Running and
+  Finished, cards 16 dp apart; section headers in the caption size and muted ink with a 1.5-stroke
+  chevron 6 dp after the word; the card 16 dp above, below and before the glyph and 24 dp after the
+  Stop, radius 14; the title 14/19 semibold; the kind word in the title's ink and the time or
+  ending in the muted ink; the diamond at 11; the Stop a 16 dp ring holding a 6 dp square in the
+  title's ink, centred on the title's first line, with 14 dp of slop for a 44 dp target; the close
+  cross and title 8 dp further in. The shell glyph is lucide `SquareCode`: Claude's is an open
+  window whose top edge is broken by a `</>` mark, which lucide does not have; SquareCode (a window
+  holding a code mark) is nearer than SquareTerminal, AppWindow or CodeXml.
+
+### Limits
+
+- The output-read end needs the agent to read the output after the task ended. A shell that ends
+  mid-turn on a tab with no beacon and is never read again still stays running until the footer
+  counts fewer shells than are named, shows its zero, or the pane goes `done`; left-behind subagent
+  shells can hold off all three, as here.
+- A task whose own output prints a line that reads exactly `[exited with code N]` without naming
+  another task's output file in its command (a path built in a variable, a script that does the
+  `cat`) is taken as ended when that output is read. None did in this session.
+- A read made beside another Bash or Read in the same response proves nothing, so a lead that
+  checks two outputs at once retires neither by it.
+- With the footer padding gone, `shellsOutsideLead` counts a lead shell launched above the window
+  as a subagent's, so it retires fewer subagent shells by the footer while one runs (Opus review).
+- A Stop on a nested agent's row selects it by its description in Claude's Background dialog.
+  No capture shows that dialog listing a subagent's own subagent; if it does not, the drive refuses
+  and says why.
+- An agent launched by a subagent the sheet does not read (past the six-agent cap, or a third
+  level) is not listed.
+- Kept finished rows live in memory only; a relaunched app starts with none.
+- Agents: 42 of this session's 67 background agents ended mid-turn, written only as queue-operation
+  and queued_command records. They still leave Running and the count, because Orca's own hooks run
+  in a hand-started Claude too and its roster drops each agent at SubagentStop (its persisted
+  status for this pane listed exactly the two agents still running;
+  `mobile-background-tasks-absorbed-agent.test.ts`). With no host status at all (a pane Orca has no
+  hook row for) nothing the phone receives says such an agent ended, and it stays running: an
+  agent's output file is its own JSONL, with no end trailer.

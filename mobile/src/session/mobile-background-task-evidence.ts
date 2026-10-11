@@ -6,7 +6,10 @@ import {
 } from '../../../src/shared/native-chat-types'
 import {
   INTERRUPTED,
+  outputReadEnding,
+  quotesAnotherTaskOutput,
   readLaunch,
+  soleOutputRead,
   readNotifications,
   readString,
   stoppedTaskId,
@@ -77,6 +80,7 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
   const shellLaunches: LabelledShellLaunch[] = []
   const retiredTaskIds: string[] = []
   let oldestAt: number | null = null
+  const shellCommands = new Map<string, string | undefined>()
   for (const message of messages) {
     if (message.timestamp !== null && (oldestAt === null || message.timestamp < oldestAt)) {
       oldestAt = message.timestamp
@@ -90,6 +94,7 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
           ownAgentIds.push(target)
         }
       } else if (isToolResultBlock(block)) {
+        const soleRead = soleOutputRead(pending, block)
         const call = takeAnsweredCall(pending, block)
         // A stop ends its task once its answer says it went through, as in
         // `deriveBackgroundTasks`: the memory keeps a retired id for good.
@@ -98,6 +103,16 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
           retiredTaskIds.push(stopped)
         }
         const launch = call ? readLaunch(call, block.output) : null
+        if (launch?.kind === 'shell') {
+          shellCommands.set(launch.id, launch.stopLabel)
+        }
+        // So does a read of its output that shows the end trailer, on the
+        // terms `deriveBackgroundTasks` takes it: a shell this window launched,
+        // the one read in flight, a command reading no other task's output.
+        const ended = call && soleRead ? outputReadEnding(call, block) : null
+        if (ended && shellCommands.has(ended.id) && !quotesAnotherTaskOutput(shellCommands.get(ended.id), ended.id)) {
+          retiredTaskIds.push(ended.id)
+        }
         const launched = launch?.kind === 'agent' ? launch.id : ASYNC_AGENT_LAUNCHED.exec(block.output)?.[1]
         if (launched) {
           ownAgentIds.push(launched)

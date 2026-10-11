@@ -693,10 +693,15 @@ describe('a tab opened after its turn ended with shells still running', () => {
   // Stop hook still lists background shells.
   const monitoring = { state: 'working' as const, workingMode: 'monitoring' as const, stateStartedAt: T0 }
 
-  it('lists the desk\'s monitoring state as a running shell until the agent names them', () => {
+  // Until 2026-10-11 a fresh `monitoring` pane drew one nameless "Background
+  // shell the desk is still tracking". Orca holds the pane there while the
+  // lead's Stop lists any running non-agent task, and in session 0954729d four
+  // shells finished subagents had left running held it there for hours, while
+  // the Claude app listed nothing running. A row that names nothing is gone.
+  it('lists no nameless shell for the desk\'s monitoring state', () => {
     const tasks = deriveBackgroundTasks([], NOW, monitoring)
-    expect(tasks.running.map((task) => [task.kind, task.status])).toEqual([['shell', 'running']])
-    expect(countRunningBackgroundTasks([], monitoring, {}, NOW)).toBe(1)
+    expect(tasks.running).toEqual([])
+    expect(countRunningBackgroundTasks([], monitoring, {}, NOW)).toBe(0)
   })
 
   // 2026-09-11, NexDash pane: a turn died on an expired OAuth token, the Stop
@@ -812,25 +817,24 @@ describe('a tab opened after its turn ended with shells still running', () => {
     expect(tasks.running).toEqual([])
   })
 
-  it('shows the shells the agent footer counts even when the beacon tail cannot reach them', () => {
-    // From the phone, 2026-09-14: desktop footer "· 4 shells" while the phone
-    // showed none, because this session's 301 MB transcript put the shell
-    // launches beyond the beacon's 4 MB tail. The agent counts them live, so
-    // with no subagent running its on-screen figure is the truthful floor.
+  it('makes up no nameless rows for shells the footer counts and the beacon tail cannot reach', () => {
+    // 2026-09-14 the phone padded "· 4 shells" with four unnamed rows, for a
+    // 301 MB transcript whose launches sat beyond the beacon's tail. On
+    // 2026-10-11 (session 0954729d) the same padding was four shells finished
+    // subagents had left running, none of them the lead's, while the Claude
+    // app listed nothing running: the footer cannot tell the two apart, and a
+    // row that names nothing can be neither read nor stopped.
     const tasks = deriveBackgroundTasks([], NOW, monitoring, { onScreenShellCount: 4 })
-    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(4)
-    expect(tasks.running.every((task) => task.status === 'running')).toBe(true)
+    expect(tasks.running).toEqual([])
   })
 
-  it('does not double-count a shell the footer counts and the beacon already named', () => {
+  it('lists only the shell the beacon named, whatever more the footer counts', () => {
     const tasks = deriveBackgroundTasks([], NOW, monitoring, {
       runningTaskIds: ['bajgl5wmo'],
       launchedTaskIds: ['bajgl5wmo'],
       onScreenShellCount: 2
     })
-    // One named from the beacon, one unnamed filler to reach the footer's 2.
-    expect(tasks.running.filter((task) => task.kind === 'shell')).toHaveLength(2)
-    expect(tasks.running.some((task) => task.id === 'bajgl5wmo')).toBe(true)
+    expect(tasks.running.map((task) => task.id)).toEqual(['bajgl5wmo'])
   })
 
   it('adds no filler when the named shells already meet the footer count', () => {

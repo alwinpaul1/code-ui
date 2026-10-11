@@ -24,7 +24,6 @@ export function deriveReportedBackgroundTasks(
     stopRunningTaskIdsAt: report?.stopRunningTaskIdsAt ?? null,
     onScreenShellCount: report?.onScreenShellCount ?? null,
     heldOnScreenShellCount: report?.heldOnScreenShellCount ?? null,
-    leadOnlyShellCount: report?.leadOnlyShellCount ?? null,
     ...(report?.runBoundaryAt === undefined ? {} : { runBoundaryAt: report.runBoundaryAt }),
     screenCompletions: report?.screenCompletions ?? [],
     agentProvenance: report?.agentProvenance ?? null,

@@ -34,6 +34,7 @@ vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('lucide-react-native', () => ({
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
 }))

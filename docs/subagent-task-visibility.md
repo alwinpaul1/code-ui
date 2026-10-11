@@ -140,10 +140,20 @@ subagents, as a count and nothing more:
   not used) and while a monitor runs (the pill's wording is then unknown).
 - `deriveBackgroundTasks` returns it as `shellsInSubagents`, only when above
   zero. The structured lane never sets it.
-- The sheet's Running section draws one muted caption under the rows:
-  "+2 shells in subagents" (`subagentShellsLabel`). It takes the place of
-  "Nothing running." when it is the only thing running. The pill's
-  "N running tasks" count is unchanged.
+- The sheet's Running section drew one muted caption under the rows:
+  "+2 shells in subagents" (`subagentShellsLabel`). It took the place of
+  "Nothing running." when it was the only thing running. The pill's
+  "N running tasks" count was unchanged.
+
+**Removed 2026-10-11** (the user's ask, beside screenshots of the Claude app,
+which has no such line). The count also held shells that finished subagents
+had left running: four timed-out commands Claude Code had moved to the
+background held the footer at "· 4 shells" for hours in session 0954729d, and
+the Claude app listed none of them. `shellsInSubagents` and
+`subagentShellsLabel` are gone; `shellsOutsideLead` stays, only to retire
+listed subagent shells beyond the footer's count. See
+docs/mobile-background-tasks.md, "Stale rows, nested agents and the Claude
+look".
 
 Tests, fed the captured screens and the lead's real transcript records:
 `mobile-background-tasks-subagent-shells.test.ts` (both scenarios, footer off
@@ -222,9 +232,13 @@ What the rows show, verified against a second throwaway run (**Claude Code
   sleep", "Shell  1m 20s"), timed from the launching record. Since 2026-10-11
   they carry Claude's own Stop like the lead's shells
   (docs/mobile-background-tasks.md, "A Stop on a terminal tab").
-- **The "+N shells in subagents" line** takes the listed running ones out, and
-  is dropped when every shell the footer counts outside the lead is listed.
-  The pill's "N running tasks" count is unchanged.
+- **The "+N shells in subagents" line** took the listed running ones out, and
+  was dropped when every shell the footer counted outside the lead was listed.
+  The line itself is gone since 2026-10-11 (above).
+- **Agents a subagent launched** are rows too since 2026-10-11, judged by the
+  host's roster alone, and a read agent's finished rows stay in Finished after
+  it hands back (docs/mobile-background-tasks.md, "Stale rows, nested agents
+  and the Claude look").
 
 **The finding that shapes the shell rows.** A subagent's shell completion is
 delivered to the SUBAGENT (Claude resumes it with the notification), and
