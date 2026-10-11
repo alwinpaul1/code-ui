@@ -4,6 +4,7 @@ import type { MobileImageSource } from './mobile-image-source-picker'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
 import { useMobileImageAttachment } from './use-mobile-image-attachment'
+import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
   useMobileNativeChatImageAttachments,
@@ -32,7 +33,7 @@ type Args = {
    *  paste can mark the terminal input for healing (#10228). Takes the image
    *  send's budget so the paste and this text body share one `sending` window. */
   readonly beforeNativeChatImagePaste?: () => Promise<void>
-  readonly beginNativeChatImageSend?: (text: string, images?: string[], imagePaths?: string[]) => (() => void) | null
+  readonly beginNativeChatImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
