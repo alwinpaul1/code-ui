@@ -92,8 +92,9 @@ function ContextWindowSheetBody({
   const { space } = useTheme()
   // Read once per opening, when the drawer mounts this body: a reset countdown
   // does not need to tick while the sheet is up, and calling the clock during
-  // render is neither pure nor stable. It lived on the sheet itself, which the
-  // composer mounts with the chat and only flips `visible` on, so every reset
+  // render is neither pure nor stable. It lived on the sheet itself, which its
+  // owner (then the composer, the header since G9) mounts once and only flips
+  // `visible` on, so every reset
   // was counted from when the chat opened: "resets in 3h 0m" with 1h left,
   // and never "resetting now" (review, 2026-09-30).
   const [now] = useState(() => Date.now())

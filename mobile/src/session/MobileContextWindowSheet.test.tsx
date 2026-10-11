@@ -68,7 +68,7 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('the context window sheet in a %s session', (scheme, palette) => {
-  // The composer mounts the sheet with the chat and only flips `visible` when
+  // The header (the composer, until G9) mounts the sheet and only flips `visible` when
   // the ring is tapped, so a clock read at mount was the chat's opening time:
   // two hours into a chat, a window resetting in one hour read "resets in 3h
   // 0m" (review, 2026-09-30).

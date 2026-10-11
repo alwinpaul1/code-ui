@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // and so does the model picker's pill (openPicker).
 //
 // How each opens over the keyboard:
-//   context window  the composer's ring
+//   context window  the header's ring (it moved from the composer, parity gap G9)
 //   permission / agent mode  the + sheet's Permission row (keyboard already gone)
 //   background tasks  the "N running tasks" row above the composer
 //   agent run  an agent row in the transcript

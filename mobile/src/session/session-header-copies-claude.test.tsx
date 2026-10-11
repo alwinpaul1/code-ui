@@ -233,6 +233,26 @@ describe.each([
     expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer')).toHaveLength(1)
   })
 
+  // Carried over from the composer's ring (849b0843), which these replaced.
+  it('still opens from a screen reader’s click, which has no press-in', async () => {
+    await mount(scheme, { context: context(40) })
+    await act(async () => (ring()!.props.onPress as () => void)())
+    expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer')).toHaveLength(1)
+  })
+
+  it('stays open when the release follows the press-in', async () => {
+    await mount(scheme, { context: context(40) })
+    await act(async () => (ring()!.props.onPressIn as () => void)())
+    await act(async () => (ring()!.props.onPress as () => void)())
+    expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer'), 'the release toggled the sheet shut').toHaveLength(1)
+  })
+
+  it('opens the sheet from the token count too, and the sheet says the window is unknown', async () => {
+    await mount(scheme, { agentStatus: { contextUsedTokens: 493_000 } })
+    await act(async () => (ring()!.props.onPressIn as () => void)())
+    expect(textNode('493k used')).toBeDefined()
+  })
+
   it('shows the tokens and no ring or percentage when the session stated no window', async () => {
     await mount(scheme, { agentStatus: { contextUsedTokens: 493_000 } })
     expect(renderer!.root.findAll((node) => String(node.type) === 'Circle')).toHaveLength(0)
