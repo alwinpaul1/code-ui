@@ -1,9 +1,11 @@
 // ─── What a running subagent is doing, read off its own transcript ──────────
 //
-// The Claude app's Background tasks sheet titles a running agent with the step
-// it is in ("Running cd /private/tmp/…"), its description otherwise, and lists the shells its
-// subagents started as rows of their own ("Shell  1m 20s"). Nothing on the
-// session-tab snapshot carries either (docs/subagent-task-visibility.md):
+// The Claude app's Background tasks sheet lists the shells a running agent
+// started as rows of their own ("Shell  1m 20s"), and titles the agent itself
+// with its description, whatever call it is in (the user's screenshots of
+// 2026-10-11; until then this module put the agent's unanswered call on the
+// row, "Running cd "/Users/…/worktrees/ag…", for the minutes a gate run takes).
+// Nothing on the session-tab snapshot carries the shells (docs/subagent-task-visibility.md):
 // Orca keeps a subagent's tool activity off the lead's status on purpose. The
 // subagent's own transcript has both, and stock Orca already serves it to the
 // phone (`nativeChat.subscribe` with `agent-<id>`, `mobile-subagent-transcript.ts`).
@@ -31,21 +33,9 @@
 // shell that ends with none of those keeps its row until its agent finishes,
 // when the row leaves with the read.
 
-import {
-  describeActiveToolCall,
-  formatActiveToolLabel,
-  isCommandToolName
-} from '../../../src/shared/native-chat-tool-activity'
-import { mcpToolIdentity } from '../../../src/shared/native-chat-tool-identity'
-import {
-  isToolCallBlock,
-  isToolResultBlock,
-  type NativeChatMessage,
-  type NativeChatToolCallBlock
-} from '../../../src/shared/native-chat-types'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
 import { COUNT_RETIRE_GRACE_MS, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
-import { foldWhitespace, readString } from './mobile-background-task-transcript'
 import { readTaskEvidence } from './mobile-background-task-evidence'
 import { isTeammateLifecycleId, type RosterRow } from './mobile-background-task-roster'
 import { subagentTranscriptTarget, type SubagentTranscriptTarget } from './mobile-subagent-transcript'
@@ -59,58 +49,6 @@ export const SUBAGENT_WATCH_CAP = 6
  *  the host's roster before it is called finished: the tab snapshot that
  *  carries its new row comes after the transcript line that launched it. */
 const NESTED_ROSTER_GRACE_MS = 30_000
-
-/** The words a running agent's row draws for one tool call: "Running <first
- *  line of the command>" for a shell call, else the chat's own running-call
- *  wording ("Running Read foo.ts", `formatActiveToolLabel`), with an MCP
- *  tool's own name and no JSON preview. */
-export function subagentStepLabel(call: NativeChatToolCallBlock): string {
-  if (isCommandToolName(call.name)) {
-    const firstLine = readString(call.input, 'command')
-      ?.split('\n')
-      .map((line) => line.trim())
-      .find((line) => line.length > 0)
-    if (firstLine) {
-      return `Running ${foldWhitespace(firstLine)}`
-    }
-  }
-  const descriptor = describeActiveToolCall(call)
-  const toolName = mcpToolIdentity(call.name)?.tool ?? descriptor.toolName
-  // A tool with no plain argument previews its input as JSON
-  // (`{"task_id":"bnj50z9e4"}` for a TaskStop); a title says the tool alone.
-  const preview = /^[[{]/.test(descriptor.preview) ? '' : descriptor.preview
-  return formatActiveToolLabel({ ...descriptor, toolName, preview, key: preview ? 'runningNamedPreview' : 'runningNamed' })
-}
-
-/** The agent's tool call still waiting for its result, as a row title; null
- *  while none is in flight (before its first call, between calls, after its
- *  hand-back). The row then reads the agent's description, as Claude Code's own
- *  panel and the Claude app do: on 2026-10-11 the sheet titled three running
- *  agents "Running cd /private/tmp/…", calls that had answered minutes before,
- *  and they read as finished work.
- *
- *  Calls and results pair first in, first out, as `pairToolBlocks` pairs them:
- *  a result that names its call (`callId`, a structured chat's) answers that call,
- *  one that names none (Orca's transcript rows) the oldest call still waiting. The
- *  newest call left waiting is the one in flight. A result with no call waiting
- *  (its call above the loaded window) answers nothing. */
-export function subagentStepInFlight(messages: readonly NativeChatMessage[]): string | null {
-  const waiting: NativeChatToolCallBlock[] = []
-  for (const message of messages) {
-    for (const block of message.blocks) {
-      if (isToolCallBlock(block)) {
-        waiting.push(block)
-      } else if (isToolResultBlock(block) && waiting.length > 0) {
-        const at = block.callId ? waiting.findIndex((call) => call.callId === block.callId) : 0
-        if (at !== -1) {
-          waiting.splice(at, 1)
-        }
-      }
-    }
-  }
-  const inFlight = waiting.at(-1)
-  return inFlight ? subagentStepLabel(inFlight) : null
-}
 
 /** The running Claude subagents whose transcripts the open sheet reads, at
  *  most `SUBAGENT_WATCH_CAP`, in the sheet's order. A Codex tab, a shell, a
@@ -162,8 +100,8 @@ export type SubagentActivityContext = {
   hostSubagents?: readonly RosterRow[] | null
 }
 
-/** The sheet's tasks with each read agent's in-flight step on its row and the
- *  shells and agents its transcript shows launched as rows of their own:
+/** The sheet's tasks with the shells and agents each read agent's transcript
+ *  shows launched as rows of their own:
  *  running ones right under their agent, finished ones at the head of
  *  Finished. An agent a subagent launched ("Opus regression review of outbox
  *  drainer", started by "Reliable sends, never dropped" in session 0954729d)
@@ -188,8 +126,7 @@ export function mergeSubagentActivity(
       running.push(task)
       continue
     }
-    const step = subagentStepInFlight(messages)
-    running.push(step ? { ...task, latestStep: step } : task)
+    running.push(task)
     const shells = subagentWork(messages, context)
     for (const shell of shells.running) {
       if (!listed.has(shell.id)) {

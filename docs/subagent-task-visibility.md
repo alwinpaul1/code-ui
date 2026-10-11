@@ -219,9 +219,13 @@ What the rows show, verified against a second throwaway run (**Claude Code
 2.1.296**, `tmux -L cuisub`, session 59454ec6; agents "Sleep probe A" and
 "Sleep probe B", records in `fixtures/claude-subagent-transcript-probe-*-2.1.296.json`):
 
-- **An agent's title is the tool call it is in** (changed 2026-10-11; it
-  was the latest call, answered or not, and rows read "Running cd …" for
-  minutes after the command had returned). For a shell call, "Running" and
+- **An agent's title is its description, always** (since the third pass of
+  2026-10-11, at the user's ask: "I would like to know what they are doing or
+  their tasks ... not the process they are doing"; docs/mobile-background-tasks.md,
+  "A running agent reads its description"). What follows is how it read before.
+  Earlier that day it was the tool call it is in (before that, the latest call,
+  answered or not, and rows read "Running cd …" for minutes after the command
+  had returned). For a shell call, "Running" and
   the command's first line ("Running cd /private/tmp && ls | head -3"); for
   any other tool, the chat's running-call words ("Running ToolSearch
   select:TaskStop"), without a JSON preview ("Running TaskStop"). Between
