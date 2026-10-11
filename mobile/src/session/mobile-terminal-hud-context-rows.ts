@@ -7,6 +7,8 @@
 // context-ring-read-off-an-answer.test.ts). An answer can say anything, so a figure counts only where
 // the agent itself paints one.
 
+import { SLOT_TOGGLE_ROW } from './mobile-terminal-queue-block'
+
 /** Claude Code's input row: `❯` at column 0, then its no-break space (2.1.270 and later), a plain
  *  one, or nothing once a reader trims the row (mobile-native-chat-dialog-guard.ts CLAUDE_INPUT). */
 const CLAUDE_INPUT_ROW = /^❯(?: |\s|$)/
@@ -97,9 +99,6 @@ const CLAUDE_MENU_ROW = /^\s*(?:❯\s*)?[/@]/
  *  Code draws its conversation two columns in at least (the `⏺ ` gutter, `⎿` rows deeper), so a reply
  *  cannot put a row here, whatever text it prints. */
 const PAINTED_PILL_ROW = /^ ?[-]/
-/** The `[-]` toggle drawn alone and right-aligned above the slot a mod paints into over the box
- *  (every 2.1.294 and 2.1.295 capture of the usage-band layout). */
-const SLOT_TOGGLE_ROW = /^\s+\[[-+]\]\s*$/
 
 /** The rows a user's own status-line painting may sit on, as indices, around Claude Code's input
  *  box: every row under the box (where Claude Code draws a status line), and rows above the box's

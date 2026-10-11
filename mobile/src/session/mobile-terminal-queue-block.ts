@@ -23,6 +23,10 @@ export const SELECTED_HINT = /^\s*[❯›>]?\s*Press Enter to edit the selected 
  *  build: "ctrl+x ctrl+s to send now" on 2.1.277, "ctrl+enter to send now" on
  *  2.1.280 (2026-09-23), so any key chord before "to send now" closes it. */
 export const SEND_NOW_HINT = /^\s*(?:(?:ctrl|shift|alt|option|opt|cmd|meta)\+\S+\s+)+to send now\s*$/i
+/** The `[-]` toggle Claude Code draws alone and right-aligned above the slot a
+ *  mod paints into over the input box (2.1.294 to 2.1.296 captures). Shared with
+ *  the HUD's band reader (mobile-terminal-hud-context-rows.ts). */
+export const SLOT_TOGGLE_ROW = /^\s+\[[-+]\]\s*$/
 /** The working spinner Claude draws between the transcript and the queue:
  *  "✻ Frolicking… (15m 36s · ↓ 56.6k tokens)". The glyph rotates; the
  *  ellipsis after the verb does not. */
