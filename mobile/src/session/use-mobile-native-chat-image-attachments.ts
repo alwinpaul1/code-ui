@@ -7,10 +7,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
 import type { MobileImageSource } from './mobile-image-source-picker'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
-import {
-  NO_NATIVE_CHAT_IMAGE_ATTACHMENTS,
-  withScopeAttachments
-} from './mobile-native-chat-image-scope-state'
+import { NO_NATIVE_CHAT_IMAGE_ATTACHMENTS } from './mobile-native-chat-image-scope-state'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
 import { openMobileNativeChatSendBudget, type MobileNativeChatSendOutcome } from './mobile-native-chat-send'
@@ -151,16 +148,17 @@ export function useMobileNativeChatImageAttachments({
     (state) => state.videoFrameExtractionByScope
   )
   const {
-    setAttachmentsByScope,
     addUploadedImages,
     addUploadingImage,
+    markUploadFailed,
+    removeScopeAttachment,
     settleUploads,
     markAttachmentReuploading,
     replaceAttachmentImage,
     takeSentAttachments,
     restoreSentAttachments,
     setVideoFrameExtractionProgress
-  } = useNativeChatAttachmentScopeWriters()
+  } = useNativeChatAttachmentScopeWriters(showToast)
   const replaceAttachment = useMobileNativeChatImageMarkup({
     client, getActiveWorktreeConnectionId, scopeKey, markAttachmentReuploading,
     replaceAttachmentImage, showToast
@@ -200,6 +198,8 @@ export function useMobileNativeChatImageAttachments({
     showToast,
     onImagesUploaded: addUploadedImages,
     onImageUploading: addUploadingImage,
+    // A picture that did not upload keeps its chip, failed, with a retry on it.
+    onImageFailed: markUploadFailed,
     onUploadSettled: settleUploads,
     onVideoFrameExtractionProgress: setVideoFrameExtractionProgress,
     onAttachSuccess,
@@ -209,19 +209,11 @@ export function useMobileNativeChatImageAttachments({
 
   const removeAttachment = useCallback(
     (id: string): void => {
-      const scope = scopeKey
-      if (!scope) {
-        return
+      if (scopeKey) {
+        removeScopeAttachment(scopeKey, id)
       }
-      setAttachmentsByScope((prev) =>
-        withScopeAttachments(
-          prev,
-          scope,
-          (prev[scope] ?? []).filter((attachment) => attachment.id !== id)
-        )
-      )
     },
-    [scopeKey]
+    [scopeKey, removeScopeAttachment]
   )
 
   const sendNativeChat = useCallback(

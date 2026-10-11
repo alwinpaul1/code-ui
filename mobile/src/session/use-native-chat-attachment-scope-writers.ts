@@ -3,12 +3,17 @@ import {
   addUploadingNativeChatImage,
   appendPendingNativeChatImages,
   dropUploadingNativeChatImages,
+  failUploadingNativeChatImage,
   markNativeChatImageReuploading,
   replaceNativeChatImageAttachment,
   type PendingNativeChatImage,
   type UploadingNativeChatImage
 } from './mobile-native-chat-image-attachment'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
+import {
+  forgetNativeChatUploadRetry,
+  registerNativeChatUploadRetry
+} from './mobile-native-chat-upload-retry'
 import {
   nativeChatChipIdCounter,
   useNativeChatImageAttachmentsStore,
@@ -18,7 +23,9 @@ import {
 /** The writes an upload makes to a tab's chip strip: a chip when a file is
  *  picked, the finished upload into that chip, and the sweep of chips whose
  *  upload never finished. Split from the attachments hook for its line ceiling. */
-export function useNativeChatAttachmentScopeWriters() {
+export function useNativeChatAttachmentScopeWriters(
+  showToast?: (message: string, durationMs?: number) => void
+) {
   const setAttachmentsByScope = useNativeChatImageAttachmentsStore((state) => state.update)
   const addUploadedImages = useCallback(
     (scope: string, uploadedImages: Omit<PendingNativeChatImage, 'id'>[]) => {
@@ -35,6 +42,40 @@ export function useNativeChatAttachmentScopeWriters() {
         ...prev,
         [scope]: addUploadingNativeChatImage(prev[scope] ?? [], image, nativeChatChipIdCounter)
       }))
+    },
+    [setAttachmentsByScope]
+  )
+  // A picture whose upload failed keeps its chip, marked failed, with its
+  // retry kept under the chip's id; a retry that fails too says why.
+  const markUploadFailed = useCallback(
+    (
+      scope: string,
+      image: { previewUri: string; batch?: string },
+      retry: () => Promise<{ path: string; previewUri: string }>
+    ): void => {
+      const current = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
+      const { chips, id } = failUploadingNativeChatImage(current, image)
+      if (id === null) {
+        return
+      }
+      setAttachmentsByScope((prev) => withScopeAttachments(prev, scope, chips))
+      registerNativeChatUploadRetry(id, {
+        scope,
+        run: retry,
+        onFailed: (error) =>
+          showToast?.(`Upload failed: ${error instanceof Error ? error.message : String(error)}`, 2000)
+      })
+    },
+    [setAttachmentsByScope, showToast]
+  )
+  // The chip's remove badge. A failed chip's retry goes with it: it holds the
+  // picture's bytes, up to megabytes for a photo.
+  const removeScopeAttachment = useCallback(
+    (scope: string, id: string) => {
+      forgetNativeChatUploadRetry(id)
+      setAttachmentsByScope((prev) =>
+        withScopeAttachments(prev, scope, (prev[scope] ?? []).filter((attachment) => attachment.id !== id))
+      )
     },
     [setAttachmentsByScope]
   )
@@ -121,6 +162,8 @@ export function useNativeChatAttachmentScopeWriters() {
     setAttachmentsByScope,
     addUploadedImages,
     addUploadingImage,
+    markUploadFailed,
+    removeScopeAttachment,
     settleUploads,
     markAttachmentReuploading,
     replaceAttachmentImage,

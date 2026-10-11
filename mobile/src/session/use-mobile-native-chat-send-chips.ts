@@ -123,6 +123,10 @@ export async function settleMobileNativeChatSendChips(args: {
     for (const id of watchedIds) {
       const chip = byId.get(id)
       const drawn = uploading.get(id)
+      if (chip?.failed) {
+        // Its upload failed and the chip stayed for a retry: it has no path to paste.
+        return { reason: 'failed', chip }
+      }
       if (chip?.uploading) {
         uploading.set(id, chip)
         waiting ??= chip
@@ -268,6 +272,12 @@ export function useMobileNativeChatSendChips(args: {
     // reading must not wait on it (2026-09-27 review).
     const activeState = scope ? videoFrameExtractionState(scope) : null
     const activeMatchesTap = activeState !== null && tapBatches.has(activeState.batch)
+    const failedChip = chips.find((chip) => chip.failed === true)
+    if (failedChip) {
+      // A chip whose upload failed has nothing to paste. The user retries it or
+      // takes it out; sending the text without it would drop the photo unasked.
+      return Promise.resolve(refuse({ reason: 'failed', chip: failedChip }))
+    }
     if (!scope || (!chips.some((chip) => chip.uploading) && !activeMatchesTap)) {
       return send([...chips])
     }
