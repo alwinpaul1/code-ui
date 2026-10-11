@@ -39,7 +39,7 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
       (candidate) => candidate.id === deps.activeSessionTabIdRef.current
     )
     // Why: activate the anchor before the per-tab close round-trips so the user
-    // never sits on a dying tab or an empty pane while the loop runs.
+    // never sits on a dying tab or an empty pane while the closes go out.
     if (activeWasTargeted) {
       deps.switchSessionTab(anchor)
     }

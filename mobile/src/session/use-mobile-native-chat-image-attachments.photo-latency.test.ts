@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
-import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
+import { canRetryNativeChatUpload, retryNativeChatUpload } from './mobile-native-chat-upload-retry'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import type { RpcClient } from '../transport/rpc-client'
@@ -247,6 +247,63 @@ describe('a photo picked from the + sheet', () => {
     })
     expect(retried).toBe(false)
     expect(useNativeChatImageAttachmentsStore.getState().byScope[SCOPE_A]).toBeUndefined()
+  })
+
+  it('retries through the connection the screen has now, not the one the pick went out on', async () => {
+    // Opus review, 2026-10-12: a dropped relay is the likeliest reason an upload fails, and a
+    // reconnect is a new client. A retry pinned to the old one could never succeed.
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+    const before = makeClient((method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return failure('Relay connection lost')
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    const after = makeClient((method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return ok('start', { uploadId: 'upload-2' })
+      }
+      if (method === 'clipboard.appendImageUploadChunk') {
+        return ok('append', {})
+      }
+      return ok('commit', '/tmp/a.jpg')
+    })
+    const args = baseArgs({ client: before as unknown as RpcClient })
+    mount(args)
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    const failed = hook!.attachments[0]!
+    act(() => {
+      renderer!.update(createElement(Harness, { args: { ...args, client: after as unknown as RpcClient } }))
+    })
+    const callsBefore = before.calls.length
+    let retried = false
+    await act(async () => {
+      retried = await retryNativeChatUpload(failed.id)
+    })
+    expect(retried).toBe(true)
+    expect(before.calls.length).toBe(callsBefore)
+    expect(after.calls.map((call) => call.method)).toContain('clipboard.commitImageUpload')
+    expect(hook!.attachments[0]).toMatchObject({ id: failed.id, path: '/tmp/a.jpg' })
+  })
+
+  it('lets go of a failed photo\'s retry, and its bytes, when the chip store resets', async () => {
+    pick.mockResolvedValue([{ base64: 'AAAA', uri: 'file:///a.jpg' }])
+    const client = makeClient((method) => {
+      if (method === 'clipboard.startImageUpload') {
+        return failure('Upload slot refused')
+      }
+      throw new Error(`unexpected ${method}`)
+    })
+    mount(baseArgs({ client: client as unknown as RpcClient }))
+    await act(async () => {
+      await hook!.attachImage('library')
+    })
+    const failed = hook!.attachments[0]!
+    expect(canRetryNativeChatUpload(failed.id)).toBe(true)
+    act(() => useNativeChatImageAttachmentsStore.getState().reset())
+    expect(canRetryNativeChatUpload(failed.id)).toBe(false)
   })
 
   it('refuses a send tapped beside a failed photo, and writes nothing', async () => {

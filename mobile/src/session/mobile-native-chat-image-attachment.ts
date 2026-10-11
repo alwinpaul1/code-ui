@@ -232,6 +232,12 @@ export type UploadNativeChatImagesDeps = {
     error: unknown,
     retry: () => Promise<{ path: string; previewUri: string }>
   ) => void
+  /** The connection a retry goes out on, read when it is tapped: a reconnect is a new client,
+   *  and a retry pinned to the pick's own could never succeed (Opus review, 2026-10-12). */
+  readonly retryConnection?: () => {
+    readonly client: MobileClipboardImageRpcSender | null
+    readonly getConnectionId: () => Promise<string | null>
+  }
 }
 
 /** Picks an image and uploads it to the host, returning the host path + a local
@@ -248,7 +254,8 @@ export async function uploadMobileNativeChatImages(
     onUploadStart,
     onImageStart,
     onImageUploaded,
-    onImageFailed
+    onImageFailed,
+    retryConnection
   }: UploadNativeChatImagesDeps
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
   const picked = await pickImages(source)
@@ -291,8 +298,12 @@ export async function uploadMobileNativeChatImages(
         if (!base64) {
           throw new Error('The picture could not be read')
         }
-        const path = await saveMobileClipboardImageAsTempFile(client, base64, {
-          connectionId: await getConnectionId()
+        const live = retryConnection?.() ?? { client, getConnectionId }
+        if (!live.client) {
+          throw new Error('Not connected to the desktop')
+        }
+        const path = await saveMobileClipboardImageAsTempFile(live.client, base64, {
+          connectionId: await live.getConnectionId()
         })
         return { path, previewUri }
       })

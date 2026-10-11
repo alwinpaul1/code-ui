@@ -3,7 +3,10 @@ import {
   replaceNativeChatImageAttachment,
   retryFailedNativeChatImage
 } from './mobile-native-chat-image-attachment'
-import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
+import {
+  nativeChatAttachmentsResets,
+  useNativeChatImageAttachmentsStore
+} from './mobile-native-chat-image-attachments-store'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
 
 /**
@@ -19,10 +22,23 @@ type NativeChatUploadRetry = {
   readonly onFailed: (error: unknown) => void
 }
 
-const retries = new Map<string, NativeChatUploadRetry>()
+// Each retry holds its picture's bytes (a document's are inline, up to the 18 MB cap), so a
+// store reset, which reuses chip ids from 1, must let go of them (Opus review, 2026-10-12).
+// The store cannot import this module (it is imported by it), so a retry records the reset
+// count it was made under and one from before the latest reset is dropped on sight.
+const retries = new Map<string, NativeChatUploadRetry & { readonly resets: number }>()
+
+function pruneRetriesFromBeforeReset(): void {
+  for (const [id, retry] of retries) {
+    if (retry.resets !== nativeChatAttachmentsResets.current) {
+      retries.delete(id)
+    }
+  }
+}
 
 export function registerNativeChatUploadRetry(id: string, retry: NativeChatUploadRetry): void {
-  retries.set(id, retry)
+  pruneRetriesFromBeforeReset()
+  retries.set(id, { ...retry, resets: nativeChatAttachmentsResets.current })
 }
 
 export function forgetNativeChatUploadRetry(id: string): void {
@@ -30,6 +46,7 @@ export function forgetNativeChatUploadRetry(id: string): void {
 }
 
 export function canRetryNativeChatUpload(id: string): boolean {
+  pruneRetriesFromBeforeReset()
   return retries.has(id)
 }
 
@@ -44,6 +61,7 @@ export function resetNativeChatUploadRetriesForTests(): void {
  * false.
  */
 export async function retryNativeChatUpload(id: string): Promise<boolean> {
+  pruneRetriesFromBeforeReset()
   const retry = retries.get(id)
   if (!retry) {
     return false

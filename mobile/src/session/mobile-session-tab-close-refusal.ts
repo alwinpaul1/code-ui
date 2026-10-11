@@ -5,9 +5,11 @@ import type { RpcResponse } from '../transport/types'
  *
  * The phone drops the tab on tap and only then sends the close. Orca answers once its renderer
  * has retired the tab and flushed the workspace session, and gives that renderer up to 20 s
- * (`TERMINAL_TAB_CLOSE_TIMEOUT_MS`, Orca 1.4.2xx) before it fails the close. A snapshot that
- * lands in that window still lists the tab, so the tombstone has to outlast the whole wait;
- * the snapshot gate drops it early the moment a snapshot no longer lists the tab.
+ * (`TERMINAL_TAB_CLOSE_TIMEOUT_MS`, read in the Orca 1.4.178-rc.2 source) before it fails the
+ * close. A snapshot that lands in that window still lists the tab, so the tombstone outlasts
+ * that wait; the snapshot gate drops it early the moment a snapshot no longer lists the tab.
+ * A request that first waits out a relay re-dial can run longer than this; the tab can then
+ * come back with that snapshot until the host's next publication settles it.
  */
 export const CLOSE_IN_FLIGHT_TOMBSTONE_MS = 30_000
 
@@ -25,7 +27,18 @@ export type SessionTabCloseVerdict =
   | { kind: 'closed' }
   | { kind: 'refused'; reason: string }
 
-const GONE_CODES = new Set(['tab_not_found', 'terminal_tab_not_found', 'terminal_gone', 'terminal_exited'])
+// `terminal_handle_stale` and `terminal_not_found` are what `terminal.close` throws for a split
+// leaf whose PTY or handle is already gone (Orca's getLiveLeafForHandle). Before the optimistic
+// close the handle path dropped the leaf whatever the answer; reading these as refusals put a
+// dead leaf back on every tap (Opus review, 2026-10-12).
+const GONE_CODES = new Set([
+  'tab_not_found',
+  'terminal_tab_not_found',
+  'terminal_gone',
+  'terminal_exited',
+  'terminal_handle_stale',
+  'terminal_not_found'
+])
 
 const REASONS: Record<string, string> = {
   terminal_tab_pinned: 'it is pinned on the desktop',
@@ -40,6 +53,10 @@ const REASONS: Record<string, string> = {
 }
 
 function describe(code: string | undefined, message: string | undefined): string {
+  if (message?.startsWith('Request timed out')) {
+    // The transport's own wording names the RPC method, which means nothing to the user.
+    return REASONS.terminal_tab_close_timeout!
+  }
   return (code && REASONS[code]) || (message && REASONS[message]) || message || code || 'the desktop refused'
 }
 
@@ -70,7 +87,7 @@ export function readSessionTabCloseReply(response: RpcResponse): SessionTabClose
 /** A close that never got an answer: the relay dropped, or the request was refused locally. */
 export function readSessionTabCloseError(error: unknown): SessionTabCloseVerdict {
   const message = error instanceof Error ? error.message : String(error)
-  return { kind: 'refused', reason: message || 'the desktop could not be reached' }
+  return { kind: 'refused', reason: message ? describe(undefined, message) : 'the desktop could not be reached' }
 }
 
 export function sessionTabCloseRefusedToast(title: string | undefined, reason: string): string {

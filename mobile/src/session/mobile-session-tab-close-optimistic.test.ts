@@ -135,6 +135,22 @@ function closeSession(tabs: MobileSessionTab[], activeId: string | null) {
     activeId: () => activeSessionTabIdRef.current,
     activeHandle: () => ({ state: activeHandle, ref: activeHandleRef.current }),
     terminalHandles: () => terminals.map((terminal) => terminal.handle),
+    terminalRefHandles: () => terminalsRef.current.map((terminal) => terminal.handle),
+    /** A terminal.list landing mid-close: it still lists every PTY. */
+    relist(handles: string[]) {
+      const records = handles.map((handle) => ({ handle, title: handle, isActive: false }))
+      terminals = records
+      terminalsRef.current = records
+    },
+    /** The route moving to another worktree: the startup reset clears the tombstones. */
+    moveToWorktree(tabs: MobileSessionTab[]) {
+      tombstones.clear()
+      sessionTabsRef.current = tabs
+      sessionTabs = tabs
+      activeSessionTabIdRef.current = null
+      activeHandleRef.current = null
+      activeHandle = null
+    },
     closeTerminal(handle: string, title: string) {
       const mounted = actions
       if (!mounted) {
@@ -281,6 +297,72 @@ describe('closing a session tab from the phone', () => {
     await closing
     expect(session.strip()).toEqual(['p::l', 'p::r'])
     expect(session.toasts).toHaveLength(1)
+  })
+})
+
+describe('a close that races the rest of the screen (Opus review)', () => {
+  const left = () => terminalTab('p::l', { parentTabId: 'p', leafId: 'l', terminal: 'term-l' })
+  const right = () => terminalTab('p::r', { parentTabId: 'p', leafId: 'r', terminal: 'term-r' })
+
+  it.each(['terminal_handle_stale', 'terminal_not_found'])(
+    'keeps a split leaf closed when the desktop says its handle is already gone (%s)',
+    async (code) => {
+      const session = open([left(), right()], 'p::l')
+      const closing = session.close(right())
+      session.replies[0].resolve(failed('runtime_error', code))
+      await closing
+      expect(session.strip()).toEqual(['p::l'])
+      expect(session.toasts).toEqual([])
+    }
+  )
+
+  it('does not put a refused tab into the worktree the screen has moved to', async () => {
+    const a = terminalTab('a')
+    const b = terminalTab('b')
+    const session = open([a, b], 'b')
+    const closing = session.close(b)
+    const elsewhere = terminalTab('w2')
+    session.moveToWorktree([elsewhere])
+    session.replies[0].resolve(failed('terminal_tab_pinned'))
+    await closing
+    expect(session.strip()).toEqual(['w2'])
+    expect(session.activeId()).toBeNull()
+    expect(session.toasts).toEqual([])
+  })
+
+  it('does not put back a tab a snapshot has already shown gone', async () => {
+    const a = terminalTab('a')
+    const b = terminalTab('b')
+    const session = open([a, b], 'a')
+    const closing = session.close(b)
+    // applyClosedTabTombstones drops the tombstone once a snapshot no longer lists the tab.
+    session.tombstones.delete('b')
+    session.replies[0].resolve(failed('timeout', 'Request timed out: session.tabs.close'))
+    await closing
+    expect(session.strip()).toEqual(['a'])
+  })
+
+  it('drops a closed split leaf\'s record even when a terminal list put it back mid-close', async () => {
+    const session = open([left(), right()], 'p::l')
+    const closing = session.close(right())
+    session.relist(['term-l', 'term-r'])
+    session.replies[0].resolve(accepted())
+    await closing
+    expect(session.terminalHandles()).toEqual(['term-l'])
+    expect(session.terminalRefHandles()).toEqual(['term-l'])
+  })
+
+  it('closes two split leaves at once without the second putting the first back', async () => {
+    const q1 = terminalTab('q::1', { parentTabId: 'q', leafId: '1', terminal: 'term-q1' })
+    const q2 = terminalTab('q::2', { parentTabId: 'q', leafId: '2', terminal: 'term-q2' })
+    const session = open([left(), right(), q1, q2], 'p::l')
+    const first = session.close(right())
+    const second = session.close(q2)
+    expect(session.terminalRefHandles()).toEqual(['term-l', 'term-q1'])
+    session.replies[0].resolve(accepted())
+    session.replies[1].resolve(accepted())
+    await Promise.all([first, second])
+    expect(session.terminalHandles()).toEqual(['term-l', 'term-q1'])
   })
 })
 

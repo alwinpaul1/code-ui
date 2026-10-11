@@ -46,6 +46,18 @@ export function confirmsMirroredTabSelection(publicationEpoch?: string): boolean
  * whose TTL elapsed — the TTL guards against a failed host-side close hiding a
  * tab forever.
  */
+/** The tabs whose close is still settling, for the terminal-list reconcile, which must not
+ *  rebuild one of them from a PTY the desktop has not closed yet. */
+export function liveClosedTabIds(tombstones: ReadonlyMap<string, number>, now: number): Set<string> {
+  const live = new Set<string>()
+  for (const [id, expiry] of tombstones) {
+    if (now < expiry) {
+      live.add(id)
+    }
+  }
+  return live
+}
+
 export function applyClosedTabTombstones<T extends { id: string }>(
   tabs: T[],
   tombstones: Map<string, number>,

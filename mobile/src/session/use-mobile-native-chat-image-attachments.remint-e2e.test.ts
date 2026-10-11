@@ -112,8 +112,8 @@ describe('a composer send that follows its tab, end to end', () => {
       )
       close = useMobileSessionCloseActions({
         client,
-        terminals: [{ handle: 'term-9', title: 'other', isActive: false }],
-        terminalsRef: { current: [] },
+        // The close reads the list from the ref (2026-10-12), as the screen keeps it current.
+        terminalsRef: { current: [{ handle: 'term-9', title: 'other', isActive: false }] },
         setTerminals: vi.fn(),
         setSessionTabs: vi.fn(),
         sessionTabsRef,

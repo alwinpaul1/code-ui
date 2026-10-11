@@ -7,6 +7,7 @@ import {
   terminalRecordsEqual
 } from './mobile-terminal-records'
 import { reconcileSessionTabsWithTerminalList } from './mobile-session-tab-terminal-reconcile'
+import { liveClosedTabIds } from './session-tab-snapshot-gate'
 import {
   createTerminalPrunePredicate,
   pruneTerminalKeyboardMetrics,
@@ -26,6 +27,7 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
     terminalsRef,
     sessionTabsRef,
     setSessionTabs,
+    closedTabTombstonesRef,
     pruneTerminalHandlesFromLiveInput,
     defaultTerminalHandlesToLiveInput,
     clearTerminalLiveInputDefault,
@@ -142,7 +144,8 @@ export function useMobileSessionTerminalList(scope: MobileSessionTerminalStreamD
 
             const nextTabs = reconcileSessionTabsWithTerminalList(
               sessionTabsRef.current,
-              mergedTerminals
+              mergedTerminals,
+              liveClosedTabIds(closedTabTombstonesRef.current, Date.now())
             )
             if (!mobileSessionTabsEqual(sessionTabsRef.current, nextTabs)) {
               sessionTabsRef.current = nextTabs as typeof sessionTabsRef.current

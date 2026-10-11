@@ -233,7 +233,9 @@ const HEAD_CALLBACK_IDENTITY_SHA256 =
 // 2026-10-10 (Orca #26159 ported): readMarkdownTab's writes land only while their own loading
 // record is the tab's current one, and an accepted Markdown tab close deletes its clean document.
 // The bodies of readMarkdownTab and handleCloseSessionTab moved. Same callbacks.
-const HEAD_CALLBACK_BODY_SHA256 = '9fc107e757e803caf1fd43cf8b37db96771dd61ecf067a210c50b9963cf8c577'
+// 2026-10-12 (Opus review of the optimistic tab close): applySessionTabs and the terminal list's
+// fetch hand the live closed-tab tombstones to reconcileSessionTabsWithTerminalList.
+const HEAD_CALLBACK_BODY_SHA256 = '0b23fa4fc950135edfd7afb520085d2aaa3e1b360d009317205068b32f8a4f5f'
 // 2026-09-19 (Orca #21083 ported): the startup effect's two worktree.activate
 // sends became host-screen's worktreeActivate, and the sleeping-agent check
 // reads that operation's verdict instead of the reply envelope. Same 23
@@ -326,7 +328,7 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // sendClose, closeTerminalOptimistically and selectAfterClose, and handleCloseSessionTab's body
 // takes the tab off the strip before it sends.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  'e73fc8b3c162f1f61423af6b16dacb5e7a3de3a2ae51e1e14f87d8f0b1ad361f'
+  'c09daf0d882f63e70f9cc6e6f0e6e01fc00556b23e13045ac03cb4b49df53ce6'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.

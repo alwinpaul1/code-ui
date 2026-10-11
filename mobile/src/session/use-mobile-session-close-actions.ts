@@ -27,7 +27,6 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     worktreeId,
     client,
     setTerminals,
-    terminals,
     terminalsRef,
     setSessionTabs,
     setFileDocs,
@@ -112,12 +111,18 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
    * The PTY stays subscribed until the desktop confirms, so a refusal puts the record back with
    * nothing to re-attach.
    */
-  async function closeTerminalOptimistically(target: Terminal): Promise<SessionTabCloseVerdict> {
+  async function closeTerminalOptimistically(
+    target: Terminal,
+    /** False once the screen has moved on (another worktree), so a refusal restores nothing. */
+    stillOurs: () => boolean = () => true
+  ): Promise<SessionTabCloseVerdict> {
     const sendingClient = client
     if (!sendingClient) {
       return { kind: 'refused', reason: 'not connected' }
     }
-    const before = terminals
+    // The ref, not the render's list: two closes in one bulk run each filtered the same stale
+    // array, and the second put the first one's record back (Opus review, 2026-10-12).
+    const before = terminalsRef.current
     const index = before.findIndex((terminal) => terminal.handle === target.handle)
     const record = index === -1 ? null : before[index]
     const next = before.filter((terminal) => terminal.handle !== target.handle)
@@ -138,10 +143,19 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       (response) => sessionTerminalClose.interpret(response).accepted
     )
     if (verdict.kind === 'closed') {
+      // A terminal list that landed mid-close still listed the PTY and put the record back.
+      const remaining = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
+      if (remaining.length !== terminalsRef.current.length) {
+        terminalsRef.current = remaining
+        setTerminals(remaining)
+      }
       unsubscribeTerminal(target.handle)
       terminalRefs.current.delete(target.handle)
       initializedHandlesRef.current.delete(target.handle)
       clearTerminalLiveInputDefault(target.handle)
+      return verdict
+    }
+    if (!stillOurs()) {
       return verdict
     }
     if (record) {
@@ -222,11 +236,10 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
 
     const verdict =
       plan.via === 'terminal-handle'
-        ? await closeTerminalOptimistically({
-            handle: plan.handle,
-            title: tab.title,
-            isActive: tab.isActive
-          })
+        ? await closeTerminalOptimistically(
+            { handle: plan.handle, title: tab.title, isActive: tab.isActive },
+            () => closedTabTombstonesRef.current.has(tab.id)
+          )
         : await sendClose(
             () =>
               sessionTabClose.request(sendingClient, {
@@ -240,7 +253,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
             (response) => sessionTabClose.interpret(response).accepted
           )
 
+    // The tombstone is gone when the screen moved to another worktree (the startup reset clears
+    // them) or a snapshot already showed the tab gone; either way the strip is no longer the one
+    // this close took the tab from, and putting it back would be wrong (Opus review, 2026-10-12).
+    const stripStillOurs = closedTabTombstonesRef.current.has(tab.id)
     if (verdict.kind === 'refused') {
+      if (!stripStillOurs) {
+        return
+      }
       closedTabTombstonesRef.current.delete(tab.id)
       const restored = restoreRefusedSessionTab(sessionTabsRef.current, tab, index)
       sessionTabsRef.current = restored
@@ -252,7 +272,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       showToast(sessionTabCloseRefusedToast(tab.title, verdict.reason), CLOSE_REFUSED_TOAST_MS)
       return
     }
-    closedTabTombstonesRef.current.set(tab.id, Date.now() + CLOSED_TAB_TOMBSTONE_MS)
+    if (stripStillOurs) {
+      closedTabTombstonesRef.current.set(tab.id, Date.now() + CLOSED_TAB_TOMBSTONE_MS)
+    }
     if (plan.via === 'terminal-handle') {
       return
     }

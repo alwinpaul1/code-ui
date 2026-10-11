@@ -27,7 +27,10 @@ function sessionTabGroupId(tab: MobileTerminalSessionTab): string {
  */
 export function reconcileSessionTabsWithTerminalList(
   tabs: readonly MobileSessionTabLike[],
-  terminals: readonly TerminalRecord[]
+  terminals: readonly TerminalRecord[],
+  /** Tabs the user closed whose close is still settling (the closed-tab tombstones): their
+   *  PTY is still listed until the desktop has closed it, so they must not be rebuilt. */
+  suppressedTabIds: ReadonlySet<string> = new Set()
 ): MobileSessionTabLike[] {
   const liveHandles = new Set(
     terminals
@@ -40,12 +43,13 @@ export function reconcileSessionTabsWithTerminalList(
       tab.synthesizedFromTerminalList !== true ||
       (typeof tab.terminal === 'string' && liveHandles.has(tab.terminal))
   )
-  return appendUnlistedConnectedTerminalTabs(kept, terminals)
+  return appendUnlistedConnectedTerminalTabs(kept, terminals, suppressedTabIds)
 }
 
 export function appendUnlistedConnectedTerminalTabs(
   tabs: readonly MobileSessionTabLike[],
-  terminals: readonly TerminalRecord[]
+  terminals: readonly TerminalRecord[],
+  suppressedTabIds: ReadonlySet<string> = new Set()
 ): MobileSessionTabLike[] {
   const listedHandles = new Set(
     getTerminalRecordsFromSessionTabs(tabs).map((terminal) => terminal.handle)
@@ -69,7 +73,12 @@ export function appendUnlistedConnectedTerminalTabs(
   // recovery asks for one. Filling the handle in from the list was tried and
   // withdrawn: the route strips the leaf address from its records on every
   // snapshot, so the borrowed handle came and went on each beat.
-  const leavesOnStrip = new Set([...tabs.map((tab) => tab.id), ...sessionTabLeafAddresses(tabs)])
+  // A leaf the user closed counts as on the strip until its close settles, so it is not rebuilt.
+  const leavesOnStrip = new Set([
+    ...tabs.map((tab) => tab.id),
+    ...sessionTabLeafAddresses(tabs),
+    ...suppressedTabIds
+  ])
   const extras: MobileTerminalSessionTab[] = []
   for (const terminal of terminals) {
     const parentTabId = terminal.tabId
