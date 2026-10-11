@@ -8,8 +8,12 @@ vi.mock('react-native', () => ({
   View: 'View',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
 }))
+const drawer = vi.hoisted(() => ({ onAfterClose: undefined as (() => void) | undefined }))
 vi.mock('../components/BottomDrawer', () => ({
-  BottomDrawer: ({ children }: { children: unknown }) => children
+  BottomDrawer: ({ children, onAfterClose }: { children: unknown; onAfterClose?: () => void }) => {
+    drawer.onAfterClose = onAfterClose
+    return children
+  }
 }))
 vi.mock('../ui/Txt', () => ({ Txt: 'Txt' }))
 vi.mock('lucide-react-native', () => ({
@@ -83,7 +87,7 @@ describe('the Claude-style Add context sheet', () => {
     )
   })
 
-  it('runs the source action and closes when a card is tapped', () => {
+  it('closes when a card is tapped, and runs its source once the sheet has gone', () => {
     const onClose = vi.fn()
     const onCaptureImage = vi.fn()
     const root = render({
@@ -98,6 +102,10 @@ describe('the Claude-style Add context sheet', () => {
       .find((node) => node.props.accessibilityLabel === 'Camera')
     act(() => camera!.props.onPress())
     expect(onClose).toHaveBeenCalledOnce()
+    // The camera is an Activity: launched over the closing sheet, it froze the
+    // sheet's exit (plus-sheet-closes-before-the-picker-opens.test.tsx).
+    expect(onCaptureImage).not.toHaveBeenCalled()
+    act(() => drawer.onAfterClose?.())
     expect(onCaptureImage).toHaveBeenCalledOnce()
   })
 

@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ActivityIndicator, View, Pressable } from 'react-native'
 import { Check, Edit3, Trash2, type LucideIcon } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
@@ -201,6 +201,13 @@ export function ActionSheetModal({
   onClose
 }: Props) {
   const pendingActionRef = useRef<(() => void) | null>(null)
+  // A sheet opened again before its exit finished never unmounts, so a held
+  // action would run on some later close, one the user made without choosing it.
+  useEffect(() => {
+    if (visible) {
+      pendingActionRef.current = null
+    }
+  }, [visible])
   const sequencedActions = actions.map((action) =>
     action.closeBeforePress
       ? {

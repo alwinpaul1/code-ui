@@ -1,4 +1,5 @@
 import { Camera, Image as ImageIcon, Paperclip, Zap, ChevronRight } from 'lucide-react-native'
+import { useEffect, useRef } from 'react'
 import { Pressable, View } from 'react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
 import { Txt } from '../ui/Txt'
@@ -65,12 +66,40 @@ export function MobileNativeChatAttachSheet({
     { key: 'photos', label: 'Photos', icon: ImageIcon, onPress: onAttachImage },
     { key: 'files', label: 'Files', icon: Paperclip, onPress: onAttachFile }
   ]
-  const run = (press?: () => void) => () => {
+  // A source card's work starts once the sheet has gone, never while it closes.
+  // Each card launches a system picker, which is an Activity: it pauses this
+  // one, and Reanimated stops driving frames on a host pause, so the 150 ms exit
+  // froze where its first frames left it. Android's photo picker is a sheet
+  // over the app, so the half-closed + sheet and its dimmed backdrop stayed in
+  // sight behind it, and back from the pick the exit's end reached JS behind
+  // the photo's chip and its read, leaving the sheet's window up over the chat
+  // (reported 2026-10-11: "closes stuck after attaching media especially
+  // images"). The press is held here and run from `onAfterClose`, after the
+  // unmount has committed, so the picker, the chip and the upload all come
+  // after the sheet. The cost is the exit itself before the picker opens.
+  // A sheet torn down mid-exit (the tab closed, the chat swapped for its
+  // terminal) drops the held press on purpose: its attach would land in a
+  // composer that is gone.
+  const pendingPressRef = useRef<(() => void) | null>(null)
+  // A sheet opened again before its exit finished (the + tapped again) never
+  // unmounts, so the held press would run on some later close instead: the
+  // user took it back by reopening.
+  useEffect(() => {
+    if (visible) {
+      pendingPressRef.current = null
+    }
+  }, [visible])
+  const runAfterClose = (press?: () => void) => () => {
+    pendingPressRef.current = press ?? null
     onClose()
+  }
+  const runAfterClosed = (): void => {
+    const press = pendingPressRef.current
+    pendingPressRef.current = null
     press?.()
   }
   return (
-    <BottomDrawer visible={visible} onClose={onClose}>
+    <BottomDrawer visible={visible} onClose={onClose} onAfterClose={runAfterClosed}>
       <Txt
         variant="label"
         weight="semibold"
@@ -88,7 +117,7 @@ export function MobileNativeChatAttachSheet({
               accessibilityRole="button"
               accessibilityLabel={card.label}
               disabled={!card.onPress}
-              onPress={run(card.onPress)}
+              onPress={runAfterClose(card.onPress)}
               style={({ pressed }) => ({
                 flex: 1,
                 minHeight: 96,
@@ -114,7 +143,11 @@ export function MobileNativeChatAttachSheet({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={modeRow.label}
-          onPress={run(onOpenPermission)}
+          // Another sheet, not an Activity: it opens beside this one's exit.
+          onPress={() => {
+            onClose()
+            onOpenPermission()
+          }}
           style={({ pressed }) => ({
             flexDirection: 'row',
             alignItems: 'center',

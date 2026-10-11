@@ -73,17 +73,22 @@ export function MobileTerminalInputActions({
       <ActionSheetModal
         visible={showAttachSheet}
         title="Add to terminal"
+        // Both rows launch a system picker, an Activity that pauses this one
+        // and with it the sheet's exit, which froze half-closed behind the
+        // photo picker (2026-10-11). The picker opens once the sheet has gone.
         actions={[
           {
             label: 'Photos',
             hint: 'Pick from your photo library',
             icon: ImageIcon,
+            closeBeforePress: true,
             onPress: onAttachImage
           },
           {
             label: 'Files',
             hint: 'PDF, documents, code, anything on this phone',
             icon: Paperclip,
+            closeBeforePress: true,
             onPress: onAttachFile
           }
         ]}

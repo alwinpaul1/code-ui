@@ -8,9 +8,10 @@ import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 // opens it re-ran the whole composer first: the text field, the photo chips,
 // the model pills, the context ring, the suggestion hook and the three other
 // sheets' wrappers, none of which change. That render sits between the
-// finger and the commit that mounts the sheet's native window, and again
-// between the Photos tap and the launch of the picker (the sheet closes in
-// the same press). The flag now lives with the + and the sheet alone.
+// finger and the commit that mounts the sheet's native window, and again in
+// front of the Photos tap's close. The flag now lives with the + and the sheet
+// alone. (The picker itself waits for the sheet to have gone:
+// plus-sheet-closes-before-the-picker-opens.test.tsx.)
 //
 // The chip strip stands in for "the rest of the composer": it is a plain
 // function component that renders whenever the composer does.
@@ -81,8 +82,27 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/BottomDrawer', async () => {
   const React = await import('react')
   return {
-    BottomDrawer: ({ visible, onClose, children }: { visible: boolean; onClose: () => void; children?: unknown }) =>
-      visible ? React.createElement('BottomDrawer', { visible, onClose }, children as React.ReactNode) : null
+    // Reports the sheet gone in the commit that closes it: this file counts renders, not the exit.
+    BottomDrawer: ({
+      visible,
+      onClose,
+      onAfterClose,
+      children
+    }: {
+      visible: boolean
+      onClose: () => void
+      onAfterClose?: () => void
+      children?: unknown
+    }) => {
+      const wasVisible = React.useRef(visible)
+      React.useEffect(() => {
+        if (wasVisible.current && !visible) {
+          onAfterClose?.()
+        }
+        wasVisible.current = visible
+      }, [visible])
+      return visible ? React.createElement('BottomDrawer', { visible, onClose }, children as React.ReactNode) : null
+    }
   }
 })
 
@@ -164,7 +184,7 @@ describe.each(['light', 'dark'] as const)('the + sheet in %s mode', (scheme) => 
     expect(chipRenders.count - before, 'the whole composer re-rendered to close the sheet').toBe(0)
   })
 
-  it('closes on Photos, in the same press that asks for the picker', async () => {
+  it('closes on Photos, and asks for the picker once it has gone', async () => {
     const onAttachImage = vi.fn()
     await act(async () => {
       renderer = create(
