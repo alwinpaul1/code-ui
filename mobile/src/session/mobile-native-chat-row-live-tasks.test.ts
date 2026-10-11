@@ -66,26 +66,48 @@ describe('the host structured roster', () => {
 
 describe('a run reading its own progress', () => {
   const inputs = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
+  const NEWEST = { inNewestReply: true }
+
+  // Review of cdcee5126: results pair by order, and a background launch's text
+  // can land in an earlier call's slot while that call's answer lands in the
+  // Agent's. Every call is answered; the run must not read "Running".
+  it('reads a run whose answers landed out of call order as finished', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Read', input: { file_path: '/tmp/a.ts' } },
+      { type: 'tool-call', name: 'Agent', input: { description: 'Review', prompt: 'p', run_in_background: true } },
+      { type: 'tool-result', output: 'Async agent launched successfully.\nagentId: abc123def (internal ID)' },
+      { type: 'tool-result', output: 'file contents' }
+    ]
+    expect(toolRunProgress(blocks, inputs, NEWEST)).toBeNull()
+    // With the Read's answer still out, the Read is the open call.
+    expect(toolRunProgress(blocks.slice(0, 3), inputs, NEWEST)).toEqual({ kind: 'call', call: blocks[0] })
+  })
+
+  it("never reads an open call as running outside the chat's newest reply", () => {
+    const open: NativeChatBlock[] = [{ type: 'tool-call', name: 'Read', input: { file_path: '/tmp/a.ts' } }]
+    expect(toolRunProgress(open, inputs, NEWEST)).toEqual({ kind: 'call', call: open[0] })
+    expect(toolRunProgress(open, inputs, { inNewestReply: false })).toBeNull()
+  })
 
   it('an empty run and a lone result never run', () => {
-    expect(toolRunProgress([], inputs)).toBeNull()
+    expect(toolRunProgress([], inputs, NEWEST)).toBeNull()
     const lone: NativeChatBlock[] = [{ type: 'tool-result', output: 'Command running in background with ID: b3w804om8.' }]
-    expect(toolRunProgress(lone, { ...inputs, liveTaskIds: new Set([RUNNING_ROWS_SHELL_ID]) })).toBeNull()
+    expect(toolRunProgress(lone, { ...inputs, liveTaskIds: new Set([RUNNING_ROWS_SHELL_ID]) }, NEWEST)).toBeNull()
   })
 
   it('names the agent it launched while that agent is live', () => {
-    expect(toolRunProgress(agentRun(), { ...inputs, agentWorking: false, liveTaskIds: new Set([RUNNING_ROWS_AGENT_ID]) })).toEqual({
+    expect(toolRunProgress(agentRun(), { ...inputs, agentWorking: false, liveTaskIds: new Set([RUNNING_ROWS_AGENT_ID]) }, NEWEST)).toEqual({
       kind: 'agent',
       subject: RUNNING_ROWS_AGENT_DESCRIPTION
     })
   })
 
   it("does not take another run's live shell for its own", () => {
-    expect(toolRunProgress(bashRunMovedToBackground(), { ...inputs, liveTaskIds: new Set(['bother000']) })).toBeNull()
+    expect(toolRunProgress(bashRunMovedToBackground(), { ...inputs, liveTaskIds: new Set(['bother000']) }, NEWEST)).toBeNull()
   })
 
   it('reads a structured call as the lane does, not as an open transcript call', () => {
     const marked: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: 'ls' }, state: 'completed' }]
-    expect(toolRunProgress(marked, inputs)).toBeNull()
+    expect(toolRunProgress(marked, inputs, NEWEST)).toBeNull()
   })
 })

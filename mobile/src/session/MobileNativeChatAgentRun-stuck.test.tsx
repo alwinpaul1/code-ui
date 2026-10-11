@@ -154,8 +154,16 @@ describe('the row of a background Agent call (session 0954729d, Claude Code 2.1.
     return renderer!
   }
 
-  it('stops sweeping and reads "Ran 1 agent" once the launch result is in, though the agent works on in the background', async () => {
+  // The 2026-10-11 recording (Claude Code 2.1.296): the Claude app sweeps
+  // "Running agent: <description>" for as long as the background agent works.
+  // Orca's roster will also say when it stops, so the row may follow it.
+  it('sweeps "Running agent: <description>" after the launch answered, while Orca\'s roster lists the agent', async () => {
     const tree = await render({ messages: backgroundAgentLaunchMessages(), status: rosterRunningTheAgent(), agentWorking: true })
+    expect(glyphsOf(tree).join('')).toBe(`Running agent: ${BACKGROUND_AGENT.description}`)
+  })
+
+  it('stops sweeping and reads "Ran 1 agent" once the roster has dropped the agent', async () => {
+    const tree = await render({ messages: backgroundAgentLaunchMessages(), status: { ...rosterRunningTheAgent(), subagents: [] }, agentWorking: true })
     expect(glyphsOf(tree)).toEqual([])
     expect(labelText(tree)).toBe('Ran 1 agent')
     expect(texts(tree)).not.toContain(`Running agent: ${BACKGROUND_AGENT.description}`)

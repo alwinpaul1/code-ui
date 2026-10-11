@@ -62,24 +62,37 @@ export function ToolRun(props: ToolRunProps) {
 function RunProgressGate({
   blocks,
   enabled,
+  inNewestReply,
   children
 }: {
   blocks: NativeChatBlock[]
   enabled: boolean
+  inNewestReply: boolean
   children: (progress: ToolRunProgress) => React.ReactNode
 }) {
-  return enabled ? <ReadsProgress blocks={blocks}>{children}</ReadsProgress> : <>{children(null)}</>
+  return enabled ? (
+    <ReadsProgress blocks={blocks} inNewestReply={inNewestReply}>
+      {children}
+    </ReadsProgress>
+  ) : (
+    <>{children(null)}</>
+  )
 }
 
 function ReadsProgress({
   blocks,
+  inNewestReply,
   children
 }: {
   blocks: NativeChatBlock[]
+  inNewestReply: boolean
   children: (progress: ToolRunProgress) => React.ReactNode
 }) {
   const agentRuns = useNativeChatAgentRuns()
-  const progress = useMemo(() => toolRunProgress(blocks, agentRuns), [blocks, agentRuns])
+  const progress = useMemo(
+    () => toolRunProgress(blocks, agentRuns, { inNewestReply }),
+    [blocks, agentRuns, inNewestReply]
+  )
   return <>{children(progress)}</>
 }
 
@@ -102,6 +115,9 @@ type ToolRunProps = {
   /** This run's place in its message (message id and segment), so each diff
    *  card under it has an identity beyond its content. */
   revertScope?: string
+  /** The run is in the chat's newest reply (`mayStillGrow`): only there may a
+   *  call with no answer read as running on a transcript tab. */
+  inNewestReply?: boolean
   /** Focus view: the row says only how many calls ran — no sentence, no
    *  argument, no plan line, no "Running" — until the reader unfolds it. The
    *  label holds while open too, so a tap does not make the row jump. */
@@ -119,6 +135,7 @@ function ToolRunView({
   onRevertHunk,
   revertScope,
   focusView = false,
+  inNewestReply = false,
   styles
 }: ToolRunProps) {
   const { colors } = useTheme()
@@ -274,7 +291,7 @@ function ToolRunView({
   const mayBeRunning = !focusView && toolRunMayBeRunning(allPairs)
   return (
     <View style={styles.toolRun}>
-      <RunProgressGate blocks={blocks} enabled={mayBeRunning}>
+      <RunProgressGate blocks={blocks} enabled={mayBeRunning} inNewestReply={inNewestReply}>
         {(progress) => {
           if (progress?.kind === 'call') {
             return renderActiveHeader(progress.call)

@@ -61,11 +61,19 @@ const IDLE: NativeChatAgentRuns = {
   agentWorking: false
 }
 
-function Harness({ blocks, agentRuns }: { blocks: NativeChatBlock[]; agentRuns: NativeChatAgentRuns }) {
+function Harness({
+  blocks,
+  agentRuns,
+  inNewestReply
+}: {
+  blocks: NativeChatBlock[]
+  agentRuns: NativeChatAgentRuns
+  inNewestReply: boolean
+}) {
   const styles = useChatMessageStyles()
   return (
     <NativeChatAgentRunsContext.Provider value={agentRuns}>
-      <MobileNativeChatToolSegment blocks={blocks} defaultExpanded={false} styles={styles} />
+      <MobileNativeChatToolSegment blocks={blocks} defaultExpanded={false} inNewestReply={inNewestReply} styles={styles} />
     </NativeChatAgentRunsContext.Provider>
   )
 }
@@ -84,11 +92,16 @@ describe('a tool row still running', () => {
     renderer = null
   })
 
-  function render(blocks: NativeChatBlock[], agentRuns: NativeChatAgentRuns, scheme: 'light' | 'dark' = 'light') {
+  function render(
+    blocks: NativeChatBlock[],
+    agentRuns: NativeChatAgentRuns,
+    scheme: 'light' | 'dark' = 'light',
+    inNewestReply = true
+  ) {
     act(() => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
-          <Harness blocks={blocks} agentRuns={agentRuns} />
+          <Harness blocks={blocks} agentRuns={agentRuns} inNewestReply={inNewestReply} />
         </ThemeProvider>
       )
     })
@@ -163,19 +176,36 @@ describe('a tool row still running', () => {
     })
   })
 
+  /** The colours the row draws its words and glyphs in. */
+  function colorsOf(tree: ReactTestRenderer): string[] {
+    return tree.root.findAll((node) => typeof node.props.color === 'string').map((node) => String(node.props.color))
+  }
+
   for (const scheme of ['light', 'dark'] as const) {
-    it(`draws the running label in the theme's own secondary text colour (${scheme})`, () => {
-      const colors = scheme === 'light' ? lightColors : darkColors
-      for (const [blocks, runs] of [
+    const colors = scheme === 'light' ? lightColors : darkColors
+    const other = scheme === 'light' ? darkColors : lightColors
+
+    it(`keeps an earlier reply's unanswered call still while a later turn works (${scheme})`, () => {
+      // An interrupted turn leaves its call with no answer for good.
+      const tree = render(bashRunUnanswered(), { ...IDLE, agentWorking: true }, scheme, false)
+      expect(shimmer(tree)).toBeUndefined()
+      expect(rowText(tree)).not.toBe('Running')
+    })
+
+    it(`draws the running rows from the theme that is on (${scheme})`, () => {
+      const running: [NativeChatBlock[], NativeChatAgentRuns][] = [
         [bashRunUnanswered(), { ...IDLE, agentWorking: true }],
         [agentRun(), { ...IDLE, liveTaskIds: new Set([RUNNING_ROWS_AGENT_ID]) }]
-      ] as const) {
-        const label = shimmer(render(blocks, runs, scheme))!
-        expect(label).toBeDefined()
-        const glyph = label.findAll((node) => String(node.type) === 'Text' && node !== label)[0]!
-        const style = [glyph.props.style].flat(3).find((entry) => entry && typeof entry.color === 'string')
-        expect(style?.color ?? null).not.toBeNull()
-        expect([colors.textSecondary, colors.textMuted, colors.textPrimary]).toContain(style.color)
+      ]
+      for (const [blocks, runs] of running) {
+        const tree = render(blocks, runs, scheme)
+        expect(shimmer(tree)).toBeDefined()
+        const drawn = colorsOf(tree)
+        expect(drawn).toContain(colors.textSecondary)
+        expect(drawn).toContain(colors.textMuted)
+        if (other.textSecondary !== colors.textSecondary) {
+          expect(drawn).not.toContain(other.textSecondary)
+        }
       }
     })
   }

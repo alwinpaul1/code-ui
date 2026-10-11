@@ -163,11 +163,13 @@ describe('the run sheet opened from the chat', () => {
   // a run-sheet row opens, is rendered after the chat and comes last.
   const detailPair = (tree: ReactTestRenderer) => tree.root.findAllByType('ToolDetailSheet' as never).at(-1)!.props.pair
 
-  // Since 2026-10-11 the row settles once the launch has answered, the agent
-  // still running or not (mobile-native-chat-agent-run.ts).
-  it('reads its sentence once the launch has answered, then lists the five calls behind a tap', async () => {
+  // Since the 2026-10-11 recording (Claude Code 2.1.296) the row sweeps
+  // "Running agent: <description>" while Orca's roster lists the agent it
+  // launched, as the Claude app's does, and its tap still opens the sheet,
+  // titled in the past tense.
+  it('reads Running agent while the roster lists the agent, then lists the five calls behind a tap', async () => {
     const tree = await render(true)
-    expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label')).toHaveLength(0)
+    expect(tree.root.findAll((n) => n.props.testID === 'tool-run-agent-label' && String(n.type) === 'Text')).toHaveLength(1)
     expect(tree.root.findAll((n) => n.props.testID === 'run-sheet')).toHaveLength(0)
     await press(tree, 'tool-run-header')
     expect(tree.root.findAll((n) => n.props.testID === 'tool-line')).toHaveLength(0)
