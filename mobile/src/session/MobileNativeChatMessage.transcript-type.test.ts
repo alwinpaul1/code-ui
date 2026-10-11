@@ -126,7 +126,6 @@ describe('the chat transcript’s type', () => {
 
   it.each([
     ['a reply', reply],
-    ['a thought', { ...reply, id: 'r1', role: 'reasoning', blocks: [{ type: 'text', text: 'Thinking it over.' }] }],
     [
       'a plan document',
       { ...reply, id: 's1', role: 'system', blocks: [{ type: 'text', text: '1. Do it', presentation: 'plan-document' }] }
@@ -154,6 +153,20 @@ describe('the chat transcript’s type', () => {
     for (const sheet of byType('MobileNativeChatToolDetailSheet')) {
       expect(sheet.props.typography).toBeUndefined()
     }
+  })
+
+  // A thought is a "Thought process" row since 2026-10-12; its words are in the sheet it opens.
+  it('draws a thought, opened, at the same size', () => {
+    render(
+      createElement(MobileNativeChatMessage, {
+        message: { ...reply, id: 'r1', role: 'reasoning', blocks: [{ type: 'text', text: 'Thinking it over.' }] }
+      })
+    )
+    expect(byType('MobileMarkdown')).toHaveLength(0)
+    const row = byType('Pressable').find((node) => node.props.accessibilityLabel === 'Thought process')!
+    act(() => row.props.onPress())
+    const [markdown] = byType('MobileMarkdown')
+    expect(markdown!.props.typography).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY)
   })
 
   it('draws a subagent’s message, opened, at the same size', () => {

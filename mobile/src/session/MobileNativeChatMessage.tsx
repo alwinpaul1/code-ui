@@ -339,8 +339,8 @@ function MobileNativeChatMessageImpl({
         >
           {segments.map((segment, segmentIndex) =>
             segment.kind === 'prose' ? (
-              // No line beside the agent's own words, interim or final: the
-              // Claude app draws one only beside a thought (2026-09-25).
+              // No line beside the agent's own words, interim or final
+              // (2026-09-25). A thought is its own "Thought process" row.
               <View key={`p${segmentIndex}`}>
                 {groupProseBlocks(segment.blocks, { isUser }).map((group, index, groups) => (
                   // Air between a picture and the caption under it.
