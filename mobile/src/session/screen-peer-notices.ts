@@ -18,8 +18,9 @@ import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
  * harness's boilerplate, the way the Claude app shows a peer message, and
  * nothing of the message or the sender (the user's call, 2026-09-21; the
  * earlier card and one-liner are gone). A subagent's row gets no bubble
- * (drawsPeerBubble); where no prompt hook carries the message, it is drawn as
- * the folded "Message from <sender>" row the desktop TUI shows (2026-09-26).
+ * (drawsPeerBubble); where no prompt hook carries the message, a message sent
+ * mid-run is drawn as the folded "Message from <sender>" row the desktop TUI
+ * shows (2026-09-26), and a hand-back is not drawn at all (2026-10-11).
  * The body is still remembered for what follows. When the transcript
  * later carries the turn itself (a row Orca did publish, surfaced by
  * mobile-native-chat-peer-messages.ts) at or after that anchor, the notice
@@ -166,9 +167,10 @@ export function observeScreenPeerNotices(
  *
  *  `subagentRows`: draw a subagent's sender-only row as the folded "Message
  *  from <sender>" row (MobileNativeChatAgentMessageRow), the way the desktop
- *  TUI draws it (the user's call, 2026-09-26). Off on a tab launched with the
- *  prompt hook, which carries the same message with its words
- *  (mobile-native-chat-agent-message-rows.ts), so it is drawn once. */
+ *  TUI draws it (the user's call, 2026-09-26), when it is a message sent
+ *  mid-run and not a hand-back (isMidRunMessage, 2026-10-11). Off on a tab
+ *  launched with the prompt hook, which carries the same message with its
+ *  words (mobile-native-chat-agent-message-rows.ts), so it is drawn once. */
 export function withScreenPeerNotices(
   folded: readonly NativeChatMessage[],
   allNotices: readonly ScreenPeerNotice[],
@@ -179,7 +181,9 @@ export function withScreenPeerNotices(
   }
   const notices = allNotices.filter(
     (notice) =>
-      notice.held !== true && notice.pending !== true && (drawsPeerBubble(notice) || options.subagentRows === true)
+      notice.held !== true &&
+      notice.pending !== true &&
+      (drawsPeerBubble(notice) || (options.subagentRows === true && isMidRunMessage(notice, allNotices, options.bodies)))
   )
   if (notices.length === 0) {
     return folded as NativeChatMessage[]
@@ -279,8 +283,28 @@ export function withScreenPeerNotices(
 
 /** Words another source carried for a sender-only row: the tab status's copy
  *  of a subagent message (parseStatusSubagentPreview), by the agent's id or
- *  the name the row shows, with when the phone first read it. */
-export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; seenAt?: number }
+ *  the name the row shows, with when the phone first read it. `handback`:
+ *  the copy opened with the harness's hand-back line. */
+export type ScreenRowBody = { senders: readonly string[]; body: string; cut: boolean; handback?: boolean; seenAt?: number }
+
+/**
+ * Whether a sender-only row is drawn: only when the tab status's copy paired
+ * with it (bodyOf) is a message the subagent sent mid-run. The Claude app
+ * draws nothing for a hand-back, a subagent's final report (the user's
+ * screenshots of 2026-10-11). The row alone cannot say which it is. In
+ * session 0954729d (Claude Code 2.1.294 to 2.1.296), 73 of the 74 subagent
+ * deliveries were hand-backs, and the 74th resent a report through
+ * SendMessage. So a row with no copy paired, or one paired with a hand-back's
+ * copy, is not drawn.
+ */
+function isMidRunMessage(
+  notice: ScreenPeerNotice,
+  notices: readonly ScreenPeerNotice[],
+  bodies: readonly ScreenRowBody[] | undefined
+): boolean {
+  const words = bodyOf(notice, notices, bodies)
+  return words !== undefined && words.handback !== true
+}
 
 /** How far apart the phone may first read a row and the status's copy of its
  *  message and still take them for one message. The hook that puts a message
@@ -321,9 +345,9 @@ function bodyOf(
  * those since 2.1.272 as a queued_command with origin.kind "peer" and handback
  * true (22 of 22 on this machine), and the Claude app draws no bubble for it,
  * only this session's own "Messaged @agent" call (2026-09-24, from the phone,
- * reversing 2026-09-21's bubble before every subagent reply). Such a row is
- * drawn instead as the folded row the desktop TUI shows, when the caller asks
- * (`subagentRows`, 2026-09-26): never as a bubble.
+ * reversing 2026-09-21's bubble before every subagent reply). It draws no
+ * folded row for it either (2026-10-11), so such a row is drawn only for a
+ * message sent mid-run (isMidRunMessage): never as a bubble.
  */
 function drawsPeerBubble(notice: ScreenPeerNotice): boolean {
   return notice.body !== undefined

@@ -3,7 +3,7 @@ import { isToolCallBlock, isToolResultBlock, isTextBlock, type NativeChatMessage
 import type { AgentHudBeacon, DesktopPrompt } from './agent-hud-beacon'
 import type { AgentMessagePrompt } from './agent-hud-beacon-agent-messages'
 import { readLaunch, readString, takeAnsweredCall, type PendingCall } from './mobile-background-task-transcript'
-import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
+import { isPeerTrailingFrame } from './claude-peer-message-frames'
 
 /**
  * A message a subagent sent its lead, drawn the way the desktop TUI draws it:
@@ -20,6 +20,11 @@ import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
  *     (`› Message from @general-purpose (ctrl+o to expand)`), which names
  *     the sender and nothing more (screen-peer-notices.ts).
  *
+ * A hand-back, a subagent's final report, is not drawn at all: the Claude
+ * app draws nothing for one (the user's screenshots of 2026-10-11, reversing
+ * the TUI row of 2026-09-26). It is still parsed here, so it is never drawn
+ * as the user's bubble either.
+ *
  * Not the user's bubble, and not the peer bubble another SESSION's message
  * gets: that one carries a `<cross-session-message>` block and is left to
  * mobile-native-chat-peer-messages.ts.
@@ -29,7 +34,9 @@ import { PEER_TRAILING_FRAMES } from './claude-peer-message-frames'
  *  text block has no other field for it), and the message as its text. */
 export const AGENT_MESSAGE_PRESENTATION = 'agent-message'
 
-export type SubagentMessage = { from: string; body: string }
+/** `handback`: the harness's hand-back line opened it, so it is a subagent's
+ *  final report rather than a message it sent mid-run. */
+export type SubagentMessage = { from: string; body: string; handback: boolean }
 
 /** A prompt the hook took at the row a subagent message names. */
 export type SameRowPrompt = { nonce: string; text: string }
@@ -41,6 +48,9 @@ export type BeaconAgentMessage = {
   body: string
   /** The hook shortened the prompt, so the message ends early. */
   cut: boolean
+  /** A subagent's final report: the Claude app draws nothing for one, so
+   *  neither does the chat (mobile-native-chat-agent-message-rows.ts). */
+  handback?: true
   /** The transcript row that was last when the message was taken. */
   anchorId?: string
   /** Read back from the warm-start store, not heard this run. */
@@ -102,15 +112,16 @@ export function parseSubagentMessage(text: string, options: { cut?: boolean } = 
   const whole = body.trimEnd()
   const close = whole.lastIndexOf(CLOSE_TAG)
   const after = close === -1 ? null : whole.slice(close + CLOSE_TAG.length)
-  if (after !== null && (after === '' || PEER_TRAILING_FRAMES.includes(after))) {
+  if (after !== null && (after === '' || isPeerTrailingFrame(after))) {
     body = whole.slice(0, close)
   } else if (options.cut !== true) {
     return null
   }
-  if (HANDBACK_PREAMBLE.test(body)) {
+  const handback = HANDBACK_PREAMBLE.test(body)
+  if (handback) {
     body = dedent(body.replace(HANDBACK_PREAMBLE, ''))
   }
-  return { from, body: body.replace(/\s+$/, '').replace(/^\n+/, '') }
+  return { from, body: body.replace(/\s+$/, '').replace(/^\n+/, ''), handback }
 }
 
 /** Whether a stored text is a hand-back the hook cut: the wrapper's line,
@@ -202,6 +213,7 @@ export function beaconAgentMessages(prompts: readonly AgentMessagePrompt[] | und
       from: parsed.from,
       body: parsed.body,
       cut: prompt.cut === true,
+      ...(parsed.handback ? { handback: true as const } : {}),
       ...(prompt.anchorId ? { anchorId: prompt.anchorId } : {}),
       ...(prompt.restored ? { restored: true as const } : {}),
       ...(prompt.drawnAfter ? { drawnAfter: prompt.drawnAfter } : {}),
@@ -318,7 +330,7 @@ export function agentMessageOf(message: NativeChatMessage): { sender: string; bo
 export function screenRowBodies(
   messages: readonly StatusSubagentMessage[],
   raw: readonly NativeChatMessage[]
-): { senders: string[]; body: string; cut: boolean; seenAt?: number }[] {
+): { senders: string[]; body: string; cut: boolean; handback: boolean; seenAt?: number }[] {
   if (messages.length === 0) {
     return []
   }
@@ -326,13 +338,13 @@ export function screenRowBodies(
   return messages.map((message) => {
     const name = names.get(message.from)
     const senders = name ? [message.from, name] : [message.from]
-    return { senders, body: message.body, cut: message.cut, ...(message.seenAt !== undefined ? { seenAt: message.seenAt } : {}) }
+    return { senders, body: message.body, cut: message.cut, handback: message.handback, ...(message.seenAt !== undefined ? { seenAt: message.seenAt } : {}) }
   })
 }
 
 /** What the tab status carried of a subagent message: who sent it, and as
  *  much of its words as fit (parseStatusSubagentPreview). */
-export type StatusSubagentPreview = { from: string; body: string; cut: boolean }
+export type StatusSubagentPreview = { from: string; body: string; cut: boolean; handback: boolean }
 /** The same, with when the phone first read it (its clock); none for a copy
  *  read on a first read of the status, which is never paired. */
 export type StatusSubagentMessage = StatusSubagentPreview & { seenAt?: number }
@@ -367,9 +379,10 @@ export function parseStatusSubagentPreview(text: string, cut: boolean): StatusSu
   } else if (!cut) {
     return null
   }
-  if (body.startsWith(HANDBACK_LINE)) {
+  const handback = body.startsWith(HANDBACK_LINE)
+  if (handback) {
     const report = body.indexOf(REPORT_FOLLOWS)
     body = report === -1 ? '' : body.slice(report + REPORT_FOLLOWS.length)
   }
-  return { from, body: body.trim(), cut: close === -1 }
+  return { from, body: body.trim(), cut: close === -1, handback }
 }

@@ -74,6 +74,16 @@ function fromBeacon(beacon: DesktopPrompt[]) {
   return { prompts: mergeDesktopPrompts([], beacon), agentMessages: beaconAgentMessages(beacon) }
 }
 
+/** The tab status's copy of a message a subagent sent mid-run (not a
+ *  hand-back), first read by the phone at `clock`. A sender-only screen row
+ *  is drawn only with such a copy paired to it (2026-10-11). */
+function midRunStatus(from: string, words: string, clock: string) {
+  vi.setSystemTime(at(clock))
+  let state = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, { prompt: '', updatedAt: at('12:39:00.000') })
+  state = observeAgentStatusPrompt(state, SESSION, { prompt: `<agent-message from="${from}"> ${words} </agent-message>`, updatedAt: at(clock) })
+  return state.agentMessages ?? []
+}
+
 describe("a subagent's message to this session", () => {
   const { show, lastFrame } = landingHarness(frames)
   afterEach(() => resetAgentMessageAnchorsForTests())
@@ -93,20 +103,30 @@ describe("a subagent's message to this session", () => {
     expect(ids.indexOf('agent-message:4101')).toBeLessThan(ids.indexOf('a2'))
   })
 
-  it("is drawn from the TUI's row on a tab launched without the prompt hook, with no words to show", async () => {
+  // 2026-10-11: the TUI's row alone cannot say whether it is a hand-back,
+  // which the Claude app does not draw, and most are.
+  it("draws nothing for the TUI's row alone on a tab launched without the prompt hook, and no user bubble", async () => {
     const peerRows = peerNoticesFromScreen([SCREEN_ROW])
     await show('12:40:30.000', { messages: MESSAGES, working: true, promptHook: false, peerRows })
-    expect(agentRows()).toEqual([{ sender: 'general-purpose', body: '' }])
+    expect(agentRows()).toEqual([])
     expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
   })
 
   it('is drawn once on a tab with the prompt hook, where the screen shows the same message', async () => {
-    const beacon = [{ nonce: '4102', text: SUBAGENT_HANDBACK_PROMPT, cut: true, anchorId: 'a1' }]
+    const beacon = [{ nonce: '4102', text: SUBAGENT_REQUEST_PROMPT, anchorId: 'a1' }]
     const peerRows = peerNoticesFromScreen([SCREEN_ROW])
     await show('12:40:30.000', { messages: MESSAGES, working: true, promptHook: true, peerRows, ...fromBeacon(beacon) })
     expect(agentRows()).toEqual([
-      { sender: 'general-purpose', body: '1. Verdict: has defects. Two of them are wrong numbers, and one of those reopens t…', cut: true }
+      { sender: 'general-purpose', body: expect.stringMatching(/^Request for one read-only device probe \(copy-flicker agent\)/) }
     ])
+  })
+
+  it('draws nothing for a hand-back on a tab with the prompt hook, where the screen shows its row too', async () => {
+    const beacon = [{ nonce: '4103', text: SUBAGENT_HANDBACK_PROMPT, cut: true, anchorId: 'a1' }]
+    const peerRows = peerNoticesFromScreen([SCREEN_ROW])
+    await show('12:40:30.000', { messages: MESSAGES, working: true, promptHook: true, peerRows, ...fromBeacon(beacon) })
+    expect(agentRows()).toEqual([])
+    expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
   })
 })
 
@@ -393,7 +413,7 @@ describe("a subagent's hand-back that waited in the queue box, on a tab with no 
       '────────────────────────────────────────────────────────────────────────────────'
     ])
 
-  it('is never drawn as the user bubble, and is drawn once as "Message from a9d5c2f85e94ca47f"', async () => {
+  it('is never drawn as the user bubble, nor as a "Message from" row', async () => {
     const lastFolded = () => (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
     await show('12:40:30.000', { messages: [PROMPT, OPENING], working: true, promptHook: false, queued: queueBox([MIDTURN_HANDBACK_ROW]) })
     await show('12:40:40.000', {
@@ -404,7 +424,7 @@ describe("a subagent's hand-back that waited in the queue box, on a tab with no 
       peerRows: peerNoticesFromScreen(['⏺ Reading the dump.', '', MIDTURN_HANDBACK_ROW])
     })
     expect(lastFrame().map((bubble) => bubble.text)).toEqual(['Why is the copy flickering?'])
-    expect(lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!.sender] : []))).toEqual([MIDTURN_HANDBACK_FROM])
+    expect(lastFolded().flatMap((row) => (agentMessageOf(row) ? [agentMessageOf(row)!.sender] : []))).toEqual([])
   })
 })
 
@@ -441,7 +461,7 @@ describe("a subagent's message on a tab with no prompt hook, with the tab status
     ])
   })
 
-  it('keeps saying only the sender reached the phone for a hand-back, whose report the status never holds', async () => {
+  it('draws no row for a hand-back, which the status copy says it is', async () => {
     await show('12:40:30.000', {
       messages: [PROMPT, OPENING],
       working: true,
@@ -449,7 +469,7 @@ describe("a subagent's message on a tab with no prompt hook, with the tab status
       peerRows: peerNoticesFromScreen(['⏺ Reading the dump.', '', MIDTURN_HANDBACK_ROW]),
       statusAgentMessages: statusOf(MIDTURN_HANDBACK_STATUS_PROMPT)
     })
-    expect(agentRows()).toEqual([{ sender: MIDTURN_HANDBACK_FROM, body: '' }])
+    expect(agentRows()).toEqual([])
   })
 })
 
@@ -504,7 +524,7 @@ describe("two messages from one subagent, each side missing a different one", ()
     LAUNCH[1]!
   ]
 
-  it("never opens the first message's row to the second message's words", async () => {
+  it("never opens the first message's row to the second message's words: with none of its own, it is not drawn", async () => {
     await show('12:40:30.000', { messages: [PROMPT, OPENING, ...launched], working: true, promptHook: false, peerRows: peerNoticesFromScreen(screen1) })
     const later = [PROMPT, OPENING, ...launched, call, result]
     const statusCopies = status(['ok, run it', `<agent-message from="${AGENT_ID}"> ${SECOND} </agent-message>`], ['12:41:30.000', '12:42:30.000'])
@@ -515,8 +535,8 @@ describe("two messages from one subagent, each side missing a different one", ()
       peerRows: peerNoticesFromScreen(screen2),
       statusAgentMessages: statusCopies
     })
-    const first = rowsOf().find((row) => row.id === 'peer-notice:probe:1')
-    expect(first).toEqual({ id: 'peer-notice:probe:1', sender: 'probe', body: '' })
+    expect(rowsOf().find((row) => row.id === 'peer-notice:probe:1')).toBeUndefined()
+    expect(rowsOf().some((row) => row.body.includes(SECOND))).toBe(false)
   })
 
   // The trade, taken on purpose (final pre-merge review, 2026-09-27): on a tab
@@ -525,7 +545,7 @@ describe("two messages from one subagent, each side missing a different one", ()
   // that tried to tell it by what was painted above it (159e20db, 3672cb4c,
   // 0ab87379) drew one message twice somewhere else. The first row keeps no
   // words: the status's copy is the second message's.
-  it('does not draw the second row once the first has scrolled off, and gives the first none of its words: the documented refusal', async () => {
+  it('does not draw the second row once the first has scrolled off, and gives the first none of its words, so neither is drawn: the documented refusal', async () => {
     await show('12:40:30.000', { messages: [PROMPT, OPENING, ...launched], working: true, promptHook: false, peerRows: peerNoticesFromScreen(screen1) })
     const statusCopies = status(['ok, run it', `<agent-message from="${AGENT_ID}"> ${SECOND} </agent-message>`], ['12:41:30.000', '12:42:30.000'])
     await show('12:42:30.000', {
@@ -535,7 +555,7 @@ describe("two messages from one subagent, each side missing a different one", ()
       peerRows: peerNoticesFromScreen(screen2),
       statusAgentMessages: statusCopies
     })
-    expect(rowsOf()).toEqual([{ id: 'peer-notice:probe:1', sender: 'probe', body: '' }])
+    expect(rowsOf()).toEqual([])
   })
 })
 
@@ -567,9 +587,10 @@ describe('one subagent row under the tool output of the turn it came in', () => 
 
   it('is drawn once however many times the chat reads the same screen, near its top', async () => {
     const peerRows = peerNoticesFromScreen(['     Tests  340 passed (340)', '', ROW, '', '⏺ Bash(git status)', '  ⎿  On branch main'])
-    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows })
-    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows })
-    await show('12:40:32.000', { messages: turn, working: true, promptHook: false, peerRows })
+    const statusAgentMessages = midRunStatus('probe', 'tests done', '12:40:29.000')
+    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows, statusAgentMessages })
+    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows, statusAgentMessages })
+    await show('12:40:32.000', { messages: turn, working: true, promptHook: false, peerRows, statusAgentMessages })
     expect(agentRows()).toEqual(['peer-notice:probe:1'])
   })
 
@@ -584,8 +605,9 @@ describe('one subagent row under the tool output of the turn it came in', () => 
       '',
       ROW
     ]
-    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(first) })
-    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(repainted) })
+    const statusAgentMessages = midRunStatus('probe', 'tests done', '12:40:29.000')
+    await show('12:40:30.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(first), statusAgentMessages })
+    await show('12:40:31.000', { messages: turn, working: true, promptHook: false, peerRows: peerNoticesFromScreen(repainted), statusAgentMessages })
     expect(agentRows()).toEqual(['peer-notice:probe:1'])
   })
 })
@@ -651,17 +673,20 @@ describe('a peer message that waited in the queue box, once Claude takes it', ()
   ]
 
   it.each([
-    ['with no prompt hook', MIDTURN_HANDBACK_ROW, false, `peer-notice:${MIDTURN_HANDBACK_FROM}:1`],
+    ['with no prompt hook, sent mid-run', MIDTURN_HANDBACK_ROW, false, `peer-notice:${MIDTURN_HANDBACK_FROM}:1`],
     ['with the prompt hook', '› Cross-session message from @code-ui-6f: reply with received (ctrl+o to expand)', true, 'peer-notice:code-ui-6f:1']
   ] as const)('is drawn once when it waited alone in the queue, %s', async (_label, row, promptHook, id) => {
     const messages = [PROMPT, OPENING, ...LAUNCH]
-    await show('12:40:30.000', { messages, working: true, promptHook, queued: queuedMessagesFromScreen(queuedAlone(row)), peerRows: peerNoticesFromScreen(queuedAlone(row)) })
+    // A subagent's row is drawn only with a mid-run copy paired (2026-10-11).
+    const statusAgentMessages = promptHook ? [] : midRunStatus(MIDTURN_HANDBACK_FROM, 'ready for the probe', '12:40:29.000')
+    await show('12:40:30.000', { messages, working: true, promptHook, queued: queuedMessagesFromScreen(queuedAlone(row)), peerRows: peerNoticesFromScreen(queuedAlone(row)), statusAgentMessages })
     await show('12:40:40.000', {
       messages: [...messages, LATER],
       working: true,
       promptHook,
       queued: queuedMessagesFromScreen(taken(row)),
-      peerRows: peerNoticesFromScreen(taken(row))
+      peerRows: peerNoticesFromScreen(taken(row)),
+      statusAgentMessages
     })
     expect(drawnIds()).toEqual([id])
   })
@@ -694,8 +719,11 @@ describe('a peer message that waited in the queue box, once Claude takes it', ()
     expect(agentMessageOf(folded[drawn]!)?.body).toBe('ready for the probe')
   })
 
-  it('is drawn once as "Message from", on a tab with no prompt hook', async () => {
+  it('is drawn once as "Message from", on a tab with no prompt hook, for a message sent mid-run', async () => {
     const messages = [PROMPT, OPENING, ...LAUNCH]
+    // Read as Claude takes it, which is when the row is first seen in the turn.
+    const statusAgentMessages = midRunStatus(MIDTURN_HANDBACK_FROM, 'ready for the probe', '12:40:39.000')
+    vi.setSystemTime(at('12:40:30.000'))
     await show('12:40:30.000', {
       messages,
       working: true,
@@ -708,7 +736,8 @@ describe('a peer message that waited in the queue box, once Claude takes it', ()
       working: true,
       promptHook: false,
       queued: queuedMessagesFromScreen(taken(MIDTURN_HANDBACK_ROW)),
-      peerRows: peerNoticesFromScreen(taken(MIDTURN_HANDBACK_ROW))
+      peerRows: peerNoticesFromScreen(taken(MIDTURN_HANDBACK_ROW)),
+      statusAgentMessages
     })
     expect(drawnIds()).toEqual([`peer-notice:${MIDTURN_HANDBACK_FROM}:1`])
   })

@@ -105,6 +105,18 @@ const SCREEN = [
   "  branch (fix/troubleshoot-relay-row). It isn't merged yet."
 ]
 const ROWS = peerNoticesFromScreen(SCREEN)
+/** The same screen with another session's message in that place. Since
+ *  2026-10-11 a subagent's sender-only row found on the screen is not drawn:
+ *  with no copy of its words paired, nothing says it is not a hand-back, which
+ *  the Claude app does not draw. The placement of a found row is the same for
+ *  every row that is drawn, so it is pinned with this one. */
+const PEER_SCREEN = SCREEN.map((line) => (line.startsWith('› Message from @general-purpose') ? '› Message from @code-ui-6f: Capture probe (ctrl+o to expand)' : line))
+const PEER_ROWS = peerNoticesFromScreen(PEER_SCREEN)
+/** Another session's message: drawn as the peer bubble, with this sender. */
+const P = [{ sender: 'code-ui-6f', body: 'Capture probe' }]
+/** The row the chat drew from the screen, named by its sender. */
+const drawnRow = (message: NativeChatMessage) =>
+  agentMessageOf(message) ? `row:${agentMessageOf(message)!.sender}` : message.id.startsWith('peer-notice:') ? `row:${message.id.split(':')[1]}` : message.id
 
 describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', () => {
   const { show, unmount } = landingHarness(frames)
@@ -127,9 +139,10 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
   function placement(): { row: number; committing: number; final: number; rows: number } {
     const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
     const index = (id: string) => folded.findIndex((message) => message.id === id)
-    const rows = folded.filter((message) => agentMessageOf(message)?.sender === 'general-purpose')
+    const isRow = (message: NativeChatMessage) => drawnRow(message).startsWith('row:')
+    const rows = folded.filter(isRow)
     return {
-      row: folded.findIndex((message) => agentMessageOf(message)?.sender === 'general-purpose'),
+      row: folded.findIndex(isRow),
       committing: index(COMMITTING),
       final: index(FINAL),
       rows: rows.length
@@ -138,6 +151,22 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
 
   it('reads the TUI’s row as a subagent’s, with no words', () => {
     expect(ROWS).toEqual([{ sender: 'general-purpose' }])
+    expect(PEER_ROWS).toEqual(P)
+  })
+
+  it('draws no row for the subagent’s row found on the screen, and says why once', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    vi.setSystemTime(at('17:38:58.000'))
+    await showAt('17:38:58.000', BEFORE_COMMIT, null)
+    await showAt('17:38:58.500', BEFORE_COMMIT, [])
+    unmount()
+    await showAt('17:40:00.000', ANSWERED, null)
+    await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:02.000', ANSWERED, ROWS)
+    expect(placement().rows).toBe(0)
+    expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[peer-row]'))).toEqual([
+      '[peer-row] not drawn: the row from @general-purpose names only its sender and was on the screen when the chat first read it, so no copy of its words says it is not a hand-back (the Claude app draws none)'
+    ])
   })
 
   it('keeps a subagent’s message the chat did not watch arrive above the lead’s reply to it', async () => {
@@ -149,8 +178,8 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     unmount()
     // Back after the lead answered: the screen is not read yet, then is.
     await showAt('17:40:00.000', ANSWERED, null)
-    await showAt('17:40:01.000', ANSWERED, ROWS)
-    await showAt('17:40:02.000', ANSWERED, ROWS)
+    await showAt('17:40:01.000', ANSWERED, PEER_ROWS)
+    await showAt('17:40:02.000', ANSWERED, PEER_ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
     expect(where.row).toBeGreaterThan(where.committing)
@@ -165,8 +194,8 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     await showAt('17:38:58.500', BEFORE_COMMIT, [])
     unmount()
     await showAt('17:40:00.000', [], null, true)
-    await showAt('17:40:01.000', [], ROWS, true)
-    await showAt('17:40:02.000', ANSWERED, ROWS)
+    await showAt('17:40:01.000', [], PEER_ROWS, true)
+    await showAt('17:40:02.000', ANSWERED, PEER_ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
     expect(where.row).toBeGreaterThan(where.committing)
@@ -180,7 +209,7 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     // The link drops; the chat stays mounted and does not read the screen.
     await showAt('17:38:59.000', BEFORE_COMMIT, null)
     await showAt('17:40:00.000', ANSWERED, null)
-    await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:01.000', ANSWERED, PEER_ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
     expect(where.row).toBeGreaterThan(where.committing)
@@ -205,9 +234,9 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     vi.setSystemTime(at('17:38:58.000'))
     await showAt('17:38:58.000', BEFORE_COMMIT, null)
     await showAt('17:38:58.500', BEFORE_COMMIT, [])
-    await showAt('17:39:02.500', TAKEN, ROWS)
-    await showAt('17:39:17.000', ANSWERED, ROWS)
-    await showAt('17:39:18.000', ANSWERED, ROWS)
+    await showAt('17:39:02.500', TAKEN, PEER_ROWS)
+    await showAt('17:39:17.000', ANSWERED, PEER_ROWS)
+    await showAt('17:39:18.000', ANSWERED, PEER_ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
     expect(where.row).toBeGreaterThan(where.committing)
@@ -218,10 +247,10 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     vi.setSystemTime(at('17:38:58.000'))
     await showAt('17:38:58.000', BEFORE_COMMIT, null)
     await showAt('17:38:58.500', BEFORE_COMMIT, [])
-    await showAt('17:39:02.500', TAKEN, ROWS)
+    await showAt('17:39:02.500', TAKEN, PEER_ROWS)
     unmount()
     await showAt('17:40:00.000', ANSWERED, null)
-    await showAt('17:40:01.000', ANSWERED, ROWS)
+    await showAt('17:40:01.000', ANSWERED, PEER_ROWS)
     const where = placement()
     expect(where.rows).toBe(1)
     expect(where.row).toBeLessThan(where.final)
@@ -236,9 +265,9 @@ describe('a subagent’s message taken mid-turn, on a tab with no prompt hook', 
     unmount()
     const later = [only[0]!, ...ANSWERED.slice(BEFORE_COMMIT.length)]
     await showAt('17:40:00.000', later, null)
-    await showAt('17:40:01.000', later, ROWS)
+    await showAt('17:40:01.000', later, PEER_ROWS)
     const folded = (frames.at(-1)!.folded as NativeChatMessage[]) ?? []
-    const index = folded.findIndex((message) => agentMessageOf(message)?.sender === 'general-purpose')
+    const index = folded.findIndex((message) => drawnRow(message) === 'row:code-ui-6f')
     expect(folded[index - 1]?.id).toBe(COMMITTING)
   })
 
@@ -303,7 +332,7 @@ describe('rows found on the first screen read, after the review of the first fix
         act(() => renderer?.unmount())
         renderer = null
       },
-      ids: () => out.map((message) => (agentMessageOf(message) ? `row:${agentMessageOf(message)!.sender}` : message.id))
+      ids: () => out.map(drawnRow)
     }
   }
   const peerLines = (info: { mock: { calls: unknown[][] } }) =>
@@ -350,13 +379,13 @@ describe('rows found on the first screen read, after the review of the first fix
     const view = chat()
     view.show({ rows: null, folded: [U1, A1], scope: 'A' })
     view.show({ rows: [], folded: [U1, A1], scope: 'A' })
-    view.show({ rows: R, folded: [U1, A1, U2, A2], scope: 'A' })
+    view.show({ rows: P, folded: [U1, A1, U2, A2], scope: 'A' })
     for (let index = 0; index < 100; index += 1) {
       view.show({ rows: null, folded: [], scope: `other-${index}` })
     }
     view.show({ rows: null, folded: [U1, A1, U2, A2, U3, A3], scope: 'A' })
-    view.show({ rows: R, folded: [U1, A1, U2, A2, U3, A3], scope: 'A' })
-    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:general-purpose', 'u3', 'a3'])
+    view.show({ rows: P, folded: [U1, A1, U2, A2, U3, A3], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:code-ui-6f', 'u3', 'a3'])
   })
 
   // Degenerate: past the cap of scopes it read, the oldest memory goes. A row
@@ -368,18 +397,18 @@ describe('rows found on the first screen read, after the review of the first fix
     view.show({ rows: null, folded: [U1, A1], scope: 'A' })
     view.show({ rows: [], folded: [U1, A1], scope: 'A' })
     view.show({ rows: null, folded: [U1, A1], scope: 'A' })
-    view.show({ rows: R, folded: [U1, A1, A1B], scope: 'A' })
-    expect(view.ids()).toEqual(['u1', 'a1', 'row:general-purpose', 'a1b'])
+    view.show({ rows: P, folded: [U1, A1, A1B], scope: 'A' })
+    expect(view.ids()).toEqual(['u1', 'a1', 'row:code-ui-6f', 'a1b'])
     for (let index = 0; index < 200; index += 1) {
       view.show({ rows: null, folded: [U1], scope: `other-${index}` })
       view.show({ rows: [], folded: [U1], scope: `other-${index}` })
     }
     view.show({ rows: null, folded: [U1, A1, A1B], scope: 'A' })
-    view.show({ rows: R, folded: [U1, A1, A1B], scope: 'A' })
+    view.show({ rows: P, folded: [U1, A1, A1B], scope: 'A' })
     expect(view.ids()).toEqual(['u1', 'a1', 'a1b'])
     expect(peerLines(info)).toEqual([
-      '[peer-row] drawn: the row from @general-purpose was on the screen when the chat first read it, not watched arriving; placed after a1, the last row the chat held when it last read the screen',
-      '[peer-row] not drawn: the row from @general-purpose was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by'
+      '[peer-row] drawn: the row from @code-ui-6f was on the screen when the chat first read it, not watched arriving; placed after a1, the last row the chat held when it last read the screen',
+      '[peer-row] not drawn: the row from @code-ui-6f was on the screen when the chat first read it, and the chat holds no earlier reading of this session to place it by'
     ])
   })
   // Re-review of 1045e43b: the placement was decided once, on the first read,
@@ -405,12 +434,12 @@ describe('rows found on the first screen read, after the review of the first fix
     view.show({ rows: [], folded: BEFORE_COMMIT, scope: 'A' })
     view.unmount()
     view.show({ rows: null, folded: [], scope: 'A', settled: false })
-    view.show({ rows: ROWS, folded: [], scope: 'A', settled: false })
-    view.show({ rows: ROWS, folded: ANSWERED, scope: 'A' })
+    view.show({ rows: PEER_ROWS, folded: [], scope: 'A', settled: false })
+    view.show({ rows: PEER_ROWS, folded: ANSWERED, scope: 'A' })
     const ids = view.ids()
-    expect(ids.filter((id) => id === 'row:general-purpose')).toHaveLength(1)
-    expect(ids.indexOf('row:general-purpose')).toBeGreaterThan(ids.indexOf(COMMITTING))
-    expect(ids.indexOf('row:general-purpose')).toBeLessThan(ids.indexOf(FINAL))
+    expect(ids.filter((id) => id === 'row:code-ui-6f')).toHaveLength(1)
+    expect(ids.indexOf('row:code-ui-6f')).toBeGreaterThan(ids.indexOf(COMMITTING))
+    expect(ids.indexOf('row:code-ui-6f')).toBeLessThan(ids.indexOf(FINAL))
   })
 
   it('says so once for each of two rows from one sender found on the same read', () => {
@@ -420,8 +449,8 @@ describe('rows found on the first screen read, after the review of the first fix
     view.show({ rows: [], folded: [U1, A1], scope: 'A' })
     view.unmount()
     view.show({ rows: null, folded: [U1, A1, A1B], scope: 'A' })
-    view.show({ rows: [...R, ...R], folded: [U1, A1, A1B], scope: 'A' })
-    expect(view.ids().filter((id) => id === 'row:general-purpose')).toHaveLength(2)
+    view.show({ rows: [...P, ...P], folded: [U1, A1, A1B], scope: 'A' })
+    expect(view.ids().filter((id) => id === 'row:code-ui-6f')).toHaveLength(2)
     expect(peerLines(info)).toHaveLength(2)
   })
 })
@@ -493,7 +522,7 @@ describe('rows on the screen, read beside the real transcript hook', () => {
         act(() => renderer?.unmount())
         renderer = null
       },
-      ids: () => out.map((message) => (agentMessageOf(message) ? `row:${agentMessageOf(message)!.sender}` : message.id))
+      ids: () => out.map(drawnRow)
     }
   }
 
@@ -528,10 +557,10 @@ describe('rows on the screen, read beside the real transcript hook', () => {
     await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
     await view.show({ agent: 'claude', rows: null, lastConnectedAt: 1 })
     await view.show({ agent: 'claude', rows: null, lastConnectedAt: 2 })
-    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
+    await view.show({ agent: 'claude', rows: P, lastConnectedAt: 2 })
     await view.emit({ type: 'snapshot', messages: [U1, COMMIT, FINAL], hasMore: false })
-    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 2 })
-    expect(view.ids()).toEqual(['u1', 'commit', 'row:general-purpose', 'final'])
+    await view.show({ agent: 'claude', rows: P, lastConnectedAt: 2 })
+    expect(view.ids()).toEqual(['u1', 'commit', 'row:code-ui-6f', 'final'])
   })
 
   it('draws a row the chat watches arrive while the transcript is a base kept over an empty re-subscribe', async () => {
@@ -547,10 +576,10 @@ describe('rows on the screen, read beside the real transcript hook', () => {
     await view.emit({ type: 'appended', messages: [U2, A2] })
     await view.show({ agent: 'claude', rows: [], lastConnectedAt: 1 })
     // Watching: a subagent's row arrives, and the lead writes on.
-    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 1 })
+    await view.show({ agent: 'claude', rows: P, lastConnectedAt: 1 })
     await view.emit({ type: 'appended', messages: [A3] })
-    await view.show({ agent: 'claude', rows: R, lastConnectedAt: 1 })
-    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:general-purpose', 'a3'])
+    await view.show({ agent: 'claude', rows: P, lastConnectedAt: 1 })
+    expect(view.ids()).toEqual(['u1', 'a1', 'u2', 'a2', 'row:code-ui-6f', 'a3'])
   })
 })
 
@@ -568,7 +597,6 @@ describe('the log line of a row found before the transcript settled', () => {
   const U1 = text('u1', 'user', 'start the agents', 1)
   const COMMIT = text('commit', 'assistant', 'Committing it.', 10)
   const FINAL = text('final', 'assistant', 'Committed on a branch.', 20)
-  const R = [{ sender: 'general-purpose' }]
   type Props = { rows: ReturnType<typeof peerNoticesFromScreen> | null; folded: NativeChatMessage[]; settled: boolean }
   beforeEach(() => resetScreenPeerNoticesForTests())
   afterEach(() => vi.restoreAllMocks())
@@ -591,11 +619,11 @@ describe('the log line of a row found before the transcript settled', () => {
     show({ rows: null, folded: [U1, COMMIT], settled: true })
     show({ rows: [], folded: [U1, COMMIT], settled: true })
     show({ rows: null, folded: [U1, COMMIT], settled: true })
-    show({ rows: R, folded: [U1, COMMIT], settled: false })
-    show({ rows: R, folded: [U1, COMMIT, FINAL], settled: true })
+    show({ rows: P, folded: [U1, COMMIT], settled: false })
+    show({ rows: P, folded: [U1, COMMIT, FINAL], settled: true })
     act(() => renderer?.unmount())
     expect(info.mock.calls.map((call) => String(call[0])).filter((line) => line.startsWith('[peer-row]'))).toEqual([
-      '[peer-row] drawn: the row from @general-purpose was on the screen when the chat first read it, not watched arriving; placed after commit, the last row the chat held when it last read the screen'
+      '[peer-row] drawn: the row from @code-ui-6f was on the screen when the chat first read it, not watched arriving; placed after commit, the last row the chat held when it last read the screen'
     ])
   })
 })

@@ -48,12 +48,26 @@ const SHORT_NOTICE = 'This is from another Claude session, not your user. After 
 /** `i`: the tail a mid-turn delivery adds. */
 const REPLY_TAIL = ' After completing your current task, decide whether/how to respond (reply via SendMessage to the `from=` address).'
 
-/** `Kat` and `YPr`, each with the line break before it: the only text `Ux`
- *  accepts after the last `</agent-message>`. */
-export const PEER_TRAILING_FRAMES: readonly string[] = [
-  `\n${FROM_SESSION}${REPLY_TAIL}`,
-  `\n${NOT_FROM_USER}${REPLY_TAIL}`,
-  `\n${SHORT_NOTICE}`,
-  `\n${FROM_DESCENDANT}${REPLY_TAIL}`,
-  `\n${FROM_DESCENDANT}`
+/** `Kat` and `YPr`: the only paragraphs `Ux` accepts after the last
+ *  `</agent-message>`. */
+const PEER_TRAILING_PARAGRAPHS: readonly string[] = [
+  `${FROM_SESSION}${REPLY_TAIL}`,
+  `${NOT_FROM_USER}${REPLY_TAIL}`,
+  SHORT_NOTICE,
+  `${FROM_DESCENDANT}${REPLY_TAIL}`,
+  FROM_DESCENDANT
 ]
+
+/**
+ * Whether the text after a delivery's last `</agent-message>` is one of the
+ * harness's framing paragraphs. 2.1.283 put one line break before it;
+ * 2.1.294 to 2.1.296 put a blank line there (all 74 subagent deliveries the
+ * transcript of session 0954729d records, fixtures/claude-subagent-handback-2.1.296.ts).
+ * That the hook reports the prompt in the same form is assumed, not checked on
+ * the wire. With only the first form known, a short delivery the hook did not
+ * cut was drawn as the user's bubble, XML and all (2026-10-11).
+ */
+export function isPeerTrailingFrame(after: string): boolean {
+  const lead = /^\n\n?/.exec(after)
+  return lead !== null && PEER_TRAILING_PARAGRAPHS.includes(after.slice(lead[0].length))
+}

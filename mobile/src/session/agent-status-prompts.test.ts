@@ -577,22 +577,23 @@ describe("a subagent message's copy on the tab status", () => {
         from: 'a7a46867b4f497c96',
         body: onStatus.slice('<agent-message from="a7a46867b4f497c96"> '.length).trim(),
         cut: true,
+        handback: false,
         seenAt: expect.any(Number)
       }
     ])
     expect(state.agentMessages?.[0]?.body.startsWith('Request for one read-only device probe (copy-flicker agent)')).toBe(true)
   })
 
-  it('keeps nothing of a hand-back but who sent it: the harness line fills all 200 characters', () => {
+  it('keeps nothing of a hand-back but who sent it, and that it is one: the harness line fills all 200 characters', () => {
     expect(MIDTURN_HANDBACK_STATUS_PROMPT).toHaveLength(200)
     expect(observe(MIDTURN_HANDBACK_STATUS_PROMPT).agentMessages).toEqual([
-      { from: 'a9d5c2f85e94ca47f', body: '', cut: true, seenAt: expect.any(Number) }
+      { from: 'a9d5c2f85e94ca47f', body: '', cut: true, handback: true, seenAt: expect.any(Number) }
     ])
   })
 
   it('keeps a message that fit whole, and not a person\'s short prompt that opens with the tag', () => {
     expect(observe('<agent-message from="a7a46867b4f497c96"> hello from probe </agent-message>').agentMessages).toEqual([
-      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false, seenAt: expect.any(Number) }
+      { from: 'a7a46867b4f497c96', body: 'hello from probe', cut: false, handback: false, seenAt: expect.any(Number) }
     ])
     expect(observe('<agent-message from="x"> keeps showing in my log, why?').agentMessages ?? []).toEqual([])
   })
@@ -625,7 +626,7 @@ describe("a subagent message's copy read on a first read of the tab status", () 
 
   it('is kept with no time to pair by, and one read live after it has one', () => {
     const first = observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, 'sess-1', { ...LIVE, prompt: OLD })
-    expect(first.agentMessages?.[0]).toEqual({ from: 'a7a46867b4f497c96', body: 'OLD: probe step 1 done', cut: false })
+    expect(first.agentMessages?.[0]).toEqual({ from: 'a7a46867b4f497c96', body: 'OLD: probe step 1 done', cut: false, handback: false })
     const live = observeAgentStatusPrompt(first, 'sess-1', { ...LIVE, prompt: '<agent-message from="a1111111111111111"> other report </agent-message>' })
     expect(live.agentMessages?.[1]?.seenAt).toEqual(expect.any(Number))
   })
