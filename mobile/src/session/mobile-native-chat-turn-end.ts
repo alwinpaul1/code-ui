@@ -12,10 +12,6 @@ const CARRIES_ON_A_TURN: ReadonlySet<NativeChatRole> = new Set<NativeChatRole>([
 
 /** One agent turn, as its last row's actions see it. */
 export type AgentTurn = {
-  /** Transcript index of the turn's first row: the first after the prompt
-   *  (or after the notice that cut the turn, or the harness turn the chat
-   *  hides), a thought included. */
-  firstIndex: number
   /** The rows of the turn that draw as the agent's reply (the rows that each
    *  carried their own Copy before it moved to the turn's end), oldest first. */
   replyRows: readonly NativeChatMessage[]
@@ -70,11 +66,10 @@ export function agentTurnsByEnd(messages: readonly NativeChatMessage[]): Map<str
     const next = messages[index + 1]
     // A row the harness's hidden user turn opened (a background task's notification) starts a
     // turn of its own, as the row of a prompt would.
-    if (!next || !CARRIES_ON_A_TURN.has(next.role) || isHarnessTurnStart(next.id)) {
+    if (!next || !CARRIES_ON_A_TURN.has(next.role) || isHarnessTurnStart(next)) {
       const end = replyRows.at(-1)
       if (end) {
         turns.set(end.id, {
-          firstIndex: first,
           replyRows,
           // What the rows draw: a roster's frozen sentence is not on screen (#26125).
           hasProse: replyRows.some((row) => nativeChatMessageText(drawnNativeChatBlocks(row.blocks)) !== '')

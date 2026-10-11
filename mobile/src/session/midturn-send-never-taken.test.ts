@@ -308,6 +308,22 @@ describe('a message sent while Claude works, that Claude took', () => {
     expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
   })
 
+  it('is held when a short send only starts an earlier drawn row ("ok" under `❯ okay let\'s go`)', async () => {
+    const tab = workingTab((afterBody) => (afterBody === 0 ? busyWith('ok', ["okay let's go"]) : busyWith('', ["okay let's go"])))
+    const sending = write(tab.client, () => HOOKED_COPIES, 'ok')
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('is delivered on its own row of the same short words', async () => {
+    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', ['ok'])))
+    const sending = write(tab.client, () => HOOKED_COPIES, 'ok')
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
   it('is delivered on a queue row Claude cut, a long enough start of its words', async () => {
     const long = 'Can you check whether the build on main and the release branch passes the gate'
     const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [`${long.slice(0, 60)}…`])))

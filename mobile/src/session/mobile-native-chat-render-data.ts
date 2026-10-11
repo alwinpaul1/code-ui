@@ -115,7 +115,7 @@ export function foldMobileNativeChatMessages(
  *  ("Another Claude session sent a message"), and the filter is vendored.
  *  Keyed on a hint only this code writes, so nothing else slips through. */
 function stripNoise(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  // A hidden harness USER turn starts a turn of its own (mobile-native-chat-harness-turn-starts.ts).
+  // A hidden task notification starts a turn of its own (mobile-native-chat-harness-turn-starts.ts).
   return withoutHiddenTurns(messages, (message) => !isPeerBoilerplateRow(message) && isNoiseMessage(message))
 }
 

@@ -178,7 +178,14 @@ export async function verifyClaudeSubmit(args: {
    *  then says something else is not (Opus re-review of 05dd008f6). */
   const rowIsTheWords = (row: string): boolean => {
     const drawn = dense(row).replace(/…$/, '')
-    return words !== '' && (drawn.startsWith(allWords) || (drawn.length >= words.length && allWords.startsWith(drawn)))
+    // A short send must be the whole row: "ok" is not `❯ okay let's go` (Opus review of 7adf67674).
+    // A long one may run on into rows the screen reader joined, or be cut.
+    return (
+      words !== '' &&
+      (drawn === allWords ||
+        (allWords.length >= WORDS_PREFIX_CHARS && drawn.startsWith(allWords)) ||
+        (drawn.length >= WORDS_PREFIX_CHARS && allWords.startsWith(drawn)))
+    )
   }
   const commandWords = shell === null ? '' : dense(shell).slice(0, WORDS_PREFIX_CHARS)
   const photos = args.images === true

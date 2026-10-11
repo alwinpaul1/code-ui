@@ -1,4 +1,4 @@
-import { isPromptRule, QUEUE_HINT, SELECTED_HINT } from './mobile-terminal-queue-block'
+import { isPromptRule, QUEUE_HINT, SELECTED_HINT, SEND_NOW_HINT } from './mobile-terminal-queue-block'
 
 /**
  * Claude Code's input box as the phone reads it off `terminal.read --screen`:
@@ -196,7 +196,9 @@ const MAX_WRAPPED_ROWS = 6
 function withWrappedRows(lines: readonly string[], from: number, end: number, head: string): string {
   const parts = [head]
   for (let at = from + 1; at < end && parts.length <= MAX_WRAPPED_ROWS; at++) {
-    if (!WRAPPED_ROW.test(lines[at]!)) {
+    // The queue box's "ctrl+enter to send now" row sits under its last entry at the same indent:
+    // not words of the prompt (a short send must match its row whole, verifyClaudeSubmit).
+    if (!WRAPPED_ROW.test(lines[at]!) || SEND_NOW_HINT.test(lines[at]!)) {
       break
     }
     parts.push(lines[at]!.trim())

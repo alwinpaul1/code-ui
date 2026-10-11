@@ -169,7 +169,7 @@ export function MobileNativeChatView({
   )
   const newestFirst = useMemo(() => data.toReversed(), [data])
   // A reply's actions are drawn once, under the turn's last message; its Copy
-  // copies the whole reply and its arrow aims at the reply's start.
+  // copies the whole reply.
   const turnEndProps = useMobileNativeChatTurnEnds(data)
   // Labels say "today" or a weekday relative to now; five minutes keeps a
   // divider honest across midnight without churning the rows.
