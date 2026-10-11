@@ -59,9 +59,15 @@ describe('the row for a run of agents', () => {
     expect(isAgentOnlyRun(drawnRun())).toBe(true)
   })
 
-  it('says it is running while any one of the five still runs', () => {
-    expect(agentRunState(drawnRun(), inputs(ALL)).running).toBe(true)
-    expect(agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[2].agentId])).running).toBe(true)
+  // Until 2026-10-11 the row swept while the roster ran any of them, and stuck
+  // sweeping wherever nothing retired a finished agent
+  // (mobile-native-chat-agent-run-stuck.test.ts). The roster's word now goes
+  // to the run sheet alone.
+  it('settles once all five launches have answered, though the roster still runs them', () => {
+    expect(agentRunState(drawnRun(), inputs(ALL)).running).toBe(false)
+    expect(agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[2].agentId])).running).toBe(false)
+    expect(agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[2].agentId])).agentsRunning).toBe(true)
+    expect(agentRunState(drawnRun(), inputs([])).agentsRunning).toBe(false)
   })
 
   it('settles once every agent has reported, even while the turn goes on', () => {
@@ -119,14 +125,16 @@ describe('the agents of a mixed run', () => {
     expect(agentRunState(mixedRunWithBackgroundAgent(), idle).entries).toHaveLength(1)
   })
 
-  it('lists one agent for CronDelete, three commands and an Agent, and runs it by its launch id', () => {
+  it('lists one agent for CronDelete, three commands and an Agent, and knows it runs by its launch id', () => {
     const state = agentRunState(mixedRunWithBackgroundAgent(), {
       ...idle,
       runningIds: new Set([MIXED_RUN_AGENT_ID])
     })
     expect(state.entries.map((entry) => entry.title)).toEqual([MIXED_RUN_AGENT_DESCRIPTION])
-    expect(state.running).toBe(true)
-    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).running).toBe(false)
+    expect(state.agentsRunning).toBe(true)
+    // Its launch has answered: the row itself has settled.
+    expect(state.running).toBe(false)
+    expect(agentRunState(mixedRunWithBackgroundAgent(), idle).agentsRunning).toBe(false)
   })
 
   it('does not count the commands\' answers as the agent launch\'s answer', () => {
@@ -157,7 +165,7 @@ describe('a mixed run whose results land out of call order', () => {
   it('lists the one agent with the id its launch result carries', () => {
     const state = agentRunState(outOfOrder, idle)
     expect(state.entries).toEqual([{ title: MIXED_RUN_AGENT_DESCRIPTION, agentId: MIXED_RUN_AGENT_ID }])
-    expect(state.running).toBe(true)
+    expect(state.agentsRunning).toBe(true)
   })
 
   it('never lends a run an agent id from another run\'s results', () => {
@@ -191,7 +199,8 @@ describe('an unanswered call that is not an agent', () => {
 // 2026-10-09: the Claude app's collapsed row names the agent, "Running agent:
 // Review: story flow". Three reviewers ran side by side and it named the first.
 describe('the agent the collapsed row names', () => {
-  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
+  // The row names an agent only while a call is being made, in a live turn.
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: true }
   const call = (input: unknown, state: 'running' | 'completed'): NativeChatBlock => ({
     type: 'tool-call',
     name: 'Agent',
@@ -199,19 +208,23 @@ describe('the agent the collapsed row names', () => {
     state
   })
 
-  it('is the first agent that still runs, by its launch id', () => {
+  it('is none once every launch has answered, though the roster still runs two of them', () => {
     const { subject } = agentRunState(drawnRun(), inputs([PARALLEL_AGENTS[3].agentId, PARALLEL_AGENTS[4].agentId]))
-    expect(subject).toBe(PARALLEL_AGENTS[3].description)
+    expect(subject).toBeNull()
   })
 
-  it('is the first agent whose call is still live, when no launch id says so', () => {
+  it('is none once the turn has ended, though a call is still marked live', () => {
+    expect(agentRunState([call({ description: 'two' }, 'running')], { ...idle, agentWorking: false }).subject).toBeNull()
+  })
+
+  it('is the first agent whose call is still live', () => {
     const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'running'), call({ description: 'three' }, 'running')]
     expect(agentRunState(blocks, idle).subject).toBe('two')
   })
 
-  it('falls back to the last agent call with no answer when none is known to run on its own', () => {
+  it('falls back to the last agent call with no answer when none is marked live', () => {
     const blocks = [call({ description: 'one' }, 'completed'), call({ description: 'two' }, 'completed')]
-    expect(agentRunState(blocks, { ...idle, agentWorking: true }).subject).toBe('two')
+    expect(agentRunState(blocks, idle).subject).toBe('two')
   })
 
   // Review, 2026-10-09: with no running call tied to an agent id (no roster,
