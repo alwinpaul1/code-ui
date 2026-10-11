@@ -43,6 +43,8 @@ export function outboxEntryLanding(
     normalizedText: entry.normalizedText,
     baselineTailMessageId: entry.baselineTailMessageId,
     deadline: null,
+    // Its one id: a row or receipt another send settled is never this one's proof (S1).
+    outboxId: entry.id,
     ...(entry.knownReceiptNonces ? { knownReceiptNonces: new Set(entry.knownReceiptNonces) } : {})
   }
   // A mid-turn prompt Claude Code takes from its queue writes no row (isTakenSend); its own

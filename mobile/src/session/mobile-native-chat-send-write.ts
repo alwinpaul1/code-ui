@@ -197,6 +197,7 @@ async function pressReturnAgain(args: {
   deadline: number
   mobileClient?: MobileClient
   receipts: () => readonly BeaconPromptReceipt[]
+  sendId?: string
   seenNonces: ReadonlySet<string>
   receiptsBefore: readonly BeaconPromptReceipt[]
   priorBashRows: readonly string[] | null
@@ -243,6 +244,7 @@ async function pressReturnAgain(args: {
       images: args.hasImages,
       receipts: args.receipts,
       seenNonces: args.seenNonces,
+      ...(args.sendId ? { sendId: args.sendId } : {}),
       priorBashRows: args.priorBashRows,
       priorChipRows: args.priorChipRows,
       wordsSeenInInput: true,
@@ -291,6 +293,8 @@ export async function writeChatSend(args: {
   deviceToken: string | null
   /** The agent's prompt copies as they are now. */
   receipts: () => readonly BeaconPromptReceipt[]
+  /** The send's one id (its outbox entry's), which Claude's check keys its copy by (S1). */
+  sendId?: string
 }): Promise<ChatSendWrite> {
   const { agent, client, terminal, text, deadline } = args
   const mobileClient = args.deviceToken
@@ -375,6 +379,7 @@ export async function writeChatSend(args: {
     images: args.hasImages,
     receipts: args.receipts,
     seenNonces,
+    ...(args.sendId ? { sendId: args.sendId } : {}),
     priorBashRows,
     priorChipRows,
     deadline

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { hydrateNativeChatSendClaims } from './native-chat-send-claims'
 
 const OUTBOX_KEY = 'orca:chatOutbox'
 
@@ -177,6 +178,9 @@ function notify(): void {
 /** Reads the stored list once per process; entries written before the read finished stay. */
 export function hydrateNativeChatOutbox(): Promise<void> {
   hydration ??= (async () => {
+    // Read with the entries: whether a row already settled another send is part of telling
+    // whether an entry landed (native-chat-send-claims.ts). It never refuses.
+    await hydrateNativeChatSendClaims()
     try {
       const stored = parseStored(await AsyncStorage.getItem(OUTBOX_KEY), Date.now())
       const held = new Set(entries.map((entry) => entry.id))

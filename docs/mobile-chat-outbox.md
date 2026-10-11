@@ -94,6 +94,21 @@ its session (a first message), which has no transcript to look in.
   reads with its own composer and queue readers. An agent whose queue box the phone cannot read
   is never typed into by the drainer: its entries wait for their chat.
 
+### One id per send (S1, 2026-10-11)
+
+Every part of one press carries the outbox entry's id (`send-<ms>-<12 hex>`): the entry, the
+bubble (`pending-outbox-<id>`, for photo sends and sends waiting for a session too), the hold,
+Claude's check that it took the words (`verifyClaudeSubmit` `sendId`), and so the queue binding,
+which works on bubble ids. The terminal lane still cannot put the id on the wire, so a send is
+matched to its row by its words; what changed is that the row or prompt receipt that settled a
+send is written down under its id (`mobile/src/storage/native-chat-send-claims.ts`, AsyncStorage
+`orca:chatSendClaims`, a week, 500 claims), by every path that decides "it landed": a bubble
+retiring on its row, a hold, Claude's check, the chat's recovery and the drainer. No other send
+can then be settled by the same row or receipt, in this run or after a restart. Sends of the same
+words take rows in the order they left the phone, and a bubble still waiting for its row competes
+with a later ack-lost send (`landedHeldSends`), so the second "yes" is no longer proved delivered
+by the first one's row.
+
 ### When it gives up
 
 The entry stays in the outbox, marked failed with a reason (`failedReason`), and nothing is said

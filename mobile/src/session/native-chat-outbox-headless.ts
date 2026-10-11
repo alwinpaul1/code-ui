@@ -363,7 +363,8 @@ export async function sendTerminalOutboxEntry(
       residue: mobileNativeChatInputResidue(terminal),
       deadline,
       deviceToken: null,
-      receipts: () => []
+      receipts: () => [],
+      sendId: entry.id
     })
     if (written.kind === 'stopped') {
       // A clear that did not go typed none of the words; Claude declining them did.

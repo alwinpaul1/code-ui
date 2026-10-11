@@ -107,6 +107,10 @@ export function acceptOwnSendInPending(
   imagePaths?: string[]
 ): PendingByKey {
   const current = previous[key] ?? []
+  // One bubble per send: its id is the send's own (S1), so a second draw of it is the same send.
+  if (current.some((item) => item.id === id)) {
+    return previous
+  }
   const kept = withoutWitnessesOfSends(current, [{ text, sentAt: origin.sentAt }])
   const base = kept === current ? previous : { ...previous, [key]: kept }
   return appendMobileNativeChatPending(base, key, id, origin, text, images, imagePaths)

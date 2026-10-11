@@ -1,5 +1,6 @@
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { UnconfirmedSend } from './mobile-native-chat-draft-reconcile'
+import { claimNonceForSend, nonceClaimedByAnother } from '../storage/native-chat-send-claims'
 import type { DesktopPrompt } from './agent-hud-beacon'
 
 /** One `up=` reading from the agent's own `UserPromptSubmit` hook: the text the
@@ -78,7 +79,8 @@ export function findBeaconConfirmedSends(
       continue
     }
     const receipt = normalized.find((candidate) => {
-      if (claimedNonces.has(candidate.nonce)) {
+      // Taken by another send already, here or before (S1, native-chat-send-claims.ts).
+      if (claimedNonces.has(candidate.nonce) || nonceClaimedByAnother(candidate.nonce, entry.outboxId)) {
         return false
       }
       if (photoOnly) {
@@ -100,6 +102,9 @@ export function findBeaconConfirmedSends(
     })
     if (receipt) {
       claimedNonces.add(receipt.nonce)
+      if (entry.outboxId) {
+        claimNonceForSend(entry.outboxId, receipt.nonce)
+      }
       confirmed.push(entry)
     }
   }

@@ -187,11 +187,13 @@ describe('useMobileNativeChatDrafts', () => {
 
   it('clears one pending per landed message so duplicate sends are not all dropped', async () => {
     await mount('a')
+    // Two presses, two origins: one origin is one send, drawn once (S1).
     const origin = state?.captureSendOrigin('ping')
+    const again = state?.captureSendOrigin('ping')
     act(() => {
-      if (origin) {
+      if (origin && again) {
         state?.acceptSend(origin, 'ping')
-        state?.acceptSend(origin, 'ping')
+        state?.acceptSend(again, 'ping')
       }
     })
     expect(state?.pending.map((pending) => pending.text)).toEqual(['ping', 'ping'])
@@ -525,11 +527,13 @@ describe('useMobileNativeChatDrafts', () => {
         createElement(Harness, { tabId: 'a', messages: [assistantTextMessage('a1', 'hi')] })
       )
     )
+    // Two presses, two origins: one origin is one send, drawn once (S1).
     const origin = state?.captureSendOrigin('')
+    const again = state?.captureSendOrigin('')
     act(() => {
-      if (origin) {
+      if (origin && again) {
         state?.acceptSend(origin, '', ['file:///a.jpg'])
-        state?.acceptSend(origin, '', ['file:///b.jpg'])
+        state?.acceptSend(again, '', ['file:///b.jpg'])
       }
     })
     expect(state?.pending).toHaveLength(2)

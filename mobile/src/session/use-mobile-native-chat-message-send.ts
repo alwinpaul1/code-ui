@@ -244,7 +244,7 @@ export function useMobileNativeChatMessageSend(args: {
         typesCodexCommand,
         seed: seededLaunchDraft,
         residue: mobileNativeChatInputResidue(handle),
-        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current
+        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current, sendId: origin.outboxId
       }))
       if (written.kind === 'stopped') {
         // Refused before the body, or Claude declined it. Nothing more is typed,

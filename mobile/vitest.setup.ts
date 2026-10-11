@@ -90,4 +90,8 @@ vi.mock('expo-clipboard', () => ({
 beforeEach(async () => {
   const { resetNativeChatKeptSessionsForTests } = await import('./src/session/native-chat-kept-session-state')
   resetNativeChatKeptSessionsForTests()
+  // Which send each transcript row settled is module state keyed by row id, and fixtures
+  // reuse row ids ('u1') from test to test: one test's claim must not settle the next's.
+  const { resetNativeChatSendClaimsForTests } = await import('./src/storage/native-chat-send-claims')
+  resetNativeChatSendClaimsForTests()
 })
