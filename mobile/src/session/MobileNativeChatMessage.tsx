@@ -21,6 +21,7 @@ import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoiler
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
 import { MobileNativeChatAgentMessageRow } from './MobileNativeChatAgentMessageRow'
 import { MobileNativeChatReasoningNote } from './MobileNativeChatReasoningNote'
+import { errorRowOf } from './mobile-native-chat-error-rows'
 import { MobileNativeChatToolSegment } from './MobileNativeChatToolSegment'
 import type { MobileTaskListPredecessors } from './mobile-native-chat-task-list-rows'
 import type { MobileNativeChatRevertHunk } from './mobile-diff-hunk-revert-request'
@@ -194,6 +195,17 @@ function MobileNativeChatMessageImpl({
   const agentMessage = agentMessageOf(message)
   if (agentMessage) {
     return <MobileNativeChatAgentMessageRow {...agentMessage} fontScale={fontScale} onOpenFile={onOpenFile} styles={styles} />
+  }
+
+  // A failed or stopped turn is drawn as the Claude app draws it: its own row
+  // in the danger colour, not the agent's prose with a Copy under it.
+  const errorRow = errorRowOf(message)
+  if (errorRow) {
+    return (
+      <View style={styles.row}>
+        <MobileNativeChatNoticeRow block={{ type: 'text', text: errorRow.text, tone: 'error' }} fontScale={fontScale} />
+      </View>
+    )
   }
 
   // A host-authored notice — a compaction boundary, a plan document, a toned
