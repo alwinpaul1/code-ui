@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatRole } from '../../../src/shared/native-chat-types'
-import { agentTurnPlainText, agentTurnsByEnd, messageIdsEndingATurn } from './mobile-native-chat-turn-end'
 import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
+import { MIXED_RUN_AGENT_ID, mixedRunWithBackgroundAgent } from './fixtures/claude-mixed-tool-run-agent-2026-10-01'
+import { agentTurnPlainText, agentTurnsByEnd, messageIdsEndingATurn, trailingWorkIsRunning } from './mobile-native-chat-turn-end'
 
 // The Claude app draws its copy and speak actions once, at the end of the
 // assistant's turn (2026-10-09 screenshot). Ours drew copy and the scroll-up
@@ -241,5 +242,129 @@ describe('where a reply ends around a row the chat hides', () => {
     expect(foldMobileNativeChatMessages([row('a1', 'assistant', [text('Only.')]), notification('n1')]).map((r) => r.id)).toEqual(['a1'])
     const folded = foldMobileNativeChatMessages([notification('n1'), row('a1', 'assistant', [text('Only.')])])
     expect([...agentTurnsByEnd(folded).keys()]).toEqual(['a1'])
+  })
+})
+
+// 2026-10-11, the user's screenshot: mid-turn the Copy sat under a "Running"
+// shell row, below the words it copies. The Claude app hangs a turn's actions
+// off the turn's last assistant message with words (rs8.w6 via n030.k), and
+// tool rows after it never move them. So the list has to know which row holds
+// the turn's last words, and what work follows them.
+describe('the last words of a turn and the work after them', () => {
+  const runningShell: NativeChatMessage['blocks'][number] = {
+    type: 'tool-call',
+    name: 'Bash',
+    input: { command: 'pnpm test' },
+    state: 'running'
+  }
+
+  it('names the row with the last words, and the running shell after them in the same row', () => {
+    const rows = [row('u1', 'user', [text('go')]), row('a1', 'assistant', [text('Committed.'), runningShell])]
+    const turn = agentTurnsByEnd(rows).get('a1')!
+    expect(turn.proseEndId).toBe('a1')
+    expect(turn.trailingWork).toEqual([runningShell])
+  })
+
+  it('names an earlier row when a later row of the turn is only work', () => {
+    const rows = [
+      row('u1', 'user', [text('go')]),
+      row('a1', 'assistant', [...bashCall, text('Committed.')]),
+      row('a2', 'assistant', [runningShell])
+    ]
+    const turn = agentTurnsByEnd(rows).get('a2')!
+    expect(turn.proseEndId).toBe('a1')
+    expect(turn.trailingWork).toEqual([runningShell])
+  })
+
+  it('has no work after the words of a turn that ends on words', () => {
+    const rows = [row('u1', 'user', [text('go')]), row('a1', 'assistant', [...bashCall, text('Done.')])]
+    const turn = agentTurnsByEnd(rows).get('a1')!
+    expect(turn.proseEndId).toBe('a1')
+    expect(turn.trailingWork).toEqual([])
+  })
+
+  it('has no words and all of its work for a turn whose only row is a running tool', () => {
+    const rows = [row('u1', 'user', [text('go')]), row('a1', 'assistant', [runningShell])]
+    const turn = agentTurnsByEnd(rows).get('a1')!
+    expect(turn.proseEndId).toBeUndefined()
+    expect(turn.trailingWork).toEqual([runningShell])
+  })
+
+  // Review of b935e72a7: a message sent mid-turn draws its echo after the
+  // running turn, which then read as not the newest, and the Copy dropped back
+  // under the running shell, the very symptom of 2026-10-11.
+  it('is still the newest turn when only a message sent from the phone, not yet in the transcript, follows it', () => {
+    const rows = [
+      row('u1', 'user', [text('go')]),
+      row('a1', 'assistant', [text('Running tests.'), runningShell]),
+      row('pending-1', 'user', [text('also lint')])
+    ]
+    expect(agentTurnsByEnd(rows, new Set(['pending-1'])).get('a1')!.isNewest).toBe(true)
+    expect(agentTurnsByEnd(rows).get('a1')!.isNewest).toBe(false)
+    expect(agentTurnsByEnd([...rows, row('a2', 'assistant', [text('Linting.')])], new Set(['pending-1'])).get('a1')!.isNewest).toBe(false)
+  })
+
+  it('is the newest turn for the one row of a list of one, and with a thought after its end', () => {
+    expect(agentTurnsByEnd([row('a1', 'assistant', [text('Hi.')])]).get('a1')!.isNewest).toBe(true)
+    const thought = agentTurnsByEnd([row('a1', 'assistant', [text('Hi.')]), row('r1', 'reasoning', [text('hmm')])])
+    expect(thought.get('a1')!.isNewest).toBe(true)
+  })
+
+  it('does not count an empty text as words', () => {
+    const rows = [
+      row('u1', 'user', [text('go')]),
+      row('a1', 'assistant', [text('Committed.')]),
+      row('a2', 'assistant', [text(''), runningShell, text('   ')])
+    ]
+    const turn = agentTurnsByEnd(rows).get('a2')!
+    expect(turn.proseEndId).toBe('a1')
+    expect(turn.trailingWork).toEqual([runningShell])
+  })
+})
+
+describe("whether the work after a turn's last words is still running", () => {
+  const idle = { runningIds: new Set<string>(), confirmed: new Map<string, string>(), agentWorking: false }
+  const working = { ...idle, agentWorking: true }
+  const shell = (state: 'running' | 'completed'): NativeChatMessage['blocks'] => [
+    { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, state }
+  ]
+
+  it('is running while the newest turn is being worked on', () => {
+    expect(trailingWorkIsRunning(shell('completed'), { turnIsNewest: true, runs: working })).toBe(true)
+  })
+
+  it('is not running for an older turn, whatever the agent is doing now', () => {
+    expect(trailingWorkIsRunning(shell('completed'), { turnIsNewest: false, runs: working })).toBe(false)
+  })
+
+  // As the row draws it (mobile-native-chat-tool-run-progress.ts): a call its
+  // turn left marked running was abandoned when the turn ended, and must not
+  // hold the actions above it for good.
+  it('is not running for a call left marked running once its turn is over', () => {
+    expect(trailingWorkIsRunning(shell('running'), { turnIsNewest: false, runs: idle })).toBe(false)
+    expect(trailingWorkIsRunning(shell('running'), { turnIsNewest: true, runs: idle })).toBe(false)
+  })
+
+  it('is running while a source that also retires it counts its agent as running, not on the reader alone', () => {
+    const blocks = mixedRunWithBackgroundAgent()
+    expect(trailingWorkIsRunning(blocks, { turnIsNewest: true, runs: idle })).toBe(false)
+    expect(
+      trailingWorkIsRunning(blocks, { turnIsNewest: true, runs: { ...idle, runningIds: new Set([MIXED_RUN_AGENT_ID]) } })
+    ).toBe(false)
+    expect(
+      trailingWorkIsRunning(blocks, { turnIsNewest: true, runs: { ...idle, liveTaskIds: new Set([MIXED_RUN_AGENT_ID]) } })
+    ).toBe(true)
+  })
+
+  // Review of b935e72a7: an older turn's unanswered Agent call read as running
+  // whenever the agent worked on a LATER turn, so its Copy jumped up and back.
+  it("is not running for an older turn's unanswered agent while the agent works on a later turn", () => {
+    const unanswered: NativeChatMessage['blocks'] = [{ type: 'tool-call', name: 'Agent', input: { description: 'x' } }]
+    expect(trailingWorkIsRunning(unanswered, { turnIsNewest: false, runs: working })).toBe(false)
+    expect(trailingWorkIsRunning(unanswered, { turnIsNewest: true, runs: working })).toBe(true)
+  })
+
+  it('is never running when there is no work after the words', () => {
+    expect(trailingWorkIsRunning([], { turnIsNewest: true, runs: working })).toBe(false)
   })
 })

@@ -122,11 +122,13 @@ describe('MobileNativeChatView, where a turn ends', () => {
     renderer = null
   })
 
-  async function render(messages: NativeChatMessage[]): Promise<void> {
-    await renderFolded(messages, messages)
+  type Pending = Parameters<typeof MobileNativeChatView>[0]['pending']
+
+  async function render(messages: NativeChatMessage[], pending: Pending = []): Promise<void> {
+    await renderFolded(messages, messages, pending)
   }
 
-  async function renderFolded(messages: NativeChatMessage[], folded: NativeChatMessage[]): Promise<void> {
+  async function renderFolded(messages: NativeChatMessage[], folded: NativeChatMessage[], pending: Pending = []): Promise<void> {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatView, {
@@ -138,7 +140,7 @@ describe('MobileNativeChatView, where a turn ends', () => {
           sendSurfaceId: 'tab-a',
           getSendCompletionGeneration: () => 0,
           getComposerEditGeneration: () => 0,
-          pending: [],
+          pending,
           composerText: '',
           onComposerTextChange: vi.fn()
         })
@@ -272,5 +274,37 @@ describe('MobileNativeChatView, where a turn ends', () => {
     await renderFolded(rows, foldMobileNativeChatMessages(rows))
     expect(endsTurn('a1')).toBe(true)
     expect(rowOf('a1').props.copyTurnText?.('a1')).toBe('Only row.')
+  })
+
+  // 2026-10-11: mid-turn the Copy sat under a running shell row, below the
+  // words it copies. The Claude app keeps a turn's actions under its last
+  // words while work after them still runs, so the row with those words has
+  // to be told, and both rows told what work follows and whether the turn is
+  // the newest one.
+  const runningShell = { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, state: 'running' } as const
+
+  it('tells the row with the last words that it holds the actions, and both rows the work after them', async () => {
+    await render([
+      turn('u0', 'user'),
+      turn('a0', 'assistant'),
+      turn('u1', 'user'),
+      said('a1', 'assistant', [{ type: 'text', text: 'Committed.' }]),
+      said('a2', 'assistant', [runningShell])
+    ])
+    expect(rowOf('a1').props).toMatchObject({ anchorsTurnActions: true, turnIsNewest: true, turnTrailingWork: [runningShell] })
+    expect(rowOf('a2').props).toMatchObject({ endsTurn: true, anchorsTurnActions: false, turnIsNewest: true, turnTrailingWork: [runningShell] })
+    expect(rowOf('a0').props).toMatchObject({ endsTurn: true, anchorsTurnActions: true, turnIsNewest: false, turnTrailingWork: [] })
+    expect(rowOf('u1').props).toMatchObject({ anchorsTurnActions: false })
+  })
+
+  // Review of b935e72a7: a message sent mid-turn draws its echo after the
+  // running turn, and the turn then read as old, so its Copy fell back under
+  // the running shell.
+  it('keeps the running turn the newest while a message sent from the phone waits after it', async () => {
+    await render(
+      [turn('u1', 'user'), said('a1', 'assistant', [{ type: 'text', text: 'Running tests.' }, runningShell])],
+      [{ id: 'pending-1', text: 'also lint', baselineTailMessageId: 'a1' }]
+    )
+    expect(rowOf('a1').props).toMatchObject({ endsTurn: true, turnIsNewest: true })
   })
 })

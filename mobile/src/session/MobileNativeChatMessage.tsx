@@ -1,22 +1,20 @@
 import { memo, useContext, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
-import { Copy, Undo2 } from 'lucide-react-native'
+import { Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { inFlightToolCall } from './mobile-native-chat-in-flight-call'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
 import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { splitTurnIntoSegments } from './mobile-native-chat-turn-segments'
-import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { AgentControls, TurnActionsPlace, type TurnActionsAt } from './MobileNativeChatTurnActions'
 import { copyFailedNotice } from '../components/use-copy-to-clipboard'
 import { groupProseBlocks, imageLeadsText } from './mobile-native-chat-prose-groups'
 import { useMobileNativeChatMessageCopy } from './use-mobile-native-chat-message-copy'
 import { renderProseGroup } from './mobile-native-chat-prose-group-view'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import {
-  useChatMessageStyles,
-  type ChatMessageStyles
-} from './mobile-native-chat-message-styles'
+import { useChatMessageStyles } from './mobile-native-chat-message-styles'
 import { nativeChatMessageText, nativeChatReplyPlainText } from './mobile-native-chat-message-text'
 import { isPeerBoilerplateRow } from './mobile-native-chat-peer-messages'
 import { MobileNativeChatPeerBoilerplateRow } from './MobileNativeChatPeerBoilerplateRow'
@@ -74,37 +72,6 @@ function Bubble({
   )
 }
 
-/** Subtle controls under the end of an agent turn: copy the reply's prose. No
- *  Copy without prose to copy: under a message made only of tool calls a tap
- *  copied nothing and said nothing, a dead button (review, 2026-09-30).
- *
- *  No scroll-to-the-reply's-start arrow: the Claude app has none, under a
- *  finished reply or a working turn (user, 2026-10-11, with a screenshot of
- *  Claude: copy and read-aloud only). Ours blinked the jump control when tapped
- *  under a working turn and, with replies a background task started read as one
- *  turn, landed several replies up. */
-function AgentControls({
-  onCopy,
-  styles
-}: {
-  onCopy: () => void
-  styles: ChatMessageStyles
-}) {
-  const { colors } = useTheme()
-  return (
-    <View style={styles.controls}>
-      <Pressable
-        style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-        onPress={onCopy}
-        hitSlop={8}
-        accessibilityLabel="Copy message"
-      >
-        <Copy size={14} color={colors.textMuted} strokeWidth={2} />
-      </Pressable>
-    </View>
-  )
-}
-
 function MobileNativeChatMessageImpl({
   message,
   mayStillGrow = false,
@@ -127,6 +94,9 @@ function MobileNativeChatMessageImpl({
   endsTurn = true,
   turnHasProse,
   copyTurnText,
+  anchorsTurnActions = false,
+  turnTrailingWork,
+  turnIsNewest = false,
   subagentGroupsOpen,
   onToggleSubagentGroup
 }: {
@@ -167,7 +137,8 @@ function MobileNativeChatMessageImpl({
   turnActivity?: { kind: 'description'; text: string } | null
   /** Whether this is the last message of the agent's turn. Its actions (copy)
    *  are drawn once, under the turn's end, as the Claude app
-   *  does, not under every message of it (2026-10-09). The list says it; a
+   *  does, not under every message of it (2026-10-09), unless work after the
+   *  turn's last words still runs (anchorsTurnActions). The list says it; a
    *  surface that does not (a subagent's transcript) keeps them on each. */
   endsTurn?: boolean
   /** Whether any row of the turn this row ends has words: its Copy copies the
@@ -177,6 +148,17 @@ function MobileNativeChatMessageImpl({
   /** The whole reply this row ends, as Copy gives it, asked for only on a tap.
    *  Absent, Copy copies this row alone (a subagent's transcript). */
   copyTurnText?: (messageId: string) => string
+  /** This row holds its turn's last words. While the work after them still
+   *  runs, the turn's actions are drawn here, right under those words and
+   *  above the work, as the Claude app keeps them (2026-10-11); the row that
+   *  ends the turn then draws none. */
+  anchorsTurnActions?: boolean
+  /** The turn's tool calls and results after its last words. Absent, the
+   *  actions stay at the turn's end (a surface that names no turns). */
+  turnTrailingWork?: readonly NativeChatBlock[]
+  /** Whether this row's turn is the newest in the list, so the agent's
+   *  working state speaks for it. */
+  turnIsNewest?: boolean
   /** The spawn groups the reader opened, held by the transcript so a remounted row keeps them;
    *  only a row holding a roster gets it (Orca #26125). */
   subagentGroupsOpen?: ReadonlySet<string>
@@ -302,9 +284,37 @@ function MobileNativeChatMessageImpl({
     ) : null
 
   const controls =
-    isAgent && endsTurn && copyable ? (
+    isAgent && copyable ? (
       <AgentControls onCopy={handleCopy} styles={styles} />
     ) : null
+  // Where the turn's actions go. The Claude app hangs them off the turn's last
+  // words and moves them under the work only once the turn is over (its
+  // `result`); while work after the words still runs, they stay above it.
+  // Ours drew Copy under a still-running shell, below the words it copies
+  // (2026-10-11). Only a row the list names as placing them (the turn's end,
+  // or the row with its last words) has a choice to make; each of its two
+  // places reads the running state for itself (TurnActionsPlace), so no
+  // other row subscribes to it.
+  const choosesPlace = isAgent && turnTrailingWork !== undefined && (endsTurn || anchorsTurnActions)
+  const lastWordsSegment =
+    choosesPlace && anchorsTurnActions
+      ? segments.findLastIndex((segment) => segment.kind === 'prose' && nativeChatMessageText(segment.blocks) !== '')
+      : -1
+  const placeAt = (at: TurnActionsAt): ReactNode =>
+    choosesPlace ? (
+      <TurnActionsPlace
+        at={at}
+        controls={controls}
+        work={turnTrailingWork}
+        turnIsNewest={turnIsNewest}
+        endsTurn={endsTurn}
+        hasWordsPlace={lastWordsSegment !== -1}
+        styles={styles}
+      />
+    ) : at === 'end' && endsTurn && controls ? (
+      <View style={styles.agentControlsRow}>{controls}</View>
+    ) : null
+  const endControls = isAgent ? placeAt('end') : null
 
   return (
     <>
@@ -342,6 +352,8 @@ function MobileNativeChatMessageImpl({
                     })}
                   </View>
                 ))}
+                {/* Under the turn's last words, above the work still running after them. */}
+                {segmentIndex === lastWordsSegment ? placeAt('words') : null}
               </View>
             ) : showToolRun ? (
               <MobileNativeChatToolSegment
@@ -366,7 +378,7 @@ function MobileNativeChatMessageImpl({
             ) : null
           )}
           {showToolRun ? (
-            controls ? <View style={styles.agentControlsRow}>{controls}</View> : null
+            endControls
           ) : onCancelQueued ? (
             <View style={styles.controlsRow}>
               <Txt variant="caption" tone="inverse" style={{ opacity: 0.7 }}>
@@ -384,9 +396,9 @@ function MobileNativeChatMessageImpl({
                 </Txt>
               </Pressable>
             </View>
-          ) : controls ? (
+          ) : endControls ? (
             // Under the turn's last block, at the text's own edge.
-            <View style={styles.agentControlsRow}>{controls}</View>
+            endControls
           ) : (
             sentPromptControls
           )}
