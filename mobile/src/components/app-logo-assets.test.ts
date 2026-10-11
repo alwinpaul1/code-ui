@@ -37,9 +37,19 @@ function plugin(name: string): Record<string, unknown> {
 }
 
 const WHITE = '255,255,255'
-/** The icon's tile: the brand red, back from black (2026-10-11, the user asked
- *  for the orange icon again). The splash uses the same red. */
-const ICON_TILE = brand.red
+/** The launcher icon's tile (2026-10-11, the user picked option "E" from a
+ *  sheet of premium mockups): near-black, lit from the top left, with the white
+ *  knot at 80% and a soft shadow under it. The adaptive icon carries that tile
+ *  as a background IMAGE; this flat colour is only the fallback under it. The
+ *  splash and the in-app mark stay red, since a black tile vanishes on the
+ *  dark splash and the dark app surfaces (measured 1.20:1 on #1A1917). */
+const ICON_TILE = '#141414'
+/** True for a pixel of the dark tile: no channel above 110 and no hue to
+ *  speak of, so a red or grey-white tile both fail it. */
+function isDarkTilePixel(key: string): boolean {
+  const [r, g, b] = key.split(',').map(Number)
+  return Math.max(r, g, b) <= 110 && Math.max(r, g, b) - Math.min(r, g, b) <= 8
+}
 const RED = [1, 3, 5].map((at) => Number.parseInt(brand.red.slice(at, at + 2), 16)).join(',')
 
 /** The one colour of every pixel with any coverage; fails naming the others. */
@@ -85,13 +95,26 @@ describe('the splash tile', () => {
 })
 
 describe('the launcher icon', () => {
-  it('is an adaptive foreground of the knot alone in white over the brand red background', () => {
+  it('is an adaptive foreground of the knot alone in white over the dark tile', () => {
     const { foregroundImage, backgroundColor } = expo.android.adaptiveIcon
     const png = asset(foregroundImage)
     expect([png.width, png.height]).toEqual([1024, 1024])
+    // Pure white with no shadow, because the same file is the monochrome
+    // (themed) icon, which Android reads as an alpha mask: a shadow there
+    // would draw as a grey smudge. The shadow lives in the background image.
     expect(onlyVisibleColour(png)).toBe(WHITE)
     expect(alphaRange(png)).toEqual({ min: 0, max: 255 })
     expect(backgroundColor).toBe(ICON_TILE)
+  })
+
+  it('has a dark, fully opaque adaptive background image with no red in it', () => {
+    const { backgroundImage } = expo.android.adaptiveIcon
+    expect(backgroundImage, 'app.json adaptiveIcon.backgroundImage').toBeTypeOf('string')
+    const png = asset(backgroundImage)
+    expect([png.width, png.height]).toEqual([1024, 1024])
+    expect(alphaRange(png)).toEqual({ min: 255, max: 255 })
+    const off = [...opaqueColours(png).keys()].filter((key) => !isDarkTilePixel(key))
+    expect(off.slice(0, 5), 'pixels that are not the dark tile').toEqual([])
   })
 
   /**
@@ -105,7 +128,7 @@ describe('the launcher icon', () => {
    * regenerated full-bleed icon would still be 1024, still mostly red and still
    * have white in it, and would pass every other assertion here.
    */
-  it('has a 1024 app icon cut to a squircle, brand red with a white knot', () => {
+  it('has a 1024 app icon cut to a squircle, dark with a white knot', () => {
     const png = asset(expo.icon)
     expect([png.width, png.height]).toEqual([1024, 1024])
     expect(alphaAt(png, 4, 4), 'the corner is cut away').toBe(0)
@@ -119,9 +142,19 @@ describe('the launcher icon', () => {
     expect(alphaAt(png, 20, 120), 'still curving where a rounded rect would be solid').toBe(0)
     expect(alphaAt(png, 512, 2), 'the edge midpoint is solid').toBe(255)
     const colours = visibleColours(png)
-    const ranked = [...colours.entries()].sort((a, b) => b[1] - a[1])
-    expect(ranked[0][0]).toBe(RED)
+    // The tile is a gradient, so no single shade of it outnumbers the white:
+    // count the dark pixels together instead.
+    let dark = 0
+    let total = 0
+    for (const [key, count] of colours) {
+      total += count
+      if (isDarkTilePixel(key)) {
+        dark += count
+      }
+    }
+    expect(dark / total, 'share of the icon that is the dark tile').toBeGreaterThan(0.6)
     expect(colours.get(WHITE) ?? 0).toBeGreaterThan(0)
+    expect(colours.has(RED), 'no brand red').toBe(false)
   })
 })
 

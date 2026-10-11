@@ -29,14 +29,16 @@ slightly different angles (52 deg and 50 deg from horizontal).
 Outputs, all overwritten:
   assets/brand/mark.svg          vector master: the tile, viewBox 0 0 741 704
   src/components/app-logo-path.ts the same path for the in-app <AppLogo/>
-  assets/icon.png                1024 red squircle, white knot. Carries its own
+  assets/icon.png                1024 dark squircle, white knot. Carries its own
                                  OS mask (iOS squircle, Android legacy) supplies
                                  the corners; a tile carrying its own would show
                                  double corners.
+  assets/adaptive-icon-background.png
+                                 1024 background: the lit dark tile and the
+                                 knot's shadow, full bleed.
   assets/adaptive-icon.png       1024 foreground: the knot alone in white, the
                                  tile mapped onto the 72dp visible box so the
-                                 launcher's mask becomes the tile. app.json's
-                                 adaptiveIcon.backgroundColor is the red.
+                                 launcher's mask becomes the tile.
   assets/notification-icon.png   96 white silhouette on transparent, the knot
                                  in an 80 px live area. Android draws small
                                  icons as an alpha mask, so any colour here
@@ -56,10 +58,14 @@ import tempfile
 
 MOBILE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RED = "#F11924"  # the art's dominant colour, sampled (241, 25, 36)
-# The app icon's tile: the brand red again (2026-10-11), after a stretch on black
-# (2026-09-17 to 2026-10-11). The splash uses the same red; one asset serves both
-# splash backgrounds, where black would vanish on the dark one.
-ICON_TILE = RED
+# The app icon's tile (2026-10-11, the user picked option "E" from a sheet of
+# premium mockups): near-black, lit from the top left by a gradient and a faint
+# sheen, the white knot at 80% so it has room, with a soft shadow under it.
+# The splash and the in-app mark stay the red cut-out tile: one splash asset
+# serves both splash backgrounds, where black would vanish on the dark one.
+ICON_TILE = "#141414"  # the adaptive icon's flat fallback under its image
+ICON_TOP, ICON_BOTTOM = "#2A2A2A", "#050505"
+ICON_KNOT_SCALE = 0.8
 WHITE = "#FFFFFF"
 
 # ---- geometry, in tile units: 741 wide, 704 tall, corner radius 181 ---------
@@ -185,6 +191,36 @@ def svg(view_box: str, body: str) -> str:
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="{view_box}">{body}</svg>'
 
 
+# ---- the launcher icon's surface -------------------------------------------
+def icon_defs() -> str:
+    return (
+        f'<linearGradient id="tile" x1="0" y1="0" x2="0.6" y2="1">'
+        f'<stop offset="0" stop-color="{ICON_TOP}"/><stop offset="1" stop-color="{ICON_BOTTOM}"/></linearGradient>'
+        '<radialGradient id="sheen" cx="0.3" cy="0.05" r="0.9">'
+        '<stop offset="0" stop-color="#fff" stop-opacity="0.22"/>'
+        '<stop offset="0.6" stop-color="#fff" stop-opacity="0"/></radialGradient>'
+        '<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">'
+        '<feGaussianBlur stdDeviation="14"/><feOffset dy="10"/>'
+        '<feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer></filter>'
+    )
+
+
+def scaled_knot(extend: float, fill: str, extra: str = "") -> str:
+    """The knot at ICON_KNOT_SCALE about the tile's centre."""
+    s = ICON_KNOT_SCALE
+    t = f"translate({W / 2:.2f} {H / 2:.2f}) scale({s}) translate({-W / 2:.2f} {-H / 2:.2f})"
+    return f'<g transform="{t}"{extra}>{knot_svg_body(extend, fill)}</g>'
+
+
+def icon_ground(y: float, size: float, extend: float, x: float = 0.0) -> str:
+    """The lit tile over a size x size square at (x, y), and the knot's shadow."""
+    box = f'x="{x:.2f}" y="{y:.2f}" width="{size:.2f}" height="{size:.2f}"'
+    return (
+        f'<rect {box} fill="url(#tile)"/><rect {box} fill="url(#sheen)"/>'
+        + scaled_knot(extend, "#000", ' filter="url(#shadow)"')
+    )
+
+
 # ---- outputs ---------------------------------------------------------------
 def render(svg_text: str, out_rel: str, size: int) -> None:
     out = os.path.join(MOBILE, out_rel)
@@ -229,7 +265,7 @@ def main() -> int:
     )
 
     print("raster")
-    # App icon: red with the knot's open ends running off the tile, clipped to a
+    # App icon: the lit dark tile with the knot's open ends running off the tile, clipped to a
     # squircle. It carries its own silhouette because this asset is shown
     # UNMASKED in most places it appears — the legacy API 24-25 launcher, a
     # sideload prompt, a file browser, a repository listing — where a full-bleed
@@ -239,17 +275,21 @@ def main() -> int:
     squircle = f'<clipPath id="squircle"><path d="{squircle_path(icon_cx, icon_cy, W / 2)}"/></clipPath>'
     full_bleed = f'<rect x="0" y="{-(W - H) / 2:.2f}" width="{W:.0f}" height="{W:.0f}" fill="{ICON_TILE}"/>'
     icon_body = (
-        f"<defs>{squircle}</defs>"
-        f'<g clip-path="url(#squircle)">{full_bleed + knot_svg_body(200, WHITE)}</g>'
+        f"<defs>{squircle}{icon_defs()}</defs>"
+        f'<g clip-path="url(#squircle)">{icon_ground(-(W - H) / 2, W, 200)}{scaled_knot(200, WHITE)}</g>'
     )
     render(svg(square, icon_body), "assets/icon.png", 1024)
 
     # Adaptive foreground: the 108dp canvas shows its inner 72dp through the
     # launcher's mask, so the tile's width is mapped onto that 72dp box and the
-    # knot's open ends are extended clear off the canvas.
+    # knot's open ends are extended clear off the canvas. Pure white, no shadow:
+    # the same file is the monochrome (themed) icon, read as an alpha mask.
     units = W * 108 / 72
     adaptive_box = f"{-(units - W) / 2:.2f} {-(units - H) / 2:.2f} {units:.2f} {units:.2f}"
-    render(svg(adaptive_box, knot_svg_body(400, WHITE)), "assets/adaptive-icon.png", 1024)
+    render(svg(adaptive_box, scaled_knot(400, WHITE)), "assets/adaptive-icon.png", 1024)
+    # Adaptive background: the lit dark tile and the knot's shadow, full bleed.
+    ground = icon_ground(-(units - H) / 2, units, 400, x=-(units - W) / 2)
+    render(svg(adaptive_box, f"<defs>{icon_defs()}</defs>{ground}"), "assets/adaptive-icon-background.png", 1024)
 
     # Notification: 24dp asset, glyph in the inner 20dp (80 of 96 px), ends cut
     # flush with the tile so the silhouette is finite.
