@@ -124,14 +124,10 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('the Copy control of an agent message in a %s session', (scheme, palette) => {
-  it('draws no Copy control under a message made only of tool calls', () => {
-    const root = render(TOOLS_ONLY, scheme, { messageIndex: 3, onScrollToMessage: () => {} })
+  it('draws no Copy control under a message made only of tool calls, and no arrow either', () => {
+    const root = render(TOOLS_ONLY, scheme)
     expect(copyLabels(root)).toEqual([])
-    // Its other control stays, in the theme's muted ink.
-    const scroll = root.find(
-      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Scroll this message to top'
-    )
-    expect(scroll.find((node) => String(node.type) === 'ArrowUp').props.color).toBe(palette.textMuted)
+    expect(root.findAll((node) => String(node.type) === 'ArrowUp').length).toBe(0)
   })
 
   it('draws no Copy control, and no empty controls row, when the settled tools are folded away', () => {

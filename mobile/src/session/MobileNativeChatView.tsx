@@ -194,8 +194,7 @@ export function MobileNativeChatView({
     onMomentumScrollEnd,
     pinToTail,
     pinToTailAfterContentResize,
-    jumpToTail,
-    onScrollToMessage
+    jumpToTail
   } = useMobileNativeChatTailFollow<NativeChatMessage>({
     rows: newestFirst,
     hasMore,
@@ -259,8 +258,6 @@ export function MobileNativeChatView({
         message={item}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
-        messageIndex={index}
-        onScrollToMessage={onScrollToMessage}
         onOpenFile={onOpenFile}
         onRevertHunk={onRevertHunk}
         focusView={focusView}
@@ -286,7 +283,6 @@ export function MobileNativeChatView({
       dividerLabels,
       toolsExpanded,
       fontScale,
-      onScrollToMessage,
       onOpenFile,
       onRevertHunk,
       focusView,

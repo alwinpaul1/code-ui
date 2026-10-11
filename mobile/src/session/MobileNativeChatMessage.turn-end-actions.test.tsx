@@ -99,7 +99,7 @@ function render(
   act(() => {
     renderer = create(
       <ThemeProvider initialPreference={scheme}>
-        <MobileNativeChatMessage message={message} messageIndex={2} onScrollToMessage={() => {}} {...props} />
+        <MobileNativeChatMessage message={message} {...props} />
       </ThemeProvider>
     )
   })
@@ -129,28 +129,46 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('the actions under an agent message in a %s session', (scheme, palette) => {
-  it('draw once, after the last block of the turn, with copy and the scroll-up arrow both kept', () => {
+  it('draw once, after the last block of the turn: Copy, in the theme\'s muted ink', () => {
     const root = render(TOOLS_THEN_PROSE, scheme, { endsTurn: true })
     expect(copyControls(root)).toHaveLength(1)
-    expect(upControls(root)).toHaveLength(1)
     expect(copyControls(root)[0]!.find((node) => String(node.type) === 'Copy').props.color).toBe(palette.textMuted)
-    expect(upControls(root)[0]!.find((node) => String(node.type) === 'ArrowUp').props.color).toBe(palette.textMuted)
+  })
+
+  // 2026-10-11: the Claude app has no arrow to the start of a reply, under a finished reply or a
+  // working turn (the user's screenshot of it: copy and read-aloud only). Ours drew one, and
+  // tapped under a working turn it blinked the jump control, then landed several replies up.
+  it('draw no arrow to the start of the reply, under a finished reply or a working turn', () => {
+    const cases: Partial<Parameters<typeof MobileNativeChatMessage>[0]>[] = [
+      { endsTurn: true },
+      { endsTurn: true, activeTurnIsWorking: true, mayStillGrow: true },
+      { endsTurn: true, activeTurnIsWorking: true, structuredActivityUi: true }
+    ]
+    for (const message of [PROSE, PROSE_THEN_TOOLS, TOOLS_THEN_PROSE, TOOLS_ONLY]) {
+      for (const props of cases) {
+        // Everything the list used to hand a row for the arrow (its index and the jump), handed
+        // anyway: no build may draw an arrow from them.
+        const root = render(message, scheme, { ...props, ...({ messageIndex: 2, onScrollToMessage: () => {} } as object) })
+        expect(upControls(root)).toHaveLength(0)
+        expect(root.findAll((node) => String(node.type) === 'ArrowUp')).toHaveLength(0)
+        act(() => renderer?.unmount())
+      }
+    }
   })
 
   it('draw nowhere on a message the turn goes on past', () => {
     for (const message of [PROSE, PROSE_THEN_TOOLS, TOOLS_THEN_PROSE, TOOLS_ONLY]) {
       const root = render(message, scheme, { endsTurn: false })
       expect(copyControls(root)).toHaveLength(0)
-      expect(upControls(root)).toHaveLength(0)
       act(() => renderer?.unmount())
     }
   })
 
   it('stand left-aligned under the text, not right-aligned at the edge', () => {
-    for (const message of [PROSE, TOOLS_THEN_PROSE, TOOLS_ONLY]) {
+    for (const message of [PROSE, TOOLS_THEN_PROSE]) {
       const root = render(message, scheme, { endsTurn: true })
-      const copyOrUp = (copyControls(root)[0] ?? upControls(root)[0])!
-      const justifications = ancestors(copyOrUp)
+      const copy = copyControls(root)[0]!
+      const justifications = ancestors(copy)
         .map((node) => flat(node.props.style).justifyContent)
         .filter((value) => value !== undefined)
       expect(justifications).not.toContain('flex-end')
@@ -160,8 +178,8 @@ describe.each([
   })
 
   it('sit under the tool run of a turn that ends on one, not inside its row', () => {
-    const root = render(TOOLS_ONLY, scheme, { endsTurn: true })
-    const up = upControls(root)[0]!
+    const root = render(TOOLS_ONLY, scheme, { endsTurn: true, turnHasProse: true, copyTurnText: () => 'On it.' })
+    const up = copyControls(root)[0]!
     const run = root.find((node) => node.props.testID === 'tool-run-header')
     // The run's own row held them at its right end; they are not in it now.
     expect(run.parent!.findAll((node) => node === up)).toHaveLength(0)
@@ -172,10 +190,10 @@ describe.each([
     expect(inOrder.map((node) => (node === up ? 'actions' : 'run'))).toEqual(['run', 'actions'])
   })
 
-  it('still draw no Copy for a message with no words, and keep the scroll-up arrow', () => {
+  it('still draw no Copy, and no actions row at all, for a message with no words', () => {
     const root = render(TOOLS_ONLY, scheme, { endsTurn: true })
     expect(copyControls(root)).toHaveLength(0)
-    expect(upControls(root)).toHaveLength(1)
+    expect(upControls(root)).toHaveLength(0)
   })
 
   it('still copy the message prose when pressed', async () => {
@@ -203,23 +221,12 @@ describe.each([
   it('offer no Copy under a turn with no words in any row', () => {
     const root = render(TOOLS_ONLY, scheme, { endsTurn: true, turnHasProse: false, copyTurnText: () => '' })
     expect(copyControls(root)).toHaveLength(0)
-    expect(upControls(root)).toHaveLength(1)
   })
 
-  it('jump to the start of the turn, not to its last row, on the scroll-up arrow', () => {
-    const onScrollToMessage = vi.fn()
-    const root = render(TOOLS_THEN_PROSE, scheme, { endsTurn: true, messageIndex: 2, turnStartIndex: 5, onScrollToMessage })
-    act(() => upControls(root)[0]!.props.onPress())
-    expect(onScrollToMessage).toHaveBeenCalledWith(5)
-  })
-
-  it('keep each message its own Copy and arrow where the surface names no turn (a subagent transcript)', async () => {
-    const onScrollToMessage = vi.fn()
-    const root = render(PROSE, scheme, { messageIndex: 2, onScrollToMessage })
+  it('keep each message its own Copy where the surface names no turn (a subagent transcript)', async () => {
+    const root = render(PROSE, scheme)
     await act(async () => copyControls(root)[0]!.props.onPress())
     expect(Clipboard.setStringAsync).toHaveBeenCalledWith('All green.')
-    act(() => upControls(root)[0]!.props.onPress())
-    expect(onScrollToMessage).toHaveBeenCalledWith(2)
   })
 
   it('draw by default, so a chat that does not say where its turns end keeps its actions', () => {

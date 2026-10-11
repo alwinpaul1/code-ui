@@ -51,9 +51,6 @@ export type MobileNativeChatTailFollow<TItem> = {
   pinToTailAfterContentResize: (width: number, height: number) => void
   /** Explicit jump — the jump-to-latest control. Resumes following. */
   jumpToTail: (animated: boolean) => void
-  /** Align one message's top to the top of the viewport; hands the list to the
-   *  reader, since the agent's streaming must not move what they jumped to. */
-  onScrollToMessage: (index: number) => void
   /** Leave the tail deliberately, e.g. before paging in older history. */
   detachFromTail: () => void
 }
@@ -350,14 +347,6 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     [cancelSettle, endDrag, setAtTail, setFollowing]
   )
 
-  const onScrollToMessage = useCallback(
-    (index: number) => {
-      detachFromTail()
-      listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true })
-    },
-    [detachFromTail]
-  )
-
   // A pushed route (the Files explorer, a file preview, Settings) took this
   // screen out of the window, and the reader was up in history. On Android
   // FlashList keeps their place THROUGH the native scroll view: it moves an
@@ -419,7 +408,6 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     pinToTail,
     pinToTailAfterContentResize,
     jumpToTail,
-    onScrollToMessage,
     detachFromTail
   }
 }
