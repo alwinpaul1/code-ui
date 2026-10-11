@@ -832,8 +832,8 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
   "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone). Sizes as
   re-measured on 2026-10-11 below.
 - **No Stop.** The round Stop at a running card's right (`MobileBackgroundTaskStopButton.tsx`,
-  on the workflow card too) was removed on 2026-10-11 at the user's ask; Claude's cards have none
-  ("No Stop on any row" below).
+  on the workflow card too) was removed on 2026-10-11 at the user's ask, although the Claude app
+  does draw one ("No Stop on any row" below).
 - **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
   (with the chevron on a finished one), were this fork's own addition and are gone at the user's
   request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
@@ -1075,8 +1075,13 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
 
 The user, beside screenshots of the Claude app on the same Claude Code 2.1.296 session: "remove
 this … button from here", on the round Stop of "Locate plugin API types · Shell 5m 26s", and
-earlier on an Agent row. Claude's rows are the glyph, the title and the kind with its time, with
-nothing at the right, for every kind.
+earlier on an Agent row.
+
+**This departs from the Claude app on purpose.** The decompiled Claude app (1.261009.20,
+docs/claude-app-implementation-notes.md in the main checkout) does draw a Stop on each running row:
+a `stopCircle` icon button in a 40 dp box ("Stop task"), disabled while stopping, with no
+confirmation. The user asked for it gone here all the same, so it is gone. Its row title is the
+task's description, or the kind's name when there is none, which is what this sheet draws.
 
 So no row of the sheet draws a Stop, on either lane: not a shell, an agent, a monitor, a workflow or
 an unknown row, whatever the host's `supportsTaskStop` and `stoppable` say. The card keeps its

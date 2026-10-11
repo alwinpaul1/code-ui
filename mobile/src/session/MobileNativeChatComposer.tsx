@@ -124,12 +124,15 @@ type Props = {
 /** Claude-app style composer: a rounded card with the text field on top and a
  *  single action row beneath (attach, model, mic, send). */
 /** The input's padding. The bottom one is the air above the button row: with the 2 dp the row
- *  leaves above a 36 dp button, 18 dp from the last line of text to the buttons, as the Claude app
- *  leaves 16-20 (screenshots, 2026-10-11; it was 4 + 2, and a caret drag hit the buttons). */
+ *  leaves above a 36 dp button, 11 dp from the last line of text to the buttons, the Claude app's
+ *  own figure (1.261009.20, decompiled: 8 dp text padding + 3 dp in its 42 dp row;
+ *  docs/claude-app-implementation-notes.md, "The composer"). It was 4 + 2, and a caret drag hit
+ *  the buttons (the user's screenshots, 2026-10-11). */
 const COMPOSER_INPUT_PAD_TOP = 12
-const COMPOSER_INPUT_PAD_BOTTOM = 16
-/** Whole lines the input shows before it scrolls. Its height is padding plus whole lines, so a
- *  full box never shows a cut line at its foot (the 150 dp cap fell 2 dp into a seventh). */
+const COMPOSER_INPUT_PAD_BOTTOM = 9
+/** Whole lines the input shows before it scrolls, 1 to 6 as in the Claude app. Its height is
+ *  padding plus whole lines, so a full box never shows a cut line at its foot (the 150 dp cap fell
+ *  2 dp into a seventh). */
 const COMPOSER_INPUT_MAX_LINES = 6
 /** Lines of draft left in view while the `/` or `@` menu is up. */
 const COMPOSER_INPUT_LINES_WITH_MENU = 2

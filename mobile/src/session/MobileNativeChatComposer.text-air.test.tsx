@@ -7,11 +7,12 @@ import { paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-t
 // The composer's text and its button row, against the Claude app on the same phone (the user's
 // screenshots, 2026-10-11):
 //
-// 1. Air. Claude leaves about 16-20 dp between the typed text and the top of its buttons (+, model
-//    pill, mic, send); Code UI left 6 (the input's 4 dp bottom padding and 2 dp above a 36 dp button
+// 1. Air. Claude leaves 11 dp between the typed text and the top of its buttons (+, model pill,
+//    mic, send: 8 dp text padding + 3 dp in its 42 dp row, from the decompiled app 1.261009.20,
+//    docs/claude-app-implementation-notes.md); Code UI left 6 (the input's 4 dp bottom padding and 2 dp above a 36 dp button
 //    centred in the row), so a multi-line draft ran down onto the row and a caret drag could land
 //    on a button.
-// 2. The box. The input capped at 150 dp: 12 dp top padding, 4 bottom, 22 dp lines, so the cap
+// 2. The box. Claude shows 1 to 6 lines, then scrolls. The input capped at 150 dp: 12 dp top padding, 4 bottom, 22 dp lines, so the cap
 //    fell 2 dp into a seventh line and a cut line showed at the bottom of a full box.
 // 3. Dictating. While the phone recogniser spoke into the composer, the input's own text went
 //    transparent and a second, absolutely positioned Text drew the words over it
@@ -126,11 +127,9 @@ for (const scheme of ['light', 'dark'] as const) {
   const palette = scheme === 'dark' ? darkColors : lightColors
 
   describe(`the composer's text keeps clear of its buttons, as the Claude app's does (${scheme})`, () => {
-    it('leaves 16 to 20 dp between the last line of text and the top of the buttons', async () => {
+    it("leaves Claude's 11 dp between the last line of text and the top of the buttons", async () => {
       await render(scheme, 'Please check this and send')
-      const air = airAboveButtons()
-      expect(air).toBeGreaterThanOrEqual(16)
-      expect(air).toBeLessThanOrEqual(20)
+      expect(airAboveButtons()).toBe(11)
     })
 
     it('fits one line exactly when empty, and caps at exactly six whole lines with no cut seventh', async () => {
