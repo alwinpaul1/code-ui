@@ -89,6 +89,9 @@ export function useMobileNativeChatMessageSend(args: {
   /** The agent's own prompt copies (the hook beacon's `up=`). A copy that
    *  carries a send's words proves Claude took it. */
   promptReceipts?: readonly BeaconPromptReceipt[]
+  /** Whether Claude's own record already shows a send whose write just failed (the drafts
+   *  hook's `sendOnRecord`, S3). */
+  sendOnRecord?: (origin: MobileNativeChatSendOrigin, text: string) => boolean
 }): MobileNativeChatMessageSend {
   const {
     client,
@@ -107,7 +110,7 @@ export function useMobileNativeChatMessageSend(args: {
     beforeSend,
     onCommandDispatched,
     refuseUnderDialog = readSendUnderDialogRefusal,
-    promptReceipts = NO_RECEIPTS
+    promptReceipts = NO_RECEIPTS, sendOnRecord
   } = args
   // Read when the send verifies, not as of the render it began in.
   const promptReceiptsRef = useRef(promptReceipts)
@@ -276,10 +279,11 @@ export function useMobileNativeChatMessageSend(args: {
         }
         return 'unknown'
       }
-      if (outcome === 'rejected') {
-        if (syncComposer) {
-          restoreRejectedDraft(origin, draftText)
-        }
+      // A failure that raced its echo is a success (S3): the write failed, but Claude's own record
+      // (its row, or its copy of the prompt) already shows the message. Never the screen.
+      const raced = outcome === 'rejected' && syncComposer && classification === 'chat' && sendOnRecord?.(origin, text) === true
+      if (outcome === 'rejected' && !raced) {
+        if (syncComposer) { restoreRejectedDraft(origin, draftText) }
         report(notSent())
         return 'rejected'
       }
@@ -319,7 +323,7 @@ export function useMobileNativeChatMessageSend(args: {
       readSeededLaunchDraftSeed,
       refuseUnderDialog,
       restoreRejectedDraft, showSendingEcho,
-      sendGate
+      sendGate, sendOnRecord
     ]
   )
 

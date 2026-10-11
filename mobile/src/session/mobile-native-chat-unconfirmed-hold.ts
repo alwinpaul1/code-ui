@@ -29,6 +29,50 @@ export const UNCONFIRMED_SEND_DEADLINE_MS = 20_000
  * Returns the entry it parked, or null when the transcript already proved the
  * send landed and nothing needs holding.
  */
+function heldEntryOf(origin: MobileNativeChatSendOrigin, text: string): UnconfirmedSend {
+  return {
+    draftKey: origin.draftKey,
+    pendingKey: origin.pendingKey,
+    text,
+    normalizedText: origin.normalizedText,
+    baselineTailMessageId: origin.baselineTailMessageId,
+    deadline: null,
+    ...(origin.knownReceiptNonces ? { knownReceiptNonces: origin.knownReceiptNonces } : {}),
+    ...(origin.outboxId ? { outboxId: origin.outboxId } : {}),
+    ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {})
+  }
+}
+
+type RecordNow = {
+  messages: readonly NativeChatMessage[]
+  receipts?: readonly BeaconPromptReceipt[]
+  pending?: readonly MobileNativeChatPendingMessage[]
+  isActiveTranscript: boolean
+}
+
+/** Its row after its boundary, or the agent's own copy of it taken after it left; both only
+ *  from this send's own chat (the copies are the active tab's). Claims what it finds (S1). */
+function entryOnRecord(entry: UnconfirmedSend, now: RecordNow): boolean {
+  return (
+    now.isActiveTranscript &&
+    (landedHeldSends(now.messages, [entry], now.pending ?? []).length > 0 ||
+      findBeaconConfirmedSends(now.receipts ?? [], [entry]).length > 0)
+  )
+}
+
+/**
+ * Whether Claude's own record already shows this send, at the moment its write failed (S3).
+ *
+ * The Claude app treats a POST that failed after its echo was seen as a success. The phone's
+ * equivalent: a body write the host refused, or answered with an error, can still have reached
+ * the agent (the bytes went out, the answer did not), and if its row or Claude's copy of it is
+ * already here, calling it "Message not sent" and putting the words back invites a second copy.
+ * Only Claude's record counts, never the screen.
+ */
+export function sendAlreadyOnRecord(args: RecordNow & { origin: MobileNativeChatSendOrigin; text: string }): boolean {
+  return entryOnRecord(heldEntryOf(args.origin, args.text), args)
+}
+
 export function parkUnconfirmedSend(args: {
   origin: MobileNativeChatSendOrigin
   text: string
@@ -45,25 +89,10 @@ export function parkUnconfirmedSend(args: {
   onUnconfirmed: () => void
   onExpire: (entry: UnconfirmedSend) => void
 }): UnconfirmedSend | null {
-  const { origin, text, messages, isActiveTranscript, onUnconfirmed, onExpire } = args
-  const entry: UnconfirmedSend = {
-    draftKey: origin.draftKey,
-    pendingKey: origin.pendingKey,
-    text,
-    normalizedText: origin.normalizedText,
-    baselineTailMessageId: origin.baselineTailMessageId,
-    deadline: null,
-    ...(origin.knownReceiptNonces ? { knownReceiptNonces: origin.knownReceiptNonces } : {}),
-    ...(origin.outboxId ? { outboxId: origin.outboxId } : {}),
-    ...(origin.sentAt !== undefined ? { sentAt: origin.sentAt } : {})
-  }
+  const { onUnconfirmed, onExpire } = args
+  const entry = heldEntryOf(args.origin, args.text)
   // Why: the transcript event can beat the lost RPC acknowledgement, and so can the prompt copy.
-  // Both only from this send's own chat: the copies are the active tab's.
-  if (
-    isActiveTranscript &&
-    (landedHeldSends(messages, [entry], args.pending ?? []).length > 0 ||
-      findBeaconConfirmedSends(args.receipts ?? [], [entry]).length > 0)
-  ) {
+  if (entryOnRecord(entry, args)) {
     void retireOutboxSend(entry.outboxId)
     return null
   }

@@ -144,7 +144,7 @@ export function useMobileNativeChatController(
     restoreRejectedDraft,
     clearDraftAtSendStart,
     acceptSend,
-    holdUnconfirmedSend, removePending, showOutboxEcho, showSendingEcho
+    holdUnconfirmedSend, removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   } = useMobileNativeChatDrafts({
     hostId, worktreeId,
     tabId: activeSessionTabId,
@@ -361,7 +361,7 @@ export function useMobileNativeChatController(
     holdUnconfirmedSend,
     onSendError,
     beforeSend: settleDraftMirrorBeforeSend,
-    onCommandDispatched: peekTerminalForDispatchedCommand, promptReceipts: tailPrompts
+    onCommandDispatched: peekTerminalForDispatchedCommand, promptReceipts: tailPrompts, sendOnRecord
   })
 
   const structuredNativeChatSend = useMobileStructuredNativeChatSendBridge({

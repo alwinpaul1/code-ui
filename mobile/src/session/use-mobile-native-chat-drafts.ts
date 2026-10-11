@@ -7,7 +7,7 @@ import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
-import { landedHeldSends, parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
+import { landedHeldSends, parkUnconfirmedSend, sendAlreadyOnRecord } from './mobile-native-chat-unconfirmed-hold'
 import {
   draftWasSent,
   mergeLandedImagePreviewEchoes,
@@ -107,7 +107,7 @@ export function useMobileNativeChatDrafts(args: {
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
   removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
-  showOutboxEcho: (entry: NativeChatOutboxEntry) => void; showSendingEcho: (origin: MobileNativeChatSendOrigin) => void // outbox bubbles
+  showOutboxEcho: (entry: NativeChatOutboxEntry) => void; showSendingEcho: (origin: MobileNativeChatSendOrigin) => void; sendOnRecord: (origin: MobileNativeChatSendOrigin, text: string) => boolean // outbox bubbles; S3
 } {
   const {
     hostId,
@@ -280,6 +280,8 @@ export function useMobileNativeChatDrafts(args: {
     []
   )
 
+  const sendOnRecord = useCallback((origin: MobileNativeChatSendOrigin, text: string) => sendAlreadyOnRecord({ origin, text, messages: messagesRef.current, receipts: receiptsRef.current ?? [], pending: ownBubblesRef.current, isActiveTranscript: activeDraftKeyRef.current === origin.draftKey && (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey) }), []) // S3
+
   useEffect(() => {
     if (!draftKey || unconfirmedRef.current.length === 0) {
       return
@@ -394,6 +396,6 @@ export function useMobileNativeChatDrafts(args: {
     acceptSend,
     clearDraftAtSendStart,
     holdUnconfirmedSend,
-    removePending, showOutboxEcho, showSendingEcho
+    removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   }
 }
