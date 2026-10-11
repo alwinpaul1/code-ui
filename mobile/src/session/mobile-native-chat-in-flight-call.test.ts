@@ -20,18 +20,26 @@ describe('the call a structured turn draws as "Running"', () => {
     expect(inFlightToolCall([call], { activeTurnIsWorking: true })).toBe(call)
   })
 
-  it('is none once its result has landed, though the lane still marks it running', () => {
-    expect(inFlightToolCall([bash('running'), result()], { activeTurnIsWorking: true })).toBeNull()
-  })
-
   it('is none once a stateless call has its result, while the turn thinks on', () => {
     expect(inFlightToolCall([bash(), result()], { activeTurnIsWorking: true })).toBeNull()
+  })
+
+  it('is the older call still going when a newer parallel call has answered first', () => {
+    const older = bash(undefined, 'c1')
+    const read: NativeChatBlock = { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' }, callId: 'c2' }
+    expect(inFlightToolCall([older, read, result('c2')], { activeTurnIsWorking: true })).toBe(older)
+  })
+
+  it('keeps a call the lane marks running though output has arrived: a command streaming output still runs', () => {
+    const call = bash('running')
+    expect(inFlightToolCall([call, result()], { activeTurnIsWorking: true })).toBe(call)
   })
 
   it('is a stateless call with no result while the turn works, and none once the turn has ended', () => {
     const call = bash()
     expect(inFlightToolCall([call], { activeTurnIsWorking: true })).toBe(call)
     expect(inFlightToolCall([call], { activeTurnIsWorking: false })).toBeNull()
+    expect(inFlightToolCall([bash('running')], { activeTurnIsWorking: false })).toBeNull()
   })
 
   it('is the newest call when an older one has answered', () => {

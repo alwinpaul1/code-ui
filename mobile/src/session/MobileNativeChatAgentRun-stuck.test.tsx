@@ -190,14 +190,14 @@ describe('the row of a background Agent call (session 0954729d, Claude Code 2.1.
   })
 
   // The sweep: the ordinary tool row of a structured turn had the same shape.
-  it('draws no "Running" over a structured call whose result is in, though the lane still marks it running', async () => {
+  it('draws no "Running" over a stateless structured call whose result is in, while the turn thinks on', async () => {
     const message: NativeChatMessage = {
       id: 'structured-turn',
       role: 'assistant',
       timestamp: 0,
       source: 'transcript',
       blocks: [
-        { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, callId: 'c1', state: 'running' },
+        { type: 'tool-call', name: 'Bash', input: { command: 'pnpm test' }, callId: 'c1' },
         { type: 'tool-result', output: 'ok', callId: 'c1' }
       ]
     }
