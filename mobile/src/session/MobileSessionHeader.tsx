@@ -88,7 +88,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     handlePanelTap,
     showHeaderMoreButton
   } = controller
-  const modelLabel = resolveSessionModelLabel(controller)
   // Drawn for the Claude app's session entries too (G35), not only the project screens.
   const sessionMenu = useSessionHeaderMenu(controller)
   const showMoreButton = showHeaderMoreButton || sessionMenu.entries.length > 0
@@ -156,27 +155,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
               {terminalSummary}
             </Txt>
-            {modelLabel ? (
-              <View
-                accessibilityLabel={`Model ${modelLabel}`}
-                style={{
-                  // A flex child shrinks only when told to. Without these a
-                  // long live label ("Opus 5 (1M context) xhigh") pushed the
-                  // row under the terminal icon instead of truncating
-                  // (2026-09-18, screenshot).
-                  flexShrink: 1,
-                  minWidth: 0,
-                  paddingHorizontal: 6,
-                  paddingVertical: 1,
-                  borderRadius: radius.xs,
-                  backgroundColor: colors.accentSoft
-                }}
-              >
-                <Txt variant="caption" weight="medium" tone="accent" numberOfLines={1}>
-                  {modelLabel}
-                </Txt>
-              </View>
-            ) : null}
           </Pressable>
         </View>
         {viewToggle ? (

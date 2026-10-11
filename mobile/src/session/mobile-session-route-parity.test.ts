@@ -430,7 +430,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
 // MobileSessionHeaderMenu.tsx, outside this family, taking handlePanelTap('pr')'s 'pr' with it.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '692161a415c81cb814447c6546fc23dd2776c1b24993f8846d4bd22e69cf6502'
+  '0c423dbf7e4d26fdf5c007366d6fb16be5e3648f57e653aac27d467e512e5958'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -472,7 +472,7 @@ const HEAD_RUNTIME_STRING_SHA256 =
 // 2026-10-04: the header's tab Pressable takes its fill from tabPillBackground (tab-pill-surface.ts),
 // the same three theme tokens it chose inline, so the contrast test can measure the dot on each.
 // Same host record COUNT (97); that one Pressable's captured style moved.
-const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4156eca9e069751'
+const HEAD_HOST_JSX_SHA256 = '8e496f53a5ac74ae5199e34bf31b684ab729501ffad8a532210881e2f9e58404'
 // 2026-09-06: queue editor controls added to the terminal dock.
 // 2026-09-09 (night): the PDF viewer in the session file tab gets its file name
 // for the Download button.
@@ -572,7 +572,7 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // context usedTokens /> (the ring and its sheet, moved from the composer). The title and subline
 // Txt records are unchanged. The sheets' more-actions record is now <MobileSessionHeaderMenu
 // controller />.
-const HEAD_LEAF_JSX_SHA256 = '6337dd4da06bc46d350780ab16c5e8b00b6b8b18965962bd935d725f8feb2a39'
+const HEAD_LEAF_JSX_SHA256 = '32a3d0729024d4b217b2321c1f2758b3dfbce1873cb8550f7c6c31774d0b7899'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1140,14 +1140,17 @@ describe('mobile session route extraction parity', () => {
     // 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
     // MobileSessionHeaderMenu.tsx, outside this family, taking `handlePanelTap('pr')` with it. The
     // context ring and its sheet, and the Rename dialog's strings, live outside the family too.
-    expect(strings).toHaveLength(666)
+    // 661 later on 2026-10-11: the header's model pill ("Model …", its styles) is gone; the user
+    // asked for the model and effort to show only in the composer.
+    expect(strings).toHaveLength(661)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
     // 99 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — its bar,
     // the two pressables it maps, and the preview's own scroller.
     // 97 since 2026-09-26: the old reader's View and FlatList moved out with it.
-    expect(jsx.host).toHaveLength(97)
+    // 96 later on 2026-10-11: the header's model pill <View> is gone (model shows in the composer only).
+    expect(jsx.host).toHaveLength(96)
     expect(hash(jsx.host)).toBe(HEAD_HOST_JSX_SHA256)
     // 69 since 2026-09-15: the markdown preview's own leaf element.
     // 71 since 2026-09-15 (later): the .md tab's Preview/Edit toggle — the icon
@@ -1169,7 +1172,8 @@ describe('mobile session route extraction parity', () => {
     // <MobileSessionHeaderMenu controller />, which owns it and the Rename dialog: same count.
     // 75 again later on 2026-10-11: the user asked for the ring back in the composer, so the
     // header no longer mounts <MobileSessionHeaderContext>; the menu stays.
-    expect(jsx.leaf).toHaveLength(75)
+    // 74 later on 2026-10-11: the header's model pill text leaf is gone too.
+    expect(jsx.leaf).toHaveLength(74)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.
