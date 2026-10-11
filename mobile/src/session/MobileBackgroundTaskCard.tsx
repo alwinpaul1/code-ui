@@ -16,8 +16,8 @@ import {
  * re-measured beside Code UI on the same phone, 2026-10-11): a card darker than the sheet with the
  * kind's glyph, a 14/19 semibold title (two lines at most), then the kind in the title's ink and its
  * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. No card carries a
- * Stop: Claude's has none, and the round one the fork drew at the right was removed at the user's
- * ask (2026-10-11, no-stop.test.tsx). The card itself opens nothing: the fork's "View transcript" link is gone
+ * Stop: the user asked for the round one at the right gone (2026-10-11, no-stop.test.tsx), though
+ * the Claude app does draw one (docs/mobile-background-tasks.md, "No Stop on any row"). The card itself opens nothing: the fork's "View transcript" link is gone
  * (2026-10-10, not in Orca).
  */
 export function MobileBackgroundTaskCard({

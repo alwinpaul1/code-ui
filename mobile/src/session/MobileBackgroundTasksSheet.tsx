@@ -27,8 +27,8 @@ const TICK_MS = 1000
 /** The list of background work the agent has in flight and has finished. A
  *  terminal-driven tab has only the transcript the chat view already holds; a
  *  structured tab gets the provider's own roster from the host. It lists and
- *  stops nothing: no row carries a Stop, as no row of the Claude app's sheet
- *  does (the user, 2026-10-11; no-stop.test.tsx). */
+ *  stops nothing: no row carries a Stop, at the user's ask (2026-10-11;
+ *  no-stop.test.tsx), though the Claude app's rows carry one. */
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
@@ -46,7 +46,7 @@ export function MobileBackgroundTasksSheet({
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   connection?: BackgroundTasksConnection
   /** Where the running agents' own transcripts are (a Claude tab): read only
-   *  while the sheet is open, for each agent's latest step and its shells. */
+   *  while the sheet is open, for the shells and agents each agent launched. */
   subagentSource?: SubagentActivitySource | null
   onClose: () => void
 }) {
@@ -152,8 +152,9 @@ export function MobileBackgroundTasksSheetBody({
   return (
     // Claude's list sits 24 dp in from the screen's edges, 12 dp further than
     // the drawer's own padding, and leaves 24 dp between Running and Finished.
-    // No Stop all at Running's right and no Stop on a row: the Claude app has
-    // neither, and the user asked for both gone (2026-10-11).
+    // No Stop all at Running's right and no Stop on a row: the user asked for
+    // both gone (2026-10-11). The Claude app has no Stop all, but does draw a
+    // Stop on each running row.
     <View style={{ paddingBottom: space.md, paddingHorizontal: space.md, gap: space.xl }}>
       <BackgroundTasksSection title="Running" open={runningOpen} onToggle={() => setRunningOpen((open) => !open)}>
         {disconnected && running.length > 0 ? (

@@ -1,8 +1,9 @@
 // No Stop on any row of the Background tasks sheet (the user, 2026-10-11, beside screenshots of the
 // Claude Android app on the same Claude Code 2.1.296 session: "remove this … button from here", on
-// the round Stop of "Locate plugin API types · Shell 5m 26s", and earlier on an Agent row). The
-// Claude app's rows are the glyph, the title and the kind with its time, nothing at the right. Stop
-// all and the "+N" line went the same way earlier the same day (no-stop-all.test.tsx).
+// the round Stop of "Locate plugin API types · Shell 5m 26s", and earlier on an Agent row). This
+// departs from the Claude app on purpose: its decompiled sheet (1.261009.20) does draw a Stop on a
+// running row, with no confirmation; the user asked for it gone regardless. Stop all and the "+N"
+// line went earlier the same day (no-stop-all.test.tsx).
 //
 // Both lanes: a structured tab's host roster (every kind it names) and a terminal Claude tab's
 // transcript read with the footer's shells pill up, the case that used to draw a Stop on every row
@@ -76,7 +77,7 @@ const pressableLabels = (renderer: ReactTestRenderer) =>
     .findAllByType('Pressable' as never)
     .map((node) => String(node.props.accessibilityLabel ?? ''))
 
-describe('the Background tasks sheet draws no Stop on any row, as the Claude app draws none', () => {
+describe('the Background tasks sheet draws no Stop on any row, as the user asked', () => {
   let renderer: ReactTestRenderer | null = null
 
   afterEach(() => {

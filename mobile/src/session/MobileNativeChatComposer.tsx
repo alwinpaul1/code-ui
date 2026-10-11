@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
-import { DictationComposerPaint } from './DictationComposerPaint'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
@@ -15,6 +14,14 @@ import type {
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { useRichPasteInput } from './use-rich-paste-input'
+import {
+  COMPOSER_LINE_HEIGHT,
+  COMPOSER_TEXT_PAD_X,
+  COMPOSER_TEXT_PAD_Y,
+  COMPOSER_TEXT_SIZE,
+  composerInputBox,
+  useDictationCaret
+} from './composer-input-box'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -84,7 +91,8 @@ type Props = {
   micActive?: boolean
   /** Microphone level 0..1 while `micActive`; shows the voice bars. */
   micLevel?: number
-  /** Finished words in normal color, the open phrase lighter. */
+  /** What the app's own dictation last wrote. In the render that brings a new one, if `value` is
+   *  its text, the caret goes to its `caret`. */
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
   /** Context window figure from the desktop status line; shows the ring. */
@@ -124,8 +132,6 @@ type Props = {
 
 /** Claude-app style composer: a rounded card with the text field on top and a
  *  single action row beneath (attach, model, mic, send). */
-/** Two lines of draft plus padding. */
-const COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU = 72
 
 export function MobileNativeChatComposer({
   value,
@@ -171,12 +177,11 @@ export function MobileNativeChatComposer({
   popoverSpace = 0,
   dockHeight = 0
 }: Props): React.JSX.Element {
-  const { colors, fonts, radius, space, type } = useTheme()
+  const { colors, fonts, space } = useTheme()
   const [cursor, setCursor] = useState(() => value.length)
   useEffect(() => {
     onComposerCursor?.(cursor)
   }, [cursor, onComposerCursor])
-  const [focused, setFocused] = useState(false)
   // Transiently drives the native caret after a mid-text autocomplete insert,
   // then released on the next selection change so manual caret placement still
   // works (a permanently controlled `selection` breaks it in React Native).
@@ -299,12 +304,8 @@ export function MobileNativeChatComposer({
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   }
-  const showInterim = micActive && Boolean(dictationPaint?.interim)
-  const composerType = {
-    fontFamily: fonts.regular,
-    fontSize: type.body.size + 1,
-    lineHeight: type.body.lineHeight + 1
-  }
+  // Placed once per dictation result (composer-input-box.ts).
+  const dictationSelection = useDictationCaret(dictationPaint, value)
 
   return (
     <View>
@@ -320,14 +321,17 @@ export function MobileNativeChatComposer({
         style={{ paddingHorizontal: space.md, paddingTop: space.xs, paddingBottom: space.md }}
         testID="native-chat-composer-inset"
       >
+        {/* Claude's shell (1.261009.20, `o530.b`): 24 dp radius, the surface at 96%, a 0.5 dp
+            hairline, a soft shadow (blur 8, black 10%, y 2) and 8 dp inside above and below. */}
         <View
           style={{
-            borderWidth: 1,
-            borderColor: focused ? colors.borderStrong : colors.border,
-            borderRadius: radius.xl,
-            // See-through like the dock it sits on; a shadow under glass
-            // reads as a smudge, so none.
-            backgroundColor: colors.bgPanelGlass,
+            borderWidth: 0.5,
+            borderColor: colors.composerBorder,
+            borderRadius: 24,
+            backgroundColor: colors.composerFill,
+            boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.1)',
+            paddingTop: 8,
+            paddingBottom: 8,
             overflow: 'hidden'
           }}
           testID="native-chat-composer"
@@ -358,37 +362,43 @@ export function MobileNativeChatComposer({
             collapsable={false}
             style={
               suggestions.length > 0
-                ? { maxHeight: COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU, overflow: 'hidden', justifyContent: 'flex-end' }
+                ? { maxHeight: composerInputBox.maxHeightWithMenu, overflow: 'hidden', justifyContent: 'flex-end' }
                 : null
             }
             testID="native-chat-composer-input-fold"
           >
             <TextInput
               ref={textInputRef}
+              // One text layer, capped at whole lines and scrolling inside its box. Until
+              // 2026-10-11 dictation turned this text transparent and drew the words in an
+              // absolutely positioned Text over it, with no cap and no scroll: past the cap it
+              // ran over the button row and out of the composer, a line apart from the
+              // scrolled input's own copy (MobileNativeChatComposer.text-air.test.tsx).
               style={{
                 width: '100%',
-                maxHeight: 150,
-                minHeight: 44,
-                color: showInterim ? 'transparent' : colors.text,
-                ...composerType,
-                paddingHorizontal: space.lg,
-                paddingTop: space.md,
-                paddingBottom: space.xs
+                maxHeight: composerInputBox.maxHeight,
+                minHeight: composerInputBox.minHeight,
+                color: colors.text,
+                fontFamily: fonts.regular,
+                fontSize: COMPOSER_TEXT_SIZE,
+                lineHeight: COMPOSER_LINE_HEIGHT,
+                paddingHorizontal: COMPOSER_TEXT_PAD_X,
+                paddingTop: COMPOSER_TEXT_PAD_Y,
+                paddingBottom: COMPOSER_TEXT_PAD_Y
               }}
               value={value}
               onChangeText={onChangeText}
-              // Controlled only transiently right after an autocomplete insert.
-              selection={pendingSelection ?? undefined}
+              // Controlled only while the app dictates, and transiently right after an
+              // autocomplete insert.
+              selection={dictationSelection ?? pendingSelection ?? undefined}
               onSelectionChange={(e) => {
                 const next = e.nativeEvent.selection.end
                 setCursor(next)
                 onComposerCursor?.(next)
                 setPendingSelection(null)
               }}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
               placeholder={placeholder}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.composerPlaceholder}
               selectionColor={colors.accent}
               multiline
               // Why: never revoke `editable` — iOS resigns first responder on a focused
@@ -396,19 +406,18 @@ export function MobileNativeChatComposer({
               // The lock gates sending; the draft survives and rides the next send.
               textAlignVertical="top"
             />
-            {showInterim && dictationPaint ? <DictationComposerPaint paint={dictationPaint} /> : null}
           </View>
           <View
+            // Claude's row: 42 dp (36 dp buttons + 6), 8 dp in from each side.
             style={{
-              minHeight: 48,
+              minHeight: 42,
               flexDirection: 'row',
               alignItems: 'center',
               gap: space.xs,
               // Why: one flexible child (the model pill) and fixed icon buttons;
               // without this the row grows past the composer and clips send.
               flexWrap: 'nowrap',
-              paddingHorizontal: space.sm,
-              paddingBottom: space.sm
+              paddingHorizontal: 8
             }}
             testID="native-chat-composer-actions"
           >
@@ -430,12 +439,6 @@ export function MobileNativeChatComposer({
                 }
               />
             ) : null}
-            {sessionOptions ? (
-              <MobileNativeChatSessionOptionPickers
-                {...sessionOptions}
-                sendInFlight={sending}
-              />
-            ) : null}
             {contextWindow ? (
               <ContextWindowRing
                 usedPercent={contextWindow.usedPercent}
@@ -447,6 +450,13 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={{ flex: 1, minWidth: 0 }} />
+            {/* The model pill leads Claude's trailing group, before the mic and Send. */}
+            {sessionOptions ? (
+              <MobileNativeChatSessionOptionPickers
+                {...sessionOptions}
+                sendInFlight={sending}
+              />
+            ) : null}
             {micActive ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
               <Pressable focusable={false}
@@ -473,7 +483,7 @@ export function MobileNativeChatComposer({
                 {micActive ? (
                   <Square pointerEvents="none" size={16} color={colors.danger} strokeWidth={2.4} fill={colors.danger} />
                 ) : (
-                  <Mic pointerEvents="none" size={19} color={colors.textSecondary} strokeWidth={2} />
+                  <Mic pointerEvents="none" size={20} color={colors.textSecondary} strokeWidth={2} />
                 )}
               </Pressable>
             ) : null}
@@ -490,7 +500,7 @@ export function MobileNativeChatComposer({
               disabled={!canSend}
             >
               <ArrowUp
-                size={19}
+                size={20}
                 color={colors.onAccent}
                 strokeWidth={2.6}
               />

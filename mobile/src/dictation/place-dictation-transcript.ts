@@ -26,7 +26,8 @@ export function placeSpokenText(
   if (target.kind === 'chat') {
     const painted = paintSpokenAtCursor(prefix, suffix, text, interim)
     setChatComposerText(() => painted.text)
-    return painted.interim ? painted : null
+    // Always, interim or not: the composer puts the caret at `caret` while the app dictates.
+    return painted
   }
   placeLiveTranscript(text, base, target, setChatComposerText, setInput, sendLiveTerminalInput)
   return null

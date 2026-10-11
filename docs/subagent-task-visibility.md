@@ -1,7 +1,10 @@
 # Subagent task visibility (2026-10-10)
 
-The Claude Android app shows each background agent's latest step ("Running
-cd /private/...") and the shells its subagents start ("Shell 1m 20s"). On a
+The Claude Android app shows the shells a background agent starts ("Shell 1m
+20s"); this note first read its agent rows as showing the agent's latest step
+("Running cd /private/..."), which the decompiled app (1.261009.20) does not
+bear out: a row's title is the task's description, or the kind's name, and
+since 2026-10-11 Code UI's is too ("Reading the subagents' own transcripts" below). On a
 terminal-driven Code UI tab the Background tasks sheet showed neither: agent
 rows carry the spawn description, and a shell started inside a subagent was
 not listed at all. This note records what stock Orca and Claude Code actually
@@ -111,7 +114,8 @@ no command. `background_tasks` is read only for its agent-typed entries
 shells reach the phone only as the pane staying `working`.
 
 So nothing on the session-tab snapshot carries a subagent's latest step or any
-subagent shell, and no stock-Orca field can be made to.
+subagent shell, and no stock-Orca field can be made to. (The step is no longer
+drawn: an agent row reads its description since 2026-10-11.)
 
 ## 3. The beacon and the status-line payload
 
@@ -169,7 +173,8 @@ cannot tell the two apart.
 
 ## What is impossible without changing Orca (or reading subagent transcripts)
 
-- **An agent row's latest step ("Running cd …").** Claude sends it to hooks;
+- **An agent row's latest step ("Running cd …")** (no longer drawn since
+  2026-10-11; recorded as found). Claude sends it to hooks;
   Orca deliberately keeps it off the lead's status and off the roster row. The
   screen does not paint it. The status line does not carry it.
 - **A subagent's shells by name and elapsed time ("Shell 1m 20s").** The phone

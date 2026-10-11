@@ -43,29 +43,38 @@ export type DictationPaint = {
   before: string
   interim: string
   after: string
+  /** The whole draft this paint wrote into the composer. */
+  text: string
+  /** Where the spoken words end in the composed text: the caret while the app dictates. Android
+   *  keeps the OLD selection when JS rewrites a TextInput's value, so without it the caret stayed
+   *  where dictation began while the words landed after it (2026-10-11). */
+  caret: number
 }
 
-/** Finished words stay in `before`/`after`. The open phrase is `interim`. */
+/** Finished words stay in `before`/`after`. The open phrase is `interim`. `caret` is the end of
+ *  the spoken words, before the suffix. */
 export function paintSpokenAtCursor(
   prefix: string,
   suffix: string,
   spoken: string,
   interim: string
-): DictationPaint & { text: string } {
+): DictationPaint {
   const text = joinDictationAtCursor(prefix, suffix, spoken)
+  const spokenJoined = joinDictationAtCursor(prefix, '', spoken)
+  const caret = spokenJoined.length
   const open = interim.trim()
   if (!open) {
-    return { before: text, interim: '', after: '', text }
+    return { before: text, interim: '', after: '', text, caret }
   }
-  const spokenJoined = joinDictationAtCursor(prefix, '', spoken)
   const at = spokenJoined.lastIndexOf(open)
   if (at === -1) {
-    return { before: text, interim: '', after: '', text }
+    return { before: text, interim: '', after: '', text, caret }
   }
   return {
     before: spokenJoined.slice(0, at),
     interim: spokenJoined.slice(at, at + open.length),
     after: text.slice(at + open.length),
-    text
+    text,
+    caret
   }
 }

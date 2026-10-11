@@ -28,30 +28,34 @@ describe('dictation inserted at the caret', () => {
     expect(joinDictationAtCursor('keep', ' this', '')).toBe('keep this')
   })
 
-  it('paints the open phrase lighter than the words already finished', () => {
+  it('splits the open phrase from the finished words, and puts the caret after the spoken words', () => {
     expect(paintSpokenAtCursor('hello', ' world', 'there', 'there')).toEqual({
       before: 'hello ',
       interim: 'there',
       after: ' world',
-      text: 'hello there world'
+      text: 'hello there world',
+      caret: 'hello there'.length
     })
     expect(paintSpokenAtCursor('', '', 'hello there. how', 'how')).toEqual({
       before: 'hello there. ',
       interim: 'how',
       after: '',
-      text: 'hello there. how'
+      text: 'hello there. how',
+      caret: 'hello there. how'.length
     })
     expect(paintSpokenAtCursor('please ', '', 'fix the bug', '')).toEqual({
       before: 'please fix the bug',
       interim: '',
       after: '',
-      text: 'please fix the bug'
+      text: 'please fix the bug',
+      caret: 'please fix the bug'.length
     })
     expect(paintSpokenAtCursor('hello', '', 'there', 'missing')).toEqual({
       before: 'hello there',
       interim: '',
       after: '',
-      text: 'hello there'
+      text: 'hello there',
+      caret: 'hello there'.length
     })
   })
 })
