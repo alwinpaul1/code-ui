@@ -84,7 +84,15 @@ export function mergeImagePreviews(
 /** Host and path to the picture's URI: a cache file on the phone, or the
  *  `data:` URI it came as where no file could be written (host-image-files.ts). */
 const dataUriByPath = new Map<string, string>()
-const failedPaths = new Map<string, number>()
+/** When a refused or failed path may be asked again, and whether the agent's
+ *  text named it at the time. A refusal before the text named the path is
+ *  not held against it once the text does: that text is what makes the
+ *  desktop share it (rule 1), and it lands after the row that wanted the
+ *  picture, so holding the cooldown made the thumbnail wait 5 s or for the
+ *  next new row (2026-10-11). */
+const failedPaths = new Map<string, { until: number; named: boolean; tries: number }>()
+/** The longest a path the desktop keeps refusing waits between asks. */
+const MAX_RETRY_MS = 5 * 60_000
 const RETRY_MS = 5_000
 const inFlight = new Map<string, Promise<string | null>>()
 /** Paths already explained, so a retry every few seconds says it once. */
@@ -177,12 +185,35 @@ export async function loadHostImage(args: {
   }
   // Its cache file was cleared, or now holds another picture: read it again.
   dataUriByPath.delete(key)
-  if ((failedPaths.get(key) ?? 0) > Date.now()) {
+  const failure = failedPaths.get(key)
+  const newlyNamed = args.agentTextNamesPath === true && failure?.named === false
+  if (failure && failure.until > Date.now() && !newlyNamed) {
     return null
   }
   const pending = inFlight.get(key)
   if (pending) {
-    return pending
+    // An ask sent before the agent's text named the path may come back
+    // refused after it does: ask once more then, rather than at the next timer.
+    return args.agentTextNamesPath === true
+      ? pending.then((uri) => uri ?? (failedPaths.get(key)?.named === false ? loadHostImage(args) : null))
+      : pending
+  }
+  // Each refusal waits twice as long as the one before (5 s, 10 s, 20 s… up
+  // to 5 min): every new row re-runs the hook over every picture of the
+  // session, and a long one holds dozens of reads the desktop will never
+  // share, which asked down the relay every 5 s ahead of the one picture that
+  // could load (2026-10-11). The agent's text newly naming the path starts
+  // the count again (`newlyNamed` above).
+  // Only the desktop's answer "not shared" backs off. A failed or timed-out
+  // ask is the connection, not the path: it keeps the flat 5 s, so a path
+  // is not held for minutes after the relay comes back.
+  const fail = (refused = false) => {
+    const tries = !refused || newlyNamed ? 1 : (failure?.tries ?? 0) + 1
+    failedPaths.set(key, {
+      until: Date.now() + Math.min(RETRY_MS * 2 ** (tries - 1), MAX_RETRY_MS),
+      named: args.agentTextNamesPath === true,
+      tries
+    })
   }
   const run = (async () => {
     try {
@@ -201,7 +232,7 @@ export async function loadHostImage(args: {
         { timeoutMs: 15_000 }
       )
       if (!resolved.ok) {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail()
         const failure = (resolved as Partial<RpcFailure>).error
         explainMissing(key, args.path, `the desktop could not resolve it (${failure?.message || failure?.code || 'no reason given'})`)
         return null
@@ -234,7 +265,7 @@ export async function loadHostImage(args: {
               }
             : null
       if (!request) {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail(true)
         explainMissing(key, args.path, notShared(args))
         return null
       }
@@ -247,7 +278,7 @@ export async function loadHostImage(args: {
         ? normalizeMobileFilePreviewResult(args.path, (read as RpcSuccess).result)
         : previewErrorFromRefusal((read as RpcFailure).error)
       if (preview.status !== 'ready' || preview.kind !== 'image') {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail()
         explainMissing(key, args.path, 'message' in preview ? preview.message : 'the desktop read it, but it is not an image')
         return null
       }
@@ -255,7 +286,7 @@ export async function loadHostImage(args: {
       dataUriByPath.set(key, uri)
       return uri
     } catch (error) {
-      failedPaths.set(key, Date.now() + RETRY_MS)
+      fail()
       explainMissing(key, args.path, error instanceof Error ? error.message : String(error))
       return null
     } finally {
