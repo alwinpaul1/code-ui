@@ -6,6 +6,26 @@ import type { PendingNativeChatImage } from './mobile-native-chat-image-attachme
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { openImagePreview } from './image-preview-store'
 import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
+import { moveNativeChatAttachment } from './mobile-native-chat-attachment-order'
+
+/** "Move earlier" / "Move later" where the chip can go, the Claude app's
+ *  screen-reader reorder (ccr_reorder_move_earlier_a11y / _later_a11y). */
+function reorderActions(index: number, count: number): { name: string; label: string }[] {
+  return [
+    ...(index > 0 ? [{ name: 'moveEarlier', label: 'Move earlier' }] : []),
+    ...(index < count - 1 ? [{ name: 'moveLater', label: 'Move later' }] : [])
+  ]
+}
+
+function onReorderAction(id: string) {
+  return (event: { nativeEvent: { actionName: string } }): void => {
+    if (event.nativeEvent.actionName === 'moveEarlier') {
+      moveNativeChatAttachment(id, 'earlier')
+    } else if (event.nativeEvent.actionName === 'moveLater') {
+      moveNativeChatAttachment(id, 'later')
+    }
+  }
+}
 
 /** The strip above the composer text: image thumbnails and named document
  *  chips, each with its remove badge, plus (while a document attach is
@@ -97,8 +117,12 @@ export function MobileNativeChatAttachmentChips({
           ) : null}
         </View>
       ) : null}
-      {attachments.map((attachment) => {
+      {attachments.map((attachment, index) => {
         const isFile = attachment.kind === 'file'
+        const reorder = {
+          accessibilityActions: reorderActions(index, attachments.length),
+          onAccessibilityAction: onReorderAction(attachment.id)
+        }
         return (
           <View
             key={attachment.id}
@@ -113,6 +137,9 @@ export function MobileNativeChatAttachmentChips({
           >
             {isFile ? (
               <View
+                accessible
+                accessibilityLabel={attachment.name ?? 'File'}
+                {...reorder}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -138,6 +165,7 @@ export function MobileNativeChatAttachmentChips({
               <Pressable
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
+                {...reorder}
                 style={{ flex: 1 }}
                 onPress={() =>
                   openImagePreview(

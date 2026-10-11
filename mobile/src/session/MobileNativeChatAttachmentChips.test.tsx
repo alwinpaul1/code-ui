@@ -577,3 +577,68 @@ describe('a chip still uploading', () => {
   })
 })
 
+// The Claude app reorders composer chips (g330.a, rs8.moveUpload), and offers
+// it to a screen reader as "Move earlier" and "Move later"
+// (ccr_reorder_move_earlier_a11y / _later_a11y, 1.261009.20). Order is the
+// order the photos are pasted, so it is the order the agent reads them in.
+describe('reordering the chips from a screen reader', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    useNativeChatImageAttachmentsStore.getState().reset()
+  })
+
+  const DOC: PendingNativeChatImage = { id: 'img-4', path: '/tmp/d.pdf', previewUri: 'file:///d.pdf', kind: 'file', name: 'd.pdf' }
+
+  function drawFromStore(scheme: Scheme, chips: PendingNativeChatImage[]): void {
+    useNativeChatImageAttachmentsStore.getState().update((prev) => ({ ...prev, [MARKUP_SCOPE]: chips }))
+    act(() => {
+      renderer = create(screen(scheme, { attachments: chips, onRemoveAttachment: vi.fn() }))
+    })
+  }
+
+  function actionsOf(node: ReactTestInstance): string[] {
+    return (node.props.accessibilityActions ?? []).map((action: { label: string }) => action.label)
+  }
+
+  function movable(): ReactTestInstance[] {
+    return renderer!.root.findAll(
+      (node) => node.props.accessible !== false && Array.isArray(node.props.accessibilityActions)
+    )
+  }
+
+  it.each(SCHEMES)('offers Move earlier and Move later only where the chip can go (%s)', (scheme) => {
+    drawFromStore(scheme, [PHOTO, SECOND, DOC])
+    const chips = movable()
+    expect(chips).toHaveLength(3)
+    expect(chips.map(actionsOf)).toEqual([['Move later'], ['Move earlier', 'Move later'], ['Move earlier']])
+  })
+
+  it('moves the chip one place in the strip the send pastes from', () => {
+    drawFromStore('light', [PHOTO, SECOND, THIRD])
+    act(() => {
+      movable()[1]!.props.onAccessibilityAction({ nativeEvent: { actionName: 'moveEarlier' } })
+    })
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]?.map((chip) => chip.id)).toEqual([
+      'img-2',
+      'img-1',
+      'img-3'
+    ])
+    act(() => {
+      movable()[0]!.props.onAccessibilityAction({ nativeEvent: { actionName: 'moveLater' } })
+    })
+    // The strip as drawn still has img-1 first; the move is by chip id.
+    expect(useNativeChatImageAttachmentsStore.getState().byScope[MARKUP_SCOPE]?.map((chip) => chip.id)).toEqual([
+      'img-2',
+      'img-3',
+      'img-1'
+    ])
+  })
+
+  it('offers no move on a lone chip', () => {
+    drawFromStore('dark', [PHOTO])
+    expect(movable().flatMap(actionsOf)).toEqual([])
+  })
+})
+
