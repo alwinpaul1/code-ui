@@ -4,7 +4,9 @@
 // here. Kept out of props so nothing above it re-renders on open/close.
 import { useSyncExternalStore } from 'react'
 
-export type ImageMarkupResult = { readonly base64: string }
+/** The flattened picture: JPEG for an opaque source, PNG for one with alpha
+ *  (image-markup-format.ts), with the type its bytes are. */
+export type ImageMarkupResult = { readonly base64: string; readonly mimeType: 'image/png' | 'image/jpeg' }
 
 export type ImageMarkupState = {
   readonly uri: string

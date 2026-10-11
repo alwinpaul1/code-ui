@@ -90,7 +90,7 @@ describe('a send tapped while a photo is still uploading', () => {
       let markup: Promise<void> = Promise.resolve()
       let sending: Promise<boolean> = Promise.resolve(false)
       await act(async () => {
-        markup = hook!.replaceAttachment('img-1', 'ZZZZ')
+        markup = hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png')
         await settle()
         sending = hook!.sendNativeChat('look')
         await settle()
@@ -242,7 +242,7 @@ describe('a send tapped while a photo is still uploading', () => {
       let markup: Promise<void> = Promise.resolve()
       let sending: Promise<boolean> = Promise.resolve(true)
       await act(async () => {
-        markup = hook!.replaceAttachment('img-1', 'ZZZZ')
+        markup = hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png')
         await settle()
         sending = hook!.sendNativeChat('look')
         await settle()
@@ -450,8 +450,8 @@ describe('a send tapped while a photo is still uploading', () => {
 
       await act(async () => {
         await Promise.all([
-          hook!.replaceAttachment('img-1', 'ZZZZ'),
-          hook!.replaceAttachment('img-1', 'ZZZZ')
+          hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png'),
+          hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png')
         ])
       })
       expect(hook!.attachments).toEqual([expect.objectContaining({ id: 'img-1', ...chip })])

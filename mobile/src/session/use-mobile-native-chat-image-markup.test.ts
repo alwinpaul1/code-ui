@@ -16,7 +16,7 @@ const PHOTO = { id: 'img-1', path: '/tmp/a.png', previewUri: 'file:///a.jpg' }
  */
 describe('a markup Done that could not save says so', () => {
   let renderer: ReactTestRenderer | null = null
-  let replace: ((id: string, base64: string) => Promise<void>) | null = null
+  let replace: ((id: string, base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>) | null = null
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -47,7 +47,7 @@ describe('a markup Done that could not save says so', () => {
     const showToast = vi.fn()
     const { replaceAttachmentImage } = mount(null, showToast)
 
-    await act(() => replace!('img-1', 'ZZZZ'))
+    await act(() => replace!('img-1', 'ZZZZ', 'image/png'))
 
     expect(replaceAttachmentImage).not.toHaveBeenCalled()
     expect(showToast).toHaveBeenCalledExactlyOnceWith(NOT_SAVED, 1500)
@@ -63,7 +63,7 @@ describe('a markup Done that could not save says so', () => {
     }))
     const { replaceAttachmentImage } = mount({ sendRequest } as unknown as RpcClient, showToast)
 
-    await act(() => replace!('img-1', 'ZZZZ'))
+    await act(() => replace!('img-1', 'ZZZZ', 'image/png'))
 
     // The chip goes back to the photo as it was, from under the loading ring.
     expect(replaceAttachmentImage).toHaveBeenCalledExactlyOnceWith('h\0w\0tab', 'img-1', PHOTO)

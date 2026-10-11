@@ -13,6 +13,8 @@ import Svg, { Image as SvgImage, Path } from 'react-native-svg'
 import { Check, Redo2, Undo2, X } from 'lucide-react-native'
 import { closeImageMarkup, useImageMarkup } from '../session/image-markup-store'
 import { loadMarkupImageSize } from './markup-image-size'
+import { encodeMarkupOutput, loadMarkupSourceTraits } from './markup-image-output'
+import { markupOutputFormat } from '../session/image-markup-format'
 import {
   canRedoMarkupStroke,
   canUndoMarkupStroke,
@@ -55,7 +57,13 @@ type NaturalSize = { width: number; height: number }
  *  library: the photo and the strokes are both drawn inside one `<Svg>` (the
  *  photo as an SVG `<Image>`, matching the Claude app's markup flow), so
  *  asking that view for a bitmap at the photo's own resolution already
- *  contains both layers composited — no extra native dependency needed. */
+ *  contains both layers composited — no extra native dependency needed.
+ *
+ *  Copied from the Claude app (1.261009.20, `jgh`/`fl`): the bar is titled
+ *  "Mark up image"; while Done writes the picture it adds "Saving…" and the
+ *  screen can be neither closed nor drawn on; an opaque source is written as
+ *  JPEG at 85, one with alpha as PNG (image-markup-format.ts). The bar keeps
+ *  Code UI's own colours and sizes. */
 export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const session = useImageMarkup()
   const { colors, space, isDark } = useTheme()
@@ -66,6 +74,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const [strokeState, setStrokeState] = useState<MarkupStrokeState>(EMPTY_MARKUP_STROKE_STATE)
   const [draftPoints, setDraftPoints] = useState<readonly MarkupPoint[]>([])
   const [confirmingDiscard, setConfirmingDiscard] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   // A new session (even a reopen of the same photo) starts from a blank
   // canvas — keyed on `token`, not the uri, so picking the same photo twice
@@ -76,6 +85,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     setStrokeState(EMPTY_MARKUP_STROKE_STATE)
     setDraftPoints([])
     setConfirmingDiscard(false)
+    setSaving(false)
   }, [session?.token])
 
   useEffect(() => {
@@ -119,13 +129,13 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
 
   const addDraftPoint = useCallback(
     (x: number, y: number, replace: boolean) => {
-      if (!natural || drawn.width <= 0 || drawn.height <= 0) {
+      if (saving || !natural || drawn.width <= 0 || drawn.height <= 0) {
         return
       }
       const point = displayPointToNatural({ x, y }, drawn, natural)
       setDraftPoints((prev) => (replace ? [point] : [...prev, point]))
     },
-    [natural, drawn.width, drawn.height]
+    [saving, natural, drawn.width, drawn.height]
   )
 
   // Reads this render's draftPoints directly (not through a setState updater,
@@ -154,6 +164,11 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   }
 
   const handleClose = (): void => {
+    // The Claude app's sheet cannot be dismissed while it saves; neither can
+    // this, or Back would drop the marks the flatten is writing.
+    if (saving) {
+      return
+    }
     if (resolveMarkupCloseAction(strokeState) === 'confirm-discard') {
       setConfirmingDiscard(true)
       return
@@ -167,10 +182,12 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   }
 
   const handleDone = (): void => {
+    if (saving) {
+      return
+    }
     if (!hasMarkupStrokes(strokeState) || !natural) {
       // Nothing drawn (or the photo never loaded): closing is the same as X,
-      // and re-encoding an unmarked photo through a PNG round trip would
-      // only lose quality for nothing.
+      // and re-encoding an unmarked photo would only lose quality for nothing.
       closeImageMarkup()
       return
     }
@@ -179,13 +196,14 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
       closeImageMarkup()
       return
     }
-    svg.toDataURL(
-      (base64) => {
-        session.onDone({ base64 })
+    const format = markupOutputFormat(loadMarkupSourceTraits(session.uri))
+    setSaving(true)
+    svg.toDataURL((png) => {
+      void encodeMarkupOutput(png, format).then((result) => {
+        session.onDone(result)
         closeImageMarkup()
-      },
-      markupOutputSize(natural)
-    )
+      })
+    }, markupOutputSize(natural))
   }
 
   return (
@@ -219,6 +237,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
               <TopBarButton
                 accessibilityLabel="Close"
                 onPress={handleClose}
+                disabled={saving}
                 background={colors.bgRaised}
               >
                 <X size={20} color={colors.text} strokeWidth={2.2} />
@@ -226,7 +245,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
               <TopBarButton
                 accessibilityLabel="Undo"
                 onPress={() => setStrokeState(undoMarkupStroke)}
-                disabled={!canUndoMarkupStroke(strokeState)}
+                disabled={saving || !canUndoMarkupStroke(strokeState)}
                 background={colors.bgRaised}
               >
                 <Undo2
@@ -238,7 +257,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
               <TopBarButton
                 accessibilityLabel="Redo"
                 onPress={() => setStrokeState(redoMarkupStroke)}
-                disabled={!canRedoMarkupStroke(strokeState)}
+                disabled={saving || !canRedoMarkupStroke(strokeState)}
                 background={colors.bgRaised}
               >
                 <Redo2
@@ -248,7 +267,17 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
                 />
               </TopBarButton>
             </View>
-            <TopBarButton accessibilityLabel="Done" onPress={handleDone} background={colors.accent}>
+            <View style={{ flex: 1, alignItems: 'center', paddingHorizontal: space.sm }}>
+              <Txt variant="body" weight="semibold" numberOfLines={1}>
+                Mark up image
+              </Txt>
+              {saving ? (
+                <Txt variant="caption" tone="secondary" numberOfLines={1} accessibilityLiveRegion="polite">
+                  Saving…
+                </Txt>
+              ) : null}
+            </View>
+            <TopBarButton accessibilityLabel="Done" onPress={handleDone} disabled={saving} background={colors.accent}>
               <Check size={20} color={colors.onAccent} strokeWidth={2.6} />
             </TopBarButton>
           </View>

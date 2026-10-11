@@ -938,7 +938,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])
 
       await act(async () => {
-        await hook!.replaceAttachment('img-1', 'ZZZZ')
+        await hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png')
       })
 
       expect(hook!.attachments).toMatchObject([
@@ -953,7 +953,7 @@ describe('useMobileNativeChatImageAttachments', () => {
       mount(baseArgs({ client: client as unknown as RpcClient, scopeKey: null }))
 
       await act(async () => {
-        await hook!.replaceAttachment('img-1', 'ZZZZ')
+        await hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png')
       })
 
       expect(client.calls).toEqual([])
@@ -976,7 +976,7 @@ describe('useMobileNativeChatImageAttachments', () => {
         await hook!.attachImage('library')
       })
 
-      await act(() => hook!.replaceAttachment('img-1', 'ZZZZ'))
+      await act(() => hook!.replaceAttachment('img-1', 'ZZZZ', 'image/png'))
       const saidSo = 'Markup not saved — the photo is still attached without it'
       expect(showToast).toHaveBeenCalledExactlyOnceWith(saidSo, 1500)
       expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])

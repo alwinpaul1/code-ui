@@ -281,7 +281,7 @@ describe('uploadMarkedUpNativeChatImage', () => {
   it('uploads the flattened bytes the same way the original picker upload did', async () => {
     const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/marked.png')])
 
-    const result = await uploadMarkedUpNativeChatImage('AAAA', {
+    const result = await uploadMarkedUpNativeChatImage('AAAA', 'image/png', {
       client,
       getConnectionId: async () => 'conn-9'
     })
@@ -298,8 +298,21 @@ describe('uploadMarkedUpNativeChatImage', () => {
     const client = clientWithResponses([methodNotFound('start'), failed('save', 'disk full')])
 
     await expect(
-      uploadMarkedUpNativeChatImage('AAAA', { client, getConnectionId: async () => null })
+      uploadMarkedUpNativeChatImage('AAAA', 'image/png', { client, getConnectionId: async () => null })
     ).rejects.toThrow('disk full')
+  })
+
+  // The editor writes an opaque photo as a JPEG at 85 (image-markup-format.ts):
+  // the chip's picture must say so, not call the JPEG bytes a PNG.
+  it('labels a marked-up JPEG as a JPEG in the chip picture it returns', async () => {
+    const client = clientWithResponses([methodNotFound('start'), ok('save', '/tmp/marked.png')])
+
+    const result = await uploadMarkedUpNativeChatImage('/9j/4AAQ', 'image/jpeg', {
+      client,
+      getConnectionId: async () => null
+    })
+
+    expect(result.previewUri).toBe('data:image/jpeg;base64,/9j/4AAQ')
   })
 })
 
