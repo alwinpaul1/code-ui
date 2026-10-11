@@ -1,7 +1,8 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
-import { darkColors, lightColors, type as typeScale } from '../theme/tokens'
+import { readFileSync } from 'node:fs'
+import { darkColors, lightColors } from '../theme/tokens'
 import { paintSpokenAtCursor, type DictationPaint } from '../hooks/mobile-live-transcript'
 
 // The composer's text and its button row, against the Claude app on the same phone (the user's
@@ -116,7 +117,8 @@ async function rerender(scheme: 'light' | 'dark', value: string, extra: Extra = 
 
 const input = (): ReactTestInstance => renderer!.root.find((node) => (node.type as unknown) === 'TextInput')
 const inputStyle = () => flat(input().props.style)
-const LINE = typeScale.body.lineHeight + 1
+/** Claude's composer text: 17 sp at 1.4 (docs/claude-app-typography.md, "Composer text"). */
+const LINE = 17 * 1.4
 const MAX_LINES = 6
 
 /** From the input's last line to the top of the row's buttons: the input's bottom padding, the
@@ -136,6 +138,50 @@ const draft = (lines: number) => Array.from({ length: lines }, (_, index) => `li
 
 for (const scheme of ['light', 'dark'] as const) {
   const palette = scheme === 'dark' ? darkColors : lightColors
+
+  describe(`the composer box is the Claude app's, from its decompiled code (${scheme})`, () => {
+    // Claude 1.261009.20 (docs/claude-app-implementation-notes.md, "The composer";
+    // docs/claude-app-typography.md, "Composer shell/text/buttons").
+    it('draws the shell with a 24 dp radius, the surface at 96%, a 0.5 dp hairline and 8 dp inside top and bottom', async () => {
+      await render(scheme, '')
+      const shell = flat(renderer!.root.findByProps({ testID: 'native-chat-composer' }).props.style)
+      expect(shell.borderRadius).toBe(24)
+      expect(shell.borderWidth).toBe(0.5)
+      expect(shell.backgroundColor).toBe(palette.composerFill)
+      expect(shell.borderColor).toBe(palette.composerBorder)
+      expect(shell.paddingTop).toBe(8)
+      expect(shell.paddingBottom).toBe(8)
+      expect(shell.boxShadow).toBe('0px 2px 8px rgba(0, 0, 0, 0.1)')
+    })
+
+    it("sets the text at 17 sp, 1.4 line height, 13 x 8 padding, with Claude's muted placeholder", async () => {
+      await render(scheme, '')
+      const style = inputStyle()
+      expect(style.fontSize).toBe(17)
+      expect(style.lineHeight).toBe(LINE)
+      expect(style.paddingHorizontal).toBe(13)
+      expect(style.paddingTop).toBe(8)
+      expect(style.paddingBottom).toBe(8)
+      expect(input().props.placeholderTextColor).toBe(palette.composerPlaceholder)
+    })
+
+    it('lays the buttons in a 42 dp row 8 dp in from each side, 36 dp buttons with 20 dp icons', async () => {
+      await render(scheme, 'x')
+      const row = flat(renderer!.root.findByProps({ testID: 'native-chat-composer-actions' }).props.style)
+      expect(row.minHeight).toBe(42)
+      expect(row.paddingHorizontal).toBe(8)
+      for (const label of ['Attach image', 'Dictate', 'Send message']) {
+        const button = renderer!.root.find(
+          (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === label
+        )
+        expect(flat(button.props.style)).toMatchObject({ width: 36, height: 36 })
+      }
+      for (const glyph of ['Plus', 'Mic', 'ArrowUp']) {
+        const icon = renderer!.root.find((node) => (node.type as unknown) === glyph)
+        expect(icon.props.size, glyph).toBe(20)
+      }
+    })
+  })
 
   describe(`the composer's text keeps clear of its buttons, as the Claude app's does (${scheme})`, () => {
     it("leaves Claude's 11 dp between the last line of text and the top of the buttons", async () => {
@@ -231,4 +277,28 @@ for (const scheme of ['light', 'dark'] as const) {
     })
   })
 }
+
+// Claude's row: a leading group (attach, mode chip), a flexible middle, then a trailing group of the
+// model chip, the mic and Send. Code UI drew the model pill in the leading group. A structural
+// fact with no behavioural handle in this harness (the pill needs a live session-option
+// controller), so it is read off the JSX, code only.
+describe("the composer's button order is Claude's", () => {
+  it('puts the model pill after the flexible middle, before the mic and Send', () => {
+    const source = readFileSync(new URL('./MobileNativeChatComposer.tsx', import.meta.url), 'utf8')
+    const at = (needle: string) => {
+      const index = source.indexOf(needle)
+      expect(index, needle).toBeGreaterThan(-1)
+      return index
+    }
+    const attach = at('<MobileNativeChatAttachButton')
+    const middle = at('<View style={{ flex: 1, minWidth: 0 }} />')
+    const pill = at('<MobileNativeChatSessionOptionPickers')
+    const mic = at("accessibilityLabel={micActive ? 'Stop dictation' : 'Dictate'}")
+    const send = at('accessibilityLabel="Send message"')
+    expect(attach).toBeLessThan(middle)
+    expect(middle).toBeLessThan(pill)
+    expect(pill).toBeLessThan(mic)
+    expect(mic).toBeLessThan(send)
+  })
+})
 
