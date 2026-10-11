@@ -123,7 +123,8 @@ async function* pickFromLibrary(
   resizeImage: MobileImageResizer = noResize
 ): AsyncGenerator<PickedMobileImage> {
   // Nothing is awaited when there is nothing to ask: the launch goes out in
-  // the same turn as the tap.
+  // the same turn as the call. (From the + sheet that call comes once the
+  // sheet has gone, MobileNativeChatAttachSheet.tsx says why.)
   const permission = requestPermission ? await requestPermission() : null
   // Why: `granted` covers full + limited iOS access; only a hard denial blocks us.
   if (permission && !permission.granted) {
