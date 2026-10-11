@@ -34,14 +34,29 @@ function formatCoordinate(value: number): string {
   return String(Math.round(value * 100) / 100)
 }
 
+function coordinates(point: MarkupPoint): string {
+  return `${formatCoordinate(point.x)} ${formatCoordinate(point.y)}`
+}
+
+/** The stroke as the Claude app draws it (com.anthropic.claude 1.261009.20,
+ *  `dgh.e`): a move to the first point; for each later point a quadratic
+ *  curve whose control is the point before it and whose end is the midpoint
+ *  of the two; then a line to the last point. Every touch sample is kept (the
+ *  app thins none). One point gives a move and a line to the same spot, which
+ *  the round cap paints as a dot; none gives an empty path. */
 export function markupStrokePathData(stroke: MarkupStroke): string {
-  if (stroke.points.length === 0) {
+  const points = stroke.points
+  if (points.length === 0) {
     return ''
   }
-  const [first, ...rest] = stroke.points as [MarkupPoint, ...MarkupPoint[]]
-  const move = `M${formatCoordinate(first.x)} ${formatCoordinate(first.y)}`
-  const lines = rest.map((point) => ` L${formatCoordinate(point.x)} ${formatCoordinate(point.y)}`)
-  return move + lines.join('')
+  let previous = points[0]!
+  let path = `M${coordinates(previous)}`
+  for (const point of points.slice(1)) {
+    const midpoint = { x: (previous.x + point.x) / 2, y: (previous.y + point.y) / 2 }
+    path += ` Q${coordinates(previous)} ${coordinates(midpoint)}`
+    previous = point
+  }
+  return `${path} L${coordinates(previous)}`
 }
 
 /** Fraction of the photo's own width the pen draws at, so it reads the same

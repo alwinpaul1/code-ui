@@ -46,8 +46,10 @@ describe('marking up a picture the agent sent', () => {
     expect(preview?.onEdit).toBeTypeOf('function')
     act(() => preview!.onEdit!())
     expect(peekImageMarkup()?.uri).toBe(URI)
-    peekImageMarkup()!.onDone({ base64: 'iVBORw0KGgo=' })
-    expect(attach).toHaveBeenCalledWith('iVBORw0KGgo=')
+    // An opaque picture comes back from the editor as a JPEG
+    // (image-markup-format.ts), and the composer is told so.
+    peekImageMarkup()!.onDone({ base64: '/9j/4AAQ', mimeType: 'image/jpeg' })
+    expect(attach).toHaveBeenCalledWith('/9j/4AAQ', 'image/jpeg')
   })
 
   it('draws no pencil when no chat composer can take the drawing', () => {
@@ -61,7 +63,7 @@ describe('marking up a picture the agent sent', () => {
     tapTile()
     act(() => peekImagePreview()!.onEdit!())
     unregister()
-    peekImageMarkup()!.onDone({ base64: 'iVBORw0KGgo=' })
+    peekImageMarkup()!.onDone({ base64: 'iVBORw0KGgo=', mimeType: 'image/png' })
     expect(warn.mock.calls.some((call) => String(call[0]).includes('no composer'))).toBe(true)
     warn.mockRestore()
   })

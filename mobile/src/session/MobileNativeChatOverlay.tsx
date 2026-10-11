@@ -462,7 +462,7 @@ export function MobileNativeChatOverlay({
         onRemoveAttachment={images.removeAttachment}
         onEditAttachment={(id, uri) =>
           openImageMarkup(uri, {
-            onDone: (result) => void images.replaceAttachment(id, result.base64)
+            onDone: (result) => void images.replaceAttachment(id, result.base64, result.mimeType)
           })
         }
         videoFrameExtraction={images.videoFrameExtraction}

@@ -293,7 +293,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
         <MobileNativeChatAttachmentChips
           attachments={attachments}
           onRemoveAttachment={() => {}}
-          onEditAttachment={(id, uri) => openImageMarkup(uri, { onDone: (result) => void replace(id, result.base64) })}
+          onEditAttachment={(id, uri) => openImageMarkup(uri, { onDone: (result) => void replace(id, result.base64, result.mimeType) })}
         />
       )
     }
@@ -311,7 +311,7 @@ describe('a photo in the attachment strip opens full-screen first', () => {
     tap(pressables(screenNow, 'Edit image')[0])
     const editor = peekImageMarkup()
     expect(editor?.uri).toBe('file:///a.jpg')
-    return { screenNow, done: (base64: string) => act(() => editor!.onDone({ base64 })) }
+    return { screenNow, done: (base64: string) => act(() => editor!.onDone({ base64, mimeType: 'image/png' })) }
   }
 
   function uploadRings(renderer: ReactTestRenderer): ReactTestInstance[] {

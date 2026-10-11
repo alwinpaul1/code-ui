@@ -102,11 +102,15 @@ export function replaceNativeChatImageAttachment(
   return updated
 }
 
+/** The type of a marked-up picture: JPEG for an opaque source, PNG for one
+ *  with alpha (image-markup-format.ts). */
+export type MarkedUpImageMimeType = 'image/png' | 'image/jpeg'
+
 /** The picture a marked-up chip shows. The chip takes it the moment Done is
  *  tapped and the finished upload carries the same string, so a send waiting
  *  on the chip can tell the marks landed from the photo being put back. */
-export function markedUpNativeChatImagePreviewUri(base64: string): string {
-  return `data:image/png;base64,${base64}`
+export function markedUpNativeChatImagePreviewUri(base64: string, mimeType: MarkedUpImageMimeType): string {
+  return `data:${mimeType};base64,${base64}`
 }
 
 /** Draws a chip as uploading again while its marked-up bytes go to the host
@@ -134,16 +138,18 @@ export type UploadMarkedUpImageDeps = {
   readonly getConnectionId: () => Promise<string | null>
 }
 
-/** Re-uploads a flattened markup PNG the same way the original picker upload
- *  did (`uploadMobileNativeChatImages`'s per-image step), so what rides to
- *  the agent on send is the marked-up bytes, not the original photo. */
+/** Re-uploads a flattened markup picture the same way the original picker
+ *  upload did (`uploadMobileNativeChatImages`'s per-image step, which sends a
+ *  picked photo's JPEG bytes the same way), so what rides to the agent on
+ *  send is the marked-up bytes, not the original photo. */
 export async function uploadMarkedUpNativeChatImage(
   base64: string,
+  mimeType: MarkedUpImageMimeType,
   { client, getConnectionId }: UploadMarkedUpImageDeps
 ): Promise<{ path: string; previewUri: string }> {
   const connectionId = await getConnectionId()
   const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
-  return { path, previewUri: markedUpNativeChatImagePreviewUri(base64) }
+  return { path, previewUri: markedUpNativeChatImagePreviewUri(base64, mimeType) }
 }
 
 export type UploadNativeChatImagesDeps = {

@@ -1119,3 +1119,52 @@ transcripts for the shells and agents they launch. Pinned by
 session 0954729d, resumed at 15:31:21, mid-gate at 15:38, light and dark) and the sheet-level
 `MobileBackgroundTasksSheet.subagent-activity.test.tsx`.
 
+## A timed-out foreground shell that ends mid-turn: no signal reaches the phone (2026-10-11)
+
+Reported on session 0954729d (Claude Code 2.1.296, hand-started, so no beacon): "Run the full gate
+on main" (b3w804om8) was a foreground Bash call that hit its 600 s timeout at 16:01:17 and was moved
+to the background. It ended at 16:04:23 and the sheet listed it as running for over an hour.
+
+**How the Claude app learns a task ended** (com.anthropic.claude 1.261009.20, decompiled; registry
+`qhu`, task record `at2`, view state `iu2`):
+
+- Explicit events from the session stream: `task_started`, `task_progress`, `task_updated` (status
+  `completed`, `failed`, `stopped`/`killed`/`cancelled`) and `task_notification` (`qhu.j`).
+- A user turn's text holding `<task|agent|bash-notification>` with `<task-id>` and `<status>`,
+  read by regex (`rhu.e/f/g`, `qhu` around line 2650).
+- `background_tasks_changed` snapshots (`qhu.g`): a running task missing from the snapshot is
+  marked ended ("Stopped") unless its type is unknown or `remote_agent`.
+- A session reset clears the registry (`qhu.k`), and a session-level flag in `iu2` draws every
+  running task as ended.
+- **No timeout and no staleness rule.** Nothing expires a task by elapsed time; without an end event
+  or a snapshot that drops it, the app would keep it running too.
+
+**What Code UI can see for this task, and why none of it fires:**
+
+- The notification is a `queue-operation` record and a `queued_command` attachment; Claude Code's
+  "file changed" note with the `[exited with code 0]` trailer is an `edited_text_file` attachment.
+  Orca's reader drops all three. Both of the lead's reads of the output file (16:01:33, 16:03:40)
+  came before the end, so the output-read end had no trailer to find.
+- **The output file through `files.resolveTerminalPath`.** Orca (`orca-runtime-files.ts`) grants a
+  path outside the workspace only when (a) an assistant text block in the last 2,000 transcript
+  messages names it (`native-chat-file-provenance.ts`), or (b) it is under `/tmp`, `/private/tmp`
+  or the temp dir **and** the terminal's last 64 KB of output, or its recent path candidates, hold
+  it verbatim on one line. In this session 0 of 55 background shells had their output path in any
+  assistant text or thinking block. And Claude Code 2.1.296 never paints the path: a raw
+  `tmux pipe-pane` capture of a full launch and completion held no `tasks/` byte at all (the calls
+  fold into "Ran 2 shell commands", and the TUI draws on the alternate screen with no newlines).
+  Even granted, the grant pins size and mtime (a growing file goes stale) and
+  `files.readTerminalArtifact` refuses files over 512 KiB.
+- **Orca's roster** carries agents only. From the Stop hook's `background_tasks` Orca keeps one
+  boolean, "a non-agent task is running", which held the pane `working` here because shells left
+  behind by subagents were still running.
+- **The screen.** The completion row ("Background command "Run the full gate on main" completed
+  (exit code 0)") is read only while visible; on the alternate screen it is in no scrollback and no
+  `terminal.read` tail once it scrolls away. The footer read "4 shells", all subagents' shells, so
+  its count never fell below the shells the phone names.
+- **A later transcript row naming the task:** none in this session.
+
+So the phone receives nothing that says b3w804om8 ended, and it keeps the row. Guessing from elapsed
+time is ruled out (the Claude app does not do it either). What would fix it: a launch with the
+beacon (`done=` names every ended id), or Orca forwarding `queued_command` task notifications or
+the Stop hook's per-id `background_tasks` to the phone.

@@ -11,7 +11,7 @@ import { openImageMarkup } from './image-markup-store'
  * with none registered (no chat on screen, or one that cannot attach) the
  * viewer draws no pencil, rather than one whose Done goes nowhere.
  */
-export type ChatMarkupAttach = (base64: string) => Promise<void>
+export type ChatMarkupAttach = (base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>
 
 let target: ChatMarkupAttach | null = null
 
@@ -41,7 +41,7 @@ export function chatMarkupOpener(uri: string): (() => void) | undefined {
           console.warn('[chat-markup] the marked-up picture had no composer to go to: the chat closed while it was drawn')
           return
         }
-        void attach(result.base64)
+        void attach(result.base64, result.mimeType)
       }
     })
   }

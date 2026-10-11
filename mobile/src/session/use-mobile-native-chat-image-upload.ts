@@ -75,8 +75,8 @@ export function useMobileNativeChatImageUpload(args: {
 }): {
   attachImage: (source: MobileImageSource) => Promise<void>
   attachImageFile: (uri: string) => Promise<void>
-  /** A PNG the phone drew (the markup editor's Done), as raw base64. */
-  attachImageBase64: (base64: string) => Promise<void>
+  /** A picture the phone drew (the markup editor's Done, JPEG or PNG), as raw base64. */
+  attachImageBase64: (base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>
   attachDocument: () => Promise<void>
   /** Stops a document attach's frame extraction in progress; a no-op once it
    *  has already settled. */
@@ -268,9 +268,9 @@ export function useMobileNativeChatImageUpload(args: {
     [attachWith]
   )
   const attachImageBase64 = useCallback(
-    (base64: string) =>
+    (base64: string, mimeType: 'image/png' | 'image/jpeg') =>
       attachWith(async function* drawn() {
-        yield { base64, uri: `data:image/png;base64,${base64}`, mimeType: 'image/png' }
+        yield { base64, uri: `data:${mimeType};base64,${base64}`, mimeType }
       }, 'files'),
     [attachWith]
   )

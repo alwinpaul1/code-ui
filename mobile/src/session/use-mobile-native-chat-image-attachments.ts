@@ -100,14 +100,15 @@ export type MobileNativeChatImageAttachments = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
   /** An image file already on the phone (a keyboard paste's cache copy). */
   readonly attachImageFile: (uri: string) => Promise<void>
-  /** A PNG the phone drew: a picture from the chat marked up in the viewer. */
-  readonly attachImageBase64: (base64: string) => Promise<void>
+  /** A picture the phone drew (JPEG or PNG, as the markup editor chose): one
+   *  from the chat marked up in the viewer. */
+  readonly attachImageBase64: (base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>
   /** Any document via the file picker; described to the agent in the message text. */
   readonly attachDocument: () => Promise<void>
   readonly removeAttachment: (id: string) => void
   /** The markup editor's Done: uploads a flattened photo and swaps it into
    *  the chip at `id` (use-mobile-native-chat-image-markup.ts). */
-  readonly replaceAttachment: (id: string, base64: string) => Promise<void>
+  readonly replaceAttachment: (id: string, base64: string, mimeType: 'image/png' | 'image/jpeg') => Promise<void>
   /** Ride any pending images along with `text`, then submit; clears the sent
    *  chips (and only those) once the send is accepted. */
   readonly sendNativeChat: (text: string) => Promise<boolean>

@@ -1,4 +1,5 @@
 import { Image } from 'react-native'
+import { base64HeadBytes } from '../session/image-markup-format'
 
 // The markup editor needs a photo's size before it can lay out the canvas.
 // Image.getSize fetches the encoded image on Android, through Fresco, which
@@ -15,21 +16,6 @@ type GetSize = (uri: string, ok: (width: number, height: number) => void, fail: 
  *  bytes, and a JPEG's frame header follows its APP segments (EXIF can run
  *  to 64 KB). */
 const HEADER_BASE64_CHARS = 96 * 1024
-
-function bytesOf(base64: string): Uint8Array | null {
-  const clean = base64.replace(/\s+/g, '').slice(0, HEADER_BASE64_CHARS)
-  const whole = clean.slice(0, clean.length - (clean.length % 4))
-  try {
-    const binary = atob(whole)
-    const bytes = new Uint8Array(binary.length)
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index)
-    }
-    return bytes
-  } catch {
-    return null
-  }
-}
 
 function pngSize(bytes: Uint8Array): Size | null {
   const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
@@ -68,7 +54,7 @@ export function imageSizeFromDataUri(uri: string): Size | null {
   if (!match) {
     return null
   }
-  const bytes = bytesOf(uri.slice(match[0].length))
+  const bytes = base64HeadBytes(uri.slice(match[0].length), HEADER_BASE64_CHARS)
   const size = bytes ? (pngSize(bytes) ?? jpegSize(bytes)) : null
   return size && size.width > 0 && size.height > 0 ? size : null
 }

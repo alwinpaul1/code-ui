@@ -850,8 +850,8 @@ it('opens markup on the photo the preview\'s pencil was for, and brings Done bac
     expect(editor?.uri).toBe('file:///b.jpg')
     expect(replaceAttachment).not.toHaveBeenCalled()
 
-    act(() => editor!.onDone({ base64: 'ZZZZ' }))
-    expect(replaceAttachment).toHaveBeenCalledExactlyOnceWith('img-2', 'ZZZZ')
+    act(() => editor!.onDone({ base64: 'ZZZZ', mimeType: 'image/jpeg' }))
+    expect(replaceAttachment).toHaveBeenCalledExactlyOnceWith('img-2', 'ZZZZ', 'image/jpeg')
   } finally {
     act(() => renderer!.unmount())
     resetImageMarkupForTests()
