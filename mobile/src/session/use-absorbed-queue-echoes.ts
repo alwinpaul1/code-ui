@@ -206,10 +206,11 @@ export function useAbsorbedQueueWitness(
     held.current.set(counter.current, {
       key: slot.key,
       text: slot.text,
-      // The first sighting of each entry is its send: the Claude app draws a
-      // mid-turn message there, with the calls that ran while it waited below
-      // it, and the user chose that order over the desk terminal's, which
-      // draws it where the agent took it (2026-09-23).
+      // The first sighting of each entry is its send, where it is placed and
+      // remembered. It is drawn where the agent took it, after the results of
+      // the calls that ran while it waited, as the Claude app draws a message
+      // sent elsewhere (mid-turn-take-point.ts, 2026-10-11; drawn at the send
+      // from 2026-09-23 to then).
       anchorId: slot.sighting ?? anchorId,
       takenAt: anchorId,
       firstRead: slot.firstRead,

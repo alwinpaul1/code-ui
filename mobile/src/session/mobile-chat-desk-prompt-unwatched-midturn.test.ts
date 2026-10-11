@@ -255,8 +255,11 @@ describe('a mid-turn message sent at the desk', () => {
   // watched arrive is timed by the status that first carried it. Claude Code
   // runs UserPromptSubmit for a message queued mid-turn at Enter (read out of
   // the 2.1.281 binary, mobile-chat-mid-turn-phone-send.test.ts), so that is
-  // the enqueue, 17:27:57.547, and the bubble sits where it was sent.
-  it('stays where it was sent when the chat was open as it arrived', async () => {
+  // the enqueue, 17:27:57.547, and the bubble is placed where it was sent.
+  // It is DRAWN where Claude took it: after the Bash call whose result
+  // (17:28:16.693) its `queued_command` follows, below the words written
+  // after the send (mid-turn-take-point.ts, 2026-10-11).
+  it('is placed where it was sent and drawn where Claude took it when the chat was open as it arrived', async () => {
     vi.setSystemTime(at('17:27:56.900'))
     const reader = statusReader()
     reader.read(run(OPENING_TEXT, '17:27:56.800'))
@@ -270,7 +273,8 @@ describe('a mid-turn message sent at the desk', () => {
     const where = placement()
     expect(where.count).toBe(1)
     expect(anchorOf(MESSAGE)).toBe('5ce2673e-58e9-404e-8081-111a4da49ea5')
-    expect(where.message).toBeLessThan(where.afterSend)
+    expect(where.message).toBeGreaterThan(where.afterSend)
+    expect(where.message).toBeLessThan(where.reply)
     reader.unmount()
     unmount()
   })
@@ -303,8 +307,11 @@ describe('a mid-turn message sent at the desk', () => {
   // was left before the turn began; the message was typed before the agent
   // wrote anything. Claude Code stamps a prompt's row when it creates the
   // message, before its UserPromptSubmit hooks run, so the row is stamped just
-  // before the state's start Orca records from the hook.
-  it('sits right under the turn’s opening prompt when it is the only row after the turn’s start', async () => {
+  // before the state's start Orca records from the hook. Placed under the
+  // opening prompt, it is drawn at the live end until Claude takes it, which
+  // is after a tool result, and the agent's first words are none
+  // (mid-turn-take-point.ts, 2026-10-11).
+  it('is placed under the turn’s opening prompt and drawn at the live end, under the agent’s first words, before Claude takes it', async () => {
     vi.setSystemTime(at('17:12:30.000'))
     const answered = text('answered', 'Handover doc written.', '17:05:29.000')
     const opening = user('opening-2', 'go ahead with all three fixes', '17:12:04.980')
@@ -329,7 +336,8 @@ describe('a mid-turn message sent at the desk', () => {
     await showAt('17:12:42.000', [answered, opening, text('first-words', 'On it.', '17:12:40.000')], prompts)
     const drawn = rows(frames.at(-1)!)
     const index = drawn.findIndex((row) => row.text === MESSAGE)
-    expect([drawn[index - 1]?.id, drawn[index + 1]?.id]).toEqual(['opening-2', 'first-words'])
+    expect(anchorOf(MESSAGE)).toBe('opening-2')
+    expect([drawn[index - 1]?.id, drawn[index + 1]?.id]).toEqual(['first-words', undefined])
     reader.unmount()
     unmount()
   })

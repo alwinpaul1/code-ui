@@ -579,9 +579,11 @@ describe('a message on the first status after Orca’s stand-in', () => {
     const prompts = reader.read(run('05:40:05.000'))
     await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
     await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
-    // After the result written at 05:36:02, which folds into the words
-    // written at 05:34:51 with the call before it.
-    expect(placesOf(SECOND_SEND)).toEqual([BEFORE_FIRST[0]!.id])
+    // Placed in its run, after the result written at 05:36:02, and drawn
+    // where Claude took it: after the next result, written at 05:37:31 (its
+    // `queued_command` follows it), which folds into the words written at
+    // 05:36:16 with the call before it (mid-turn-take-point.ts, 2026-10-11).
+    expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
     reader.unmount()
     unmount()
   })
@@ -714,7 +716,8 @@ describe('a message on the first status after Orca’s stand-in', () => {
         const prompts = reader.read(run('05:40:05.000'))
         await showAt('05:40:05.200', UP_TO_05_40, prompts, true, [], hooked)
         await showAt('05:40:30.000', UP_TO_05_40, prompts, true, [], hooked)
-        expect(placesOf(SECOND_SEND)).toEqual([BEFORE_FIRST[0]!.id])
+        // In its run, drawn where Claude took it (see the case above).
+        expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
       }
       reader.unmount()
       unmount()
@@ -723,7 +726,7 @@ describe('a message on the first status after Orca’s stand-in', () => {
       const prompts = again.read(run('05:41:59.000'), withCopy ? { beacon: [hookCopy('05:36:36.000')] } : {})
       await showAt('05:42:00.100', UP_TO_05_40, prompts, true, [], hooked)
       await showAt('05:42:10.000', UP_TO_05_40, prompts, true, [], hooked)
-      expect(placesOf(SECOND_SEND)).toEqual(withCopy ? [WRITTEN_BEFORE_SECOND] : [BEFORE_FIRST[0]!.id])
+      expect(placesOf(SECOND_SEND)).toEqual([WRITTEN_BEFORE_SECOND])
       again.unmount()
       unmount()
     })

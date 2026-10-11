@@ -113,6 +113,25 @@ export function working(prompt: string, stamped: string): NonNullable<AgentStatu
     providerSession: { id: SESSION }
   }
 }
+/** A pane status of this case's session with its own clocks, for a turn
+ *  that is not the one above: its state, prompt, stamp, and when the state
+ *  began, with the states before it. */
+export function paneStatus(
+  state: string,
+  prompt: string,
+  stamped: string,
+  since: string,
+  history: readonly { state: string; prompt?: string; startedAt?: number }[] = []
+): NonNullable<AgentStatusPromptSource> {
+  return {
+    state,
+    prompt: normalizePromptField(prompt),
+    updatedAt: at(stamped),
+    stateStartedAt: at(since),
+    stateHistory: history,
+    providerSession: { id: SESSION }
+  }
+}
 /** The pane after the Stop hook: the run pushed to the history with the
  *  prompt it ended carrying, which Orca keeps on the `done`. */
 export function done(prompt: string, stamped = '05:46:51.005'): NonNullable<AgentStatusPromptSource> {

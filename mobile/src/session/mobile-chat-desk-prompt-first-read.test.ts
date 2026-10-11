@@ -72,9 +72,14 @@ describe('a message typed at the desk mid-turn after a permission was granted', 
   const P2 = 'also dump the row counts before and after'
   const opening = userRow('u1', [P1], '07:00:00.000')
   const a1 = agentRow('a1', 'Checking the schema.', '07:00:40.000')
+  // The call the permission was for, and its result, written after P2 was
+  // typed: Claude takes a queued message after a result (mid-turn-take-point.ts).
+  const c1: NativeChatMessage = { id: 'c1', role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }], timestamp: at('07:00:41.000'), source: 'transcript' }
+  const r1: NativeChatMessage = { id: 'r1', role: 'tool', blocks: [{ type: 'tool-result', output: '' }], timestamp: at('07:01:55.000'), source: 'transcript' }
   const a2 = agentRow('a2', 'Migrated; counting rows.', '07:02:00.000')
   // 07:01:00 the agent asks for permission; 07:01:30 it is granted; 07:01:45
-  // P2 is typed at the desk and queued. The chat opens at 07:03:10.
+  // P2 is typed at the desk and queued; 07:01:55 the call returns and Claude
+  // takes it. The chat opens at 07:03:10.
   const status = {
     state: 'working',
     prompt: P2,
@@ -90,7 +95,7 @@ describe('a message typed at the desk mid-turn after a permission was granted', 
   it('is drawn in that run, after the rows written before the resume, when the chat opens later in it', async () => {
     vi.setSystemTime(at('07:03:10.000'))
     const prompts = [...observeAgentStatusPrompt(EMPTY_AGENT_STATUS_PROMPTS, SESSION, status).prompts]
-    const messages = [opening, a1, a2]
+    const messages = [opening, a1, c1, r1, a2]
     await show('07:03:10.000', { messages, working: true, prompts })
     await show('07:03:11.000', { messages, working: true, prompts })
     const rows = rowIds(frames.at(-1)!)

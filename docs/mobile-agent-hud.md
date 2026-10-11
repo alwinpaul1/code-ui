@@ -886,7 +886,10 @@ below. Since 2026-09-29 the hook also sends when it ran (`ts=`, below), and the
 phone moves the message below the rows stamped a second or more before the
 start of that second, so it pays it only for a call made within about two
 seconds of the send, and a tab whose hook sends no time still pays it in full. A device check settles the exclusion
-itself. The same decoder draws nothing for a
+itself. That is where the message is PLACED. Since 2026-10-11 it is drawn where
+Claude took it, after the results of the calls that ran while it waited, and at
+the live end while the agent works and none has come (`mid-turn-take-point.ts`),
+so a call made after the send draws above it either way. The same decoder draws nothing for a
 record whose only block is `redacted_thinking`, `server_tool_use` or
 `web_search_tool_result`, which is why a row must also carry text, an image
 or a string prompt.
