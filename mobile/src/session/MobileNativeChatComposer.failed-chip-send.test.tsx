@@ -63,7 +63,8 @@ async function render(
   value: string,
   attachments: PendingNativeChatImage[],
   scheme: 'light' | 'dark',
-  onSend = vi.fn().mockResolvedValue(true)
+  onSend = vi.fn().mockResolvedValue(true),
+  extra: Record<string, unknown> = {}
 ): Promise<void> {
   await act(async () => {
     renderer = create(
@@ -77,6 +78,7 @@ async function render(
           getComposerEditGeneration={() => 0}
           onAttachImage={vi.fn()}
           attachments={attachments}
+          {...extra}
         />
       </ThemeProvider>
     )
@@ -109,5 +111,15 @@ describe('Send beside a chip whose upload failed', () => {
   it.each(['light', 'dark'] as const)('stays on beside a chip still uploading, so the tap can wait for it (%s)', async (scheme) => {
     await render('look', [READY, UPLOADING], scheme)
     expect(sendButton().props.disabled).toBe(false)
+  })
+
+  it.each(['light', 'dark'] as const)('gives the slot to Stop while the agent works and only a failed chip is there (%s)', async (scheme) => {
+    // Opus review, 2026-10-12: a disabled Send held the slot, and the agent could not be stopped.
+    const onStop = vi.fn()
+    await render('', [FAILED], scheme, vi.fn().mockResolvedValue(true), { canStop: true, onStop })
+    const stop = renderer!.root.findAll(
+      (node) => (node.type as unknown) === 'Pressable' && node.props.accessibilityLabel === 'Stop the agent'
+    )
+    expect(stop).toHaveLength(1)
   })
 })

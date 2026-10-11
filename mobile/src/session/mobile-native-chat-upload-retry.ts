@@ -87,12 +87,16 @@ export async function retryNativeChatUpload(id: string): Promise<boolean> {
       )
     return true
   } catch (error) {
+    // Removed while it went up again (the badge shows over the ring): nothing to say.
+    const stillWanted = retries.get(id) === retry
     useNativeChatImageAttachmentsStore
       .getState()
       .update((prev) =>
         withScopeAttachments(prev, retry.scope, refailNativeChatImage(prev[retry.scope] ?? [], id))
       )
-    retry.onFailed(error)
+    if (stillWanted) {
+      retry.onFailed(error)
+    }
     return false
   }
 }

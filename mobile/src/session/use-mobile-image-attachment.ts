@@ -84,7 +84,7 @@ export function useMobileImageAttachment({
           return
         }
         if (getErrorMessage(error) === 'Clipboard image is too large') {
-          showToast('File too large to attach (18 MB max)', 1500)
+          showToast('File size exceeds 18 MB limit', 1500)
           return
         }
         // This screen has no chip strip to show reading-frames progress or a
@@ -93,7 +93,7 @@ export function useMobileImageAttachment({
         // or extraction is reached by some other path, name why rather than
         // falling through to the bare "Attach failed" (2026-09-27 review).
         if (error instanceof VideoFrameExtractionError) {
-          showToast(`File too large to attach (18 MB max) — the video ${describeVideoFrameExtractionFailure(error)}`, 1500)
+          showToast(`File size exceeds 18 MB limit — the video ${describeVideoFrameExtractionFailure(error)}`, 1500)
           return
         }
         showToast('Attach failed', 1500)

@@ -225,9 +225,9 @@ describe('describeVideoFrameExtractionFailure', () => {
     // reason ("... (18 MB max) — the video ${reason}"). A reason with an
     // embedded dash of its own reads as two dashes in one sentence.
     const reason = describeVideoFrameExtractionFailure(new VideoFrameExtractionError('This video could not be read'))
-    const toast = `File too large to attach (18 MB max) — the video ${reason}`
+    const toast = `File size exceeds 18 MB limit — the video ${reason}`
     expect(toast.match(/—/g)).toHaveLength(1)
-    expect(toast).toBe('File too large to attach (18 MB max) — the video could not be read; the format may not be supported')
+    expect(toast).toBe('File size exceeds 18 MB limit — the video could not be read; the format may not be supported')
   })
 })
 

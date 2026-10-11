@@ -119,10 +119,7 @@ export function MobileNativeChatAttachmentChips({
       ) : null}
       {attachments.map((attachment, index) => {
         const isFile = attachment.kind === 'file'
-        const reorder = {
-          accessibilityActions: reorderActions(index, attachments.length),
-          onAccessibilityAction: onReorderAction(attachment.id)
-        }
+        const reorderable = reorderActions(index, attachments.length)
         return (
           <View
             key={attachment.id}
@@ -139,7 +136,8 @@ export function MobileNativeChatAttachmentChips({
               <View
                 accessible
                 accessibilityLabel={attachment.name ?? 'File'}
-                {...reorder}
+                accessibilityActions={reorderable}
+                onAccessibilityAction={onReorderAction(attachment.id)}
                 style={{
                   flex: 1,
                   flexDirection: 'row',
@@ -165,7 +163,8 @@ export function MobileNativeChatAttachmentChips({
               <Pressable
                 accessibilityRole="imagebutton"
                 accessibilityLabel="Preview image"
-                {...reorder}
+                accessibilityActions={reorderable}
+                onAccessibilityAction={onReorderAction(attachment.id)}
                 style={{ flex: 1 }}
                 onPress={() =>
                   openImagePreview(

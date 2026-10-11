@@ -61,14 +61,14 @@ export function useNativeChatAttachmentScopeWriters(
       scope: string,
       image: { previewUri: string; batch?: string },
       retry: () => Promise<{ path: string; previewUri: string }>
-    ): void => {
+    ): boolean => {
       if (nativeChatRemovedUploads.uploads.delete(removedUploadKey(scope, image.batch, image.previewUri))) {
-        return
+        return false
       }
       const current = useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []
       const { chips, id } = failUploadingNativeChatImage(current, image)
       if (id === null) {
-        return
+        return false
       }
       setAttachmentsByScope((prev) => withScopeAttachments(prev, scope, chips))
       registerNativeChatUploadRetry(id, {
@@ -77,19 +77,24 @@ export function useNativeChatAttachmentScopeWriters(
         onFailed: (error) =>
           showToast?.(`Upload failed: ${error instanceof Error ? error.message : String(error)}`, 2000)
       })
+      return true
     },
     [setAttachmentsByScope, showToast]
   )
   // The chip's remove badge, in every state as in the Claude app. A failed
   // chip's retry goes with it: it holds the picture's bytes, up to megabytes
-  // for a photo. One still uploading leaves a mark, so its landing (or its
-  // failure) cannot draw it again and a send waiting on it goes without it.
+  // for a photo. Every removal leaves a mark, so a send waiting beside the chip
+  // goes without it; one still uploading also marks its picture, so its
+  // landing (or its failure) cannot draw it again.
   const removeScopeAttachment = useCallback(
     (scope: string, id: string) => {
       forgetNativeChatUploadRetry(id)
       const chip = useNativeChatImageAttachmentsStore.getState().byScope[scope]?.find((c) => c.id === id)
-      if (chip?.uploading) {
+      // Any chip a send may be waiting beside, landed or not (Opus review, 2026-10-12).
+      if (chip) {
         nativeChatRemovedUploads.ids.add(id)
+      }
+      if (chip?.uploading) {
         // A retry or a markup save lands by chip id, which is gone already.
         if (chip.batch !== undefined) {
           nativeChatRemovedUploads.uploads.add(removedUploadKey(scope, chip.batch, chip.previewUri))

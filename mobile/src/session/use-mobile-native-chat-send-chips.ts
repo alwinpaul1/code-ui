@@ -180,7 +180,7 @@ export function mobileNativeChatSendChipsRefusalMessage({
     case 'removed':
       // Every chip it waited on was taken out. The words stay in the box: a
       // `!` line asked no shell question while a photo rode with it.
-      return 'Message not sent: its photo was removed. Send again to send the text alone'
+      return 'Message not sent: its photo was removed'
     default: {
       const exhaustive: never = reason
       return exhaustive

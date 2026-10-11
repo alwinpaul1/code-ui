@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import {
+  nativeChatAttachmentCount,
+  type PendingNativeChatImage
+} from './mobile-native-chat-image-attachment'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import { withScopeAttachments } from './mobile-native-chat-image-scope-state'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
@@ -134,6 +137,47 @@ describe('the Claude app\'s attachment limit', () => {
       })
 
       expect(hook!.attachments.map((chip) => chip.path)).toEqual(['/tmp/a.png'])
+      expect(args.showToast).not.toHaveBeenCalled()
+    })
+
+    function frames(count: number, groupId: string): PendingNativeChatImage[] {
+      return Array.from({ length: count }, (_, i) => ({
+        id: `${groupId}-${i + 1}`,
+        path: `/tmp/${groupId}-${i + 1}.png`,
+        previewUri: `file:///${groupId}-${i + 1}.jpg`,
+        videoFrame: {
+          groupId,
+          index: i,
+          total: count,
+          sourceName: `${groupId}.mp4`,
+          durationLabel: '1:00',
+          intervalLabel: '3 s',
+          intervalMs: 3000
+        }
+      }))
+    }
+
+    it('counts a video\'s frames as one attachment, the way the user picked it', () => {
+      // Opus review, 2026-10-12: twenty frames of one video filled the strip.
+      expect(nativeChatAttachmentCount(frames(20, 'v1'))).toBe(1)
+      expect(nativeChatAttachmentCount([...seeded(2), ...frames(5, 'v1'), ...frames(3, 'v2')])).toBe(4)
+      expect(nativeChatAttachmentCount([])).toBe(0)
+    })
+
+    it('still takes a photo beside a video read into 20 frames', async () => {
+      useNativeChatImageAttachmentsStore
+        .getState()
+        .update((prev) => withScopeAttachments(prev, SCOPE_A, frames(20, 'v1')))
+      pick.mockResolvedValue(photos(['a']))
+      const { client } = uploadHost([ok('save-a', '/tmp/a.png')])
+      const args = laneArgs('terminal', client)
+      mount(args)
+
+      await act(async () => {
+        await hook!.attachImage('library')
+      })
+
+      expect(hook!.attachments).toHaveLength(21)
       expect(args.showToast).not.toHaveBeenCalled()
     })
   })

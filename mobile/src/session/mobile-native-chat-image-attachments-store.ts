@@ -35,8 +35,9 @@ export const nativeChatAttachmentsResets = { current: 0 }
  *  cancels that chip's upload (`g330.b`, `j29.k`, 1.261009.20). An RPC already
  *  on the relay cannot be called back, so the upload is let finish and its
  *  result dropped: `uploads` (scope, selection and picture) keeps the landing
- *  from drawing the chip again, and `ids` tells a send waiting on that chip
- *  it was taken out, not lost to a failed upload. */
+ *  from drawing the chip again, and `ids` (every chip removed, landed or not)
+ *  tells a send waiting beside it that it was taken out, not lost to a failed
+ *  upload. */
 export const nativeChatRemovedUploads = { ids: new Set<string>(), uploads: new Set<string>() }
 
 export function removedUploadKey(scope: string, batch: string | undefined, previewUri: string): string {

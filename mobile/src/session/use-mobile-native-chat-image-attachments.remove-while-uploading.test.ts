@@ -5,8 +5,10 @@ import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-a
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
+import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
 import {
   deferred,
+  failed,
   LANES,
   laneArgs,
   sentPaths,
@@ -200,9 +202,98 @@ describe('a chip removed while its photo uploads, as in the Claude app', () => {
         expect(args.baseSend).not.toHaveBeenCalled()
         expect(pasted()).toEqual([])
         expect(args.onSendError).toHaveBeenCalledExactlyOnceWith(
-          'Message not sent: its photo was removed. Send again to send the text alone'
+          'Message not sent: its photo was removed'
         )
       }
     )
+    it.each(LANES)(
+      'sends the photo left when one that had already landed is removed while the send waits (%s)',
+      async (lane) => {
+        // Opus review, 2026-10-12: only an uploading chip left a mark, so a
+        // landed one removed during the wait refused the send as "did not upload".
+        pick.mockResolvedValueOnce(photos(['a']))
+        const saveA = deferred()
+        const saveB = deferred()
+        const { client, pasted } = uploadHost([saveA.promise, saveB.promise])
+        const args = laneArgs(lane, client)
+        mount(args)
+        let attachA: Promise<void> = Promise.resolve()
+        let attachB: Promise<void> = Promise.resolve()
+        let sending: Promise<boolean> = Promise.resolve(false)
+        await act(async () => {
+          attachA = hook!.attachImage('library')
+          await settle()
+          pick.mockResolvedValueOnce(photos(['b']))
+          attachB = hook!.attachImage('library')
+          await settle()
+          sending = hook!.sendNativeChat('look')
+          await settle()
+        })
+        await act(async () => {
+          saveA.resolve(ok('save-a', '/tmp/a.png'))
+          await attachA
+        })
+        const landedA = hook!.attachments.find((chip) => chip.previewUri === 'file:///a.jpg')
+        expect(landedA).toMatchObject({ path: '/tmp/a.png' })
+        let accepted = false
+        await act(async () => {
+          hook!.removeAttachment(landedA!.id)
+          await settle()
+          saveB.resolve(ok('save-b', '/tmp/b.png'))
+          await attachB
+          accepted = await sending
+        })
+        expect(args.onSendError).not.toHaveBeenCalled()
+        expect(accepted).toBe(true)
+        expect(sentPaths(lane, args, pasted)).toEqual(['/tmp/b.png'])
+      }
+    )
+
+    it('says nothing when a photo removed mid-upload then fails to upload', async () => {
+      pick.mockResolvedValue(photos(['a']))
+      const save = deferred()
+      const { client } = uploadHost([save.promise])
+      const args = laneArgs('terminal', client, { onError: vi.fn() })
+      mount(args)
+      let attach: Promise<void> = Promise.resolve()
+      await act(async () => {
+        attach = hook!.attachImage('library')
+        await settle()
+      })
+      act(() => hook!.removeAttachment(hook!.attachments[0]!.id))
+      await act(async () => {
+        save.resolve(failed('save', 'disk full'))
+        await attach
+      })
+      expect(hook!.attachments).toEqual([])
+      expect(args.showToast).not.toHaveBeenCalled()
+      expect(args.onError).not.toHaveBeenCalled()
+    })
+
+    it('says nothing when a chip removed during its retry then fails again', async () => {
+      pick.mockResolvedValue(photos(['a']))
+      const retrySave = deferred()
+      const { client } = uploadHost([failed('save', 'disk full'), retrySave.promise])
+      const args = laneArgs('terminal', client)
+      mount(args)
+      await act(async () => {
+        await hook!.attachImage('library')
+      })
+      const [chip] = hook!.attachments
+      expect(chip).toMatchObject({ failed: true })
+      vi.mocked(args.showToast).mockClear()
+      let retrying: Promise<boolean> = Promise.resolve(true)
+      await act(async () => {
+        retrying = retryNativeChatUpload(chip!.id)
+        await settle()
+      })
+      act(() => hook!.removeAttachment(chip!.id))
+      await act(async () => {
+        retrySave.resolve(failed('save-2', 'disk full'))
+        await retrying
+      })
+      expect(hook!.attachments).toEqual([])
+      expect(args.showToast).not.toHaveBeenCalled()
+    })
   })
 })

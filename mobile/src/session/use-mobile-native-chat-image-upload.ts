@@ -14,6 +14,7 @@ import { pickMobileDocuments, pickMobileImageFiles } from './mobile-image-source
 import {
   NATIVE_CHAT_ATTACHMENT_LIMIT,
   NATIVE_CHAT_ATTACHMENT_LIMIT_LINE,
+  nativeChatAttachmentCount,
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
@@ -66,12 +67,13 @@ export function useMobileNativeChatImageUpload(args: {
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
-  /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`. */
+  /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`.
+   *  False when no chip stayed (the user removed it while it went up). */
   onImageFailed?: (
     scope: string,
     image: UploadingNativeChatImage & { batch: string },
     retry: () => Promise<{ path: string; previewUri: string }>
-  ) => void
+  ) => boolean
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
    *  `null` once the attach settles, extracted or not. */
@@ -174,14 +176,15 @@ export function useMobileNativeChatImageUpload(args: {
           },
           onImageFailed: onImageFailed
             ? (image, _error, retry) => {
-                chipFailed = true
-                onImageFailed(scope, { ...image, batch }, retry)
+                const kept = onImageFailed(scope, { ...image, batch }, retry)
+                chipFailed ||= kept
+                return kept
               }
             : undefined,
           retryConnection: () => liveConnectionRef.current,
           // Counted live, so two picks landing together still stop at the limit.
           hasRoom: () =>
-            (useNativeChatImageAttachmentsStore.getState().byScope[scope]?.length ?? 0) <
+            nativeChatAttachmentCount(useNativeChatImageAttachmentsStore.getState().byScope[scope] ?? []) <
             NATIVE_CHAT_ATTACHMENT_LIMIT,
           onLimitReached: () => showToast(NATIVE_CHAT_ATTACHMENT_LIMIT_LINE, 2500),
           onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
