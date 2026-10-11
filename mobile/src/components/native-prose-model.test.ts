@@ -95,10 +95,10 @@ describe('a reply drawn as one native text, as the Claude app sets it', () => {
     expect(first!.spaceAfter).toBe(NATIVE_PROSE_LIST_ITEM_GAP)
     expect(second!.spaceAfter).toBe(0)
     // The blank line between blocks is a newline a selection crosses and a
-    // copy keeps, drawn 7 dp tall (TRANSCRIPT_MARKDOWN_TYPOGRAPHY.blockGap).
+    // copy keeps, drawn 8 dp tall (TRANSCRIPT_MARKDOWN_TYPOGRAPHY.blockGap).
     expect(gap!.lineHeight).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.blockGap)
     expect(paragraphText(model, 1)).toBe('')
-    expect(model.paragraphs.every((paragraph) => paragraph.kind === 'gap' || paragraph.lineHeight === 22)).toBe(true)
+    expect(model.paragraphs.every((paragraph) => paragraph.kind === 'gap' || paragraph.lineHeight === 25.5)).toBe(true)
   })
 
   it('draws the bold lead-ins bold and the code as pills, over the drawn words', () => {

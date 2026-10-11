@@ -6,8 +6,8 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 // 2026-10-09, the user, beside the Claude app's transcript: "we can't see most
 // of the content ... we need the same for ours, transcript and code, others
 // stay the same". Every row of the transcript that draws Markdown takes the
-// transcript's type, the sent prompt's bubble takes the same size (14 on 21 then, 15 on 22 since the
-// Claude app was measured again the same day), and
+// transcript's type, the sent prompt's bubble took the same size (14 on 21 then, 15 on 22 since the
+// Claude app was measured again the same day; its own 15 on 21 card since 2026-10-11), and
 // the tool detail sheet, a sheet and not the transcript, keeps its own.
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -165,9 +165,11 @@ describe('the chat transcript’s type', () => {
   })
 
   // A lead's prompt in a subagent's transcript is Markdown in a bubble as wide
-  // as its text (mobile-markdown-code-pill-bubble.test.ts). The bubble keeps
-  // the size and the code face, and its blocks the whole blank line it drew.
-  it('sets a lead’s Markdown prompt in its bubble at the same size, its prose one Text', () => {
+  // as its text (mobile-markdown-code-pill-bubble.test.ts). Since 2026-10-11
+  // it is set at the sent prompt's 15 on 21, the Claude app's user message in
+  // a Code session, with its pills in the code face, and its blocks keep the
+  // whole blank line the bubble drew.
+  it('sets a lead’s Markdown prompt in its card at the card’s size, its prose one Text', () => {
     const styles = makeChatMessageStyles(themeFor('light'))
     render(
       createElement(Prose, {
@@ -180,15 +182,18 @@ describe('the chat transcript’s type', () => {
     )
     const [markdown] = byType('MobileMarkdown')
     const typography = markdown!.props.typography as typeof TRANSCRIPT_MARKDOWN_TYPOGRAPHY
-    expect(typography.prose).toEqual(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose)
-    expect(typography.chip).toEqual(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip)
+    expect(typography.prose).toEqual({ fontSize: 15, lineHeight: 21 })
+    expect(typography.chip.mono).toBe(true)
     expect(typography.blockGap).toBeNull()
   })
 
-  it('sets a sent prompt at 15 on 22, as the replies around it', () => {
+  // The Claude app's user message in a Code session: 15 on 1.4 em, a step
+  // under the 17 sp replies (docs/claude-app-typography.md, 2026-10-11). It
+  // was 15 on 22, the replies' size, from screenshots before.
+  it('sets a sent prompt at 15 on 21', () => {
     render(createElement(MobileNativeChatMessage, { message: { ...reply, id: 'u1', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] } }))
     const words = byType('Text').find((node) => node.children.includes('ship it'))!
-    expect(flat(words.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22 })
+    expect(flat(words.props.style)).toMatchObject({ fontSize: 15, lineHeight: 21 })
   })
 
   it.each(['light', 'dark'] as const)('keeps the sent prompt’s colours on the theme tokens in %s', (scheme) => {
@@ -196,30 +201,25 @@ describe('the chat transcript’s type', () => {
     const colors = scheme === 'dark' ? darkColors : lightColors
     expect(styles.userText.color).toBe(colors.userBubbleText)
     expect(styles.userBubble.backgroundColor).toBe(colors.userBubble)
-    expect(styles.userText).toMatchObject({ fontSize: 15, lineHeight: 22 })
+    expect(styles.userBubble.borderColor).toBe(colors.hairline)
+    expect(styles.userText).toMatchObject({ fontSize: 15, lineHeight: 21 })
   })
 
-  // The Claude app's dark bubble is DARKER than its page (#0d0d0d on #151515,
-  // same phone, 2026-10-09); ours was lighter (#2E2B26 on #1A1917). Light keeps
-  // its bubble, which already reads like Claude's.
-  it('draws the dark sent-prompt bubble darker than the page, and keeps its words readable', () => {
-    const lum = (hex: string) => contrastRatio('#FFFFFF', hex)
-    // A higher contrast against white means a darker surface.
-    expect(lum(darkColors.userBubble)).toBeGreaterThan(lum(darkColors.bg))
-    expect(lum(darkColors.userBubble)).toBeGreaterThan(lum(darkColors.bgSunken))
-    expect(contrastRatio(darkColors.userBubbleText, darkColors.userBubble)).toBeGreaterThanOrEqual(4.5)
+  // The card is the app's `pl7.w0`: #F0EFEC on its #F9F9F7 page, #2C2C2A on
+  // its #151515 one, so it reads as a raised fill in both. A 2026-10-09
+  // screenshot read a darker #0d0d0d under the dark prompt; the app's code
+  // fills the sent card #2C2C2A, and uses #0D0D0D (`pl7.s`) for its queued
+  // message and code-block header.
+  it.each(['light', 'dark'] as const)('fills the sent prompt’s card off the page, with readable words, in %s', (scheme) => {
+    const colors = scheme === 'dark' ? darkColors : lightColors
+    expect(colors.userBubble).not.toBe(colors.bg)
+    expect(contrastRatio(colors.userBubble, colors.bg)).toBeGreaterThan(1.05)
+    expect(contrastRatio(colors.userBubbleText, colors.userBubble)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it('keeps the light sent-prompt bubble as it was, with readable words', () => {
-    expect(lightColors.userBubble).toBe('#E6E2D7')
-    expect(contrastRatio(lightColors.userBubbleText, lightColors.userBubble)).toBeGreaterThanOrEqual(4.5)
-  })
-
-  it.each(['light', 'dark'] as const)('gives the sent-prompt bubble Claude’s taller, rounder shape in %s', (scheme) => {
-    // 106 px tall for one line against our 91 at the same text: 3 dp more
-    // above and below at 2.57 px per dp, and corners a little rounder.
-    const bubble = makeChatMessageStyles(themeFor(scheme)).userBubble
-    expect(bubble.paddingVertical).toBe(13)
-    expect(bubble.borderRadius).toBe(20)
+  it.each(['light', 'dark'] as const)('gives the sent prompt the Claude app’s card shape in %s', (scheme) => {
+    const card = makeChatMessageStyles(themeFor(scheme)).userBubble
+    expect(card).toMatchObject({ borderRadius: 12, paddingHorizontal: 12, paddingVertical: 14 })
+    expect('borderBottomRightRadius' in card).toBe(false)
   })
 })

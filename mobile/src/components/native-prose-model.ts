@@ -77,16 +77,15 @@ export type NativeProseSpan = {
 export type NativeProseLink = { kind: 'href'; href: string } | { kind: 'file'; path: string }
 
 /** A bullet's first line sits this far in from the margin: the Claude app's
- *  bullet is about 9 dp in at the Small size (reference screenshot), and its
- *  glyph carries a dp of side bearing. */
+ *  ListStyle marker indent, 8 (docs/claude-app-typography.md, 2026-10-11),
+ *  which a screenshot had put at about 9 with the glyph's side bearing. */
 export const NATIVE_PROSE_LIST_INDENT = 8
 /** One more level of nesting. */
 export const NATIVE_PROSE_LIST_DEPTH_INDENT = 16
-/** Between two bullets: 4 px at the screenshot's 19 px line pitch, which is
- *  about 4.6 dp at the transcript's 22 (15/22); 4.5 was set when its line was
- *  21 and is within a dp of that. Between blocks it stays the typography's
- *  blockGap. */
-export const NATIVE_PROSE_LIST_ITEM_GAP = 4.5
+/** Between two bullets: the Claude app's ListStyle item spacing, 4 sp
+ *  (docs/claude-app-typography.md, 2026-10-11); it was 4.5 from a screenshot.
+ *  Between blocks it stays the typography's blockGap. */
+export const NATIVE_PROSE_LIST_ITEM_GAP = 4
 /** A `---`, as the Text path draws it (MobileMarkdown RULE_TEXT). */
 export const NATIVE_PROSE_RULE_TEXT = '─'.repeat(24)
 /** An item continued after a fence carries no marker; its words still start

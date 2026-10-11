@@ -318,7 +318,7 @@ function MobileMarkdownInner({
   const documentKey = useMemo(() => markdownDocumentKey(text), [text])
   const pillRuns = useMarkdownCodePillRuns(textScale, text, documentKey, identity, typography)
   // The blank line between the blocks of a prose run, where the surface sets
-  // its blocks closer than a whole prose line (the transcript's 7 dp). It is
+  // its blocks closer than a whole prose line (the transcript's 8 dp). It is
   // still a newline of the run's one Text, so a selection crosses it and a
   // copy reads a blank line; only its height is the gap's
   // (mobile-markdown-prose-scale.ts, blockGap).

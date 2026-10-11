@@ -1,10 +1,5 @@
 import type { ThemeColors, fontFamily } from '../theme/tokens'
-import {
-  MARKDOWN_CHIP_BORDER_WIDTH,
-  MARKDOWN_CHIP_PADDING_HORIZONTAL,
-  MARKDOWN_CHIP_RADIUS,
-  type MarkdownTypography
-} from './mobile-markdown-prose-scale'
+import { MARKDOWN_CHIP_PADDING_HORIZONTAL, type MarkdownTypography } from './mobile-markdown-prose-scale'
 import type { NativeProseModel } from './native-prose-model'
 
 /**
@@ -45,8 +40,8 @@ export function nativeProseSpec(model: NativeProseModel, options: Options): stri
       fontSize: typography.chip.fontSize,
       lineHeight: typography.chip.lineHeight,
       paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL,
-      borderWidth: MARKDOWN_CHIP_BORDER_WIDTH,
-      radius: MARKDOWN_CHIP_RADIUS
+      borderWidth: typography.chip.borderWidth,
+      radius: typography.chip.radius
     }
   })
 }

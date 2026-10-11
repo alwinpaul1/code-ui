@@ -32,7 +32,10 @@ const DARK = { colors: darkColors, scheme: 'dark' as const }
 // own: on this fork's document before #21969 (1150a4e0's string modules, script region emptied)
 // and on this one, and the two agreed.
 // Re-pinned 2026-10-11: dark `text` went #ECE9E2 -> #F8F8F6 (same length, colour only).
-const DOCUMENT_SHELL_SHA256 = '4c177f2c87890fbd26800ed7b65d2eae153da10e2ec259b282247d318b36d660'
+// Re-pinned 2026-10-11 again: the dark palette moved to the Claude app's (#1A1917 -> #151515,
+// #F8F8F6 -> #F9F9F7, #B8B4AB -> #C3C2B7, #2B2925 -> #2C2C2A, #332F2A -> #343432). Same length;
+// diffed against main's shell, only those eight custom-property values changed.
+const DOCUMENT_SHELL_SHA256 = 'd788f3611b8151bcf54486705c1ef0c689f79bbd470a85dc712b2e1718724157'
 const DOCUMENT_SHELL_BYTES = 5621
 
 const SCRIPT_OPEN = '  <script>\n'

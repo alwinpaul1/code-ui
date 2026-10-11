@@ -13,6 +13,8 @@ import {
   DEFAULT_MARKDOWN_TYPOGRAPHY,
   INSTRUMENT_SANS_FACE,
   JETBRAINS_MONO_FACE,
+  MARKDOWN_CHIP_BORDER_WIDTH,
+  MARKDOWN_CHIP_RADIUS,
   TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
   markdownChipBaselineShift,
   markdownChipFootprint,
@@ -52,43 +54,47 @@ type Styles = Record<string, Record<string, unknown>>
 
 const SCHEMES = ['light', 'dark'] as const
 
-describe('the chat transcript at the Claude app’s Small density', () => {
-  it.each(SCHEMES)('sets prose at 15 on a 22 dp line in %s', (scheme) => {
+// 2026-10-11: the Claude app's own type scale for a Claude Code session, read
+// from its code (com.anthropic.claude 1.261009.20, docs/claude-app-typography.md):
+// body 17 on 1.5 em, headings 28, 24 and 20 on 1.3 em, 8 between blocks, code
+// 15. That is its Medium transcript size, the default; the 15 on 22 above was
+// measured off screenshots of its Small.
+describe('the chat transcript at the Claude app’s Medium size', () => {
+  it.each(SCHEMES)('sets prose at 17 on a 25.5 dp line in %s', (scheme) => {
     const styles = makeMarkdownStyles(themeFor(scheme), TRANSCRIPT_MARKDOWN_TYPOGRAPHY) as unknown as Styles
     for (const name of ['paragraph', 'quoteText', 'listText']) {
-      expect(styles[name]!.fontSize, name).toBe(15)
-      expect(styles[name]!.lineHeight, name).toBe(22)
+      expect(styles[name]!.fontSize, name).toBe(17)
+      expect(styles[name]!.lineHeight, name).toBe(25.5)
     }
     // Between one block and the next, as between the Claude app's paragraphs.
-    expect(styles.root!.gap).toBe(7)
+    expect(styles.root!.gap).toBe(8)
   })
 
-  it.each(SCHEMES)('steps the headings and list marker up with the 15 dp prose in %s', (scheme) => {
-    // Claude's glyphs are ~9% taller than the 14 dp set (ink 37 px vs 34 px, line pitch
-    // 57.1 px vs 55.3 px, same phone, 2026-10-09), so the whole ladder moves a step.
+  it.each(SCHEMES)('steps the headings down from 28 to 20, every one above the 17 dp prose, in %s', (scheme) => {
     const styles = makeMarkdownStyles(themeFor(scheme), TRANSCRIPT_MARKDOWN_TYPOGRAPHY) as unknown as Styles
-    expect(styles.heading).toMatchObject({ fontSize: 15.5, lineHeight: 22 })
-    expect(styles.headingLevel1).toMatchObject({ fontSize: 19, lineHeight: 26 })
-    expect(styles.headingLevel2).toMatchObject({ fontSize: 17, lineHeight: 24 })
-    expect(styles.headingLevel3).toMatchObject({ fontSize: 16, lineHeight: 23 })
-    expect(styles.listMarkerInline).toMatchObject({ fontSize: 14 })
+    expect(styles.heading).toMatchObject({ fontSize: 20, lineHeight: 26 })
+    expect(styles.headingLevel1).toMatchObject({ fontSize: 28, lineHeight: 36.4 })
+    expect(styles.headingLevel2).toMatchObject({ fontSize: 24, lineHeight: 31.2 })
+    expect(styles.headingLevel3).toMatchObject({ fontSize: 20, lineHeight: 26 })
+    expect(styles.listMarkerInline).toMatchObject({ fontSize: 16 })
     const sizes = ['headingLevel1', 'headingLevel2', 'headingLevel3', 'heading'].map(
       (name) => styles[name]!.fontSize as number
     )
     expect(sizes).toEqual([...sizes].sort((x, y) => y - x))
-    expect(Math.min(...sizes)).toBeGreaterThan(15)
+    expect(Math.min(...sizes)).toBeGreaterThan(17)
   })
 
-  it.each(SCHEMES)('draws inline code in JetBrains Mono, one size under the prose step, in %s', (scheme) => {
+  it.each(SCHEMES)('draws inline code in JetBrains Mono at the app’s 15, in %s', (scheme) => {
     const styles = makeMarkdownStyles(themeFor(scheme), TRANSCRIPT_MARKDOWN_TYPOGRAPHY) as unknown as Styles
     expect(styles.inlineCodeChipText!.fontFamily).toBe(fontFamily.mono)
-    expect(styles.inlineCodeChipText!.fontSize).toBe(12)
+    expect(styles.inlineCodeChipText!.fontSize).toBe(15)
     expect(styles.inlineCodeChipTextTable!.fontFamily).toBe(fontFamily.mono)
     // A span with a newline in it stays a nested Text; it is code too.
     expect(styles.inlineCode!.fontFamily).toBe(fontFamily.mono)
-    // Its text sits on the paragraph's baseline, in the mono face's metrics.
+    // Its text sits on the paragraph's baseline, in the mono face's metrics,
+    // with the transcript's 0.5 dp hairline.
     const shift = (styles.inlineCodeChip!.transform as { translateY: number }[])[0]!.translateY
-    expect(shift).toBeCloseTo(markdownChipBaselineShift(12, 14, JETBRAINS_MONO_FACE), 6)
+    expect(shift).toBeCloseTo(markdownChipBaselineShift(15, 17.5, JETBRAINS_MONO_FACE, 0.5), 6)
   })
 
   it.each(SCHEMES)('keeps every colour on the theme tokens in %s', (scheme) => {
@@ -129,6 +135,10 @@ describe('every other Markdown surface', () => {
     expect(markdownProseScale(15, 2)).toEqual({ fontSize: 30, lineHeight: 52 })
     expect(markdownChipScale(1)).toBeNull()
     expect(markdownChipFootprint(1)).toBe(18.5)
+    // Literals in DEFAULT_MARKDOWN_TYPOGRAPHY, which is declared above the constants.
+    expect(DEFAULT_MARKDOWN_TYPOGRAPHY.chip.borderWidth).toBe(MARKDOWN_CHIP_BORDER_WIDTH)
+    expect(DEFAULT_MARKDOWN_TYPOGRAPHY.chip.radius).toBe(MARKDOWN_CHIP_RADIUS)
+    expect(DEFAULT_MARKDOWN_TYPOGRAPHY.codeBlock).toEqual({ radius: radius.md, padding: space.md })
   })
 })
 
@@ -161,11 +171,13 @@ describe('a transcript pill at every zoom', () => {
     ]
     for (const zoom of ZOOMS) {
       const chip = markdownChipScale(zoom, typo)
-      const shift = chip?.baselineShift ?? markdownChipBaselineShift(typo.chip.fontSize, typo.chip.lineHeight, JETBRAINS_MONO_FACE)
+      const shift =
+        chip?.baselineShift ??
+        markdownChipBaselineShift(typo.chip.fontSize, typo.chip.lineHeight, JETBRAINS_MONO_FACE, typo.chip.borderWidth)
       for (const [name, block, table] of blocks) {
         const line = markdownZoomedLine(block.fontSize, block.lineHeight, zoom) ?? block
         const pillLine = (table ? typo.chip.tableLineHeight : typo.chip.lineHeight) * (chip?.factor ?? 1)
-        const pill = pillLine + 2
+        const pill = pillLine + 2 * typo.chip.borderWidth
         expect(line.lineHeight - pill, `${name} at ${zoom}: pill over pill`).toBeGreaterThanOrEqual(2)
         expect(lineBottom(line.fontSize, line.lineHeight, pill) - shift, `${name} at ${zoom}: inside its line`).toBeGreaterThanOrEqual(1)
       }

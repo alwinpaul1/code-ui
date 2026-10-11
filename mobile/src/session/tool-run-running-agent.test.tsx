@@ -287,7 +287,7 @@ describe('a mixed run whose background agent is still running', () => {
     ['dark', darkColors]
   ] as const)('keeps the label and glyph on the theme, in %s', (scheme, palette) => {
     const tree = render({ blocks: launching(), agentRuns: RUNNING }, scheme)
-    expect(flattenColor(agentLabel(tree).props.style)).toBe(palette.textSecondary)
+    expect(flattenColor(agentLabel(tree).props.style)).toBe(palette.chatMuted)
     expect(tree.root.findByProps({ testID: 'agent-run-glyph' }).props.children.props.stroke).toBe(
       palette.textMuted
     )

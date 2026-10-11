@@ -127,34 +127,35 @@ describe('the face a running label keeps while it shimmers', () => {
   }
 
   // Code review of c03f5328: the swept "Running agent" drew in Regular where
-  // the plain label is Medium. Each glyph span named no face, so the patched
+  // the plain label was Medium. Each glyph span named no face, so the patched
   // Text gave it Regular, and the narrower word pulled the chevron sideways
-  // when the sweep started and stopped.
-  it('keeps "Running agent: <subject>" in Medium while it sweeps, in light and dark', () => {
+  // when the sweep started and stopped. The label is the Claude app's 400
+  // since 2026-10-11, and the sweep keeps that face.
+  it('keeps "Running agent: <subject>" in the label\'s Regular while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(AgentRow, scheme, 'agent-run-label')
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running agent: Fix the chat rows')
-      expect(faceOf(label)).toBe(fontFamily.medium)
-      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
+      expect(faceOf(label)).toBe(fontFamily.regular)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.regular]))
     }
   })
 
-  // The tool row's "Running" is the agent row's Medium (2026-10-09, matching the
-  // Claude app's row for a running command), not the Regular it first had.
-  it('keeps the running tool row\'s "Running" in Medium while it sweeps, in light and dark', () => {
+  // The tool row's "Running" is the agent row's face (2026-10-09, matching the
+  // Claude app's row for a running command): its 400 since 2026-10-11.
+  it('keeps the running tool row\'s "Running" in the label\'s Regular while it sweeps, in light and dark', () => {
     for (const scheme of ['light', 'dark'] as const) {
       const { label, glyphs } = draw(ToolRow, scheme, 'tool-run-active-label')
       expect(glyphs.map((glyph) => String(glyph.props.children)).join('')).toBe('Running')
-      expect(faceOf(label)).toBe(fontFamily.medium)
-      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.medium]))
+      expect(faceOf(label)).toBe(fontFamily.regular)
+      expect(new Set(glyphs.map(faceOf))).toEqual(new Set([fontFamily.regular]))
     }
   })
 
-  // Every caller is Medium now, so the two tests above cannot tell a ShimmerText
-  // that copies its caller's face from one that hard-codes Medium. A face of
+  // Every caller is Regular now, so the two tests above cannot tell a ShimmerText
+  // that copies its caller's face from one that hard-codes Regular. A face of
   // another weight does.
   it.each([
-    ['Regular', fontFamily.regular],
+    ['Medium', fontFamily.medium],
     ['SemiBold', fontFamily.semibold]
   ] as const)('draws each swept glyph in the caller\'s own %s, whatever the callers use', (_name, face) => {
     function Row() {

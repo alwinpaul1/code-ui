@@ -28,7 +28,7 @@ import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
 import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
-import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import { TOOL_RUN_CHEVRON_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { runningAgentText } from './mobile-native-chat-agent-run'
@@ -259,12 +259,12 @@ function ToolRunView({
           <ShimmerText
             text={focusView ? countLabel : runningCallVerb(call)}
             active
-            color={colors.textSecondary}
+            color={colors.chatMuted}
             style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
             numberOfLines={1}
             testID="tool-run-active-label"
           />
-          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+          <Chevron size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
         </Pressable>
       </View>
     )
@@ -345,7 +345,7 @@ function ToolRunView({
               <ShimmerText
                 text={runningAgentText(agentSubject)}
                 active
-                color={colors.textSecondary}
+                color={colors.chatMuted}
                 style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
                 numberOfLines={1}
                 testID="tool-run-agent-label"
@@ -375,7 +375,7 @@ function ToolRunView({
             </Text>
           ) : null}
           {diffStat && !runningAgent ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
-          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+          <Chevron size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
         </Pressable>
       </View>
           )

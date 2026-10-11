@@ -32,3 +32,12 @@ export function splitSyntaxIntoLines(
 export function gutterWidthForLines(count: number, charWidth = 9): number {
   return Math.max(2, String(Math.max(count, 1)).length) * charWidth + 10
 }
+
+/** A digit's width in the code face at `fontSize`: JetBrains Mono's 0.6 em,
+ *  rounded up, and a dp for Android rounding the type up to a whole pixel
+ *  (TextAttributes.kt). 9 at 13 sp, the gutter's old fixed price; at the
+ *  transcript's 15 sp a bare 9 left "10" a fraction of a pixel too wide for its
+ *  box, and it broke over two rows (review, 2026-10-11). */
+export function gutterCharWidth(fontSize: number): number {
+  return Math.ceil(0.6 * fontSize) + 1
+}
