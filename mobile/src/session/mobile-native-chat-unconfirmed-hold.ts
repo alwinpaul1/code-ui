@@ -8,7 +8,7 @@ import { outboxEntryIdOfEcho } from './mobile-native-chat-outbox-drafts'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { findBeaconConfirmedSends, type BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { appForegroundSince } from './app-foreground-clock'
-import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
+import { findOutboxEntry, isOutboxSendLive, releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
 /** How long an ack-lost send waits for evidence before the view says the
  *  delivery is unconfirmed: time with the app in the foreground (foregroundTimeStillOwed). */
@@ -70,7 +70,9 @@ function entryOnRecord(entry: UnconfirmedSend, now: RecordNow): boolean {
  * Only Claude's record counts, never the screen.
  */
 export function sendAlreadyOnRecord(args: RecordNow & { origin: MobileNativeChatSendOrigin; text: string }): boolean {
-  return entryOnRecord(heldEntryOf(args.origin, args.text), args)
+  // A boundary taken before the read settled is no boundary: any older row of the words, or the
+  // beacon's old latest copy at a cold start, would pass (review of the batch, finding 2).
+  return args.origin.baselineResolved && entryOnRecord(heldEntryOf(args.origin, args.text), args)
 }
 
 export function parkUnconfirmedSend(args: {
@@ -143,6 +145,13 @@ function foregroundTimeStillOwed(armedAt: number): number {
   return back > armedAt ? Math.max(0, back + UNCONFIRMED_SEND_DEADLINE_MS - Date.now()) : 0
 }
 
+/** A bubble whose entry waits in the outbox with no send carrying it ("Not sent", parked, or
+ *  handed over after a hold): the desktop has not taken it, so no row of its words is its yet
+ *  (review of the batch, finding 1). The outbox looks for its row itself when it next tries. */
+function waitingInOutbox(sendId: string): boolean {
+  return findOutboxEntry(sendId) !== undefined && !isOutboxSendLive(sendId)
+}
+
 /** The send id a bubble stands for: its outbox entry's for a phone send drawn under it, else the
  *  bubble's own id (a send from a build before one id per send). */
 export function sendIdOfBubble(id: string): string {
@@ -171,7 +180,8 @@ export function landedHeldSends(
         !isTakenSend(item) &&
         item.baselineResolved &&
         normalizeReconcileText(item.text) !== '' &&
-        !heldIds.has(sendIdOfBubble(item.id))
+        !heldIds.has(sendIdOfBubble(item.id)) &&
+        !waitingInOutbox(sendIdOfBubble(item.id))
     )
     .map((item) => ({
       draftKey: '',

@@ -245,7 +245,7 @@ export function useMobileNativeChatImageAttachments({
         const textOnly = pendingAll.length === 0 && composerText.trim() !== ''
         const refuse = (message: string, waits = INPUT_BOX_REFUSALS.get(message)): boolean => {
           if (textOnly && waits && parkRefusedSend?.(composerText)) { onSendError(waits); return true }
-          onError?.(); if (textOnly) { onSendError(message, { retry: true }) } else { onSendError(message) }; return false
+          onError?.(); if (textOnly && !/session changed|pairing invalid/.test(message)) { onSendError(message, { retry: true }) } else { onSendError(message) }; return false
         }
         // Says why when the budget ran out (the app was away, or the desktop slow).
         const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'

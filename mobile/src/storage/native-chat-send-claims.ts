@@ -62,7 +62,9 @@ export function hydrateNativeChatSendClaims(): Promise<void> {
       const raw = await AsyncStorage.getItem(CLAIMS_KEY)
       const parsed = parseStored(raw)
       const now = Date.now()
-      const stored = Array.isArray(parsed) ? parsed.filter(isClaim).filter((claim) => now - claim.at < CLAIM_PRUNE_AGE_MS) : []
+      const stored = Array.isArray(parsed)
+        ? parsed.filter(isClaim).filter((claim) => claim.kind === 'row' && now - claim.at < CLAIM_PRUNE_AGE_MS)
+        : []
       const merged = new Map(stored.map((claim) => [slot(claim.kind, claim.key), claim]))
       for (const [key, claim] of claims) {
         merged.set(key, claim)
@@ -88,7 +90,10 @@ function persist(): void {
       if (kept.length < claims.size) {
         claims = new Map(kept.map((claim) => [slot(claim.kind, claim.key), claim]))
       }
-      await AsyncStorage.setItem(CLAIMS_KEY, JSON.stringify(kept))
+      // Rows only. A receipt's nonce is a hook pid, or a status copy's counter that starts again
+      // in every process: kept across a restart, an old claim hid a new receipt with the same
+      // nonce from the send it was for (review of the batch, finding 4).
+      await AsyncStorage.setItem(CLAIMS_KEY, JSON.stringify(kept.filter((claim) => claim.kind === 'row')))
     } catch (error) {
       console.warn('[storage] could not save the chat send claims; they hold for this run only', error)
     }
@@ -152,10 +157,15 @@ export function nativeChatSendClaimWritesSettled(): Promise<void> {
   return writes
 }
 
-/** Test-only: the claims are module state; this is a process restart. */
-export function resetNativeChatSendClaimsForTests(): void {
+/** Test-only: the claims are module state. `keepStored` is a process restart; without it the
+ *  stored copy goes too, so one test's claims never come back in the next (the AsyncStorage
+ *  mock outlives a test). */
+export function resetNativeChatSendClaimsForTests(options: { keepStored?: boolean } = {}): void {
   claims = new Map()
   hydration = null
   readRefused = false
   writes = Promise.resolve()
+  if (!options.keepStored) {
+    void AsyncStorage.removeItem(CLAIMS_KEY)
+  }
 }

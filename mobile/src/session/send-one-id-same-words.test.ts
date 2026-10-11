@@ -223,7 +223,7 @@ describe('a message the app was closed under, against rows other sends settled',
   it('keeps what each row settled across a restart', async () => {
     claimRowForSend('send-first', 'r1')
     await nativeChatSendClaimWritesSettled()
-    resetNativeChatSendClaimsForTests()
+    resetNativeChatSendClaimsForTests({ keepStored: true })
     expect(rowClaimant('r1')).toBe(undefined)
     await hydrateNativeChatSendClaims()
     expect(rowClaimant('r1')).toBe('send-first')
@@ -231,7 +231,7 @@ describe('a message the app was closed under, against rows other sends settled',
 
   it('reads a store it cannot parse as no claims, and still claims in memory', async () => {
     await AsyncStorage.setItem('orca:chatSendClaims', '{not json')
-    resetNativeChatSendClaimsForTests()
+    resetNativeChatSendClaimsForTests({ keepStored: true })
     await hydrateNativeChatSendClaims()
     expect(claimRowForSend('send-first', 'r1')).toBe(true)
     expect(claimRowForSend('send-second', 'r1')).toBe(false)

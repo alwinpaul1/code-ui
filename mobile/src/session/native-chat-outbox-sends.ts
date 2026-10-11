@@ -141,7 +141,7 @@ export function releaseOutboxSendFromGate(id: string | undefined): boolean {
   if (!findOutboxEntry(id)?.atGate) {
     return false
   }
-  passOutboxGate(id)
+  void patchOutboxEntry(id!, { atGate: undefined, unwritten: true })
   return releaseOutboxSend(id)
 }
 

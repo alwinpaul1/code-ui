@@ -36,6 +36,11 @@ export function outboxEntryLanding(
   messages: readonly NativeChatMessage[],
   receipts: readonly BeaconPromptReceipt[]
 ): OutboxLanding {
+  // Nothing of it was ever written: no row or copy can be its, even with no boundary to count from
+  // (a send parked offline from launch; review of the batch, finding 3).
+  if (entry.unwritten && entry.lastAttemptAt === undefined) {
+    return 'missing'
+  }
   const held: UnconfirmedSend = {
     draftKey: entry.draftKey,
     pendingKey: entry.pendingKey,

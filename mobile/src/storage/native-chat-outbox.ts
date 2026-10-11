@@ -64,6 +64,9 @@ export type NativeChatOutboxEntry = {
    *  composer. A process that dies here leaves them there, so such an entry is dropped when the
    *  store is read instead of being sent beside them. */
   atGate?: true
+  /** Handed to the outbox by a refusal before anything was written (S4): until an automatic
+   *  send of it starts (`lastAttemptAt`), it cannot have landed, whatever the transcript shows. */
+  unwritten?: true
 }
 
 export type NativeChatOutboxRoute = {
