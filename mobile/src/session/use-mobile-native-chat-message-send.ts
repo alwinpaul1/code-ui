@@ -24,7 +24,8 @@ import { notePhoneTerminalSend } from './native-chat-kept-session-state'
 import { CLEAR_NOT_WRITTEN, writeChatSend } from './mobile-native-chat-send-write'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { MobileNativeChatSendFollow } from './mobile-native-chat-send-follow'
-import { recordOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'; import { noteSendStage, timeSendWrites } from './native-chat-send-timing'
+import { retireOutboxSend } from './native-chat-outbox-sends'; import { noteSendStage, timeSendWrites } from './native-chat-send-timing'
+import { openSendGateOutbox } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
 
@@ -75,7 +76,7 @@ export function useMobileNativeChatMessageSend(args: {
     text: string,
     onUnconfirmed: () => void
   ) => void
-  onSendError: (message: string) => void
+  onSendError: (message: string, details?: MobileNativeChatSendErrorDetails) => void
   /** Runs before any bytes go out on a composer send. The draft mirror uses it
    *  to drain in-flight keystroke echoes and forget them, so the send's own
    *  clear + body is not interleaved with, or later "corrected" against, them. */
@@ -89,6 +90,9 @@ export function useMobileNativeChatMessageSend(args: {
   /** The agent's own prompt copies (the hook beacon's `up=`). A copy that
    *  carries a send's words proves Claude took it. */
   promptReceipts?: readonly BeaconPromptReceipt[]
+  /** Whether Claude's own record already shows a send whose write just failed (the drafts
+   *  hook's `sendOnRecord`, S3). */
+  sendOnRecord?: (origin: MobileNativeChatSendOrigin, text: string) => boolean
 }): MobileNativeChatMessageSend {
   const {
     client,
@@ -107,7 +111,7 @@ export function useMobileNativeChatMessageSend(args: {
     beforeSend,
     onCommandDispatched,
     refuseUnderDialog = readSendUnderDialogRefusal,
-    promptReceipts = NO_RECEIPTS
+    promptReceipts = NO_RECEIPTS, sendOnRecord
   } = args
   // Read when the send verifies, not as of the render it began in.
   const promptReceiptsRef = useRef(promptReceipts)
@@ -126,7 +130,7 @@ export function useMobileNativeChatMessageSend(args: {
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number,
-      report: (message: string) => void = onSendError,
+      report: (message: string, details?: MobileNativeChatSendErrorDetails) => void = onSendError,
       follow?: MobileNativeChatSendFollow
     ): Promise<MobileNativeChatSendOutcome> => {
       // The host writes trailing whitespace verbatim onto the agent's input line,
@@ -164,16 +168,20 @@ export function useMobileNativeChatMessageSend(args: {
       // pin the composer for twice as long. An image send already opened one
       // covering its paste — keep spending that.
       const deadline = sharedDeadline ?? openMobileNativeChatSendBudget()
+      const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
+      // Written down before the gate, so a gate that wanted the desktop hands it to the outbox (S4).
+      const gate = openSendGateOutbox({ origin, draftText, chat: classification === 'chat', syncComposer, ...(images ? { images } : {}), report, clearDraftForSend, ...(showSendingEcho ? { showSendingEcho } : {}) })
+      gate.enter()
       // Nothing has been written yet, so a composer send tapped while the relay
       // re-dials waits for it and then goes (mobile-native-chat-send-readiness.ts).
       // A card answer or a command does not: what it types was chosen against a
       // screen the phone has not seen since the link dropped.
+      let refused: 'rejected' | 'unknown' = 'rejected'
       const client = syncComposer
-        ? await sendGate.wait(deadline, follow ? follow.tabChanged : () => handleRef.current !== handle)
+        ? await sendGate.wait(deadline, follow ? follow.tabChanged : () => handleRef.current !== handle, (message, unready) => { refused = gate.refuse(message, unready) })
         : sendGate.now(recordControlSend ? 'Answer' : 'Command', report)
-      if (!client || movedUnderSend()) {
-        return 'rejected'
-      }
+      if (!client) { return refused }
+      if (movedUnderSend()) { gate.drop(); return 'rejected' }
       // An answer or a pick types text and an Enter, which a dialog on screen
       // takes as its answer (2026-09-27), and an agent that exited back to a shell
       // takes as a command to run (Claude 2026-10-02): the look also refuses a screen
@@ -190,10 +198,10 @@ export function useMobileNativeChatMessageSend(args: {
         (await refusedUnderDialog(
           refuseUnderDialog,
           { client, terminal: handle, deadline, agent, requireComposer: true },
-          report
+          (message) => { refused = gate.giveBack(message) }
         ))
       ) {
-        return 'rejected'
+        return refused
       }
       if (syncComposer && beforeSend) {
         await beforeSend()
@@ -212,26 +220,20 @@ export function useMobileNativeChatMessageSend(args: {
       // (spentSendBudgetRefusal: the app was away, or the desktop was slow).
       const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
       if (!(await healMobileNativeChatStaleInput(healArgs))) {
-        report(notSent())
-        return 'rejected'
+        return gate.giveBack(notSent())
       }
       if (syncComposer) { noteSendStage('look', Date.now() - lookStartedAt) } // screen look, mirror drain, heal
       // Why: empty the composer at send time, not on the ack — over relay the
       // round trip is visible, and a lost ack must not strand the sent prompt
       // in the box. Only a definite rejection puts the text back.
-      const classification = images?.length ? 'chat' : classifyMobileNativeChatSend(agent, text)
       if (syncComposer) {
-        // Before the box empties (native-chat-outbox-sends.ts); fail-open. Chat only: a command writes no row, so nothing could tell it ran, and a resend would run it twice.
-        if (classification === 'chat') { recordOutboxSend(origin, draftText, { hasAttachments: Boolean(images?.length) }) }
+        // Chat only in the outbox: a command writes no row, so nothing could tell it ran, and a resend would run it twice.
+        gate.pass()
         clearDraftForSend(origin, draftText)
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       if (syncComposer && classification === 'chat' && !images?.length) { showSendingEcho?.(origin) }
-      const typesCodexCommand =
-        agent === 'codex' &&
-        classification !== 'chat' &&
-        isSlashCommandDraft(text) &&
-        !images?.length
+      const typesCodexCommand = agent === 'codex' && classification !== 'chat' && isSlashCommandDraft(text) && !images?.length
       // Clear, body, and for Claude a check that it took the words. The limit
       // behind it is per stdin READ and writes coalesce, so the host's ack is not
       // proof (mobile-native-chat-send-write.ts).
@@ -244,15 +246,15 @@ export function useMobileNativeChatMessageSend(args: {
         typesCodexCommand,
         seed: seededLaunchDraft,
         residue: mobileNativeChatInputResidue(handle),
-        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current
+        deadline, deviceToken: deviceTokenRef.current, receipts: () => promptReceiptsRef.current, sendId: origin.outboxId
       }))
       if (written.kind === 'stopped') {
         // Refused before the body, or Claude declined it. Nothing more is typed,
         // and Enter is not pressed again: Claude asked the user to review.
-        if (syncComposer) {
-          restoreRejectedDraft(origin, draftText)
-        }
-        report(written.message === CLEAR_NOT_WRITTEN ? notSent() : written.message)
+        if (syncComposer) { restoreRejectedDraft(origin, draftText) }
+        // A clear that never went wrote nothing: a refusal before any write, with a Retry (S5).
+        if (written.message === CLEAR_NOT_WRITTEN) { return gate.giveBack(notSent()) }
+        report(written.message)
         return 'rejected'
       }
       const outcome = written.outcome
@@ -276,10 +278,11 @@ export function useMobileNativeChatMessageSend(args: {
         }
         return 'unknown'
       }
-      if (outcome === 'rejected') {
-        if (syncComposer) {
-          restoreRejectedDraft(origin, draftText)
-        }
+      // A failure that raced its echo is a success (S3): the write failed, but Claude's own record
+      // (its row, or its copy of the prompt) already shows the message. Never the screen.
+      const raced = outcome === 'rejected' && syncComposer && classification === 'chat' && sendOnRecord?.(origin, text) === true
+      if (outcome === 'rejected' && !raced) {
+        if (syncComposer) { restoreRejectedDraft(origin, draftText) }
         report(notSent())
         return 'rejected'
       }
@@ -319,7 +322,7 @@ export function useMobileNativeChatMessageSend(args: {
       readSeededLaunchDraftSeed,
       refuseUnderDialog,
       restoreRejectedDraft, showSendingEcho,
-      sendGate
+      sendGate, sendOnRecord
     ]
   )
 

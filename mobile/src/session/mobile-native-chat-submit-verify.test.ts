@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
+import { claimNonceForSend, nonceClaimant } from '../storage/native-chat-send-claims'
 import {
   SUBMIT_LOOK_GAP_MS,
   SUBMIT_SETTLE_MS,
@@ -236,6 +237,22 @@ describe('checking that Claude took a message the host acked', () => {
           seenNonces: new Set(['n1'])
         })
       ).resolves.toEqual({ kind: 'unknown', stillTyped: true })
+    })
+
+    // S1: one id per send. A copy an earlier send of the same words took is that send's, even
+    // when it reached the phone after this one left (so it is not among the seen nonces).
+    it('ignores a copy of the same words that another send already took, and takes its own', async () => {
+      const s = scene([holding('yes')])
+      claimNonceForSend('send-earlier', 'n2')
+      await expect(
+        verify(s, 'yes', { sendId: 'send-later', receipts: () => [receipt('n2', 'yes')] })
+      ).resolves.toEqual({ kind: 'unknown', stillTyped: true })
+
+      const t = scene([holding('yes')])
+      await expect(
+        verify(t, 'yes', { sendId: 'send-later', receipts: () => [receipt('n2', 'yes'), receipt('n3', 'yes')] })
+      ).resolves.toEqual({ kind: 'sent', byReceipt: true })
+      expect(nonceClaimant('n3')).toBe('send-later')
     })
 
     it('ignores a copy of other words', async () => {

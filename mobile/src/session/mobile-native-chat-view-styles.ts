@@ -38,6 +38,18 @@ export function makeChatViewStyles(theme: Theme) {
       borderColor: colors.border,
       backgroundColor: colors.bgPanel
     },
+    // S5: the failure's words and its Retry on one row, the action after the words.
+    sendErrorPillWithAction: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: space.md
+    },
+    sendErrorText: {
+      flexShrink: 1
+    },
+    sendErrorAction: {
+      textDecorationLine: 'underline'
+    },
     pressed: {
       opacity: 0.6
     },

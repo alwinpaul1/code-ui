@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import { hydrateNativeChatSendClaims } from './native-chat-send-claims'
 
 const OUTBOX_KEY = 'orca:chatOutbox'
 
@@ -59,6 +60,13 @@ export type NativeChatOutboxEntry = {
   attachments?: NativeChatOutboxAttachment[]
   /** When the last automatic send of it started, by the phone's clock. */
   lastAttemptAt?: number
+  /** Written before the send gate (S4) and not past it yet: its words are still in the
+   *  composer. A process that dies here leaves them there, so such an entry is dropped when the
+   *  store is read instead of being sent beside them. */
+  atGate?: true
+  /** Handed to the outbox by a refusal before anything was written (S4): until an automatic
+   *  send of it starts (`lastAttemptAt`), it cannot have landed, whatever the transcript shows. */
+  unwritten?: true
 }
 
 export type NativeChatOutboxRoute = {
@@ -159,7 +167,7 @@ function parseStored(raw: string | null, now: number): NativeChatOutboxEntry[] {
     return Array.isArray(parsed)
       ? parsed
           .filter(isEntry)
-          .filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS)
+          .filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS && entry.atGate !== true)
           .map(withReadableExtras)
       : []
   } catch {
@@ -177,6 +185,9 @@ function notify(): void {
 /** Reads the stored list once per process; entries written before the read finished stay. */
 export function hydrateNativeChatOutbox(): Promise<void> {
   hydration ??= (async () => {
+    // Read with the entries: whether a row already settled another send is part of telling
+    // whether an entry landed (native-chat-send-claims.ts). It never refuses.
+    await hydrateNativeChatSendClaims()
     try {
       const stored = parseStored(await AsyncStorage.getItem(OUTBOX_KEY), Date.now())
       const held = new Set(entries.map((entry) => entry.id))

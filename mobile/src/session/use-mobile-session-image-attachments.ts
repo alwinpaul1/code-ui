@@ -34,6 +34,7 @@ type Args = {
    *  send's budget so the paste and this text body share one `sending` window. */
   readonly beforeNativeChatImagePaste?: () => Promise<void>
   readonly beginNativeChatImageSend?: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
+  readonly parkRefusedNativeChatSend?: (text: string) => boolean
   readonly nativeChatBaseSend: (
     text: string,
     images?: string[],
@@ -76,7 +77,7 @@ export function useMobileSessionImageAttachments({
   beforeTerminalSend,
   nativeChatBaseSend,
   beforeNativeChatImagePaste,
-  beginNativeChatImageSend,
+  beginNativeChatImageSend, parkRefusedNativeChatSend,
   structuredNativeChat,
   readSeededLaunchDraft,
   showToast,
@@ -118,7 +119,7 @@ export function useMobileSessionImageAttachments({
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
     beforeImagePaste: beforeNativeChatImagePaste,
-    beginImageSend: beginNativeChatImageSend,
+    beginImageSend: beginNativeChatImageSend, parkRefusedSend: parkRefusedNativeChatSend,
     readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError

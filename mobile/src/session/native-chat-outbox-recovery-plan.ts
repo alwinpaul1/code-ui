@@ -36,6 +36,11 @@ export function outboxEntryLanding(
   messages: readonly NativeChatMessage[],
   receipts: readonly BeaconPromptReceipt[]
 ): OutboxLanding {
+  // Nothing of it was ever written: no row or copy can be its, even with no boundary to count from
+  // (a send parked offline from launch; review of the batch, finding 3).
+  if (entry.unwritten && entry.lastAttemptAt === undefined) {
+    return 'missing'
+  }
   const held: UnconfirmedSend = {
     draftKey: entry.draftKey,
     pendingKey: entry.pendingKey,
@@ -43,6 +48,8 @@ export function outboxEntryLanding(
     normalizedText: entry.normalizedText,
     baselineTailMessageId: entry.baselineTailMessageId,
     deadline: null,
+    // Its one id: a row or receipt another send settled is never this one's proof (S1).
+    outboxId: entry.id,
     ...(entry.knownReceiptNonces ? { knownReceiptNonces: new Set(entry.knownReceiptNonces) } : {})
   }
   // A mid-turn prompt Claude Code takes from its queue writes no row (isTakenSend); its own

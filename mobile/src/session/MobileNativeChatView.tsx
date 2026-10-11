@@ -24,12 +24,12 @@ import {
   useMobileNativeChatTaskProgress
 } from './mobile-native-chat-composer-tasks'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
-import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'
+import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'; import { MobileNativeChatPendingDim } from './MobileNativeChatPendingDim'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
-import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'; import { retrySendFromComposer } from './native-chat-send-error-retry'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useMobileNativeChatTurnEnds } from './use-mobile-native-chat-turn-ends'
 import { useNow } from '../hooks/use-now'
@@ -255,7 +255,7 @@ export function MobileNativeChatView({
         {dividerLabels.has(item.id) ? (
           <MobileNativeChatTimeDivider label={dividerLabels.get(item.id) as string} />
         ) : null}
-        <MobileNativeChatMessage
+        <MobileNativeChatPendingDim delivery={outboxDeliveries?.[item.id]}><MobileNativeChatMessage
         message={item}
         toolsExpanded={toolsExpanded}
         fontScale={fontScale}
@@ -277,7 +277,7 @@ export function MobileNativeChatView({
         // another turn's status.
         {...turns.resolveRow(data.length - 1 - index, item)}
         taskListPredecessors={taskListPredecessors.get(item.id)}
-        />{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
+        /></MobileNativeChatPendingDim>{outboxDeliveries?.[item.id] ? <MobileNativeChatOutboxStatus delivery={outboxDeliveries[item.id]!} onRetry={onRetryOutbox ? () => onRetryOutbox(item.id) : undefined} onEdit={onEditOutbox ? () => onEditOutbox(item.id) : undefined} /> : null}
       </ChatRowOnScreenScope>
     ),
     [
@@ -441,7 +441,7 @@ export function MobileNativeChatView({
         // "Working" on the status line would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
-        sendErrorMessage={sendErrorMessage}
+        sendErrorMessage={sendErrorMessage} onRetrySend={() => retrySendFromComposer(composerText, handleSend, onClearSendError)}
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}

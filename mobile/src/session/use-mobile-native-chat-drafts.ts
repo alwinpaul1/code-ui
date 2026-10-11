@@ -7,10 +7,9 @@ import { useMobileNativeChatPendingPersistence } from './use-mobile-native-chat-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
 import { useMobileNativeChatBeaconConfirm, type BeaconPromptReceipt } from './use-mobile-native-chat-beacon-confirm'
-import { parkUnconfirmedSend } from './mobile-native-chat-unconfirmed-hold'
+import { landedHeldSends, parkUnconfirmedSend, sendAlreadyOnRecord } from './mobile-native-chat-unconfirmed-hold'
 import {
   draftWasSent,
-  findLandedUnconfirmedSends,
   mergeLandedImagePreviewEchoes,
   migrateImagePreviewMessageIds,
   normalizeReconcileText,
@@ -108,7 +107,7 @@ export function useMobileNativeChatDrafts(args: {
   ) => void
   /** Drop one optimistic echo whose queued entry the user cancelled. */
   removePending: (id: string) => void; rememberEcho: (id: string, text: string, anchorId: string | null) => void; takeSends: (ids: readonly string[]) => void
-  showOutboxEcho: (entry: NativeChatOutboxEntry) => void; showSendingEcho: (origin: MobileNativeChatSendOrigin) => void // outbox bubbles
+  showOutboxEcho: (entry: NativeChatOutboxEntry) => void; showSendingEcho: (origin: MobileNativeChatSendOrigin) => void; sendOnRecord: (origin: MobileNativeChatSendOrigin, text: string) => boolean // outbox bubbles; S3
 } {
   const {
     hostId,
@@ -236,8 +235,7 @@ export function useMobileNativeChatDrafts(args: {
         return null
       }
       if ((origin.outboxRecovery || origin.echoDrawn) && origin.outboxId) { return outboxEchoId(origin.outboxId) } // its bubble is already drawn
-      pendingCounter += 1
-      const id = `pending-${Date.now()}-${pendingCounter}`
+      const id = origin.outboxId ? outboxEchoId(origin.outboxId) : `pending-${Date.now()}-${(pendingCounter += 1)}` // one id per send (S1)
       const key = origin.pendingKey
       if (key) {
         liveNativeChatDrafts(origin.draftKey, own).setPendingBySession((previous) => acceptOwnSendInPending(previous, key, id, origin, text, images, imagePaths))
@@ -258,7 +256,7 @@ export function useMobileNativeChatDrafts(args: {
   // not re-create the send callback on every prompt the agent reports.
   const receiptNoncesRef = useRef<readonly string[]>([])
   receiptNoncesRef.current = (args.beaconPromptReceipts ?? []).map((receipt) => receipt.nonce)
-  const receiptsRef = useRef(args.beaconPromptReceipts); receiptsRef.current = args.beaconPromptReceipts // the copies a hold parks against
+  const receiptsRef = useRef(args.beaconPromptReceipts); receiptsRef.current = args.beaconPromptReceipts; const ownBubblesRef = useRef(NO_PENDING_MESSAGES); ownBubblesRef.current = (pendingKey && pendingBySession[pendingKey]) || NO_PENDING_MESSAGES // what a hold parks against
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
@@ -266,7 +264,7 @@ export function useMobileNativeChatDrafts(args: {
       const entry = parkUnconfirmedSend({
         origin,
         text,
-        messages: messagesRef.current, receipts: receiptsRef.current ?? [],
+        messages: messagesRef.current, receipts: receiptsRef.current ?? [], pending: ownBubblesRef.current,
         isActiveTranscript:
           activeDraftKeyRef.current === origin.draftKey &&
           (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey),
@@ -282,6 +280,8 @@ export function useMobileNativeChatDrafts(args: {
     []
   )
 
+  const sendOnRecord = useCallback((origin: MobileNativeChatSendOrigin, text: string) => sendAlreadyOnRecord({ origin, text, messages: messagesRef.current, receipts: receiptsRef.current ?? [], pending: ownBubblesRef.current, isActiveTranscript: activeDraftKeyRef.current === origin.draftKey && (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey) }), []) // S3
+
   useEffect(() => {
     if (!draftKey || unconfirmedRef.current.length === 0) {
       return
@@ -291,7 +291,7 @@ export function useMobileNativeChatDrafts(args: {
         entry.draftKey === draftKey &&
         (entry.pendingKey === null || entry.pendingKey === pendingKey)
     )
-    const landed = findLandedUnconfirmedSends(messages, relevant)
+    const landed = landedHeldSends(messages, relevant, ownBubblesRef.current)
     if (landed.length === 0) {
       return
     }
@@ -396,6 +396,6 @@ export function useMobileNativeChatDrafts(args: {
     acceptSend,
     clearDraftAtSendStart,
     holdUnconfirmedSend,
-    removePending, showOutboxEcho, showSendingEcho
+    removePending, showOutboxEcho, showSendingEcho, sendOnRecord
   }
 }

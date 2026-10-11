@@ -9,6 +9,7 @@ import {
   normalizedNativeChatUserMessageText
 } from './mobile-native-chat-image-transcript-markers'
 export { normalizeNativeChatUserText as normalizeReconcileText } from './mobile-native-chat-image-transcript-markers'
+import { claimRowForSend, rowClaimedByAnother } from '../storage/native-chat-send-claims'
 
 /** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
  *  the deadline surfaces the uncertainty. */
@@ -24,8 +25,12 @@ export type UnconfirmedSend = {
    *  across launches), so without this a receipt from hours ago confirms a send
    *  that never arrived and silently cancels its "Delivery unconfirmed" notice. */
   knownReceiptNonces?: ReadonlySet<string>
-  /** The outbox entry the send is written under, retired when it lands. */
+  /** The outbox entry the send is written under, retired when it lands. Also the send's one id
+   *  (S1): the row that settles it is claimed under it (native-chat-send-claims.ts). */
   outboxId?: string
+  /** When the send left the phone, by the phone's clock: sends of the same words take rows in
+   *  this order (landedHeldSends). */
+  sentAt?: number
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {
@@ -384,11 +389,13 @@ export function findLandedUnconfirmedSends(
     if (tailIndex === undefined) {
       continue
     }
-    const echo = userMessagesByText
-      .get(entry.normalizedText)
-      ?.find((message) => message.index > tailIndex && !claimedMessageIds.has(message.id))
+    // A row another send already settled is that send's, in this pass or an earlier one, in
+    // this process or before a restart (S1): never a second send's proof as well.
+    const free = (id: string): boolean => !claimedMessageIds.has(id) && !rowClaimedByAnother(id, entry.outboxId)
+    const echo = userMessagesByText.get(entry.normalizedText)?.find((message) => message.index > tailIndex && free(message.id))
     if (echo) {
       claimedMessageIds.add(echo.id)
+      if (entry.outboxId) { claimRowForSend(entry.outboxId, echo.id) }
       landed.push(entry)
     }
   }

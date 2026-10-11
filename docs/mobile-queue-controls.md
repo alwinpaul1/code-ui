@@ -349,3 +349,24 @@ The queue editor's `submitInput` still sends Tab first and only then falls back
 to `\r` behind Orca's host-side sendable guard. That is not the same case: it
 covers Codex finishing a turn *while the editor is open*, where the screen the
 phone is holding is a turn old.
+
+## A queued message when the turn errors or is interrupted, Claude Code 2.1.296
+
+Checked 2026-10-11 for S6 of `claude-app-parity-gaps.md` (the Claude app moves its own local
+queue back into the composer when it cannot send it at turn end). Claude Code 2.1.296, run in an
+isolated tmux at 46 columns with its own config directory and a stand-in Messages API that
+answers every request with a non-retryable 400 after 8 s:
+
+- **The turn ends in an API error.** The queued message is not dropped and not put back in the
+  input. Claude Code dequeues it and submits it as the next turn: the screen draws
+  `⏺ API Error: 400 …`, the turn's `✻ … for 16s` line, then `❯ second queued message` and a new
+  spinner. The transcript writes it as a `user` row with `promptSource: "queued"`, after two
+  `queue-operation` rows and the `isApiErrorMessage` assistant row.
+- **The turn is interrupted with Escape** (what the phone's Stop sends). The same: `⎿ Interrupted`,
+  then the queued message is submitted as the next turn.
+
+So on this build nothing is left to hand back: the phone's bubble for such a message retires on
+that queued `user` row as before. Putting its words back into the composer as well would send
+them twice. S6 is skipped. A permission prompt mid-turn does not end the turn either; the queue
+stays in the box while it is up. Re-check on a newer build before building a hand-back. Codex
+was not checked (its queue is not part of this item's evidence).

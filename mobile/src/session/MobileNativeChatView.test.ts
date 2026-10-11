@@ -210,7 +210,7 @@ describe('MobileNativeChatView', () => {
     const row = list.props.renderItem({ item: data[index], index }) as {
       props: { children: [unknown, ReturnType<typeof createElement>] }
     }
-    return row.props.children[1]
+    return (row.props.children[1] as { props: { children: ReturnType<typeof createElement> } }).props.children // inside the pending dim (S2)
   }
 
   function banners(): ReactTestInstance[] {

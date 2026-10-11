@@ -9,6 +9,7 @@ import { rebaseMobileNativeChatPendingBaselines } from './mobile-native-chat-pen
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 import { retireLandedMobileNativeChatPending } from './mobile-native-chat-pending-retirement'
 import { pastedPhotos } from './mobile-native-chat-photo-rows'
+import { claimRowsOfRetiredOwnSends } from './native-chat-retired-send-rows'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 
 const NO_PREVIEWS: LandedImagePreviewEcho[] = []
@@ -94,15 +95,18 @@ export function storedAfterLanding(
   settledFrom: MobileNativeChatPendingMessage[],
   settled: LandedOwnSends
 ): MobileNativeChatPendingMessage[] {
-  if (stored === settledFrom) {
-    return settled.pending
-  }
-  return retireLandedMobileNativeChatPending(
-    messages,
-    rebaseMobileNativeChatPendingBaselines(messages, stored),
-    settled.landedImagePendingIds,
-    settled.receipts
-  )
+  const next =
+    stored === settledFrom
+      ? settled.pending
+      : retireLandedMobileNativeChatPending(
+          messages,
+          rebaseMobileNativeChatPendingBaselines(messages, stored),
+          settled.landedImagePendingIds,
+          settled.receipts
+        )
+  // The row that retired each of the phone's own sends, under the send's id (S1).
+  claimRowsOfRetiredOwnSends(messages, stored, next)
+  return next
 }
 
 /** The phone's previews as the chat draws them for this read: the stored ones,

@@ -2,7 +2,9 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
+import { darkColors, lightColors } from '../theme/tokens'
 import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { holdSendErrorRetry, resetSendErrorRetryForTests } from './native-chat-send-error-retry'
 import type { ChatViewStyles } from './mobile-native-chat-view-styles'
 
 vi.mock('react-native', () => ({
@@ -56,5 +58,66 @@ describe('the status line above the composer', () => {
     })
     expect(renderer!.root.findAllByType('Pressable' as never)).toHaveLength(0)
     expect(renderer!.root.findAllByType('MobileNativeChatStatusLine' as never)).toHaveLength(1)
+  })
+})
+
+// S5: a send refused before anything was written, its words back in the composer, offers Retry,
+// as the Claude app's snackbar does. Only that failure: a later one without it never inherits it.
+describe('the send-failure banner’s Retry', () => {
+  let renderer: ReactTestRenderer | null = null
+  const MESSAGE = 'Message not sent: not connected to your desktop'
+
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    resetSendErrorRetryForTests()
+  })
+
+  function render(message: string, onRetrySend: () => void, scheme: 'light' | 'dark' = 'light'): ReactTestRenderer {
+    act(() => renderer?.unmount())
+    act(() => {
+      renderer = create(
+        createElement(
+          ThemeProvider,
+          { initialPreference: scheme },
+          createElement(MobileNativeChatChromeRow, { sendErrorMessage: message, onRetrySend, styles })
+        )
+      )
+    })
+    return renderer!
+  }
+
+  const retryButton = (tree: ReactTestRenderer) =>
+    tree.root.findAllByType('Pressable').find((node) => node.props.accessibilityLabel === 'Retry sending the message')
+
+  it('offers Retry for the failure that asked for it, and sends again when tapped', () => {
+    const onRetrySend = vi.fn()
+    holdSendErrorRetry(MESSAGE, true)
+    const button = retryButton(render(MESSAGE, onRetrySend))
+    expect(button).toBeDefined()
+    act(() => button!.props.onPress())
+    expect(onRetrySend).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers none for a failure that did not ask for it', () => {
+    holdSendErrorRetry(MESSAGE, true)
+    expect(retryButton(render('Delivery unconfirmed — check chat before retrying', vi.fn()))).toBeUndefined()
+    holdSendErrorRetry('Message not sent (session changed)', false)
+    expect(retryButton(render('Message not sent (session changed)', vi.fn()))).toBeUndefined()
+  })
+
+  it('paints Retry in the danger tone of whichever theme is on', () => {
+    holdSendErrorRetry(MESSAGE, true)
+    const retryColors = (tree: ReactTestRenderer): string[] =>
+      retryButton(tree)!
+        .findAllByType('Text')
+        .flatMap((node) => (Array.isArray(node.props.style) ? node.props.style : [node.props.style]))
+        .flatMap((entry: unknown) =>
+          entry && typeof entry === 'object' && typeof (entry as { color?: unknown }).color === 'string'
+            ? [(entry as { color: string }).color]
+            : []
+        )
+    expect(retryColors(render(MESSAGE, vi.fn(), 'light'))).toContain(lightColors.danger)
+    expect(retryColors(render(MESSAGE, vi.fn(), 'dark'))).toContain(darkColors.danger)
   })
 })

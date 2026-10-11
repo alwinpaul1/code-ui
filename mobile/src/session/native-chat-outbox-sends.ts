@@ -80,7 +80,7 @@ export function findOutboxEntry(id: string | undefined): NativeChatOutboxEntry |
 export function recordOutboxSend(
   origin: MobileNativeChatSendOrigin,
   text: string,
-  extra?: { hasAttachments?: boolean; attachments?: readonly NativeChatOutboxAttachment[] }
+  extra?: { hasAttachments?: boolean; attachments?: readonly NativeChatOutboxAttachment[]; atGate?: boolean }
 ): void {
   const id = origin.outboxId
   if (!id) {
@@ -117,10 +117,32 @@ export function recordOutboxSend(
     ...(extra?.hasAttachments || attachments ? { hasAttachments: true as const } : {}),
     ...(attachments ? { attachments } : {}),
     ...(route ? { route: { ...route } } : {}),
+    ...(extra?.atGate ? { atGate: true as const } : {}),
     autoAttempts: 0
   }
   const startedAt = Date.now()
   void changeNativeChatOutbox((current) => [...current, entry]).then(() => noteSendStage('outbox', Date.now() - startedAt))
+}
+
+/** The send got past its gate (S4): its words leave the composer now, so the entry is a send's
+ *  like any other from here, kept across a restart. */
+export function passOutboxGate(id: string | undefined): void {
+  if (findOutboxEntry(id)?.atGate) {
+    void patchOutboxEntry(id!, { atGate: undefined })
+  }
+}
+
+/**
+ * The gate refused the send because the desktop could not be reached (S4). Its entry, written
+ * before the gate, is handed to the outbox to send once the link is back (releaseOutboxSend says
+ * who). Returns false when nothing could: the caller then retires it and gives the words back.
+ */
+export function releaseOutboxSendFromGate(id: string | undefined): boolean {
+  if (!findOutboxEntry(id)?.atGate) {
+    return false
+  }
+  void patchOutboxEntry(id!, { atGate: undefined, unwritten: true })
+  return releaseOutboxSend(id)
 }
 
 /** The structured operation id every attempt of this origin's entry sends, if it has one. */

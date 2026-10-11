@@ -94,6 +94,46 @@ its session (a first message), which has no transcript to look in.
   reads with its own composer and queue readers. An agent whose queue box the phone cannot read
   is never typed into by the drainer: its entries wait for their chat.
 
+### Written before the send gate (S4, 2026-10-11)
+
+A composer text send writes its entry before the send gate, marked `atGate` while its words are
+still in the composer (`native-chat-send-gate-outbox.ts`). If the gate refuses because the
+desktop could not be reached within the send's budget, the entry is handed to the outbox
+(`releaseOutboxSendFromGate`): the box empties, the bubble is drawn, the banner says "Message
+waits for your desktop: it is sent when the connection is back", and the drainer (or the chat's
+recovery) sends it once the link is up, by the same evidence-gated rules as any entry. Nothing
+was typed, so its first automatic try is not a resend. A refusal the outbox cannot see through
+(no route, no drainer) or any other refusal before a write gives the words back with a Retry
+(S5). The structured lane does the same, under the entry's operation id. Photo sends and recovery
+resends keep their own refusal paths. An app killed while a send waits at the gate leaves the
+words in the composer; its `atGate` entry is dropped when the store is read, so it is never sent
+beside them.
+
+The composer's own send looks at the screen and waits for the link in the image hook
+(`sendFollowingTheTab`) before the text send runs, so the same hand-off sits there too
+(`parkRefusedComposerSend`): a text send refused for no input box ("Claude's input box isn't on
+the desktop screen. The message will send when it is back."), no screen, an unreadable screen,
+or a desktop that never came back waits in the outbox; a dialog, a changed session or a refused
+pairing keeps the words in the composer (Retry for the dialog). A parked entry is marked
+`unwritten`: until an automatic send of it starts it reads as missing, so one parked with no
+settled transcript (offline from launch) is still sent. The words go to the outbox OR stay in
+the composer, never both: both would let a Send in the composer and the drainer each deliver it.
+
+### One id per send (S1, 2026-10-11)
+
+Every part of one press carries the outbox entry's id (`send-<ms>-<12 hex>`): the entry, the
+bubble (`pending-outbox-<id>`, for photo sends and sends waiting for a session too), the hold,
+Claude's check that it took the words (`verifyClaudeSubmit` `sendId`), and so the queue binding,
+which works on bubble ids. The terminal lane still cannot put the id on the wire, so a send is
+matched to its row by its words; what changed is that the row or prompt receipt that settled a
+send is written down under its id (`mobile/src/storage/native-chat-send-claims.ts`, AsyncStorage
+`orca:chatSendClaims`, a week, 500 claims), by every path that decides "it landed": a bubble
+retiring on its row, a hold, Claude's check, the chat's recovery and the drainer. No other send
+can then be settled by the same row or receipt, in this run or after a restart. Sends of the same
+words take rows in the order they left the phone, and a bubble still waiting for its row competes
+with a later ack-lost send (`landedHeldSends`), so the second "yes" is no longer proved delivered
+by the first one's row.
+
 ### When it gives up
 
 The entry stays in the outbox, marked failed with a reason (`failedReason`), and nothing is said

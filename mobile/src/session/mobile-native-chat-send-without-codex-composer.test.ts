@@ -258,7 +258,7 @@ describe('the real send onto a Codex terminal', () => {
       expect(outcome).toBe('rejected')
       expect(host.writes).toEqual([])
       expect(clearDraftForSend).not.toHaveBeenCalled()
-      expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL)
+      expect(report).toHaveBeenCalledExactlyOnceWith(SEND_WITHOUT_CODEX_COMPOSER_REFUSAL, { retry: true })
     }
   )
 

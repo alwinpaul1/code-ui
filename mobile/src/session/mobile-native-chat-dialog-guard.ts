@@ -273,7 +273,7 @@ export function describeScreenForLog(lines: readonly string[]): string {
   const lastRule = rules.at(-1) ?? -1
   const unindented = lines
     .slice(lastRule + 1)
-    .flatMap((row, offset) => (row.trim() !== '' && !row.startsWith('  ') ? [`${lastRule + 1 + offset}:${JSON.stringify(row.slice(0, 2))}/${row.length}`] : []))
+    .flatMap((row, offset) => (row.trim() !== '' && !row.startsWith('  ') ? [`${lastRule + 1 + offset}:${JSON.stringify(row.slice(0, 1))}/${row.length}`] : []))
   const tail = lines.slice(-6).map((row) => (row.trim() === '' ? '_' : `${JSON.stringify(row.trimStart().slice(0, 1))}${row.length - row.trimStart().length}/${row.length}`))
   return `${lines.length} rows; input rows [${inputRows.join(',')}]; rules [${rules.join(',')}]; column-0 rows under the last rule [${unindented.join(' ')}]; last rows ${tail.join(' ')}`
 }

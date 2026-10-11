@@ -36,7 +36,7 @@ import { useMobileNativeChatSendGate } from './mobile-native-chat-send-readiness
 import { useMobileNativeChatSendChips } from './use-mobile-native-chat-send-chips'
 import type { UndoNativeChatSendStart } from './mobile-native-chat-draft-send-start'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
-import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
+import type { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'; import { INPUT_BOX_REFUSALS, SEND_WAITS_FOR_DESKTOP } from './native-chat-send-gate-outbox'; import type { MobileNativeChatSendErrorDetails } from './use-mobile-native-chat-send-error'; import { noteSendStage, timeSendStage, withNativeChatSendTiming } from './native-chat-send-timing'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void
@@ -57,7 +57,8 @@ type Args = {
   readonly showToast: ShowToast
   /** Send failures go to the composer's inline banner, not the toast — the same
    *  channel the controller's own rejections use, so one failure paints once. */
-  readonly onSendError: (message: string) => void
+  /** `parkRefusedSend` hands a text send refused before any write to the outbox (parkRefusedComposerSend, S4). */
+  readonly onSendError: (message: string, details?: MobileNativeChatSendErrorDetails) => void; readonly parkRefusedSend?: (text: string) => boolean
   /** The plain text send (controller.handleNativeChatSendWithOutcome); wrapped so
    *  images ride along. The optional URIs drive the optimistic echo's thumbnails.
    *  Must preserve 'unknown': after a successful paste, an ambiguously-delivered
@@ -136,7 +137,7 @@ export function useMobileNativeChatImageAttachments({
   onSendError,
   baseSend,
   beforeImagePaste,
-  beginImageSend,
+  beginImageSend, parkRefusedSend,
   structuredNativeChat,
   refuseUnderDialog,
   hostTerminalOfTab,
@@ -238,10 +239,13 @@ export function useMobileNativeChatImageAttachments({
       const tap = { scope, deadline, text: composerText }
       const tappedAt = Date.now() // one connection-log line per send, by stage (native-chat-send-timing.ts)
       return withNativeChatSendTiming(scope, { chars: composerText.length, images: attachments.length }, () => settleSendChips(tap, async (pendingAll) => { if (pendingAll.length > 0) { noteSendStage('upload', Date.now() - tappedAt) }
-        const refuse = (message: string): false => {
-          onError?.()
-          onSendError(message)
-          return false
+        // A text send refused before any write (S4/S5): one with no input box to type into, or no
+        // desktop, waits in the outbox, which types it once the box is back; any other keeps its
+        // words in the composer with a Retry.
+        const textOnly = pendingAll.length === 0 && composerText.trim() !== ''
+        const refuse = (message: string, waits = INPUT_BOX_REFUSALS.get(message)): boolean => {
+          if (textOnly && waits && parkRefusedSend?.(composerText)) { onSendError(waits); return true }
+          onError?.(); if (textOnly && !/session changed|pairing invalid/.test(message)) { onSendError(message, { retry: true }) } else { onSendError(message) }; return false
         }
         // Says why when the budget ran out (the app was away, or the desktop slow).
         const notSent = (): string => spentSendBudgetRefusal('Message', deadline) ?? 'Message not sent'
@@ -259,7 +263,7 @@ export function useMobileNativeChatImageAttachments({
             // One read, before any paste: a dialog first, then (Claude or Codex) a screen with no input box.
             look: (client, terminal, followed) => refuseUnderDialog({ client, terminal, deadline, agent, requireComposer: !followed }),
             verify: (client, terminal) => agentComposerOnScreen({ client, terminal, agent, deadline }),
-            refuse
+            refuse, refuseUnready: (message, unready) => refuse(message, unready.missing === 'connection' ? SEND_WAITS_FOR_DESKTOP : undefined)
           },
           async ({ terminal, follow }) => {
             // Documents never paste as images: their note joins the text body, and
@@ -348,7 +352,7 @@ export function useMobileNativeChatImageAttachments({
             }
             // Nothing is written until the paste: a tab given another terminal
             // before it restarts from the top and is verified there, a switch refuses.
-            const gone = (): false | typeof SEND_REMINTED =>
+            const gone = (): boolean | typeof SEND_REMINTED =>
               follow.tabChanged() ? refuse('Message not sent (session changed)') : SEND_REMINTED
             const pasteClient = await sendGate.wait(deadline, follow.tabChanged)
             if (!pasteClient) {

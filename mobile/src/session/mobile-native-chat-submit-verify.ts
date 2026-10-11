@@ -1,6 +1,7 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { normalizeNativeChatUserText } from '../../../src/shared/native-chat-image-transcript-markers'
 import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
+import { claimNonceForSend, nonceClaimedByAnother } from '../storage/native-chat-send-claims'
 import {
   claudeSentBashTexts,
   claudeSentPromptTexts,
@@ -101,16 +102,24 @@ function beaconHasWords(
   receipts: readonly BeaconPromptReceipt[],
   seen: ReadonlySet<string>,
   text: string,
-  photos = false
+  photos = false,
+  sendId?: string
 ): boolean {
   const photoOnly = photos && normalizeNativeChatUserText(text) === ''
-  return receipts.some(
+  // A copy another send of the same words already took is that send's (S1, one id per send),
+  // and the copy that says this one went is written down under its id.
+  const copy = receipts.find(
     (receipt) =>
       !seen.has(receipt.nonce) &&
+      !nonceClaimedByAnother(receipt.nonce, sendId) &&
       (photoOnly
         ? normalizeNativeChatUserText(receipt.text) === '' && hasImageChip(receipt.text)
         : receiptCarriesWords(receipt, text))
   )
+  if (copy && sendId) {
+    claimNonceForSend(sendId, copy.nonce)
+  }
+  return copy !== undefined
 }
 
 /**
@@ -137,6 +146,8 @@ export async function verifyClaudeSubmit(args: {
   /** Copies already in the beacon before this send wrote anything: they are old
    *  prompts, and an identical older one proves nothing about this send. */
   seenNonces: ReadonlySet<string>
+  /** The send's one id (its outbox entry's): a copy another send took never verifies this one. */
+  sendId?: string
   /** The send pasted photos ahead of its words: Claude draws each as an `[Image #N]`
    *  chip in the input and in the sent prompt's row. The chips are set aside when
    *  the words are compared, and a photo-only send is told by the chips alone. */
@@ -248,7 +259,7 @@ export async function verifyClaudeSubmit(args: {
     return sawWords ? { kind: 'sent', inputOnly: true } : null
   }
   const beaconHeard = (): boolean =>
-    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text, photos)
+    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text, photos, args.sendId)
   const heardByReceipt: SubmitVerdict = { kind: 'sent', byReceipt: true }
   /** The words left the input with nothing drawn: the looks go on, for Claude's copy or its row,
    *  until the window ends (the caller does not count this alone as delivered). */

@@ -229,6 +229,8 @@ export type MobileNativeChatController = {
   /** Clears the composer as an image send starts; returns the undo for a
    *  failed paste. `images` also adds the optimistic bubble in this same call. */
   beginNativeChatImageSend: (text: string, images?: string[], imagePaths?: string[]) => UndoNativeChatSendStart | null
+  /** Hands a composer text send refused before any write to the outbox (S4); false when it cannot. */
+  parkRefusedNativeChatSend: (text: string) => boolean
   handleNativeChatSendWithOutcome: (
     text: string,
     images?: string[],

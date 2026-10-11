@@ -192,7 +192,7 @@ describe('a composer send that follows its tab, end to end', () => {
     mount(client)
     expect(await tap('rm -rf build')).toBe(false)
     expect(toNew.filter((method) => method === 'terminal.send')).toEqual([])
-    expect(onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED)
+    expect(onSendError).toHaveBeenCalledExactlyOnceWith(SEND_TERMINAL_RESTARTED, { retry: true })
   })
 
   // Opus review of the follow: closing the active terminal re-points the phone's active

@@ -205,7 +205,7 @@ describe('a structured session message sent while the relay re-dials', () => {
 
     expect(outcome).toBe('rejected')
     expect(onSendError).toHaveBeenCalledExactlyOnceWith(
-      'Message not sent: the connection to your desktop dropped and did not come back within 11 s'
+      'Message not sent: the connection to your desktop dropped and did not come back within 11 s', { retry: true }
     )
     expect(clearDraftForSend).not.toHaveBeenCalled()
     for (const link of fakeRelayLinks) {

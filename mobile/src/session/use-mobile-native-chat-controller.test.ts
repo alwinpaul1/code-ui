@@ -306,7 +306,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     })
     expect(accepted).toBe(false)
     expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent')
+    expect(onSendError).toHaveBeenCalledWith('Message not sent', { retry: true })
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
 
@@ -517,7 +517,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(await sending).toBe(false)
     expect(clientStub.sendRequest.mock.calls.filter(([method]) => method === 'terminal.send')).toEqual([])
     expect(sendWithOutcome).not.toHaveBeenCalled()
-    expect(onSendError).toHaveBeenCalledWith('Message not sent: the connection to your desktop dropped and did not come back within 11 s')
+    expect(onSendError).toHaveBeenCalledWith('Message not sent: the connection to your desktop dropped and did not come back within 11 s', { retry: true })
     // The tap asked the link to come back now instead of after its backoff.
     expect(clientStub.notifyForeground).toHaveBeenCalledWith('user-send')
   })
