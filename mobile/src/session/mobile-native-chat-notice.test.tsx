@@ -146,9 +146,12 @@ describe('a notice on screen', () => {
     return undefined
   }
 
-  it('marks a compaction as a break in the conversation, not as something said', () => {
+  // The Claude app 1.261009.20 names the boundary `ccr_context_compacted`,
+  // "Compacted conversation" (adding "· saved N tokens" only when its stream
+  // carries the pre/post token counts, which Orca's status row does not).
+  it('names a compaction "Compacted conversation", as the Claude app does, not as something said', () => {
     const tree = render(noticeMessage({ presentation: 'compaction' }))
-    expect(texts(tree.root)).toEqual(['Context compacted'])
+    expect(texts(tree.root)).toEqual(['Compacted conversation'])
     expect(texts(tree.root)).not.toContain('A readable document or notice')
   })
 
@@ -179,7 +182,7 @@ describe('a notice on screen', () => {
   it('leaves an ordinary system line exactly as it was', () => {
     const tree = render(noticeMessage({}))
     expect(texts(tree.root)).toContain('A readable document or notice')
-    expect(texts(tree.root)).not.toContain('Context compacted')
+    expect(texts(tree.root)).not.toContain('Compacted conversation')
   })
 
   it('colours the notice from the live theme, in light and in dark', () => {
