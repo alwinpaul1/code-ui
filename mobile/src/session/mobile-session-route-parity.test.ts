@@ -572,7 +572,7 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // context usedTokens /> (the ring and its sheet, moved from the composer). The title and subline
 // Txt records are unchanged. The sheets' more-actions record is now <MobileSessionHeaderMenu
 // controller />.
-const HEAD_LEAF_JSX_SHA256 = 'afb3eb5eda1c132767a3db8c33e4643fed19331292a36a66c4afd42632e89886'
+const HEAD_LEAF_JSX_SHA256 = '6337dd4da06bc46d350780ab16c5e8b00b6b8b18965962bd935d725f8feb2a39'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1167,7 +1167,9 @@ describe('mobile session route extraction parity', () => {
     // 76 since 2026-10-11 (parity gaps G9, G35): the header mounts <MobileSessionHeaderContext>,
     // the context ring and its sheet moved from the composer. The sheets' <MobileSessionHeaderMoreActionsSheet> became
     // <MobileSessionHeaderMenu controller />, which owns it and the Rename dialog: same count.
-    expect(jsx.leaf).toHaveLength(76)
+    // 75 again later on 2026-10-11: the user asked for the ring back in the composer, so the
+    // header no longer mounts <MobileSessionHeaderContext>; the menu stays.
+    expect(jsx.leaf).toHaveLength(75)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

@@ -161,11 +161,6 @@ const texts = (): ReactTestInstance[] => renderer!.root.findAll((node) => String
 const textNode = (value: string): ReactTestInstance | undefined => texts().find((node) => textOf(node) === value)
 const ring = (): ReactTestInstance | undefined =>
   renderer!.root.findAll((node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'View usage')[0]
-const arcStroke = (): unknown =>
-  ring()
-    ?.findAll((node) => String(node.type) === 'Circle')
-    .map((node) => node.props.stroke)
-    .at(-1)
 
 const context = (usedPercent: number): TerminalHudContextWindow => ({ usedPercent, usedLabel: '160.0k', windowLabel: '200.0k' })
 
@@ -204,60 +199,10 @@ describe.each([
     expect(more).toHaveLength(0)
   })
 
-  it.each([
-    [40, 'info'],
-    [75, 'warning'],
-    [89, 'warning'],
-    [90, 'danger']
-  ] as const)('puts the context ring in the header at %i percent in the theme %s colour', async (percent, token) => {
-    await mount(scheme, { context: context(percent) })
-    expect(ring(), 'the ring in the header').toBeDefined()
-    expect(ring()!.props.accessibilityValue).toEqual({ text: `${percent}% used` })
-    expect(arcStroke()).toBe(palette[token])
-  })
-
-  it('opens the context sheet from the ring as the finger lands', async () => {
+  // 2026-10-11: the user asked for the ring back in the composer, beside the +,
+  // after seeing it in the header ("Don't keep it on top").
+  it('draws no context ring in the header, even with a stated window', async () => {
     await mount(scheme, { context: context(40) })
-    await act(async () => (ring()!.props.onPressIn as () => void)())
-    expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer')).toHaveLength(1)
-  })
-
-  // Carried over from the composer's ring (849b0843), which these replaced.
-  it('still opens from a screen reader’s click, which has no press-in', async () => {
-    await mount(scheme, { context: context(40) })
-    await act(async () => (ring()!.props.onPress as () => void)())
-    expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer')).toHaveLength(1)
-  })
-
-  it('stays open when the release follows the press-in', async () => {
-    await mount(scheme, { context: context(40) })
-    await act(async () => (ring()!.props.onPressIn as () => void)())
-    await act(async () => (ring()!.props.onPress as () => void)())
-    expect(renderer!.root.findAll((node) => String(node.type) === 'BottomDrawer'), 'the release toggled the sheet shut').toHaveLength(1)
-  })
-
-  it('opens the sheet from the token count too, and the sheet says the window is unknown', async () => {
-    await mount(scheme, { usedTokens: 493_000 })
-    await act(async () => (ring()!.props.onPressIn as () => void)())
-    expect(textNode('493k used')).toBeDefined()
-  })
-
-  it('shows the tokens and no ring or percentage when the session stated no window', async () => {
-    await mount(scheme, { usedTokens: 493_000 })
-    expect(renderer!.root.findAll((node) => String(node.type) === 'Circle')).toHaveLength(0)
-    const tokens = textNode('493k')
-    expect(tokens, `tokens among ${texts().map(textOf).join(' | ')}`).toBeDefined()
-    expect(texts().some((node) => /%/.test(textOf(node)))).toBe(false)
-  })
-
-  it('shows no ring at all when nothing is known', async () => {
-    await mount(scheme, {})
-    expect(ring()).toBeUndefined()
-    expect(renderer!.root.findAll((node) => String(node.type) === 'Circle')).toHaveLength(0)
-  })
-
-  it('shows no ring over the terminal view, where the chat HUD is not reading', async () => {
-    await mount(scheme, { context: context(40), showNativeChat: false })
-    expect(ring()).toBeUndefined()
+    expect(ring(), 'a ring in the header').toBeUndefined()
   })
 })

@@ -34,7 +34,6 @@ import { Txt } from '../ui/Txt'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { sessionModelPillLabel } from './session-model-pill'
-import { MobileSessionHeaderContext } from './MobileSessionHeaderContextRing'
 import { useSessionHeaderMenu } from './use-session-header-menu'
 import {
   nativeChatKeptSessionKey,
@@ -180,13 +179,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             ) : null}
           </Pressable>
         </View>
-        {/* The context ring, where the Claude app places it: only over the chat, whose HUD reads it. */}
-        {showNativeChat ? (
-          <MobileSessionHeaderContext
-            context={controller.nativeChatController.nativeChatContextWindow}
-            usedTokens={controller.nativeChatController.nativeChatContextUsedTokens}
-          />
-        ) : null}
         {viewToggle ? (
           <MobileSessionHeaderIconButton
             accessibilityLabel={viewToggle.label}

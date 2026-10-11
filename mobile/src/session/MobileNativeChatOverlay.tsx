@@ -467,6 +467,7 @@ export function MobileNativeChatOverlay({
         micLevel={micLevel}
         dictationPaint={dictationPaint}
         onComposerCursor={onComposerCursor}
+        contextWindow={controller.nativeChatContextWindow}
         permissionMode={controller.nativeChatPermissionMode}
         onSelectPermissionMode={onSelectPermissionMode}
         agentMode={controller.nativeChatAgentMode}
