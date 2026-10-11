@@ -43,27 +43,40 @@ describe('mapping a finger touch onto the photo behind it', () => {
   })
 })
 
-describe('drawing a stroke as an SVG path', () => {
-  it('renders an empty stroke as an empty path, drawing nothing', () => {
+// The Claude app's path (com.anthropic.claude 1.261009.20, `dgh.e`, decompiled
+// 2026-10-11): moveTo the first point; for every later point a quadTo whose
+// control is the previous point and whose end is the midpoint between the two;
+// then a lineTo the last point. No point is dropped on the way, and the pen
+// has a round cap and a round join, so a stroke reads as a smooth curve, not
+// the straight segments between touch samples.
+describe('drawing a stroke as a smoothed SVG path', () => {
+  it('draws an empty stroke as an empty path, drawing nothing', () => {
     expect(markupStrokePathData({ points: [] })).toBe('')
   })
 
-  it('moves to the first point and lines through the rest, in order', () => {
+  it('curves through the midpoints of a known drag, as the Claude app does', () => {
     const stroke: MarkupStroke = {
-      points: [{ x: 0, y: 0 }, { x: 10, y: 5 }, { x: 20, y: 0 }]
+      points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 10 }]
     }
-    expect(markupStrokePathData(stroke)).toBe('M0 0 L10 5 L20 0')
+    expect(markupStrokePathData(stroke)).toBe('M0 0 Q0 0 5 0 Q10 0 10 5 Q10 10 15 10 L20 10')
   })
 
-  // The degenerate one-point case: no line is drawable, but the path must
-  // still be well-formed (a lone "M" is valid SVG and paints nothing).
-  it('draws a lone point as just a move, with no line', () => {
-    expect(markupStrokePathData({ points: [{ x: 3, y: 4 }] })).toBe('M3 4')
+  // A drag whose finger moved once: one curve that is a straight half, then
+  // the line to the end. Still a straight mark between the two touches.
+  it('draws two points as a straight mark from the first to the second', () => {
+    expect(markupStrokePathData({ points: [{ x: 0, y: 0 }, { x: 10, y: 5 }] })).toBe('M0 0 Q0 0 5 2.5 L10 5')
+  })
+
+  // The degenerate one-point case: a move and a line to the same point. With
+  // the round cap that is a dot the pen's width across, the Claude app's own
+  // result for a drag that ended on its first sample.
+  it('draws a lone point as a zero-length line, which the round cap paints as a dot', () => {
+    expect(markupStrokePathData({ points: [{ x: 3, y: 4 }] })).toBe('M3 4 L3 4')
   })
 
   it('rounds coordinates so the path stays short on a long freehand drag', () => {
     const stroke: MarkupStroke = { points: [{ x: 1.2345, y: 6.789 }, { x: 2, y: 2 }] }
-    expect(markupStrokePathData(stroke)).toBe('M1.23 6.79 L2 2')
+    expect(markupStrokePathData(stroke)).toBe('M1.23 6.79 Q1.23 6.79 1.62 4.39 L2 2')
   })
 })
 

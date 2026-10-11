@@ -20,10 +20,12 @@ export const EMPTY_MARKUP_STROKE_STATE: MarkupStrokeState = { strokes: [], redoS
 
 /** Commits a finger's finished drag to the canvas and clears the redo stack
  *  — drawing something new after an undo throws away whatever a redo would
- *  have restored, the same as any editor. A stroke with fewer than two
- *  points (a tap that never dragged) draws no visible line and is dropped. */
+ *  have restored, the same as any editor. A one-point stroke (a drag that
+ *  ended on its first sample) is kept and drawn as a dot, as the Claude app
+ *  keeps it; a plain tap never starts one, since the pan starts only past the
+ *  touch slop. A stroke with no points is dropped. */
 export function commitMarkupStroke(state: MarkupStrokeState, stroke: MarkupStroke): MarkupStrokeState {
-  if (stroke.points.length < 2) {
+  if (stroke.points.length === 0) {
     return state
   }
   return { strokes: [...state.strokes, stroke], redoStack: [] }

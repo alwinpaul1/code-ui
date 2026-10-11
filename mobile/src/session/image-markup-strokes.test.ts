@@ -69,11 +69,18 @@ describe('the markup stroke list a finger draws', () => {
     expect(redoMarkupStroke(drawn)).toBe(drawn)
   })
 
-  // A tap that never dragged has one point (or none) and draws no visible
-  // line — the Claude app's pen does not leave a dot on a tap.
-  it('drops a stroke with fewer than two points instead of committing a dot', () => {
-    const tapped = commitMarkupStroke(EMPTY_MARKUP_STROKE_STATE, { points: [{ x: 4, y: 4 }] })
-    expect(tapped).toBe(EMPTY_MARKUP_STROKE_STATE)
+  // A plain tap never starts a stroke: the pan, like the Claude app's drag
+  // detector, starts only past the touch slop. A drag that did start and
+  // ended on its first sample holds one point, and the Claude app commits it
+  // as it is (`osg` case 9, 1.261009.20): a dot the pen's width across.
+  it('commits a one-point drag as a dot, the way the Claude app keeps it', () => {
+    const dot = { points: [{ x: 4, y: 4 }] }
+    const drawn = commitMarkupStroke(EMPTY_MARKUP_STROKE_STATE, dot)
+    expect(drawn.strokes).toEqual([dot])
+    expect(resolveMarkupCloseAction(drawn)).toBe('confirm-discard')
+  })
+
+  it('drops a stroke with no points at all', () => {
     const empty = commitMarkupStroke(EMPTY_MARKUP_STROKE_STATE, { points: [] })
     expect(empty).toBe(EMPTY_MARKUP_STROKE_STATE)
   })

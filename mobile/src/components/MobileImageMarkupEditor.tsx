@@ -111,7 +111,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
 
   const commitDraft = useCallback((points: readonly MarkupPoint[]) => {
     setDraftPoints([])
-    if (points.length < 2) {
+    if (points.length === 0) {
       return
     }
     setStrokeState((state) => commitMarkupStroke(state, { points }))
@@ -288,7 +288,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
                         strokeLinejoin="round"
                       />
                     ))}
-                    {draftPoints.length > 1 ? (
+                    {draftPoints.length > 0 ? (
                       <Path
                         d={markupStrokePathData({ points: draftPoints })}
                         stroke={MARKUP_PEN_COLOR}
