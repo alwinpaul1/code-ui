@@ -526,6 +526,7 @@ export function MobileNativeChatComposer({
         showModeSheet={showModeSheet}
         onCloseModeSheet={() => setShowModeSheet(false)}
         permissionMode={permissionMode}
+        runningModel={sessionOptions?.liveModel?.model ?? null}
         onSelectPermissionMode={onSelectPermissionMode}
         agentMode={agentMode}
         onSelectAgentMode={onSelectAgentMode}

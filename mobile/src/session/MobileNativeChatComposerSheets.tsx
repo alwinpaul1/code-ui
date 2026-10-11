@@ -14,6 +14,7 @@ export function MobileNativeChatComposerSheets({
   showModeSheet,
   onCloseModeSheet,
   permissionMode,
+  runningModel = null,
   onSelectPermissionMode,
   agentMode = null,
   onSelectAgentMode,
@@ -24,6 +25,8 @@ export function MobileNativeChatComposerSheets({
   showModeSheet: boolean
   onCloseModeSheet: () => void
   permissionMode: TerminalPermissionMode | null
+  /** The model the agent says is running, which can rule Auto out. */
+  runningModel?: string | null
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   agentMode?: TerminalAgentMode | null
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
@@ -47,6 +50,7 @@ export function MobileNativeChatComposerSheets({
         <MobilePermissionModeSheet
           visible={showModeSheet}
           current={permissionMode}
+          runningModel={runningModel}
           onSelect={(mode) => {
             onCloseModeSheet()
             onSelectPermissionMode?.(mode)
