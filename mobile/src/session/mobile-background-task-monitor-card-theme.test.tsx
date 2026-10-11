@@ -22,6 +22,7 @@ vi.mock('lucide-react-native', () => ({
   CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
+  SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal'
 }))
 
@@ -72,7 +73,7 @@ describe('a Monitor on its task card, in light and dark', () => {
         </ThemeProvider>
       )
     })
-    const glyphs = renderer!.root.findAll((node) => ['Activity', 'Terminal'].includes(node.type as unknown as string))
+    const glyphs = renderer!.root.findAll((node) => ['Activity', 'Terminal', 'SquareTerminal'].includes(node.type as unknown as string))
     expect(glyphs.map((node) => node.type)).toEqual(['Activity'])
     expect(glyphs[0]!.props.color).toBe(palette.textSecondary)
     const words = renderer!.root

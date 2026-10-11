@@ -57,6 +57,7 @@ vi.mock('lucide-react-native', () => ({
   ListTree: 'ListTree',
   Sparkles: 'Sparkles',
   Square: 'Square',
+  SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
 }))
@@ -204,7 +205,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(texts).toContain('Start 200s sleep in background')
     // Both footer shells are listed now: no "+N shells in subagents" left over.
     expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
-    // A subagent's shell has no Stop: nothing can reach it.
+    // With no Stop handed to the sheet (a Codex tab, the structured lane's absence), no Stop.
     expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop Start a 120-second background sleep')).toHaveLength(0)
   })
 

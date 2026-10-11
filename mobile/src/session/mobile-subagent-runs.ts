@@ -1,4 +1,5 @@
 import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import { elapsedSince } from './mobile-background-task-captions'
 
 /**
  * When each live subagent's CURRENT run began, as far as the phone has seen.
@@ -86,4 +87,27 @@ export function observeSubagentRuns(
     }
   }
   return next
+}
+
+/** A launch the run clock saw stop and come back is more than this after
+ *  its launch; a first run's roster row starts a moment after the launch call
+ *  (SubagentStart 0.1 to 1 s later, fixtures/claude-busy-lead-tasks-2.1.296). */
+const RESUMED_RUN_MIN_GAP_MS = 10_000
+
+/** When a launched agent's CURRENT run began: its launch, unless the run clock
+ *  (`mobile-subagent-runs.ts`) watched it stop and come back later. An agent
+ *  that handed back and was woken (its own shell or reviewer finished, a
+ *  message reached it) is timed from the wake, as Claude Code's panel and the
+ *  Claude app time it: on 2026-10-11 the sheet read "56m 3s" for an agent the
+ *  Claude app showed at "50s", and the row looked like a finished one. An
+ *  unknown run start (null, absent) keeps the launch. Returns the start and the
+ *  time since it. */
+export function currentRunStart(
+  launchedAt: number | null,
+  runStart: number | null | undefined,
+  now: number
+): { startedAt: number | null; elapsedMs: number | null } {
+  const resumed = typeof runStart === 'number' && (launchedAt === null || runStart - launchedAt > RESUMED_RUN_MIN_GAP_MS)
+  const startedAt = resumed ? runStart : launchedAt
+  return { startedAt, elapsedMs: elapsedSince(startedAt, now) }
 }

@@ -25,7 +25,7 @@
 // the provenance the caller can or cannot supply, decide.
 
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { SubagentRunClock } from './mobile-subagent-runs'
+import { currentRunStart, type SubagentRunClock } from './mobile-subagent-runs'
 import {
   isTextBlock,
   isToolCallBlock,
@@ -165,7 +165,9 @@ export type BackgroundTaskKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'u
  *  unseen. `completed` and `failed` come from a notification that said so. */
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'finished'
 
-export type BackgroundTask = {
+/** `stopLabel`: what a terminal tab's Stop selects in Claude's Background dialog
+ *  (a shell's command, an agent's description; claude-background-dialog.ts). */
+export type BackgroundTask = Pick<Launch, 'stopLabel'> & {
   /** Claude's own task id — a shell's `bzp6f42la`, or a subagent's `agentId`. */
   id: string
   kind: BackgroundTaskKind
@@ -409,8 +411,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       row !== undefined && !isTeammateLifecycleId(launch.id) && notification?.timestamp != null && row.startedAt <= notification.timestamp
     const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? row !== undefined && !endedThisRun : null
     if (rosterSaysRunning === true) {
-      const startedAt = currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id))
-      running.push({ ...launch, startedAt, status: 'running', elapsedMs: elapsedSince(startedAt, now) })
+      running.push({ ...launch, ...currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id), now), status: 'running' })
       continue
     }
     if (notification) {
@@ -541,25 +542,6 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)
   return { running, finished: finished.map((entry) => entry.task) }
-}
-
-/** A launch the run clock saw stop and come back is more than this after
- *  its launch; a first run's roster row starts a moment after the launch call
- *  (SubagentStart 0.1 to 1 s later, fixtures/claude-busy-lead-tasks-2.1.296). */
-const RESUMED_RUN_MIN_GAP_MS = 10_000
-
-/** When a launched agent's CURRENT run began: its launch, unless the run clock
- *  (`mobile-subagent-runs.ts`) watched it stop and come back later. An agent
- *  that handed back and was woken (its own shell or reviewer finished, a
- *  message reached it) is timed from the wake, as Claude Code's panel and the
- *  Claude app time it: on 2026-10-11 the sheet read "56m 3s" for an agent the
- *  Claude app showed at "50s", and the row looked like a finished one. An
- *  unknown run start (null, absent) keeps the launch. */
-function currentRunStart(launchedAt: number | null, runStart: number | null | undefined): number | null {
-  if (typeof runStart !== 'number') {
-    return launchedAt
-  }
-  return launchedAt === null || runStart - launchedAt > RESUMED_RUN_MIN_GAP_MS ? runStart : launchedAt
 }
 
 /** How many background tasks are still in flight. The chat view reads this

@@ -154,8 +154,9 @@ export type SubagentActivityContext = {
 /** The sheet's tasks with each read agent's in-flight step on its row and the
  *  shells its transcript shows as rows of their own: running ones right
  *  under their agent, finished ones at the head of Finished. With no feed it
- *  returns `tasks` itself. A shell gets no Stop: a terminal tab has no stop
- *  path at all, and the structured lane, which has one, never comes here. */
+ *  returns `tasks` itself. Whether a row takes a Stop is decided after, by
+ *  what Claude's own Background dialog can select (terminal-background-task-stops.ts):
+ *  it lists a subagent's shells beside the lead's. */
 export function mergeSubagentActivity(
   tasks: BackgroundTasks,
   feeds: ReadonlyMap<string, readonly NativeChatMessage[]>,
@@ -222,8 +223,7 @@ function subagentShells(messages: readonly NativeChatMessage[], context: Subagen
     ...(context.finishedTaskIds ? { finishedTaskIds: context.finishedTaskIds } : {})
   })
   const shell = (task: BackgroundTask) => task.kind === 'shell'
-  const own = (task: BackgroundTask): BackgroundTask => ({ ...task, stoppable: false })
-  return { running: derived.running.filter(shell).map(own), finished: derived.finished.filter(shell).map(own) }
+  return { running: derived.running.filter(shell), finished: derived.finished.filter(shell) }
 }
 
 /** The listed subagent shells the footer says are over: beyond what it counts

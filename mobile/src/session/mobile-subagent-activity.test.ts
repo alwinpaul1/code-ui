@@ -84,12 +84,12 @@ describe("a background agent's row shows the step it is in, as the Claude app do
 })
 
 describe('shells started inside subagents are listed as their own rows', () => {
-  it("lists A's background sleep under A with its live time, and no Stop", () => {
+  it("lists A's background sleep under A with its live time", () => {
     const now = Date.parse('2026-10-10T18:46:35.616Z')
     const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now })
     expect(merged.running.map((task) => task.id)).toEqual([PROBE_A_AGENT, PROBE_A_SHELL, PROBE_B_AGENT])
     const shell = merged.running[1]!
-    expect(shell).toMatchObject({ kind: 'shell', title: 'Start a 120-second background sleep', status: 'running', stoppable: false })
+    expect(shell).toMatchObject({ kind: 'shell', title: 'Start a 120-second background sleep', status: 'running' })
     // Launched 18:45:15.616: 1m 20s later.
     expect(shell.elapsedMs).toBe(80_000)
   })
@@ -216,7 +216,7 @@ describe("a subagent's last shell leaves Running when the status line says it fi
       finishedTaskIds: [PROBE_B_SHELL]
     })
     expect(merged.running.map((task) => task.id)).toEqual([PROBE_A_AGENT, PROBE_B_AGENT])
-    expect(merged.finished.find((task) => task.id === PROBE_B_SHELL)).toMatchObject({ kind: 'shell', status: 'completed', stoppable: false })
+    expect(merged.finished.find((task) => task.id === PROBE_B_SHELL)).toMatchObject({ kind: 'shell', status: 'completed' })
   })
 
   it('leaves a shell running when the finished ids name other tasks, or none', () => {

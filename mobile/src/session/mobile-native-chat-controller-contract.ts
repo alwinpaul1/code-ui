@@ -1,3 +1,4 @@
+import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ScreenPeerRow } from './mobile-terminal-peer-notices'
 import type { ScreenSentPhotos } from './mobile-terminal-sent-photos'
@@ -140,11 +141,16 @@ export type MobileNativeChatController = {
   /** The host's own background-task roster on the structured lane. `undefined`
    *  leaves the tab to the transcript reader; see mobile-structured-background-tasks.ts. */
   nativeChatBackgroundTasks: AgentSessionBackgroundTaskState | null | undefined
-  /** Stops one named background task, where the roster says the host accepts it. */
+  /** Stops one named background task: the structured lane by id, where the roster says the host
+   *  accepts it; a terminal Claude tab through Claude's own Background dialog, by `target`. */
   handleNativeChatStopBackgroundTask: (
     taskId: string,
-    report?: (message: string) => void
+    report?: (message: string) => void,
+    target?: ClaudeBackgroundStopTarget
   ) => Promise<boolean>
+  /** A terminal Claude tab with a live connection: its rows take Claude's own Stop
+   *  (use-claude-terminal-task-stop.ts). */
+  nativeChatTerminalTaskStop: boolean
   /** The host connection, for the Background tasks sheet's "Status unknown" and its re-read. */
   nativeChatHostConnection: BackgroundTasksConnection
   nativeChatStreamingText?: string

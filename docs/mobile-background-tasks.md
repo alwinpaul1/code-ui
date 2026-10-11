@@ -817,7 +817,8 @@ subagents' own transcripts" in `docs/subagent-task-visibility.md`.
 From the user's screenshot of the Claude Android app's Background tasks sheet (dark):
 
 - **The card** (`MobileBackgroundTaskCard.tsx`) is darker than the sheet (`bgSunken` on the
-  drawer's `bgPanel`, in both themes), leads with the kind's glyph (a console for a shell, the
+  drawer's `bgPanel`, in both themes), leads with the kind's glyph (a terminal window, lucide
+  `SquareTerminal`, for a shell since 2026-10-11; a bare `>_` before; the
   hollow diamond for an agent, Activity for a monitor, ListTree for a workflow), puts the title in
   body text (two lines, then an ellipsis), and under it the kind and its live time ("Shell  41s",
   "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone).
@@ -860,3 +861,83 @@ transcript and the host status), so the sheet holds no load of its own that coul
 `shouldRefetchAfterReconnect`. Not changed: the status line's "N running tasks" count, which still
 reads the last roster while disconnected.
 
+
+## Stale rows on a terminal tab (2026-10-11)
+
+Reported with side-by-side screenshots of one session: the Claude app listed five running tasks,
+Code UI 0.9.127 listed agents at "56m 3s", "37m 5s" and "35m 58s" titled "Running cd
+/private/tmp/…", and four shells that had ended one to three minutes before.
+
+What the session really was (its own transcripts, Orca's persisted roster in
+`agent-hooks/last-status.json`, and the process list, read on the desk):
+
+- **The agents were running.** Orca's roster held exactly those three, and Claude Code finished
+  them later (the lead's `queue-operation` enqueues at 22:40 and after). Two of them had handed
+  back and been woken by a reviewer's message; the Claude app times a row from that wake
+  ("Fix markdown … 50s"), Code UI timed it from the launch an hour before. And the title was the
+  agent's latest tool call, answered minutes earlier, which read like finished work.
+- **The shells were subagents' shells that had ended**, and the tab had nothing to retire them
+  by: the lead was a hand-started `claude -r` (no launch flag, so no beacon, no `done=` and no
+  `run=`), each completion went to the subagent as a record Orca's reader drops, and the footer
+  showed no count, which the phone did not read as zero.
+
+What changed:
+
+- An agent row's title is the description unless a tool call is in flight
+  (`subagentStepInFlight`, `mobile-subagent-activity.ts`).
+- A launched agent the run clock (`mobile-subagent-runs.ts`) saw stop and come back more than
+  10 s after its launch is timed from the comeback (`currentRunStart`, `mobile-background-tasks.ts`).
+  Cost: the run clock's known false comebacks (a nested `claude -p` making Orca re-create rows the
+  phone saw leave) now shorten a launched agent's time too, not only a roster-only row's.
+- The footer's zero: Claude Code 2.1.296 draws "(shift+tab to cycle)" on the mode row only while
+  the row holds no task pill, and puts it back within a second of the last shell's end (every
+  capture of 2026-10-10 and 2026-10-11). That row is now read as zero shells
+  (`claude-footer-shell-count.ts`), which retires every listed shell launched more than 10 s
+  before, the lead's and the subagents'. At 40 columns and under the hint is gone even with no
+  pill (and at 28 the pill is gone with two shells running), so a row without either says nothing.
+
+Recorded live: a throwaway Claude Code 2.1.296 session in `tmux -L cuitasks`, `env -i`, the
+phone's real `--settings` flag with `CUIHUD_TTY` on a scratch file, a lead busy in a 75 s
+foreground ping while two shells and two agents ended under it
+(`fixtures/claude-busy-lead-tasks-2.1.296.ts`: the lead's and both subagents' records, the
+lead's `queue-operation` records, every beacon frame decoded, and the screens). With the beacon,
+`done=` named every id, the agents' too, and Orca's roster dropped each agent at its SubagentStop,
+so that lane was already right; the test pins it.
+
+## A Stop on a terminal tab (2026-10-11)
+
+A terminal-driven Claude tab had no Stop: stock Orca has no stop for its tasks, and Claude Code
+takes no command naming one. Claude Code's own Background dialog does, driven by its own keys
+(`claude-background-dialog.ts`, `claude-background-task-stop.ts`, `use-claude-terminal-task-stop.ts`),
+verified live against Claude Code 2.1.296, idle and with the lead working:
+
+1. With the input box located, no dialog or menu up, and the footer's mode row showing a
+   "N shells" pill and the "← for agents" hint, ↓ moves the focus onto the pill (the hint goes).
+2. Enter, only once the hint has gone: the Background dialog ("Background", "2 active shells ·
+   1 active agent", a row per task: a shell by its command, an agent by its description; "x to
+   stop · Esc to close"). With exactly one task running, Enter opens that shell's "Shell details"
+   instead.
+3. The arrows to the one row that matches, read back; `x`; the row leaves.
+4. Esc, which closes the dialog onto the input box. In the details view `x` closes it by itself,
+   and no Esc follows.
+
+Every key is sent on a screen that says where it lands. Esc goes only to the dialog, the details
+view, the focused pill or the agent panel, never to the input box (there it interrupts a working
+lead; in the dialog and on the pill it does not, checked live). Enter never goes to the input box
+(it would submit what is in it, a prompt suggestion included). Two rows that could both be the
+target (the same command twice, labels cut to one prefix) are refused. A drive holds the chat's
+terminal write lock, and Stops on one terminal run one after another (Stop all presses them
+together, agents first, since an agent's Stop needs the pill a running shell keeps up).
+
+Which rows draw a Stop (`terminal-background-task-stops.ts`): every running shell, the lead's and
+the subagents' (the dialog lists both), and every running agent while the footer shows a shells
+pill. With no pill there is no Background dialog to open from the footer: ↓ then focuses the
+agent panel, whose rows Claude retitles with its own summaries ("Running background sleep
+command"), so nothing could select an agent by its description and no Stop is drawn.
+
+Not used: ← (it moves the whole conversation into Claude's session manager and re-forks the
+session into a background daemon, seen live) and `/tasks` (typed into the input box).
+
+Limits: at 40 columns the footer drops the "← for agents" hint (at 48 it was cut to "← for…", still
+read), and then nothing is driven (the Stop says why). A multi-line command's dialog row was not captured; the row is
+matched by its first line or as a cut prefix, else refused.

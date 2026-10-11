@@ -1,0 +1,50 @@
+
+  Ran 2 shell commands
+
+⏺ Agent(Live stop agent)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+
+⏺ Agent "Live stop agent" was stopped by user
+
+⏺ Stopped.
+
+  session:ok
+
+✻ Cogitated for 21s · done 1:30 AM · 1 shell still running
+
+❯ Run Bash "ping -c 30 127.0.0.1" in the foreground, wait for it, then reply "pinged".
+
+⏺ Task "Second live lead shell" was stopped by the user
+
+  Ran 1 shell command
+
+⏺ Task "Live lead shell" was stopped by the user
+
+⏺ pinged
+
+  session:ok
+
+✻ Cooked for 32s · done 1:31 AM · 1 shell still running
+
+❯ Run Bash "sleep 300" with run_in_background true and description "Single shell", then Bash "ping -c 40
+  127.0.0.1" in the foreground and wait for it, then reply "pinged".
+
+⏺ Single shell · 4s
+  ⎿  $ ping -c 40 127.0.0.1 (4s · 6 lines)
+     (ctrl+b to run in background)
+
+✳ Flummoxing… (8s · ↓ 214 tokens)
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 6%   ◷ 5h 22% │ 2:20 AM   ▦ 7d 74% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 92% · misses 0
+  ⏵⏵ bypass permissions on · 1 shell · ← for agents

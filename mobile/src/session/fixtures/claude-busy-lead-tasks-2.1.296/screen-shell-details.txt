@@ -1,0 +1,50 @@
+❯ In one response, in parallel, no waiting: (1) Bash "sleep 400" with run_in_background true and description
+  "Live lead shell"; (2) Bash "sleep 401" with run_in_background true and description "Second live lead
+  shell"; (3) Agent with run_in_background true, description "Live stop agent", telling it to run Bash "sleep
+  402" with run_in_background true and description "Live agent shell", then run Bash "ping -c 300 127.0.0.1"
+  in the foreground, then reply done. Then reply "launched" and end your turn. Answer later notifications
+  with one word.
+
+  Ran 2 shell commands
+
+⏺ Agent(Live stop agent)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+
+⏺ Agent "Live stop agent" was stopped by user
+
+⏺ Stopped.
+
+  session:ok
+
+✻ Cogitated for 21s · done 1:30 AM · 1 shell still running
+
+❯ Run Bash "ping -c 30 127.0.0.1" in the foreground, wait for it, then reply "pinged".
+
+⏺ Task "Second live lead shell" was stopped by the user
+
+⏺ Pinging localhost 30 times · 18s
+  ⎿  $ ping -c 30 127.0.0.1 (19s · 21 lines)
+     (ctrl+b to run in background)
+
+✻ Processing… (21s · ↓ 114 tokens)
+  ⎿  Tip: Use /memory to view and manage Claude memory
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 6%   ◷ 5h 22% │ 2:20 AM   ▦ 7d 74% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Shell details
+
+  Status:   running
+  Runtime:  49s
+  Command:  sleep 400
+
+  Output:
+  No output available
+
+  ← to go back · Esc/Enter/Space to close · x to stop

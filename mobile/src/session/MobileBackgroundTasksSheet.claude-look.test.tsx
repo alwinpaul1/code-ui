@@ -33,6 +33,7 @@ vi.mock('lucide-react-native', () => ({
   CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
+  SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
 }))
@@ -156,7 +157,7 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
     it(`draws each card darker than the sheet, with the kind's glyph and its meta line (${scheme})`, async () => {
       await mount(scheme)
       expect(flatStyle(card('pnpm dev --port 8081')).backgroundColor).toBe(palette.bgSunken)
-      expect(card('pnpm dev --port 8081').findAllByType('Terminal' as never)).toHaveLength(1)
+      expect(card('pnpm dev --port 8081').findAllByType('SquareTerminal' as never)).toHaveLength(1)
       expect(card('Audit the release notes').findAllByType('Diamond' as never)).toHaveLength(1)
       const all = texts()
       expect(all).toEqual(expect.arrayContaining(['Shell', '41s', 'Agent', '13m 18s', 'Completed', 'Failed']))

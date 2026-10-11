@@ -41,7 +41,7 @@ import { useAgentStatusPrompts } from './use-agent-status-prompts'
 import { useBeaconAgentMessages } from './mobile-native-chat-agent-messages'
 import { agentHudBeaconMatches } from './hud-beacon-fields'
 import { claudeLeadTurnEnded } from './claude-lead-turn-ended'
-import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'
+import { useLastConnectedAt } from '../transport/client-context-connection-metrics'; import { useMobileNativeChatOutbox } from './use-mobile-native-chat-outbox'; import { useClaudeTerminalTaskStop } from './use-claude-terminal-task-stop'
 
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
@@ -521,10 +521,8 @@ export function useMobileNativeChatController(
   // What a closed app or an expired hold left in the outbox: resent once when safe, or handed back (use-native-chat-outbox-recovery.ts).
   const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
 
-  const structuredCancelPrompt = useNativeChatAcceptedAction(
-    activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false,
-    onSendResolved
-  )
+  // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
+  const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud })
 
   return {
     isTabChatView,
@@ -559,7 +557,7 @@ export function useMobileNativeChatController(
     nativeChatAgentStatus: activeChatTaskStatus, nativeChatSessionIdentity: activeChatSessionIdentity,
     nativeChatBackgroundTaskReport: backgroundTaskReportWithScreen,
     nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : undefined,
-    handleNativeChatStopBackgroundTask: structuredNativeChat.stopBackgroundTask, nativeChatHostConnection,
+    handleNativeChatStopBackgroundTask: activeChatStructured ? structuredNativeChat.stopBackgroundTask : (terminalTaskStop ?? structuredNativeChat.stopBackgroundTask), nativeChatTerminalTaskStop: terminalTaskStop !== undefined, nativeChatHostConnection,
     nativeChatStreamingText,
     nativeChatStreamLive,
     nativeChatStreamScopeKey: streamScopeKey,

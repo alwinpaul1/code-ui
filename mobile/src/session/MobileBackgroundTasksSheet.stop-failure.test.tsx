@@ -70,6 +70,7 @@ vi.mock('lucide-react-native', () => ({
   ListTree: 'ListTree',
   Sparkles: 'Sparkles',
   Square: 'Square',
+  SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
 }))
