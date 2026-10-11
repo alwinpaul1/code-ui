@@ -1,5 +1,14 @@
-import { isTextBlock, type NativeChatMessage, type NativeChatRole } from '../../../src/shared/native-chat-types'
+import {
+  isTextBlock,
+  isToolCallBlock,
+  isToolResultBlock,
+  type NativeChatBlock,
+  type NativeChatMessage,
+  type NativeChatRole
+} from '../../../src/shared/native-chat-types'
 import { agentMessageOf } from './mobile-native-chat-agent-messages'
+import type { NativeChatAgentRunInputs } from './mobile-native-chat-agent-run'
+import { toolRunProgress } from './mobile-native-chat-tool-run-progress'
 import { nativeChatMessageText, nativeChatReplyPlainText } from './mobile-native-chat-message-text'
 import { drawnNativeChatBlocks } from './mobile-native-chat-subagent-group-blocks'
 import { isRenderableNativeChatNotice } from './mobile-native-chat-notice-kind'
@@ -12,11 +21,81 @@ const CARRIES_ON_A_TURN: ReadonlySet<NativeChatRole> = new Set<NativeChatRole>([
 
 /** One agent turn, as its last row's actions see it. */
 export type AgentTurn = {
+  /** Whether nothing follows the turn but messages the phone sent that the
+   *  transcript has not taken yet (their echoes), so the agent's working
+   *  state is about this turn. A message sent mid-turn draws its echo after
+   *  the running turn; counting it, the turn read as old and its Copy fell
+   *  back under the running work (review of b935e72a7). */
+  isNewest: boolean
   /** The rows of the turn that draw as the agent's reply (the rows that each
    *  carried their own Copy before it moved to the turn's end), oldest first. */
   replyRows: readonly NativeChatMessage[]
   /** Whether any of those rows has words, without the Markdown pass. */
   hasProse: boolean
+  /** The reply row holding the turn's last words, if any row has words. While
+   *  the work after those words still runs, the turn's actions hang under
+   *  them, above that work, as the Claude app hangs its action row off the
+   *  turn's last assistant message with text (see trailingWorkIsRunning). */
+  proseEndId: string | undefined
+  /** The tool calls and results drawn after the turn's last words, oldest
+   *  first: the rest of that row and every later row of the turn. All of the
+   *  turn's work when no row has words; empty when the turn ends on words. */
+  trailingWork: readonly NativeChatBlock[]
+}
+
+const NO_ECHOES: ReadonlySet<string> = new Set()
+
+const isWork = (block: NativeChatBlock): boolean => isToolCallBlock(block) || isToolResultBlock(block)
+const hasWords = (block: NativeChatBlock): boolean => isTextBlock(block) && block.text.trim() !== ''
+
+/** Where a turn's last words are and what work follows them. Over the blocks
+ *  each row draws, so a roster's frozen sentence (#26125) is not words here
+ *  either; a blank text is not words, as Claude's own test is non-blank. */
+function lastWordsAndWorkAfter(replyRows: readonly NativeChatMessage[]): {
+  proseEndId: string | undefined
+  trailingWork: NativeChatBlock[]
+} {
+  const trailingWork: NativeChatBlock[] = []
+  for (let index = replyRows.length - 1; index >= 0; index -= 1) {
+    const row = replyRows[index]!
+    const drawn = drawnNativeChatBlocks(row.blocks)
+    const lastWords = drawn.findLastIndex(hasWords)
+    trailingWork.unshift(...drawn.slice(lastWords + 1).filter(isWork))
+    if (lastWords !== -1) {
+      return { proseEndId: row.id, trailingWork }
+    }
+  }
+  return { proseEndId: undefined, trailingWork }
+}
+
+/**
+ * Whether the work after a turn's last words is still going, which keeps the
+ * turn's actions under those words instead of under the work.
+ *
+ * The Claude app (com.anthropic.claude 1.261009.20) keys each turn's action
+ * row (l330.a: "Copy message", "Read aloud", thumbs) to the later of two
+ * records: the turn's last assistant message with non-blank text, and the
+ * turn's `result` (rs8.w6, built by n030.k). Tool rows never move it. The
+ * result arrives only when the turn is over, and moves the row to the end,
+ * under the work. The phone's transcript has no result record, so "the turn
+ * is over" is read from the work itself: the newest turn while the agent
+ * works on it, or work its row draws as still running (toolRunProgress: an
+ * agent or a background shell a source that will also retire it counts).
+ * Only the newest turn's working state counts: an older turn's open call was
+ * abandoned (review of b935e72a7).
+ */
+export function trailingWorkIsRunning(
+  work: readonly NativeChatBlock[],
+  { turnIsNewest, runs }: { turnIsNewest: boolean; runs: NativeChatAgentRunInputs }
+): boolean {
+  if (!work.some(isWork)) {
+    return false
+  }
+  if (turnIsNewest && runs.agentWorking) {
+    return true
+  }
+  const ownTurn = { ...runs, agentWorking: turnIsNewest && runs.agentWorking }
+  return toolRunProgress(work, ownTurn, { inNewestReply: turnIsNewest }) !== null
 }
 
 /** Whether a row draws as the agent's reply and so can carry its actions:
@@ -46,9 +125,15 @@ function drawsAsReply(message: NativeChatMessage): boolean {
  *  before the next one, or the end of the list. A turn's newest row may be a
  *  thought, which draws no actions, so the end is the last row that can; a
  *  turn with none (a lone thought) has no end. `messages` is in transcript
- *  order, oldest first. */
-export function agentTurnsByEnd(messages: readonly NativeChatMessage[]): Map<string, AgentTurn> {
+ *  order, oldest first; `echoIds` names the rows that are the phone's own
+ *  echoes of a sent message, not yet in the transcript. */
+export function agentTurnsByEnd(
+  messages: readonly NativeChatMessage[],
+  echoIds: ReadonlySet<string> = NO_ECHOES
+): Map<string, AgentTurn> {
   const turns = new Map<string, AgentTurn>()
+  // The newest row that is not an echo: a turn at or past it is the newest.
+  const lastTranscriptIndex = messages.findLastIndex((message) => !echoIds.has(message.id))
   let first = -1
   let replyRows: NativeChatMessage[] = []
   for (let index = 0; index < messages.length; index += 1) {
@@ -70,9 +155,11 @@ export function agentTurnsByEnd(messages: readonly NativeChatMessage[]): Map<str
       const end = replyRows.at(-1)
       if (end) {
         turns.set(end.id, {
+          isNewest: index >= lastTranscriptIndex,
           replyRows,
           // What the rows draw: a roster's frozen sentence is not on screen (#26125).
-          hasProse: replyRows.some((row) => nativeChatMessageText(drawnNativeChatBlocks(row.blocks)) !== '')
+          hasProse: replyRows.some((row) => nativeChatMessageText(drawnNativeChatBlocks(row.blocks)) !== ''),
+          ...lastWordsAndWorkAfter(replyRows)
         })
       }
       first = -1
