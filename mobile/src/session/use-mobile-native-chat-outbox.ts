@@ -32,6 +32,9 @@ export function useMobileNativeChatOutbox(input: {
   agent?: string | null
   terminal?: string | null
   transcriptPath?: string | null
+  /** The last prompt the tab's hooks reported, stamped on each message as it leaves so the
+   *  drainer can tell a prompt that changed to its words from one that was already there. */
+  promptBefore?: string | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
   receipts: readonly BeaconPromptReceipt[]
@@ -74,6 +77,7 @@ export function useMobileNativeChatOutbox(input: {
   const routeAgent = input.agent ?? null
   const routeTerminal = structured ? null : (input.terminal ?? null)
   const routeTranscriptPath = structured ? null : (input.transcriptPath ?? null)
+  const routePromptBefore = structured || input.promptBefore === undefined ? undefined : input.promptBefore
   useEffect(
     () =>
       draftKey && tabId && routeLane
@@ -85,10 +89,11 @@ export function useMobileNativeChatOutbox(input: {
             agent: routeAgent,
             sessionId,
             terminal: routeTerminal,
-            transcriptPath: routeTranscriptPath
+            transcriptPath: routeTranscriptPath,
+            ...(routePromptBefore === undefined ? {} : { promptBefore: routePromptBefore })
           })
         : undefined,
-    [draftKey, hostId, routeAgent, routeLane, routeTerminal, routeTranscriptPath, sessionId, tabId, worktreeId]
+    [draftKey, hostId, routeAgent, routeLane, routePromptBefore, routeTerminal, routeTranscriptPath, sessionId, tabId, worktreeId]
   )
   const send = useCallback(
     (text: string) => (structured ? sendStructured(text) : sendTerminal(text)),

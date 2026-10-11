@@ -1,7 +1,7 @@
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
 import type { NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import type { OutboxSendOutcome } from './native-chat-outbox-drain-plan'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { OUTBOX_HEADLESS_READ_MS } from './native-chat-outbox-headless'
@@ -55,7 +55,7 @@ function readSessionFence(client: RpcClient, sessionId: string): Promise<number 
 export async function sendSessionOutboxEntry(
   client: RpcClient,
   entry: NativeChatOutboxEntry
-): Promise<MobileNativeChatSendOutcome> {
+): Promise<OutboxSendOutcome> {
   const sessionId = entry.route?.sessionId
   if (!sessionId) {
     return 'rejected'
@@ -69,11 +69,12 @@ export async function sendSessionOutboxEntry(
       })
       held = true
     } catch {
-      return 'rejected'
+      // Nothing was sent: it costs the entry no attempt.
+      return 'not-now'
     }
     const fence = await readSessionFence(client, sessionId)
     if (fence === null) {
-      return 'rejected'
+      return 'not-now'
     }
     return await sendMobileStructuredAgentSessionMessage({
       client,

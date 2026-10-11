@@ -13,8 +13,8 @@ import { newNativeChatFeedToken } from './mobile-native-chat-feed-token'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { settleAfterImagePaste } from './mobile-native-chat-image-send-settle'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
-import { openMobileNativeChatSendBudget, type MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { writeChatSend } from './mobile-native-chat-send-write'
+import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
+import { CLEAR_NOT_WRITTEN, writeChatSend } from './mobile-native-chat-send-write'
 import { healMobileNativeChatStaleInput, mobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWriteForSend,
@@ -25,7 +25,8 @@ import { sessionTabsListRead } from './mobile-session-read-operations'
 import { queueBoxReadFromScreen } from './mobile-terminal-queue-read'
 import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
 import { outboxEntryLanding } from './native-chat-outbox-recovery-plan'
-import type { OutboxDrainObservation } from './native-chat-outbox-drain-plan'
+import type { OutboxDrainObservation, OutboxSendOutcome } from './native-chat-outbox-drain-plan'
+import { INPUT_STILL_HOLDS_TEXT } from './mobile-native-chat-verified-clear'
 
 /**
  * How the app-wide drainer (native-chat-outbox-drainer.ts) looks at and sends an entry with no
@@ -40,7 +41,8 @@ import type { OutboxDrainObservation } from './native-chat-outbox-drain-plan'
  *
  * 1. the worktree's tab list: the tab still there, its terminal today, the session it runs (a
  *    session the tab's own agent says it moved to is not the one the message was written for),
- *    the prompts its hooks reported since the message left, and whether the agent works;
+ *    whether its last hook prompt changed to the message's words since it left, and whether the
+ *    agent works;
  * 2. the session's transcript: the message's row after the boundary it left at, or for a photo
  *    a row naming one of the desktop paths it pasted;
  * 3. the screen: no dialog, the agent's own input box, nothing typed in it at the desk, and a
@@ -54,9 +56,6 @@ export const OUTBOX_HEADLESS_READ_MS = 8_000
 /** Transcript rows read for the landing check: far past the chat's first page, so the boundary
  *  a message left at is still in the read after a long turn. */
 export const OUTBOX_HEADLESS_TRANSCRIPT_LIMIT = 200
-/** A prompt the tab's hooks reported this long before the message left the phone still counts
- *  as its receipt: the stamp is the desktop's clock and the phone's may run ahead of it. */
-export const OUTBOX_RECEIPT_CLOCK_SKEW_MS = 60_000
 
 type TerminalTab = Extract<MobileSessionTab, { type: 'terminal' }>
 
@@ -88,30 +87,35 @@ async function readTabs(client: RpcClient, worktreeId: string): Promise<SessionT
   }
 }
 
-/** Whether a prompt the tab's hooks reported is this message's receipt. */
-export function promptIsReceiptOf(entry: NativeChatOutboxEntry, prompt: string | undefined, at: number | undefined): boolean {
-  if (!prompt || entry.normalizedText === '' || typeof at !== 'number') {
-    return false
-  }
-  if (at < entry.createdAt - OUTBOX_RECEIPT_CLOCK_SKEW_MS) {
-    return false
-  }
+function wordsMatch(entry: NativeChatOutboxEntry, prompt: string): boolean {
   const copy = normalizeReconcileText(prompt)
-  if (copy === '') {
-    return false
-  }
-  return copy === entry.normalizedText || (statusCopyMayBeCut(prompt) && entry.normalizedText.startsWith(copy))
+  return copy !== '' && (copy === entry.normalizedText || (statusCopyMayBeCut(prompt) && entry.normalizedText.startsWith(copy)))
 }
 
-function hookReceiptSeen(entry: NativeChatOutboxEntry, tab: TerminalTab): boolean {
-  const status = tab.agentStatus
-  if (!status) {
+/**
+ * Whether the tab's last hook prompt is this message's receipt: its words, and not the prompt the
+ * tab already had when the message left (`route.promptBefore`). No time stamp is used: the
+ * status's `updatedAt` is its delivery clock, which every tool ping and every relay reconnect
+ * restamps, and a later state of an earlier turn carries that turn's prompt with a fresh
+ * `startedAt` (Opus review of 4efae5746: a repeated "continue" was retired unsent). With no
+ * prompt-before known, no prompt is trusted, and the transcript decides.
+ */
+export function promptIsReceiptOf(entry: NativeChatOutboxEntry, prompt: string | undefined): boolean {
+  const before = entry.route?.promptBefore
+  if (!prompt || entry.normalizedText === '' || before === undefined) {
     return false
   }
-  if (promptIsReceiptOf(entry, status.prompt, status.updatedAt)) {
+  return wordsMatch(entry, prompt) && (before === null || before === '' || !wordsMatch(entry, before))
+}
+
+/** Words left on the agent's input line by an earlier try of this same message (its words, or
+ *  only its photo chips): the send's own clear takes them, so they are no one else's typing. */
+export function inputHoldsOnlyItsOwn(entry: NativeChatOutboxEntry, draft: string): boolean {
+  const rest = draft.replace(/\[Image #\d+\]/g, ' ').trim()
+  if (rest === '') {
     return true
   }
-  return (status.stateHistory ?? []).some((past) => promptIsReceiptOf(entry, past.prompt, past.startedAt))
+  return normalizeReconcileText(rest) === entry.normalizedText || queueRowIsPendingSend(entry.text, rest)
 }
 
 /** One snapshot of a session's transcript, or null when none came in time. */
@@ -222,7 +226,7 @@ export async function observeTerminalOutboxEntry(
   if (sessionMovedOn(entry, tab)) {
     return { kind: 'session-changed' }
   }
-  if (hookReceiptSeen(entry, tab)) {
+  if (promptIsReceiptOf(entry, tab.agentStatus?.prompt)) {
     return { kind: 'landed' }
   }
   const state = tab.agentStatus?.state
@@ -257,8 +261,10 @@ export async function observeTerminalOutboxEntry(
     return { kind: 'busy' }
   }
   const boxLive = route.agent === 'codex' ? codexComposerLive(screen.lines) : claudeComposerLive(screen.lines)
-  // Words typed at the desk: the send's clear would wipe them.
-  if (!boxLive || screen.draft.trim() !== '') {
+  // Words typed at the desk: the send's clear would wipe them. Its own words, left by an earlier
+  // try, are not someone's typing: left alone they held the entry here for a day.
+  const ownLeftover = screen.draft.trim() !== '' && inputHoldsOnlyItsOwn(entry, screen.draft)
+  if (!boxLive || (screen.draft.trim() !== '' && !ownLeftover)) {
     return { kind: 'busy' }
   }
   const queue = queueBoxReadFromScreen(screen.lines, route.agent, screen.draft)
@@ -266,33 +272,45 @@ export async function observeTerminalOutboxEntry(
     // Waiting in the agent's own queue: it goes when the turn ends.
     return { kind: 'landed' }
   }
-  if (!queue.readable || queue.entries.length > 0) {
+  // Text on Claude's input line hides its queue hint, so a line holding only this message's own
+  // leftover reads as no box at all. Claude takes its queue when a turn ends, so with the tab
+  // saying its agent is done there is none to hold the message.
+  const queueUnseenButDone = ownLeftover && !queue.readable && state === 'done' && queue.entries.length === 0
+  if ((!queue.readable && !queueUnseenButDone) || queue.entries.length > 0) {
     return { kind: 'busy' }
   }
   return { kind: 'clear', terminal: tab.terminal }
 }
 
 /** Types a terminal entry again: its photos' paths first, then its words, with the same checks a
- *  composer send makes (the dialog look, the stale-input heal, Claude's check that it took them). */
+ *  composer send makes (the dialog look, the stale-input heal, Claude's check that it took them).
+ *  'not-now' is a refusal before anything was typed (it costs the entry no attempt); 'rejected'
+ *  may have left something on the input line, never submitted. */
 export async function sendTerminalOutboxEntry(
   client: RpcClient,
   entry: NativeChatOutboxEntry,
   terminal: string
-): Promise<MobileNativeChatSendOutcome> {
+): Promise<OutboxSendOutcome> {
   const agent = entry.route?.agent ?? null
   const owner = acquireMobileNativeChatTerminalWriteForSend(terminal)
   if (!owner) {
     // Another sequence (a composer send, an answer) is typing into it: not now.
-    return 'rejected'
+    return 'not-now'
   }
   try {
     let deadline = openMobileNativeChatSendBudget()
+    // One more look at the desk's input now the terminal is ours: someone may have started
+    // typing there since the drainer's look, and the clear below would take their words.
+    const now = await readMobileNativeChatScreen({ client, terminal, deadline })
+    if (!now || (now.draft.trim() !== '' && !inputHoldsOnlyItsOwn(entry, now.draft))) {
+      return 'not-now'
+    }
     const refusal = await readSendUnderDialogRefusal({ client, terminal, agent, deadline, requireComposer: true })
     if (refusal) {
-      return 'rejected'
+      return 'not-now'
     }
     if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null, deadline }))) {
-      return 'rejected'
+      return 'not-now'
     }
     const text = entry.text.trimEnd()
     const paths = (entry.attachments ?? []).map((item) => item.path)
@@ -318,8 +336,9 @@ export async function sendTerminalOutboxEntry(
         sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms))
       })
       if (settled.refusal) {
-        // The paths are on the input line and nothing was submitted; the next try's paste
-        // clears them first (its leading Ctrl+U).
+        // The paths are on the input line and nothing was submitted. The drainer's next look
+        // takes chips alone on the line as this message's own (inputHoldsOnlyItsOwn), and that
+        // try's paste clears them first (its leading Ctrl+U).
         return 'rejected'
       }
       deadline = settled.textDeadline
@@ -339,7 +358,12 @@ export async function sendTerminalOutboxEntry(
       deviceToken: null,
       receipts: () => []
     })
-    return written.kind === 'stopped' ? 'rejected' : written.outcome
+    if (written.kind === 'stopped') {
+      // A clear that did not go typed none of the words; Claude declining them did.
+      const untyped = written.message === CLEAR_NOT_WRITTEN || written.message === INPUT_STILL_HOLDS_TEXT
+      return untyped && paths.length === 0 ? 'not-now' : 'rejected'
+    }
+    return written.outcome
   } finally {
     releaseMobileNativeChatTerminalWrite(terminal, owner)
   }

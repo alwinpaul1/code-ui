@@ -80,6 +80,9 @@ type Desktop = {
   /** Text typed at the desk's own keyboard. */
   deskDraft: string
   tabPresent: boolean
+  /** Someone starts typing at the desk once the screen has been read this many times. */
+  deskTypingAtRead: number | null
+  reads: number
   hookPrompt: { prompt: string; at: number } | null
 }
 
@@ -97,6 +100,8 @@ function desktop(submit: Submit = 'accepted'): Desktop {
     agentState: 'done',
     deskDraft: '',
     tabPresent: true,
+    deskTypingAtRead: null,
+    reads: 0,
     hookPrompt: null
   }
   const take = (text: string): void => {
@@ -148,14 +153,22 @@ function desktop(submit: Submit = 'accepted'): Desktop {
         })
       }
       if (method === 'terminal.read') {
+        tab.reads += 1
+        if (tab.deskTypingAtRead !== null && tab.reads >= tab.deskTypingAtRead) {
+          tab.deskDraft = 'typed at the desk'
+          tab.deskTypingAtRead = null
+        }
         const last = tab.submitted.at(-1)
         const lines = last !== undefined && input === '' ? submitted(last) : holding(input || tab.deskDraft)
         return ok('r', { terminal: { source: 'screen', tail: lines, draft: input === '' ? tab.deskDraft : '' } })
       }
       if (method === 'terminal.send') {
         const text = params.text ?? ''
-        if (text.includes('\x15')) {
+        const keys = [...text].every((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)
+        if (text.includes('\x15') || (keys && text.length > 0)) {
+          // A clear: Ctrl+U, or Claude's backspace burst. It takes whatever the line holds.
           input = ''
+          tab.deskDraft = ''
         }
         if (text.includes(PASTED)) {
           input = `${input}[Image #1] `
@@ -226,6 +239,13 @@ describe('a terminal chat message the phone could not confirm', () => {
 
   /** The worktree screen with ANOTHER tab shown: tab-a's chat controller is mounted, its chat view is not. */
   function mountHidden(): void {
+    mountController(false)
+  }
+  /** Tab-a's chat view on screen, its transcript settled. */
+  function mountShown(): void {
+    mountController(true)
+  }
+  function mountController(shown: boolean): void {
     function Controller(): null {
       drafts = useMobileNativeChatDrafts({
         hostId: 'h',
@@ -256,7 +276,7 @@ describe('a terminal chat message the phone could not confirm', () => {
         worktreeId: 'w',
         tabId: 'tab-a',
         sessionId: 'session-1',
-        showNativeChat: false,
+        showNativeChat: shown,
         structured: false,
         terminalChat: true,
         agent: 'claude',
@@ -419,7 +439,8 @@ describe('a terminal chat message the phone could not confirm', () => {
 
   it('takes the agent’s own prompt receipt as delivery and types nothing', async () => {
     vi.useFakeTimers()
-    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    // The tab's last prompt was another one when the message left; now it is the message.
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({ route: { ...stored({}).route!, promptBefore: 'earlier' } })]))
     tab.hookPrompt = { prompt: TEXT, at: Date.now() - 30_000 }
     startDrainer()
     await advance(60_000)
@@ -428,10 +449,11 @@ describe('a terminal chat message the phone could not confirm', () => {
     expect(logs.map((line) => line.message)).toEqual(['Message from the outbox had arrived'])
   })
 
-  it('does not take an older prompt of the same words as its receipt', async () => {
+  it('does not take the prompt the tab already had as its receipt, however fresh its stamp', async () => {
     vi.useFakeTimers()
-    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
-    tab.hookPrompt = { prompt: TEXT, at: Date.now() - 60_000 - 10 * 60_000 }
+    // "continue" twice: the second never reached the desk, and a reconnect restamped the status.
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({ route: { ...stored({}).route!, promptBefore: TEXT } })]))
+    tab.hookPrompt = { prompt: TEXT, at: Date.now() }
     startDrainer()
     await advance(60_000)
     expect(tab.submitted).toEqual([TEXT])
@@ -462,7 +484,75 @@ describe('a terminal chat message the phone could not confirm', () => {
     expect(logs).toHaveLength(1)
   })
 
-  describe('a photo send pending at an app restart', () => {
+  // ─── Found by the Opus review of 4efae5746 ───────────────────────────────────
+
+  it('clears and types again when the only words in the desk\u2019s input are its own, left by an earlier try', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({ autoAttempts: 1, lastAttemptAt: Date.now() - 60_000 })]))
+    tab.deskDraft = TEXT
+    startDrainer()
+    await advance(90_000)
+    expect(tab.submitted).toEqual([TEXT])
+    expect(nativeChatOutboxEntries()).toEqual([])
+  })
+
+  it('does not type when someone starts typing at the desk between the look and the send', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    // The look reads the screen once; the send's own looks come after it.
+    tab.deskTypingAtRead = 2
+    startDrainer()
+    await advance(5 * 60_000)
+    expect(tab.submitted).toEqual([])
+    expect(tab.deskDraft).toBe('typed at the desk')
+    expect(nativeChatOutboxEntries()[0]!.failed).toBeUndefined()
+  })
+
+  it('does not give up on a tab that is missing from one reading and back on the next', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    // Orca restarting on the desktop: the phone reconnects before the tabs are restored.
+    tab.tabPresent = false
+    startDrainer()
+    await advance(20_000)
+    tab.tabPresent = true
+    await advance(120_000)
+    expect(tab.submitted).toEqual([TEXT])
+    expect(nativeChatOutboxEntries()).toEqual([])
+  })
+
+  it('writes one line for an entry it gives up on, even when the store will not save the mark', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    tab.tabPresent = false
+    const setItem = vi.spyOn(AsyncStorage, 'setItem').mockRejectedValue(new Error('disk full'))
+    try {
+      startDrainer()
+      await advance(30 * 60_000)
+      expect(logs.filter((line) => line.level === 'warn')).toHaveLength(1)
+    } finally {
+      setItem.mockRestore()
+    }
+  })
+
+  it('keeps an on-screen chat\u2019s later text behind its older photo', async () => {
+    vi.useFakeTimers()
+    const older = stored({
+      id: 'photo',
+      createdAt: Date.now() - 90_000,
+      hasAttachments: true,
+      attachments: [{ path: PASTED, previewUri: 'file:///p.jpg' }]
+    })
+    const later = stored({ id: 'text', operationId: 'op-2', text: 'and then this', normalizedText: 'and then this', createdAt: Date.now() - 30_000 })
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([older, later]))
+    // The chat is on screen with no drainer running: the photo is the drainer's, so it waits.
+    mountShown()
+    await advance(60_000)
+    expect(tab.submitted).toEqual([])
+    expect(nativeChatOutboxEntries().map((entry) => entry.id)).toEqual(['photo', 'text'])
+  })
+
+    describe('a photo send pending at an app restart', () => {
     const photo = (): NativeChatOutboxEntry =>
       stored({ hasAttachments: true, attachments: [{ path: PASTED, previewUri: 'file:///p.jpg' }] })
 

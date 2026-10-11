@@ -33,7 +33,8 @@ It runs:
   (`OUTBOX_DRAIN_BACKOFF_MS`).
 
 It uses the UI's live client for the host, or the background watcher's, and dials nothing of its
-own: with no link up, entries wait for the next connection.
+own: with no link up, entries wait for the next connection, and the drainer looks again every
+30 s (`OUTBOX_DRAIN_NO_LINK_RECHECK_MS`) for a link nothing announced.
 
 Each entry carries what it needs to be sent with no chat on screen, stamped when it is written:
 its route (host, worktree, tab, lane, agent, session, terminal, transcript path; published by the
@@ -47,8 +48,9 @@ those still wait for their chat, as before.
   before (it reads the chat's own screen state and sends through the composer path).
 - Every other entry, and every photo entry: the drainer.
 - Each automatic send claims the entry for its length (`claimOutboxSend`), so the two never carry
-  one entry at once. Messages of one chat go in the order they were sent: the oldest entry still
-  on its way holds the ones after it. A failed entry (waiting for Retry) holds nothing back.
+  one entry at once. Messages of one chat go in the order they were sent, in both: the oldest
+  entry still on its way (carried by a send, a photo the drainer holds, or waiting for a safe
+  moment) holds the ones after it. A failed entry (waiting for Retry) holds nothing back.
 
 ### Never posted twice
 
@@ -58,23 +60,30 @@ those still wait for their chat, as before.
   (`sendSessionOutboxEntry`). It gives up after `OUTBOX_DRAIN_SESSION_ATTEMPTS` (8) tries.
 - **Terminal:** there is no id, so typing again is posting again. The drainer types only on
   evidence that the message did not arrive, read from the desktop (`observeTerminalOutboxEntry`):
-  1. the worktree's tab list (`session.tabs.list`): the tab is still there, it still runs the
-     session the message was written for (only the tab's own agent naming another session counts;
-     a nested agent's status does not), no prompt its hooks reported since the message left is the
-     message (60 s of clock skew allowed, `OUTBOX_RECEIPT_CLOCK_SKEW_MS`), and the agent is not
+  1. the worktree's tab list (`session.tabs.list`): the tab is still there (a tab missing from
+     the list counts as closed only after `OUTBOX_TAB_GONE_CONFIRM_MS`, 2 min, of readings: a
+     desktop Orca that just restarted lists none), it still runs the session the message was
+     written for (only the tab's own agent naming another session counts; a nested agent's status
+     does not), its last hook prompt did not change to the message's words since it left (the
+     prompt at the press is stamped on the entry as `route.promptBefore`; no time stamp is used,
+     since `updatedAt` is restamped by every tool ping and reconnect), and the agent is not
      working, blocked or waiting;
   2. the session's transcript (one `nativeChat.subscribe` snapshot of 200 rows): no row of it
      after the boundary it left at, and for a photo no row naming a desktop path it pasted;
   3. the screen (`terminal.read`): no dialog, the agent's own input box, nothing typed in it at
-     the desk, and a queue box it can read that does not hold the message (one that does counts as
-     delivered: it goes when the turn ends).
+     the desk (its own words left by an earlier try do not count: the send's clear takes them),
+     and a queue box it can read that does not hold the message (one that does counts as
+     delivered: it goes when the turn ends). It looks at the desk's input once more after it takes
+     the terminal's write lock, right before it types.
 
   Any read that fails or times out is "not now", never "not there". It looks only
   `OUTBOX_TERMINAL_CONFIRM_WAIT_MS` (20 s) after the last send started, so a row that lands a
-  moment late is never typed twice, and a chat on screen whose composer holds words is never typed
-  into (its live-input mirror shares the line). A refused try (a dialog, a busy terminal, a failed
-  paste) typed nothing and costs no attempt; after `OUTBOX_DRAIN_TERMINAL_ATTEMPTS` (3) typed tries
-  it gives up. A transcript that cannot show whether it arrived (its boundary is not in the read)
+  moment late is never typed twice; the chat's own recovery honours the same wait, so a message
+  the drainer just typed is neither called "Not sent" nor typed again by a Retry inside it. A chat
+  on screen whose composer holds words is never typed into (its live-input mirror shares the
+  line). A refusal before anything was typed (a dialog, the terminal busy with another input,
+  words at the desk, a session that could not be held) costs no attempt; one after something may
+  have been typed does. After `OUTBOX_DRAIN_TERMINAL_ATTEMPTS` (3) typed tries it gives up. A transcript that cannot show whether it arrived (its boundary is not in the read)
   is never typed again by itself.
 
   The reads were written against Claude Code 2.1.296 screens captured at 46 columns
@@ -101,10 +110,14 @@ out of the 200-line log before (0.9.127). Never the words: lengths, counts, the 
 ## Limits, stated plainly
 
 - A message the agent took from its queue mid-turn writes no transcript row; the drainer finds it
-  only through the tab's hook prompts (the last prompt and its state history). If several other
-  prompts came after it and pushed it out of that history, a terminal entry could be typed again.
-- An identical message sent within the clock-skew window before this one is read as this one's
-  receipt, and this one is then taken as delivered.
+  only through the tab's last hook prompt changing to its words. If another prompt came after it,
+  or it repeats the prompt the tab already had ("continue" twice), that evidence is gone, and a
+  terminal entry could be typed again. The drainer does not type while the agent works, which
+  narrows this to a message taken in the turn that just ended.
+- The drainer's clear takes words left on the desk's input line only when they are the message's
+  own; a desk user who starts typing in the instant between its last look and its clear can still
+  lose those keystrokes. While it types (a few seconds) the phone's own composer send to that tab
+  is refused with "Another input is still being sent".
 - With no link to the host at all (no screen of it open and no background watcher), entries wait
   for the next connection; the drainer does not dial.
 - A structured host that keeps answering "unknown" for an operation id ends, after 8 tries, in

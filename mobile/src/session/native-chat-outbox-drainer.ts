@@ -6,7 +6,6 @@ import {
   type NativeChatOutboxFailReason
 } from '../storage/native-chat-outbox'
 import type { RpcClient } from '../transport/rpc-client'
-import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
   claimOutboxSend,
   findOutboxEntry,
@@ -20,12 +19,17 @@ import {
   unclaimOutboxSend
 } from './native-chat-outbox-sends'
 import {
+  OUTBOX_DRAIN_NO_LINK_RECHECK_MS,
+  OUTBOX_TAB_GONE_CONFIRM_MS,
   outboxDrainBackoffMs,
   outboxDrainCandidates,
   outboxTerminalConfirmedAt,
   planOutboxDrain,
-  type OutboxDrainObservation
+  type OutboxDrainObservation,
+  type OutboxSendOutcome
 } from './native-chat-outbox-drain-plan'
+
+export type { OutboxSendOutcome }
 
 /**
  * The app-wide outbox drainer: sends every chat's waiting messages as soon as the host's link is
@@ -61,7 +65,7 @@ export type OutboxDrainDeps = {
     client: RpcClient,
     entry: NativeChatOutboxEntry,
     observation: OutboxDrainObservation
-  ) => Promise<MobileNativeChatSendOutcome>
+  ) => Promise<OutboxSendOutcome>
   setTimer: (ms: number, run: () => void) => () => void
   log: (hostId: string, line: { level: 'info' | 'warn'; message: string; detail: string }) => void
 }
@@ -73,6 +77,8 @@ type DrainState = {
   nextAt: number
   /** The drainer sent it at least once: its delivery is worth a line. */
   sent: boolean
+  /** When its tab was first seen missing from the tab list, while it stays missing. */
+  tabGoneSince?: number
 }
 
 export type OutboxDrainer = {
@@ -126,8 +132,9 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
     if (entry.failed) {
       return
     }
+    // The mark is in memory at once, saved or not, so a later pass never gives it up again.
     await patchOutboxEntry(entry.id, { failed: true, failedReason: reason })
-    if (entry.route) {
+    if (entry.route && findOutboxEntry(entry.id)?.failed) {
       deps.log(entry.route.hostId, {
         level: 'warn',
         message: 'Message not sent: it waits in its chat for Retry',
@@ -149,10 +156,20 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
   }
 
   const drainOne = async (entry: NativeChatOutboxEntry, client: RpcClient, state: DrainState): Promise<void> => {
-    const observation: OutboxDrainObservation =
+    let observation: OutboxDrainObservation =
       entry.route?.lane === 'session'
         ? { kind: 'clear' }
         : await deps.observe(client, entry).catch((): OutboxDrainObservation => ({ kind: 'busy' }))
+    // One reading without the tab is not a closed tab: a desktop Orca that just restarted lists
+    // none until it restores them, and a closed tab cannot be taken back.
+    if (observation.kind === 'tab-gone') {
+      state.tabGoneSince ??= deps.now()
+      if (deps.now() - state.tabGoneSince < OUTBOX_TAB_GONE_CONFIRM_MS) {
+        observation = { kind: 'busy' }
+      }
+    } else {
+      state.tabGoneSince = undefined
+    }
     // The entry as it is now: a row seen, a Retry or an edit in the meantime changed it.
     const current = findOutboxEntry(entry.id)
     if (!current || current.failed) {
@@ -172,6 +189,11 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
       backOff(state)
       return
     }
+    // The chat may have come on screen with words in its composer while the look ran.
+    if (current.route?.lane === 'terminal' && !outboxChatIdleOrHidden(current.draftKey)) {
+      backOff(state)
+      return
+    }
     // Counted on disk BEFORE it goes: a process that dies now leaves the next one knowing a copy
     // may be out (and, for a terminal, when it went: the confirm wait runs from then).
     const attemptAt = deps.now()
@@ -185,7 +207,7 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
       return
     }
     state.sent = true
-    let outcome: MobileNativeChatSendOutcome
+    let outcome: OutboxSendOutcome
     try {
       outcome = await deps.send(client, { ...current, autoAttempts: current.autoAttempts + 1, lastAttemptAt: attemptAt }, observation)
     } catch {
@@ -195,9 +217,9 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
       retire(current, state, 'sent')
       return
     }
-    if (outcome === 'rejected' && current.route?.lane === 'terminal') {
-      // Refused before anything was submitted (a dialog, a heal or a paste that failed, the
-      // terminal busy with another input): this try typed nothing, so it costs no attempt.
+    if (outcome === 'not-now') {
+      // Refused before anything went out: this try costs no attempt. A refusal after something
+      // may have been typed ('rejected') keeps its count (Opus review of 4efae5746).
       await patchOutboxEntry(current.id, { autoAttempts: current.autoAttempts })
     }
     backOff(state)
@@ -236,7 +258,9 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
       }
       const client = deps.connectedClient(route.hostId)
       if (!client) {
-        // Waits for the host's next connection, which kicks a fresh pass.
+        // Waits for the host's next connection, which kicks a fresh pass, and looks again now and
+        // then for a link nothing announces (the background watcher's).
+        soonest = Math.min(soonest, deps.now() + OUTBOX_DRAIN_NO_LINK_RECHECK_MS)
         continue
       }
       if (!claimOutboxSend(entry.id)) {

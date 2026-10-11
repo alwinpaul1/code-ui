@@ -215,28 +215,64 @@ describe('observeTerminalOutboxEntry', () => {
     ).toEqual({ kind: 'clear', terminal: 'term-1' })
   })
 
-  it('takes a hook prompt of its words reported after it left as its receipt', async () => {
-    expect(await observe(claude({ status: idleStatus('claude', { prompt: TEXT, updatedAt: NOW - 30_000 }) }))).toEqual({
-      kind: 'landed'
+})
+
+// Found by the Opus review of 4efae5746: `updatedAt` is the status's delivery clock (every tool
+// ping and every relay reconnect restamps it), not when the prompt came, so a repeat of the last
+// prompt ("continue", "yes") read as delivered and was retired unsent.
+describe('the tab\u2019s hook prompt as a receipt', () => {
+  const claudeDesk = (status: Record<string, unknown>): Desk => ({
+    agent: 'claude',
+    screen: CLAUDE_IDLE,
+    transcript: transcript(),
+    status,
+    tabs: 'ok'
+  })
+
+  it('does not take the prompt the tab already had when the message left, however fresh its stamp', async () => {
+    const repeat = { route: { ...entry('claude').route!, promptBefore: TEXT } }
+    expect(await observe(claudeDesk(idleStatus('claude', { prompt: TEXT, updatedAt: NOW })), repeat)).toEqual({
+      kind: 'clear',
+      terminal: 'term-1'
     })
     expect(
       await observe(
-        claude({ status: idleStatus('claude', { stateHistory: [{ state: 'working', prompt: TEXT, startedAt: NOW - 20_000 }] }) })
+        claudeDesk(idleStatus('claude', { stateHistory: [{ state: 'done', prompt: TEXT, startedAt: NOW }] })),
+        repeat
       )
+    ).toEqual({ kind: 'clear', terminal: 'term-1' })
+  })
+
+  it('does not trust a prompt at all when it does not know what the tab had before', async () => {
+    expect(await observe(claudeDesk(idleStatus('claude', { prompt: TEXT, updatedAt: NOW })))).toEqual({
+      kind: 'clear',
+      terminal: 'term-1'
+    })
+  })
+
+  it('takes a prompt that changed to its words after it left', async () => {
+    expect(
+      await observe(claudeDesk(idleStatus('claude', { prompt: TEXT, updatedAt: NOW })), {
+        route: { ...entry('claude').route!, promptBefore: 'something earlier' }
+      })
     ).toEqual({ kind: 'landed' })
   })
 })
 
 describe('promptIsReceiptOf', () => {
-  it('matches its words, a cut copy of long words, and nothing older or empty', () => {
+  const knowing = (before: string | null, overrides: Partial<NativeChatOutboxEntry> = {}) =>
+    entry('claude', { ...overrides, route: { ...entry('claude').route!, promptBefore: before } })
+
+  it('matches its words, a cut copy of long words, and nothing empty or already there', () => {
     const long = 'x'.repeat(260)
-    const longEntry = entry('claude', { text: long, normalizedText: long })
-    expect(promptIsReceiptOf(entry('claude'), TEXT, NOW)).toBe(true)
-    expect(promptIsReceiptOf(longEntry, 'x'.repeat(199), NOW)).toBe(true)
-    expect(promptIsReceiptOf(longEntry, 'x'.repeat(50), NOW)).toBe(false)
-    expect(promptIsReceiptOf(entry('claude'), TEXT, NOW - 60_000 - 61_000)).toBe(false)
-    expect(promptIsReceiptOf(entry('claude'), '', NOW)).toBe(false)
-    expect(promptIsReceiptOf(entry('claude', { text: '', normalizedText: '' }), '', NOW)).toBe(false)
+    expect(promptIsReceiptOf(knowing('earlier'), TEXT)).toBe(true)
+    expect(promptIsReceiptOf(knowing(null), TEXT)).toBe(true)
+    expect(promptIsReceiptOf(knowing('earlier', { text: long, normalizedText: long }), 'x'.repeat(199))).toBe(true)
+    expect(promptIsReceiptOf(knowing('earlier', { text: long, normalizedText: long }), 'x'.repeat(50))).toBe(false)
+    expect(promptIsReceiptOf(knowing(TEXT), TEXT)).toBe(false)
+    expect(promptIsReceiptOf(knowing('earlier'), '')).toBe(false)
+    expect(promptIsReceiptOf(knowing('earlier', { text: '', normalizedText: '' }), '')).toBe(false)
+    expect(promptIsReceiptOf(entry('claude'), TEXT)).toBe(false)
   })
 })
 
@@ -272,7 +308,7 @@ describe('sendSessionOutboxEntry', () => {
     expect(calls.map((call) => call.method)[0]).toBe('agentSession.hold')
   })
 
-  it('sends nothing and lets nothing go when the session cannot be held', async () => {
+  it('sends nothing, lets nothing go, and costs no attempt when the session cannot be held', async () => {
     const methods: string[] = []
     const desk = {
       getState: () => 'connected',
@@ -283,7 +319,7 @@ describe('sendSessionOutboxEntry', () => {
       })
     } as unknown as RpcClient
     expect(await sendSessionOutboxEntry(desk, entry('claude', { route: { ...entry('claude').route!, lane: 'session' } }))).toBe(
-      'rejected'
+      'not-now'
     )
     expect(methods).toEqual(['agentSession.hold'])
   })

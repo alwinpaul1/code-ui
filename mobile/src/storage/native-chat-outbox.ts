@@ -74,6 +74,10 @@ export type NativeChatOutboxRoute = {
   terminal: string | null
   /** The transcript file the chat read, when the host named one (terminal lane). */
   transcriptPath: string | null
+  /** The last prompt the tab's hooks had reported when the message left (terminal lane), so the
+   *  drainer only takes a prompt that CHANGED to the message's words as its receipt. Absent when
+   *  the phone did not know it: no prompt is trusted then. */
+  promptBefore?: string | null
 }
 
 export type NativeChatOutboxAttachment = { path: string; previewUri: string }
@@ -101,7 +105,8 @@ function isRoute(value: unknown): value is NativeChatOutboxRoute {
     optionalString(route.agent) &&
     optionalString(route.sessionId) &&
     optionalString(route.terminal) &&
-    optionalString(route.transcriptPath)
+    optionalString(route.transcriptPath) &&
+    (route.promptBefore === undefined || optionalString(route.promptBefore))
   )
 }
 

@@ -32,7 +32,7 @@ import {
 import { mountOutboxDrainer, resetOutboxSendsForTests } from './native-chat-outbox-sends'
 import { resetNativeChatSendTimingForTests } from './native-chat-send-timing'
 import { resetAppForegroundClockForTests } from './app-foreground-clock'
-import { createOutboxDrainer, type OutboxDrainer } from './native-chat-outbox-drainer'
+import { createOutboxDrainer, type OutboxDrainer, type OutboxSendOutcome } from './native-chat-outbox-drainer'
 import { OUTBOX_DRAIN_SESSION_ATTEMPTS } from './native-chat-outbox-drain-plan'
 
 const TEXT = 'what is in this screenshot'
@@ -392,10 +392,14 @@ describe('the drainer at the degenerate sizes', () => {
   let unmount: (() => void) | null = null
   const sends: NativeChatOutboxEntry[] = []
   const logs: unknown[] = []
+  let linkUp = true
+  let answer: OutboxSendOutcome = 'accepted'
 
   beforeEach(() => {
     sends.length = 0
     logs.length = 0
+    linkUp = true
+    answer = 'accepted'
     resetNativeChatOutboxForTests()
     resetOutboxSendsForTests()
   })
@@ -413,11 +417,11 @@ describe('the drainer at the degenerate sizes', () => {
     unmount = mountOutboxDrainer()
     drainer = createOutboxDrainer({
       now: () => Date.now(),
-      connectedClient: () => connectedClient,
+      connectedClient: () => (linkUp ? connectedClient : null),
       observe: async () => ({ kind: 'clear', terminal: 'term-1' }),
       send: async (_client, entry) => {
         sends.push(entry)
-        return 'accepted'
+        return answer
       },
       setTimer: (ms, run) => {
         const timer = setTimeout(run, ms)
@@ -504,5 +508,31 @@ describe('the drainer at the degenerate sizes', () => {
     await drainer!.idle()
     expect(sends.map((entry) => entry.id)).toEqual(['new'])
     expect(nativeChatOutboxEntries().map((entry) => entry.id)).toEqual(['legacy'])
+  })
+
+  // Found by the Opus review of 4efae5746.
+  it('sends once a link comes up that nothing announced (the background watcher\u2019s), within a minute', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    linkUp = false
+    start()
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(sends).toEqual([])
+    linkUp = true
+    await vi.advanceTimersByTimeAsync(60_000)
+    await drainer!.idle()
+    expect(sends.map((entry) => entry.id)).toEqual(['send-1'])
+  })
+
+  it('does not spend a structured entry\u2019s tries on sends that never left (a hold or fence that failed)', async () => {
+    vi.useFakeTimers()
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([stored({})]))
+    answer = 'not-now'
+    start()
+    await vi.advanceTimersByTimeAsync(30 * 60_000)
+    await drainer!.idle()
+    expect(sends.length).toBeGreaterThan(8)
+    expect(nativeChatOutboxEntries()).toEqual([expect.objectContaining({ autoAttempts: 0 })])
+    expect(nativeChatOutboxEntries()[0]!.failed).toBeUndefined()
   })
 })

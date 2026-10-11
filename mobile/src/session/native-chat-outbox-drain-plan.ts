@@ -2,7 +2,21 @@ import type {
   NativeChatOutboxEntry,
   NativeChatOutboxFailReason
 } from '../storage/native-chat-outbox'
-import { OUTBOX_MAX_RESEND_AGE_MS } from './native-chat-outbox-recovery-plan'
+import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
+import { OUTBOX_MAX_RESEND_AGE_MS, OUTBOX_TERMINAL_CONFIRM_WAIT_MS } from './native-chat-outbox-recovery-plan'
+
+export { OUTBOX_TERMINAL_CONFIRM_WAIT_MS }
+
+/** How a drainer send ended. 'not-now' is a refusal before anything went out (a session that
+ *  could not be held, a terminal busy with another input, words typed at the desk): it costs the
+ *  entry no attempt. */
+export type OutboxSendOutcome = MobileNativeChatSendOutcome | 'not-now'
+/** A tab missing from the tab list is only gone once it has stayed missing this long: a desktop
+ *  Orca that just restarted lists no tabs until it restores them. */
+export const OUTBOX_TAB_GONE_CONFIRM_MS = 2 * 60_000
+/** With no link to the host, the drainer looks again this often: a link the background watcher
+ *  opens moves no connection metric the root watches. */
+export const OUTBOX_DRAIN_NO_LINK_RECHECK_MS = 30_000
 
 /**
  * What the app-wide outbox drainer (native-chat-outbox-drainer.ts) does with one entry. Pure: the
@@ -19,11 +33,6 @@ import { OUTBOX_MAX_RESEND_AGE_MS } from './native-chat-outbox-recovery-plan'
 /** Waits between automatic tries of one entry, by how many tries in a row came to nothing; the
  *  last one repeats. A new connection or the app coming to the front starts it over. */
 export const OUTBOX_DRAIN_BACKOFF_MS = [2_000, 5_000, 15_000, 30_000, 60_000] as const
-/** A terminal entry is not looked at until this long after its last send started (the press, or
- *  the last automatic send): the row of a send whose acknowledgement was lost lands a moment
- *  later, and typing it again before then is how a message is posted twice. Matches the hold's
- *  own deadline (UNCONFIRMED_SEND_DEADLINE_MS). */
-export const OUTBOX_TERMINAL_CONFIRM_WAIT_MS = 20_000
 /** Automatic sends a structured entry gets from the drainer. Every one carries the entry's one
  *  operation id, so the host's ledger answers a repeat with the first one's result and none can
  *  post the message twice; the cap is only so a session that keeps refusing ends in "Not sent". */

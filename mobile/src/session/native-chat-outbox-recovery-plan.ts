@@ -17,6 +17,13 @@ export const OUTBOX_IDLE_SETTLE_MS = 2_000
  *  twice. (The app-wide drainer gives one up to OUTBOX_DRAIN_SESSION_ATTEMPTS, under the same id.) */
 export const OUTBOX_SESSION_AUTO_ATTEMPTS = 2
 
+/** A terminal entry is not looked at until this long after its last send started (the press, or
+ *  the last automatic send, the drainer's or the recovery's): the row of a send whose
+ *  acknowledgement was lost lands a moment later, and typing it again before then, or calling it
+ *  "Not sent" so a Retry types it, is how a message is posted twice. Matches the hold's own
+ *  deadline (UNCONFIRMED_SEND_DEADLINE_MS). */
+export const OUTBOX_TERMINAL_CONFIRM_WAIT_MS = 20_000
+
 export type OutboxLane = 'terminal' | 'session'
 
 /** Whether the transcript shows the entry: its row after its boundary, or the agent's own
@@ -82,6 +89,8 @@ export type OutboxStep =
  * - Carrying files: the app-wide drainer's to send (native-chat-outbox-drainer.ts), which knows
  *   the desktop paths they were uploaded to. One it gave up on, or one written by 0.9.128 or
  *   earlier (no paths kept), goes back into the composer.
+ * - A terminal entry typed less than OUTBOX_TERMINAL_CONFIRM_WAIT_MS ago (by this recovery or the
+ *   app-wide drainer) waits: its row may be on its way.
  * - A terminal entry a previous automatic send already went out for, or one whose boundary
  *   the read no longer reaches, is never typed again by itself: there is no server id to
  *   dedupe on, so it says "Not sent" and waits for Retry. A structured one is resent under
@@ -122,6 +131,13 @@ export function planOutboxEntry(input: {
       return entry.failed ? { kind: 'give-back', reason: 'undelivered' } : { kind: 'wait' }
     }
     return { kind: 'give-back', reason: 'attachments' }
+  }
+  if (
+    lane === 'terminal' &&
+    entry.lastAttemptAt !== undefined &&
+    now < entry.lastAttemptAt + OUTBOX_TERMINAL_CONFIRM_WAIT_MS
+  ) {
+    return { kind: 'wait' }
   }
   if (!userRetry) {
     if (entry.failed) {

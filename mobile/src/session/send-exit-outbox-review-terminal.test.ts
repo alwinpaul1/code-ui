@@ -361,7 +361,9 @@ describe('outbox regressions found in review (2026-10-10) (terminal)', () => {
     await processRestart()
     const tab = desktop()
     mount(tab.client)
-    await advance(5_000)
+    // It was typed under a minute ago: the confirm wait runs out before it is called "Not sent"
+    // (OUTBOX_TERMINAL_CONFIRM_WAIT_MS, Opus review of 4efae5746).
+    await advance(25_000)
     expect(Object.values(outbox!.deliveries)).toEqual(['failed'])
     const failedRow = Object.keys(outbox!.deliveries)[0]!
 

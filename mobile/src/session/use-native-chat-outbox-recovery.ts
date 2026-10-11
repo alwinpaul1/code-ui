@@ -216,10 +216,18 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
     if (!hydrated || !current.draftKey || !current.lane || inFlight.current) {
       return
     }
-    const mine = nativeChatOutboxEntries().filter(
-      (entry) => entry.draftKey === current.draftKey && !isOutboxSendLive(entry.id)
-    )
+    const mine = nativeChatOutboxEntries()
+      .filter((entry) => entry.draftKey === current.draftKey)
+      .sort((left, right) => left.createdAt - right.createdAt)
+    // Messages of one chat go in the order they were sent: an older one still on its way (carried
+    // by a send, the drainer's photo, or waiting for a safe moment) holds the later ones back
+    // (Opus review of 4efae5746: a text went out before the photo sent ahead of it).
+    let heldBack = false
     for (const entry of mine) {
+      if (isOutboxSendLive(entry.id)) {
+        heldBack = true
+        continue
+      }
       if (current.sendable && gap <= MAX_COUNTED_GAP_MS) {
         waited.current.set(entry.id, (waited.current.get(entry.id) ?? 0) + gap)
       }
@@ -248,9 +256,11 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       }
       if (step.kind === 'fail' && !entry.failed) {
         void patchOutboxEntry(entry.id, { failed: true })
-      } else if (step.kind === 'send') {
+      } else if (step.kind === 'send' && !heldBack) {
         void resend(entry)
         return
+      } else if ((step.kind === 'wait' || step.kind === 'send') && !entry.failed) {
+        heldBack = true
       }
     }
   }, [giveBack, hydrated, resend])
