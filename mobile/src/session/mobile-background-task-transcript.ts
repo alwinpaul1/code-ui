@@ -369,4 +369,23 @@ export function outputReadEnding(
   return { id, status }
 }
 
+/** Whether an answer can be trusted as this call's for `outputReadEnding`:
+ *  it names its call (a structured chat's), or it is a transcript's answer
+ *  that came while this was the only Bash or Read call waiting. Transcript
+ *  answers pair first in, first out, and parallel answers land in any order,
+ *  so with two reads in flight the ended task's trailer can be handed to the
+ *  running one's call (review of 59494020b). `pending` is the waiting list
+ *  before the answer takes its call. */
+export function soleOutputRead(pending: readonly PendingCall[], answer: Pick<NativeChatToolResultBlock, 'callId'>): boolean {
+  return answer.callId !== undefined || pending.filter((call) => call.name === 'Bash' || call.name === 'Read').length === 1
+}
+
+/** Whether a task's own command reads another task's output file (`tail -f
+ *  …/tasks/X.output`, an `until grep …; cat …/X.output` wait): its own output
+ *  can then hold X's end trailer while it runs on, so a read of it proves
+ *  nothing about its end (review of 59494020b). */
+export function quotesAnotherTaskOutput(command: string | undefined, id: string): boolean {
+  return [...(command ?? '').matchAll(TASK_OUTPUT_FILE)].some((match) => match[1] !== id)
+}
+
 export { INTERRUPTED }

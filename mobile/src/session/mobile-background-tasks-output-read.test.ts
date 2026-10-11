@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { deriveBackgroundTasks, type BackgroundTaskHostStatus } from './mobile-background-tasks'
 import { readTaskEvidence } from './mobile-background-task-evidence'
 import { outputReadEnding } from './mobile-background-task-transcript'
@@ -92,6 +93,57 @@ describe("a lead shell whose end only Claude Code's output file records", () => 
 
     expect(tasks.running.filter((task) => task.kind === 'shell')).toEqual([])
     expect(tasks).not.toHaveProperty('shellsInSubagents')
+  })
+})
+
+// Found by the Opus review of 59494020b. No real record of either shape exists
+// yet, so these are built in the shape of the real ones above (Claude Code
+// 2.1.296 launch sentences, a transcript's results carrying no call id).
+describe('a trailer that may belong to another task proves nothing (review of 59494020b)', () => {
+  const dir = '/private/tmp/claude-501/x/sess/tasks'
+  const launchOut = (id: string) =>
+    `Command running in background with ID: ${id}. Output is being written to: ${dir}/${id}.output. You will be notified when it completes. To check interim output, use Read on that file path.`
+  let n = 0
+  const msg = (role: 'assistant' | 'tool', blocks: NativeChatMessage['blocks'], timestamp: number): NativeChatMessage => ({
+    id: `r${++n}`,
+    role,
+    timestamp,
+    source: 'transcript',
+    blocks
+  })
+
+  it('keeps a running shell running when two reads were in flight and the ended one answered first', () => {
+    const t = 1_000_000
+    const messages: NativeChatMessage[] = [
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: { command: 'npm test', run_in_background: true, description: 'gate A' } }], t),
+      msg('tool', [{ type: 'tool-result', output: launchOut('aaaaaaaaa') }], t + 1),
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: { command: 'npm run lint', run_in_background: true, description: 'lint B' } }], t + 2),
+      msg('tool', [{ type: 'tool-result', output: launchOut('bbbbbbbbb') }], t + 3),
+      msg(
+        'assistant',
+        [
+          { type: 'tool-call', name: 'Bash', input: { command: `sleep 20; tail -3 ${dir}/aaaaaaaaa.output` } },
+          { type: 'tool-call', name: 'Bash', input: { command: `tail -3 ${dir}/bbbbbbbbb.output` } }
+        ],
+        t + 4
+      ),
+      msg('tool', [{ type: 'tool-result', output: 'lint ok\n[exited with code 0]' }], t + 5),
+      msg('tool', [{ type: 'tool-result', output: 'test 41/97 ...' }], t + 25)
+    ]
+    expect(deriveBackgroundTasks(messages, t + 60_000, null).running.map((task) => task.id)).toContain('aaaaaaaaa')
+    expect(readTaskEvidence(messages).retiredTaskIds).not.toContain('aaaaaaaaa')
+  })
+
+  it("keeps running a shell whose own command follows another task's output, though its output shows that task's trailer", () => {
+    const t = 2_000_000
+    const messages: NativeChatMessage[] = [
+      msg('assistant', [{ type: 'tool-call', name: 'Bash', input: { command: `tail -f ${dir}/xxxxxxxxx.output`, run_in_background: true, description: 'follow' } }], t),
+      msg('tool', [{ type: 'tool-result', output: launchOut('yyyyyyyyy') }], t + 1),
+      msg('assistant', [{ type: 'tool-call', name: 'Read', input: { file_path: `${dir}/yyyyyyyyy.output` } }], t + 2),
+      msg('tool', [{ type: 'tool-result', output: '     1\tbuilding\n     2\t[exited with code 0]' }], t + 3)
+    ]
+    expect(deriveBackgroundTasks(messages, t + 60_000, null).running.map((task) => task.id)).toEqual(['yyyyyyyyy'])
+    expect(readTaskEvidence(messages).retiredTaskIds).toEqual([])
   })
 })
 

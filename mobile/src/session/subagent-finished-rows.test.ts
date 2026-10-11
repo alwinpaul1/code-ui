@@ -3,6 +3,8 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 import { mergeSubagentActivity } from './mobile-subagent-activity'
 import { EMPTY_FINISHED_SUBAGENT_ROWS, keepFinishedSubagentRows } from './subagent-finished-rows'
 import { PROBE_B_AGENT, PROBE_B_STOPPED_SHELL, orcaTranscriptRows, probeBRecords, recordsThrough } from './fixtures/claude-subagent-transcripts-2.1.296'
+import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import { NESTED_AFTER_LAUNCH_UUID, NESTED_AGENT, NESTED_LAUNCHED_AT, NESTED_PARENT_AGENT, nestedParentRows } from './fixtures/claude-nested-agent-2.1.296'
 
 // The Claude app keeps a subagent's finished shells in Finished ("Run the full
 // gate  Shell  Completed", the user's screenshot of 2026-10-11) after the agent
@@ -48,6 +50,38 @@ describe("a subagent's finished shells stay in Finished after the agent hands ba
     expect(again.tasks.finished.map((task) => task.id)).toEqual(['bshell002'])
     const relisted: BackgroundTasks = { running: [{ ...done, status: 'running', elapsedMs: 0 }], finished: [] }
     expect(keepFinishedSubagentRows(first.memory, relisted, relisted).tasks.finished).toEqual([])
+  })
+
+  // Review of 59494020b: the roster snapshot can lag the parent's transcript,
+  // so a nested agent the roster does not list yet is judged finished at its
+  // launch. Kept, that row came back as "Completed" once the parent handed
+  // back, while the reviewer still ran.
+  it('never shows or keeps a nested agent as finished before it was seen running, nor keeps one seen running again', () => {
+    const PARENT_STARTED = NESTED_LAUNCHED_AT - 44 * 60_000
+    const parentRow: BackgroundTask = { id: NESTED_PARENT_AGENT, kind: 'agent', title: 'Reliable sends, never dropped', status: 'running', startedAt: PARENT_STARTED, elapsedMs: 0 }
+    const row = (id: string, startedAt: number): AgentSubagentSnapshot => ({ id, agentType: 'general-purpose', state: 'working', startedAt })
+    const lane: BackgroundTasks = { running: [parentRow], finished: [] }
+    const feed = new Map([[NESTED_PARENT_AGENT, nestedParentRows(NESTED_AFTER_LAUNCH_UUID)]])
+    const lagging = mergeSubagentActivity(lane, feed, { now: NESTED_LAUNCHED_AT + 1_000, hostSubagents: [row(NESTED_PARENT_AGENT, PARENT_STARTED)] })
+    const k1 = keepFinishedSubagentRows(EMPTY_FINISHED_SUBAGENT_ROWS, lane, lagging)
+    expect(k1.tasks.finished.some((task) => task.id === NESTED_AGENT)).toBe(false)
+
+    const listed = mergeSubagentActivity(lane, feed, {
+      now: NESTED_LAUNCHED_AT + 2_000,
+      hostSubagents: [row(NESTED_PARENT_AGENT, PARENT_STARTED), row(NESTED_AGENT, NESTED_LAUNCHED_AT + 400)]
+    })
+    const k2 = keepFinishedSubagentRows(k1.memory, lane, listed)
+    expect(k2.tasks.running.some((task) => task.id === NESTED_AGENT)).toBe(true)
+
+    const handedBack: BackgroundTasks = { running: [], finished: [{ ...parentRow, status: 'completed', elapsedMs: null }] }
+    const k3 = keepFinishedSubagentRows(k2.memory, handedBack, handedBack)
+    expect([...k3.tasks.running, ...k3.tasks.finished].some((task) => task.id === NESTED_AGENT)).toBe(false)
+
+    // Once the roster drops it while the parent is still read, it is finished, and kept.
+    const dropped = mergeSubagentActivity(lane, feed, { now: NESTED_LAUNCHED_AT + 60_000, hostSubagents: [row(NESTED_PARENT_AGENT, PARENT_STARTED)] })
+    const k4 = keepFinishedSubagentRows(k2.memory, lane, dropped)
+    expect(k4.tasks.finished.map((task) => [task.id, task.status])).toEqual([[NESTED_AGENT, 'completed']])
+    expect(keepFinishedSubagentRows(k4.memory, handedBack, handedBack).tasks.finished.map((task) => task.id)).toContain(NESTED_AGENT)
   })
 
   it('changes nothing with nothing remembered and no feed rows (no subagents)', () => {

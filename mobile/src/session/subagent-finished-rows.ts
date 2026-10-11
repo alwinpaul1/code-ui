@@ -46,6 +46,18 @@ export function keepFinishedSubagentRows(
       next = copy
     }
   }
+  // A kept row the merged list shows running again is not over: a footer
+  // reading that dipped and came back, a roster that dropped a row and listed
+  // it again. Kept, it came back as finished once its agent handed back
+  // (review of 59494020b).
+  const back = merged.running.filter((task) => next.has(task.id))
+  if (back.length > 0) {
+    const copy = new Map(next)
+    for (const task of back) {
+      copy.delete(task.id)
+    }
+    next = copy
+  }
   if (next.size > KEPT_MAX) {
     next = new Map([...next].slice(next.size - KEPT_MAX))
   }

@@ -55,6 +55,11 @@ import { subagentTranscriptTarget, type SubagentTranscriptTarget } from './mobil
  *  the agents below keep their description, as before. */
 export const SUBAGENT_WATCH_CAP = 6
 
+/** How long after its launch an agent a subagent started may be missing from
+ *  the host's roster before it is called finished: the tab snapshot that
+ *  carries its new row comes after the transcript line that launched it. */
+const NESTED_ROSTER_GRACE_MS = 30_000
+
 /** The words a running agent's row draws for one tool call: "Running <first
  *  line of the command>" for a shell call, else the chat's own running-call
  *  wording ("Running Read foo.ts", `formatActiveToolLabel`), with an MCP
@@ -256,9 +261,14 @@ function subagentWork(messages: readonly NativeChatMessage[], context: SubagentA
   // refuses a teammate spawned from inside one, and a SendMessage to one puts
   // its id in `launched`.
   const nested = (task: BackgroundTask) => task.kind === 'agent' && launched.has(task.id) && !isTeammateLifecycleId(task.id)
+  // The roster can lag the transcript: Orca adds the row at SubagentStart and
+  // the phone gets it on the next tab snapshot. A launch the roster does not
+  // list yet is not called finished in that gap (review of 59494020b: the row
+  // read "Completed" at launch, and was kept so).
+  const settled = (task: BackgroundTask) => task.startedAt === null || context.now - task.startedAt >= NESTED_ROSTER_GRACE_MS
   return {
     running: [...derived.running.filter(shell), ...judged.running.filter(nested)],
-    finished: [...derived.finished.filter(shell), ...judged.finished.filter(nested)]
+    finished: [...derived.finished.filter(shell), ...judged.finished.filter((task) => nested(task) && settled(task))]
   }
 }
 

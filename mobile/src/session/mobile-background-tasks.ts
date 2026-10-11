@@ -36,7 +36,9 @@ import {
   INTERRUPTED,
   foldWhitespace,
   outputReadEnding,
+  quotesAnotherTaskOutput,
   readLaunch,
+  soleOutputRead,
   readNotifications,
   stoppedTaskId,
   takeAnsweredCall,
@@ -231,6 +233,7 @@ export function deriveBackgroundTasks(
         // lost that background task. One that names none (a transcript's) is
         // paired by position, oldest unanswered call first, save that an
         // Agent call waits for an Agent-shaped result (`takeAnsweredCall`).
+        const soleRead = soleOutputRead(pending, block)
         const call = takeAnsweredCall(pending, block)
         const launch = call ? readLaunch(call, block.output) : null
         if (launch && !launches.has(launch.id)) {
@@ -250,10 +253,19 @@ export function deriveBackgroundTasks(
         }
         // A read of a task's own output file that shows Claude Code's end
         // trailer: on a tab with no beacon, often the only sign the phone gets
-        // that a shell ended mid-turn (`outputReadEnding`). A notification
-        // already in hand keeps its own status and summary.
-        const ended = call ? outputReadEnding(call, block) : null
-        if (ended && launches.get(ended.id)?.kind !== 'agent' && !notifications.has(ended.id)) {
+        // that a shell ended mid-turn (`outputReadEnding`). Only for a shell
+        // the window launched, read by the one read in flight, whose own
+        // command reads no other task's output (`soleOutputRead`,
+        // `quotesAnotherTaskOutput`). A notification already in hand keeps its
+        // own status and summary.
+        const ended = call && soleRead ? outputReadEnding(call, block) : null
+        const endedLaunch = ended ? launches.get(ended.id) : undefined
+        if (
+          ended &&
+          endedLaunch?.kind === 'shell' &&
+          !quotesAnotherTaskOutput(endedLaunch.stopLabel, ended.id) &&
+          !notifications.has(ended.id)
+        ) {
           notifications.set(ended.id, { status: ended.status, summary: null, at: position, timestamp: message.timestamp })
         }
         // A SendMessage that resumed a stopped agent starts a new run of it.

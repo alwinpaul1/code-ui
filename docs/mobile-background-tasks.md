@@ -1004,6 +1004,11 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
   completed, else failed; killed stopped). In this transcript it ends all four lead shells whose
   only notification was a queue-operation, and nothing that had not ended. A call naming two output
   files proves nothing: a real `cat a; tail -2 b` showed a's trailer above b's running tail.
+  After the Opus review two more guards: the answer must be the one Bash or Read in flight when it
+  landed (or name its call), since transcript answers pair first in, first out and parallel
+  answers land in any order; and the task must be a shell the window launched whose own command
+  reads no other task's output file (a `tail -f …/X.output` or an `until grep …; cat X.output`
+  wait holds X's trailer while it runs on). All four still end in this transcript.
   Fixtures: `fixtures/claude-lead-shell-output-read.ts`.
 - **No row that names nothing.** The footer count only caps the named shells now; it never pads
   "Background shell" rows. The fresh-`monitoring` placeholder ("Background shell the desk is still
@@ -1014,12 +1019,14 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
 - **An agent a subagent launched is a row.** While the sheet reads a running agent's transcript it
   also takes the agents that transcript launched, judged by the host's roster alone: running while
   Orca's roster holds the row, finished once it drops it (the reviewer's own end reaches its parent
-  as records Orca's reader drops). With no roster none is listed. One level deep: the reviewer's
-  own transcript is not read. Fixture: `fixtures/claude-nested-agent-2.1.296.ts`.
+  as records Orca's reader drops). With no roster none is listed. In its first 30 s a launch the
+  roster does not list yet is not called finished (the tab snapshot carrying its row lags the
+  transcript). One level deep: the reviewer's own transcript is not read. Fixture:
+  `fixtures/claude-nested-agent-2.1.296.ts`.
 - **A subagent's finished rows stay.** The finished shells and agents a read showed are kept for the
   session (`subagent-finished-rows.ts`, 200 rows, 8 sessions) and put back in Finished after the
   agent hands back and its read stops. A row still running at the hand-back is not kept, since its
-  end was never seen.
+  end was never seen, and a kept row that shows running again is dropped from the memory.
 - **The look, re-measured off the two screenshots** (same phone, about 2.68 px per dp): the list
   24 dp in from the screen's edges (12 dp more than the drawer gives), 24 dp between Running and
   Finished, cards 16 dp apart; section headers in the caption size and muted ink with a 1.5-stroke
@@ -1037,9 +1044,16 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
   mid-turn on a tab with no beacon and is never read again still stays running until the footer
   counts fewer shells than are named, shows its zero, or the pane goes `done`; left-behind subagent
   shells can hold off all three, as here.
-- A task whose own output prints a line that reads exactly `[exited with code N]` (it `cat`s another
-  task's finished output, say) is taken as ended when that output is read. None did in this
-  session.
+- A task whose own output prints a line that reads exactly `[exited with code N]` without naming
+  another task's output file in its command (a path built in a variable, a script that does the
+  `cat`) is taken as ended when that output is read. None did in this session.
+- A read made beside another Bash or Read in the same response proves nothing, so a lead that
+  checks two outputs at once retires neither by it.
+- With the footer padding gone, `shellsOutsideLead` counts a lead shell launched above the window
+  as a subagent's, so it retires fewer subagent shells by the footer while one runs (Opus review).
+- A Stop on a nested agent's row selects it by its description in Claude's Background dialog.
+  No capture shows that dialog listing a subagent's own subagent; if it does not, the drive refuses
+  and says why.
 - An agent launched by a subagent the sheet does not read (past the six-agent cap, or a third
   level) is not listed.
 - Kept finished rows live in memory only; a relaunched app starts with none.
