@@ -276,6 +276,33 @@ describe.each(SCHEMES)('the update card in %s', (scheme, colors: ThemeColors) =>
   })
 })
 
+// Reported 2026-10-11: while checking for updates the spinner sat at the left
+// of the dialog instead of in the middle. The header is a left-aligned column
+// for every state with an icon and a message; a state that is only a spinner
+// and a title has to centre its column.
+describe.each(SCHEMES)('a spinner state of the update card in %s', (scheme) => {
+  const SPINNER_STATES: Array<[string, DialogState]> = [
+    ['checking for updates', { kind: 'checking' }],
+    ['installing', { kind: 'installing' }]
+  ]
+  it.each(SPINNER_STATES)('%s: centres the spinner and its title in the dialog', async (_name, state) => {
+    useApkInstallStore.setState({ phase: 'installing', version: '0.9.127' })
+    const root = await renderBody(state, scheme)
+    const well = byTestId(root, 'update-status-well')
+    const header = well.parent!
+    expect(flattenStyle(header.props.style).alignItems).toBe('center')
+    expect(flattenStyle(well.props.style).alignItems).toBe('center')
+    expect(flattenStyle(well.props.style).justifyContent).toBe('center')
+    expect(well.findAllByType('ActivityIndicator' as never)).toHaveLength(1)
+    expect(flattenStyle(root.findByProps({ accessibilityRole: 'header' }).props.style).textAlign).toBe('center')
+  })
+  it('keeps the icon-and-message states left-aligned', async () => {
+    const root = await renderBody({ kind: 'up-to-date' }, scheme)
+    const header = byTestId(root, 'update-status-well').parent!
+    expect(flattenStyle(header.props.style).alignItems).toBeUndefined()
+  })
+})
+
 describe('a downloaded update whose version nobody knows yet', () => {
   // A cold start can find a downloaded APK before any check has run, with no
   // version on the native state either (review, 2026-10-10).
