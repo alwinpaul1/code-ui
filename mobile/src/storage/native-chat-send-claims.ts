@@ -157,15 +157,13 @@ export function nativeChatSendClaimWritesSettled(): Promise<void> {
   return writes
 }
 
-/** Test-only: the claims are module state. `keepStored` is a process restart; without it the
- *  stored copy goes too, so one test's claims never come back in the next (the AsyncStorage
- *  mock outlives a test). */
+/** Test-only: the claims are module state. `keepStored` is a process restart: the stored copy is
+ *  read again. Without it the store counts as read and empty, so one test's claims never come
+ *  back in the next (the AsyncStorage mock outlives a test), and the reset touches no storage
+ *  (a suite's own mock may count or refuse calls). */
 export function resetNativeChatSendClaimsForTests(options: { keepStored?: boolean } = {}): void {
   claims = new Map()
-  hydration = null
+  hydration = options.keepStored ? null : Promise.resolve()
   readRefused = false
   writes = Promise.resolve()
-  if (!options.keepStored) {
-    void AsyncStorage.removeItem(CLAIMS_KEY)
-  }
 }

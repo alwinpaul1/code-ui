@@ -119,7 +119,10 @@ describe('finding 8: tests do not inherit the previous test’s stored claims', 
     resetNativeChatSendClaimsForTests()
     await hydrateNativeChatSendClaims()
     expect(rowClaimant('u1')).toBeUndefined()
-    expect(await AsyncStorage.getItem('orca:chatSendClaims')).toBeNull()
+    // The next claim writes only what this test holds.
+    claimRowForSend('this-test', 'u2')
+    await nativeChatSendClaimWritesSettled()
+    expect(JSON.parse((await AsyncStorage.getItem('orca:chatSendClaims')) ?? '[]').map((claim: { key: string }) => claim.key)).toEqual(['u2'])
   })
 })
 
