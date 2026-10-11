@@ -105,14 +105,14 @@ describe('checking that Claude took a photo send the host acked', () => {
   it('says unknown, never sent, while the chips and the caption are still in the input after the whole window', async () => {
     const s = scene([holding(3, 'what is wrong here')])
 
-    await expect(verifyPhotos(s, 'what is wrong here')).resolves.toEqual({ kind: 'unknown' })
+    await expect(verifyPhotos(s, 'what is wrong here')).resolves.toEqual({ kind: 'unknown', stillTyped: true })
     expect(s.clock()).toBeGreaterThanOrEqual(4_500)
   })
 
   it('says unknown while a lone chip is still in the input of a photo-only send', async () => {
     const s = scene([holding(1, '')])
 
-    await expect(verifyPhotos(s, '')).resolves.toEqual({ kind: 'unknown' })
+    await expect(verifyPhotos(s, '')).resolves.toEqual({ kind: 'unknown', stillTyped: true })
   })
 
   it('does not take an older photo prompt row for this send when the caption differs', async () => {

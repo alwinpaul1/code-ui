@@ -129,7 +129,7 @@ describe('checking that Claude took a message the host acked', () => {
     const lines = EMPTY_COMPOSER.map((row) => (row === '❯\u00a0' ? '❯ check the build' : row))
     const s = scene([{ lines: [...lines.slice(0, 2), ...lines.slice(2)] }])
 
-    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown', stillTyped: true })
   })
 
   it('takes no look before the Enter has had time to land', async () => {
@@ -153,7 +153,7 @@ describe('checking that Claude took a message the host acked', () => {
     // seconds later. The words in the input are no evidence of a lost Enter.
     const s = scene([holding('check the build')])
 
-    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown' })
+    await expect(verify(s, 'check the build')).resolves.toEqual({ kind: 'unknown', stillTyped: true })
 
     expect(s.clock()).toBeGreaterThanOrEqual(SUBMIT_VERIFY_WINDOW_MS)
     expect(
@@ -164,7 +164,7 @@ describe('checking that Claude took a message the host acked', () => {
   it('keeps waiting while the draft Orca published still holds the words', async () => {
     const s = scene([{ lines: composerWithTextInDraft(), draft: INCIDENT_MESSAGE }])
 
-    await expect(verify(s, INCIDENT_MESSAGE)).resolves.toEqual({ kind: 'unknown' })
+    await expect(verify(s, INCIDENT_MESSAGE)).resolves.toEqual({ kind: 'unknown', stillTyped: true })
   })
 
   it('calls the send sent once the words are gone, whatever else the input shows (a prompt suggestion, text from the desk)', async () => {
@@ -183,7 +183,7 @@ describe('checking that Claude took a message the host acked', () => {
     const long = 'word '.repeat(80).trim()
     const s = scene([{ lines: composerWithTextInRows(long, 40) }])
 
-    await expect(verify(s, long)).resolves.toEqual({ kind: 'unknown' })
+    await expect(verify(s, long)).resolves.toEqual({ kind: 'unknown', stillTyped: true })
   })
 
   it('says unknown, and holds the window open, when a dialog stands where the composer was', async () => {
@@ -235,7 +235,7 @@ describe('checking that Claude took a message the host acked', () => {
           receipts: () => [receipt('n1', 'hello')],
           seenNonces: new Set(['n1'])
         })
-      ).resolves.toEqual({ kind: 'unknown' })
+      ).resolves.toEqual({ kind: 'unknown', stillTyped: true })
     })
 
     it('ignores a copy of other words', async () => {
@@ -243,7 +243,7 @@ describe('checking that Claude took a message the host acked', () => {
 
       await expect(
         verify(s, 'hello', { receipts: () => [receipt('n2', 'goodbye')] })
-      ).resolves.toEqual({ kind: 'unknown' })
+      ).resolves.toEqual({ kind: 'unknown', stillTyped: true })
     })
 
     it('takes a cut copy as the start of the words', async () => {

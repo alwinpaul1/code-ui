@@ -138,7 +138,10 @@ describe('a photo send that Claude did not take is not shown as sent', () => {
     expect(r.sent).toBe(true) // held for the transcript, as a text send is
     expect(r.undo).not.toHaveBeenCalled()
     expect(hook!.attachments).toEqual([])
-    expect(r.calls.filter((c) => c.method === 'terminal.send' && c.params.enter === true)).toHaveLength(1)
+    // The caption with its Return, then one more Return alone when the words stayed in the input
+    // (a Return Claude dropped while it read the photos, 2026-10-11); never the words twice.
+    const enters = r.calls.filter((c) => c.method === 'terminal.send' && c.params.enter === true)
+    expect(enters.map((c) => c.params.text)).toEqual([CAPTION, ''])
     // The photos may still be on the desktop line, so the next send clears it first.
     expect(isMobileNativeChatInputStale('term-1')).toBe(true)
   })
