@@ -110,7 +110,7 @@
           "image": "./assets/splash-icon.png",
           "backgroundColor": "#F3F1EA",
           "dark": {
-            "image": "./assets/splash-icon.png",
+            "image": "./assets/splash-icon-dark.png",
             "backgroundColor": "#1A1917"
           }
         }

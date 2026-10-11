@@ -22,7 +22,6 @@ src/components/PickerModal.accessibility.test.ts
 src/components/WorktreeAgentList.test.tsx
 src/components/account-usage-state.test.ts
 src/components/agent-monitoring-indicators.test.ts
-src/components/app-logo-assets.test.ts
 src/components/bottom-drawer-close-lifecycle.test.ts
 src/components/bottom-drawer-window-handback.test.ts
 src/components/codex-reset-credit-capability.test.ts

@@ -31,11 +31,10 @@ describe('the brand mark', () => {
     )
   }
 
-  it('draws the tile with the knot cut through it, in the brand red', () => {
+  it('draws the tile with the knot cut through it, one path', () => {
     const tree = render(createElement(AppLogo))
     const path = tree.root.findByType('Path')
     expect(path.props.d).toBe(APP_LOGO_PATH)
-    expect(path.props.fill).toBe(brand.red)
     // One closed outline: the knot is concavity in the tile, not holes, so a
     // single fill colour is the whole mark.
     expect(tree.root.findAllByType('Path')).toHaveLength(1)
@@ -49,26 +48,28 @@ describe('the brand mark', () => {
     expect(tree.root.findByType('Path').props.fill).toBe('#336699')
   })
 
-  it('keeps the brand red in light and in dark, and reads on both canvases', () => {
-    // The mark stopped following the text colour with the 2026-09-17 brand
-    // refresh: an app icon is the same red on every wallpaper. What changes
-    // between schemes is what shows through the knot, so the red must clear
-    // 3:1 (WCAG non-text) on every surface it is drawn over in either scheme.
-    for (const preference of ['light', 'dark'] as const) {
+  // 2026-10-11: the launcher icon went black with a white knot (option E), and
+  // the user asked for the in-app mark to follow: black in light mode, white
+  // in dark mode, where a black tile would vanish. The knot is cut through, so
+  // the canvas shows in it and the mark reads as tile-plus-knot in both.
+  it('is black in light mode and white in dark mode, and reads on every surface', () => {
+    for (const [preference, expected] of [
+      ['light', brand.markLight],
+      ['dark', brand.markDark]
+    ] as const) {
       const tree = themed(preference)
-      expect(tree.root.findByType('Path').props.fill, preference).toBe(brand.red)
+      expect(tree.root.findByType('Path').props.fill, preference).toBe(expected)
       act(() => tree.unmount())
       renderer = null
     }
-    for (const [scheme, colors] of [
-      ['light', lightColors],
-      ['dark', darkColors]
+    expect(brand.markLight).toBe('#141414')
+    expect(brand.markDark).toBe('#FFFFFF')
+    for (const [scheme, colors, mark] of [
+      ['light', lightColors, brand.markLight],
+      ['dark', darkColors, brand.markDark]
     ] as const) {
       for (const surface of [colors.bg, colors.bgPanel, colors.bgRaised]) {
-        expect(
-          contrastRatio(brand.red, surface),
-          `${scheme} ${surface}`
-        ).toBeGreaterThanOrEqual(3)
+        expect(contrastRatio(mark, surface), `${scheme} ${surface}`).toBeGreaterThanOrEqual(3)
       }
     }
   })

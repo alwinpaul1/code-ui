@@ -43,9 +43,10 @@ Outputs, all overwritten:
                                  in an 80 px live area. Android draws small
                                  icons as an alpha mask, so any colour here
                                  becomes a white blob.
-  assets/splash-icon.png         1024 tile with transparent corners and knot,
-                                 so either splash background shows through.
-  assets/favicon.png             48, same as the splash.
+  assets/splash-icon.png         1024 black tile, transparent corners and knot,
+                                 for the light splash.
+  assets/splash-icon-dark.png    1024 the same in white, for the dark splash.
+  assets/favicon.png             48, same as the light splash.
 """
 from __future__ import annotations
 
@@ -63,8 +64,8 @@ RED = "#F11924"  # the art's dominant colour, sampled (241, 25, 36)
 # knot at 80% so it has room, with a soft shadow under it. A white sheen at the
 # top left was dropped the same day: the user saw it as a white shade on the
 # icon in the app drawer.
-# The splash and the in-app mark stay the red cut-out tile: one splash asset
-# serves both splash backgrounds, where black would vanish on the dark one.
+# The splash and the in-app mark are the cut-out tile in black on light and
+# white on dark (2026-10-11), so the splash has one image per scheme.
 ICON_TILE = "#141414"  # the adaptive icon's flat fallback under its image
 ICON_TOP, ICON_BOTTOM = "#2A2A2A", "#050505"
 ICON_KNOT_SCALE = 0.8
@@ -299,9 +300,13 @@ def main() -> int:
     notif_box = f"{cx - units / 2:.2f} {cy - units / 2:.2f} {units:.2f} {units:.2f}"
     render(svg(notif_box, knot_svg_body(0, WHITE)), "assets/notification-icon.png", 96)
 
-    # Splash and favicon: the tile as drawn, corners and knot transparent.
-    render(svg(square, tile), "assets/splash-icon.png", 1024)
-    render(svg(square, tile), "assets/favicon.png", 48)
+    # Splash and favicon: the tile as drawn, corners and knot transparent, in
+    # the mark's colour for each scheme (tokens.ts brand.markLight/markDark).
+    black_tile = f'<path fill="{ICON_TILE}" d="{path}"/>'
+    white_tile = f'<path fill="{WHITE}" d="{path}"/>'
+    render(svg(square, black_tile), "assets/splash-icon.png", 1024)
+    render(svg(square, white_tile), "assets/splash-icon-dark.png", 1024)
+    render(svg(square, black_tile), "assets/favicon.png", 48)
     return 0
 
 

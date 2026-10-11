@@ -163,16 +163,19 @@ export const darkColors: ThemeColors = {
   alertScrim: 'rgba(0, 0, 0, 0.28)'
 }
 
-/** The brand mark's red, the same in BOTH schemes on purpose: it is the app
- *  icon's colour, not a surface, and the mark is drawn with its knot cut
- *  through so the canvas shows in the gaps instead of a second tone. It reads
- *  at 3:1 or better on every standard surface of either scheme (AppLogo.test).
- *  Sampled from assets/brand/mark-source.webp (241, 25, 36); app.json's
+/** The brand red, now the notification tint (the mark itself is black or
+ *  white per scheme, below). Sampled from assets/brand/mark-source.webp (241, 25, 36); app.json's
  *  adaptive-icon background and notification tint carry the same value, pinned
  *  by app-logo-assets.test.ts. Regenerate the icons with
  *  scripts/build-brand-assets.py if it ever moves. */
 export const brand = {
-  red: '#F11924'
+  red: '#F11924',
+  /** The in-app mark and the splash tile, per scheme (2026-10-11, following
+   *  the launcher icon to black): black on light surfaces, white on dark ones,
+   *  where black would vanish. The light value is the launcher tile's flat
+   *  colour. app-logo-assets.test.ts pins the splash PNGs to these. */
+  markLight: '#141414',
+  markDark: '#FFFFFF'
 } as const
 
 /** Instrument Sans is the only UI face. Weights map to loaded font names, since

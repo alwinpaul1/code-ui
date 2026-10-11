@@ -81,19 +81,6 @@ describe('the notification icon', () => {
   })
 })
 
-/**
- * The splash tile is the one asset that must work over TWO backgrounds, so it
- * did not follow the icon to black. Measured: black is 18.58:1 on the light
- * splash and 1.20:1 on the dark #1A1917, where the tile and the knot cut out of
- * it would both disappear. Red sits mid-luminance and clears 3:1 on both.
- */
-describe('the splash tile', () => {
-  it('is the brand red so it reads on both splash backgrounds', () => {
-    const png = asset(expo.plugins.find((p) => p[0] === 'expo-splash-screen')[1].image)
-    expect(onlyOpaqueColour(png)).toBe(RED)
-  })
-})
-
 describe('the launcher icon', () => {
   it('is an adaptive foreground of the knot alone in white over the dark tile', () => {
     const { foregroundImage, backgroundColor } = expo.android.adaptiveIcon
@@ -176,30 +163,40 @@ describe('the splash mark', () => {
     backgroundColor: string
     dark: { image: string; backgroundColor: string }
   }
+  // 2026-10-11: the splash follows the in-app mark, black on the light splash
+  // and white on the dark one (a black tile measured 1.20:1 on #1A1917), so
+  // there are two images, one per scheme.
+  const BLACK_MARK = '20,20,20'
 
-  it('is the red tile with transparent corners and knot, 1024x1024', () => {
+  it('is the black tile on the light splash, corners and knot transparent', () => {
     const png = asset(splash.image)
     expect([png.width, png.height]).toEqual([1024, 1024])
-    expect(onlyOpaqueColour(png)).toBe(RED)
+    expect(onlyOpaqueColour(png)).toBe(BLACK_MARK)
     expect(alphaRange(png)).toEqual({ min: 0, max: 255 })
-    expect(splash.dark.image).toBe(splash.image)
+  })
+
+  it('is the white tile on the dark splash, corners and knot transparent', () => {
+    expect(splash.dark.image).not.toBe(splash.image)
+    const png = asset(splash.dark.image)
+    expect([png.width, png.height]).toEqual([1024, 1024])
+    expect(onlyOpaqueColour(png)).toBe(WHITE)
+    expect(alphaRange(png)).toEqual({ min: 0, max: 255 })
   })
 
   it('reads on the light and the dark splash background', () => {
-    for (const background of [splash.backgroundColor, splash.dark.backgroundColor]) {
-      expect(contrastRatio(brand.red, background), background).toBeGreaterThanOrEqual(3)
-    }
+    expect(contrastRatio(brand.markLight, splash.backgroundColor)).toBeGreaterThanOrEqual(3)
+    expect(contrastRatio(brand.markDark, splash.dark.backgroundColor)).toBeGreaterThanOrEqual(3)
   })
 })
 
 describe('the favicon', () => {
-  it('is the red tile at 48x48', () => {
+  it('is the black tile at 48x48', () => {
     const png = asset('assets/favicon.png')
     expect([png.width, png.height]).toEqual([48, 48])
     // Asserted first so an all-transparent render says so, instead of failing
     // inside onlyOpaqueColour with an empty colour map and naming nothing.
     expect(alphaRange(png).max).toBe(255)
-    expect(onlyOpaqueColour(png)).toBe(RED)
+    expect(onlyOpaqueColour(png)).toBe('20,20,20')
   })
 })
 
