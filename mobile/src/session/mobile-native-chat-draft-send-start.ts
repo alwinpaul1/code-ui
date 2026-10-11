@@ -30,7 +30,13 @@ export function clearDraftAtSendStartWith(
   }
   // Written down before the box empties, and handed to the text send this same press makes
   // next, so the press has one outbox entry (native-chat-outbox-sends.ts).
-  recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length) })
+  // A terminal photo send knows the desktop paths it will paste: kept, so the app-wide drainer
+  // can paste them again (native-chat-outbox-drainer.ts). Only when they pair one to one.
+  const attachments =
+    images?.length && imagePaths?.length === images.length
+      ? images.map((previewUri, index) => ({ path: imagePaths[index]!, previewUri }))
+      : undefined
+  recordOutboxSend(origin, text, { hasAttachments: Boolean(images?.length), ...(attachments ? { attachments } : {}) })
   if (origin.outboxId) {
     offerOutboxAdoption(origin.draftKey, origin.normalizedText, origin.outboxId, false)
   }

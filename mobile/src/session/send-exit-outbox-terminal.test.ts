@@ -422,7 +422,9 @@ describe('a chat message the app was closed under', () => {
     await advance(5_000)
     await processRestart()
     mount(desktop().client)
-    await advance(5_000)
+    // It was typed under a minute ago: the confirm wait runs out before it is called "Not sent"
+    // (OUTBOX_TERMINAL_CONFIRM_WAIT_MS, Opus review of 4efae5746).
+    await advance(25_000)
     expect(Object.values(outbox!.deliveries)).toEqual(['failed'])
 
     await act(async () => {

@@ -261,7 +261,7 @@ export function useMobileNativeChatDrafts(args: {
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
-      if (!mountedRef.current) { releaseOutboxSend(origin.outboxId); return } // the chat closed under it: the next chat of its tab sees it through
+      if (!mountedRef.current) { releaseOutboxSend(origin.outboxId); return } // the chat closed under it: the outbox sees it through
       const entry = parkUnconfirmedSend({
         origin,
         text,
@@ -310,7 +310,7 @@ export function useMobileNativeChatDrafts(args: {
     return () => {
       mountedRef.current = false
       for (const entry of unconfirmedRef.current) {
-        clearTimeout(entry.deadline ?? undefined); releaseOutboxSend(entry.outboxId) // the next chat of its tab looks for it
+        clearTimeout(entry.deadline ?? undefined); releaseOutboxSend(entry.outboxId) // the outbox looks for it
       }
       unconfirmedRef.current = []
     }

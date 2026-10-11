@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
 import * as Linking from 'expo-linking'
 import { RpcClientProvider } from '../src/transport/client-context'
+import { NativeChatOutboxDrainer } from '../src/session/NativeChatOutboxDrainer'
 import {
   getNotificationNavigationTarget,
   notificationTapKey
@@ -343,6 +344,9 @@ function ThemedRoot() {
             opens it, the one way in (2026-09-26; the chip's own pencil went
             on 2026-09-24). */}
         <MobileImageMarkupEditor />
+        {/* Sends every chat's waiting messages once the link is up, whichever
+            route or chat is showing (native-chat-outbox-drainer.ts). */}
+        <NativeChatOutboxDrainer />
       </View>
     </RpcClientProvider>
   )
