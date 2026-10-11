@@ -1,11 +1,12 @@
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
-import { parseFileMentionText, type FileMentionCard } from './mobile-native-chat-file-mentions'
+import { parseFileMentionText, sentFileCard, type FileMentionCard } from './mobile-native-chat-file-mentions'
+import { SENT_FILE_PRESENTATION } from './mobile-native-chat-agent-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
 
 export type ProseGroup =
   | { type: 'block'; block: NativeChatBlock }
   | { type: 'image-strip'; uris: string[]; alt: string }
-  | { type: 'file-cards'; cards: FileMentionCard[] }
+  | { type: 'file-cards'; cards: FileMentionCard[]; sent?: true }
 
 /** Fold a run of two or more loadable images into one sideways-scrolling
  *  strip, the way the Claude app lays out a multi-image upload (2026-09-12).
@@ -32,8 +33,17 @@ export function groupProseBlocks(
         continue
       }
     }
-    const uri = isImageRefBlock(block) ? (block.url ?? block.path) : undefined
     const last = groups[groups.length - 1]
+    // A file the agent sent with SendUserFile (mobile-native-chat-agent-images.ts).
+    if (isTextBlock(block) && block.presentation === SENT_FILE_PRESENTATION) {
+      if (last?.type === 'file-cards' && last.sent) {
+        last.cards.push(sentFileCard(block.text))
+      } else {
+        groups.push({ type: 'file-cards', cards: [sentFileCard(block.text)], sent: true })
+      }
+      continue
+    }
+    const uri = isImageRefBlock(block) ? (block.url ?? block.path) : undefined
     if (uri && isRenderableImageUri(uri)) {
       if (last?.type === 'image-strip') {
         last.uris.push(uri)

@@ -265,6 +265,19 @@ Nothing here is built.
   and the terminal's recent output held it. A screenshot in a scratchpad
   that Claude Code 2.1.283 folds into "Read 1 file" is neither. The fix is
   the desktop's: forward the image, or grant the path a Read call named.
+  Rechecked on Orca 1.4.224 and Claude Code 2.1.296 (2026-10-11): unchanged;
+  the reader keeps an `image` block only when its source is a URL, and the
+  Read result holds base64. Since then the phone draws the slot anyway: the
+  picture when the host sends it, else a placeholder naming the file.
+- **Files the agent sent (SendUserFile, 2026-10-11).** The Claude app draws the
+  caption as a line of text and each sent picture as a 250 dp square tile,
+  outside the tool group, and does not count the call as "used a tool". The
+  transcript holds only the path, the caption and a `file_uuid`; the Claude app
+  downloads the picture by that id from Anthropic, which the phone cannot. So
+  the phone asks the host for the path the same way as a Read (above), and
+  draws a placeholder naming the file when it is refused; a non-image file is
+  a file card. 95 calls on this machine, Claude Code 2.1.210 to 2.1.296: PDFs
+  75, PNGs 31. Fixture: `mobile/src/session/fixtures/claude-send-user-file-2.1.296.ts`.
 - **What a queued message leaves in the transcript (14).** Two shapes, and
   the phone reads only one. A message still queued when a turn ends is
   dequeued as a `user` row with `promptSource: "queued"`. A message Claude

@@ -14,10 +14,9 @@ import { normalizeImageTranscriptMessages } from '../../../src/shared/native-cha
 import {
   isImageRefBlock,
   isTextBlock,
-  isToolCallBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
-import { toolCallKind } from './mobile-native-chat-tool-sentence'
+import { agentImagePaths } from './mobile-native-chat-agent-images'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
 import {
   hostImageStillThere,
@@ -26,25 +25,13 @@ import {
   type HostImageFileStore
 } from './host-image-files'
 
-const IMAGE_FILE = /\.(png|jpe?g|gif|webp|bmp)$/i
-
-/** The image files an assistant message read with its Read tool, in order.
- *  The Claude app shows those under the fold row as thumbnails (2026-09-12);
- *  the bytes sit in the transcript's tool result, which the desktop reader
- *  does not forward, so the phone fetches a host thumbnail of the path. */
+/** The pictures an assistant message's calls show, in order: each image its
+ *  Read tool read, and each picture SendUserFile sent. The Claude app shows
+ *  both as thumbnails (2026-09-12, 2026-10-11); the bytes never reach the
+ *  phone (mobile-native-chat-agent-images.ts), so it fetches a host
+ *  thumbnail of each path. */
 export function readImagePaths(message: NativeChatMessage): string[] {
-  const paths: string[] = []
-  for (const block of message.blocks) {
-    if (!isToolCallBlock(block) || toolCallKind(block.name) !== 'read') {
-      continue
-    }
-    const input = block.input as { file_path?: unknown; path?: unknown } | null
-    const path = typeof input?.file_path === 'string' ? input.file_path : typeof input?.path === 'string' ? input.path : null
-    if (path && IMAGE_FILE.test(path)) {
-      paths.push(path)
-    }
-  }
-  return paths
+  return agentImagePaths(message)
 }
 
 /** Image-ref paths per RAW record, in block order, for messages the phone has
@@ -306,6 +293,11 @@ export function useHostImagePreviews(args: {
         : {},
     [enabled, localPreviews, messages]
   )
+  // Records whose paths are an agent's pictures, not a user's pasted ones.
+  const agentIds = useMemo(
+    () => new Set(messages.filter((m) => wanted[m.id] && m.role !== 'user').map((m) => m.id)),
+    [messages, wanted]
+  )
   // Only for the line a refusal leaves behind; recomputed with `wanted`.
   const namedInAgentText = useMemo(
     () => new Set(Object.values(wanted).flat().filter((path) => agentTextNamesPath(messages, path))),
@@ -361,10 +353,14 @@ export function useHostImagePreviews(args: {
       const uris = paths.map(
         (path) => loaded[`${hostId}\0${path}`] ?? dataUriByPath.get(`${hostId}\0${path}`) ?? ''
       )
-      if (uris.some((uri) => uri.length > 0)) {
+      // An agent's pictures keep their entry with nothing loaded yet: the view
+      // joins the entries of every record a turn folded, in record order, and
+      // places them by position (placeAgentImages), so a record left out
+      // would hand its neighbour's picture to its own slot.
+      if (uris.some((uri) => uri.length > 0) || agentIds.has(messageId)) {
         previews[messageId] = uris
       }
     }
     return previews
-  }, [hostId, loaded, wanted])
+  }, [agentIds, hostId, loaded, wanted])
 }

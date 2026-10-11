@@ -36,6 +36,7 @@ import { repostBannerWithReplyVerdict } from '../src/notifications/question-repl
 import { peekLiveHostClient } from '../src/transport/live-host-clients'
 import { sendMobileNativeChatPermissionResponse } from '../src/session/mobile-native-chat-permission-send'
 import { ImagePreviewModal } from '../src/components/ImagePreviewModal'
+import { saveViewedImage } from '../src/files/mobile-image-download-device'
 import { MobileImageMarkupEditor } from '../src/components/MobileImageMarkupEditor'
 import { MobileBackgroundPowerPrompt } from '../src/components/MobileBackgroundPowerPrompt'
 
@@ -339,7 +340,7 @@ function ThemedRoot() {
         <MobileBackgroundPowerPrompt />
         {/* Likewise the full-screen image viewer: a chat thumbnail, a
             markdown figure and an image file all open it (2026-09-19). */}
-        <ImagePreviewModal />
+        <ImagePreviewModal onSave={saveViewedImage} />
         {/* And the markup editor: the pencil in a composer photo's preview
             opens it, the one way in (2026-09-26; the chip's own pencil went
             on 2026-09-24). */}

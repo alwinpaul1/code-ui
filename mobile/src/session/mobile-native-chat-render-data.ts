@@ -14,8 +14,6 @@ import { keepDesktopImagePlaceholders } from './mobile-desktop-image-placeholder
 import { foldToolMessages } from '../../../src/shared/native-chat-tool-fold'
 import {
   isImageRefBlock,
-  isToolCallBlock,
-  isToolResultBlock,
   type NativeChatBlock,
   type NativeChatMessage
 } from '../../../src/shared/native-chat-types'
@@ -24,6 +22,7 @@ import {
   normalizeImageTranscriptMessages
 } from './mobile-native-chat-image-transcript-markers'
 import { foldQueuedImageTurns, trailingCompanionOwner } from './mobile-native-chat-queued-image-fold'
+import { placeAgentImages } from './mobile-native-chat-agent-images'
 
 /** An optimistic user echo: the text and/or the local preview URIs of any images
  *  ridden along on the send, shown until the transcript catches up. */
@@ -119,32 +118,6 @@ function stripNoise(messages: readonly NativeChatMessage[]): NativeChatMessage[]
   return withoutHiddenTurns(messages, (message) => !isPeerBoilerplateRow(message) && isNoiseMessage(message))
 }
 
-/** A Read's picture sits with the call: after the tool blocks, before any
- *  text that was written after them. Text that came before the call stays
- *  before the picture. With no tool block to anchor on, the picture stays
- *  at the end. */
-export function withAgentReadImages(
-  blocks: readonly NativeChatBlock[],
-  previews: readonly string[]
-): NativeChatBlock[] {
-  const images: NativeChatBlock[] = previews.map((url) => ({
-    type: 'image-ref',
-    url,
-    alt: 'Image the agent read'
-  }))
-  let lastTool = -1
-  for (let index = 0; index < blocks.length; index += 1) {
-    const block = blocks[index]
-    if (block && (isToolCallBlock(block) || isToolResultBlock(block))) {
-      lastTool = index
-    }
-  }
-  if (lastTool < 0) {
-    return [...blocks, ...images]
-  }
-  return [...blocks.slice(0, lastTool + 1), ...images, ...blocks.slice(lastTool + 1)]
-}
-
 /** Previews arrive keyed by RAW record id, because the hook that fetches them
  *  cannot see the send boundaries this fold was cut at. Here both sides are
  *  known, so each raw id is moved to the folded row that absorbed it: a row
@@ -225,14 +198,16 @@ export function buildMobileNativeChatTransientData({
   const previewsByFoldedId = remapPreviewsToFold(messages, folded, imagePreviewsByMessageId)
   const renderedFolded = folded.map((message) => {
     const previews = previewsByFoldedId?.[message.id]
+    if (message.role === 'assistant') {
+      // The transcript gives the phone no image block for a Read, and only a
+      // path for SendUserFile. Each picture goes where the Claude app draws
+      // it, a placeholder until the host sends it
+      // (mobile-native-chat-agent-images.ts).
+      const blocks = placeAgentImages(message.blocks, previews)
+      return blocks === message.blocks ? message : { ...message, blocks }
+    }
     if (!previews?.length) {
       return message
-    }
-    if (message.role === 'assistant') {
-      // The transcript has no image block for a Read. Put the picture after
-      // the call and before the words that follow it, so the sentence that
-      // introduced the figure stays above the figure.
-      return { ...message, blocks: withAgentReadImages(message.blocks, previews) }
     }
     if (message.role !== 'user') {
       return message

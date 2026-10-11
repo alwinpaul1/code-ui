@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Image, Modal, Pressable, ScrollView, StatusBar, useWindowDimensions, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { Pencil, X } from 'lucide-react-native'
+import { Check, Download, Pencil, X } from 'lucide-react-native'
 import {
   closeImagePreview,
   setImagePreviewIndex,
@@ -13,6 +13,7 @@ import { Txt } from '../ui/Txt'
 import { svgAspectRatio } from './markdown-image-source'
 import { ZoomableImage } from './ZoomableImage'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
+import type { MobileImageDownloadOutcome } from '../files/mobile-image-download'
 
 /** Full-screen viewer for an image the app already holds (a phone upload's
  *  local file, a host thumbnail already fetched, a markdown figure read off
@@ -20,8 +21,15 @@ import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
  *  picture at fit, the scrim or the X to close. Dark scrim in both themes,
  *  like the Claude app's viewer. Mounted once, in the root layout, so any
  *  screen can open it. */
-export function ImagePreviewModal(): React.JSX.Element | null {
+export function ImagePreviewModal({
+  onSave
+}: {
+  /** Saves the picture on screen (the root layout passes the device's save
+   *  picker, mobile-image-download-device.ts). Absent, no Download button. */
+  onSave?: (uri: string) => Promise<MobileImageDownloadOutcome>
+} = {}): React.JSX.Element | null {
   const preview = useImagePreview()
+  const save = useViewerSave(onSave, preview?.uri ?? null)
   const { width, height } = useWindowDimensions()
   const { colors, space } = useTheme()
   const [zoomed, setZoomed] = useState(false)
@@ -97,6 +105,33 @@ export function ImagePreviewModal(): React.JSX.Element | null {
                 first, 2026-09-26). Absent
                 for a sent bubble or a markdown figure, which have no editor
                 behind them. */}
+            <View style={{ flexDirection: 'row', gap: space.sm }}>
+            {save.available && preview.sources[preview.index]?.kind === 'bitmap' ? (
+              <Pressable
+                onPress={save.run}
+                disabled={save.state === 'saving'}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  save.state === 'saved' ? 'Saved' : save.state === 'failed' ? "Couldn't save" : 'Download image'
+                }
+                style={({ pressed }) => ({
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: save.state === 'saving' ? 0.6 : 1,
+                  backgroundColor: pressed ? 'rgba(255,255,255,0.28)' : 'rgba(255,255,255,0.16)'
+                })}
+              >
+                {save.state === 'saved' ? (
+                  <Check size={20} color="#fff" strokeWidth={2.2} />
+                ) : (
+                  <Download size={20} color="#fff" strokeWidth={2.2} />
+                )}
+              </Pressable>
+            ) : null}
             {preview.onEdit ? (
               <Pressable
                 onPress={() => {
@@ -121,6 +156,7 @@ export function ImagePreviewModal(): React.JSX.Element | null {
             ) : (
               <View />
             )}
+            </View>
           </View>
           {/* Why a paged ScrollView: the Claude app's viewer swipes through the
               message's images and counts them ("5 of 6", 2026-09-12). Paging
@@ -172,6 +208,57 @@ export function ImagePreviewModal(): React.JSX.Element | null {
 }
 
 const NO_SOURCES: ImagePreviewSource[] = []
+const SAVE_FEEDBACK_MS = 2000
+type SaveState = 'idle' | 'saving' | 'saved' | 'failed'
+
+/** The Download button's state: what the last save of this picture did,
+ *  shown for a moment, and a line naming a failure, since the viewer has no
+ *  toast and a dead button reads the same as a slow one. */
+function useViewerSave(
+  onSave: ((uri: string) => Promise<MobileImageDownloadOutcome>) | undefined,
+  uri: string | null
+): { available: boolean; state: SaveState; run: () => void } {
+  const [state, setState] = useState<SaveState>('idle')
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const live = useRef(true)
+  useEffect(() => {
+    live.current = true
+    return () => {
+      live.current = false
+      if (timer.current) {
+        clearTimeout(timer.current)
+      }
+    }
+  }, [])
+  useEffect(() => setState('idle'), [uri])
+  const run = useCallback(() => {
+    if (!onSave || !uri) {
+      return
+    }
+    setState('saving')
+    void onSave(uri)
+      .catch((error: unknown): MobileImageDownloadOutcome => {
+        console.warn(`[image-viewer] save failed: ${error instanceof Error ? error.message : String(error)}`)
+        return { status: 'failed' }
+      })
+      .then((outcome) => {
+        if (!live.current) {
+          return
+        }
+        if (outcome.status === 'failed-left-incomplete') {
+          console.warn(`[image-viewer] save failed, and an incomplete ${outcome.fileName} is left where it was saved`)
+        } else if (outcome.status === 'failed') {
+          console.warn('[image-viewer] save failed: the picture could not be written where it was chosen')
+        }
+        setState(outcome.status === 'saved' ? 'saved' : outcome.status === 'cancelled' ? 'idle' : 'failed')
+        if (timer.current) {
+          clearTimeout(timer.current)
+        }
+        timer.current = setTimeout(() => setState('idle'), SAVE_FEEDBACK_MS)
+      })
+  }, [onSave, uri])
+  return { available: onSave !== undefined, state, run }
+}
 
 function sourceKey(source: ImagePreviewSource): string {
   return source.kind === 'bitmap' ? source.uri : source.xml

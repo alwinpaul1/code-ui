@@ -16,7 +16,14 @@ import { Txt } from '../ui/Txt'
  * either fail or show binary bytes as text). Wiring it up needs its own
  * verified host round trip, not a guess bolted onto this card.
  */
-export function MobileNativeChatFileCardRow({ cards }: { cards: FileMentionCard[] }) {
+export function MobileNativeChatFileCardRow({
+  cards,
+  sent = false
+}: {
+  cards: FileMentionCard[]
+  /** Files the agent sent (SendUserFile), not ones the user attached. */
+  sent?: boolean
+}) {
   const styles = useFileCardStyles()
   return (
     <View style={styles.row}>
@@ -24,7 +31,7 @@ export function MobileNativeChatFileCardRow({ cards }: { cards: FileMentionCard[
         <View
           key={`${index}:${card.path}`}
           style={styles.card}
-          accessibilityLabel={`Attached file ${card.name}`}
+          accessibilityLabel={`${sent ? 'Sent' : 'Attached'} file ${card.name}`}
         >
           {card.ext ? (
             <View style={styles.badge}>
