@@ -1,25 +1,18 @@
-import { MobileContextWindowSheet } from './MobileContextWindowSheet'
 import { MobilePermissionModeSheet } from './MobilePermissionModeSheet'
 import { MobileAgentModeSheet } from './MobileAgentModeSheet'
-import type {
-  TerminalAgentMode,
-  TerminalHudContextWindow,
-  TerminalPermissionMode
-} from './mobile-terminal-hud-parse'
+import type { TerminalAgentMode, TerminalPermissionMode } from './mobile-terminal-hud-parse'
 
-/** The composer's mode picker and context window sheets. The add-to-chat
- *  sheet belongs to the + (MobileNativeChatAttachButton), which keeps its
- *  open flag out of the composer's state. */
+/** The composer's mode picker sheet. The add-to-chat sheet belongs to the +
+ *  (MobileNativeChatAttachButton), which keeps its open flag out of the
+ *  composer's state. The context window sheet moved to the session header
+ *  with the ring (MobileSessionHeader.tsx, parity gap G9). */
 export function MobileNativeChatComposerSheets({
   showModeSheet,
   onCloseModeSheet,
   permissionMode,
   onSelectPermissionMode,
   agentMode = null,
-  onSelectAgentMode,
-  showContextSheet,
-  onCloseContextSheet,
-  contextWindow
+  onSelectAgentMode
 }: {
   showModeSheet: boolean
   onCloseModeSheet: () => void
@@ -27,9 +20,6 @@ export function MobileNativeChatComposerSheets({
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   agentMode?: TerminalAgentMode | null
   onSelectAgentMode?: (mode: TerminalAgentMode) => void
-  showContextSheet: boolean
-  onCloseContextSheet: () => void
-  contextWindow: TerminalHudContextWindow | null
 }) {
   return (
     <>
@@ -54,11 +44,6 @@ export function MobileNativeChatComposerSheets({
           onClose={onCloseModeSheet}
         />
       )}
-      <MobileContextWindowSheet
-        visible={showContextSheet}
-        context={contextWindow}
-        onClose={onCloseContextSheet}
-      />
     </>
   )
 }

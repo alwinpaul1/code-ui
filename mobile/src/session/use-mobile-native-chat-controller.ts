@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { hudFieldsFromAgentStatus } from './hud-agent-status-fields'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
@@ -603,7 +604,7 @@ export function useMobileNativeChatController(
     nativeChatScreenPeerNotices: activeChatStructured ? [] : screenPeerNotices,
     nativeChatScreenSentPhotos: activeChatStructured || connState !== 'connected' ? [] : screenSentPhotos,
     nativeChatPromptHook: hudBeacon?.promptHook ?? null,
-    nativeChatContextWindow: liveHud.context, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
+    nativeChatContextWindow: liveHud.context, nativeChatContextUsedTokens: hudFieldsFromAgentStatus(activeChatAgentStatus).contextUsedTokens ?? null, nativeChatLiveModel: claudeModelPillPair({ model: claudeReported.model, label: claudeReported.label, effort: claudeReported.effort }, transcriptModel.fallback), nativeChatPermissionMode: hudObservation?.permissionMode ?? null, nativeChatAgentMode: hudObservation?.agentMode ?? null,
     refreshNativeChatHud: refreshTerminalHud, nativeChatSpinner: activeChatStructured || connState !== 'connected' ? null : screenSpinner
   }
 }

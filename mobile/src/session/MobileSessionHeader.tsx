@@ -34,6 +34,8 @@ import { Txt } from '../ui/Txt'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { sessionModelPillLabel } from './session-model-pill'
+import { MobileSessionHeaderContext } from './MobileSessionHeaderContextRing'
+import { useSessionHeaderMenu } from './use-session-header-menu'
 import {
   nativeChatKeptSessionKey,
   ownTabStatus,
@@ -88,6 +90,9 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     showHeaderMoreButton
   } = controller
   const modelLabel = resolveSessionModelLabel(controller)
+  // Drawn for the Claude app's session entries too (G35), not only the project screens.
+  const sessionMenu = useSessionHeaderMenu(controller)
+  const showMoreButton = showHeaderMoreButton || sessionMenu.entries.length > 0
   // Why: chat and terminal are two views of the same agent session; the user
   // switches between them from the header instead of the tab long-press sheet.
   const { activeChatEligible, showNativeChat } = controller.nativeChatController
@@ -175,6 +180,13 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             ) : null}
           </Pressable>
         </View>
+        {/* The context ring, where the Claude app places it: only over the chat, whose HUD reads it. */}
+        {showNativeChat ? (
+          <MobileSessionHeaderContext
+            context={controller.nativeChatController.nativeChatContextWindow}
+            usedTokens={controller.nativeChatController.nativeChatContextUsedTokens}
+          />
+        ) : null}
         {viewToggle ? (
           <MobileSessionHeaderIconButton
             accessibilityLabel={viewToggle.label}
@@ -198,7 +210,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             onPress={() => handlePanelTap('sourceControl')}
           />
         )}
-        {showHeaderMoreButton ? (
+        {showMoreButton ? (
           <MobileSessionHeaderIconButton
             active={activePanel === 'pr'}
             accessibilityLabel="More session actions"

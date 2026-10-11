@@ -5,13 +5,10 @@ import { vi } from 'vitest'
 import { ThemeProvider } from '../theme/theme-context'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
 
-// The composer's context ring opens its sheet the way the + does
-// (849b0843): on touch-down, not when the finger lifts. The recording of
-// 2026-09-27 held each tap about 80 ms, all of it spent waiting. The ring
-// sits in the composer's action row, in the dock, outside the chat list's
-// scroll and under no gesture handler, so nothing can claim the touch after
-// it has opened the sheet. The sheet itself sends the keyboard away as it
-// opens (sheets-over-the-chat-keyboard.test.tsx).
+// The context ring moved from the composer's action row to the session header, as the Claude app
+// places it (parity gap G9; session-header-copies-claude.test.tsx pins the header's ring, its
+// colours and its touch-down open). The composer must not draw a second one: two rings, one in the
+// dock and one in the header, would state the same figure twice and open two sheets.
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -81,7 +78,9 @@ async function mountComposer(scheme: 'light' | 'dark'): Promise<void> {
           getSendCompletionGeneration: () => 0,
           getComposerEditGeneration: () => 0,
           agent: 'claude',
-          contextWindow: { usedPercent: 42 } as never
+          // The prop the composer used to draw its ring from, handed in anyway: a stray one must
+          // draw nothing now.
+          ...({ contextWindow: { usedPercent: 42 } } as object)
         })}
       </ThemeProvider>,
       { createNodeMock: () => ({ focus: () => {}, blur: () => {}, isFocused: () => true }) }
@@ -89,33 +88,18 @@ async function mountComposer(scheme: 'light' | 'dark'): Promise<void> {
   })
 }
 
-function ring(): ReactTestInstance {
-  return renderer!.root.find(
-    (node) => isHost(node, 'Pressable') && node.props.accessibilityLabel === 'Context window 42% used'
+const contextRings = (): ReactTestInstance[] =>
+  renderer!.root.findAll(
+    (node) =>
+      isHost(node, 'Pressable') &&
+      typeof node.props.accessibilityLabel === 'string' &&
+      /context window|view usage/i.test(node.props.accessibilityLabel)
   )
-}
 
-function sheetUp(): boolean {
-  return renderer!.root.findAll((node) => isHost(node, 'BottomDrawer')).length > 0
-}
-
-describe.each(['light', 'dark'] as const)('the context ring in %s mode', (scheme) => {
-  it('opens its sheet as the finger lands', async () => {
+describe.each(['light', 'dark'] as const)('the composer in %s mode', (scheme) => {
+  it('draws no context ring, which the header now owns', async () => {
     await mountComposer(scheme)
-    await act(async () => (ring().props.onPressIn as (() => void) | undefined)?.())
-    expect(sheetUp(), 'the ring waited for the finger to lift').toBe(true)
-  })
-
-  it('still opens from a screen reader’s click, which has no press-in', async () => {
-    await mountComposer(scheme)
-    await act(async () => (ring().props.onPress as () => void)())
-    expect(sheetUp()).toBe(true)
-  })
-
-  it('stays open when the release follows the press-in', async () => {
-    await mountComposer(scheme)
-    await act(async () => (ring().props.onPressIn as (() => void) | undefined)?.())
-    await act(async () => (ring().props.onPress as () => void)())
-    expect(sheetUp(), 'the release toggled the sheet shut').toBe(true)
+    expect(contextRings()).toHaveLength(0)
+    expect(renderer!.root.findAll((node) => isHost(node, 'BottomDrawer'))).toHaveLength(0)
   })
 })

@@ -87,6 +87,21 @@ export const terminalDisplayModeSet = bindDeferredRpcOperation(
   })
 )
 
+/** Renaming the session from the header menu (parity gap G35): the workspace's own display name,
+ *  which is the header's title, through the `worktree.set` field the desktop's rename writes. The
+ *  reply body is unread: acceptance is the whole answer, and the title follows from the host's
+ *  `worktreesChanged` event (use-live-worktree-name.ts). Skip on refusal, so the menu can say the
+ *  rename did not happen instead of throwing past it. */
+export const sessionWorkspaceRename = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name-or-skip',
+    method: 'worktree.set',
+    acceptance: 'success-result-or-skip',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('workspace-renamed', sessionWriteUnreadReplySchema)
+  })
+)
+
 /** Renaming a terminal. The reply body is unread: only acceptance decides whether the strip keeps
  *  the new title, and a refusal leaves the server title to the next refresh. */
 export const sessionTerminalRename = bindDeferredRpcOperation(

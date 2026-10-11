@@ -127,7 +127,9 @@ const HEAD_MAIN_HOOK_SHA256 = '39a916300c485c34503587a202bdddec9c6150ad200761cd3
 // 2026-09-26: the file actions' Object.assign also takes saveToPhonePresence.
 // 2026-09-30: clipboard binds in the dictation hook (useClipboardWriter).
 // 2026-10-04: agentSessionRepeatedStopSupported and its setter bind (Orca #24301).
-const HEAD_HOOK_BINDING_SHA256 = '224da2a3ecf3c5177590b5df92761111b78c3f312faf99cb31d1f536100b98dc'
+// 2026-10-11: the foundation also takes `branch: worktreeBranch` out of useLiveWorktreeName, for
+// the header menu's Copy branch (parity gap G35).
+const HEAD_HOOK_BINDING_SHA256 = '61bb3427f8f29707e60787ccade3525549a55d36ad19fa2d298caca2f84e0d51'
 // 79 since 2026-09-18: askAboutFileLines, same change as HEAD_MAIN_HOOK_SHA256 above.
 // 81 since 2026-09-18 (later): resolveAskAboutScreenTarget and askAboutTerminalScreen.
 // 83 since 2026-09-24: reportDictationFailure (Orca #22256).
@@ -425,8 +427,10 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // identity and adds no literal. No other literal moved.
 // 674 since 2026-10-10 (Orca #26148 ported): FileReader's `doc.kind === 'media'` arm, which plays a
 // video or music tab through MobileFileMediaPreview; no other literal moved.
+// 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
+// MobileSessionHeaderMenu.tsx, outside this family, taking handlePanelTap('pr')'s 'pr' with it.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '153078c3168c89ac8fc25ce91e916f8903e986e745dc6b1aa4abc2b78e44120d'
+  '692161a415c81cb814447c6546fc23dd2776c1b24993f8846d4bd22e69cf6502'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -564,7 +568,11 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // 2026-10-10 (Orca #26148 ported): one new leaf record, <MobileFileMediaPreview media client title /> in FileReader's media arm.
 // 2026-10-10 (later): one new leaf record, <MobileSubagentActivityFeeds hostId worktreeId /> beside the
 // subagent transcript modal in the session content.
-const HEAD_LEAF_JSX_SHA256 = '5d29b8a9ff3f59a8dc154f15e079c4372b0e58df8414eb95d2439049479f2a9f'
+// 2026-10-11 (parity gaps G9, G35): one new leaf record in the header, <MobileSessionHeaderContext
+// context usedTokens /> (the ring and its sheet, moved from the composer). The title and subline
+// Txt records are unchanged. The sheets' more-actions record is now <MobileSessionHeaderMenu
+// controller />.
+const HEAD_LEAF_JSX_SHA256 = 'afb3eb5eda1c132767a3db8c33e4643fed19331292a36a66c4afd42632e89886'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1129,7 +1137,10 @@ describe('mobile session route extraction parity', () => {
     // 674 since 2026-10-10: FileReader's 'media' arm (Orca #26148).
     // 667 since 2026-10-10 (later): the create-tab and send-notes drawers' no-agent rows moved to
     // mobile-new-tab-agent-status-rows.ts (Orca #27196), taking their literals with them.
-    expect(strings).toHaveLength(667)
+    // 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
+    // MobileSessionHeaderMenu.tsx, outside this family, taking `handlePanelTap('pr')` with it. The
+    // context ring and its sheet, and the Rename dialog's strings, live outside the family too.
+    expect(strings).toHaveLength(666)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
@@ -1153,7 +1164,10 @@ describe('mobile session route extraction parity', () => {
     // 74 since 2026-10-10: FileReader mounts MobileFileMediaPreview for a video or music tab (Orca #26148).
     // 75 since 2026-10-10 (later): the session content mounts MobileSubagentActivityFeeds, the
     // Background tasks sheet's reads of its running agents' transcripts.
-    expect(jsx.leaf).toHaveLength(75)
+    // 76 since 2026-10-11 (parity gaps G9, G35): the header mounts <MobileSessionHeaderContext>,
+    // the context ring and its sheet moved from the composer. The sheets' <MobileSessionHeaderMoreActionsSheet> became
+    // <MobileSessionHeaderMenu controller />, which owns it and the Rename dialog: same count.
+    expect(jsx.leaf).toHaveLength(76)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.

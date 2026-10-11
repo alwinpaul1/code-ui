@@ -1,14 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
-import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
 import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
 import type {
   TerminalAgentMode,
-  TerminalHudContextWindow,
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
@@ -88,8 +86,6 @@ type Props = {
    *  its text, the caret goes to its `caret`. */
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
-  /** Context window figure from the desktop status line; shows the ring. */
-  contextWindow?: TerminalHudContextWindow | null
   /** Permission mode from the terminal footer; drives the mode sheet. */
   permissionMode?: TerminalPermissionMode | null
   /** Steps the terminal to the chosen mode (Shift+Tab until its footer agrees). */
@@ -164,7 +160,6 @@ export function MobileNativeChatComposer({
   micLevel = 0,
   dictationPaint = null,
   onComposerCursor,
-  contextWindow = null,
   permissionMode = null,
   onSelectPermissionMode,
   agentMode = null,
@@ -219,7 +214,6 @@ export function MobileNativeChatComposer({
     }
   }, [sendSurfaceId])
   const [sending, setSending] = useState(false)
-  const [showContextSheet, setShowContextSheet] = useState(false)
   const [showModeSheet, setShowModeSheet] = useState(false)
   const trimmed = value.trim()
   const sessionOptionDispatching = sessionOptions?.controller.pendingId != null
@@ -457,16 +451,6 @@ export function MobileNativeChatComposer({
                 sendInFlight={sending}
               />
             ) : null}
-            {contextWindow ? (
-              <ContextWindowRing
-                usedPercent={contextWindow.usedPercent}
-                // On touch-down, as the + does: the ring sits in the dock,
-                // outside the chat list's scroll, so no scroll can claim the
-                // touch afterwards. onPress stays for a screen reader's click.
-                onPressIn={() => setShowContextSheet(true)}
-                onPress={() => setShowContextSheet(true)}
-              />
-            ) : null}
             <View style={{ flex: 1, minWidth: 0 }} />
             {micActive ? <VoiceLevelBars level={micLevel} /> : null}
             {onMicPress ? (
@@ -526,9 +510,6 @@ export function MobileNativeChatComposer({
         onSelectPermissionMode={onSelectPermissionMode}
         agentMode={agentMode}
         onSelectAgentMode={onSelectAgentMode}
-        showContextSheet={showContextSheet}
-        onCloseContextSheet={() => setShowContextSheet(false)}
-        contextWindow={contextWindow}
       />
     </View>
   )

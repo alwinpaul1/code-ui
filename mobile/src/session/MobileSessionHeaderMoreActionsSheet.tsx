@@ -1,7 +1,17 @@
-import { ListChecks, Plug, ShieldCheck, FileText } from 'lucide-react-native'
+import {
+  Activity,
+  Copy,
+  FileText,
+  GitBranch,
+  ListChecks,
+  Pencil,
+  Plug,
+  ShieldCheck
+} from 'lucide-react-native'
 import { MobileAgentSessionHistoryIcon } from '../agent-history/MobileAgentSessionHistoryIcon'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { useTheme } from '../theme/theme-context'
+import type { SessionHeaderMenuEntry } from './session-header-menu'
 
 type Props = {
   visible: boolean
@@ -13,6 +23,14 @@ type Props = {
   onOpenMcpServers: () => void
   onOpenPermissionRules: () => void
   onOpenProjectMemory: () => void
+  /** The Claude app's session entries this session can offer, in its order
+   *  (sessionHeaderMenuEntries). Copy session ID is drawn last, where the app
+   *  keeps it in its own group. */
+  sessionEntries: readonly SessionHeaderMenuEntry[]
+  onCopyBranch: () => void
+  onOpenBackgroundTasks: () => void
+  onRename: () => void
+  onCopySessionId: () => void
   onClose: () => void
 }
 
@@ -26,13 +44,40 @@ export function MobileSessionHeaderMoreActionsSheet({
   onOpenMcpServers,
   onOpenPermissionRules,
   onOpenProjectMemory,
+  sessionEntries,
+  onCopyBranch,
+  onOpenBackgroundTasks,
+  onRename,
+  onCopySessionId,
   onClose
 }: Props) {
   const { colors } = useTheme()
+  const has = (entry: SessionHeaderMenuEntry) => sessionEntries.includes(entry)
+  const sessionActions: ActionSheetAction[] = [
+    ...(has('copy-branch')
+      ? [{ label: 'Copy branch', icon: GitBranch, onPress: onCopyBranch }]
+      : []),
+    // Both open a sheet or a dialog, so they wait for this one to leave
+    // (the dual-Modal race, #10331).
+    ...(has('background-tasks')
+      ? [
+          {
+            label: 'Background tasks',
+            icon: Activity,
+            closeBeforePress: true,
+            onPress: onOpenBackgroundTasks
+          }
+        ]
+      : []),
+    ...(has('rename')
+      ? [{ label: 'Rename', icon: Pencil, closeBeforePress: true, onPress: onRename }]
+      : [])
+  ]
   return (
     <ActionSheetModal
       visible={visible}
       actions={[
+        ...sessionActions,
         ...(showAgentSessionHistory
           ? [
               {
@@ -80,6 +125,9 @@ export function MobileSessionHeaderMoreActionsSheet({
                 onPress: onOpenProjectMemory
               }
             ]
+          : []),
+        ...(has('copy-session-id')
+          ? [{ label: 'Copy session ID', icon: Copy, onPress: onCopySessionId }]
           : [])
       ]}
       onClose={onClose}

@@ -26,6 +26,9 @@ export type LiveWorktreeName = {
   /** What the host last proved about this worktree still existing — see the bounce in
    *  use-missing-worktree-bounce.ts. */
   resolution: WorktreeShowResolution
+  /** The record's branch, a full `refs/heads/…` ref as Orca stores it; null until the host has
+   *  answered, when the record carries none (a detached HEAD), and on the floating workspace. */
+  branch: string | null
 }
 
 export function useLiveWorktreeName({
@@ -41,6 +44,11 @@ export function useLiveWorktreeName({
   const [worktreeName, setWorktreeName] = useState(() => ({
     worktreeId,
     name: routeNameHint
+  }))
+  // Keyed by id like the name, so the previous workspace's branch never shows under the next one.
+  const [branch, setBranch] = useState<{ worktreeId: string; branch: string | null }>(() => ({
+    worktreeId,
+    branch: null
   }))
   // Why: keyed by id so a verdict about the previous route can never survive into the next one.
   const [resolved, setResolved] = useState<{
@@ -120,6 +128,12 @@ export function useLiveWorktreeName({
             return
           }
           const worktree = accepted.value
+          const liveBranch = worktree?.branch?.trim() || null
+          setBranch((current) =>
+            current.worktreeId === worktreeId && current.branch === liveBranch
+              ? current
+              : { worktreeId, branch: liveBranch }
+          )
           const liveName = worktree ? getLiveWorktreeDisplayName([worktree], worktreeId) : null
           if (liveName) {
             setWorktreeName((current) =>
@@ -201,10 +215,11 @@ export function useLiveWorktreeName({
 
   if (isFloatingWorkspace) {
     // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
-    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
+    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown', branch: null }
   }
   return {
     name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
-    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
+    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown',
+    branch: branch.worktreeId === worktreeId ? branch.branch : null
   }
 }

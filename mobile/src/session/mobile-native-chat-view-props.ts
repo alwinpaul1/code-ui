@@ -3,7 +3,6 @@ import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
 import type { MobileChatQueueEntry } from './mobile-terminal-queued-messages'
 import type {
-  TerminalHudContextWindow,
   TerminalAgentMode,
   TerminalPermissionMode
 } from './mobile-terminal-hud-parse'
@@ -141,7 +140,6 @@ export type MobileNativeChatViewProps = {
   dictationPaint?: DictationPaint | null
   /** Caret in the composer, so a take inserts there instead of at the end. */
   onComposerCursor?: (cursor: number) => void
-  contextWindow?: TerminalHudContextWindow | null
   permissionMode?: TerminalPermissionMode | null
   onSelectPermissionMode?: (mode: TerminalPermissionMode) => void
   agentMode?: TerminalAgentMode | null
