@@ -15,8 +15,10 @@ import { STOP_NO_TARGET, STOP_TERMINAL_BUSY, useClaudeTerminalTaskStop, type Cla
 
 // The terminal tab's Stop, end to end on the phone side: the hook a terminal Claude tab gets,
 // driving Claude Code's Background dialog over the same `terminal.read` / `terminal.send` RPCs a
-// send uses, against the real screens of fixtures/claude-busy-lead-tasks-2.1.296.ts; and the joins
-// (read from the AST, never a comment) that hand it to the sheet.
+// send uses, against the real screens of fixtures/claude-busy-lead-tasks-2.1.296.ts; and the join
+// (read from the AST, never a comment) that builds it in the controller. The Background tasks sheet
+// draws no Stop since 2026-10-11 (MobileBackgroundTasksSheet.no-stop.test.tsx), so nothing on screen
+// calls it today.
 
 const SESSION_DIR = import.meta.dirname
 
@@ -145,7 +147,7 @@ function valuesOf(source: ts.SourceFile, name: string): string[] {
   return found
 }
 
-describe('the terminal Stop reaches the sheet', () => {
+describe('the terminal Stop in the controller', () => {
   it('is built for a connected terminal Claude tab only, and is what the tab stops with', () => {
     const controller = parse('use-mobile-native-chat-controller.ts')
     expect(valuesOf(controller, 'enabled')).toContain(
@@ -155,15 +157,5 @@ describe('the terminal Stop reaches the sheet', () => {
       'activeChatStructured ? structuredNativeChat.stopBackgroundTask : (terminalTaskStop ?? structuredNativeChat.stopBackgroundTask)'
     ])
     expect(valuesOf(controller, 'nativeChatTerminalTaskStop')).toEqual(['terminalTaskStop !== undefined'])
-  })
-
-  it('is handed to the chat view by the overlay, with the row target passed through', () => {
-    const overlay = parse('MobileNativeChatOverlay.tsx')
-    expect(valuesOf(overlay, 'onStopBackgroundTask')).toEqual([
-      'controller.nativeChatBackgroundTasks?.supportsTaskStop === true || controller.nativeChatTerminalTaskStop\n            ? stopBackgroundTask\n            : undefined'
-    ])
-    expect(readFileSync(join(SESSION_DIR, 'MobileNativeChatOverlay.tsx'), 'utf8')).toContain(
-      'controller.handleNativeChatStopBackgroundTask(taskId, report, target)'
-    )
   })
 })

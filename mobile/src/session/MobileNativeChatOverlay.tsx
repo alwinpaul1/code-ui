@@ -6,7 +6,7 @@ import { useNativeChatFrame } from './use-native-chat-frame'
 import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
-import { cloneElement, useCallback, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
+import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
@@ -359,11 +359,6 @@ export function MobileNativeChatOverlay({
     () => drawnAfterEarlierAgentMessages(pendingWithDesktopPrompts, agentMessages, folded, session.messages),
     [agentMessages, folded, pendingWithDesktopPrompts, session.messages]
   )
-  const stopBackgroundTask = useCallback(
-    (taskId: string, report?: (message: string) => void, target?: Parameters<typeof controller.handleNativeChatStopBackgroundTask>[2]) =>
-      controller.handleNativeChatStopBackgroundTask(taskId, report, target),
-    [controller]
-  )
   const streaming = useMobileNativeChatStreamingBubble(
     folded,
     controller.nativeChatStreamingText,
@@ -417,11 +412,6 @@ export function MobileNativeChatOverlay({
         backgroundTaskReport={controller.nativeChatBackgroundTaskReport}
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
         spinner={controller.nativeChatSpinner ?? null}
-        onStopBackgroundTask={
-          controller.nativeChatBackgroundTasks?.supportsTaskStop === true || controller.nativeChatTerminalTaskStop
-            ? stopBackgroundTask
-            : undefined
-        }
         reportBackgroundTaskFailure={onSendFailure} hostConnection={controller.nativeChatHostConnection}
         streaming={streaming}
         onStop={controller.handleNativeChatStop}

@@ -1,4 +1,3 @@
-import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { InlineQueueEditor } from './use-mobile-native-chat-queue-editor'
 import type { AskDismissOutcome } from './use-mobile-native-chat-ask-dismiss'
@@ -78,16 +77,8 @@ export type MobileNativeChatViewProps = {
    *  host has reported one it is the whole answer and the two props above go
    *  unread; `undefined` leaves the tab to the transcript reader. */
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  /** Stops one named background task; omitted when the host accepts no stop.
-   *  `report` is the tasks sheet's own place to say a Stop failed. */
-  /** Resolves true only when the host confirmed the task stopped (the sheet holds its row's Stop). */
-  onStopBackgroundTask?: (
-    taskId: string,
-    report?: (message: string) => void,
-    target?: ClaudeBackgroundStopTarget
-  ) => Promise<boolean>
-  /** The chat's banner, or its toast: where a failed Stop is said once the
-   *  tasks sheet is not showing it (use-sheet-failure.ts). */
+  /** The chat's banner, or its toast: where a failed `!` shell-command confirm is said
+   *  (MobileNativeChatShellConfirmView.tsx). */
   reportBackgroundTaskFailure?: (message: string) => void
   /** The host connection: the Background tasks sheet's rows read "Status unknown" while it is down. */
   hostConnection?: BackgroundTasksConnection

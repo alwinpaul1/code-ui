@@ -57,12 +57,9 @@ type Connection = { connected: boolean; lastConnectedAt: number | null }
 
 describe('the background tasks sheet across a disconnect', () => {
   let renderer: ReactTestRenderer | null = null
-  const onStopTask = vi.fn(async () => true)
-
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
-    onStopTask.mockClear()
   })
 
   afterEach(() => {
@@ -78,7 +75,6 @@ describe('the background tasks sheet across a disconnect', () => {
       createElement(MobileBackgroundTasksSheetBody, {
         messages: [],
         hostBackgroundTasks: ROSTER,
-        onStopTask,
         connection
       })
     )
@@ -97,17 +93,11 @@ describe('the background tasks sheet across a disconnect', () => {
   const textNodes = (): ReactTestInstance[] =>
     renderer!.root.findAllByType('Text' as never).filter((node) => typeof node.props.children === 'string')
   const texts = () => textNodes().map((node) => node.props.children as string)
-  const stopLabels = () =>
-    renderer!.root
-      .findAllByType('Pressable' as never)
-      .map((node) => String(node.props.accessibilityLabel ?? ''))
-      .filter((label) => label.startsWith('Stop '))
 
   for (const scheme of ['light', 'dark'] as const) {
-    it(`says "Status unknown" on running rows and offers no Stop while disconnected (${scheme})`, async () => {
+    it(`says "Status unknown" on running rows while disconnected (${scheme})`, async () => {
       await show({ connected: true, lastConnectedAt: 1 }, scheme)
       expect(texts()).toEqual(expect.arrayContaining(['41s', '5s']))
-      expect(stopLabels()).toEqual(['Stop pnpm dev', 'Stop pnpm watch'])
 
       await show({ connected: false, lastConnectedAt: 1 }, scheme)
       const all = texts()
@@ -117,7 +107,6 @@ describe('the background tasks sheet across a disconnect', () => {
       expect(all).toContain('Status unknown — reconnecting')
       // What already finished stays a fact.
       expect(all).toContain('Completed')
-      expect(stopLabels()).toEqual([])
       const palette = scheme === 'dark' ? darkColors : lightColors
       const unknown = textNodes().find((node) => node.props.children === 'Status unknown')!
       const flat = Object.assign({}, ...[unknown.props.style].flat().filter(Boolean))
@@ -125,27 +114,14 @@ describe('the background tasks sheet across a disconnect', () => {
     })
   }
 
-  it('reads the roster again by itself when the connection returns, and lets an old Stop go', async () => {
+  it('reads the roster again by itself when the connection returns', async () => {
     await show({ connected: true, lastConnectedAt: 1 })
-    const stop = renderer!.root
-      .findAllByType('Pressable' as never)
-      .find((node) => node.props.accessibilityLabel === 'Stop pnpm dev')!
-    await act(async () => {
-      stop.props.onPress()
-    })
-    const held = () =>
-      renderer!.root
-        .findAllByType('Pressable' as never)
-        .find((node) => node.props.accessibilityLabel === 'Stop pnpm dev')!.props.disabled === true
-    expect(held()).toBe(true)
-
     await show({ connected: false, lastConnectedAt: 1 })
     // Time passes while away; the returning connection redraws at once, not on the next tick.
     vi.setSystemTime(NOW + 60_000)
     await show({ connected: true, lastConnectedAt: 2 })
     expect(texts()).toEqual(expect.arrayContaining(['1m 41s', '1m 5s']))
     expect(texts()).not.toContain('Status unknown')
-    expect(held()).toBe(false)
   })
 
   // A structure check: the connection must reach the sheet from the controller, through the overlay,
@@ -160,43 +136,6 @@ describe('the background tasks sheet across a disconnect', () => {
     expect(read('./MobileNativeChatView.tsx')).toMatch(/<MobileNativeChatTasksProvider[\s\S]*?hostConnection=\{hostConnection\}/)
     expect(read('./MobileNativeChatTasksProvider.tsx')).toMatch(/<MobileBackgroundTasksSheet[\s\S]*?connection=\{hostConnection\}/)
     expect(read('./MobileBackgroundTasksSheet.tsx')).toMatch(/<MobileBackgroundTasksSheetBody[\s\S]*?connection=\{connection\}/)
-  })
-
-  // Review finding (2026-10-10): the reconnect frame that also drops a confirmed row used to put the
-  // old connection's holds back (the leave-the-list drop was computed from the pre-reset set).
-  it('lets every hold go on a reconnect frame that also drops a confirmed row', async () => {
-    const roster2 = (ids: string[]): AgentSessionBackgroundTaskState => ({
-      ...ROSTER,
-      tasks: (ROSTER.tasks ?? []).filter((task) => ids.includes(task.id))
-    })
-    const withRoster = (state: AgentSessionBackgroundTaskState, connection: Connection) =>
-      createElement(
-        ThemeProvider as never,
-        { initialPreference: 'light' },
-        createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state, onStopTask, connection })
-      )
-    await act(async () => {
-      renderer = create(withRoster(roster2(['dev', 'watch']), { connected: true, lastConnectedAt: 1 }))
-    })
-    const press = async (title: string) => {
-      const button = renderer!.root
-        .findAllByType('Pressable' as never)
-        .find((node) => node.props.accessibilityLabel === `Stop ${title}`)!
-      await act(async () => {
-        button.props.onPress()
-      })
-    }
-    await press('pnpm dev')
-    await press('pnpm watch')
-    const held = (title: string) =>
-      renderer!.root
-        .findAllByType('Pressable' as never)
-        .find((node) => node.props.accessibilityLabel === `Stop ${title}`)!.props.disabled === true
-    expect(held('pnpm watch')).toBe(true)
-    await act(async () => {
-      renderer!.update(withRoster(roster2(['watch']), { connected: true, lastConnectedAt: 2 }))
-    })
-    expect(held('pnpm watch')).toBe(false)
   })
 
   // Review finding: a running Workflow card kept its ticking time while disconnected.

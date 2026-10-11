@@ -78,7 +78,8 @@ reader's history. The Running list, which is what the row counts, is strictly
 better: it is the provider's own answer, so it never strands a task the
 transcript could not retire.
 
-**Stopping one task** is offered only where the roster says
+**Stopping one task** (no longer drawn: the sheet has no Stop on any row since
+2026-10-11, "No Stop on any row" below; this is how it worked) was offered only where the roster says
 `supportsTaskStop`, and never on a row the host marks `stoppable: false`
 (Orca #19705, 2026-09-10: a foreground subagent live inside the turn, which
 the SDK cannot target — the phone advertises
@@ -96,11 +97,10 @@ and #27026 adds a Codex sub-agent's Stop; the sheet reads only the flags, so
 those rows get a Stop with no phone change. Grok's commands and sub-agents
 (#27022) arrive the same way.
 
-**A Stop holds its button** from the press until the answer, and, when the
-host confirmed it (`cancelled: true`), until the row leaves the Running list
-(`use-mobile-background-task-stops.ts`, Orca #26780). A failed, unconfirmed or
-nothing-stopped answer gives the button back at once, and so does a row that
-leaves and comes back. There is no timer.
+**A Stop held its button** from the press until the answer, and, when the
+host confirmed it (`cancelled: true`), until the row left the Running list
+(Orca #26780). The hook that did it, `use-mobile-background-task-stops.ts`, went
+with the button on 2026-10-11.
 
 **Tokens per task (2026-10-10).** The wire's `totalTokens` (provider-reported,
 cumulative) is drawn on the card's meta line after the time or the ending, in
@@ -829,9 +829,9 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
   the title in two lines at most, and under it the kind and its live time ("Shell  41s",
   "Agent  13m 18s") or how it ended ("Shell  Completed", "Failed" in the danger tone). Sizes as
   re-measured on 2026-10-11 below.
-- **Stop** (`MobileBackgroundTaskStopButton.tsx`): a round button level with the title's first
-  line, a circle outline holding a filled square, on a running card only, through the same
-  per-task stop path. The workflow card uses the same button.
+- **No Stop.** The round Stop at a running card's right (`MobileBackgroundTaskStopButton.tsx`,
+  on the workflow card too) was removed on 2026-10-11 at the user's ask; Claude's cards have none
+  ("No Stop on any row" below).
 - **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
   (with the chevron on a finished one), were this fork's own addition and are gone at the user's
   request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
@@ -840,8 +840,8 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
 ## Stop all (2026-10-10, removed 2026-10-11)
 
 Removed at the user's request on 2026-10-11 ("stop all and view transcript remove those", beside
-screenshots of the Claude app, whose Running header has nothing at its right). Each running row
-keeps its own Stop. What it was, for the record:
+screenshots of the Claude app, whose Running header has nothing at its right). The rows' own Stops
+followed later that day ("No Stop on any row" below). What it was, for the record:
 
 The Running section's header carried a quiet "Stop all" at its right while at least one running
 row takes a Stop and is not already stopping (`use-mobile-background-tasks-stop-all.ts`). Each task
@@ -857,16 +857,13 @@ to a host with no per-row stop; this one is the user's own ask and works over th
 ## While the relay is down (2026-10-10)
 
 With no connection to the desktop nothing on the sheet is current, so a running row does not keep
-saying it runs: its time reads "Status unknown" (muted), it offers no Stop (a Stop could not be
-sent), and the section says "Status unknown —
+saying it runs: its time reads "Status unknown" (muted), and the section says "Status unknown —
 reconnecting". A finished row stays as it was: that is a fact already received. The connection is
 the controller's `connState` and `useLastConnectedAt(hostId)`, handed down as
 `nativeChatHostConnection` through the overlay, the view and the provider.
 
 When the connection returns, the new `lastConnectedAt` re-reads the sheet at once, by itself: the
-clock jumps to now (not the next tick) and every Stop hold from the old connection is let go, since
-an answer for a Stop sent on a connection that is gone no longer holds a row
-(`use-mobile-background-task-stops.ts`). The roster itself comes back on the lanes' own reconnect
+clock jumps to now (not the next tick). The roster itself comes back on the lanes' own reconnect
 paths (the structured subscribe re-attaches with a snapshot; the terminal lane re-reads its
 transcript and the host status), so the sheet holds no load of its own that could fail and need
 `shouldRefetchAfterReconnect`. Not changed: the status line's "N running tasks" count, which still
@@ -923,6 +920,11 @@ lead's `queue-operation` records, every beacon frame decoded, and the screens). 
 so that lane was already right; the test pins it.
 
 ## A Stop on a terminal tab (2026-10-11)
+
+**Withdrawn from the sheet the same day** ("No Stop on any row" below). The drive described here
+is still built by the controller (`use-claude-terminal-task-stop.ts`, `nativeChatTerminalTaskStop`)
+but nothing on screen calls it, and `terminal-background-task-stops.ts`, which chose the rows, is
+gone. Kept for the record:
 
 A terminal-driven Claude tab had no Stop: stock Orca has no stop for its tasks, and Claude Code
 takes no command naming one. Claude Code's own Background dialog does, driven by its own keys
@@ -1056,9 +1058,6 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
   checks two outputs at once retires neither by it.
 - With the footer padding gone, `shellsOutsideLead` counts a lead shell launched above the window
   as a subagent's, so it retires fewer subagent shells by the footer while one runs (Opus review).
-- A Stop on a nested agent's row selects it by its description in Claude's Background dialog.
-  No capture shows that dialog listing a subagent's own subagent; if it does not, the drive refuses
-  and says why.
 - An agent launched by a subagent the sheet does not read (past the six-agent cap, or a third
   level) is not listed.
 - Kept finished rows live in memory only; a relaunched app starts with none.
@@ -1069,3 +1068,25 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
   `mobile-background-tasks-absorbed-agent.test.ts`). With no host status at all (a pane Orca has no
   hook row for) nothing the phone receives says such an agent ended, and it stays running: an
   agent's output file is its own JSONL, with no end trailer.
+
+## No Stop on any row (2026-10-11, third pass)
+
+The user, beside screenshots of the Claude app on the same Claude Code 2.1.296 session: "remove
+this … button from here", on the round Stop of "Locate plugin API types · Shell 5m 26s", and
+earlier on an Agent row. Claude's rows are the glyph, the title and the kind with its time, with
+nothing at the right, for every kind.
+
+So no row of the sheet draws a Stop, on either lane: not a shell, an agent, a monitor, a workflow or
+an unknown row, whatever the host's `supportsTaskStop` and `stoppable` say. The card keeps its
+insets (24 dp at the right, where the Stop sat). The sheet takes no stop handler any more, and the
+chat view, the tasks provider and the overlay no longer hand one down; the sheet's Stop failure
+line went with it. Deleted: `MobileBackgroundTaskStopButton.tsx`,
+`use-mobile-background-task-stops.ts`, `terminal-background-task-stops.ts`, and their tests.
+
+Left in place, unreachable from the screen: the controller's `handleNativeChatStopBackgroundTask`
+(the structured lane's `agentSession.cancel` and the terminal drive through Claude's Background
+dialog). If the Stop is gone for good they can go too.
+
+Pinned by `MobileBackgroundTasksSheet.no-stop.test.tsx` (a structured roster of every kind, and the
+busy-lead terminal fixture with the footer's shells pill up, in light and dark).
+

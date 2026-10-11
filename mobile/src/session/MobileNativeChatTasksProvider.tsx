@@ -13,11 +13,7 @@ import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
 import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailSheet'
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
-import {
-  MobileBackgroundTasksSheet,
-  type BackgroundTaskStopHandler,
-  type BackgroundTasksConnection
-} from './MobileBackgroundTasksSheet'
+import { MobileBackgroundTasksSheet, type BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
 import {
   NativeChatAgentRunsContext,
   NativeChatRunSheetContext,
@@ -39,9 +35,6 @@ export function MobileNativeChatTasksProvider({
   sessionIdentity,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask,
-  reportStopFailure,
-  scopeKey,
   hostConnection,
   children
 }: {
@@ -56,11 +49,6 @@ export function MobileNativeChatTasksProvider({
   sessionIdentity?: NativeChatSessionIdentity | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: BackgroundTaskStopHandler
-  /** The chat's banner, or its toast, and the tab it belongs to: where a failed
-   *  Stop goes when the sheet is not showing it. */
-  reportStopFailure?: (message: string) => void
-  scopeKey?: string | null
   /** The host connection; see MobileBackgroundTasksSheet's `connection`. */
   hostConnection?: BackgroundTasksConnection
   children: ReactNode
@@ -174,9 +162,6 @@ export function MobileNativeChatTasksProvider({
           agentStatus={agentStatus ?? null}
           backgroundTaskReport={backgroundTaskReport}
           hostBackgroundTasks={hostBackgroundTasks}
-          onStopTask={onStopTask}
-          reportStopFailure={reportStopFailure}
-          scopeKey={scopeKey}
           connection={hostConnection}
           subagentSource={subagentSource}
           onClose={() => setSheetOpen(false)}

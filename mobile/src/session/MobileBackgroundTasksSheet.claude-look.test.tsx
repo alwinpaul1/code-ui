@@ -152,11 +152,6 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
     return node
   }
 
-  const stopOf = (title: string) =>
-    card(title)
-      .findAllByType('Pressable' as never)
-      .find((node) => node.props.accessibilityLabel === `Stop ${title}`)
-
   for (const scheme of ['light', 'dark'] as const) {
     const palette = scheme === 'dark' ? darkColors : lightColors
 
@@ -173,27 +168,6 @@ describe('the background tasks sheet, laid out like the Claude app', () => {
         .findAllByType('Text' as never)
         .find((node) => node.props.children === 'Failed')!
       expect(flatStyle(failed).color).toBe(palette.danger)
-    })
-
-    it(`puts a round Stop at the top right of a running card only, and it stops that task (${scheme})`, async () => {
-      const onStopTask = vi.fn()
-      await mount(scheme, { hostBackgroundTasks: ROSTER, onStopTask })
-      const stop = stopOf('pnpm dev --port 8081')!
-      expect(stop).toBeDefined()
-      expect(flatStyle(stop).alignSelf).toBe('flex-start')
-      // A circle outline holding a filled square, in the muted foreground.
-      // A 16 dp ring holding a 6 dp square, in the title's ink, as Claude draws it.
-      const ring = stop.findAll((node) => flatStyle(node).borderWidth !== undefined)
-      expect(ring.length).toBe(1)
-      expect(flatStyle(ring[0]!)).toMatchObject({ width: 16, height: 16, borderRadius: 8, borderColor: palette.text })
-      const square = stop.findAll((node) => flatStyle(node).backgroundColor === palette.text)
-      expect(square.map((node) => [flatStyle(node).width, flatStyle(node).height])).toEqual([[6, 6]])
-      await act(async () => {
-        stop.props.onPress()
-      })
-      expect(onStopTask.mock.calls[0]?.[0]).toBe('sh-1')
-      expect(stopOf('pnpm test')).toBeUndefined()
-      expect(stopOf('pnpm lint')).toBeUndefined()
     })
 
     it(`draws Claude's smaller semibold title, the kind word in the title's ink, and the card's measured insets (${scheme})`, async () => {

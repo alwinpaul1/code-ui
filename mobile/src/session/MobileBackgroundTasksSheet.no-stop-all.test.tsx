@@ -1,7 +1,8 @@
 // No "Stop all" on the Background tasks sheet (the user, 2026-10-11, beside screenshots of the
 // Claude Android app: "stop all and view transcript remove those"). The Claude app's Running
-// header is the word and its chevron, nothing at its right; each running row keeps its own Stop.
-// It replaces the 2026-10-10 Stop all, the fork's own addition over upstream's strip.
+// header is the word and its chevron, nothing at its right. It replaces the 2026-10-10 Stop all, the
+// fork's own addition over upstream's strip. The rows' own Stops went later the same day
+// (no-stop.test.tsx).
 
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
@@ -62,7 +63,7 @@ describe('the Background tasks sheet has no Stop all, as the Claude app has none
         createElement(
           ThemeProvider as never,
           { initialPreference: scheme },
-          createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state, onStopTask: vi.fn(async () => true) })
+          createElement(MobileBackgroundTasksSheetBody, { messages: [], hostBackgroundTasks: state })
         )
       )
     })
@@ -80,19 +81,19 @@ describe('the Background tasks sheet has no Stop all, as the Claude app has none
       .filter((child): child is string => typeof child === 'string')
 
   for (const scheme of ['light', 'dark'] as const) {
-    it(`draws no Stop all over three running rows, and each row keeps its own Stop (${scheme})`, async () => {
+    it(`draws no Stop all over three running rows (${scheme})`, async () => {
       await mount(roster(['dev', 'watch', 'lint'], ['old']), scheme)
 
       expect(texts()).not.toContain('Stop all')
       expect(labels()).not.toContain('Stop all running tasks')
-      expect(labels().filter((label) => label.startsWith('Stop '))).toEqual(['Stop npm run dev', 'Stop npm run watch', 'Stop npm run lint'])
+      expect(texts()).toEqual(expect.arrayContaining(['npm run dev', 'npm run watch', 'npm run lint']))
     })
   }
 
   it('draws none over a single running row, nor over an empty Running section', async () => {
     await mount(roster(['dev']))
     expect(texts()).not.toContain('Stop all')
-    expect(labels().filter((label) => label.startsWith('Stop '))).toEqual(['Stop npm run dev'])
+    expect(labels()).not.toContain('Stop all running tasks')
     act(() => renderer?.unmount())
 
     await mount(roster([], ['old']))
