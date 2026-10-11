@@ -5,6 +5,8 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { androidNativeParent } from '../test/android-fabric-native-parent.test-support'
 import { ThemeProvider } from '../theme/theme-context'
+import { colorsForScheme } from '../theme/tokens'
+import { chatSelectionColors } from './chat-selection-colors'
 import { MobileMarkdown } from './MobileMarkdown'
 import { createPhone, hostParent } from './mobile-markdown-code-pill-phone.test-support'
 import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
@@ -19,6 +21,10 @@ import { resetRememberedPillCutsForTests } from './use-markdown-code-pill-runs'
 // over markdown-selection-copy.tsx.
 
 const nativeModule = vi.hoisted(() => ({ present: true }))
+const colorInts = vi.hoisted(() => {
+  const ints = new Map<string, number>()
+  return { of: (color: string) => ints.get(color) ?? (ints.set(color, -1 - ints.size), ints.get(color)!) }
+})
 
 vi.mock('react-native', () => ({
   Linking: { openURL: vi.fn() },
@@ -29,6 +35,8 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View',
   useColorScheme: () => 'light',
+  // A colour int per colour, as processColor gives the native view.
+  processColor: (color: string) => colorInts.of(color),
   Platform: { OS: 'android', select: (o: Record<string, unknown>) => o.android ?? o.default }
 }))
 vi.mock('expo-modules-core', () => ({
@@ -250,6 +258,17 @@ describe.each(['light', 'dark'] as const)('the document on Android, %s', (which)
     // other way round and would make a Text keep its pills.
     expect(children.map((node) => [node.type, node.props.collapsable])).toEqual([['View', false]])
     expect(checkMounts(children[0]!)).toBeGreaterThan(10)
+  })
+
+  it('gives its selection the handles and highlight of the theme’s accent, as the Claude app does with its primary', () => {
+    scheme = which
+    show('plain words')
+    const { root } = outermost()
+    const selection = chatSelectionColors(colorsForScheme(which))
+    // The native view gets each as the colour int processColor gives for it.
+    expect(root.props.selectionHandleColor).toBe(colorInts.of(selection.handle))
+    expect(root.props.selectionHighlightColor).toBe(colorInts.of(selection.highlight!))
+    expect(selection.handle).toBe(colorsForScheme(which).accent)
   })
 
   it('keeps a reply of one pill and a reply of none the same way', () => {

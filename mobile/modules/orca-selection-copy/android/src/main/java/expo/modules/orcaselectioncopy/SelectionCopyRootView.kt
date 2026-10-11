@@ -3,21 +3,25 @@ package expo.modules.orcaselectioncopy
 import android.content.Context
 import android.util.Log
 import android.view.ActionMode
+import android.view.MotionEvent
 import android.view.View
 import android.widget.TextView
 import com.facebook.react.views.view.ReactViewGroup
 
 /**
  * Wraps a Markdown document on Android (markdown-selection-copy.android.tsx) and gives each Text
- * inside it a selection menu whose Copy and Share carry a code pill's words instead of U+FFFC
- * (SelectionCopyActionModeCallback.kt).
+ * inside it, the reply's native prose view included, the chat's selection: a menu of only Copy
+ * and Select all (ChatSelectionMenu.kt), handles and highlight in the app's accent
+ * (ChatSelectionColors.kt), and, for a Text with code pills, a Copy that carries a pill's words
+ * instead of U+FFFC (SelectionCopyActionModeCallback.kt).
  *
  * A Text opens its selection menu by asking its ancestors, one by one, through
  * startActionModeForChild, so this view is asked for every Text the document draws: a paragraph's,
  * a quote's, a table cell's, a pill's own. It works in any window (a Modal is a window of its
- * own) and does nothing until someone selects: no listener on each Text, no walk of the tree. A
- * Text with no inline View is handed back its own menu, unwrapped. The cost is this one view per
- * document.
+ * own) and does nothing until someone touches or selects: no listener on each Text. The colours go
+ * onto the document's Texts at each touch down (a walk of this one document, skipped for a Text
+ * that has them already), before a hold can start a selection, and again when the menu opens. The
+ * cost is this one view per document.
  *
  * It wraps the document's root View and never stands in for it: expo-modules-core 57.0.16 makes
  * each child of an Expo view keep its own children unless collapsableChildren={false}, the
@@ -26,11 +30,39 @@ import com.facebook.react.views.view.ReactViewGroup
  * one child as a View does.
  */
 class SelectionCopyRootView(context: Context) : ReactViewGroup(context) {
+  private val colors = ChatSelectionColors()
+
+  fun setSelectionHandleColor(color: Int?) {
+    if (colors.set(color, colors.highlight)) {
+      colors.applyBelow(this)
+    }
+  }
+
+  fun setSelectionHighlightColor(color: Int?) {
+    if (colors.set(colors.handle, color)) {
+      colors.applyBelow(this)
+    }
+  }
+
+  override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+    if (ev.actionMasked == MotionEvent.ACTION_DOWN) {
+      colors.applyBelow(this)
+    }
+    return super.onInterceptTouchEvent(ev)
+  }
+
   override fun startActionModeForChild(originalView: View?, callback: ActionMode.Callback?, type: Int): ActionMode? {
     val menu =
       try {
-        if (originalView is TextView && callback != null && InlineViewPlaceholders.any(originalView.text)) {
-          SelectionCopyActionModeCallback(originalView, callback)
+        if (originalView is TextView && callback != null) {
+          colors.applyBelow(originalView)
+          val copying =
+            if (InlineViewPlaceholders.any(originalView.text)) {
+              SelectionCopyActionModeCallback(originalView, callback)
+            } else {
+              callback
+            }
+          ChatSelectionMenuCallback(copying)
         } else {
           callback
         }
