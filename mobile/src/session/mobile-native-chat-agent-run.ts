@@ -29,6 +29,12 @@ import { agentTitle, foldWhitespace, readLaunch, readString } from './mobile-bac
 // background agents of session 0954729d ended that way). The reader's answer
 // still reaches the run sheet (`agentsRunning`), which tells an opened
 // transcript whether its agent is live.
+//
+// A background agent does sweep the row while it runs, as the Claude app's
+// does ("Running agent: Fix status line usage figures", 2026-10-11, Claude
+// Code 2.1.296), but only on the word of a source that will also say when it
+// stops (`liveTaskIds`): the host's own roster, Orca's per-subagent hook rows.
+// Never on the transcript reader's alone, which is what stuck.
 
 export type NativeChatAgentRunInputs = {
   /** Agent ids the background-task reader counts as running: the run sheet's
@@ -40,6 +46,11 @@ export type NativeChatAgentRunInputs = {
   /** Whether the tab's agent is in a turn: a launch still unanswered is
    *  being made while it is, and was abandoned once it is not. */
   agentWorking: boolean
+  /** Task ids (agents and shells) a source that can also retire them says are
+   *  running: the host's structured roster, or for an agent Orca's live
+   *  subagent row (`rowLiveTaskIds`). What a finished launch's row sweeps for.
+   *  Absent: none. */
+  liveTaskIds?: ReadonlySet<string>
 }
 
 /** One agent in the run. `agentId` is set only where the phone KNOWS which
@@ -47,8 +58,9 @@ export type NativeChatAgentRunInputs = {
 export type NativeChatAgentRunEntry = { title: string; agentId: string | null }
 
 export type NativeChatAgentRunState = {
-  /** An Agent/Task call of the run is still being made: it has no answer yet
-   *  and the turn is live. What the row sweeps for. */
+  /** An Agent/Task call of the run is still being made (no answer yet and
+   *  the turn is live), or an agent it launched is in `liveTaskIds`. What the
+   *  row sweeps for. */
   running: boolean
   /** The background-task reader counts an agent this run launched as running.
    *  Never drawn on the row (see above); the run sheet hands it to the
@@ -100,7 +112,7 @@ export function runningAgentText(subject: string | null): string {
  *  ids, so a background launch's answer can land before an earlier call's. Pairing
  *  by order handed the launch text to the wrong call (a Read) and lost the agent.
  *  Only this run's own results are read, so a run never shows another's agent. */
-const isLaunchText = (output: string): boolean =>
+export const isLaunchText = (output: string): boolean =>
   readLaunch({ name: 'Agent', input: null, startedAt: null }, output) !== null
 
 /** Whether an Agent/Task call of the run has no answer yet. Results pair to calls
@@ -185,15 +197,24 @@ export function agentRunState(
   }
   // Only a live turn makes calls: one it left unanswered was abandoned and
   // never sweeps on, a structured call still marked running included.
-  const running = inputs.agentWorking && hasUnansweredAgent(blocks)
+  const launching = inputs.agentWorking && hasUnansweredAgent(blocks)
+  const live = inputs.liveTaskIds
+  const launchedLive = live !== undefined && launched.some((id) => live.has(id))
+  const running = launching || launchedLive
   const entries = calls.map((call) => ({
     title: call.title,
     agentId:
       launched.find((id) => call.description !== null && inputs.confirmed.get(id) === call.description) ??
       (calls.length === 1 && launched.length === 1 ? launched[0]! : null)
   }))
-  const open = running ? unansweredAgentCalls(blocks) : []
-  const subjectIndex = open.find((index) => calls[index]!.live) ?? open.at(-1)
+  const open = launching ? unansweredAgentCalls(blocks) : []
+  // A call being made names the row first; else the first agent of the run
+  // known (by its own id) to still run. One whose id the phone cannot tie to
+  // its call names nothing: a guess could name a finished agent.
+  const liveIndex = launchedLive
+    ? entries.findIndex((entry) => entry.agentId !== null && live.has(entry.agentId))
+    : -1
+  const subjectIndex = open.find((index) => calls[index]!.live) ?? open.at(-1) ?? (liveIndex === -1 ? undefined : liveIndex)
   const subjectCall = subjectIndex === undefined ? undefined : calls[subjectIndex]
   return {
     running,

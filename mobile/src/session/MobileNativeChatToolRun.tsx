@@ -26,16 +26,13 @@ import { nativeChatToolLineIdentity } from '../../../src/shared/native-chat-tool
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import type { NativeChatToolPair as ToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { isShellActivityToolCall } from '../../../src/shared/native-chat-tool-icon'
-import {
-  isToolCallBlock,
-  type NativeChatBlock,
-  type NativeChatToolCallBlock
-} from '../../../src/shared/native-chat-types'
+import type { NativeChatBlock, NativeChatToolCallBlock } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
-import { agentRunState, isAgentToolName, runningAgentText } from './mobile-native-chat-agent-run'
+import { runningAgentText } from './mobile-native-chat-agent-run'
+import { toolRunMayBeRunning, toolRunProgress, type ToolRunProgress } from './mobile-native-chat-tool-run-progress'
 import { runningCallAccessibilityLabel } from './mobile-native-chat-running-call-label'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
@@ -54,36 +51,36 @@ export function ToolRun(props: ToolRunProps) {
   return <ToolRunView {...props} />
 }
 
-/** Hands its children whether an Agent/Task call of the run is still being
- *  made (`agentRunState`'s `running`: no answer yet, in a live turn). Only a run that
- *  holds an Agent/Task call reads the chat's agent state, which changes with
- *  every message and status update: read by every run it re-rendered each one
- *  under the memoised message row (review, 2026-10-01). It wraps the header
- *  alone, so a run gaining its first Agent call swaps only the header's subtree:
- *  the run's own state (open row, detail sheet, shown calls, sheet owner) lives
- *  above it and survives. */
-function RunningAgentGate({
+/** Hands its children whether the run still runs (`toolRunProgress`): an
+ *  agent it launched, a call still open while the turn works, a shell it moved
+ *  to the background. Only a run that could be running reads the chat's task
+ *  state, which changes with every message and status update: read by every
+ *  run it re-rendered each one under the memoised message row (review,
+ *  2026-10-01). It wraps the header alone, so a run starting or ending swaps
+ *  only the header's subtree: the run's own state (open row, detail sheet,
+ *  shown calls, sheet owner) lives above it and survives. */
+function RunProgressGate({
   blocks,
   enabled,
   children
 }: {
   blocks: NativeChatBlock[]
   enabled: boolean
-  children: (runningAgent: boolean, subject: string | null) => React.ReactNode
+  children: (progress: ToolRunProgress) => React.ReactNode
 }) {
-  return enabled ? <ReadsAgents blocks={blocks}>{children}</ReadsAgents> : <>{children(false, null)}</>
+  return enabled ? <ReadsProgress blocks={blocks}>{children}</ReadsProgress> : <>{children(null)}</>
 }
 
-function ReadsAgents({
+function ReadsProgress({
   blocks,
   children
 }: {
   blocks: NativeChatBlock[]
-  children: (runningAgent: boolean, subject: string | null) => React.ReactNode
+  children: (progress: ToolRunProgress) => React.ReactNode
 }) {
   const agentRuns = useNativeChatAgentRuns()
-  const state = useMemo(() => agentRunState(blocks, agentRuns), [blocks, agentRuns])
-  return <>{children(state.running, state.subject)}</>
+  const progress = useMemo(() => toolRunProgress(blocks, agentRuns), [blocks, agentRuns])
+  return <>{children(progress)}</>
 }
 
 type ToolRunProps = {
@@ -197,10 +194,6 @@ function ToolRunView({
     activeCall === null && (open || !focusView)
   )
   const diffStat = focusView ? null : toolRunDiffStat(blocks, createdFileCount)
-  // The call's input, not its word: Codex names a classified shell row
-  // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
-  // shares that word and ran none.
-  const ActiveToolIcon = activeCall && isShellActivityToolCall(activeCall) ? SquareTerminal : Wrench
   // One disclosure mark on either header: down when open, right when closed.
   const Chevron = open ? ChevronDown : ChevronRight
   // A run of exactly one call IS that call's row — the Claude app shows a
@@ -211,8 +204,9 @@ function ToolRunView({
   // row, not the ones shown: a run with rows behind "Show N more tool calls"
   // keeps the reveal-first behaviour, since it has more than one to disclose.
   // The Claude app's row for a run with an agent launch in it is "Running
-  // agent ›" (`runningAgent`, read by RunningAgentGate), whatever else the run
-  // did (2026-10-01 screenshots), until the launch has its answer (2026-10-11).
+  // agent ›" (`runningAgent`, read by RunProgressGate), whatever else the run
+  // did (2026-10-01 screenshots), while the launch is being made or the agent
+  // it launched still runs by a source that will say when it stops (2026-10-11).
   const openRunSheet = useRunSheetOpener(blocks, revertScope)
   const singlePair = allPairs.length === 1 ? allPairs[0]! : null
   const singlePairOpensSheet =
@@ -220,32 +214,44 @@ function ToolRunView({
   const detailSheet = (
     <MobileNativeChatToolDetailSheet pair={detailPair} onClose={() => setDetailPair(null)} />
   )
+  // The "Running" header, for the structured lane's live call or a call the
+  // run itself shows still going (RunProgressGate): a terminal glyph and
+  // "Running" with the shimmer, as the Claude app draws a running command.
+  const renderActiveHeader = (call: NativeChatToolCallBlock): React.JSX.Element => {
+    // The call's input, not its word: Codex names a classified shell row
+    // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
+    // shares that word and ran none.
+    const ActiveToolIcon = isShellActivityToolCall(call) ? SquareTerminal : Wrench
+    return (
+      <View style={styles.toolRunHeader}>
+        <Pressable
+          testID="tool-run-active-header"
+          style={styles.toolRunToggle}
+          onPress={() => setOpen((v) => !v)}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: open }}
+          accessibilityLabel={focusView ? undefined : runningCallAccessibilityLabel(call)}
+          accessibilityLiveRegion="polite"
+        >
+          <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
+          <ShimmerText
+            text={focusView ? countLabel : 'Running'}
+            active
+            color={colors.textSecondary}
+            style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
+            numberOfLines={1}
+            testID="tool-run-active-label"
+          />
+          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+        </Pressable>
+      </View>
+    )
+  }
   if (activeCall) {
     return (
       <View style={styles.toolRun}>
-        <View style={styles.toolRunHeader}>
-          <Pressable
-            testID="tool-run-active-header"
-            style={styles.toolRunToggle}
-            onPress={() => setOpen((v) => !v)}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: open }}
-            accessibilityLabel={focusView ? undefined : runningCallAccessibilityLabel(activeCall)}
-            accessibilityLiveRegion="polite"
-          >
-            <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
-            <ShimmerText
-              text={focusView ? countLabel : 'Running'}
-              active
-              color={colors.textSecondary}
-              style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
-              numberOfLines={1}
-              testID="tool-run-active-label"
-            />
-            <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
-          </Pressable>
-        </View>
+        {renderActiveHeader(activeCall)}
         {open ? renderBody() : null}
         {detailSheet}
       </View>
@@ -265,11 +271,16 @@ function ToolRunView({
   // SendMessage's preview, a command's description).
   const sentenceShowsFailures =
     sentenceSpans.length > 0 && toolRunSentenceShowsFailures(blocks, failedCallCount)
-  const hasAgentCall = !focusView && blocks.some((block) => isToolCallBlock(block) && isAgentToolName(block.name))
+  const mayBeRunning = !focusView && toolRunMayBeRunning(allPairs)
   return (
     <View style={styles.toolRun}>
-      <RunningAgentGate blocks={blocks} enabled={hasAgentCall}>
-        {(runningAgent, agentSubject) => {
+      <RunProgressGate blocks={blocks} enabled={mayBeRunning}>
+        {(progress) => {
+          if (progress?.kind === 'call') {
+            return renderActiveHeader(progress.call)
+          }
+          const runningAgent = progress?.kind === 'agent'
+          const agentSubject = runningAgent ? progress.subject : null
           const sentenceStatesFailures = !runningAgent && sentenceShowsFailures
           return (
       <View style={styles.toolRunHeader}>
@@ -348,7 +359,7 @@ function ToolRunView({
       </View>
           )
         }}
-      </RunningAgentGate>
+      </RunProgressGate>
       {open ? renderBody() : null}
       {detailSheet}
     </View>
