@@ -181,6 +181,9 @@ export async function verifyClaudeSubmit(args: {
     }
     const input = readClaudeInput(screen.lines, screen.draft)
     if (!input.located) {
+      // No input box on this look (a dialog over it, say): whatever an earlier look saw in the
+      // input says nothing about where a Return would go now.
+      stillTyped = false
       return null
     }
     if (heard(input.text)) {
@@ -254,4 +257,36 @@ export async function verifyClaudeSubmit(args: {
     }
   }
   return looked ? (stillTyped ? { kind: 'unknown', stillTyped: true } : { kind: 'unknown' }) : { kind: 'unverified' }
+}
+
+/**
+ * Whether one screen shows Claude's input holding exactly this send's words (photo chips aside)
+ * and nothing else, with no review notice: the only screen a second Return may go over
+ * (mobile-native-chat-send-write.ts pressReturnAgain). Words typed after the send, glued on by
+ * the draft mirror or at the desk, fail it. Words Orca publishes as the draft count only over a
+ * bare `❯` row, which is how the box looks when Orca's detector took it; over the `❯ ` of an empty
+ * box they are a draft Orca has not caught up on (Opus review of 7872fddf2). A `!` bash box fails
+ * it too: a command is run by its own check, not by a Return pressed again.
+ */
+export function claudeInputHoldsExactly(screen: MobileNativeChatScreen, text: string, images: boolean): boolean {
+  if (claudeSubmitNotice(screen.lines)) {
+    return false
+  }
+  const drawn = readClaudeInput(screen.lines, '')
+  if (!drawn.located || drawn.mode === 'bash') {
+    return false
+  }
+  let typed = drawn.text
+  if (typed === '') {
+    if (!screen.lines.some((line) => line === '❯')) {
+      return false
+    }
+    typed = screen.draft.trim()
+  }
+  if (images && !hasImageChip(typed)) {
+    return false
+  }
+  const want = dense(text)
+  const got = dense(images ? withoutImageChips(typed) : folded(typed))
+  return got === want && (want !== '' || images)
 }
