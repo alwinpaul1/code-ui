@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { MarkupStroke } from './image-markup-strokes'
 import {
+  MARKUP_PEN_COLOR,
   MARKUP_PEN_MIN_WIDTH_PX,
   displayPointToNatural,
+  markupOutputSize,
   markupPenWidth,
   markupStrokePathData
 } from './image-markup-geometry'
@@ -73,5 +75,27 @@ describe('the pen width', () => {
   it('never draws thinner than a visible minimum on a tiny photo', () => {
     expect(markupPenWidth(10)).toBe(MARKUP_PEN_MIN_WIDTH_PX)
     expect(markupPenWidth(0)).toBe(MARKUP_PEN_MIN_WIDTH_PX)
+  })
+})
+
+// The decompiled Claude app (1.261009.20): one pen, 8 dp wide at the size the
+// picture is drawn on screen (stored as a fraction of that width, so it scales
+// with the output), and Done writes the picture with its longest side capped
+// at 2000 px.
+describe("the Claude app's pen and output size", () => {
+  it('draws 8 dp wide on screen, whatever the picture’s own size', () => {
+    // A 2010 px sheet drawn 400 dp wide: 8 dp on screen is 40.2 px of the picture.
+    expect(markupPenWidth(2010, 400)).toBeCloseTo(40.2, 5)
+    expect(markupPenWidth(400, 400)).toBe(8)
+  })
+
+  it('caps the saved picture at 2000 px on its longest side, keeping its shape', () => {
+    expect(markupOutputSize({ width: 4000, height: 3000 })).toEqual({ width: 2000, height: 1500 })
+    expect(markupOutputSize({ width: 1179, height: 2556 })).toEqual({ width: 923, height: 2000 })
+    expect(markupOutputSize({ width: 1200, height: 800 })).toEqual({ width: 1200, height: 800 })
+  })
+
+  it('draws in the Claude app’s red', () => {
+    expect(MARKUP_PEN_COLOR).toBe('#B93535')
   })
 })

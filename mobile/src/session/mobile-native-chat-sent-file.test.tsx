@@ -138,16 +138,49 @@ describe('a file the agent sent with SendUserFile', () => {
     expect(REPLY_TEXT.length).toBeGreaterThan(0)
   })
 
-  it('draws each picture as a 250 dp rounded square, cropped to fill, and a tap opens it full-screen', () => {
+  it('draws each picture as the Claude app does, a 96 dp square with 12 dp corners, cropped to fill, and a tap opens it full-screen', () => {
     const root = render(stepOf(SEND_FILE_TURN, { [READ_CALL_ID]: [READ_URI], [SEND_CALL_ID]: [SENT_URI] }))
     const tiles = imageButtons(root)
     expect(tiles).toHaveLength(2)
     const sent = tiles[1]!.findByType('Image' as never)
     expect(sent.props.resizeMode).toBe('cover')
     const style = Object.assign({}, ...[sent.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
-    expect(style).toMatchObject({ width: 250, height: 250, borderRadius: 16 })
+    expect(style).toMatchObject({ width: 96, height: 96, borderRadius: 12, backgroundColor: colorsForScheme('light').bg })
     act(() => tiles[1]!.props.onPress())
     expect(peekImagePreview()).toMatchObject({ uri: SENT_URI })
+  })
+
+  // The decompiled Claude app (1.261009.20): no shimmer; the tile shows the
+  // screen background until the picture arrives.
+  it('fills a tile with the dark screen background in the dark theme until its picture draws', () => {
+    scheme = 'dark'
+    const root = render(stepOf(SEND_FILE_TURN, { [READ_CALL_ID]: [READ_URI], [SEND_CALL_ID]: [SENT_URI] }))
+    const image = imageButtons(root)[0]!.findByType('Image' as never)
+    const style = Object.assign({}, ...[image.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
+    expect(style.backgroundColor).toBe(colorsForScheme('dark').bg)
+  })
+
+  // Same app, a user message: 96 dp tiles, 12 dp corners, cropped, in one row
+  // with 8 dp gaps. Code UI drew a lone photo the bubble's full width and a
+  // run of them as 132 × 176 tiles with 18 dp corners.
+  it("draws a photo in the user's own bubble as the same 96 dp tile, alone or in a row", () => {
+    const user = (urls: string[]): NativeChatMessage => ({
+      id: 'u1',
+      role: 'user',
+      timestamp: 0,
+      source: 'transcript',
+      blocks: [...urls.map((url) => ({ type: 'image-ref' as const, url })), { type: 'text', text: 'like this' }]
+    })
+    const tileStyle = (node: ReactTestInstance) =>
+      Object.assign({}, ...[node.findByType('Image' as never).props.style].flat(3).filter(Boolean)) as Record<string, unknown>
+    const lone = imageButtons(render(user(['file:///photo-1.jpg'])))
+    expect(lone).toHaveLength(1)
+    expect(tileStyle(lone[0]!)).toMatchObject({ width: 96, height: 96, borderRadius: 12 })
+    expect(lone[0]!.findByType('Image' as never).props.resizeMode).toBe('cover')
+    act(() => renderer?.unmount())
+    const row = imageButtons(render(user(['file:///photo-1.jpg', 'file:///photo-2.jpg'])))
+    expect(row).toHaveLength(2)
+    expect(tileStyle(row[1]!)).toMatchObject({ width: 96, height: 96, borderRadius: 12 })
   })
 
   it('shows a placeholder naming the file, and nothing to tap, while the host has not shared the picture', () => {

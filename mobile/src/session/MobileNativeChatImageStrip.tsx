@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Image, Pressable, ScrollView, useWindowDimensions } from 'react-native'
 import { openImagePreview } from './image-preview-store'
+import { chatMarkupOpener } from './chat-image-markup-target'
+import { useTheme } from '../theme/theme-context'
 import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 /** A figure the agent read fills the message width, up to most of the screen
@@ -53,24 +55,33 @@ export function MobileNativeChatImageThumb({
   )
 }
 
-/** The Claude app's thumbnail of a picture the agent read or sent (the
- *  user's screenshots of 2026-10-11): a 250 dp square with 16 dp corners,
- *  left-aligned, the picture cropped to fill it, no frame or label. A tap
- *  opens the whole picture full-screen. */
-export const AGENT_IMAGE_TILE_SIZE = 250
-export const AGENT_IMAGE_TILE_RADIUS = 16
+/** The Claude app's chat thumbnail (com.anthropic.claude 1.261009.20,
+ *  decompiled 2026-10-11): a 96 dp square with 12 dp corners, the picture
+ *  cropped to fill it, no frame or label, and no shimmer: the tile shows the
+ *  screen background until the picture draws. Used for a picture the agent
+ *  read or sent and for the photos in the user's own bubble. A first reading
+ *  of a screenshot took its pixels for dp and drew 250 dp, over half the
+ *  screen. A tap opens the whole picture full-screen. */
+export const AGENT_IMAGE_TILE_SIZE = 96
+export const AGENT_IMAGE_TILE_RADIUS = 12
 
 export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; label: string }) {
+  const { colors } = useTheme()
   return (
     <Pressable
-      onPress={() => openImagePreview(uri, label)}
+      onPress={() => openImagePreview(uri, label, 0, chatMarkupOpener(uri))}
       accessibilityRole="imagebutton"
       accessibilityLabel={label}
       style={{ alignSelf: 'flex-start', maxWidth: '100%' }}
     >
       <Image
         source={{ uri }}
-        style={{ width: AGENT_IMAGE_TILE_SIZE, height: AGENT_IMAGE_TILE_SIZE, borderRadius: AGENT_IMAGE_TILE_RADIUS }}
+        style={{
+          width: AGENT_IMAGE_TILE_SIZE,
+          height: AGENT_IMAGE_TILE_SIZE,
+          borderRadius: AGENT_IMAGE_TILE_RADIUS,
+          backgroundColor: colors.bg
+        }}
         resizeMode="cover"
         accessibilityLabel={label}
       />

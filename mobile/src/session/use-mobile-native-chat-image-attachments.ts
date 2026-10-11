@@ -100,6 +100,8 @@ export type MobileNativeChatImageAttachments = {
   readonly attachImage: (source: MobileImageSource) => Promise<void>
   /** An image file already on the phone (a keyboard paste's cache copy). */
   readonly attachImageFile: (uri: string) => Promise<void>
+  /** A PNG the phone drew: a picture from the chat marked up in the viewer. */
+  readonly attachImageBase64: (base64: string) => Promise<void>
   /** Any document via the file picker; described to the agent in the message text. */
   readonly attachDocument: () => Promise<void>
   readonly removeAttachment: (id: string) => void
@@ -181,6 +183,7 @@ export function useMobileNativeChatImageAttachments({
   const {
     attachImage,
     attachImageFile,
+    attachImageBase64,
     attachDocument,
     cancelVideoFrameExtraction,
     isAttaching
@@ -462,6 +465,7 @@ export function useMobileNativeChatImageAttachments({
     isAttaching,
     attachImage,
     attachImageFile,
+    attachImageBase64,
     attachDocument,
     removeAttachment,
     replaceAttachment,

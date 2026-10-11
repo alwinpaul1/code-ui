@@ -33,6 +33,7 @@ import type { DesktopPrompt } from './agent-hud-beacon'
 import { useAbsorbedQueueWitness } from './use-absorbed-queue-echoes'
 import { queuedDeskWitnesses, useRememberedWitnesses } from './use-queued-desk-witnesses'
 import { openImageMarkup } from './image-markup-store'
+import { setChatMarkupAttachTarget } from './chat-image-markup-target'
 
 import type { MobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
 import type { MobileNativeChatController } from './use-mobile-native-chat-controller'
@@ -231,6 +232,8 @@ export function MobileNativeChatOverlay({
     [pairingPending, desktopPrompts, session.messages]
   )
   useEffect(() => rememberPhotoCopies(hookPairing.photoCopies), [hookPairing])
+  // A picture from the chat marked up in the viewer goes to this composer (chat-image-markup-target.ts).
+  useEffect(() => setChatMarkupAttachTarget(images.attachImageBase64), [images.attachImageBase64])
   // …and a message the agent's queue box still lists is drawn THERE, not as
   // a bubble above it (2026-09-19, see promptsNoCopyStandsFor).
   // A user row of a desk copy's words lands it, unless a later submission of

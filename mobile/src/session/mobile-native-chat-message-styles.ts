@@ -4,7 +4,8 @@ import { useTheme, type Theme } from '../theme/theme-context'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
-const IMAGE_TILE_HEIGHT = 176
+/** The Claude app's 96 dp chat tile (MobileNativeChatImageStrip.tsx). */
+const IMAGE_TILE_HEIGHT = 96
 
 export const TEXT_SIZE = 15
 export const MONO_SIZE = 12
@@ -216,9 +217,10 @@ export function makeChatMessageStyles(theme: Theme) {
     // Bare pictures with rounded corners, no frame or fill: a border around a
     // letterboxed screenshot read as "a box with a small image in it".
     imageTile: {
-      width: 132,
+      width: IMAGE_TILE_HEIGHT,
       height: IMAGE_TILE_HEIGHT,
-      borderRadius: radius.lg
+      borderRadius: 12,
+      backgroundColor: colors.bg
     },
     imageThumb: {
       width: '100%',

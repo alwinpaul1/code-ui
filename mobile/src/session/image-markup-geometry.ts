@@ -49,6 +49,27 @@ export function markupStrokePathData(stroke: MarkupStroke): string {
 const MARKUP_PEN_WIDTH_FRACTION = 0.006
 export const MARKUP_PEN_MIN_WIDTH_PX = 4
 
-export function markupPenWidth(naturalWidth: number): number {
+/** The Claude app's pen (com.anthropic.claude 1.261009.20, decompiled
+ *  2026-10-11): one colour, 8 dp wide at the size the picture is drawn on
+ *  screen. */
+export const MARKUP_PEN_COLOR = '#B93535'
+const MARKUP_PEN_DP = 8
+/** Done writes the picture with its longest side at most this. */
+const MARKUP_OUTPUT_MAX_PX = 2000
+
+/** The pen's width in the picture's own pixels: 8 dp at the width it is drawn
+ *  on screen. Before the drawn width is known, a fraction of the picture's. */
+export function markupPenWidth(naturalWidth: number, drawnWidth?: number): number {
+  if (drawnWidth !== undefined && drawnWidth > 0 && naturalWidth > 0) {
+    return (MARKUP_PEN_DP * naturalWidth) / drawnWidth
+  }
   return Math.max(MARKUP_PEN_MIN_WIDTH_PX, naturalWidth * MARKUP_PEN_WIDTH_FRACTION)
+}
+
+/** The size Done writes: the picture's own, scaled down so its longest side
+ *  is at most 2000 px, as the Claude app does. */
+export function markupOutputSize(natural: { width: number; height: number }): { width: number; height: number } {
+  const longest = Math.max(natural.width, natural.height)
+  const scale = longest > MARKUP_OUTPUT_MAX_PX ? MARKUP_OUTPUT_MAX_PX / longest : 1
+  return { width: Math.round(natural.width * scale), height: Math.round(natural.height * scale) }
 }

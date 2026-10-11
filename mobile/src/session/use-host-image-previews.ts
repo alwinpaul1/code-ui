@@ -18,6 +18,7 @@ import {
 } from '../../../src/shared/native-chat-types'
 import { agentImagePaths } from './mobile-native-chat-agent-images'
 import { foldQueuedImageTurns } from './mobile-native-chat-queued-image-fold'
+import { hostImageAskState, recordHostImageFailure, refusedBeforeNamed, resetHostImageRefusals, RETRY_MS } from './host-image-refusals'
 import {
   hostImageStillThere,
   keepHostImageFile,
@@ -84,15 +85,13 @@ export function mergeImagePreviews(
 /** Host and path to the picture's URI: a cache file on the phone, or the
  *  `data:` URI it came as where no file could be written (host-image-files.ts). */
 const dataUriByPath = new Map<string, string>()
-const failedPaths = new Map<string, number>()
-const RETRY_MS = 5_000
 const inFlight = new Map<string, Promise<string | null>>()
 /** Paths already explained, so a retry every few seconds says it once. */
 const explained = new Set<string>()
 
 export function resetHostImagePreviewCacheForTests(): void {
   dataUriByPath.clear()
-  failedPaths.clear()
+  resetHostImageRefusals()
   inFlight.clear()
   explained.clear()
   resetHostImageFilesForTests()
@@ -177,13 +176,21 @@ export async function loadHostImage(args: {
   }
   // Its cache file was cleared, or now holds another picture: read it again.
   dataUriByPath.delete(key)
-  if ((failedPaths.get(key) ?? 0) > Date.now()) {
+  const named = args.agentTextNamesPath === true
+  const { allowed, newlyNamed } = hostImageAskState(key, named)
+  if (!allowed) {
     return null
   }
   const pending = inFlight.get(key)
   if (pending) {
-    return pending
+    // An ask sent before the agent's text named the path may come back
+    // refused after it does: ask once more then, rather than at the next timer.
+    return args.agentTextNamesPath === true
+      ? pending.then((uri) => uri ?? (refusedBeforeNamed(key) ? loadHostImage(args) : null))
+      : pending
   }
+  // Back-off rules: host-image-refusals.ts.
+  const fail = (refused = false) => recordHostImageFailure(key, { refused, named, newlyNamed })
   const run = (async () => {
     try {
       const worktree = `id:${args.worktreeId}`
@@ -201,7 +208,7 @@ export async function loadHostImage(args: {
         { timeoutMs: 15_000 }
       )
       if (!resolved.ok) {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail()
         const failure = (resolved as Partial<RpcFailure>).error
         explainMissing(key, args.path, `the desktop could not resolve it (${failure?.message || failure?.code || 'no reason given'})`)
         return null
@@ -234,7 +241,7 @@ export async function loadHostImage(args: {
               }
             : null
       if (!request) {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail(true)
         explainMissing(key, args.path, notShared(args))
         return null
       }
@@ -247,7 +254,7 @@ export async function loadHostImage(args: {
         ? normalizeMobileFilePreviewResult(args.path, (read as RpcSuccess).result)
         : previewErrorFromRefusal((read as RpcFailure).error)
       if (preview.status !== 'ready' || preview.kind !== 'image') {
-        failedPaths.set(key, Date.now() + RETRY_MS)
+        fail()
         explainMissing(key, args.path, 'message' in preview ? preview.message : 'the desktop read it, but it is not an image')
         return null
       }
@@ -255,7 +262,7 @@ export async function loadHostImage(args: {
       dataUriByPath.set(key, uri)
       return uri
     } catch (error) {
-      failedPaths.set(key, Date.now() + RETRY_MS)
+      fail()
       explainMissing(key, args.path, error instanceof Error ? error.message : String(error))
       return null
     } finally {

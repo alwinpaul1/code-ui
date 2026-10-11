@@ -27,6 +27,8 @@ import {
 } from '../session/image-markup-strokes'
 import {
   displayPointToNatural,
+  MARKUP_PEN_COLOR,
+  markupOutputSize,
   markupPenWidth,
   markupStrokePathData
 } from '../session/image-markup-geometry'
@@ -36,10 +38,9 @@ import { Txt } from '../ui/Txt'
 import { ConfirmModal } from './ConfirmModal'
 import { useKeyboardDismissedOnOpen } from './use-keyboard-dismissed-on-open'
 
-/** The pen is deliberately theme-invariant — a red pen, like the real Claude
- *  app's markup tool, on a light or a dark canvas alike. Every other colour
- *  in this screen comes from `useTheme()`. */
-const MARKUP_PEN_COLOR = '#EB4B3D'
+// The pen (MARKUP_PEN_COLOR) is deliberately theme-invariant: the Claude
+// app's red on a light or a dark canvas alike. Every other colour in this
+// screen comes from `useTheme()`.
 
 type NaturalSize = { width: number; height: number }
 
@@ -106,7 +107,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   const box = { width, height: Math.max(0, height - barHeight) }
   const aspectRatio = natural && natural.height > 0 ? natural.width / natural.height : 0
   const drawn = containedSize(box, aspectRatio)
-  const penWidth = natural ? markupPenWidth(natural.width) : 0
+  const penWidth = natural ? markupPenWidth(natural.width, drawn.width) : 0
 
   const commitDraft = useCallback((points: readonly MarkupPoint[]) => {
     setDraftPoints([])
@@ -183,7 +184,7 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
         session.onDone({ base64 })
         closeImageMarkup()
       },
-      { width: Math.round(natural.width), height: Math.round(natural.height) }
+      markupOutputSize(natural)
     )
   }
 
