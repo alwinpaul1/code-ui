@@ -61,7 +61,9 @@ export function useMobileNativeChatDraftMirror(args: {
    *  (reported from the phone, 2026-09-13). */
   const baselineEditsRef = useRef<number | null>(null)
   const armedRef = useRef(false)
-  /** Several lines a recall left on the agent: no echo until the send replaces them. */
+  /** Several lines a recall left on the agent: no echo until the send replaces them.
+   *  Not cleared when the composer empties: the mirror's Ctrl+U clears one line of
+   *  the several, and the send's own clear is the one sized for them. */
   const heldRef = useRef<string | null>(null)
 
   const forget = useCallback(() => {
