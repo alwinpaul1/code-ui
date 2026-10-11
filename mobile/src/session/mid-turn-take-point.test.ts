@@ -70,6 +70,41 @@ describe('drawnWhereTaken', () => {
     expect(drawnWhereTaken([FIRST, ANSWER, NEXT_PROMPT, AGENT, AGENT_RESULT], FIRST.id, true)).toBe(FIRST.id)
   })
 
+  // Session 0954729d, lines 643–675 (2026-10-08): one API message
+  // (msg_011CfqC7nr3e…) made three calls, each written after the result of
+  // the one before (Claude Code runs them as they stream), then the next step
+  // began 12 s later. Claude never takes a queued message inside a step: of
+  // 1,287 human queued_commands in 25 local transcripts, none sits there. A
+  // call written within a second of a result is the same step's (about one
+  // in five of them; no call of a NEW step came that soon, of 6,973).
+  it('does not draw a message between the calls of one step that are written as they stream', () => {
+    const stamp = (clock: string) => Date.parse(`2026-10-08T${clock}Z`)
+    const toolRow = (id: string, kind: 'call' | 'result', clock: string): NativeChatMessage => ({
+      id,
+      role: kind === 'call' ? 'assistant' : 'tool',
+      blocks: [kind === 'call' ? { type: 'tool-call', name: 'Bash', input: {} } : { type: 'tool-result', output: '' }],
+      timestamp: stamp(clock),
+      source: 'transcript'
+    })
+    const before = toolRow('cce36f17-5ed8-4c08-8713-eac21b165122', 'call', '17:49:39.197')
+    const step = [
+      toolRow('a1ce3b3a-3e99-4d80-9db2-33e61deee37f', 'result', '17:49:43.424'),
+      toolRow('24e5adb3-fee0-442e-a769-8370c6767a6e', 'call', '17:49:46.022'),
+      toolRow('945a6594-27d6-4a89-bbc6-91c951a10afe', 'result', '17:49:46.230'),
+      toolRow('e5bf7c90-3369-4189-815f-ab8677da40a5', 'call', '17:49:46.773'),
+      toolRow('ce5f8bac-5c6b-4c94-99bf-34866d11cb71', 'result', '17:49:46.976'),
+      toolRow('b2d9d255-1a85-4940-9b1c-de6f6cbe7045', 'call', '17:49:47.212'),
+      toolRow('5c08a533-2859-444f-90e3-0924111b533d', 'result', '17:49:47.389')
+    ]
+    const nextStep = row('2be57c5b-10e5-42a7-927d-58d945554197', 'assistant', { type: 'text', text: 'The next step.' }, '17:49:59.728')
+    // Sent while the first call of the step ran: taken after its last result.
+    expect(drawnWhereTaken([before, ...step, nextStep], step[1]!.id, true)).toBe(step[6]!.id)
+    // The step's next result not in yet: still at the live end while it works.
+    expect(drawnWhereTaken([before, ...step.slice(0, 4)], step[1]!.id, true)).toBe(step[3]!.id)
+    // A result followed by a call a new step made (12 s on) is a take.
+    expect(drawnWhereTaken([before, step[0]!, step[1]!], before.id, true)).toBe(step[0]!.id)
+  })
+
   it('does not count a result the anchor already sits on or above', () => {
     expect(drawnWhereTaken([FIRST, BASH, BASH_RESULT], BASH_RESULT.id, true)).toBe(BASH_RESULT.id)
     expect(drawnWhereTaken([FIRST, BASH, BASH_RESULT, ANSWER], BASH_RESULT.id, false)).toBe(BASH_RESULT.id)

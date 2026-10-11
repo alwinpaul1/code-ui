@@ -197,15 +197,9 @@ export function MobileNativeChatOverlay({
   // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
   // Each of the phone's sends drawn after any row written before it, even one
   // that loaded after the send did (mid-turn-written-before.ts).
-  // …and, sent mid-turn, drawn where Claude took it: after the results of the
-  // calls that ran while it waited (mid-turn-take-point.ts, 2026-10-11).
+  // …and, sent mid-turn, drawn where Claude took it (mid-turn-take-point.ts).
   const placedOwn = useMemo(
-    () =>
-      placeWhereTaken(
-        placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages),
-        session.messages,
-        agentWorking
-      ),
+    () => placeWhereTaken(placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages), session.messages, agentWorking),
     [agentWorking, projectedQueue.pending, session.messages]
   )
   const baseFolded = useMemo(
@@ -297,19 +291,10 @@ export function MobileNativeChatOverlay({
     // A read that could not see the box is unknown, not an empty box.
     controller.nativeChatQueueReadable !== false
   )
-  // A mid-turn message is drawn where Claude took it, after the results of the
-  // calls that ran while it waited, as the Claude app drew one on 2026-10-11;
-  // until it is taken, at the live end (mid-turn-take-point.ts).
-  // The witness memory keeps the send's place: drawing applies this again
-  // from there.
-  const takenDesktopEchoes = useMemo(
-    () => placeWhereTaken(desktopEchoes, session.messages, agentWorking),
-    [agentWorking, desktopEchoes, session.messages]
-  )
-  const takenAbsorbedEchoes = useMemo(
-    () => placeWhereTaken(absorbedEchoes, session.messages, agentWorking),
-    [absorbedEchoes, agentWorking, session.messages]
-  )
+  // Drawn where Claude took it, at the live end until then (mid-turn-take-point.ts);
+  // the witness memory keeps the send's place, and drawing starts from there.
+  const takenDesktopEchoes = useMemo(() => placeWhereTaken(desktopEchoes, session.messages, agentWorking), [agentWorking, desktopEchoes, session.messages])
+  const takenAbsorbedEchoes = useMemo(() => placeWhereTaken(absorbedEchoes, session.messages, agentWorking), [absorbedEchoes, agentWorking, session.messages])
   // The pending copies drawn: a witness that gave way to a copy placed by the
   // desk's clock is not, and its old place must not break the tool fold
   // either, or the call written between that place and the message drew as a

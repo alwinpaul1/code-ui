@@ -1,4 +1,4 @@
-import { isToolResultBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { isToolCallBlock, isToolResultBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { pendingPlacementAnchorId } from './mobile-native-chat-render-data'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
 
@@ -61,9 +61,12 @@ export function drawnWhereTaken(
     return null
   }
   const from = rawMessages.findIndex((message) => message.id === anchorId)
-  if (from < 0) {
+  if (from === -1) {
     return anchorId
   }
+  // The end of the last result run of a step still being written: a call
+  // written within STEP_CALL_GAP_MS of it is the same step's.
+  let stepResult: string | null = null
   for (let index = from + 1; index < rawMessages.length; index += 1) {
     const row = rawMessages[index]!
     if (isResultRow(row)) {
@@ -73,17 +76,48 @@ export function drawnWhereTaken(
       while (last + 1 < rawMessages.length && isResultRow(rawMessages[last + 1]!)) {
         last += 1
       }
-      return rawMessages[last]!.id
+      const next = rawMessages[last + 1]
+      if (next === undefined || !continuesStep(rawMessages[last]!, next)) {
+        return rawMessages[last]!.id
+      }
+      stepResult = rawMessages[last]!.id
+      index = last
+      continue
     }
     if (row.role === 'user') {
-      return anchorId
+      return stepResult ?? anchorId
     }
   }
-  return agentWorking ? (rawMessages.at(-1)?.id ?? anchorId) : anchorId
+  return agentWorking ? (rawMessages.at(-1)?.id ?? anchorId) : (stepResult ?? anchorId)
+}
+
+/**
+ * How soon after a result a call of the SAME step is written. Claude Code
+ * runs a step's calls as they stream, so one API message can write a call,
+ * its result, then its next call (Ran 2 commands as one fold). Of the 910
+ * such calls in 25 local transcripts, 186 came within a second of the result
+ * before them; of the 6,973 calls that opened a new step after a result,
+ * none did (a new step waits for the model). Rows carry no API message id,
+ * so the gap is the only tell; a slower same-step call is still drawn as a
+ * take (review of 2026-10-11).
+ */
+const STEP_CALL_GAP_MS = 1000
+
+function continuesStep(result: NativeChatMessage, next: NativeChatMessage): boolean {
+  return (
+    isCallRow(next) &&
+    result.timestamp !== null &&
+    next.timestamp !== null &&
+    next.timestamp - result.timestamp < STEP_CALL_GAP_MS
+  )
 }
 
 function isResultRow(row: NativeChatMessage): boolean {
   return row.blocks.length > 0 && row.blocks.every(isToolResultBlock)
+}
+
+function isCallRow(row: NativeChatMessage): boolean {
+  return row.blocks.length > 0 && row.blocks.every(isToolCallBlock)
 }
 
 /** Each pending echo drawn where Claude took it (drawnWhereTaken), from the
