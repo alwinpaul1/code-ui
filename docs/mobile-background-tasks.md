@@ -812,9 +812,11 @@ Probe, captured screens and limits: `docs/subagent-task-visibility.md`.
 
 Later the same day the sheet started reading each running agent's own
 transcript while it is open (`mobile-subagent-activity.ts`,
-`MobileSubagentActivityFeeds.tsx`): the agent's row is titled with its latest
-step ("Running cd /private/tmp && ls | head -3") and the shells it started are
-listed as rows of their own, under it while running, in Finished once over.
+`MobileSubagentActivityFeeds.tsx`): the shells it started are listed as rows
+of their own, under it while running, in Finished once over. (Until the third
+pass of 2026-10-11 the agent's row was also titled with its call in flight,
+"Running cd /private/tmp && ls | head -3"; it now always reads the description,
+"A running agent reads its description" below.)
 See "Reading the subagents' own transcripts" in
 `docs/subagent-task-visibility.md`.
 
@@ -892,7 +894,7 @@ What the session really was (its own transcripts, Orca's persisted roster in
 What changed:
 
 - An agent row's title is the description unless a tool call is in flight
-  (`subagentStepInFlight`, `mobile-subagent-activity.ts`).
+  (superseded the same day: the description always, "A running agent reads its description" below).
 - A launched agent is timed from its comeback when Orca's row started more than 10 s after the
   launch (Orca drops a stopped one-shot agent's row and stamps its return anew) and the run clock
   (`mobile-subagent-runs.ts`) places the run there (`currentRunStart`), timed from the earlier of
@@ -1089,4 +1091,26 @@ dialog). If the Stop is gone for good they can go too.
 
 Pinned by `MobileBackgroundTasksSheet.no-stop.test.tsx` (a structured roster of every kind, and the
 busy-lead terminal fixture with the footer's shells pill up, in light and dark).
+
+## A running agent reads its description (2026-10-11, third pass)
+
+The user's screenshot of four running agents: two read their description ("Hide agent hand-back
+row · Agent 27m 43s"), two read "Running cd "/Users/alwinpaul/Desktop/Project/Code
+UI/.claude/worktrees/ag…" where the Claude app showed "Running shimmer and stray arrow" and "Show
+chat images like Claude" (the second resumed by SendMessage). "I would like to know what they are
+doing or their tasks, like 'Show chat images like Claude', not the process they are doing."
+
+Cause: while the sheet was open it read each running agent's own transcript and put the agent's
+unanswered tool call on the row as `latestStep`, which the card drew over the title. A gate run is
+one Bash call (`cd "<worktree>/mobile" && … pnpm test`) that stays unanswered for minutes, so the
+row read as the command for minutes. The row's own `title` was the Agent call's description all
+along, on a resumed agent too: the resume path (SendMessage's `resumedAgentId`) never touched it.
+
+Now the row is the description, always, running or finished, resumed or not. `latestStep`,
+`subagentStepInFlight` and `subagentStepLabel` are gone; the sheet still reads the agents'
+transcripts for the shells and agents they launch. Pinned by
+`MobileBackgroundTaskCard.agent-title.test.tsx` (the busy-lead slow agent mid-ping, and
+`fixtures/claude-resumed-agent-bash-in-flight-2.1.296.ts`: "Show chat images like Claude" from
+session 0954729d, resumed at 15:31:21, mid-gate at 15:38, light and dark) and the sheet-level
+`MobileBackgroundTasksSheet.subagent-activity.test.tsx`.
 

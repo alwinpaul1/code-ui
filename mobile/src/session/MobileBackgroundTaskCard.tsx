@@ -55,17 +55,11 @@ export function MobileBackgroundTaskCard({
         <BackgroundTaskGlyph kind={task.kind} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        {/* A running agent's latest step is its title, as the Claude app's
-            rows read ("Running cd /private/tmp/…"); the spawn description
-            stays in what a screen reader says, and on the Stop. */}
-        <Txt
-          variant="label"
-          weight="semibold"
-          numberOfLines={2}
-          accessibilityLabel={task.latestStep ? `${task.title}, ${task.latestStep}` : undefined}
-          style={{ fontSize: 14, lineHeight: TITLE_LINE }}
-        >
-          {task.latestStep ?? task.title}
+        {/* An agent's title is its Agent call's description, running or not, as
+            the Claude app's rows read ("Show chat images like Claude"), never
+            the call it is in (the user, 2026-10-11; agent-title.test.tsx). */}
+        <Txt variant="label" weight="semibold" numberOfLines={2} style={{ fontSize: 14, lineHeight: TITLE_LINE }}>
+          {task.title}
         </Txt>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
           <Txt variant="caption">{backgroundTaskKindLabel(task.kind)}</Txt>

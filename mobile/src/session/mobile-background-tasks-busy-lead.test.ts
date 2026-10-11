@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { parseAgentHudBeaconPayload } from './agent-hud-beacon'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
-import { mergeSubagentActivity, subagentStepInFlight } from './mobile-subagent-activity'
+import { mergeSubagentActivity } from './mobile-subagent-activity'
 import { orcaTranscriptRows, recordsThrough } from './fixtures/claude-subagent-transcripts-2.1.296'
 import {
   BUSY_LAUNCHED_AT,
@@ -36,7 +36,7 @@ describe("the lead's transcript alone cannot see a mid-turn completion", () => {
   })
 })
 
-describe("a background agent's row reads its description unless a tool call is in flight", () => {
+describe("a background agent's row reads its description, a tool call in flight or not", () => {
   const agentRow = (id: string, title: string, now: number): BackgroundTask => ({
     id,
     kind: 'agent',
@@ -50,14 +50,15 @@ describe("a background agent's row reads its description unless a tool call is i
     finished: []
   })
 
-  it('titles the slow agent "Running ping -c 50 127.0.0.1" while its ping has no answer yet', () => {
-    // 23:04:35: the slow agent's ping was sent at 23:04:12.4 and answered at 23:05:02.
+  it('keeps "Busy probe slow" on the row while its ping has no answer yet', () => {
+    // 23:04:35: the slow agent's ping was sent at 23:04:12.4 and answered at 23:05:02. Until
+    // 2026-10-11 the row read "Running ping -c 50 127.0.0.1" here (agent-title.test.tsx).
     const now = at('2026-10-10T23:04:35.000Z')
     const slow = orcaTranscriptRows(recordsThrough(busyRecords('agent-slow'), '2be5402f'))
     const merged = mergeSubagentActivity(tasks(now), new Map([[SLOW_AGENT, slow]]), { now })
     const card = merged.running.find((task) => task.id === SLOW_AGENT)!
-    expect(card.latestStep).toBe('Running ping -c 50 127.0.0.1')
     expect(card.title).toBe('Busy probe slow')
+    expect(Object.keys(card)).not.toContain('latestStep')
   })
 
   it("keeps the quick agent's description once its launch of a background sleep was answered", () => {
@@ -68,7 +69,6 @@ describe("a background agent's row reads its description unless a tool call is i
     const quick = orcaTranscriptRows(recordsThrough(busyRecords('agent-quick'), 'aec3e518'))
     const merged = mergeSubagentActivity(tasks(now), new Map([[QUICK_AGENT, quick]]), { now })
     const card = merged.running.find((task) => task.id === QUICK_AGENT)!
-    expect(card.latestStep).toBeUndefined()
     expect(card.title).toBe('Busy probe quick')
   })
 
@@ -76,31 +76,7 @@ describe("a background agent's row reads its description unless a tool call is i
     const now = at('2026-10-10T23:05:03.000Z')
     const slow = orcaTranscriptRows(recordsThrough(busyRecords('agent-slow'), 'a2296a5b'))
     const merged = mergeSubagentActivity(tasks(now), new Map([[SLOW_AGENT, slow]]), { now })
-    expect(merged.running.find((task) => task.id === SLOW_AGENT)!.latestStep).toBeUndefined()
-  })
-})
-
-describe('which of two parallel calls is still in flight', () => {
-  it('pairs results first in, first out: the second call waits when one result came back', () => {
-    // Review, 2026-10-11: the walk back paired the result with the NEAREST call, so the
-    // row named the call that had already answered.
-    const rows = [
-      {
-        id: 'calls',
-        role: 'assistant' as const,
-        timestamp: 1,
-        source: 'transcript' as const,
-        blocks: [
-          { type: 'tool-call' as const, name: 'Bash', input: { command: 'echo A' } },
-          { type: 'tool-call' as const, name: 'Bash', input: { command: 'sleep 99' } }
-        ]
-      },
-      { id: 'result', role: 'tool' as const, timestamp: 2, source: 'transcript' as const, blocks: [{ type: 'tool-result' as const, output: 'A' }] }
-    ]
-    expect(subagentStepInFlight(rows)).toBe('Running sleep 99')
-    expect(subagentStepInFlight(rows.slice(0, 1))).toBe('Running sleep 99')
-    // A result whose call sits above the loaded window answers nothing here.
-    expect(subagentStepInFlight([rows[1]!, ...rows])).toBe('Running sleep 99')
+    expect(merged.running.find((task) => task.id === SLOW_AGENT)!.title).toBe('Busy probe slow')
   })
 })
 

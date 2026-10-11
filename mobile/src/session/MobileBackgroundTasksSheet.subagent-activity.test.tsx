@@ -208,14 +208,16 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     act(() => subscription.emit({ type: 'snapshot', messages, hasMore: false }))
   }
 
-  it('titles agent A with the step it is in and lists its background sleep as "Shell 1m 20s"', async () => {
+  it('titles agent A with its description while its cd runs, and lists its background sleep as "Shell 1m 20s"', async () => {
     await mount({ open: true, footer: 2 })
     answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
     answer(PROBE_B_AGENT, orcaTranscriptRows(recordsThrough(probeBRecords(), '1f61a477')))
     const { texts, labels } = readTree(renderer!)
-    expect(texts).toContain('Running cd /private/tmp && ls | head -3')
-    expect(texts).not.toContain('Sleep probe A')
-    expect(labels).toContain('Sleep probe A, Running cd /private/tmp && ls | head -3')
+    // Its `cd /private/tmp && ls | head -3` is still in flight: the row keeps the description, as
+    // the Claude app's does (the user, 2026-10-11; it read "Running cd …" until then).
+    expect(texts).toContain('Sleep probe A')
+    expect(texts).not.toContain('Running cd /private/tmp && ls | head -3')
+    expect(labels.some((label) => label.includes('Running cd'))).toBe(false)
     expect(texts).toContain('Start a 120-second background sleep')
     expect(texts).toContain('1m 20s')
     // B's TaskStop has answered and no call is in flight: B reads its description.
@@ -225,7 +227,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(texts).toContain('Start 200s sleep in background')
     // Both footer shells are listed now: no "+N shells in subagents" left over.
     expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
-    // With no Stop handed to the sheet (a Codex tab, the structured lane's absence), no Stop.
+    // No Stop on any row (no-stop.test.tsx).
     expect(renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop Start a 120-second background sleep')).toHaveLength(0)
   })
 
@@ -240,11 +242,12 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     await mount({ open: true, status: nestedStatus, ownAgentIds: [NESTED_PARENT_AGENT] })
     expect(readTree(renderer!).texts).not.toContain(NESTED_AGENT_TITLE)
     answer(NESTED_PARENT_AGENT, nestedParentRows(NESTED_AFTER_LAUNCH_UUID))
-    const { texts, labels } = readTree(renderer!)
+    const { texts } = readTree(renderer!)
     expect(texts).toContain(NESTED_AGENT_TITLE)
     expect(texts).toContain('30s')
-    // The parent is in its `sleep 1; echo waiting` at that record, so it reads its step.
-    expect(labels).toContain(`${NESTED_PARENT_TITLE}, Running sleep 1; echo waiting`)
+    // The parent is in its `sleep 1; echo waiting` at that record, and still reads its description.
+    expect(texts).toContain(NESTED_PARENT_TITLE)
+    expect(texts).not.toContain('Running sleep 1; echo waiting')
   })
 
   it("moves A's shell out of Running once the status line reports it finished, with no footer count", async () => {
@@ -255,7 +258,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     // Still listed, now as a finished row with no live clock.
     expect(texts).toContain('Start a 120-second background sleep')
     expect(texts).not.toContain('1m 20s')
-    expect(texts).toContain('Running cd /private/tmp && ls | head -3')
+    expect(texts).toContain('Sleep probe A')
   })
 
   it('keeps the description when the read is refused or never answers', async () => {
@@ -299,13 +302,13 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(readTree(renderer!).texts).toContain('Start 200s sleep in background')
   })
 
-  it('keeps the step and the shell rows through a read that fails after it answered', async () => {
+  it('keeps the shell rows through a read that fails after it answered', async () => {
     await mount({ open: true })
     answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
     const subscription = live().find((entry) => entry.params.sessionId === `agent-${PROBE_A_AGENT}`)!
     act(() => subscription.emit({ type: 'error', error: 'connection lost' }))
     const { texts } = readTree(renderer!)
-    expect(texts).toContain('Running cd /private/tmp && ls | head -3')
+    expect(texts).toContain('Sleep probe A')
     expect(texts).toContain('Start a 120-second background sleep')
   })
 
@@ -323,7 +326,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
     expect(live()).toHaveLength(0)
   })
 
-  it('draws the step title in the primary ink of the active theme, light and dark', async () => {
+  it("draws a read agent's title in the primary ink of the active theme, light and dark", async () => {
     for (const [scheme, colors] of [
       ['light', lightColors],
       ['dark', darkColors]
@@ -331,7 +334,7 @@ describe("the Background tasks sheet reads its running agents' transcripts", () 
       await mount({ open: true, scheme })
       answer(PROBE_A_AGENT, orcaTranscriptRows(recordsThrough(probeARecords(), 'b8efa9d2')))
       const { colorsByText } = readTree(renderer!)
-      expect(colorsByText.get('Running cd /private/tmp && ls | head -3')).toBe(colors.text)
+      expect(colorsByText.get('Sleep probe A')).toBe(colors.text)
       expect(colorsByText.get('1m 20s')).toBe(colors.textMuted)
       act(() => renderer?.unmount())
       renderer = null

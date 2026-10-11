@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
-import {
-  mergeSubagentActivity,
-  SUBAGENT_WATCH_CAP,
-  subagentStepInFlight,
-  subagentWatchTargets
-} from './mobile-subagent-activity'
+import { mergeSubagentActivity, SUBAGENT_WATCH_CAP, subagentWatchTargets } from './mobile-subagent-activity'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
 import { SUBAGENT_SHELL_SCREEN, screenRows } from './fixtures/claude-subagent-shells-2.1.296'
 import {
@@ -45,28 +40,15 @@ const bAfterStop = () => orcaTranscriptRows(recordsThrough(probeBRecords(), '1f6
 
 const feeds = (entries: [string, NativeChatMessage[]][]) => new Map(entries)
 
-describe("a background agent's row shows the step it is in, as the Claude app does", () => {
-  it('titles a running agent "Running cd /private/tmp && ls | head -3" while that command runs', () => {
+describe("a background agent's row keeps its description, whatever call it is in, as the Claude app does", () => {
+  // Until 2026-10-11 the row read "Running cd /private/tmp && ls | head -3" here; the user asked
+  // for the description instead (MobileBackgroundTaskCard.agent-title.test.tsx).
+  it('keeps "Sleep probe A" on the row while its cd /private/tmp && ls | head -3 runs', () => {
     const now = Date.parse('2026-10-10T18:45:18.200Z')
     const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now })
     const a = merged.running.find((task) => task.id === PROBE_A_AGENT)!
-    expect(a.latestStep).toBe('Running cd /private/tmp && ls | head -3')
-    // The spawn description stays on the row for the screen reader and the Stop.
     expect(a.title).toBe('Sleep probe A')
-  })
-
-  it('reads the first line of a multi-line command, and the run wording for any other tool', () => {
-    const call = (name: string, input: Record<string, unknown>): NativeChatMessage => ({
-      id: name,
-      role: 'assistant',
-      timestamp: 1,
-      source: 'transcript',
-      blocks: [{ type: 'tool-call', name, input }]
-    })
-    expect(subagentStepInFlight([call('Bash', { command: 'cd /private/tmp\nls -la', description: 'List' })])).toBe('Running cd /private/tmp')
-    expect(subagentStepInFlight([call('ToolSearch', { query: 'select:TaskStop', max_results: 5 })])).toBe('Running ToolSearch select:TaskStop')
-    // B's real TaskStop: no JSON in a title.
-    expect(subagentStepInFlight([call('TaskStop', { task_id: 'bnj50z9e4' })])).toBe('Running TaskStop')
+    expect(Object.keys(a)).not.toContain('latestStep')
   })
 
   it("keeps the description when the agent's transcript is unread, refused, or holds no call yet", () => {
@@ -76,9 +58,9 @@ describe("a background agent's row shows the step it is in, as the Claude app do
     expect(mergeSubagentActivity(tasks, new Map(), { now })).toBe(tasks)
     const onlyPrompt = orcaTranscriptRows(recordsThrough(probeARecords(), '3dbeb752'))
     const merged = mergeSubagentActivity(tasks, feeds([[PROBE_A_AGENT, onlyPrompt], [PROBE_B_AGENT, []]]), { now })
-    expect(merged.running.map((task) => [task.id, task.title, task.latestStep])).toEqual([
-      [PROBE_A_AGENT, 'Sleep probe A', undefined],
-      [PROBE_B_AGENT, 'Sleep probe B', undefined]
+    expect(merged.running.map((task) => [task.id, task.title])).toEqual([
+      [PROBE_A_AGENT, 'Sleep probe A'],
+      [PROBE_B_AGENT, 'Sleep probe B']
     ])
   })
 })
