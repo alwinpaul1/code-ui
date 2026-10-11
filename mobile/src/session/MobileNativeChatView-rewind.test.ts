@@ -121,7 +121,7 @@ describe('which rows the chat list offers Rewind to here on', () => {
     const row = list.props.renderItem({ item: data[index], index }) as {
       props: { children: [unknown, { props: Record<string, unknown> }] }
     }
-    return row.props.children[1].props
+    return row.props.children[1].props.children.props // inside the pending dim (S2)
   }
 
   it('hands it to the journalled user rows, and to nothing else', async () => {

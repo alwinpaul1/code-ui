@@ -160,9 +160,9 @@ describe('MobileNativeChatView, where a turn ends', () => {
     const data = list.props.data as NativeChatMessage[]
     const index = data.findIndex((row) => row.id === id)
     const row = list.props.renderItem({ item: data[index], index }) as {
-      props: { children: [unknown, { props: RowProps }] }
+      props: { children: [unknown, { props: { children: { props: RowProps } } }] } // inside the pending dim (S2)
     }
-    return { props: row.props.children[1].props, index }
+    return { props: row.props.children[1].props.children.props, index }
   }
 
   function endsTurn(id: string): unknown {
