@@ -63,6 +63,12 @@ export function useMobileNativeChatImageUpload(args: {
   onImageUploading?: (scope: string, image: UploadingNativeChatImage) => void
   /** The selection is done, successful or not: chips still marked uploading are stale. */
   onUploadSettled?: (scope: string, batch?: string) => void
+  /** One picture of a selection did not reach the host: its chip stays, failed, with `retry`. */
+  onImageFailed?: (
+    scope: string,
+    image: UploadingNativeChatImage & { batch: string },
+    retry: () => Promise<{ path: string; previewUri: string }>
+  ) => void
   /** A document attach is reading an over-the-cap video's frames — drawn
    *  beside the chips, not as one (`mobile-native-chat-image-attachments-store.ts`).
    *  `null` once the attach settles, extracted or not. */
@@ -92,6 +98,7 @@ export function useMobileNativeChatImageUpload(args: {
     onError,
     onImagesUploaded,
     onImageUploading,
+    onImageFailed,
     onUploadSettled,
     onVideoFrameExtractionProgress,
     scopeKey,
@@ -101,6 +108,9 @@ export function useMobileNativeChatImageUpload(args: {
   const [isAttaching, setIsAttaching] = useState(false)
   const picker = useMediaPicker()
   const attachingCount = useRef(0)
+  // What a failed chip's retry goes out on, read at the tap (mobile-native-chat-image-attachment.ts).
+  const liveConnectionRef = useRef({ client, getConnectionId: getActiveWorktreeConnectionId })
+  liveConnectionRef.current = { client, getConnectionId: getActiveWorktreeConnectionId }
   const connStateRef = useRef(connState)
   useLayoutEffect(() => {
     connStateRef.current = connState
@@ -136,14 +146,31 @@ export function useMobileNativeChatImageUpload(args: {
       }
       let started = false
       const batch = batchOverride ?? nextNativeChatUploadBatch()
+      // A video's frames wait for the end of the selection: whether the read
+      // stopped early is only known then, and the note reads it off every frame.
       const uploadedImages: UploadedNativeChatImage[] = []
+      let settledAny = false
       let uploadError: unknown = null
       try {
         await uploadMobileNativeChatImages(source, {
           client,
           getConnectionId: getActiveWorktreeConnectionId,
           pickImages,
-          onImageUploaded: (image) => uploadedImages.push({ ...image, batch }),
+          onImageUploaded: (image) => {
+            if (image.videoFrame) {
+              uploadedImages.push({ ...image, batch })
+              return
+            }
+            // Ready the moment its own bytes land. Why: the chip of the first
+            // photo in a pick waited for the LAST photo's upload, one relay
+            // round trip per 512 KiB of each (reported 2026-10-11).
+            settledAny = true
+            onImagesUploaded(scope, [{ ...image, batch }])
+          },
+          onImageFailed: onImageFailed
+            ? (image, _error, retry) => onImageFailed(scope, { ...image, batch }, retry)
+            : undefined,
+          retryConnection: () => liveConnectionRef.current,
           onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
           onUploadStart: () => {
             started = true
@@ -204,6 +231,8 @@ export function useMobileNativeChatImageUpload(args: {
       }
       if (uploadedImages.length > 0) {
         onImagesUploaded(scope, uploadedImages)
+      }
+      if (settledAny || uploadedImages.length > 0) {
         onAttachSuccess?.()
       }
       onUploadSettled?.(scope, batch)
@@ -251,6 +280,7 @@ export function useMobileNativeChatImageUpload(args: {
       onError,
       onImagesUploaded,
       onImageUploading,
+      onImageFailed,
       onUploadSettled,
       onVideoFrameExtractionProgress,
       scopeKey,

@@ -94,7 +94,10 @@ function previewSession() {
         reconcileBufferedDraftsRef: { current: () => {} },
         closedTabTombstonesRef: { current: new Map() },
         pendingBrowserFocusPageIdRef: { current: null },
-        activeSessionTabIdRef: { current: keptTab.id }
+        activeSessionTabIdRef: { current: keptTab.id },
+        visitedSessionTabIdsRef: { current: [] },
+        switchSessionTabRef: { current: null },
+        showToast: () => {}
       })
     )
     readers = useMobileSessionDocumentReaders(

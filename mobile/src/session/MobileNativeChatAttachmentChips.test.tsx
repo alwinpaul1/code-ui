@@ -38,7 +38,16 @@ vi.mock('react-native', async () => {
 
 vi.mock('react-native-gesture-handler', () => ({ GestureHandlerRootView: 'GestureHandlerRootView' }))
 
-vi.mock('lucide-react-native', () => ({ FileText: 'FileText', Film: 'Film', Pencil: 'Pencil', X: 'X' }))
+vi.mock('lucide-react-native', () => ({
+  FileText: 'FileText',
+  Film: 'Film',
+  Pencil: 'Pencil',
+  RotateCcw: 'RotateCcw',
+  X: 'X'
+}))
+
+const retryUpload = vi.hoisted(() => vi.fn(async () => true))
+vi.mock('./mobile-native-chat-upload-retry', () => ({ retryNativeChatUpload: retryUpload }))
 
 vi.mock('../components/ZoomableImage', () => ({ ZoomableImage: 'ZoomableImage' }))
 
@@ -481,5 +490,59 @@ describe('the video-frame extraction progress chip', () => {
       videoFrameExtraction: { batch: 'batch-1', done: 3, total: 20 }
     })
     expect(pressables(screenNow, 'Cancel reading frames')).toHaveLength(0)
+  })
+})
+
+// 2026-10-11: a photo whose upload failed used to vanish from the strip with a
+// toast, and the only way back was the picker. Its chip now stays, failed,
+// with a retry over the picture and the remove badge beside it.
+describe('a chip whose upload failed', () => {
+  let renderer: ReactTestRenderer | null = null
+  afterEach(() => {
+    act(() => renderer?.unmount())
+    renderer = null
+    retryUpload.mockClear()
+  })
+
+  const FAILED: PendingNativeChatImage = { id: 'img-9', path: '', previewUri: 'file:///f.jpg', failed: true }
+
+  function draw(scheme: Scheme, props: ChipProps): ReactTestRenderer {
+    act(() => {
+      renderer = create(screen(scheme, props))
+    })
+    return renderer!
+  }
+
+  it.each(SCHEMES)('offers a retry in the theme\'s danger colours, and still the remove badge (%s)', (scheme) => {
+    const onRemoveAttachment = vi.fn()
+    const screenNow = draw(scheme, { attachments: [PHOTO, FAILED], onRemoveAttachment })
+    const [retry] = pressables(screenNow, 'Retry upload')
+    expect(retry).toBeDefined()
+    expect(retry!.props.style).toMatchObject({ backgroundColor: PALETTE[scheme].danger })
+    const icon = retry!.findAll((node) => String(node.type) === 'RotateCcw')[0]
+    expect(icon?.props.color).toBe(PALETTE[scheme].onDanger)
+    expect(pressables(screenNow, 'Remove image')).toHaveLength(2)
+    expect(screenNow.root.findAll((node) => node.props.testID === 'attachment-uploading')).toHaveLength(0)
+  })
+
+  it('sends the picture again from the retry', () => {
+    const screenNow = draw('light', { attachments: [FAILED], onRemoveAttachment: vi.fn() })
+    tap(pressables(screenNow, 'Retry upload')[0])
+    expect(retryUpload).toHaveBeenCalledExactlyOnceWith('img-9')
+  })
+
+  it('takes it out of the strip from the remove badge', () => {
+    const onRemoveAttachment = vi.fn()
+    const screenNow = draw('dark', { attachments: [FAILED], onRemoveAttachment })
+    tap(pressables(screenNow, 'Remove image')[0])
+    expect(onRemoveAttachment).toHaveBeenCalledExactlyOnceWith('img-9')
+  })
+
+  it('offers no retry on a chip that uploaded, or one still uploading', () => {
+    const screenNow = draw('light', {
+      attachments: [PHOTO, { ...SECOND, path: '', uploading: true }],
+      onRemoveAttachment: vi.fn()
+    })
+    expect(pressables(screenNow, 'Retry upload')).toHaveLength(0)
   })
 })

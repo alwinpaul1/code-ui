@@ -26,6 +26,10 @@ export type PendingNativeChatImage = {
    *  with a spinner (2026-09-13, the Claude app's per-file loading ring). A
    *  send tapped now waits for it (use-mobile-native-chat-send-chips.ts). */
   readonly uploading?: boolean
+  /** Its bytes never reached the host (2026-10-11). The chip stays, with a
+   *  retry on it and the remove badge, instead of vanishing; `path` is still
+   *  empty, so a send tapped beside it refuses (use-mobile-native-chat-send-chips.ts). */
+  readonly failed?: boolean
   /** Which selection put this chip here. One selection's sweep must not clear
    *  another's chips: picking a large video then a small photo let the photo
    *  settle first and delete the video's chip, and the video never went with
@@ -34,7 +38,57 @@ export type PendingNativeChatImage = {
 }
 
 /** What a chip can show before the host has the bytes: no path yet. */
-export type UploadingNativeChatImage = Omit<PendingNativeChatImage, 'id' | 'path' | 'uploading'>
+export type UploadingNativeChatImage = Omit<PendingNativeChatImage, 'id' | 'path' | 'uploading' | 'failed'>
+
+/** Marks the chip a failed upload left behind (one selection's, matched the
+ *  way a finished upload is) as failed, and returns its id, or null when no
+ *  chip of that selection is still uploading that picture. */
+export function failUploadingNativeChatImage(
+  current: readonly PendingNativeChatImage[],
+  image: { previewUri: string; batch?: string }
+): { chips: PendingNativeChatImage[]; id: string | null } {
+  const slot = current.findIndex(
+    (chip) => chip.uploading && chip.previewUri === image.previewUri && chip.batch === image.batch
+  )
+  if (slot === -1) {
+    return { chips: [...current], id: null }
+  }
+  const next = [...current]
+  const { uploading: _stopped, ...chip } = next[slot]!
+  next[slot] = { ...chip, failed: true }
+  return { chips: next, id: chip.id }
+}
+
+/** A failed chip going up again from its retry: drawn uploading, and out of
+ *  its selection, so no sweep of that selection's stranded chips can take it. */
+export function retryFailedNativeChatImage(
+  current: readonly PendingNativeChatImage[],
+  id: string
+): PendingNativeChatImage[] | null {
+  const index = current.findIndex((chip) => chip.id === id && chip.failed === true)
+  if (index === -1) {
+    return null
+  }
+  const next = [...current]
+  const { failed: _retrying, batch: _swept, ...chip } = next[index]!
+  next[index] = { ...chip, uploading: true }
+  return next
+}
+
+/** The retry failed as well: the chip goes back to failed, retry and remove on it. */
+export function refailNativeChatImage(
+  current: readonly PendingNativeChatImage[],
+  id: string
+): PendingNativeChatImage[] {
+  const index = current.findIndex((chip) => chip.id === id)
+  if (index === -1) {
+    return [...current]
+  }
+  const next = [...current]
+  const { uploading: _stopped, ...chip } = next[index]!
+  next[index] = { ...chip, failed: true }
+  return next
+}
 
 export function appendPendingNativeChatImages(
   current: readonly PendingNativeChatImage[],
@@ -169,6 +223,21 @@ export type UploadNativeChatImagesDeps = {
   readonly onImageStart?: (image: UploadingNativeChatImage) => void
   /** Retains each completed upload if a later image in the same selection fails. */
   readonly onImageUploaded?: (image: Omit<PendingNativeChatImage, 'id'>) => void
+  /** One picture's read or upload failed. With this set, the rest of the
+   *  selection still goes up and the first failure is thrown once it has;
+   *  `retry` reads and uploads that one picture again. Without it, the first
+   *  failure ends the selection, as before. */
+  readonly onImageFailed?: (
+    image: UploadingNativeChatImage,
+    error: unknown,
+    retry: () => Promise<{ path: string; previewUri: string }>
+  ) => void
+  /** The connection a retry goes out on, read when it is tapped: a reconnect is a new client,
+   *  and a retry pinned to the pick's own could never succeed (Opus review, 2026-10-12). */
+  readonly retryConnection?: () => {
+    readonly client: MobileClipboardImageRpcSender | null
+    readonly getConnectionId: () => Promise<string | null>
+  }
 }
 
 /** Picks an image and uploads it to the host, returning the host path + a local
@@ -184,40 +253,64 @@ export async function uploadMobileNativeChatImages(
     pickImages,
     onUploadStart,
     onImageStart,
-    onImageUploaded
+    onImageUploaded,
+    onImageFailed,
+    retryConnection
   }: UploadNativeChatImagesDeps
 ): Promise<Omit<PendingNativeChatImage, 'id'>[]> {
   const picked = await pickImages(source)
   const uploaded: Omit<PendingNativeChatImage, 'id'>[] = []
   let connectionId: string | null = null
+  let started = false
+  let firstFailure: { error: unknown } | null = null
   for await (const image of picked) {
-    if (uploaded.length === 0) {
+    if (!started) {
+      started = true
       onUploadStart?.()
       connectionId = await getConnectionId()
     }
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    onImageStart?.(
-      image.name
-        ? { previewUri, kind: 'file', name: image.name }
-        : image.videoFrame
-          ? { previewUri, videoFrame: image.videoFrame }
-          : { previewUri }
-    )
-    // The chip is up; now the bytes, which a photo reads (and scales) on demand.
-    const base64 = image.base64 || (image.load ? await image.load() : '')
-    if (!base64) {
-      continue
-    }
-    const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
-    const result = image.name
-      ? { path, previewUri, kind: 'file' as const, name: image.name }
+    const chip: UploadingNativeChatImage = image.name
+      ? { previewUri, kind: 'file', name: image.name }
       : image.videoFrame
-        ? { path, previewUri, videoFrame: image.videoFrame }
-        : { path, previewUri }
-    uploaded.push(result)
-    onImageUploaded?.(result)
+        ? { previewUri, videoFrame: image.videoFrame }
+        : { previewUri }
+    onImageStart?.(chip)
+    try {
+      // The chip is up; now the bytes, which a photo reads (and scales) on demand.
+      const base64 = image.base64 || (image.load ? await image.load() : '')
+      if (!base64) {
+        continue
+      }
+      const path = await saveMobileClipboardImageAsTempFile(client, base64, { connectionId })
+      const result = { ...chip, path }
+      uploaded.push(result)
+      onImageUploaded?.(result)
+    } catch (error) {
+      if (!onImageFailed) {
+        throw error
+      }
+      firstFailure ??= { error }
+      onImageFailed(chip, error, async () => {
+        const base64 = image.base64 || (image.load ? await image.load() : '')
+        if (!base64) {
+          throw new Error('The picture could not be read')
+        }
+        const live = retryConnection?.() ?? { client, getConnectionId }
+        if (!live.client) {
+          throw new Error('Not connected to the desktop')
+        }
+        const path = await saveMobileClipboardImageAsTempFile(live.client, base64, {
+          connectionId: await live.getConnectionId()
+        })
+        return { path, previewUri }
+      })
+    }
+  }
+  if (firstFailure) {
+    throw firstFailure.error
   }
   return uploaded
 }

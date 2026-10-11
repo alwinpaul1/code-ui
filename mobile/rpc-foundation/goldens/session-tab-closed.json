@@ -3,10 +3,10 @@
   "family": "session.tab-close-session",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "5749989a0f32fc92397f34e7f172ceb26a085144",
+  "baseline": "0269504c8c3090df1ed7851c2a72c84ef9707d4d",
   "lockfileSha256": "761b12309b432bd5ed9f5b85e41c5928ed8f4855c26c424466294c4ee0406ff6",
   "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
-  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "adapterSha256": "641ce78da0e10638073176447fc4f133917a5a7b2e53d1553785b655a6797e93",
   "scenarioSha256": "334b50e135103db21b93e60acff31047823371049171b57388df050179a6dcbc",
   "platform": "darwin",
   "scenarioVersion": 1,
@@ -27,8 +27,15 @@
         "handle": "terminal-1"
       }
     },
-    "4306ddc37adb": {
-      "activeHandle": "terminal-1",
+    "50a46af5cf5c": {
+      "name": "session.tabs.close#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}"
+    },
+    "567d11711027": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
       "sessionTabs": [],
       "terminals": [
         {
@@ -37,11 +44,6 @@
           "title": "Terminal"
         }
       ]
-    },
-    "50a46af5cf5c": {
-      "name": "session.tabs.close#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}"
     },
     "de4cc94c0333": {
       "name": "session.tabs.close#1",
@@ -99,7 +101,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       }

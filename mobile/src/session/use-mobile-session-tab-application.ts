@@ -12,7 +12,8 @@ import { reconcileSessionTabsWithTerminalList } from './mobile-session-tab-termi
 import {
   acceptSessionSnapshot,
   applyClosedTabTombstones,
-  confirmsMirroredTabSelection
+  confirmsMirroredTabSelection,
+  liveClosedTabIds
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './mobile-session-route-helpers'
@@ -93,7 +94,8 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       }
       nextTabs = reconcileSessionTabsWithTerminalList(
         nextTabs,
-        terminalsRef.current.filter((terminal) => !isTranscriptTailLeftover(terminal))
+        terminalsRef.current.filter((terminal) => !isTranscriptTailLeftover(terminal)),
+        liveClosedTabIds(closedTabTombstonesRef.current, Date.now())
       ) as MobileSessionTab[]
       reconcileBufferedDraftsRef.current(currentSessionTabs, nextTabs, {
         retainMissingSurfaces: result.tabs.length === 0

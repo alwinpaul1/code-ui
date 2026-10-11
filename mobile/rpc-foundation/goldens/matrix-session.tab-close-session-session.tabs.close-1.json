@@ -3,16 +3,30 @@
   "family": "session.tab-close-session",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "5749989a0f32fc92397f34e7f172ceb26a085144",
+  "baseline": "0269504c8c3090df1ed7851c2a72c84ef9707d4d",
   "lockfileSha256": "761b12309b432bd5ed9f5b85e41c5928ed8f4855c26c424466294c4ee0406ff6",
   "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
-  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "adapterSha256": "641ce78da0e10638073176447fc4f133917a5a7b2e53d1553785b655a6797e93",
   "scenarioSha256": "64c12ae20aaf7202c2271134d57e4312127e8f909ad086ba69b4662bbd749bb0",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "000362643efc": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: Unknown method"
+      }
+    },
+    "06db81d7a5dd": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: transport failure"
+      }
+    },
     "0bf439aa2905": {
       "name": "session.tabs.close#1",
       "ordinal": 1,
@@ -55,6 +69,13 @@
       "ordinal": 3,
       "value": {
         "handle": "terminal-1"
+      }
+    },
+    "2e7db0767b80": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: the desktop could not be reached"
       }
     },
     "30cee8b4ade6": {
@@ -100,25 +121,6 @@
       "value": {
         "handle": "terminal-1"
       }
-    },
-    "3e15def58214": {
-      "activeHandle": "terminal-1",
-      "sessionTabs": [
-        {
-          "id": "tab-1",
-          "isActive": true,
-          "terminal": "terminal-1",
-          "title": "Terminal",
-          "type": "terminal"
-        }
-      ],
-      "terminals": [
-        {
-          "handle": "terminal-1",
-          "isActive": true,
-          "title": "Terminal"
-        }
-      ]
     },
     "3f4d08e5066d": {
       "name": "session.tabs.close#1",
@@ -188,17 +190,6 @@
         }
       }
     },
-    "4306ddc37adb": {
-      "activeHandle": "terminal-1",
-      "sessionTabs": [],
-      "terminals": [
-        {
-          "handle": "terminal-1",
-          "isActive": true,
-          "title": "Terminal"
-        }
-      ]
-    },
     "45e770794f33": {
       "name": "session.tabs.close#1",
       "ordinal": 1,
@@ -240,6 +231,19 @@
       "name": "session.tabs.close#1",
       "ordinal": 2,
       "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.close\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-1\",\"reason\":\"user\"}}"
+    },
+    "567d11711027": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "Terminal"
+        }
+      ]
     },
     "578184289260": {
       "name": "session.tabs.close#1",
@@ -349,6 +353,41 @@
           "ok": true
         }
       }
+    },
+    "6ff85203f27f": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: refused"
+      }
+    },
+    "97140331360d": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: outer refused"
+      }
+    },
+    "aec1a3a9a93f": {
+      "activeHandle": {
+        "$rpc": "null"
+      },
+      "sessionTabs": [
+        {
+          "id": "tab-1",
+          "isActive": true,
+          "terminal": "terminal-1",
+          "title": "Terminal",
+          "type": "terminal"
+        }
+      ],
+      "terminals": [
+        {
+          "handle": "terminal-1",
+          "isActive": true,
+          "title": "Terminal"
+        }
+      ]
     },
     "c713707ba458": {
       "name": "session.tabs.close#1",
@@ -478,7 +517,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -490,7 +529,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -502,7 +541,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -514,7 +553,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -526,7 +565,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -538,7 +577,7 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "4306ddc37adb",
+          "state": "567d11711027",
           "effects": ["1195cdf08e57", "32947a33faab"]
         }
       },
@@ -550,8 +589,8 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "3e15def58214",
-          "effects": []
+          "state": "aec1a3a9a93f",
+          "effects": ["97140331360d"]
         }
       },
       {
@@ -562,8 +601,8 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "3e15def58214",
-          "effects": []
+          "state": "aec1a3a9a93f",
+          "effects": ["6ff85203f27f"]
         }
       },
       {
@@ -574,8 +613,8 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "3e15def58214",
-          "effects": []
+          "state": "aec1a3a9a93f",
+          "effects": ["000362643efc"]
         }
       },
       {
@@ -586,8 +625,8 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "3e15def58214",
-          "effects": []
+          "state": "aec1a3a9a93f",
+          "effects": ["06db81d7a5dd"]
         }
       },
       {
@@ -598,8 +637,8 @@
           "settlements": {
             "close-tab": "eb79a9b3682a"
           },
-          "state": "3e15def58214",
-          "effects": []
+          "state": "aec1a3a9a93f",
+          "effects": ["2e7db0767b80"]
         }
       }
     ]

@@ -65,7 +65,10 @@ function mountDocuments(readReply: () => Promise<RpcResponse>) {
         activeSessionTabTypeRef: { current: null },
         activeHandleRef: { current: null },
         setActiveSessionTabId: () => {},
-        setActiveHandle: () => {}
+        setActiveHandle: () => {},
+        visitedSessionTabIdsRef: { current: [] },
+        switchSessionTabRef: { current: null },
+        showToast: () => {}
       })
     )
   })

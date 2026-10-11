@@ -108,6 +108,7 @@ export function sessionScreenReadMountAdapters(
             },
             terminalsRef,
             sessionTabsRef,
+            closedTabTombstonesRef: { current: new Map() },
             pruneTerminalHandlesFromLiveInput: (handles) =>
               effect('prune-live-input', [...handles]),
             defaultTerminalHandlesToLiveInput: (handles) =>

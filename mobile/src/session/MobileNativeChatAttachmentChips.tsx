@@ -1,10 +1,11 @@
-import { FileText, Film, X } from 'lucide-react-native'
+import { FileText, Film, RotateCcw, X } from 'lucide-react-native'
 import { ActivityIndicator, Image, Pressable, ScrollView, View } from 'react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { openImagePreview } from './image-preview-store'
+import { retryNativeChatUpload } from './mobile-native-chat-upload-retry'
 
 /** The strip above the composer text: image thumbnails and named document
  *  chips, each with its remove badge, plus (while a document attach is
@@ -143,7 +144,7 @@ export function MobileNativeChatAttachmentChips({
                     attachment.previewUri,
                     attachment.name ?? 'Image',
                     0,
-                    onEditAttachment && !attachment.uploading && !attachment.videoFrame
+                    onEditAttachment && !attachment.uploading && !attachment.failed && !attachment.videoFrame
                       ? () => onEditAttachment(attachment.id, attachment.previewUri)
                       : undefined
                   )
@@ -177,6 +178,42 @@ export function MobileNativeChatAttachmentChips({
                 }}
               >
                 <ActivityIndicator size="small" color={colors.text} />
+              </View>
+            ) : null}
+            {attachment.failed && !attachment.uploading ? (
+              // Its bytes never reached the host: a retry over the picture,
+              // and the remove badge stays beside it (2026-10-11). The retry
+              // itself is kept by chip id (mobile-native-chat-upload-retry.ts).
+              <View
+                pointerEvents="box-none"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.bgOverlay
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Retry upload"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 14,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    backgroundColor: colors.danger
+                  }}
+                  onPress={() => void retryNativeChatUpload(attachment.id)}
+                  hitSlop={8}
+                >
+                  <RotateCcw size={14} color={colors.onDanger} strokeWidth={2.4} />
+                </Pressable>
               </View>
             ) : null}
             {onRemoveAttachment && !attachment.uploading ? (

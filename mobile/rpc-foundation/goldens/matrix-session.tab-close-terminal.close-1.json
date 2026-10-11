@@ -3,16 +3,23 @@
   "family": "session.tab-close",
   "namedDeltas": [],
   "runnerVersion": 1,
-  "baseline": "5749989a0f32fc92397f34e7f172ceb26a085144",
+  "baseline": "0269504c8c3090df1ed7851c2a72c84ef9707d4d",
   "lockfileSha256": "761b12309b432bd5ed9f5b85e41c5928ed8f4855c26c424466294c4ee0406ff6",
   "recorderSha256": "862980a0055ad00a63aeab656595e9275b073f557b90f2b90685888684222af3",
-  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "adapterSha256": "641ce78da0e10638073176447fc4f133917a5a7b2e53d1553785b655a6797e93",
   "scenarioSha256": "89141e3e400feea78460ede72d5269bdc885f6d3de75388542b4b7d6dff2840d",
   "platform": "darwin",
   "scenarioVersion": 1,
   "projectionVersion": 2,
   "goldenFormatVersion": 5,
   "values": {
+    "000362643efc": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: Unknown method"
+      }
+    },
     "021e509dd685": {
       "name": "terminal.close#1",
       "ordinal": 1,
@@ -45,6 +52,13 @@
             "error": "refused"
           }
         }
+      }
+    },
+    "06db81d7a5dd": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: transport failure"
       }
     },
     "07f46a73239d": {
@@ -118,6 +132,13 @@
       "ordinal": 3,
       "value": {
         "handle": "terminal-1"
+      }
+    },
+    "2e7db0767b80": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: the desktop could not be reached"
       }
     },
     "32947a33faab": {
@@ -213,6 +234,13 @@
             "closed": true
           }
         }
+      }
+    },
+    "6ff85203f27f": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: refused"
       }
     },
     "7291ef90b7d5": {
@@ -330,6 +358,13 @@
       "startedAt": 0,
       "settledAt": 0,
       "value": true
+    },
+    "97140331360d": {
+      "name": "toast",
+      "ordinal": 3,
+      "value": {
+        "message": "Couldn't close Terminal: outer refused"
+      }
     },
     "b440078f92c9": {
       "name": "terminal.close#1",
@@ -537,7 +572,7 @@
             "close-terminal": "7ed3d39f0607"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["97140331360d"]
         }
       },
       {
@@ -549,7 +584,7 @@
             "close-terminal": "7ed3d39f0607"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["6ff85203f27f"]
         }
       },
       {
@@ -561,7 +596,7 @@
             "close-terminal": "7ed3d39f0607"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["000362643efc"]
         }
       },
       {
@@ -573,7 +608,7 @@
             "close-terminal": "7ed3d39f0607"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["06db81d7a5dd"]
         }
       },
       {
@@ -585,7 +620,7 @@
             "close-terminal": "7ed3d39f0607"
           },
           "state": "3e15def58214",
-          "effects": []
+          "effects": ["2e7db0767b80"]
         }
       }
     ]

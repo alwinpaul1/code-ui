@@ -220,8 +220,12 @@ describe('a send tapped while a photo is still uploading', () => {
       expect(sentPaths(lane, args, pasted)).toEqual([])
       expect(args.baseSend).not.toHaveBeenCalled()
       expect(args.beginImageSend).not.toHaveBeenCalled()
-      // The photo that did upload is still there for the retry.
-      expect(hook!.attachments).toMatchObject([{ id: 'img-1', path: '/tmp/a.png' }])
+      // The photo that did upload is still there for the retry, and since
+      // 2026-10-11 so is the one that did not, marked failed, with its own retry.
+      expect(hook!.attachments).toMatchObject([
+        { id: 'img-1', path: '/tmp/a.png' },
+        { previewUri: 'file:///b.jpg', path: '', failed: true }
+      ])
     }
   )
 
