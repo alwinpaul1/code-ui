@@ -350,22 +350,12 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     [cancelSettle, endDrag, setAtTail, setFollowing]
   )
 
-  // With the reader at the newest row and the reply's start drawn below the top edge, the list
-  // cannot bring that start any higher (the tail is offset 0). Handing the list to the reader
-  // there moved nothing and blinked the jump control up and away on every tap of the arrow under
-  // a working turn's last row (2026-10-11 recording): it stays the tail's. The row at the top edge
-  // may be cut, so a start there still goes; a list that cannot say what it drew goes as before.
   const onScrollToMessage = useCallback(
     (index: number) => {
-      const list = listRef.current
-      const drawn = atTailRef.current && followingRef.current ? list?.computeVisibleIndices?.() : undefined
-      if (drawn && drawn.startIndex >= 0 && index >= drawn.startIndex && index < drawn.endIndex) {
-        return
-      }
       detachFromTail()
-      list?.scrollToIndex({ index, viewPosition: 1, animated: true })
+      listRef.current?.scrollToIndex({ index, viewPosition: 1, animated: true })
     },
-    [detachFromTail, followingRef]
+    [detachFromTail]
   )
 
   // A pushed route (the Files explorer, a file preview, Settings) took this

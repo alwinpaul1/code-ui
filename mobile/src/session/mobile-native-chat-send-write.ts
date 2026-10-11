@@ -121,18 +121,23 @@ async function clearInputForSend(args: {
  * looks the same either way (MobileNativeChatOutboxStatus.tsx draws nothing while a send is on its
  * way).
  *
- * The words leaving the input with nothing drawn (`inputOnly`) still stand where no copy can come
- * to settle a hold, and holding would only get them typed twice:
- *  - a tab that has given no prompt copy at all (no hook heard: an older host, hooks disabled);
- *  - the same words as the last status copy on a tab with no beacon copies: the tab status repeats
- *    no prompt it already holds (agent-status-prompts.ts `text === state.last`), while the beacon
- *    gives each submission its own copy.
+ * The words leaving the input with nothing drawn (`inputOnly`) still stand in one case, where no
+ * copy can come to settle a hold and holding would only get them typed twice: the same words as
+ * the last status copy on a tab with no beacon (no beacon copy, and no status copy twinned with
+ * one): the tab status repeats no prompt it already holds (agent-status-prompts.ts
+ * `text === state.last`), while the beacon gives each submission its own copy. An empty list of
+ * copies is NOT read as a tab with no hook (Opus re-review of 05dd008f6): a fresh session, a
+ * `/clear`, or the outbox's own resend (which reads none) has none either, and Orca installs its
+ * hook for every session. On a tab that truly has no hook, a held mid-turn message Claude took
+ * with nothing drawn can be typed again after the turn: a duplicate, never a loss.
  * A `!` shell command keeps the rule it had (its `! cmd` row; no hook; `unverified` stands): a hold
  * would end with the outbox running it again, since the drainer reads its row as no landing.
  *
- * KNOWN LIMIT: a prompt drawn above has no baseline, so an EARLIER identical row still on screen
- * passes for this send's (claudeSentPromptTexts says so): repeating the words of a message still
- * in view can be called delivered before the second one landed.
+ * KNOWN LIMIT: a prompt drawn above has no baseline, so an EARLIER row of the same words still on
+ * screen passes for this send's (claudeSentPromptTexts says so): repeating a message still in view
+ * can be called delivered before the second one landed. A row must hold the words whole, or be a
+ * start of them at least 40 characters long (a queue row Claude cut); an earlier row that only
+ * shares the first 40 characters and then differs does not pass (verifyClaudeSubmit).
  */
 export function chatSendOutcomeOfVerdict(
   verdict: Exclude<SubmitVerdict, { kind: 'not-sent' }>,
@@ -145,10 +150,14 @@ export function chatSendOutcomeOfVerdict(
   if (verdict.kind !== 'sent') {
     return 'unknown'
   }
-  if (verdict.byReceipt || !verdict.inputOnly || receiptsBefore.length === 0) {
+  if (verdict.byReceipt || !verdict.inputOnly) {
     return 'accepted'
   }
-  const beaconTab = receiptsBefore.some((receipt) => !receipt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX))
+  // The merge folds a beacon copy into its status twin (desktop-prompt-merge.ts), so a beacon tab
+  // shows as twinned status copies as often as beacon nonces.
+  const beaconTab = receiptsBefore.some(
+    (receipt) => !receipt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) || receipt.hookTwin !== undefined
+  )
   const lastStatusCopy = receiptsBefore.findLast((receipt) => receipt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX))
   return !beaconTab && lastStatusCopy !== undefined && receiptCarriesWords(lastStatusCopy, text) ? 'accepted' : 'unknown'
 }

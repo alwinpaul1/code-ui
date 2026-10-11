@@ -277,11 +277,41 @@ describe('a message sent while Claude works, that Claude took', () => {
     expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
   })
 
-  it('stands on its screen on a tab that has never given a prompt copy, where none can settle a hold', async () => {
-    // No hook heard at all (an older host, hooks off): a held mid-turn send would only be typed
-    // again by the outbox after Claude had taken it.
+  it('is held with no copies at all: a fresh session, a /clear and the outbox\'s own resend have none', async () => {
+    // Opus re-review of 05dd008f6: reading "no copies" as "no hook" let the outbox's last try,
+    // which reads no copies, call the words leaving the input delivered.
     const tab = workingTab(leftInputOnly)
     const sending = write(tab.client, () => [])
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('is held when it repeats a status copy twinned with a beacon copy (a beacon tab)', async () => {
+    const tab = workingTab(leftInputOnly)
+    const copies: BeaconPromptReceipt[] = [
+      { nonce: 'status:s:1:0', text: WORDS, hookTwin: { nonce: '4242', anchorId: 'r1', seenAt: 1 } as never }
+    ]
+    const sending = write(tab.client, () => copies)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('is held when the only drawn row shares its first 40 characters with it and then says something else', async () => {
+    const long = 'Can you check whether the build on main and the release branch passes the gate'
+    const earlier = 'Can you check whether the build on main and the release branch is red'
+    const tab = workingTab((afterBody) => (afterBody === 0 ? busyWith(long) : busyWith('', [earlier])))
+    const sending = write(tab.client, () => HOOKED_COPIES, long)
+    await vi.runAllTimersAsync()
+
+    expect(await sending).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('is delivered on a queue row Claude cut, a long enough start of its words', async () => {
+    const long = 'Can you check whether the build on main and the release branch passes the gate'
+    const tab = workingTab((afterBody) => (afterBody < 0 ? busyWith('') : busyWith('', [`${long.slice(0, 60)}…`])))
+    const sending = write(tab.client, () => HOOKED_COPIES, long)
     await vi.runAllTimersAsync()
 
     expect(await sending).toEqual({ kind: 'written', outcome: 'accepted' })

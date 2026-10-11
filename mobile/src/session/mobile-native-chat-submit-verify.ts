@@ -171,7 +171,15 @@ export async function verifyClaudeSubmit(args: {
   // `! cmd` row, not a `❯` row, and fires no prompt hook (claudeSentBashTexts). Both the command
   // and the full text count as "the words", so a message that went as a plain prompt is seen too.
   const shell = shellCommandOfSend(args.text, 'claude')
-  const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
+  const allWords = dense(args.text)
+  const words = allWords.slice(0, WORDS_PREFIX_CHARS)
+  /** A drawn prompt row is this send's when it holds the words whole, or is a start of them long
+   *  enough to tell (a row Claude cut): an earlier prompt that only shares the first stretch and
+   *  then says something else is not (Opus re-review of 05dd008f6). */
+  const rowIsTheWords = (row: string): boolean => {
+    const drawn = dense(row).replace(/…$/, '')
+    return words !== '' && (drawn.startsWith(allWords) || (drawn.length >= words.length && allWords.startsWith(drawn)))
+  }
   const commandWords = shell === null ? '' : dense(shell).slice(0, WORDS_PREFIX_CHARS)
   const photos = args.images === true
   // `typed` is the input or a drawn prompt row. A photo send's words come after its chips,
@@ -193,9 +201,7 @@ export async function verifyClaudeSubmit(args: {
   /** The send drawn above the composer: its prompt row, one more chips-only row than before for
    *  a photo with no caption, or one more `! cmd` row than before. */
   const drawnAbove = (lines: readonly string[]): boolean =>
-    claudeSentPromptTexts(lines).some((row) =>
-      photos ? words !== '' && heard(row) : words !== '' && dense(row).startsWith(words)
-    ) ||
+    claudeSentPromptTexts(lines).some((row) => (photos ? words !== '' && heard(row) : rowIsTheWords(row))) ||
     (photos &&
       words === '' &&
       typeof args.priorChipRows === 'number' &&
