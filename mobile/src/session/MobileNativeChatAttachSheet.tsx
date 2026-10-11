@@ -77,6 +77,9 @@ export function MobileNativeChatAttachSheet({
   // images"). The press is held here and run from `onAfterClose`, after the
   // unmount has committed, so the picker, the chip and the upload all come
   // after the sheet. The cost is the exit itself before the picker opens.
+  // A sheet torn down mid-exit (the tab closed, the chat swapped for its
+  // terminal) drops the held press on purpose: its attach would land in a
+  // composer that is gone.
   const pendingPressRef = useRef<(() => void) | null>(null)
   // A sheet opened again before its exit finished (the + tapped again) never
   // unmounts, so the held press would run on some later close instead: the
