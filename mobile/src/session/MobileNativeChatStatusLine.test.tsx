@@ -159,10 +159,11 @@ describe('the status line above the composer', () => {
   it('draws Working in the accent and the count in the link colour of whichever theme is on', () => {
     const spinner = { verb: 'Cooking', elapsed: null, thinking: null }
     const light = draw({ runningCount: 5, working: true, spinner, scheme: 'light' }).colors
-    expect(light).toEqual(expect.arrayContaining([lightColors.accentText, lightColors.info]))
+    // The link is the Claude app's own blue for "N running tasks" (2026-10-11).
+    expect(light).toEqual(expect.arrayContaining([lightColors.accentText, lightColors.chatLink]))
     const dark = draw({ runningCount: 5, working: true, spinner, scheme: 'dark' }).colors
-    expect(dark).toEqual(expect.arrayContaining([darkColors.accentText, darkColors.info]))
-    expect(dark).not.toContain(lightColors.info)
+    expect(dark).toEqual(expect.arrayContaining([darkColors.accentText, darkColors.chatLink]))
+    expect(dark).not.toContain(lightColors.chatLink)
   })
 
   /** The star's own drawing: what the Svg is styled with, if anything. */

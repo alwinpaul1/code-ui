@@ -407,13 +407,17 @@ describe('ProtocolBlockScreen follows the appearance setting', () => {
     const dark = renderThemed('dark', phoneVerdict)
     expect(dark).toContain('Get Code UI 0.9.200')
     expect(dark).toContain(darkColors.text)
-    expect(dark).not.toContain(lightColors.bg)
+    // As a fill: the Claude app's dark text is its light page's colour, #F9F9F7,
+    // so the value alone is drawn in dark, as the words.
+    expect(dark).not.toContain(`"backgroundColor":"${lightColors.bg}"`)
   })
 
   it('paints the dark canvas and text in dark', () => {
     const dark = renderThemed('dark', verdict)
     expect(dark).toContain(darkColors.bg)
     expect(dark).toContain(darkColors.text)
-    expect(dark).not.toContain(lightColors.bg)
+    // As a fill: the Claude app's dark text is its light page's colour, #F9F9F7,
+    // so the value alone is drawn in dark, as the words.
+    expect(dark).not.toContain(`"backgroundColor":"${lightColors.bg}"`)
   })
 })

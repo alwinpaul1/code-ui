@@ -117,7 +117,20 @@ export type MarkdownTypography = {
   tableCell: { fontSize: number; lineHeight: number }
   /** An inline code pill, in a paragraph and in a table cell. `mono` sets it
    *  in the code face; otherwise it is the paragraph's own face. */
-  chip: { fontSize: number; lineHeight: number; tableFontSize: number; tableLineHeight: number; mono: boolean }
+  chip: {
+    fontSize: number
+    lineHeight: number
+    tableFontSize: number
+    tableLineHeight: number
+    mono: boolean
+    /** The pill's hairline and its corners, in dp. */
+    borderWidth: number
+    radius: number
+  }
+  /** A fence's code and its line numbers. */
+  code: { fontSize: number; lineHeight: number }
+  /** A fence's box: its corners and the padding round its code, in dp. */
+  codeBlock: { radius: number; padding: number }
   /** The list marker's size. */
   listMarkerSize: number
   /** The space between blocks: the height of the blank line between the
@@ -146,57 +159,90 @@ export const DEFAULT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
     lineHeight: MARKDOWN_CHIP_LINE_HEIGHT,
     tableFontSize: MARKDOWN_TABLE_CHIP_FONT_SIZE,
     tableLineHeight: MARKDOWN_TABLE_CHIP_LINE_HEIGHT,
-    mono: false
+    mono: false,
+    // MARKDOWN_CHIP_BORDER_WIDTH and MARKDOWN_CHIP_RADIUS, declared further down.
+    borderWidth: 1,
+    radius: 7
   },
+  code: { fontSize: MARKDOWN_BASE_SIZE - 2, lineHeight: MARKDOWN_BASE_SIZE + 5 },
+  // radius.md and space.md, as every fence outside the transcript has had.
+  codeBlock: { radius: 14, padding: 12 },
   listMarkerSize: MARKDOWN_BASE_SIZE - 1,
   blockGap: null
 }
 
 /**
- * The chat transcript, as the Claude app sets it (two screenshots on the same
- * phone, 2026-10-09): a body line every 22 dp (the app's 57.1 px at 2.57 px/dp
- * is 22.2), glyphs 9% taller than the 14 dp set this replaced (ink 37 px
- * against 34), about 7 dp between paragraphs and 4 between bullets, and inline
- * code in a monospace face on a pill about 16 dp tall. Instrument Sans at 15
- * is the face's own base size.
+ * The chat transcript, as the Claude app sets it in a Claude Code session
+ * (com.anthropic.claude 1.261009.20, read from its code on 2026-10-11:
+ * docs/claude-app-typography.md, the prose scale `zv`). Body 17 on 1.5 em
+ * (25.5); headings 28, 24 and 20 on 1.3 em at the app's 550, which Instrument
+ * Sans does not have, so 600 (`fonts.semibold`), as the app itself draws on a
+ * font without 550; 8 between blocks; code 15 on 1.5 em. It was 15 on 22 from
+ * two screenshots of the app at its Small size (2026-10-09); the app's default
+ * is Medium, which these are.
  *
  * A reply stays one selectable Text, so a hold's handles drag across its
- * paragraphs and bullets (the user's call, 2026-10-09). The 7 dp is the
- * blank line between blocks drawn 7 dp tall. On Android a run is one native
+ * paragraphs and bullets (the user's call, 2026-10-09). The 8 dp is the
+ * blank line between blocks drawn 8 dp tall. On Android a run is one native
  * TextView (`nativeProse`, native-prose-model.ts), which also sets the bullets
  * in from the margin, hangs a wrapped bullet line under the bullet's words and
- * puts 4.5 dp between bullets, still one view a selection crosses. Elsewhere
+ * puts 4 dp between bullets, still one view a selection crosses. Elsewhere
  * the React Native Text keeps bullets at the line pitch and a wrapped bullet
  * line under its marker: a Text has no paragraph margin or spacing.
  *
- * The pill is JetBrains Mono at 12 on a 14 dp line: the face's own box is
- * 1.32 em, its ink 1.23 em (JETBRAINS_MONO_FACE), and markdownChipInkRoom
- * gives the rest back as padding. That pill is 16 dp tall, which a 22 dp line
- * holds with 6 dp to the pill below and its bottom a dp inside the line (the
- * rules in mobile-markdown-chip-clipping.test.ts, checked for this type in
- * mobile-markdown-transcript-typography.test.ts). A 13 sp pill needs a 23 dp
- * line by the same rules.
+ * Inline code is the app's 15 sp in the code face. Its 1.5 em line is the
+ * paragraph's in Compose, where the chip is a background behind the words; here
+ * the pill is a box of its own, so its line is the code's ink and no more:
+ * 17.5, the same 1.17 em the 12 on 14 pill had. JETBRAINS_MONO_FACE's box is
+ * 1.32 em and its ink 1.23 em; markdownChipInkRoom gives the rest back as
+ * padding. A 15 sp pill on a 22.5 line would be 23.5 dp tall in a 25.5 dp line
+ * and meet the pill on the next. The rules it must keep are in
+ * mobile-markdown-chip-clipping.test.ts, checked for this type in
+ * mobile-markdown-transcript-typography.test.ts. Its hairline (0.5) and corners
+ * (6.4) are the app's InlineCodeChipStyle.
+ *
+ * Table cells keep 13 on 22: the app's TableStyle names no size.
  */
 export const TRANSCRIPT_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
-  prose: { fontSize: 15, lineHeight: 22 },
-  heading: { fontSize: 15.5, lineHeight: 22 },
-  headingLevel1: { fontSize: 19, lineHeight: 26 },
-  headingLevel2: { fontSize: 17, lineHeight: 24 },
-  headingLevel3: { fontSize: 16, lineHeight: 23 },
+  prose: { fontSize: 17, lineHeight: 25.5 },
+  heading: { fontSize: 20, lineHeight: 26 },
+  headingLevel1: { fontSize: 28, lineHeight: 36.4 },
+  headingLevel2: { fontSize: 24, lineHeight: 31.2 },
+  headingLevel3: { fontSize: 20, lineHeight: 26 },
   tableCell: { fontSize: 13, lineHeight: 22 },
-  chip: { fontSize: 12, lineHeight: 14, tableFontSize: 11, tableLineHeight: 13, mono: true },
-  listMarkerSize: 14,
-  blockGap: 7,
+  chip: {
+    fontSize: 15,
+    lineHeight: 17.5,
+    tableFontSize: 11,
+    tableLineHeight: 13,
+    mono: true,
+    borderWidth: 0.5,
+    radius: 6.4
+  },
+  code: { fontSize: 15, lineHeight: 22.5 },
+  codeBlock: { radius: 12, padding: 16 },
+  listMarkerSize: 16,
+  blockGap: 8,
   nativeProse: true
 }
 
 /**
- * A lead's Markdown prompt in a user bubble, in the transcript's size and
- * code face, its blocks a whole blank line apart as the bubble always drew
- * them (mobile-markdown-code-pill-bubble.test.ts, 2026-10-09).
+ * A lead's Markdown prompt in a sent prompt's card, at the card's 15 on 1.4 em
+ * (21), as the Claude app sets a user message in a Code session; its headings
+ * flattened to that size, in the bold face, as the app flattens them (`ics.c`).
+ * Its pills are the code face at 13 on 15.5, the size a 21 dp line holds by the
+ * same rules as the replies'. Its blocks are a whole blank line apart, as the
+ * bubble always drew them (mobile-markdown-code-pill-bubble.test.ts).
  */
 export const TRANSCRIPT_BUBBLE_MARKDOWN_TYPOGRAPHY: MarkdownTypography = {
   ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY,
+  prose: { fontSize: 15, lineHeight: 21 },
+  heading: { fontSize: 15, lineHeight: 21 },
+  headingLevel1: { fontSize: 15, lineHeight: 21 },
+  headingLevel2: { fontSize: 15, lineHeight: 21 },
+  headingLevel3: { fontSize: 15, lineHeight: 21 },
+  chip: { ...TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip, fontSize: 13, lineHeight: 15.5 },
+  listMarkerSize: 14,
   blockGap: null,
   // A bubble keeps the Text: it is a prompt, drawn as the bubble always drew it.
   nativeProse: false
@@ -280,11 +326,13 @@ export function markdownChipBaselineShift(
   fontSize: number,
   lineHeight: number,
   /** The pill's face: Instrument Sans, or JetBrains Mono in the transcript. */
-  face: MarkdownFaceMetrics = INSTRUMENT_SANS_FACE
+  face: MarkdownFaceMetrics = INSTRUMENT_SANS_FACE,
+  /** The pill's hairline: 0.5 in the transcript. */
+  borderWidth: number = MARKDOWN_CHIP_BORDER_WIDTH
 ): number {
   const leading = lineHeight - (face.ascent + face.descent) * fontSize
   return (
-    MARKDOWN_CHIP_BORDER_WIDTH +
+    borderWidth +
     MARKDOWN_CHIP_PADDING_VERTICAL +
     face.descent * fontSize +
     leading / 2 -
@@ -298,7 +346,7 @@ export function markdownProseScale(
   /** The line at no zoom; the default type's is size + MARKDOWN_PROSE_LINE_GAP. */
   lineHeight = size + MARKDOWN_PROSE_LINE_GAP
 ): { fontSize: number; lineHeight: number } | null {
-  // The pill's 1px borders do NOT scale — a hairline stays a hairline — so at
+  // The pill's borders (1 dp, 0.5 in the transcript) do NOT scale — a hairline stays a hairline — so at
   // a small zoom they eat the gap the line height is there to provide. Adding
   // them back keeps the clear air between two wrapped pills constant at every
   // zoom instead of shrinking it away (markdownZoomedLine).
@@ -329,14 +377,17 @@ export function markdownChipScale(
     lineHeight: chip.lineHeight * textScale,
     paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL * textScale,
     paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL * textScale,
-    borderRadius: MARKDOWN_CHIP_RADIUS * textScale,
-    baselineShift: markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography)) * textScale
+    borderRadius: chip.radius * textScale,
+    baselineShift:
+      markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography), chip.borderWidth) *
+      textScale
   }
 }
 
 /**
  * A line of text at the reader's zoom: its size and line height scaled, and
- * the pill's two 1 dp borders added back, which do not scale (as for prose,
+ * 2 dp for the pill's two borders added back, which do not scale (the default
+ * pill's 1 dp each; the transcript's 0.5 dp pill keeps the same 2 dp of room) (as for prose,
  * markdownProseScale). Headings and table cells used to keep their size at a
  * zoom while their pills grew, and pills on two wrapped lines met from zoom
  * 1.35 (review of c3e62696). Null when the reader has not zoomed.
@@ -360,5 +411,5 @@ export function markdownChipFootprint(
   const chip = markdownChipScale(textScale, typography)
   const lineHeight = chip?.lineHeight ?? typography.chip.lineHeight
   const padding = chip?.paddingVertical ?? MARKDOWN_CHIP_PADDING_VERTICAL
-  return lineHeight + 2 * padding + 2 * MARKDOWN_CHIP_BORDER_WIDTH
+  return lineHeight + 2 * padding + 2 * typography.chip.borderWidth
 }

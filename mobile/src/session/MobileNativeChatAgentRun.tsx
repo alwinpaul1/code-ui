@@ -5,7 +5,7 @@ import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState, runningAgentText } from './mobile-native-chat-agent-run'
-import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import { TOOL_RUN_CHEVRON_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { useNativeChatAgentRuns, useRunSheetOpener } from './native-chat-tasks-context'
 
@@ -52,12 +52,12 @@ export function MobileNativeChatAgentRun({
           <ShimmerText
             text={label}
             active={running}
-            color={colors.textSecondary}
+            color={colors.chatMuted}
             style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
             numberOfLines={1}
             testID="agent-run-label"
           />
-          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
+          <ChevronRight size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
         </Pressable>
       </View>
     </View>

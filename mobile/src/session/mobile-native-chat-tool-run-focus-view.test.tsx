@@ -214,8 +214,8 @@ describe('Focus view on a run of tool calls', () => {
     act(() => renderer?.unmount())
     renderer = null
     const dark = colourOf(render({ blocks: THREE_CALLS, focusView: true }, 'dark').root)
-    expect(light).toBe(lightColors.textSecondary)
-    expect(dark).toBe(darkColors.textSecondary)
+    expect(light).toBe(lightColors.chatMuted)
+    expect(dark).toBe(darkColors.chatMuted)
     expect(light).not.toBe(dark)
   })
 

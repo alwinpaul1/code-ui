@@ -32,7 +32,7 @@ import {
   type NativeChatToolCallBlock
 } from '../../../src/shared/native-chat-types'
 import { useTheme } from '../theme/theme-context'
-import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
+import { TOOL_RUN_CHEVRON_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { agentRunState, isAgentToolName, runningAgentText } from './mobile-native-chat-agent-run'
@@ -238,12 +238,12 @@ function ToolRunView({
             <ShimmerText
               text={focusView ? countLabel : 'Running'}
               active
-              color={colors.textSecondary}
+              color={colors.chatMuted}
               style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
               numberOfLines={1}
               testID="tool-run-active-label"
             />
-            <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+            <Chevron size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
           </Pressable>
         </View>
         {open ? renderBody() : null}
@@ -313,7 +313,7 @@ function ToolRunView({
               <ShimmerText
                 text={runningAgentText(agentSubject)}
                 active
-                color={colors.textSecondary}
+                color={colors.chatMuted}
                 style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
                 numberOfLines={1}
                 testID="tool-run-agent-label"
@@ -343,7 +343,7 @@ function ToolRunView({
             </Text>
           ) : null}
           {diffStat && !runningAgent ? <ToolRunDiffChip stat={diffStat} styles={styles} /> : null}
-          <Chevron size={14} color={colors.textMuted} strokeWidth={2} />
+          <Chevron size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
         </Pressable>
       </View>
           )

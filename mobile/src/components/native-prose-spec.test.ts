@@ -87,9 +87,12 @@ describe('the spec the native prose view is drawn from', () => {
       fontSize: TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip.fontSize,
       lineHeight: TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip.lineHeight,
       paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL,
-      borderWidth: MARKDOWN_CHIP_BORDER_WIDTH,
-      radius: MARKDOWN_CHIP_RADIUS
+      // The transcript's own hairline and corners, the Claude app's 0.5 and 6.4.
+      borderWidth: TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip.borderWidth,
+      radius: TRANSCRIPT_MARKDOWN_TYPOGRAPHY.chip.radius
     })
+    expect(spec.chip.borderWidth).not.toBe(MARKDOWN_CHIP_BORDER_WIDTH)
+    expect(spec.chip.radius).not.toBe(MARKDOWN_CHIP_RADIUS)
   })
 
   it('lays the text out no wider than the pixels the view can get', () => {

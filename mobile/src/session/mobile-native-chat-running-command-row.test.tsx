@@ -181,11 +181,12 @@ describe('the collapsed row of a command that is still running', () => {
     ['dark', darkColors]
   ] as const)('is worded like the running-agent row, in %s', (scheme, palette) => {
     const style = flat(label(render(RUNNING_BASH, scheme)).props.style)
-    // The agent row's face and size (toolRunLabel: Medium 13), not a lighter
-    // one that makes the word change weight when the row settles into "Ran …".
-    expect(style.fontFamily).toBe(fontFamily.medium)
-    expect(style.fontSize).toBe(13)
-    expect(style.color).toBe(palette.textSecondary)
+    // The agent row's face and size (toolRunLabel: the Claude app's Regular 15
+    // since 2026-10-11), not another that makes the word change weight when
+    // the row settles into "Ran …".
+    expect(style.fontFamily).toBe(fontFamily.regular)
+    expect(style.fontSize).toBe(15)
+    expect(style.color).toBe(palette.chatMuted)
   })
 
   it.each([

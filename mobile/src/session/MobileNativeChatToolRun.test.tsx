@@ -258,7 +258,7 @@ describe('a batch of tool calls in one run header', () => {
       expect(focus).toContain('1 failed')
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.accessibilityLabel).toBe('Failed tool calls: 1')
-      expect(flattenColor(mark.props.style)).toBe(palette.textMuted)
+      expect(flattenColor(mark.props.style)).toBe(palette.chatMuted)
       act(() => renderer!.unmount())
 
       const stateOnly: NativeChatBlock[] = [
@@ -288,7 +288,7 @@ describe('a batch of tool calls in one run header', () => {
       expect(sentence.indexOf('(1 failed)')).toBeGreaterThan(50)
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.children).toBe('1 failed')
-      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).chatMuted)
     }
   )
 
@@ -310,7 +310,7 @@ describe('a batch of tool calls in one run header', () => {
       expect(texts).toContain('Ran Run the mobile regression gate: typecheck, vitest, oxlint, ratchet (1 failed)')
       const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
       expect(mark.props.children).toBe('1 failed')
-      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).chatMuted)
     }
   )
 
@@ -336,7 +336,7 @@ describe('a batch of tool calls in one run header', () => {
       )
       expect(recipient).toHaveLength(1)
       expect(flattenColor(recipient[0]!.props.style)).toBe(palette.text)
-      expect(flattenColor(sentence.props.style)).toBe(palette.textSecondary)
+      expect(flattenColor(sentence.props.style)).toBe(palette.chatMuted)
     }
   )
 
@@ -393,7 +393,7 @@ describe('a batch of tool calls in one run header', () => {
         expect(textOf(renderer!.root.findByProps({ testID: 'tool-run-sentence' }))).toBe('Ran a command')
         const mark = renderer!.root.findByProps({ testID: 'tool-run-failed-count' })
         expect(mark.props.children).toBe('2 failed')
-        expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+        expect(flattenColor(mark.props.style)).toBe((scheme === 'dark' ? darkColors : lightColors).chatMuted)
         act(() => renderer!.unmount())
         renderer = null
       }
@@ -785,8 +785,8 @@ describe('a tool run while the turn is still working', () => {
     const darkColor = activeLabelColor(
       render({ blocks: LIVE_SHELL_RUN, activeTurnIsWorking: true }, 'dark')
     )
-    expect(lightColor).toBe(lightColors.textSecondary)
-    expect(darkColor).toBe(darkColors.textSecondary)
+    expect(lightColor).toBe(lightColors.chatMuted)
+    expect(darkColor).toBe(darkColors.chatMuted)
     expect(darkColor).not.toBe(lightColor)
   })
 
@@ -951,10 +951,10 @@ describe('the running row lays out like the settled one', () => {
           .children.filter((child): child is ReactTestInstance => typeof child !== 'string')
           .filter((child) => String(child.type).startsWith('Chevron'))
       expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronDown'])
-      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).chatMuted)
       act(() => toggle().props.onPress())
       expect(chevrons().map((child) => String(child.type))).toEqual(['ChevronRight'])
-      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).textMuted)
+      expect(chevrons()[0]!.props.color).toBe((scheme === 'dark' ? darkColors : lightColors).chatMuted)
     }
   )
 })
