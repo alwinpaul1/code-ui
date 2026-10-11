@@ -206,21 +206,24 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
       backOff(state)
       return
     }
-    state.sent = true
     let outcome: OutboxSendOutcome
     try {
       outcome = await deps.send(client, { ...current, autoAttempts: current.autoAttempts + 1, lastAttemptAt: attemptAt }, observation)
     } catch {
       outcome = 'unknown'
     }
+    if (outcome !== 'not-now') {
+      state.sent = true
+    }
     if (outcome === 'accepted') {
       retire(current, state, 'sent')
       return
     }
     if (outcome === 'not-now') {
-      // Refused before anything went out: this try costs no attempt. A refusal after something
-      // may have been typed ('rejected') keeps its count (Opus review of 4efae5746).
-      await patchOutboxEntry(current.id, { autoAttempts: current.autoAttempts })
+      // Refused before anything went out: this try costs no attempt, and moves no confirm wait.
+      // A refusal after something may have been typed ('rejected') keeps its count (Opus review
+      // of 4efae5746).
+      await patchOutboxEntry(current.id, { autoAttempts: current.autoAttempts, lastAttemptAt: current.lastAttemptAt })
     }
     backOff(state)
   }

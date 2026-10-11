@@ -40,7 +40,8 @@ Each entry carries what it needs to be sent with no chat on screen, stamped when
 its route (host, worktree, tab, lane, agent, session, terminal, transcript path; published by the
 chat controller through `publishOutboxChatRoute`) and, for photos and files, the desktop paths
 they were uploaded to with their previews. Entries written by 0.9.128 and earlier have neither:
-those still wait for their chat, as before.
+those still wait for their chat, as before, and so does an entry written before the agent named
+its session (a first message), which has no transcript to look in.
 
 ### Who sends what
 
@@ -82,8 +83,10 @@ those still wait for their chat, as before.
   the drainer just typed is neither called "Not sent" nor typed again by a Retry inside it. A chat
   on screen whose composer holds words is never typed into (its live-input mirror shares the
   line). A refusal before anything was typed (a dialog, the terminal busy with another input,
-  words at the desk, a session that could not be held) costs no attempt; one after something may
-  have been typed does. After `OUTBOX_DRAIN_TERMINAL_ATTEMPTS` (3) typed tries it gives up. A transcript that cannot show whether it arrived (its boundary is not in the read)
+  words at the desk, a link that failed under the session hold) costs no attempt; one after
+  something may have been typed does, and so does a host that answered with a refusal (a session
+  that no longer exists), so an entry for a closed session ends in "Not sent" instead of trying
+  for a day. After `OUTBOX_DRAIN_TERMINAL_ATTEMPTS` (3) typed tries it gives up. A transcript that cannot show whether it arrived (its boundary is not in the read)
   is never typed again by itself.
 
   The reads were written against Claude Code 2.1.296 screens captured at 46 columns
@@ -114,6 +117,16 @@ out of the 200-line log before (0.9.127). Never the words: lengths, counts, the 
   or it repeats the prompt the tab already had ("continue" twice), that evidence is gone, and a
   terminal entry could be typed again. The drainer does not type while the agent works, which
   narrows this to a message taken in the turn that just ended.
+- The receipt rule compares with the prompt the PHONE last heard for the tab when the message
+  left. If an identical earlier message had landed but its status had not reached the phone yet,
+  a lost repeat can still be taken as delivered. With no status known at the press, no prompt is
+  trusted, so a message the agent took from its queue mid-turn could then be typed twice.
+- A refused body write that ran out of budget (under 2 s left on a slow relay) typed nothing but
+  counts as a typed try: three of those end in "Not sent".
+- The chat's own recovery waits out the 20 s confirm wait only after a try it knows was typed;
+  after an app restart within 20 s of the original press it can look before that press's row
+  has landed (the drainer waits from the press).
+- Chips on the desk's input line count as the message's own only up to the photos it carries.
 - The drainer's clear takes words left on the desk's input line only when they are the message's
   own; a desk user who starts typing in the instant between its last look and its clear can still
   lose those keystrokes. While it types (a few seconds) the phone's own composer send to that tab

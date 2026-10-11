@@ -76,6 +76,8 @@ type Desk = {
   transcript: NativeChatMessage[] | null
   status: Record<string, unknown> | null
   tabs: 'ok' | 'fails' | 'gone'
+  /** What Orca publishes as the desk's input line. */
+  draft?: string
 }
 
 function client(desk: Desk): RpcClient {
@@ -116,7 +118,7 @@ function client(desk: Desk): RpcClient {
         })
       }
       if (method === 'terminal.read') {
-        return desk.screen ? ok('r', { terminal: { source: 'screen', tail: desk.screen, draft: '' } }) : ok('r', null)
+        return desk.screen ? ok('r', { terminal: { source: 'screen', tail: desk.screen, draft: desk.draft ?? '' } }) : ok('r', null)
       }
       return ok('x', null)
     })
@@ -259,6 +261,28 @@ describe('the tab\u2019s hook prompt as a receipt', () => {
   })
 })
 
+// Re-review of 978156bf9: chips on the desk's line are only an entry's own when it carries
+// that many photos; a screenshot pasted at the desk is someone's input.
+describe('image chips on the desk\u2019s input line', () => {
+  const desk = (draft: string): Desk => ({
+    agent: 'claude',
+    screen: CLAUDE_IDLE,
+    transcript: transcript(),
+    status: idleStatus('claude'),
+    tabs: 'ok',
+    draft
+  })
+
+  it('are not a text entry\u2019s own', async () => {
+    expect(await observe(desk('[Image #1]'))).toEqual({ kind: 'busy' })
+  })
+
+  it('are not a one-photo entry\u2019s own when there are two', async () => {
+    const photo = { hasAttachments: true as const, attachments: [{ path: '/tmp/a.png', previewUri: 'file:///a.jpg' }] }
+    expect(await observe(desk('[Image #1] [Image #2]'), photo)).toEqual({ kind: 'busy' })
+  })
+})
+
 describe('promptIsReceiptOf', () => {
   const knowing = (before: string | null, overrides: Partial<NativeChatOutboxEntry> = {}) =>
     entry('claude', { ...overrides, route: { ...entry('claude').route!, promptBefore: before } })
@@ -308,7 +332,9 @@ describe('sendSessionOutboxEntry', () => {
     expect(calls.map((call) => call.method)[0]).toBe('agentSession.hold')
   })
 
-  it('sends nothing, lets nothing go, and costs no attempt when the session cannot be held', async () => {
+  // Re-review of 978156bf9: a host that answers "no such session" is a refusal that counts,
+  // or an entry for a closed session said "Sending…" for a day; only a link that failed is free.
+  it('sends nothing and counts a try when the host refuses to hold the session', async () => {
     const methods: string[] = []
     const desk = {
       getState: () => 'connected',
@@ -319,8 +345,35 @@ describe('sendSessionOutboxEntry', () => {
       })
     } as unknown as RpcClient
     expect(await sendSessionOutboxEntry(desk, entry('claude', { route: { ...entry('claude').route!, lane: 'session' } }))).toBe(
-      'not-now'
+      'rejected'
     )
     expect(methods).toEqual(['agentSession.hold'])
+  })
+
+  it('sends nothing and costs no try when the link fails under the hold', async () => {
+    const desk = {
+      getState: () => 'connected',
+      subscribe: vi.fn(() => () => {}),
+      sendRequest: vi.fn(async () => {
+        throw new Error('Connection retry limit reached')
+      })
+    } as unknown as RpcClient
+    expect(await sendSessionOutboxEntry(desk, entry('claude', { route: { ...entry('claude').route!, lane: 'session' } }))).toBe(
+      'not-now'
+    )
+  })
+
+  it('counts a try when the session feed answers with an error instead of a fence', async () => {
+    const desk = {
+      getState: () => 'connected',
+      subscribe: vi.fn((_method: string, _params: unknown, onData: (frame: unknown) => void) => {
+        setTimeout(() => onData({ type: 'error', message: 'agent_session_not_found' }), 1)
+        return () => {}
+      }),
+      sendRequest: vi.fn(async () => ok('x', {}))
+    } as unknown as RpcClient
+    expect(await sendSessionOutboxEntry(desk, entry('claude', { route: { ...entry('claude').route!, lane: 'session' } }))).toBe(
+      'rejected'
+    )
   })
 })

@@ -109,8 +109,14 @@ export function promptIsReceiptOf(entry: NativeChatOutboxEntry, prompt: string |
 }
 
 /** Words left on the agent's input line by an earlier try of this same message (its words, or
- *  only its photo chips): the send's own clear takes them, so they are no one else's typing. */
+ *  only its photo chips): the send's own clear takes them, so they are no one else's typing.
+ *  Chips count as its own only up to the photos it carries: a text entry has none, and a
+ *  screenshot pasted at the desk is someone's input (re-review of 978156bf9). */
 export function inputHoldsOnlyItsOwn(entry: NativeChatOutboxEntry, draft: string): boolean {
+  const chips = draft.match(/\[Image #\d+\]/g)?.length ?? 0
+  if (chips > (entry.attachments?.length ?? 0)) {
+    return false
+  }
   const rest = draft.replace(/\[Image #\d+\]/g, ' ').trim()
   if (rest === '') {
     return true
@@ -171,10 +177,8 @@ export function readTranscriptOnce(
 
 /** Whether the transcript shows a photo entry's row: one naming a desktop path it pasted. */
 function photoRowLanded(entry: NativeChatOutboxEntry, messages: readonly NativeChatMessage[]): boolean {
+  // No photos: findLandedImagePreviewEchoes skips an entry with no previews.
   const attachments = entry.attachments ?? []
-  if (attachments.length === 0) {
-    return false
-  }
   return (
     findLandedImagePreviewEchoes(messages, [
       {
@@ -305,6 +309,7 @@ export async function sendTerminalOutboxEntry(
     if (!now || (now.draft.trim() !== '' && !inputHoldsOnlyItsOwn(entry, now.draft))) {
       return 'not-now'
     }
+    const leftoverOwn = now.draft.trim() !== ''
     const refusal = await readSendUnderDialogRefusal({ client, terminal, agent, deadline, requireComposer: true })
     if (refusal) {
       return 'not-now'
@@ -360,7 +365,10 @@ export async function sendTerminalOutboxEntry(
     })
     if (written.kind === 'stopped') {
       // A clear that did not go typed none of the words; Claude declining them did.
-      const untyped = written.message === CLEAR_NOT_WRITTEN || written.message === INPUT_STILL_HOLDS_TEXT
+      // A clear that could not take this message's OWN leftover will never take it: that costs an
+      // attempt, or it would loop for a day (re-review of 978156bf9).
+      const untyped =
+        written.message === CLEAR_NOT_WRITTEN || (written.message === INPUT_STILL_HOLDS_TEXT && !leftoverOwn)
       return untyped && paths.length === 0 ? 'not-now' : 'rejected'
     }
     return written.outcome

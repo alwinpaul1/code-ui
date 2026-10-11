@@ -82,6 +82,8 @@ type Desktop = {
   tabPresent: boolean
   /** Someone starts typing at the desk once the screen has been read this many times. */
   deskTypingAtRead: number | null
+  /** The input line holds more than the clear can reach: clears leave it as it was. */
+  stuckInput: boolean
   reads: number
   hookPrompt: { prompt: string; at: number } | null
 }
@@ -101,6 +103,7 @@ function desktop(submit: Submit = 'accepted'): Desktop {
     deskDraft: '',
     tabPresent: true,
     deskTypingAtRead: null,
+    stuckInput: false,
     reads: 0,
     hookPrompt: null
   }
@@ -165,7 +168,7 @@ function desktop(submit: Submit = 'accepted'): Desktop {
       if (method === 'terminal.send') {
         const text = params.text ?? ''
         const keys = [...text].every((char) => char.charCodeAt(0) < 0x20 || char.charCodeAt(0) === 0x7f)
-        if (text.includes('\x15') || (keys && text.length > 0)) {
+        if (!tab.stuckInput && (text.includes('\x15') || (keys && text.length > 0))) {
           // A clear: Ctrl+U, or Claude's backspace burst. It takes whatever the line holds.
           input = ''
           tab.deskDraft = ''
@@ -552,7 +555,26 @@ describe('a terminal chat message the phone could not confirm', () => {
     expect(nativeChatOutboxEntries().map((entry) => entry.id)).toEqual(['photo', 'text'])
   })
 
-    describe('a photo send pending at an app restart', () => {
+    // Re-review of 978156bf9.
+  it('gives back, rather than holds, a photo the drainer cannot send (no session yet)', async () => {
+    vi.useFakeTimers()
+    const older = stored({
+      id: 'photo',
+      createdAt: Date.now() - 90_000,
+      hasAttachments: true,
+      attachments: [{ path: PASTED, previewUri: 'file:///p.jpg' }],
+      route: { ...stored({}).route!, sessionId: null }
+    })
+    await AsyncStorage.setItem('orca:chatOutbox', JSON.stringify([older]))
+    mountShown()
+    await advance(60_000)
+    // The drainer could never send it, so it does not sit at "Sending…" holding the chat: its
+    // words come back to the box (the photos to attach again), as from an older build.
+    expect(nativeChatOutboxEntries()).toEqual([])
+    expect(drafts!.composerText).toBe(TEXT)
+  })
+
+  describe('a photo send pending at an app restart', () => {
     const photo = (): NativeChatOutboxEntry =>
       stored({ hasAttachments: true, attachments: [{ path: PASTED, previewUri: 'file:///p.jpg' }] })
 

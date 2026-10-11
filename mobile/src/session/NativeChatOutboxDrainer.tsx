@@ -38,7 +38,7 @@ function HostConnectionKick(props: { hostId: string; drainer: OutboxDrainer }): 
  * the stored outbox at start, and starts a fresh pass on every new connection to a host with
  * messages waiting and every return of the app to the front.
  */
-export function NativeChatOutboxDrainer(props: { deps?: OutboxDrainDeps } = {}): ReactElement {
+export function NativeChatOutboxDrainer(props: { deps?: OutboxDrainDeps }): ReactElement {
   const deps = useRef(props.deps ?? nativeChatOutboxDrainDeps).current
   const [drainer, setDrainer] = useState<OutboxDrainer | null>(null)
   const [hosts, setHosts] = useState<string[]>([])

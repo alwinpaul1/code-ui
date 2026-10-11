@@ -2,6 +2,7 @@ import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import { findBeaconConfirmedSends, type BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { findLandedUnconfirmedSends, type UnconfirmedSend } from './mobile-native-chat-draft-reconcile'
+import { outboxEntryDrainable } from './native-chat-outbox-sends'
 
 /** An entry older than this goes back into the composer instead of out: the host refuses an
  *  operation id this old as new (AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS), and a message a day
@@ -127,7 +128,7 @@ export function planOutboxEntry(input: {
     return { kind: 'give-back', reason: 'tooOld' }
   }
   if (entry.hasAttachments) {
-    if (entry.route && entry.attachments?.length) {
+    if (outboxEntryDrainable(entry)) {
       return entry.failed ? { kind: 'give-back', reason: 'undelivered' } : { kind: 'wait' }
     }
     return { kind: 'give-back', reason: 'attachments' }

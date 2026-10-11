@@ -209,9 +209,16 @@ export function releaseOutboxSend(id: string | undefined): boolean {
 }
 
 /** Whether the app-wide drainer can send this entry with no chat on screen: it knows where the
- *  entry goes and, for photos and files, the desktop paths to send again. */
+ *  entry goes (with its session and, for a terminal, its agent) and, for photos and files, the
+ *  desktop paths to send again. */
 export function outboxEntryDrainable(entry: NativeChatOutboxEntry): boolean {
-  return entry.route !== undefined && (!entry.hasAttachments || (entry.attachments?.length ?? 0) > 0)
+  const route = entry.route
+  if (!route || !route.sessionId || (route.lane === 'terminal' && !route.agent)) {
+    // With no session (a first message before the agent named one) the drainer has no transcript
+    // to look in and no session to send to: the chat's recovery sees it through, as before.
+    return false
+  }
+  return !entry.hasAttachments || (entry.attachments?.length ?? 0) > 0
 }
 
 /** The chat controller publishes where this chat's sends go; returns the unpublish. */

@@ -2,7 +2,7 @@ import { structuredAgentSessionHolderId } from '../../../src/shared/structured-a
 import type { NativeChatOutboxEntry } from '../storage/native-chat-outbox'
 import type { RpcClient } from '../transport/rpc-client'
 import type { OutboxSendOutcome } from './native-chat-outbox-drain-plan'
-import { callAgentSession } from './mobile-structured-agent-session-rpc'
+import { AgentSessionRpcResponseError, callAgentSession } from './mobile-structured-agent-session-rpc'
 import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
 import { OUTBOX_HEADLESS_READ_MS } from './native-chat-outbox-headless'
 
@@ -15,12 +15,13 @@ import { OUTBOX_HEADLESS_READ_MS } from './native-chat-outbox-headless'
  */
 
 /** The session's runtime fence, from the first event of its feed that states one (its snapshot
- *  does: AgentSessionSubscribeEvent), or null. */
-function readSessionFence(client: RpcClient, sessionId: string): Promise<number | null> {
+ *  does: AgentSessionSubscribeEvent); 'refused' when the feed answered with an error or its end,
+ *  null when nothing came in time. */
+function readSessionFence(client: RpcClient, sessionId: string): Promise<number | 'refused' | null> {
   return new Promise((resolve) => {
     let done = false
     let unsubscribe: () => void = () => {}
-    const finish = (fence: number | null): void => {
+    const finish = (fence: number | 'refused' | null): void => {
       if (done) {
         return
       }
@@ -34,7 +35,7 @@ function readSessionFence(client: RpcClient, sessionId: string): Promise<number 
       unsubscribe = client.subscribe('agentSession.subscribe', { sessionId }, (raw) => {
         const event = (raw ?? {}) as { type?: unknown; fence?: unknown }
         if (event.type === 'error' || event.type === 'end') {
-          finish(null)
+          finish('refused')
           return
         }
         if (typeof event.fence === 'number') {
@@ -68,11 +69,16 @@ export async function sendSessionOutboxEntry(
         failWhenDisconnected: true
       })
       held = true
-    } catch {
-      // Nothing was sent: it costs the entry no attempt.
-      return 'not-now'
+    } catch (error) {
+      // Nothing was sent. A link that failed costs the entry no attempt; a host that answered
+      // (no such session, say) does, or an entry for a closed session tried for a day
+      // (re-review of 978156bf9).
+      return error instanceof AgentSessionRpcResponseError ? 'rejected' : 'not-now'
     }
     const fence = await readSessionFence(client, sessionId)
+    if (fence === 'refused') {
+      return 'rejected'
+    }
     if (fence === null) {
       return 'not-now'
     }
