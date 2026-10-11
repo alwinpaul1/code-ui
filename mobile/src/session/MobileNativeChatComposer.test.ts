@@ -2,9 +2,8 @@ import { createElement, StrictMode, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { Keyboard } from 'react-native'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { space } from '../theme/tokens'
+import { radius, space } from '../theme/tokens'
 import { MobileNativeChatComposer as NativeChatComposer } from './MobileNativeChatComposer'
-import { composerInputBox } from './composer-input-box'
 import { peekImagePreview, resetImagePreviewForTests } from './image-preview-store'
 
 const getNoComposerEditGeneration = () => 0
@@ -165,10 +164,9 @@ describe('MobileNativeChatComposer', () => {
       paddingTop: space.xs,
       paddingBottom: space.md
     })
-    // Claude's shell (MobileNativeChatComposer.text-air.test.tsx pins the rest).
     expect(composer.props.style).toMatchObject({
-      borderWidth: 0.5,
-      borderRadius: 24,
+      borderWidth: 1,
+      borderRadius: radius.xl,
       overflow: 'hidden'
     })
   })
@@ -879,10 +877,8 @@ describe('MobileNativeChatComposer', () => {
   const fold = renderer!.root.findByProps({ testID: 'native-chat-composer-input-fold' }) as {
     props: { style: { maxHeight?: number; overflow?: string } | null }
   }
-  // Two lines and six lines of Claude's 17 × 1.4 text, with its 8 dp above and below
-  // (composer-input-box.ts).
-  expect(fold.props.style).toMatchObject({ maxHeight: composerInputBox.maxHeightWithMenu, overflow: 'hidden' })
-  expect(composerInputBox.maxHeightWithMenu).toBeCloseTo(16 + 2 * 23.8)
-  expect(input.props.style.maxHeight).toBeCloseTo(16 + 6 * 23.8)
+  expect(fold.props.style).toMatchObject({ maxHeight: 65, overflow: 'hidden' })
+  // Six whole lines and the padding, 12 + 6 × 22 + 9 (MobileNativeChatComposer.text-air.test.tsx).
+  expect(input.props.style.maxHeight).toBe(153)
 })
 })

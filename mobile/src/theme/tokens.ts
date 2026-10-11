@@ -23,12 +23,6 @@ export type ThemeColors = {
   /** The composer box on that dock: solid. Nothing shows through it, while
    *  the dock around it stays clear (2026-09-13). */
   bgPanelGlass: string
-  /** The composer's shell, the Claude app's surface at 96% (1.261009.20, `pl7.p`). */
-  composerFill: string
-  /** The composer's 0.5 dp hairline, Claude's `pl7.x`. */
-  composerBorder: string
-  /** The composer's placeholder, Claude's muted text `pl7.Q`. */
-  composerPlaceholder: string
   border: string
   borderStrong: string
   text: string
@@ -91,9 +85,6 @@ export const lightColors: ThemeColors = {
   bgOverlay: 'rgba(30, 28, 25, 0.42)',
   bgDock: 'rgba(243, 241, 234, 0.72)',
   bgPanelGlass: 'rgba(251, 250, 246, 1)',
-  composerFill: 'rgba(255, 255, 255, 0.96)',
-  composerBorder: 'rgba(30, 30, 29, 0.15)',
-  composerPlaceholder: '#7B7974',
   border: '#E1DDD2',
   borderStrong: '#CCC7BB',
   text: '#1E1C19',
@@ -136,9 +127,6 @@ export const darkColors: ThemeColors = {
   bgOverlay: 'rgba(0, 0, 0, 0.55)',
   bgDock: 'rgba(26, 25, 23, 0.72)',
   bgPanelGlass: 'rgba(33, 31, 28, 1)',
-  composerFill: 'rgba(32, 32, 31, 0.96)',
-  composerBorder: 'rgba(225, 224, 217, 0.15)',
-  composerPlaceholder: '#97958D',
   border: '#332F2A',
   borderStrong: '#45403A',
   // Near-white as the Claude app draws it, sampled (248, 248, 246) from its
