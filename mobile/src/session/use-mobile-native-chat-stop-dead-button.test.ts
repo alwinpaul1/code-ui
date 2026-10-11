@@ -30,7 +30,7 @@ const ANOTHER_TAB = 'host\0worktree\0other-tab\0other\0other-terminal'
  */
 describe('a Stop tap that did nothing says so', () => {
   let renderer: ReactTestRenderer | null = null
-  let stop: (() => void) | null = null
+  let stop: (() => Promise<boolean>) | null = null
   let mountedClient: RpcClient | null = null
   let mountedAgent: string | null = null
   let onSendError = vi.fn()
@@ -103,7 +103,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     expect(sendRequest).toHaveBeenCalledTimes(1)
     // The phone loses the input floor while the Escape is on the wire, which
     // also cancels the paced second one, and the host refuses the first.
@@ -119,7 +119,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, fail } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await rerender({ enabled: false, streamIdentity: ROUTE })
     await settleAll(() => fail[0]!(markRpcDeliveryUnknown(new Error('Connection closed'))))
 
@@ -132,7 +132,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => {
       settle[0]!(reply(false))
       await Promise.resolve()
@@ -150,7 +150,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient, 'grok')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await rerender({ enabled: false, streamIdentity: ROUTE })
     await settleAll(() => settle[0]!(reply(false)))
 
@@ -163,7 +163,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await rerender({ enabled: true, streamIdentity: ANOTHER_TAB })
     await settleAll(() => settle[0]!(reply(false)))
 
@@ -175,7 +175,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     act(() => renderer?.unmount())
     renderer = null
     await settleAll(() => settle[0]!(reply(false)))
@@ -190,7 +190,7 @@ describe('a Stop tap that did nothing says so', () => {
     const earlierStop = stop
 
     await rerender({ enabled: false, streamIdentity: ROUTE })
-    act(() => earlierStop?.())
+    act(() => void earlierStop?.())
     await settleAll()
 
     // Nothing was written, so nothing is left to report it but this.
@@ -207,7 +207,7 @@ describe('a Stop tap that did nothing says so', () => {
     const earlierStop = stop
 
     await rerender({ enabled: false, streamIdentity: ROUTE })
-    act(() => earlierStop?.())
+    act(() => void earlierStop?.())
     await settleAll()
 
     expect(sendRequest).not.toHaveBeenCalled()
@@ -221,9 +221,9 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await rerender({ enabled: false, streamIdentity: ROUTE })
-    act(() => stop?.())
+    act(() => void stop?.())
     await settleAll(() => settle[0]!(reply(false)))
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
@@ -235,7 +235,7 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await rerender({ enabled: false, streamIdentity: ROUTE })
     await settleAll(() => settle[0]!(reply(true)))
 
@@ -246,8 +246,8 @@ describe('a Stop tap that did nothing says so', () => {
     const { sendRequest, settle } = heldSends()
     await mount({ sendRequest } as unknown as RpcClient)
 
-    act(() => stop?.())
-    act(() => stop?.())
+    act(() => void stop?.())
+    act(() => void stop?.())
     await settleAll(() => {
       for (const resolve of settle) {
         resolve(reply(false))

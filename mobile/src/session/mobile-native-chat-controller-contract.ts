@@ -199,6 +199,8 @@ export type MobileNativeChatController = {
   sendNativeChatQueueNow?: () => Promise<boolean>
   nativeChatQueueEditor?: InlineQueueEditor | null
   handleNativeChatStop: () => void
+  /** A Stop went out and the turn has not ended (use-chat-stop-button.ts). */
+  nativeChatStopping?: boolean
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void
   /** Installed skills and plugin commands for the `/` menu (lazy, per worktree). */

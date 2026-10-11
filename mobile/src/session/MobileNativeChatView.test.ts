@@ -879,9 +879,8 @@ describe('MobileNativeChatView', () => {
 
         expect(rowProps('u1').turnStatus).toBeNull()
         expect(rowProps('a1').activeTurnIsWorking).toBe(true)
-        expect(
-          renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
-        ).toHaveLength(1)
+        // Stop lives in the composer's send slot now; the composer is mocked here.
+        expect(renderer!.root.findByType('Composer' as never).props.canStop).toBe(true)
         expect(renderer!.root.findAll((node) => node.type === testCase.cardType)).toHaveLength(1)
 
         await update(working)

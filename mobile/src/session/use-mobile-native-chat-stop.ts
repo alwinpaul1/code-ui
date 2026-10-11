@@ -32,7 +32,7 @@ export function useMobileNativeChatStop(args: {
   agent: string | null
   cancelPending: () => void
   onSendError: (message: string) => void
-}): () => void {
+}): () => Promise<boolean> {
   const { client, enabled, handleRef, deviceTokenRef, streamIdentity, agent, cancelPending, onSendError } =
     args
   const agentRef = useRef(agent)
@@ -63,14 +63,21 @@ export function useMobileNativeChatStop(args: {
   // left this chat still has to reach them: `use-mobile-native-chat-send-error.ts`
   // turns it into a toast there.
   useEffect(() => cancelSecondEscape, [cancelSecondEscape, client, enabled, streamIdentity])
-  return useCallback(() => {
+  // Resolves once every key of this tap has settled: true when the agent took one,
+  // false when none went. The composer's Stop clears its stopping ring on false
+  // (use-chat-stop-button.ts); the words are this hook's to say.
+  return useCallback((): Promise<boolean> => {
     latestStopRef.current += 1
     const tap = latestStopRef.current
     const handle = handleRef.current
     if (!client || !handle || !enabled) {
       onSendError('Stop not sent (terminal not ready)')
-      return
+      return Promise.resolve(false)
     }
+    let settle!: (sent: boolean) => void
+    const verdict = new Promise<boolean>((resolve) => {
+      settle = resolve
+    })
     cancelPending()
     cancelSecondEscape()
     const stopStreamIdentity = streamIdentity
@@ -87,6 +94,9 @@ export function useMobileNativeChatStop(args: {
     let sawUnknown = false
     let sawRejected = false
     const reportIfSettled = (): void => {
+      if (pending === 0) {
+        settle(sawAccepted)
+      }
       if (
         latestStopRef.current !== tap ||
         pending > 0 ||
@@ -161,7 +171,7 @@ export function useMobileNativeChatStop(args: {
     }
     sendKey(keys.text)
     if (!keys.second) {
-      return
+      return verdict
     }
     dropSecondEscapeRef.current = () => {
       pending -= 1
@@ -175,6 +185,7 @@ export function useMobileNativeChatStop(args: {
       pending -= 1
       reportIfSettled()
     }, 80)
+    return verdict
   }, [
     cancelPending,
     cancelSecondEscape,

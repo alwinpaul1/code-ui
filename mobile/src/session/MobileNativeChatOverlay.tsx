@@ -414,7 +414,7 @@ export function MobileNativeChatOverlay({
         spinner={controller.nativeChatSpinner ?? null}
         reportBackgroundTaskFailure={onSendFailure} hostConnection={controller.nativeChatHostConnection}
         streaming={streaming}
-        onStop={controller.handleNativeChatStop}
+        onStop={controller.handleNativeChatStop} stopping={controller.nativeChatStopping === true}
         ask={controller.nativeChatAsk}
         askKey={controller.nativeChatAskKey} askSentAt={controller.nativeChatAskSentAt}
         onDismissAsk={controller.dismissNativeChatAsk}

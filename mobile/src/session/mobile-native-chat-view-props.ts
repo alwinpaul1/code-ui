@@ -84,8 +84,11 @@ export type MobileNativeChatViewProps = {
   hostConnection?: BackgroundTasksConnection
   /** Claude Code's spinner line as its screen paints it, for the status line. */
   spinner?: ClaudeSpinner | null
-  /** Interrupt the agent mid-turn (shown as a Stop button on the working bar). */
+  /** Interrupt the agent mid-turn: Stop in the composer's send slot while
+   *  nothing is typed. */
   onStop?: () => void
+  /** A Stop went out and the turn has not ended; Stop draws its ring. */
+  stopping?: boolean
   /** Live partial assistant text to show as an in-progress bubble, already gated
    *  by the overlay against the transcript catching up. */
   streaming: string | null

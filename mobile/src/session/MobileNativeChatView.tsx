@@ -71,6 +71,7 @@ export function MobileNativeChatView({
   hostConnection,
   spinner = null,
   onStop,
+  stopping = false,
   streaming,
   hasMore,
   loadingEarlier,
@@ -436,12 +437,10 @@ export function MobileNativeChatView({
       />
       <MobileNativeChatChromeRow
         agentWorking={agentWorking}
-        canStop={canStop ?? agentWorking}
         // The structured lane says "Working for N" per turn; a second, static
         // "Working" on the status line would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
-        onStop={onStop}
         sendErrorMessage={sendErrorMessage}
         styles={styles}
       />
@@ -488,6 +487,9 @@ export function MobileNativeChatView({
         sessionCommands={sessionCommands}
         conversationCommands={conversationCommands}
         onNeedSkills={onNeedSkills}
+        canStop={(canStop ?? agentWorking) === true}
+        stopping={stopping}
+        onStop={onStop}
       />
       </View>
     </View>

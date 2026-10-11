@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { ContextWindowRing } from '../components/ContextWindowRing'
-import { ArrowUp, Mic, Square } from 'lucide-react-native'
+import { Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
 import { MobileNativeChatComposerSheets } from './MobileNativeChatComposerSheets'
 import { MobileNativeChatAttachButton } from './MobileNativeChatAttachButton'
@@ -20,7 +20,7 @@ import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session
 import type { DiscoveredSkill } from '../../../src/shared/skills'
 import { useTheme } from '../theme/theme-context'
 import { useComposerSuggestions } from './use-composer-suggestions'
-import { PressScale } from '../ui/PressScale'
+import { MobileNativeChatSendSlot } from './MobileNativeChatSendSlot'
 import { keepHeldPressThroughLongPress } from './held-press-long-press'
 import { applyAutocomplete } from './mobile-native-chat-autocomplete'
 import {
@@ -121,6 +121,12 @@ type Props = {
   popoverSpace?: number
   /** The dock's current height (which includes the popover when it is up). */
   dockHeight?: number
+  /** A turn is running that Stop can interrupt. With nothing typed, Stop takes
+   *  the send button's slot; with text, Send stays so the message can queue. */
+  canStop?: boolean
+  /** A Stop went out and the turn has not ended yet (use-chat-stop-button.ts). */
+  stopping?: boolean
+  onStop?: () => void
 }
 
 /** Claude-app style composer: a rounded card with the text field on top and a
@@ -181,7 +187,10 @@ export function MobileNativeChatComposer({
   conversationCommands,
   onNeedSkills,
   popoverSpace = 0,
-  dockHeight = 0
+  dockHeight = 0,
+  canStop = false,
+  stopping = false,
+  onStop
 }: Props): React.JSX.Element {
   const { colors, fonts, radius, space, type } = useTheme()
   const [cursor, setCursor] = useState(() => value.length)
@@ -230,8 +239,11 @@ export function MobileNativeChatComposer({
   // greys Send meanwhile. Until 2026-09-26 only a first upload greyed it,
   // markup's re-upload never marked its chip, and a send tapped just after
   // Done pasted the photo without its marks.
+  const hasContent = trimmed.length > 0 || attachments.length > 0
+  // Send or Stop, never both; typed text brings Send back (MobileNativeChatSendSlot.tsx).
+  const showStop = canStop && onStop !== undefined && !hasContent
   const canSend =
-    (trimmed.length > 0 || attachments.length > 0) &&
+    hasContent &&
     !disabled &&
     !sending &&
     !sessionOptionDispatching
@@ -498,24 +510,14 @@ export function MobileNativeChatComposer({
                 )}
               </Pressable>
             ) : null}
-            <PressScale focusable={false}
-              accessibilityLabel="Send message"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: !canSend }}
-              // Extra margin: two filled circles on the row's 4 px gap read as one blob.
-              // The accent circle always; with nothing to send it is dimmed, as the
-              // Claude app draws it, not swapped for a grey one.
-              style={[iconButton, { marginLeft: space.xs, backgroundColor: colors.accent, opacity: canSend ? 1 : 0.4 }]}
-              pressedScale={0.9}
-              onPress={handleSend}
-              disabled={!canSend}
-            >
-              <ArrowUp
-                size={19}
-                color={colors.onAccent}
-                strokeWidth={2.6}
-              />
-            </PressScale>
+            <MobileNativeChatSendSlot
+              showStop={showStop}
+              stopping={stopping}
+              onStop={onStop}
+              canSend={canSend}
+              onSend={() => void handleSend()}
+              iconButton={iconButton}
+            />
           </View>
         </View>
       </View>

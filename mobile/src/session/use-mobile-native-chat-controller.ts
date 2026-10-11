@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { hudFieldsFromAgentStatus } from './hud-agent-status-fields'
 import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
+import { useChatStopButton } from './use-chat-stop-button'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -525,6 +526,9 @@ export function useMobileNativeChatController(
   // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
   const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud })
 
+  // The composer's Stop: a ring while stopping, back on when the stop failed or the agent kept working (G24).
+  const stopButton = useChatStopButton({ stop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop, canStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking, scope: streamIdentity, onSendError })
+
   // Held across renders: a fresh map each render re-ran the chat's whole
   // render-data pass, and an agent's pictures now keep a host entry even
   // before any has loaded (use-host-image-previews.ts).
@@ -587,7 +591,7 @@ export function useMobileNativeChatController(
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     beginNativeChatImageSend: clearDraftAtSendStart,
-    handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop,
+    handleNativeChatStop: stopButton.onStop, nativeChatStopping: stopButton.stopping,
     nativeChatFilePaths,
     loadNativeChatFiles,
     nativeChatSkills,

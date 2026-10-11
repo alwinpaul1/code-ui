@@ -8,7 +8,7 @@ import { useMobileNativeChatStop } from './use-mobile-native-chat-stop'
 
 describe('useMobileNativeChatStop', () => {
   let renderer: ReactTestRenderer | null = null
-  let stop: (() => void) | null = null
+  let stop: (() => Promise<boolean>) | null = null
   const sendRequest = vi.fn()
   const onSendError = vi.fn()
 
@@ -71,7 +71,7 @@ describe('useMobileNativeChatStop', () => {
   ])('cancels the delayed second Escape when %s', async (_case, enabled, streamIdentity) => {
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     expect(sendRequest).toHaveBeenCalledTimes(1)
 
     await render(enabled as boolean, streamIdentity as string)
@@ -84,7 +84,7 @@ describe('useMobileNativeChatStop', () => {
     sendRequest.mockRejectedValue(new Error('disconnected'))
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => {
       await Promise.resolve()
       await vi.runAllTimersAsync()
@@ -101,7 +101,7 @@ describe('useMobileNativeChatStop', () => {
     sendRequest.mockResolvedValue(response)
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => vi.runAllTimersAsync())
 
     expect(onSendError).toHaveBeenCalledOnce()
@@ -118,7 +118,7 @@ describe('useMobileNativeChatStop', () => {
     sendRequest.mockRejectedValue(makeError())
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => {
       await Promise.resolve()
       await vi.runAllTimersAsync()
@@ -143,7 +143,7 @@ describe('useMobileNativeChatStop', () => {
     })
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => {
       await Promise.resolve()
       await vi.runAllTimersAsync()
@@ -158,7 +158,7 @@ describe('useMobileNativeChatStop', () => {
   it('sends Ctrl+C once to stop Grok, which does not cancel on Escape', async () => {
     await render(true, 'stream-1', 'grok')
 
-    act(() => stop?.())
+    act(() => void stop?.())
     await act(async () => vi.runAllTimersAsync())
 
     expect(sendRequest).toHaveBeenCalledTimes(1)
@@ -172,7 +172,7 @@ describe('useMobileNativeChatStop', () => {
   it('bounds the Escape on a reconnect wait instead of parking forever', async () => {
     await render(true, 'stream-1')
 
-    act(() => stop?.())
+    act(() => void stop?.())
 
     // The budget covers the reconnect wait too, so a stop can't outlast its ceiling.
     expect(sendRequest).toHaveBeenCalledWith(
@@ -195,8 +195,8 @@ describe('useMobileNativeChatStop', () => {
       .mockResolvedValue({ ok: true, result: { send: { accepted: true } } })
     await render(true, 'stream-1')
 
-    act(() => stop?.())
-    act(() => stop?.())
+    act(() => void stop?.())
+    act(() => void stop?.())
     await act(async () => vi.runAllTimersAsync())
     await act(async () => {
       rejectFirst(new Error('late failure'))
