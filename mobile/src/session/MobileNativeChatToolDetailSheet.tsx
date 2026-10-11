@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
+import { toolFilePath } from '../../../src/shared/native-chat-tool-summary'
 import { DraggableDetailSheet } from '../components/DraggableDetailSheet'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 import { useTheme } from '../theme/theme-context'
-import type { TypeVariant } from '../theme/tokens'
 import { Txt } from '../ui/Txt'
 import { highlightMobileCode } from './mobile-file-syntax'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
@@ -23,6 +22,9 @@ import {
   type ToolDetailSection
 } from './mobile-native-chat-tool-detail-sections'
 import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
+import { readViewOf } from './mobile-native-chat-read-view'
+import { MobileNativeChatReadViewer } from './MobileNativeChatReadViewer'
+import { SelectableSheetText } from './SelectableSheetText'
 
 const STATUS_TONE: Record<ToolDetailStatus, 'secondary' | 'danger' | 'muted'> = {
   Completed: 'secondary',
@@ -113,6 +115,12 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
   // Memoised on the pair: a running tool re-renders the sheet as it streams.
   const sections = useMemo(() => toolDetailSections(pair, { hasChanges: files !== null }), [pair, files])
   const output = pair.result?.output ?? ''
+  // A Claude Read's result is the file's numbered lines: drawn as the Claude
+  // app's Read viewer, with Load full file, instead of the raw Output box.
+  const readView = useMemo(
+    () => (pair.call ? readViewOf(pair.call, output, pair.result?.isError === true) : null),
+    [pair.call, output, pair.result?.isError]
+  )
   return (
     <View style={{ gap: 20 }}>
       {sections.map((section, index) => (
@@ -128,7 +136,17 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
           )}
         </Section>
       ))}
-      {output.trim().length > 0 ? (
+      {readView ? (
+        <MobileNativeChatReadViewer
+          view={readView}
+          path={pair.call ? toolFilePath(pair.call.input) : null}
+          inSection={(accessory, body) => (
+            <Section label="Output" accessory={accessory}>
+              {body}
+            </Section>
+          )}
+        />
+      ) : output.trim().length > 0 ? (
         <OutputSection output={output} isError={pair.result?.isError === true} />
       ) : null}
     </View>
@@ -240,39 +258,5 @@ function OutputSection({ output, isError }: { output: string; isError: boolean }
         </Txt>
       ) : null}
     </Section>
-  )
-}
-
-/**
- * Selectable text that lets go when the sheet's pan takes the touch.
- *
- * Why the gesture: the sheet scrolls and drags under gesture-handler, and once
- * a pan activates, its root stops passing the touch to the Android views below
- * without sending them a cancel. A selectable TextView arms its long-press on
- * touch-down, never hears the finger move or lift, and selects the word under
- * it mid-scroll (Copy / Translate / Select all, reported 2026-09-26). With a
- * Native gesture of its own, the pan's activation cancels that gesture, and
- * gesture-handler hands the TextView an ACTION_CANCEL, which drops the
- * pending long-press. A long-press that does not move still selects.
- */
-function SelectableSheetText({
-  variant,
-  tone = 'primary',
-  testID,
-  children
-}: {
-  variant: TypeVariant
-  tone?: 'danger' | 'primary'
-  testID?: string
-  children: ReactNode
-}) {
-  const gesture = useMemo(() => Gesture.Native(), [])
-  // The detector sets user-select: none on web unless told otherwise.
-  return (
-    <GestureDetector gesture={gesture} userSelect="text">
-      <Txt variant={variant} tone={tone} testID={testID} selectable>
-        {children}
-      </Txt>
-    </GestureDetector>
   )
 }
