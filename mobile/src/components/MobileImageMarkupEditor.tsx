@@ -11,7 +11,7 @@ import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-g
 import { runOnJS } from 'react-native-reanimated'
 import Svg, { Image as SvgImage, Path } from 'react-native-svg'
 import { Check, Redo2, Undo2, X } from 'lucide-react-native'
-import { closeImageMarkup, useImageMarkup } from '../session/image-markup-store'
+import { closeImageMarkup, peekImageMarkup, useImageMarkup } from '../session/image-markup-store'
 import { loadMarkupImageSize } from './markup-image-size'
 import { encodeMarkupOutput, loadMarkupSourceTraits } from './markup-image-output'
 import { markupOutputFormat } from '../session/image-markup-format'
@@ -186,8 +186,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
 
   const handleClose = (): void => {
     // The Claude app's sheet cannot be dismissed while it saves; neither can
-    // this, or Back would drop the marks the flatten is writing.
-    if (saving) {
+    // this, or Back would drop the marks the flatten is writing. The ref, not
+    // the render: two taps can land before the re-render.
+    if (savingRef.current !== null) {
       return
     }
     if (resolveMarkupCloseAction(strokeState) === 'confirm-discard') {
@@ -203,7 +204,9 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
   }
 
   const handleDone = (): void => {
-    if (saving) {
+    // Not while saving, and, as in the Claude app, not with a stroke in
+    // progress: a second finger's Done would flatten the half-drawn line.
+    if (savingRef.current !== null || draftRef.current.length > 0) {
       return
     }
     if (!hasMarkupStrokes(strokeState) || !natural) {
@@ -221,7 +224,11 @@ export function MobileImageMarkupEditor(): React.JSX.Element | null {
     const attempt = {}
     savingRef.current = attempt
     setSaving(true)
-    const current = (): boolean => savingRef.current === attempt
+    // Delivered and closed only while this save is the live one for the
+    // session it started in: a token check, since the ref is reset in an
+    // effect that can run after the store has already moved on.
+    const token = session.token
+    const current = (): boolean => savingRef.current === attempt && peekImageMarkup()?.token === token
     const giveUp = (why: string): void => {
       clearTimeout(timer)
       if (!current()) {

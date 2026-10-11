@@ -88,6 +88,14 @@ describe('the format a marked-up picture is saved in', () => {
     expect(markupOutputFormat(alpha).format).toBe('png')
   })
 
+  // Base64 wrapped at 76 columns, as MIME writers send it: the head is cut
+  // before the line breaks are stripped, with room left for them.
+  it('reads a data: URL whose base64 is wrapped onto lines', () => {
+    const wrapped = base64(fixture('screenshot-with-alpha.png')).replace(/(.{76})/g, '$1\n')
+    expect(wrapped).toContain('\n')
+    expect(markupSourceTraitsFromDataUri(`data:image/png;base64,${wrapped}`)).toEqual({ mimeType: 'image/png', hasAlpha: true })
+  })
+
   // Prefer the lossless choice when the source cannot be read: a PNG keeps
   // every pixel and any transparency, a wrong JPEG would lose both.
   it('stays with PNG when the source cannot be read or is cut before its pixels', () => {

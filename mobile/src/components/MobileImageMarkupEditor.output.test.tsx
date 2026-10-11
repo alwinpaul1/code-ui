@@ -347,4 +347,33 @@ describe.each(['light', 'dark'] as const)('the markup editor, in %s mode', (sche
     expect(texts()).not.toContain('Saving…')
     expect(warn.mock.calls.some((call) => String(call[0]).includes('composer gone'))).toBe(true)
   })
+
+  // The flatten covers the canvas exactly: letterboxing the sub-pixel shape
+  // difference of the rounded output size left a transparent strip, which a
+  // JPEG turns black (Opus review).
+  it('stretches the canvas onto the output size instead of letterboxing it', async () => {
+    await openOn(OPAQUE_PHOTO, scheme)
+    const canvas = renderer!.root.find((node) => (node.type as unknown) === 'Svg')
+    expect(canvas.props.preserveAspectRatio).toBe('none')
+  })
+
+  // The Claude app's Done runs only with no stroke in progress. A Done tapped
+  // by a second finger mid-drag flattened the half-drawn line, and the drag's
+  // end then committed it while the picture was written (Opus re-review).
+  it('waits for a stroke in progress before Done writes the picture', async () => {
+    const done = await openOn(OPAQUE_PHOTO, scheme)
+    await drawAStroke()
+    await act(async () => {
+      pan.onStart!({ x: 60, y: 60 })
+      pan.onUpdate!({ x: 70, y: 80 })
+    })
+    await pressDone()
+    expect(svg.flatten, 'Done flattened a half-drawn stroke').toBeNull()
+    expect(texts()).not.toContain('Saving…')
+    await act(async () => pan.onEnd!())
+    expect(paths()).toBe(2)
+    await pressDone()
+    await finishFlatten()
+    expect(done).toHaveLength(1)
+  })
 })

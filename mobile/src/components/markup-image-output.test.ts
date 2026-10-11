@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // bytes and writing the flattened PNG as a JPEG for an opaque source. Both are
 // fail-open: whatever goes wrong, the marks still go out, as a PNG.
 
-const opened = vi.hoisted(() => ({ modes: [] as unknown[], bytes: new Uint8Array(), closed: 0 }))
+const opened = vi.hoisted(() => ({ modes: [] as unknown[], bytes: new Uint8Array() as Uint8Array, closed: 0 }))
 
 vi.mock('expo-file-system', () => {
   class File {
