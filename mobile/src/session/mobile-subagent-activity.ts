@@ -169,9 +169,7 @@ export type SubagentActivityContext = {
  *  drainer", started by "Reliable sends, never dropped" in session 0954729d)
  *  is listed the way the Claude app lists it: running while the host's roster
  *  holds its row, finished once the roster drops it. With no feed it
- *  returns `tasks` itself. Whether a row takes a Stop is decided after, by
- *  what Claude's own Background dialog can select (terminal-background-task-stops.ts):
- *  it lists a subagent's shells beside the lead's. */
+ *  returns `tasks` itself. */
 export function mergeSubagentActivity(
   tasks: BackgroundTasks,
   feeds: ReadonlyMap<string, readonly NativeChatMessage[]>,

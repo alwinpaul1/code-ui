@@ -1,5 +1,4 @@
 import { View } from 'react-native'
-import { MobileBackgroundTaskStopButton } from './MobileBackgroundTaskStopButton'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask } from './mobile-background-tasks'
@@ -27,14 +26,10 @@ import {
  */
 export function MobileWorkflowCard({
   task,
-  onStop,
-  stopHeld = false,
   statusUnknown = false
 }: {
   task: BackgroundTask
-  onStop?: (taskId: string) => void
-  stopHeld?: boolean
-  /** No connection to the host: a running workflow's time reads "Status unknown", with no Stop. */
+  /** No connection to the host: a running workflow's time reads "Status unknown". */
   statusUnknown?: boolean
 }) {
   const { colors, radius, space } = useTheme()
@@ -52,9 +47,6 @@ export function MobileWorkflowCard({
         <Txt variant="body" weight="medium" numberOfLines={2} style={{ flex: 1 }}>
           {task.title}
         </Txt>
-        {onStop && running && !statusUnknown && task.stoppable !== false ? (
-          <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
-        ) : null}
       </View>
       <Facts>
         <Txt variant="caption" tone="secondary">

@@ -14,25 +14,10 @@ import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
 import { projectStructuredBackgroundTasks } from './mobile-structured-background-tasks'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
-import { SheetFailureLine } from './SheetFailureLine'
-import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 import { useSubagentActivityWatch, type SubagentActivitySource } from './use-subagent-activity-watch'
-import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
-import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
-import { terminalStopTargets } from './terminal-background-task-stops'
 
 /** Whether the sheet's host is reachable, and which connection it is on. */
 export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
-
-/** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
- *  caller that does not say (void) is read as unconfirmed, so the row's button comes back.
- *  `target` is what a terminal tab's Stop selects in Claude's own Background dialog
- *  (terminal-background-task-stops.ts); the structured lane stops by id and ignores it. */
-export type BackgroundTaskStopHandler = (
-  taskId: string,
-  report?: SheetFailureReport,
-  target?: ClaudeBackgroundStopTarget
-) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -41,18 +26,15 @@ const TICK_MS = 1000
 
 /** The list of background work the agent has in flight and has finished. A
  *  terminal-driven tab has only the transcript the chat view already holds; a
- *  structured tab gets the provider's own roster from the host, which can also
- *  stop one task by name. A row carries a stop control only where the host
- *  says it accepts one. */
+ *  structured tab gets the provider's own roster from the host. It lists and
+ *  stops nothing: no row carries a Stop, as no row of the Claude app's sheet
+ *  does (the user, 2026-10-11; no-stop.test.tsx). */
 export function MobileBackgroundTasksSheet({
   visible,
   messages,
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask,
-  reportStopFailure,
-  scopeKey = null,
   connection,
   subagentSource = null,
   onClose
@@ -62,37 +44,12 @@ export function MobileBackgroundTasksSheet({
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  /** `report` is where this Stop's failure is said: the sheet, while open. */
-  onStopTask?: BackgroundTaskStopHandler
-  /** The chat's banner, or its toast, and the tab it belongs to: where a failed
-   *  Stop goes once the sheet is not showing it. Without it the sheet hands
-   *  the Stop no reporter, and the lane says a failure on the banner. */
-  reportStopFailure?: SheetFailureReport
-  scopeKey?: string | null
   connection?: BackgroundTasksConnection
   /** Where the running agents' own transcripts are (a Claude tab): read only
    *  while the sheet is open, for each agent's latest step and its shells. */
   subagentSource?: SubagentActivitySource | null
   onClose: () => void
 }) {
-  // Why the sheet says a failed Stop itself: it draws in its own native window,
-  // over the chat's banner, and the row keeps its Stop until the host says the
-  // task ended. A reason said only on the banner left a Stop that seemed to do
-  // nothing (2026-09-25), the defect the session-option drawer had too.
-  const failure = useSheetFailure({
-    open: visible,
-    scopeKey,
-    reportFailure: reportStopFailure ?? ignoreFailure
-  })
-  const stop =
-    onStopTask && reportStopFailure
-      ? (taskId: string, report?: SheetFailureReport, target?: ClaudeBackgroundStopTarget) => {
-          if (!report) {
-            failure.clear()
-          }
-          return onStopTask(taskId, report ?? failure.reporter(), target)
-        }
-      : onStopTask
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     // The title rides above the list rather than in it, so it stays in view
@@ -103,14 +60,13 @@ export function MobileBackgroundTasksSheet({
       dragContentToDismiss
       dismissKeyboardOnOpen
       expandable
-      header={<MobileBackgroundTasksSheetHeader onClose={onClose} stopFailure={failure.shown} />}
+      header={<MobileBackgroundTasksSheetHeader onClose={onClose} />}
     >
       <MobileBackgroundTasksSheetBody
         messages={messages}
         agentStatus={agentStatus ?? null}
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
-        onStopTask={stop}
         connection={connection}
         subagentSource={visible ? subagentSource : null}
       />
@@ -118,24 +74,13 @@ export function MobileBackgroundTasksSheet({
   )
 }
 
-// Never called: the sheet makes a reporter only when it was handed one.
-const ignoreFailure: SheetFailureReport = () => undefined
-
-/** The sheet's title and close cross, with why the last Stop did not go
- *  through under them. The drawer pins it above the list. */
-export function MobileBackgroundTasksSheetHeader({
-  onClose,
-  stopFailure = null
-}: {
-  onClose?: () => void
-  stopFailure?: string | null
-}) {
+/** The sheet's title and close cross. The drawer pins it above the list. */
+export function MobileBackgroundTasksSheetHeader({ onClose }: { onClose?: () => void }) {
   const { space } = useTheme()
   return (
     // Claude's close cross and title sit 8 dp further in than the drawer's edge.
-    <View style={{ gap: space.sm, paddingHorizontal: space.sm }}>
+    <View style={{ paddingHorizontal: space.sm }}>
       <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
-      {stopFailure ? <SheetFailureLine>{stopFailure}</SheetFailureLine> : null}
     </View>
   )
 }
@@ -147,7 +92,6 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus,
   backgroundTaskReport,
   hostBackgroundTasks,
-  onStopTask,
   connection,
   subagentSource = null
 }: {
@@ -155,7 +99,6 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: BackgroundTaskStopHandler
   /** The host connection. Absent reads as connected (a caller that cannot tell). */
   connection?: BackgroundTasksConnection
   /** Read the running agents' transcripts while this is set (the sheet passes
@@ -164,7 +107,7 @@ export function MobileBackgroundTasksSheetBody({
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
-  // Disconnected, nothing here is current: running rows say so and take no Stop. A NEW connection
+  // Disconnected, nothing here is current: running rows say so. A NEW connection
   // (its `lastConnectedAt`) re-reads at once, by itself (CLAUDE.md, nothing stays stale).
   const disconnected = connection?.connected === false
   const connectedAt = connection?.lastConnectedAt ?? null
@@ -196,26 +139,7 @@ export function MobileBackgroundTasksSheetBody({
     hostSubagents,
     now
   })
-  // A terminal tab's Stop goes through Claude's own Background dialog, which
-  // can select only some rows (terminal-background-task-stops.ts); the rest
-  // draw no Stop. The structured lane's rows say so themselves.
-  const footerShells = backgroundTaskReport?.onScreenShellCount ?? null
-  const terminalStops = useMemo(
-    () => (!lane.structured && onStopTask ? terminalStopTargets(watched, footerShells) : null),
-    [footerShells, lane.structured, onStopTask, watched]
-  )
-  const { running, finished } = terminalStops?.tasks ?? watched
-  const targets = terminalStops?.targets ?? null
-  const runningIds = useMemo(() => running.map((task) => task.id), [running])
-  const stopOne = useMemo(
-    () =>
-      onStopTask
-        ? async (taskId: string, report?: SheetFailureReport) =>
-            (await onStopTask(taskId, report, targets?.get(taskId))) === true
-        : undefined,
-    [onStopTask, targets]
-  )
-  const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne, connection: connectedAt })
+  const { running, finished } = watched
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -228,8 +152,8 @@ export function MobileBackgroundTasksSheetBody({
   return (
     // Claude's list sits 24 dp in from the screen's edges, 12 dp further than
     // the drawer's own padding, and leaves 24 dp between Running and Finished.
-    // No Stop all at Running's right: the Claude app has none, and the user
-    // asked for it gone (2026-10-11). Each running row keeps its own Stop.
+    // No Stop all at Running's right and no Stop on a row: the Claude app has
+    // neither, and the user asked for both gone (2026-10-11).
     <View style={{ paddingBottom: space.md, paddingHorizontal: space.md, gap: space.xl }}>
       <BackgroundTasksSection title="Running" open={runningOpen} onToggle={() => setRunningOpen((open) => !open)}>
         {disconnected && running.length > 0 ? (
@@ -244,13 +168,7 @@ export function MobileBackgroundTasksSheetBody({
             two kinds as separate labelled groups. */}
         {running.length > 0 ? (
           running.map((task) => (
-            <BackgroundTaskCard
-              key={task.id}
-              task={task}
-              onStop={stopOne && !disconnected ? (taskId) => void stops.onStop(taskId) : undefined}
-              stopHeld={stops.holding.has(task.id)}
-              statusUnknown={disconnected}
-            />
+            <BackgroundTaskCard key={task.id} task={task} statusUnknown={disconnected} />
           ))
         ) : (
           <Txt variant="caption" tone="muted">

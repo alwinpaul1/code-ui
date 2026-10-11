@@ -4,7 +4,6 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
 import { MobileWorkflowCard } from './MobileWorkflowCard'
-import { MobileBackgroundTaskStopButton } from './MobileBackgroundTaskStopButton'
 import {
   backgroundTaskKindLabel,
   backgroundTaskStatusLabel,
@@ -16,28 +15,23 @@ import {
  * One task, as the Claude Android app's Background tasks sheet draws it (screenshot, 2026-10-10;
  * re-measured beside Code UI on the same phone, 2026-10-11): a card darker than the sheet with the
  * kind's glyph, a 14/19 semibold title (two lines at most), then the kind in the title's ink and its
- * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. A running card
- * carries a small round Stop level with the title's first line where the host takes one; a finished
- * card has none. The card itself opens nothing: the fork's "View transcript" link is gone
+ * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. No card carries a
+ * Stop: Claude's has none, and the round one the fork drew at the right was removed at the user's
+ * ask (2026-10-11, no-stop.test.tsx). The card itself opens nothing: the fork's "View transcript" link is gone
  * (2026-10-10, not in Orca).
  */
 export function MobileBackgroundTaskCard({
   task,
-  onStop,
-  stopHeld = false,
   statusUnknown = false
 }: {
   task: BackgroundTask
-  onStop?: (taskId: string) => void
-  /** A Stop is on its way, or the host confirmed it and the row has not left yet (Orca #26780). */
-  stopHeld?: boolean
   /** No connection to the host: a running row cannot say it runs, so its time reads "Status
-   *  unknown" and it takes no Stop. */
+   *  unknown". */
   statusUnknown?: boolean
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
-    return <MobileWorkflowCard task={task} onStop={onStop} stopHeld={stopHeld} statusUnknown={statusUnknown} />
+    return <MobileWorkflowCard task={task} statusUnknown={statusUnknown} />
   }
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'
@@ -48,7 +42,7 @@ export function MobileBackgroundTaskCard({
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: space.md,
-        // Claude's card: 16 dp above, below and before the glyph, 24 dp after the Stop.
+        // Claude's card: 16 dp above, below and before the glyph, 24 dp at the right.
         paddingTop: space.lg,
         paddingBottom: space.lg,
         paddingLeft: space.lg,
@@ -97,16 +91,11 @@ export function MobileBackgroundTaskCard({
           ) : null}
         </View>
       </View>
-      {onStop && running && !statusUnknown && task.stoppable !== false ? (
-        <View style={{ height: TITLE_LINE, justifyContent: 'center' }}>
-          <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
-        </View>
-      ) : null}
     </View>
   )
 }
 
-/** The title's line height: the glyph and the Stop are centred on its first line, as in Claude's. */
+/** The title's line height: the glyph is centred on its first line, as in Claude's. */
 const TITLE_LINE = 19
 
 /** One glyph per kind: for a shell, Claude's sheet draws an open window whose top edge is broken by
