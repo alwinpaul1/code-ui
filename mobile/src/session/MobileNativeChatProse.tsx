@@ -110,6 +110,10 @@ export function Prose({
         </View>
       )
     }
+    // A photo in the user's own bubble: the same 96 dp tile.
+    if (invert && isRenderableImageUri(uri)) {
+      return <MobileNativeChatAgentImageTile uri={uri} label={block.alt ?? 'Image'} />
+    }
     if (isRenderableImageUri(uri)) {
       // Why: the picture is already on the phone (a local upload, or a host
       // thumbnail fetched earlier), so tapping opens it full-screen at once —
