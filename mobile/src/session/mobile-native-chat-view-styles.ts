@@ -83,9 +83,12 @@ export function makeChatViewStyles(theme: Theme) {
       padding: space.xl,
       gap: space.sm
     },
+    // Centred above the composer, as the Claude app draws it (2026-10-11):
+    // half the width in, less half the button's own 40.
     fab: {
       position: 'absolute',
-      right: space.md,
+      left: '50%',
+      marginLeft: -20,
       bottom: space.md,
       width: 40,
       height: 40,

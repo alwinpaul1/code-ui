@@ -10,7 +10,8 @@
 // is past 16 s, the token count, and a thinking status. The thinking words are
 // read out of the Claude Code 2.1.281 bundle (`Oo()` and `Ao()` beside the
 // spinner): "thinking", "still thinking", "thinking more", "thinking some
-// more", "deep in thought", "thought for 3s". 2.1.283 has the same words,
+// more", "deep in thought", "thought for 3s" (that last one is not shown;
+// see THINKING). 2.1.283 has the same words,
 // thresholds and 16 s cut (`Lo()` and `Eo()` there, read 2026-09-26). The
 // Claude app draws the same three facts on its own status line, "✳ 1m 16s ·
 // 5 running tasks · thinking some more…" (recordings of 2026-09-24), with the
@@ -43,7 +44,10 @@ export type ClaudeSpinner = {
 export const SPINNER_VERB_SOURCE = String.raw`^\s*[✳✻✽✶✢·*⏺]\s+(\p{Lu}[\p{L}'’\-]+)…`
 const SPINNER_LINE = new RegExp(String.raw`${SPINNER_VERB_SOURCE}(?:\s*\(([^)]*)\)?)?`, 'u')
 const ELAPSED = /^(?:\d+h\s*)?(?:\d+m\s*)?\d+s$|^\d+h\s*\d+m$|^\d+m$/
-const THINKING = /^(?:thinking|still thinking|thinking more|thinking some more|deep in thought|almost done thinking|thought for \d+s)$/
+// "thought for 3s" is Claude Code's word too, but past tense: it reports a
+// phase that has ended, and the Claude app draws nothing for it, so it is not
+// read (reported 2026-10-11, "remove that thought for two seconds").
+const THINKING = /^(?:thinking|still thinking|thinking more|thinking some more|deep in thought|almost done thinking)$/
 
 /** The live spinner, read from the bottom of the screen up, or null when
  *  none is painted. */

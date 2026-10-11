@@ -28,7 +28,16 @@ describe("Claude Code's spinner line, read for the status line", () => {
       elapsed: '1m 16s',
       thinking: 'thinking some more'
     })
-    expect(parseClaudeSpinnerLine(['✻ Cooking… (48s · thought for 3s)'])?.thinking).toBe('thought for 3s')
+  })
+
+  // Reported 2026-10-11: the status line drew "thought for 2s…" beside
+  // Working. That part is past tense, a report on a phase that has ended, and
+  // the Claude app draws no such words, so the phone shows nothing for it.
+  it('never shows "thought for 2s" beside the working line', () => {
+    expect(parseClaudeSpinnerLine(['✻ Cooking… (48s · thought for 3s)'])?.thinking).toBeNull()
+    expect(
+      parseClaudeSpinnerLine(['✳ Synthesizing… (3s · ↓ 138 tokens · thought for 2s)'])
+    ).toEqual({ verb: 'Synthesizing', elapsed: '3s', thinking: null })
   })
 
   it('takes no key hint for a thinking status', () => {
