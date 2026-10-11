@@ -1062,3 +1062,10 @@ The nameless "Background shell" row was the footer fit padding up to the pill's 
 - An agent launched by a subagent the sheet does not read (past the six-agent cap, or a third
   level) is not listed.
 - Kept finished rows live in memory only; a relaunched app starts with none.
+- Agents: 42 of this session's 67 background agents ended mid-turn, written only as queue-operation
+  and queued_command records. They still leave Running and the count, because Orca's own hooks run
+  in a hand-started Claude too and its roster drops each agent at SubagentStop (its persisted
+  status for this pane listed exactly the two agents still running;
+  `mobile-background-tasks-absorbed-agent.test.ts`). With no host status at all (a pane Orca has no
+  hook row for) nothing the phone receives says such an agent ended, and it stays running: an
+  agent's output file is its own JSONL, with no end trailer.
