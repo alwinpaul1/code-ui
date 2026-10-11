@@ -34,9 +34,12 @@ describe('a Stop on a terminal tab selects by label, so a shared label takes non
     expect(targets.size).toBe(0)
   })
 
-  it('refuses one whose command a footer-retired row shares: that row may be the one still running', () => {
+  it('allows one whose command a footer-retired row shares: only one of them runs, and that is the one the dialog lists', () => {
+    // Re-review, 2026-10-11: counting footer-retired rows took the Stop away from every
+    // later run of a command for the rest of a beacon-less session, and bought nothing:
+    // the footer says one runs, and Claude's list shows that one whichever row was pressed.
     const { tasks } = terminalStopTargets({ running: [shell('new', 'running')], finished: [shell('old', 'finished')] }, 1)
-    expect(tasks.running[0]!.stoppable).toBe(false)
+    expect(tasks.running[0]!.stoppable).toBe(true)
   })
 
   it('allows one whose command only a row with a seen ending shares', () => {

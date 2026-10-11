@@ -140,6 +140,17 @@ describe('an agent the phone first saw late is not taken for a woken one', () =>
   })
 })
 
+describe('an agent woken while the chat was closed', () => {
+  it("is timed from Orca's own stamp of its return, not from when the phone first saw it", () => {
+    // Re-review, 2026-10-11: the clock stamps a row it first sees late with that moment.
+    const now = at('2026-10-10T23:07:00.000Z')
+    const tasks = deriveBackgroundTasks(lead(), now, working([row(QUICK_AGENT, '2026-10-10T23:04:37.182Z')]), {
+      subagentRuns: new Map([[QUICK_AGENT, now]])
+    })
+    expect(tasks.running.find((task) => task.id === QUICK_AGENT)!.startedAt).toBe(at('2026-10-10T23:04:37.182Z'))
+  })
+})
+
 describe("the footer's own zero retires finished shells on a tab with no beacon", () => {
   it('reads the no-count footer, which says "(shift+tab to cycle)" where the pill was, as zero shells', () => {
     expect(parseClaudeRunningShellCount(busyScreen('screen-footer-no-count.txt'))).toBe(0)

@@ -13,10 +13,10 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
  *   from the footer, and its agent panel retitles rows with its own summaries, so
  *   nothing could select the agent reliably: no Stop is drawn rather than a dead one.
  * - Anything else (a monitor, a workflow, a placeholder the phone cannot name): none.
- * - None, either, for a row whose label and kind another row shares while that row
- *   could still be running (running, or `finished`: retired by the footer count, which
- *   retires the OLDEST rows, not necessarily the ones that ended). The dialog would
- *   show one row for both and the Stop could end the other task (review, 2026-10-11).
+ * - None, either, for a row whose label and kind another RUNNING row shares: the
+ *   dialog would show one row for both and the Stop could end the other task (review,
+ *   2026-10-11). A row the footer count retired is not counted: the footer says only
+ *   one of them runs, and the dialog lists that one whichever row was pressed.
  *
  * Each running row gets `stoppable` set, true or false; the map holds the targets.
  */
@@ -26,7 +26,7 @@ export function terminalStopTargets(
 ): { tasks: BackgroundTasks; targets: ReadonlyMap<string, ClaudeBackgroundStopTarget> } {
   const targets = new Map<string, ClaudeBackgroundStopTarget>()
   const shared = new Map<string, number>()
-  for (const task of [...tasks.running, ...tasks.finished.filter((row) => row.status === 'finished')]) {
+  for (const task of tasks.running) {
     const key = labelKey(task)
     if (key !== null) {
       shared.set(key, (shared.get(key) ?? 0) + 1)

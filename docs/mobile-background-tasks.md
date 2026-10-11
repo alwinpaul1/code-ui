@@ -887,7 +887,8 @@ What changed:
   (`subagentStepInFlight`, `mobile-subagent-activity.ts`).
 - A launched agent is timed from its comeback when Orca's row started more than 10 s after the
   launch (Orca drops a stopped one-shot agent's row and stamps its return anew) and the run clock
-  (`mobile-subagent-runs.ts`) places the run there (`currentRunStart`). The clock alone is not
+  (`mobile-subagent-runs.ts`) places the run there (`currentRunStart`), timed from the earlier of
+  the two, so a wake the phone first saw minutes later reads from Orca's stamp. The clock alone is not
   enough: it stamps a row it first sees late with that moment, which read "0s" for an agent
   launched while the chat was closed (review). Cost: Orca's re-creation of rows around a nested
   `claude -p` now shortens a launched agent's time too, not only a roster-only row's.
@@ -939,9 +940,10 @@ together, agents first, since an agent's Stop needs the pill a running shell kee
 
 Which rows draw a Stop (`terminal-background-task-stops.ts`): every running shell, the lead's and
 the subagents' (the dialog lists both), and every running agent while the footer shows a shells
-pill; none for a row whose command or description another phone row shares while that row could
-still run (running, or retired by the footer count, which picks the oldest), since the dialog
-would show one row for both. With no pill there is no Background dialog to open from the footer: ↓ then focuses the
+pill; none for a row whose command or description another RUNNING phone row shares, since the
+dialog would show one row for both. A row the footer count retired does not count: the footer says
+only one runs, and the dialog lists that one whichever row was pressed (re-review). While a dialog
+covers the footer, its count is unknown, so agent rows draw no Stop until it closes. With no pill there is no Background dialog to open from the footer: ↓ then focuses the
 agent panel, whose rows Claude retitles with its own summaries ("Running background sleep
 command"), so nothing could select an agent by its description and no Stop is drawn.
 

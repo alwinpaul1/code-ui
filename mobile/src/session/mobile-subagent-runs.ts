@@ -101,7 +101,7 @@ const RESUMED_RUN_MIN_GAP_MS = 10_000
  *  the Claude app showed at "50s", and the row looked like a finished one.
  *  A wake needs both: Orca's row started well after the launch (Orca drops a
  *  stopped one-shot agent's row and stamps its return anew), and the run clock
- *  places the run there. The clock alone is not enough: it stamps a row it first
+ *  places the run there, timed from the earlier of the two. The clock alone is not enough: it stamps a row it first
  *  sees late with that moment, and an agent launched while the chat was closed
  *  read "0s" (review, 2026-10-11). An unknown start keeps the launch. Returns the
  *  start and the time since it. */
@@ -113,6 +113,8 @@ export function currentRunStart(
 ): { startedAt: number | null; elapsedMs: number | null } {
   const rowRestarted = typeof hostStart === 'number' && (launchedAt === null || hostStart - launchedAt > RESUMED_RUN_MIN_GAP_MS)
   const resumed = rowRestarted && typeof runStart === 'number' && (launchedAt === null || runStart - launchedAt > RESUMED_RUN_MIN_GAP_MS)
-  const startedAt = resumed ? runStart : launchedAt
+  // Orca's stamp of the return when the clock first saw the row late (the chat was
+  // closed at the wake), else the moment the clock watched it come back.
+  const startedAt = resumed && typeof hostStart === 'number' ? Math.min(runStart, hostStart) : launchedAt
   return { startedAt, elapsedMs: elapsedSince(startedAt, now) }
 }
