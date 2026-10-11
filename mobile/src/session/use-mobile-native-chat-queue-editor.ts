@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { createQueueEditorIo } from './mobile-native-chat-queue-editor-io'
+import { opaque } from './native-queue-input'
 import { sendClaudeQueueNow } from './claude-send-queue-now'
 import { readSendUnderDialogRefusal } from './mobile-native-chat-dialog-guard'
 import {
@@ -16,11 +17,11 @@ import {
 import {
   finishNativeQueueEdit,
   QueueRebuildError,
-  recallNativeQueue,
   type QueueEdit,
   type QueueEditorAgent,
   type QueueEditorIo
 } from './native-queue-editor'
+import { recallNativeQueueFor } from './native-queue-recall-target'
 export type { QueueEditorAgent } from './native-queue-editor'
 
 /** A recall whose read failed leaves an unknown amount on the agent. The line
@@ -69,6 +70,10 @@ export function useMobileNativeChatQueueEditor(args: {
   removePending?: (id: string) => void
   /** The queue as drawn, oldest first; only its length is read. */
   queued?: readonly unknown[]
+  /** The chat composer's text now; a tap-to-edit is refused over a draft. */
+  composerText?: () => string
+  /** A tapped message is in the agent's input; `text` is what that input says. */
+  onRecalled?: (recalled: { handle: string; text: string }) => void
 }) {
   const [editing, setEditing] = useState<Editing | null>(null)
   const [busy, setBusy] = useState(false)
@@ -128,13 +133,24 @@ export function useMobileNativeChatQueueEditor(args: {
         generation: lifetime.current
       })
     })
-  const open = async (index?: number, tapped?: string) => {
+  /** `target` 'composer' is the tap on a queued row: the message comes back to
+   *  the chat composer from the agent's input, as the Claude app's
+   *  dequeueToInput does. Where the recall would pull in the whole queue (stock
+   *  Claude, several queued), the sheet takes over, since it puts the rest back. */
+  const open = async (index?: number, tapped?: string, target: 'sheet' | 'composer' = 'sheet') => {
     const start = latest.current
     const handle = start.handleRef.current
     const agent = start.agent
     const generation = lifetime.current
     // A tap while a recall or an edit is already writing is answered by that one.
     if (inFlight.current || editing || (agent !== 'claude' && agent !== 'codex')) {
+      return
+    }
+    // The composer is where the message lands, so a draft there is refused
+    // before any key. (The Claude app puts the queued text above the draft; here
+    // the draft is mirrored on the desktop input, where the recall would land on it.)
+    if (target === 'composer' && start.composerText?.().trim()) {
+      start.onError('Send or clear your message first, then tap the queued one.')
       return
     }
     // The pencil is drawn whatever the connection is doing, so turning a tap
@@ -169,7 +185,9 @@ export function useMobileNativeChatQueueEditor(args: {
         }
       }
       try {
-        recall = await recallNativeQueue(watched, agent, index, tapped)
+        const recalled = await recallNativeQueueFor(target, watched, agent, index, tapped)
+        recall = recalled.recall
+        target = recalled.target
       } catch (cause) {
         if (wrote) {
           // Up has already emptied the queue into the agent's composer. Whatever
@@ -193,6 +211,18 @@ export function useMobileNativeChatQueueEditor(args: {
         start.removePending?.(pending.id)
       }
       markMobileNativeChatInputResidue(handle, recall.draft)
+      if (target === 'composer') {
+        // The words come from the agent's own input, never the drawn row. They
+        // stay there, out of the queue; the next send replaces them.
+        release()
+        if (opaque(recall.draft)) {
+          throw new Error(
+            'That message holds an attachment or collapsed paste the phone cannot load. It is in the desktop input, unsent.'
+          )
+        }
+        start.onRecalled?.({ handle, text: recall.draft })
+        return
+      }
       setStranded(false)
       setRemaining([])
       setEditing({
@@ -295,6 +325,7 @@ export function useMobileNativeChatQueueEditor(args: {
 
   return {
     open,
+    recallToComposer: (index: number, tapped: string) => open(index, tapped, 'composer'),
     sendNow,
     editor: editing
       ? ({

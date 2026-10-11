@@ -109,6 +109,27 @@ All 555 test files passed (4,375 tests, 3 skipped), including the queue operatio
 and editor action/disabled-state checks. TypeScript, lint, and the Android release
 build passed.
 
+## Tap a queued message to edit it (2026-10-11)
+
+The Claude app (1.261009.20) makes the whole queued bubble a button: a tap calls
+`dequeueToInput`, which drops the queued send and puts its text in the composer.
+Code UI's queue is the agent's own, so a tap on a queued row drives the agent's
+recall key (Claude Up, walking its selector where the hint offers one; Codex
+Alt+Up), reads back what the agent's input now says, and loads that into the
+phone composer. The message leaves the queue but stays in the desktop input, so
+the desktop still holds it: the draft mirror adopts it as its own line
+(`adoptRecalledInput`) and edits it in place when it is one line, and the next
+send clears and replaces it either way.
+
+Refused before any key: a draft in the phone composer, a row holding an
+attachment or collapsed paste, and everything the editor already refuses.
+Stock Claude Code with several queued messages would pull them all into the
+input; that tap opens the editor sheet instead, which puts the rest back.
+Captured screens: `fixtures/queued-tap-recall-2.1.296-0.153.4.ts` (Claude Code
+2.1.296, Codex 0.153.4; Codex there draws "shift + ← edit last queued message"
+and still takes Alt+Up). Tests: `queued-message-tap-to-composer.test.ts`,
+`draft-mirror-adopts-recalled-queue-entry.test.ts`.
+
 ## Per-message editing on Claude Code, 0.2.48
 
 Any queued Claude message can now be edited or deleted from the phone, with no

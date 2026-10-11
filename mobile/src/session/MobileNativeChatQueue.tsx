@@ -142,20 +142,34 @@ export function MobileNativeChatQueue({
           // caption a photo row shows in its place.
           const drawn = typeof entry === 'string' ? entry : entry.caption
           const parsed = splitOrcaPastedImagePaths(text)
+          const canEdit = editable(index)
+          const rowStyle = [
+            {
+              flexDirection: 'row' as const,
+              alignItems: 'flex-start' as const,
+              gap: space.sm,
+              paddingVertical: space.md,
+              borderTopWidth: index > 0 ? 1 : 0,
+              borderTopColor: colors.border
+            },
+            QUEUE_FLIP
+          ]
+          // The whole row is the button, as the Claude app's queued bubble is
+          // (1.261009.20: hb20.e clickable, z07 -> dequeueToInput): the tap
+          // brings the message back to the composer from the agent's input.
+          const Row = canEdit ? Pressable : View
           return (
-            <View
+            <Row
               key={`${index}:${text}`}
-              style={[
-                {
-                  flexDirection: 'row',
-                  alignItems: 'flex-start',
-                  gap: space.sm,
-                  paddingVertical: space.md,
-                  borderTopWidth: index > 0 ? 1 : 0,
-                  borderTopColor: colors.border
-                },
-                QUEUE_FLIP
-              ]}
+              {...(canEdit
+                ? {
+                    accessibilityRole: 'button' as const,
+                    accessibilityLabel: `Edit queued message ${index + 1}`,
+                    accessibilityHint: 'Moves it back into the message box',
+                    onPress: () => void onEdit?.(index, drawn)
+                  }
+                : {})}
+              style={rowStyle}
             >
               <Txt
                 variant="caption"
@@ -172,7 +186,8 @@ export function MobileNativeChatQueue({
               ) : null}
               <View style={{ flex: 1, gap: space.xs }}>
                 {parsed.text ? (
-                  <Txt variant="body" selectable>
+                  // Selectable only where no tap edits it: a selectable Text takes the row's press.
+                  <Txt variant="body" selectable={!canEdit}>
                     {parsed.text}
                   </Txt>
                 ) : null}
@@ -182,25 +197,16 @@ export function MobileNativeChatQueue({
                   </Txt>
                 ) : null}
               </View>
-              {editable(index) ? (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit queued message ${index + 1}`}
-                  onPress={() => void onEdit?.(index, drawn)}
-                  style={({ pressed }) => ({
-                    minHeight: 44,
-                    minWidth: 44,
-                    marginVertical: -space.sm,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: radius.sm,
-                    backgroundColor: pressed ? colors.bgRaised : 'transparent'
-                  })}
+              {canEdit ? (
+                // The row's own mark that it edits; the tap is the row's.
+                <View
+                  pointerEvents="none"
+                  style={{ minHeight: 24, minWidth: 24, alignItems: 'center', justifyContent: 'center' }}
                 >
                   <Pencil size={16} color={colors.textSecondary} />
-                </Pressable>
+                </View>
               ) : null}
-            </View>
+            </Row>
           )
         })}
       </ScrollView>

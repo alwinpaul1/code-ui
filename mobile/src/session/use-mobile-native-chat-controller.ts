@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { hudFieldsFromAgentStatus } from './hud-agent-status-fields'
-import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'
-import { useChatStopButton } from './use-chat-stop-button'
+import { useMobileNativeChatQueueEditor } from './use-mobile-native-chat-queue-editor'; import { useChatStopButton } from './use-chat-stop-button'
 import { useMobileNativeChatPermissionSend } from './mobile-native-chat-permission-send'
 import { useMobileNativeChatPlanFeedbackRespond } from './use-mobile-native-chat-plan-feedback-respond'
 import { useMobileNativeChatAnswerSend } from './use-mobile-native-chat-answer-send'
@@ -269,7 +268,7 @@ export function useMobileNativeChatController(
   // answers, and mirrored prose could pick one. A dialog no card shows reads
   // keys the same way, so one on screen closes the mirror too, by the same
   // test the sends use (mobile-native-chat-dialog-guard.ts).
-  const { settleBeforeSend: settleDraftMirrorBeforeSend } = useMobileNativeChatDraftMirror({
+  const { settleBeforeSend: settleDraftMirrorBeforeSend, adoptRecalledInput } = useMobileNativeChatDraftMirror({
     client, getComposerEditGeneration: getChatComposerEditGeneration,
     // Why not `inputSendable`: the lease is about who owns the input floor and
     // collapses a render late; a mirror write without it is simply refused by
@@ -517,17 +516,18 @@ export function useMobileNativeChatController(
     pending: chatPending,
     removePending,
     queued: visibleQueuedMessages,
-    onError: onSendError
+    onError: onSendError,
+    // A tapped queued message comes back here from the agent's own input (the Claude app's dequeueToInput).
+    composerText: () => chatComposerText, onRecalled: ({ handle, text }) => { adoptRecalledInput(handle, text); setChatComposerText(text); setComposerFocusRequest((n) => n + 1) }
   })
 
   // What a closed app or an expired hold left in the outbox: resent once when safe, or handed back (use-native-chat-outbox-recovery.ts).
   const outbox = useMobileNativeChatOutbox({ hostId, worktreeId, tabId: activeSessionTabId, sessionId: activeChatSessionId, showNativeChat, structured: activeChatStructured, terminalChat: activeChatResolution != null, agent: activeChatResolution?.agent ?? null, terminal: activeHandle, transcriptPath: activeChatResolution?.transcriptPath ?? null, promptBefore: activeChatPromptStatus?.prompt, messages: nativeChatSession.messages, transcriptSettled: nativeChatSession.status === 'ready', receipts: tailPrompts, inputSendable, agentWorking: nativeChatAgentWorking, promptUp: promptCard != null || terminalDialogKind !== null, queuedCount: visibleQueuedMessages.length, composerText: chatComposerText, setComposerText: setChatComposerText, sendTerminal: handleNativeChatSendWithOutcome, sendStructured: structuredNativeChatSend.sendWithOutcome, showEcho: showOutboxEcho, removeEcho: removePending, onNotice: onSendError })
 
-  // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
-  const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud })
-
   // The composer's Stop: a ring while stopping, back on when the stop failed or the agent kept working (G24).
-  const stopButton = useChatStopButton({ stop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop, canStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking, scope: streamIdentity, onSendError })
+  // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
+  const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud }); const stopButton = useChatStopButton({ stop: activeChatStructured ? structuredNativeChat.cancel : handleNativeChatStop, canStop: activeChatStructured ? structuredNativeChat.canStop : nativeChatAgentWorking, scope: streamIdentity, onSendError })
+
 
   // Held across renders: a fresh map each render re-ran the chat's whole
   // render-data pass, and an agent's pictures now keep a host entry even
@@ -587,7 +587,7 @@ export function useMobileNativeChatController(
     handleNativeChatCancelPrompt: activeChatStructured ? structuredCancelPrompt : undefined,
     handleNativeChatRespondPermission: respond,
     handleNativeChatRespondPermissionWithComment: respondWithComment,
-    openNativeChatQueueEditor: queueEditor.open, sendNativeChatQueueNow: queueEditor.sendNow,
+    openNativeChatQueueEditor: queueEditor.recallToComposer, sendNativeChatQueueNow: queueEditor.sendNow,
     nativeChatQueueEditor: queueEditor.editor,
     prepareNativeChatImageSend: settleDraftMirrorBeforeSend,
     beginNativeChatImageSend: clearDraftAtSendStart,
