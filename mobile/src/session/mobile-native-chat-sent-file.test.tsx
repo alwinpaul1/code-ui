@@ -189,6 +189,39 @@ describe('a file the agent sent with SendUserFile', () => {
     }
   })
 
+  // The Opus review of 61da3b3d5: a send that failed drew as a caption and a
+  // picture slot, so the user read a failure as a delivery. The recorded
+  // failures (2.1.239, 2.1.286) are input errors and keep their tool row
+  // anyway; this one passes input validation and fails at the file, wording
+  // modelled on those `<tool_use_error>` envelopes.
+  it('keeps a send that failed as the tool row with its error, with no caption and no picture', () => {
+    const failed = SEND_FILE_TURN.map((message) =>
+      message.id === '518dd6ab-af77-4194-8648-af6caabfce35'
+        ? { ...message, blocks: [{ type: 'tool-result' as const, output: `<tool_use_error>File does not exist: ${SEND_FILE_PATH}</tool_use_error>`, isError: true }] }
+        : message
+    )
+    const step = stepOf(failed, { [READ_CALL_ID]: [READ_URI], [SEND_CALL_ID]: [''] })
+    expect(step.blocks.map((block) => (block.type === 'tool-call' ? block.name : block.type))).toEqual([
+      'Bash', 'tool-result', 'Bash', 'tool-result', 'Read', 'tool-result', 'SendUserFile', 'tool-result', 'image-ref'
+    ])
+    render(step)
+    expect(json()).not.toContain(SEND_FILE_CAPTION)
+  })
+
+  it('names no file for a Read that failed', () => {
+    const failed = SEND_FILE_TURN.map((message) =>
+      message.id === 'c8849b9b-271e-4c06-af4a-dc80ed991a52'
+        ? { ...message, blocks: [{ type: 'tool-result' as const, output: `<tool_use_error>File does not exist.</tool_use_error>`, isError: true }] }
+        : message
+    )
+    // The hook still asked for it (its records are one block each) and holds
+    // an empty entry; the sent picture after it keeps its own.
+    const step = stepOf(failed, { [READ_CALL_ID]: [''], [SEND_CALL_ID]: [SENT_URI] })
+    expect(step.blocks.filter((block) => block.type === 'image-ref')).toEqual([
+      { type: 'image-ref', path: SEND_FILE_PATH, url: SENT_URI, alt: 'Image the agent sent' }
+    ])
+  })
+
   it('draws a sent PDF as a file card, by its name and extension, not as a picture', () => {
     const pdf = '/Users/alwinpaul/Desktop/Project/Code UI/docs/out/report.pdf'
     const raw = withSend({ files: [pdf], caption: 'The report', status: 'normal', display: 'render' })

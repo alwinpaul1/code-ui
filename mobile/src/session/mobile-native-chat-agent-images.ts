@@ -125,9 +125,18 @@ export function placeAgentImages(
   previews: readonly string[] | undefined
 ): NativeChatBlock[] {
   const sentResults = new Set<NativeChatBlock>()
+  // A call whose result is an error showed nothing: a failed send stays the
+  // tool row with its error, a failed Read gets no slot. Its pictures were
+  // still asked of the host (agentImagePaths sees one record at a time, and
+  // the result is another record), so their previews are skipped here, not
+  // left out of the count, and every later picture keeps its own.
+  const failed = new Set<NativeChatBlock>()
   let any = false
   for (const { call, result } of pairToolBlocks(blocks)) {
-    if (call && readSentFiles(call)) {
+    if (call && result?.isError && (readSentFiles(call) || readImagePath(call))) {
+      any = true
+      failed.add(call)
+    } else if (call && readSentFiles(call)) {
       any = true
       if (result) {
         sentResults.add(result)
@@ -156,6 +165,13 @@ export function placeAgentImages(
       continue
     }
     const sent = readSentFiles(block)
+    if (sent && failed.has(block)) {
+      for (let skipped = sentImagePaths(sent).length; skipped > 0; skipped -= 1) {
+        take()
+      }
+      out.push(block)
+      continue
+    }
     if (sent) {
       // The call ends the run before it: the pictures read there go first.
       flush()
@@ -176,7 +192,10 @@ export function placeAgentImages(
       out.push(block)
       const read = readImagePath(block)
       if (read) {
-        waiting.push(imageRef(read, take(), AGENT_READ_IMAGE_ALT))
+        const uri = take()
+        if (!failed.has(block)) {
+          waiting.push(imageRef(read, uri, AGENT_READ_IMAGE_ALT))
+        }
       }
       continue
     }
