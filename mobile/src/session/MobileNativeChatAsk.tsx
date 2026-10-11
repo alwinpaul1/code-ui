@@ -22,8 +22,15 @@ type Props = {
   sentAt?: number | null
 }
 
-// Sentinel index for the free-text "Other…" row (never a real option index).
+// Sentinel index for the free-text "Something else" row (never a real option index).
 const OTHER = -1
+
+/** The free answer's row, in the Claude app's words (`question_card_other_hint`,
+ *  1.261009.20). */
+export const ASK_OTHER_LABEL = 'Something else'
+/** How far the choices fade once a single-select answer is typed in the free
+ *  row, as the Claude app's card fades them: the typed words are the answer. */
+const DIMMED_CHOICE_OPACITY = 0.4
 
 /**
  * How long an accepted answer waits for the hook row to let go of the question
@@ -67,7 +74,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
   const autoAdvance = useMobileNativeChatAskAutoAdvance()
 
   // A single-select option answers the question, so the card moves on after a
-  // beat that shows it chosen; "Other…" still needs its text. Picking the same
+  // beat that shows it chosen; "Something else" still needs its text. Picking the same
   // row again inside the beat takes it back and cancels the move.
   const toggle = (qi: number, optIndex: number, multi: boolean): void => {
     // The ref as well as `locked`: a tap can land before the render that disables the rows.
@@ -166,6 +173,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
 
   const q = prompt.questions[index]!
   const otherSelected = (selections[index] ?? []).includes(OTHER)
+  // A typed single-select answer replaces the choices, so they step back. A
+  // multi-select one is sent beside them, so they keep their strength.
+  const choicesDimmed = !q.multiSelect && otherSelected && (otherText[index] ?? '').trim().length > 0
 
   return (
     <View
@@ -253,11 +263,12 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
             selected={(selections[index] ?? []).includes(optIndex)}
             multi={q.multiSelect}
             disabled={locked}
+            dimmed={choicesDimmed}
             onPress={() => toggle(index, optIndex, q.multiSelect)}
           />
         ))}
         <OptionRow
-          label="Other…"
+          label={ASK_OTHER_LABEL}
           selected={otherSelected}
           multi={q.multiSelect}
           disabled={locked}
@@ -322,8 +333,9 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel, sentAt = null 
           </Txt>
         )}
         {total > 1 && answeredAt === null ? (
+          // The Claude app's pager words (`question_card_page`).
           <Txt variant="caption" tone="muted">
-            {index + 1}/{total}
+            {`${index + 1} of ${total}`}
           </Txt>
         ) : null}
         {answeredAt === null ? (
@@ -406,6 +418,7 @@ function OptionRow({
   selected,
   multi,
   disabled = false,
+  dimmed = false,
   onPress
 }: {
   label: string
@@ -414,6 +427,8 @@ function OptionRow({
   multi?: boolean
   /** Sending or sent: the answer on its way out can no longer change. */
   disabled?: boolean
+  /** A typed answer stands in for the choices (DIMMED_CHOICE_OPACITY). */
+  dimmed?: boolean
   onPress: () => void
 }): React.JSX.Element {
   const { colors, radius, space } = useTheme()
@@ -428,7 +443,8 @@ function OptionRow({
         backgroundColor: pressed ? colors.bgSunken : colors.bgRaised,
         borderWidth: 1,
         borderColor: selected ? colors.accent : colors.border,
-        marginBottom: space.xs + 2
+        marginBottom: space.xs + 2,
+        opacity: dimmed ? DIMMED_CHOICE_OPACITY : 1
       })}
       onPress={onPress}
       disabled={disabled}
