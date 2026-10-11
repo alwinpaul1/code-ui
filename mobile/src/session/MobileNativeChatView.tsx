@@ -19,10 +19,8 @@ import {
   useChatListRenderStability
 } from './mobile-native-chat-list-extra-data'
 import { MobileNativeChatComposer } from './MobileNativeChatComposer'
-import {
-  MobileNativeChatComposerTasks,
-  useMobileNativeChatTaskProgress
-} from './mobile-native-chat-composer-tasks'
+import { useMobileNativeChatTaskProgress } from './mobile-native-chat-composer-tasks'
+import { MobileNativeChatSessionBar } from './MobileNativeChatSessionBar'
 import { MobileNativeChatKeyStrip } from './MobileNativeChatKeyStrip'
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'; import { MobileNativeChatOutboxStatus } from './MobileNativeChatOutboxStatus'; import { MobileNativeChatPendingDim } from './MobileNativeChatPendingDim'
 import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-follow'
@@ -134,7 +132,7 @@ export function MobileNativeChatView({
   onOpenFile,
   onRevertHunk,
   keyboardInset = 0,
-  keyStrip
+  keyStrip, sessionDiff = null, onOpenDiff
 }: MobileNativeChatViewProps): React.JSX.Element {
   const { colors, space } = useTheme()
   const styles = useChatViewStyles()
@@ -445,7 +443,7 @@ export function MobileNativeChatView({
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}
-      <MobileNativeChatComposerTasks list={composerList} />
+      <MobileNativeChatSessionBar list={composerList} diff={sessionDiff} onOpenDiff={onOpenDiff} working={agentWorking === true} />
       <MobileNativeChatComposer
         value={composerText}
         onChangeText={onComposerTextChange}

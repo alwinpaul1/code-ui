@@ -25,3 +25,20 @@ export function buildMobileReviewFileRoute(target: MobileReviewRouteTarget): str
     target.worktreeId
   )}?${params.toString()}`
 }
+
+/** The whole worktree's changes, from the chat's diff pill: no file picked,
+ *  so the review opens on its own first file with every change queued. */
+export function sessionReviewRoute(target: {
+  hostId: string
+  worktreeId: string
+  worktreeName?: string | null
+}): string {
+  const params = new URLSearchParams()
+  params.set('scope', 'all')
+  if (target.worktreeName) {
+    params.set('name', target.worktreeName)
+  }
+  return `/h/${encodeURIComponent(target.hostId)}/review/${encodeURIComponent(
+    target.worktreeId
+  )}?${params.toString()}`
+}

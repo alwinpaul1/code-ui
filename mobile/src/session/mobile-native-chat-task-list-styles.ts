@@ -70,26 +70,6 @@ export function makeTaskListStyles(theme: Theme) {
       color: colors.textMuted,
       fontFamily: fonts.regular,
       fontSize: MONO_SIZE
-    },
-    composer: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.bgSunken,
-      borderRadius: radius.md,
-      overflow: 'hidden'
-    },
-    composerTrigger: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.xs + 2,
-      minHeight: 44,
-      paddingHorizontal: space.md,
-      paddingVertical: space.sm
-    },
-    composerBody: {
-      maxHeight: 160,
-      paddingHorizontal: space.md,
-      paddingBottom: space.sm
     }
   })
 }

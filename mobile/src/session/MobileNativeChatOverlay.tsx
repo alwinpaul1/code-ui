@@ -12,6 +12,7 @@ import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
 import type { MobileNativeChatKeyStripProps } from './MobileNativeChatKeyStrip'
+import type { SessionDiffTotals } from './mobile-native-chat-session-bar-model'
 import { foldMobileNativeChatMessages, pendingFoldBoundaries } from './mobile-native-chat-render-data'
 import { boundPhotoCopy, isOwnPhotoStatusCopy, rememberPhotoCopies } from './desktop-prompt-photo-copies'
 import {
@@ -103,6 +104,10 @@ type Props = {
   /** Terminal accessory keys (Tab, Shift+Tab, arrows, Esc…) rendered above the
    *  composer so TUI menus stay operable from Chat UI. */
   keyStrip?: MobileNativeChatKeyStripProps
+  /** The worktree's uncommitted +/- for the session bar's diff pill. */
+  sessionDiff?: SessionDiffTotals | null
+  /** Opens the changes, from the diff pill. */
+  onOpenDiff?: () => void
 }
 
 /** Keeps the terminal mounted underneath chat so its PTY subscription survives
@@ -135,7 +140,9 @@ export function MobileNativeChatOverlay({
   sendSurfaceId,
   getSendCompletionGeneration,
   keyboardInset,
-  keyStrip
+  keyStrip,
+  sessionDiff = null,
+  onOpenDiff
 }: Props): React.JSX.Element | null {
   const session = controller.nativeChatSession
   // Both halves are fresh arrays every call, and they are the `pending` dep of
@@ -518,6 +525,8 @@ export function MobileNativeChatOverlay({
         sessionOptions={controller.nativeChatSessionOptions}
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
+        sessionDiff={sessionDiff}
+        onOpenDiff={onOpenDiff}
       />
   )
   // The loaded transcript says whether a later call touched a created file,

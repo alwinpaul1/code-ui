@@ -204,36 +204,6 @@ describe('an agent plan in the chat transcript', () => {
     return { texts, tasks, line, runArg }
   }
 
-  function renderComposer(scheme: 'light' | 'dark' = 'light') {
-    const list = {
-      tasks: [
-        { content: 'Read the parser', status: 'completed' as const },
-        {
-          content: 'Write the failing test',
-          status: 'in_progress' as const,
-          activeForm: 'Writing the test'
-        }
-      ]
-    }
-    act(() => {
-      renderer = create(
-        createElement(
-          ThemeProvider,
-          { initialPreference: scheme },
-          createElement(MobileNativeChatTaskList, { list, presentation: 'composer' })
-        )
-      )
-    })
-    const strip = renderer!.root.findByProps({ testID: 'composer-task-progress' })
-    const texts: string[] = []
-    for (const node of strip.findAllByType('Text')) {
-      if (typeof node.props.children === 'string') {
-        texts.push(node.props.children)
-      }
-    }
-    return { strip, texts }
-  }
-
   it("shows Claude's plan as a checklist instead of the raw JSON of its input", () => {
     const { texts, tasks, line, runArg } = render(CLAUDE_PLAN)
     expect(tasks.map((task) => task.text)).toEqual([
@@ -314,35 +284,6 @@ describe('an agent plan in the chat transcript', () => {
     expect(lightDone).toBe(lightColors.success)
     expect(darkDone).toBe(darkColors.success)
     expect(lightDone).not.toBe(darkDone)
-  })
-
-  it('offers the latest plan as a collapsed Tasks strip for the composer', () => {
-    const { strip, texts } = renderComposer()
-    expect(texts).toContain('Tasks')
-    expect(texts).toContain('1/2')
-    expect(strip.findAll((node) => node.props?.testID === 'task-list-row')).toEqual([])
-  })
-
-  it('expands the composer strip into the checklist on tap', () => {
-    const { strip } = renderComposer()
-    act(() => {
-      strip.findByType('Pressable').props.onPress()
-    })
-    expect(
-      strip
-        .findAll((node) => node.props?.testID === 'task-list-row')
-        .map((node) => String(node.props.children ?? ''))
-    ).toEqual(['Read the parser', 'Writing the test'])
-  })
-
-  it('paints the composer strip from the theme in light and in dark', () => {
-    const light = styleValue(renderComposer('light').strip.props.style, 'backgroundColor')
-    act(() => renderer?.unmount())
-    renderer = null
-    const dark = styleValue(renderComposer('dark').strip.props.style, 'backgroundColor')
-    expect(light).toBe(lightColors.bgSunken)
-    expect(dark).toBe(darkColors.bgSunken)
-    expect(light).not.toBe(dark)
   })
 
   it('tints the running step for the theme in use, in light and in dark', () => {
