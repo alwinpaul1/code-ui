@@ -17,6 +17,10 @@ export const CHAT_FRAME_HOLD_MS = 1500
  * for that frame and the whole chat list remounted. Only the expiry lives in
  * an effect.
  *
+ * What is remembered is up to the caller. The overlay remembers what the chat
+ * showed and draws the composer's input live over it (native-chat-held-frame.ts):
+ * a replayed element froze the composer, and keys typed in a new tab vanished.
+ *
  * Once the overlay has yielded to the terminal, the held frame is replayed
  * only while the reader is asking for chat. Without that, a chat drawn before
  * the reader switched to terminal mode came back on its own: pressing Ctrl+C
@@ -26,7 +30,7 @@ export const CHAT_FRAME_HOLD_MS = 1500
  * back: returning to chat re-reads the transcript, and the reader got a
  * spinner for a relay round trip instead of the chat they had left.
  */
-export function useNativeChatFrame(args: {
+export function useNativeChatFrame<T = React.JSX.Element>(args: {
   /** The source has nothing to show right now: not a chat tab, or reloading empty. */
   blank: boolean
   /** The blank is a blip (identity lost, view unresolved), not the reader leaving. */
@@ -36,12 +40,12 @@ export function useNativeChatFrame(args: {
   surfaceId: string
 }): {
   frame: MobileNativeChatFrame
-  held: React.JSX.Element | null
-  remember: (drawn: React.JSX.Element) => void
+  held: T | null
+  remember: (drawn: T) => void
 } {
   const { blank, blink, showNativeChat, hasTerminalUnderneath, surfaceId } = args
   const holding = blank && blink
-  const lastRef = useRef<{ surfaceId: string; element: React.JSX.Element } | null>(null)
+  const lastRef = useRef<{ surfaceId: string; element: T } | null>(null)
   // The terminal has been on screen since the last chat frame was drawn.
   const yieldedRef = useRef(false)
   const [expired, setExpired] = useState(false)
