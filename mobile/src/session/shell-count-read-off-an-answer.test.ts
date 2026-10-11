@@ -21,9 +21,11 @@ const ANSWER =
 
 describe('the running shell count on a Claude screen with its input box', () => {
   it('reads no count from an answer quoting the footer above the box', () => {
+    // The footer under the box states zero (no pill, its "(shift+tab to cycle)" hint
+    // drawn: claude-footer-shell-count.ts); the quoted "4 shells" is not read.
     const screen = [ANSWER, '', ...BOX, '  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents']
-    expect(parseClaudeRunningShellCount(screen)).toBeNull()
-    expect(parseTerminalHudObservation(screen)?.runningShellCount).toBeUndefined()
+    expect(parseClaudeRunningShellCount(screen)).toBe(0)
+    expect(parseTerminalHudObservation(screen)?.runningShellCount).toBe(0)
   })
 
   it('reads none from an answer when the box has nothing under it on screen', () => {

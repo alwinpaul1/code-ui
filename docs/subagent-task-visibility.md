@@ -209,17 +209,19 @@ What the rows show, verified against a second throwaway run (**Claude Code
 2.1.296**, `tmux -L cuisub`, session 59454ec6; agents "Sleep probe A" and
 "Sleep probe B", records in `fixtures/claude-subagent-transcript-probe-*-2.1.296.json`):
 
-- **An agent's title is its latest tool call.** For a shell call, "Running"
-  and the command's first line ("Running cd /private/tmp && ls | head -3");
-  for any other tool, the chat's running-call words ("Running ToolSearch
-  select:TaskStop"), without a JSON preview ("Running TaskStop"). The spawn
-  description stays as the screen reader's label and on the Stop. Before the
-  agent's first call, or when the read is refused or fails (an older host),
-  the row keeps the description and nothing says an error.
+- **An agent's title is the tool call it is in** (changed 2026-10-11; it
+  was the latest call, answered or not, and rows read "Running cd …" for
+  minutes after the command had returned). For a shell call, "Running" and
+  the command's first line ("Running cd /private/tmp && ls | head -3"); for
+  any other tool, the chat's running-call words ("Running ToolSearch
+  select:TaskStop"), without a JSON preview ("Running TaskStop"). Between
+  calls, before the first, after the hand-back, or when the read is refused
+  or fails, the row reads the spawn description, which is also always the
+  screen reader's label.
 - **A subagent's background shells are rows** ("Start a 120-second background
-  sleep", "Shell  1m 20s"), timed from the launching record. They carry no
-  Stop: a terminal tab has no stop path at all (the Stop is offered only where
-  the structured host says `supportsTaskStop`), so a button would be dead.
+  sleep", "Shell  1m 20s"), timed from the launching record. Since 2026-10-11
+  they carry Claude's own Stop like the lead's shells
+  (docs/mobile-background-tasks.md, "A Stop on a terminal tab").
 - **The "+N shells in subagents" line** takes the listed running ones out, and
   is dropped when every shell the footer counts outside the lead is listed.
   The pill's "N running tasks" count is unchanged.
@@ -250,8 +252,9 @@ last said, so the rows do not blink back to the description. Only the session
 screen in focus reads, so a session screen left mounted under a pushed one
 does not read the same agents again on its own host's connection.
 
-**Limits.** A subagent shell that ends with none of those (the footer paints
-no count at zero, so the LAST shell's end is never seen there) stays a running
+**Limits.** A subagent shell that ends with none of those (the footer's zero
+is read since 2026-10-11, but only while the footer is on screen and wide
+enough to draw its "(shift+tab to cycle)" hint) stays a running
 row until its agent finishes, when the read stops and the row leaves; the
 footer count line then covers it as before. A shell launched before the first
 window the read gets (40 records) is not listed. A shell that outlives its
@@ -387,11 +390,12 @@ The status-line payload still has no task field.
 
 ### The screen
 
-The footer drops the count when the last shell ends, at once, but paints
-nothing in its place (`'  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents'`
-with both agents still listed under it; fixture `screen-no-shell-count.txt`).
-"No count" is also what a footer under a narrow width or another hint looks
-like, so the phone does not read it as zero. The turn summary's
+The footer drops the count when the last shell ends, at once, and draws its
+"(shift+tab to cycle)" hint back in its place (`'  ⏵⏵ auto mode on (shift+tab
+to cycle) · ← for agents'` with both agents still listed under it; fixture
+`screen-no-shell-count.txt`). A row with no count and no hint is what a
+narrow footer looks like, so only the hint is read as zero (since 2026-10-11;
+see docs/mobile-background-tasks.md, "Stale rows on a terminal tab"). The turn summary's
 "N shells still running" and "Waiting for N background agents" lines are
 repainted only around the lead's turns.
 

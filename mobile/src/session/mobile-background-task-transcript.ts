@@ -65,6 +65,10 @@ export type Launch = {
   /** Judged by the last Stop's `run=` alone: a status line's `live=` is built
    *  from Bash launch sentences and never names a workflow or a monitor. */
   stopListOnly?: true
+  /** What Claude Code's own Background dialog draws for this task, which a
+   *  terminal tab's Stop selects it by (claude-background-dialog.ts): a shell's
+   *  command, an agent's description, uncut. Absent for other kinds. */
+  stopLabel?: string
 }
 /** `at` orders the finished list (the notification's place in the window);
  *  `timestamp` is when Claude wrote it, null when the ending came from
@@ -91,13 +95,17 @@ export function readLaunch(call: PendingCall, output: string): Launch | null {
       SHELL_MOVED.exec(output)?.[1] ??
       SHELL_BACKGROUNDED.exec(output)?.[1] ??
       SHELL_DELIVERED.exec(output)?.[1]
+    const command = readString(call.input, 'command')
     return id
-      ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: shellLabel(call.input) }
+      ? { id, kind: 'shell', title: shellTitle(call.input), startedAt: call.startedAt, label: shellLabel(call.input), ...(command ? { stopLabel: command } : {}) }
       : null
   }
   if (call.name === 'Agent') {
     const id = AGENT_LAUNCHED.exec(output)?.[1]
-    return id ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt, label: null } : null
+    const description = readString(call.input, 'description')
+    return id
+      ? { id, kind: 'agent', title: agentTitle(call.input), startedAt: call.startedAt, label: null, ...(description ? { stopLabel: description } : {}) }
+      : null
   }
   if (call.name === 'Workflow') {
     const launched = readWorkflowLaunch(call.input, output)

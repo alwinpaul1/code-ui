@@ -355,8 +355,8 @@ export function MobileNativeChatOverlay({
     [agentMessages, folded, pendingWithDesktopPrompts, session.messages]
   )
   const stopBackgroundTask = useCallback(
-    (taskId: string, report?: (message: string) => void) =>
-      controller.handleNativeChatStopBackgroundTask(taskId, report),
+    (taskId: string, report?: (message: string) => void, target?: Parameters<typeof controller.handleNativeChatStopBackgroundTask>[2]) =>
+      controller.handleNativeChatStopBackgroundTask(taskId, report, target),
     [controller]
   )
   const streaming = useMobileNativeChatStreamingBubble(
@@ -417,7 +417,7 @@ export function MobileNativeChatOverlay({
         hostBackgroundTasks={controller.nativeChatBackgroundTasks}
         spinner={controller.nativeChatSpinner ?? null}
         onStopBackgroundTask={
-          controller.nativeChatBackgroundTasks?.supportsTaskStop === true
+          controller.nativeChatBackgroundTasks?.supportsTaskStop === true || controller.nativeChatTerminalTaskStop
             ? stopBackgroundTask
             : undefined
         }

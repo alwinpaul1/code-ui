@@ -20,13 +20,21 @@ import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 import { useSubagentActivityWatch, type SubagentActivitySource } from './use-subagent-activity-watch'
 import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
 import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
+import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
+import { terminalStopTargets } from './terminal-background-task-stops'
 
 /** Whether the sheet's host is reachable, and which connection it is on. */
 export type BackgroundTasksConnection = { connected: boolean; lastConnectedAt: number | null }
 
 /** A Stop as the chat sends it: resolves true only when the host confirmed the task stopped. A
- *  caller that does not say (void) is read as unconfirmed, so the row's button comes back. */
-export type BackgroundTaskStopHandler = (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
+ *  caller that does not say (void) is read as unconfirmed, so the row's button comes back.
+ *  `target` is what a terminal tab's Stop selects in Claude's own Background dialog
+ *  (terminal-background-task-stops.ts); the structured lane stops by id and ignores it. */
+export type BackgroundTaskStopHandler = (
+  taskId: string,
+  report?: SheetFailureReport,
+  target?: ClaudeBackgroundStopTarget
+) => Promise<boolean> | void
 
 /** Finished tasks arrive a page at a time: a long session can hold hundreds,
  *  and a phone sheet that paints them all scrolls forever. */
@@ -80,11 +88,11 @@ export function MobileBackgroundTasksSheet({
   })
   const stop =
     onStopTask && reportStopFailure
-      ? (taskId: string, report?: SheetFailureReport) => {
+      ? (taskId: string, report?: SheetFailureReport, target?: ClaudeBackgroundStopTarget) => {
           if (!report) {
             failure.clear()
           }
-          return onStopTask(taskId, report ?? failure.reporter())
+          return onStopTask(taskId, report ?? failure.reporter(), target)
         }
       : onStopTask
   // Stop all names every task that did not stop on the sheet's own line.
@@ -157,7 +165,7 @@ export function MobileBackgroundTasksSheetBody({
   agentStatus?: BackgroundTaskHostStatus | null
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
-  onStopTask?: (taskId: string, report?: SheetFailureReport) => Promise<boolean> | void
+  onStopTask?: BackgroundTaskStopHandler
   /** Where a Stop all names the tasks that did not stop: the sheet's failure line. */
   onStopAllFailed?: (text: string) => void
   /** The host connection. Absent reads as connected (a caller that cannot tell). */
@@ -190,22 +198,38 @@ export function MobileBackgroundTasksSheetBody({
   }, [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns])
   // A structured lane has the provider's own roster; only a transcript-read
   // (terminal) lane gets its agents' steps and shells from their transcripts.
-  const { running, finished, shellsInSubagents } = useSubagentActivityWatch({
+  const watched = useSubagentActivityWatch({
     tasks: lane.tasks,
     source: lane.structured ? null : subagentSource,
     report: backgroundTaskReport,
     now
   })
+  // A terminal tab's Stop goes through Claude's own Background dialog, which
+  // can select only some rows (terminal-background-task-stops.ts); the rest
+  // draw no Stop. The structured lane's rows say so themselves.
+  const footerShells = backgroundTaskReport?.onScreenShellCount ?? null
+  const terminalStops = useMemo(
+    () => (!lane.structured && onStopTask ? terminalStopTargets(watched, footerShells) : null),
+    [footerShells, lane.structured, onStopTask, watched]
+  )
+  const { running, finished, shellsInSubagents } = terminalStops?.tasks ?? watched
+  const targets = terminalStops?.targets ?? null
   const runningIds = useMemo(() => running.map((task) => task.id), [running])
   const stopOne = useMemo(
     () =>
       onStopTask
-        ? async (taskId: string, report?: SheetFailureReport) => (await onStopTask(taskId, report)) === true
+        ? async (taskId: string, report?: SheetFailureReport) =>
+            (await onStopTask(taskId, report, targets?.get(taskId))) === true
         : undefined,
-    [onStopTask]
+    [onStopTask, targets]
   )
   const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne, connection: connectedAt })
-  const stopAllTasks = useMemo(() => stopAllTargets(running, stops.holding), [running, stops.holding])
+  // On a terminal tab the agents go first: an agent's Stop needs the shells pill
+  // that a running shell keeps on Claude's footer (terminal-background-task-stops.ts).
+  const stopAllTasks = useMemo(() => {
+    const all = stopAllTargets(running, stops.holding)
+    return targets ? [...all.filter((task) => task.kind === 'agent'), ...all.filter((task) => task.kind !== 'agent')] : all
+  }, [running, stops.holding, targets])
   const stopAll = useMobileBackgroundTasksStopAll({
     targets: stopAllTasks,
     onStop: stops.onStop,

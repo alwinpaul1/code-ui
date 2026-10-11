@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { Activity, Diamond, ListTree, Terminal } from 'lucide-react-native'
+import { Activity, Diamond, ListTree, SquareTerminal } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
@@ -100,8 +100,9 @@ export function MobileBackgroundTaskCard({
   )
 }
 
-/** One glyph per kind: a console for a shell, the hollow diamond for an agent, and their own for a
- *  monitor and a workflow, so neither reads as a shell. Plain markers in the secondary ink. */
+/** One glyph per kind: a terminal window for a shell (Claude's own sheet draws a small window, not
+ *  a bare prompt, the user's screenshots of 2026-10-11), the hollow diamond for an agent, and their
+ *  own for a monitor and a workflow, so neither reads as a shell. Plain markers in the secondary ink. */
 function BackgroundTaskGlyph({ kind }: { kind: BackgroundTaskKind }) {
   const { colors } = useTheme()
   switch (kind) {
@@ -113,7 +114,7 @@ function BackgroundTaskGlyph({ kind }: { kind: BackgroundTaskKind }) {
       return <ListTree size={16} color={colors.textSecondary} />
     case 'shell':
     case 'unknown':
-      return <Terminal size={16} color={colors.textSecondary} />
+      return <SquareTerminal size={16} color={colors.textSecondary} />
     default: {
       const exhaustive: never = kind
       return exhaustive

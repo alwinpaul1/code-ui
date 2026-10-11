@@ -1,0 +1,50 @@
+
+
+⏺ Noted.
+
+  session:ok
+
+✻ Churned for 2s · done 12:54 AM · 1 shell still running
+
+❯ In one response, in parallel, without waiting: (1) Bash "sleep 300" with run_in_background true and
+  description "Long lead shell"; (2) Agent with run_in_background true, description "Long probe agent",
+  telling it: run Bash "sleep 240" with run_in_background true and description "Long agent shell", then run
+  Bash "ping -c 200 127.0.0.1" in the foreground, then reply "done". Then reply "launched" and end your turn.
+  Reply to later notifications with one word.
+
+  Ran 1 shell command
+
+⏺ Agent(Long probe agent)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ launched
+
+  session:ok
+
+✻ Waiting for 1 background agent to finish
+
+❯ Run Bash "sleep 200" with run_in_background true and description "Busy-phase shell", then run Bash "ping -c
+  40 127.0.0.1" in the foreground and wait for it, then reply "pinged".
+
+⏺ Task "Long lead shell" was stopped by the user
+
+  Busy-phase shell · 10s
+  ⎿  $ ping -c 40 127.0.0.1 (10s · 12 lines)
+     (ctrl+b to run in background)
+
+✢ Discombobulating… (14s · ↓ 194 tokens)
+  ⎿  Tip: Press Shift+Enter to send a multi-line message
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 7%   ◷ 5h 20% │ 2:20 AM   ▦ 7d 73% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Background
+  1 active shell · 1 active agent
+
+    Shells (1)
+  ❯ ⏺ sleep 200          running
+
+    Local agents (1)
+    ⏺ Long probe agent   running · Opus 5.5
+
+  ↑/↓ to select · Enter to view · x to stop · Esc to close

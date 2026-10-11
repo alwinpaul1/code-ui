@@ -1,0 +1,50 @@
+
+⏺ Noted.
+
+  session:ok
+
+⏺ Agent "A rather long agent description that will surely be truncated somewhere" was stopped by user
+
+⏺ Noted.
+
+  session:ok
+
+✻ Worked for 1m 52s · done 1:03 AM · 1 shell still running
+
+❯ In one response, in parallel: (1) Bash "sleep 20" with run_in_background true, description "Busy lead shell
+  A"; (2) Bash "sleep 45" with run_in_background true, description "Busy lead shell B"; (3) Agent with
+  run_in_background true, description "Busy probe quick", telling it to run Bash "sleep 25" with
+  run_in_background true and description "Quick agent shell", then reply "quick done" without waiting; (4)
+  Agent with run_in_background true, description "Busy probe slow", telling it to run Bash "ping -c 50
+  127.0.0.1" in the foreground with description "Slow agent ping", then reply "slow done"; (5) Bash "ping -c
+  75 127.0.0.1" in the FOREGROUND with description "Lead foreground wait". After the foreground ping returns,
+  reply "all launched" and end your turn.
+
+⏺ Task "Second waiter" was stopped by the user
+
+⏺ Task "Count to a very large number slowly for the probe" was stopped by the user
+
+  Ran 2 shell commands
+
+⏺ 2 background agents launched (↓ to manage)
+   ├ Busy probe quick
+   └ Busy probe slow
+
+⏺ Leading foreground wait · 30s
+  ⎿  $ ping -c 75 127.0.0.1 (31s · 33 lines)
+     (ctrl+b to run in background)
+
+· Composing… (35s · ↓ 574 tokens)
+  ⎿  Tip: Use Plan Mode to prepare for a complex request before making changes. Press shift+tab twice to
+     enable.
+                                                                                                          [-]
+  Sonnet 5.5 medium │ ◔ 7%   ◷ 5h 21% │ 2:19 AM   ▦ 7d 73% │ Wed 7:00 PM    work │  main ?1 
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  cache ● 1h ██████ 59m left · hit 97% · misses 0
+  ⏵⏵ bypass permissions on · 1 shell · /tasks to see subagents · ← for agents
+
+  ⏺ main
+  ◯ general-purpose  Busy probe slow                                                    31s · ↓ 41.6k tokens

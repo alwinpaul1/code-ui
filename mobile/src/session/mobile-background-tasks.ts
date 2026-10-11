@@ -25,7 +25,7 @@
 // the provenance the caller can or cannot supply, decide.
 
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
-import type { SubagentRunClock } from './mobile-subagent-runs'
+import { currentRunStart, type SubagentRunClock } from './mobile-subagent-runs'
 import {
   isTextBlock,
   isToolCallBlock,
@@ -165,7 +165,9 @@ export type BackgroundTaskKind = 'shell' | 'agent' | 'monitor' | 'workflow' | 'u
  *  unseen. `completed` and `failed` come from a notification that said so. */
 export type BackgroundTaskStatus = 'running' | 'completed' | 'failed' | 'finished'
 
-export type BackgroundTask = {
+/** `stopLabel`: what a terminal tab's Stop selects in Claude's Background dialog
+ *  (a shell's command, an agent's description; claude-background-dialog.ts). */
+export type BackgroundTask = Pick<Launch, 'stopLabel'> & {
   /** Claude's own task id — a shell's `bzp6f42la`, or a subagent's `agentId`. */
   id: string
   kind: BackgroundTaskKind
@@ -189,9 +191,10 @@ export type BackgroundTask = {
   /** Cumulative tokens the provider reported for this task, where the host states them (a
    *  structured roster's `totalTokens`). Absent is unknown, and nothing is shown for it. */
   totalTokens?: number
-  /** A running subagent's latest tool step, read off its own transcript while
-   *  the sheet is open ("Running cd /private/tmp && ls"), drawn as the row's
-   *  title over `title` (`mobile-subagent-activity.ts`). Absent: unknown. */
+  /** A running subagent's tool call still in flight, read off its own
+   *  transcript while the sheet is open ("Running cd /private/tmp && ls"),
+   *  drawn as the row's title over `title` (`mobile-subagent-activity.ts`).
+   *  Absent: no call in flight, or unknown; the row reads `title`. */
   latestStep?: string
 }
 
@@ -408,7 +411,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       row !== undefined && !isTeammateLifecycleId(launch.id) && notification?.timestamp != null && row.startedAt <= notification.timestamp
     const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? row !== undefined && !endedThisRun : null
     if (rosterSaysRunning === true) {
-      running.push({ ...launch, status: 'running', elapsedMs: elapsedSince(launch.startedAt, now) })
+      running.push({ ...launch, ...currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id), row?.startedAt, now), status: 'running' })
       continue
     }
     if (notification) {

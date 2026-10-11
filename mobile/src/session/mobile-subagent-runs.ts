@@ -1,4 +1,5 @@
 import type { AgentSubagentSnapshot } from '../../../src/shared/agent-status-types'
+import { elapsedSince } from './mobile-background-task-captions'
 
 /**
  * When each live subagent's CURRENT run began, as far as the phone has seen.
@@ -86,4 +87,34 @@ export function observeSubagentRuns(
     }
   }
   return next
+}
+
+/** A launch the run clock saw stop and come back is more than this after
+ *  its launch; a first run's roster row starts a moment after the launch call
+ *  (SubagentStart 0.1 to 1 s later, fixtures/claude-busy-lead-tasks-2.1.296). */
+const RESUMED_RUN_MIN_GAP_MS = 10_000
+
+/** When a launched agent's CURRENT run began: its launch, unless it stopped and
+ *  came back. An agent that handed back and was woken (its own shell or reviewer
+ *  finished, a message reached it) is timed from the wake, as Claude Code's panel
+ *  and the Claude app time it: on 2026-10-11 the sheet read "56m 3s" for an agent
+ *  the Claude app showed at "50s", and the row looked like a finished one.
+ *  A wake needs both: Orca's row started well after the launch (Orca drops a
+ *  stopped one-shot agent's row and stamps its return anew), and the run clock
+ *  places the run there, timed from the earlier of the two. The clock alone is not enough: it stamps a row it first
+ *  sees late with that moment, and an agent launched while the chat was closed
+ *  read "0s" (review, 2026-10-11). An unknown start keeps the launch. Returns the
+ *  start and the time since it. */
+export function currentRunStart(
+  launchedAt: number | null,
+  runStart: number | null | undefined,
+  hostStart: number | null | undefined,
+  now: number
+): { startedAt: number | null; elapsedMs: number | null } {
+  const rowRestarted = typeof hostStart === 'number' && (launchedAt === null || hostStart - launchedAt > RESUMED_RUN_MIN_GAP_MS)
+  const resumed = rowRestarted && typeof runStart === 'number' && (launchedAt === null || runStart - launchedAt > RESUMED_RUN_MIN_GAP_MS)
+  // Orca's stamp of the return when the clock first saw the row late (the chat was
+  // closed at the wake), else the moment the clock watched it come back.
+  const startedAt = resumed && typeof hostStart === 'number' ? Math.min(runStart, hostStart) : launchedAt
+  return { startedAt, elapsedMs: elapsedSince(startedAt, now) }
 }

@@ -4,7 +4,7 @@ import type { BackgroundTask, BackgroundTasks } from './mobile-background-tasks'
 import {
   mergeSubagentActivity,
   SUBAGENT_WATCH_CAP,
-  subagentLatestStep,
+  subagentStepInFlight,
   subagentWatchTargets
 } from './mobile-subagent-activity'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
@@ -45,7 +45,7 @@ const bAfterStop = () => orcaTranscriptRows(recordsThrough(probeBRecords(), '1f6
 
 const feeds = (entries: [string, NativeChatMessage[]][]) => new Map(entries)
 
-describe("a background agent's row shows its latest step, as the Claude app does", () => {
+describe("a background agent's row shows the step it is in, as the Claude app does", () => {
   it('titles a running agent "Running cd /private/tmp && ls | head -3" while that command runs', () => {
     const now = Date.parse('2026-10-10T18:45:18.200Z')
     const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now })
@@ -63,10 +63,10 @@ describe("a background agent's row shows its latest step, as the Claude app does
       source: 'transcript',
       blocks: [{ type: 'tool-call', name, input }]
     })
-    expect(subagentLatestStep([call('Bash', { command: 'cd /private/tmp\nls -la', description: 'List' })])).toBe('Running cd /private/tmp')
-    expect(subagentLatestStep([call('ToolSearch', { query: 'select:TaskStop', max_results: 5 })])).toBe('Running ToolSearch select:TaskStop')
+    expect(subagentStepInFlight([call('Bash', { command: 'cd /private/tmp\nls -la', description: 'List' })])).toBe('Running cd /private/tmp')
+    expect(subagentStepInFlight([call('ToolSearch', { query: 'select:TaskStop', max_results: 5 })])).toBe('Running ToolSearch select:TaskStop')
     // B's real TaskStop: no JSON in a title.
-    expect(subagentLatestStep([call('TaskStop', { task_id: 'bnj50z9e4' })])).toBe('Running TaskStop')
+    expect(subagentStepInFlight([call('TaskStop', { task_id: 'bnj50z9e4' })])).toBe('Running TaskStop')
   })
 
   it("keeps the description when the agent's transcript is unread, refused, or holds no call yet", () => {
@@ -84,12 +84,12 @@ describe("a background agent's row shows its latest step, as the Claude app does
 })
 
 describe('shells started inside subagents are listed as their own rows', () => {
-  it("lists A's background sleep under A with its live time, and no Stop", () => {
+  it("lists A's background sleep under A with its live time", () => {
     const now = Date.parse('2026-10-10T18:46:35.616Z')
     const merged = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now })
     expect(merged.running.map((task) => task.id)).toEqual([PROBE_A_AGENT, PROBE_A_SHELL, PROBE_B_AGENT])
     const shell = merged.running[1]!
-    expect(shell).toMatchObject({ kind: 'shell', title: 'Start a 120-second background sleep', status: 'running', stoppable: false })
+    expect(shell).toMatchObject({ kind: 'shell', title: 'Start a 120-second background sleep', status: 'running' })
     // Launched 18:45:15.616: 1m 20s later.
     expect(shell.elapsedMs).toBe(80_000)
   })
@@ -216,7 +216,7 @@ describe("a subagent's last shell leaves Running when the status line says it fi
       finishedTaskIds: [PROBE_B_SHELL]
     })
     expect(merged.running.map((task) => task.id)).toEqual([PROBE_A_AGENT, PROBE_B_AGENT])
-    expect(merged.finished.find((task) => task.id === PROBE_B_SHELL)).toMatchObject({ kind: 'shell', status: 'completed', stoppable: false })
+    expect(merged.finished.find((task) => task.id === PROBE_B_SHELL)).toMatchObject({ kind: 'shell', status: 'completed' })
   })
 
   it('leaves a shell running when the finished ids name other tasks, or none', () => {
