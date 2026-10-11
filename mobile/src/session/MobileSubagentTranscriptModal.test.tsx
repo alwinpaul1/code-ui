@@ -295,6 +295,11 @@ describe('the subagent transcript viewer', () => {
     await mount()
     act(() => emit({ type: 'snapshot', messages: [message('u1', 'user'), message('a1')], hasMore: false }))
     act(() => list().props.onScrollBeginDrag())
+    act(() =>
+      list().props.onScroll({
+        nativeEvent: { contentOffset: { y: 600 }, contentSize: { height: 2400 }, layoutMeasurement: { height: 400 } }
+      })
+    )
     // Up in history, the rows the reader is on must stay put as new ones land.
     expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
 
@@ -321,6 +326,11 @@ describe('the subagent transcript viewer', () => {
       await mount(scheme)
       act(() => emit({ type: 'snapshot', messages: [message('a1')], hasMore: false }))
       act(() => list().props.onScrollBeginDrag())
+      act(() =>
+        list().props.onScroll({
+          nativeEvent: { contentOffset: { y: 600 }, contentSize: { height: 2400 }, layoutMeasurement: { height: 400 } }
+        })
+      )
       const icon = renderer!.root.findByType('ArrowDown' as never)
       const fab = renderer!.root
         .findAllByType('Pressable' as never)

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { FlashListRef } from '@shopify/flash-list'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
@@ -12,6 +12,14 @@ import { useNativeChatScreenFocus } from './use-native-chat-screen-focus'
  *  a number that moves with every token; this 40px was tuned on the device
  *  against an offset that never moves. */
 const AT_TAIL_SLOP_PX = 40
+
+/** How far the newest row must sit from its resting place before the
+ *  jump-to-latest control shows: the Claude app's own rule (1.261009.20,
+ *  docs/claude-app-implementation-notes.md section 2: the newest item off
+ *  screen, or more than 48 dp from its resting offset). Wider than the tail
+ *  slop, so the control never shows while the list still counts as at the
+ *  tail. React Native reports offsets in dp. */
+const JUMP_SHOW_OFFSET_DP = 48
 
 /** Inside this many px of the far end — which in an inverted list is the start
  *  of loaded history — page in older messages. */
@@ -31,7 +39,15 @@ function isAtHistoryStart(metrics: NativeScrollEvent): boolean {
 export type MobileNativeChatTailFollow<TItem> = {
   /** Attach to the transcript list; the hook scrolls through this ref alone. */
   listRef: RefObject<FlashListRef<TItem> | null>
-  /** Render flag for the jump-to-latest control, and for history anchoring. */
+  /** The reader has the list (a drag, a fling, a long-press, a jump away):
+   *  what turns the native scroll anchoring on. Intent alone, so it flips on
+   *  the drag's first frame, before the list has moved. */
+  detachedFromTail: boolean
+  /** Render flag for the jump-to-latest control: detached AND content below
+   *  the viewport. Intent alone raised the ↓ at the very end of a
+   *  conversation, where a drag toward the newest message (or a finger held on
+   *  it) has nothing to scroll to (2026-10-11, against the Claude app, which
+   *  shows none there). */
   showJumpToLatest: boolean
   /** Off while a scroll is in flight, so Android cannot arm a text-selection
    *  long-press under the moving rows. */
@@ -81,8 +97,9 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  What this fork keeps that upstream has no counterpart for: the reader's hold
  *  and long-press ownership and the text-selection flag that rides with it (see
  *  `use-mobile-chat-following.ts`), the new-data-only follow gate (see
- *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises the
- *  instant a drag starts rather than waiting for the list to leave the tail,
+ *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises as soon
+ *  as a drag has left the tail (intent plus geometry: intent alone raised it
+ *  at the very end, with nothing below to jump to),
  *  and putting the view back where FlashList drew once a pushed route stops
  *  covering the screen (`onScreenFocus` below). */
 export function useMobileNativeChatTailFollow<TItem>(input: {
@@ -97,9 +114,14 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const hasItems = rows.length > 0
   const listRef = useRef<FlashListRef<TItem>>(null)
   const jumpingRef = useRef(false)
-  // Geometry. A ref, not state: this fork raises the jump-to-latest control on
-  // intent alone, so nothing renders off where the list happens to sit.
+  // Geometry. The ref is what the handlers read; `contentBelow` is the jump
+  // control's own render flag: the newest row more than JUMP_SHOW_OFFSET_DP
+  // from where it rests. It flips only when the list crosses that line, so it
+  // costs a render per crossing, not per sample. An empty list, one row,
+  // content shorter than the screen and an over-scroll past the end all sit at
+  // offset <= 0.
   const atTailRef = useRef(true)
+  const [contentBelow, setContentBelow] = useState(false)
   const settleFrameRef = useRef<number | null>(null)
   // Intent is a ref as well as a render flag, and the handlers read the ref:
   // a content-size change arrives before React commits the flag, and reading
@@ -115,7 +137,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     touchEnd,
     followGate,
     textSelectable,
-    showJumpToLatest,
+    detached,
     setFollowing,
     beginScroll,
     endDrag,
@@ -176,6 +198,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
 
   const detachFromTail = useCallback(() => {
     setAtTail(false)
+    setContentBelow(true)
     setFollowing(false)
   }, [setAtTail, setFollowing])
 
@@ -192,6 +215,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const applyMetrics = useCallback(
     (metrics: NativeScrollEvent) => {
       setAtTail(isAtTail(metrics))
+      setContentBelow(metrics.contentOffset.y > JUMP_SHOW_OFFSET_DP)
       // A gesture in flight owns the list; only a settled one may hand it back.
       // A FINGER STILL DOWN counts as in flight even though it is not a drag:
       // without that, the first sample inside the tail slop handed the list
@@ -341,6 +365,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
       endDrag()
       jumpingRef.current = true
       setAtTail(true)
+      setContentBelow(false)
       setFollowing(true)
       listRef.current?.scrollToOffset({ offset: 0, animated })
     },
@@ -395,7 +420,8 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
 
   return {
     listRef,
-    showJumpToLatest,
+    detachedFromTail: detached,
+    showJumpToLatest: detached && contentBelow,
     textSelectable,
     touchStart,
     touchEnd,

@@ -151,6 +151,8 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
   })
 }
 
+const UP_IN_HISTORY = { nativeEvent: { contentOffset: { y: 600 }, contentSize: { height: 2400 }, layoutMeasurement: { height: 400 } } }
+
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
   // The list settles a released drag one frame later, so momentum can cancel
@@ -300,19 +302,15 @@ describe('MobileNativeChatView', () => {
     }
     act(() => list().props.onScrollBeginDrag())
     act(() => list().props.onScroll(nearBottom))
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
-      1
-    )
+    // Anchoring on, but 20 px from the end is nothing to jump to (2026-10-11).
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
+    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(0)
     // The release is not the settle: following comes back a frame later, once
     // no momentum has claimed the fling.
     act(() => list().props.onScrollEndDrag(nearBottom))
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
-      1
-    )
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
     flushFrames()
-    expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(
-      0
-    )
+    expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
   })
 
   // Ported from Orca 2fc84cb49 (#20493). A flick that starts at the live edge
@@ -380,6 +378,7 @@ describe('MobileNativeChatView', () => {
     expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: true })
     act(() => list().props.onScrollBeginDrag())
     expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
+    act(() => list().props.onScroll(UP_IN_HISTORY))
     act(() =>
       renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
     )
@@ -390,6 +389,7 @@ describe('MobileNativeChatView', () => {
     await render({ folded: [assistantTurn('a1', 'Reply')] })
     const list = () => renderer!.root.findByType('FlashList')
     act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScroll(UP_IN_HISTORY))
     act(() =>
       renderer!.root.findByProps({ accessibilityLabel: 'Scroll to latest' }).props.onPress()
     )
@@ -404,6 +404,7 @@ describe('MobileNativeChatView', () => {
     await render({ folded: [assistantTurn('a1', 'Reply')] })
     const list = () => renderer!.root.findByType('FlashList')
     act(() => list().props.onScrollBeginDrag())
+    act(() => list().props.onScroll(UP_IN_HISTORY))
     await pressSend()
     expect(list().props.maintainVisibleContentPosition).toEqual({ disabled: false })
     expect(renderer!.root.findAllByProps({ accessibilityLabel: 'Scroll to latest' })).toHaveLength(

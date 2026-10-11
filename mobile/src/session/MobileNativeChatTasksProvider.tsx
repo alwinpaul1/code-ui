@@ -6,6 +6,7 @@ import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/nat
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
 import { nativeChatToolRunOutcome } from '../../../src/shared/native-chat-tool-run-outcome'
 import { agentRunState } from './mobile-native-chat-agent-run'
+import { rowLiveTaskIds } from './mobile-native-chat-row-live-tasks'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
 import { toolRunSentence } from './mobile-native-chat-tool-sentence'
 import { MobileNativeChatRunSheet } from './MobileNativeChatRunSheet'
@@ -95,14 +96,20 @@ export function MobileNativeChatTasksProvider({
     [agent, parentTranscriptPath]
   )
   const subagents = agentStatus?.subagents
+  // Orca's hook status for the pane, the same the reader falls back on.
+  const hostStatus = agentStatus ?? backgroundTaskReport?.heldAgentStatus ?? null
+  const structuredRoster = hostBackgroundTasks !== undefined
   const agentRuns = useMemo(
     () => ({
       runningIds: new Set(running.filter((task) => task.kind === 'agent').map((task) => task.id)),
+      // What a conversation row may sweep for: only what a source that will
+      // also retire it says runs (mobile-native-chat-row-live-tasks.ts).
+      liveTaskIds: rowLiveTaskIds(running, { structuredRoster, hostStatus }),
       confirmed: confirmedAgentDescriptions(messages, subagents),
       agentWorking,
       ...(agent === 'claude' ? { openTranscript } : {})
     }),
-    [agent, agentWorking, messages, openTranscript, running, subagents]
+    [agent, agentWorking, hostStatus, messages, openTranscript, running, structuredRoster, subagents]
   )
   // The open subagent viewer sits outside this tree; its header said "Running"
   // for as long as it stayed open, because it only ever read the tap.

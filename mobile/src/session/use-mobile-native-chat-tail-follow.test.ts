@@ -127,12 +127,12 @@ describe('the chat transcript has one owner for its scroll position', () => {
       act(() => {
         vi.advanceTimersByTime(450)
       })
-      expect(latest!.showJumpToLatest).toBe(true)
+      expect(latest!.detachedFromTail).toBe(true)
 
       // A sample right at the live edge — exactly what enabling that anchoring
       // produces — must NOT hand the list back.
       act(() => latest!.evaluateEdge(at(0)))
-      expect(latest!.showJumpToLatest).toBe(true)
+      expect(latest!.detachedFromTail).toBe(true)
     } finally {
       vi.useRealTimers()
     }
@@ -149,7 +149,7 @@ describe('the chat transcript has one owner for its scroll position', () => {
       act(() => latest!.touchEnd())
 
       act(() => latest!.evaluateEdge(at(0)))
-      expect(latest!.showJumpToLatest).toBe(false)
+      expect(latest!.detachedFromTail).toBe(false)
     } finally {
       vi.useRealTimers()
     }

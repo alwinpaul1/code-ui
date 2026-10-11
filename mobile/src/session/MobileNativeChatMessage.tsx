@@ -360,6 +360,7 @@ function MobileNativeChatMessageImpl({
                 onRevertHunk={onRevertHunk}
                 revertScope={`${message.id}:${segmentIndex}`}
                 focusView={focusView}
+                inNewestReply={mayStillGrow}
                 styles={styles}
               />
             ) : null
