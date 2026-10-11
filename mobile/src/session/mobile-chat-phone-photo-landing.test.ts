@@ -469,10 +469,10 @@ describe('a message the phone sent with photos, as its row lands', () => {
 
     // The companion is the last row for the seconds before the agent writes
     // anything (23624 at 07:00:19.716, the first reply row at 07:00:37.425).
-    // Placed after it, the message is drawn at the live end, under the agent's
-    // first words, until a tool result says Claude took it
-    // (mid-turn-take-point.ts, 2026-10-11).
-    it('draws a message sent just after a photo message under it, at the live end until Claude takes it', async () => {
+    // The phone's own send is drawn where it was sent, as the Claude app draws
+    // its own sends, not at the live end until Claude takes it (the take
+    // point is for messages sent elsewhere; docs/claude-app-parity.md item 14).
+    it('draws a message sent just after a photo message under it, where it was sent', async () => {
       const TEXT5 = 'and check the queue box too'
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
@@ -493,8 +493,8 @@ describe('a message the phone sent with photos, as its row lands', () => {
       expect(data.map((message) => (message.id.startsWith('pending-') ? 'phone' : message.id))).toEqual([
         '94b09904',
         '40b55aba',
-        '2af316a2',
-        'phone'
+        'phone',
+        '2af316a2'
       ])
     })
 
