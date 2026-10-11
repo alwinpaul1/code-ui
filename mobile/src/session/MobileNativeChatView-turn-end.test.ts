@@ -3,6 +3,7 @@ import { act, create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileNativeChatView } from './MobileNativeChatView'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 vi.mock('../components/ImagePreviewModal', () => ({ ImagePreviewModal: () => null }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path', Defs: 'Defs', LinearGradient: 'LinearGradient', Rect: 'Rect', Stop: 'Stop' }))
@@ -122,11 +123,15 @@ describe('MobileNativeChatView, where a turn ends', () => {
   })
 
   async function render(messages: NativeChatMessage[]): Promise<void> {
+    await renderFolded(messages, messages)
+  }
+
+  async function renderFolded(messages: NativeChatMessage[], folded: NativeChatMessage[]): Promise<void> {
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatView, {
           messages,
-          folded: messages,
+          folded,
           status: 'ready',
           streaming: null,
           onSend: vi.fn().mockResolvedValue(true),
@@ -144,7 +149,6 @@ describe('MobileNativeChatView, where a turn ends', () => {
   type RowProps = {
     endsTurn: unknown
     turnHasProse?: unknown
-    turnStartIndex?: unknown
     copyTurnText?: (id: string) => string
   }
 
@@ -192,9 +196,8 @@ describe('MobileNativeChatView, where a turn ends', () => {
     expect(endsTurn('a2')).toBe(true)
   })
 
-  // Review, 2026-10-09: the turn's one Copy copied only its last row, a turn
-  // whose newest row was a thought lost its actions, and the arrow lined up
-  // the last row instead of the start of the reply.
+  // Review, 2026-10-09: the turn's one Copy copied only its last row, and a turn
+  // whose newest row was a thought lost its actions.
   const said = (id: string, role: NativeChatMessage['role'], blocks: NativeChatMessage['blocks']): NativeChatMessage => ({
     id,
     role,
@@ -221,13 +224,53 @@ describe('MobileNativeChatView, where a turn ends', () => {
     expect(endsTurn('r1')).toBe(false)
   })
 
-  it('aims the arrow at the first row of the reply, in the list\'s own (newest-first) order', async () => {
+  // 2026-10-11: the Claude app has no arrow to the start of a reply (the user's screenshot of it:
+  // copy and read-aloud only), and ours, tapped, blinked the jump control and landed several
+  // replies up. No row is handed a scroll target or a jump handler any more.
+  it('hands no row a scroll target or a jump to the start of its reply', async () => {
     await render([turn('u1', 'user'), turn('a1', 'assistant'), turn('a2', 'assistant'), turn('a3', 'assistant')])
-    expect(rowOf('a3').props.turnStartIndex).toBe(rowOf('a1').index)
+    for (const id of ['a1', 'a2', 'a3']) {
+      const props = rowOf(id).props as Record<string, unknown>
+      expect(props.onScrollToMessage).toBeUndefined()
+      expect(props.turnStartIndex).toBeUndefined()
+    }
   })
 
-  it('aims the arrow of a turn of one at its own row', async () => {
-    await render([turn('u1', 'user'), turn('a1', 'assistant')])
-    expect(rowOf('a1').props.turnStartIndex).toBe(rowOf('a1').index)
+  // The same recording: every reply Claude wrote because a background task finished came after a
+  // `<task-notification>` user turn the chat hides, so the replies read as ONE turn: only the
+  // newest drew actions, and its Copy took every reply since the user last wrote. Rows are the
+  // codeui session's own shape (transcript 0954729d, 2026-10-11, Claude Code 2.1.296): a reply
+  // ending "session:ok", the hidden notification of a background command, then the next reply.
+  it('ends a reply where a hidden background-task turn begins, so each reply has its own actions', async () => {
+    const notification = said('u-note', 'user', [
+      {
+        type: 'text',
+        text:
+          '<task-notification>\n<task-id>bq251ftrg</task-id>\n<tool-use-id>toolu_01LQmrF8EBooBaepp6DkbrU</tool-use-id>\n' +
+          '<output-file>/private/tmp/claude-501/tasks/bq251ftrg.output</output-file>\n<status>completed</status>\n' +
+          '<summary>Background command "Build the release APK" completed (exit code 0)</summary>\n</task-notification>'
+      }
+    ])
+    const rows = [
+      turn('u1', 'user'),
+      said('a1', 'assistant', [{ type: 'text', text: "It's building now.\n\nsession:ok" }]),
+      notification,
+      said('a2', 'assistant', [{ type: 'text', text: 'The build is ready (0.9.128 version number).\n\nsession:ok' }])
+    ]
+    const folded = foldMobileNativeChatMessages(rows)
+    expect(folded.map((row) => row.id)).toEqual(['u1', 'a1', 'a2'])
+    await renderFolded(rows, folded)
+
+    expect(endsTurn('a1')).toBe(true)
+    expect(endsTurn('a2')).toBe(true)
+    expect(rowOf('a2').props.copyTurnText?.('a2')).toBe('The build is ready (0.9.128 version number).\n\nsession:ok')
+  })
+
+  it('degenerate: a hidden turn with no reply after it yet ends nothing, and a reply of one row is its own turn', async () => {
+    const note = said('u-note', 'user', [{ type: 'text', text: '<task-notification>\n<task-id>x</task-id>\n<status>completed</status>\n</task-notification>' }])
+    const rows = [turn('u1', 'user'), said('a1', 'assistant', [{ type: 'text', text: 'Only row.' }]), note]
+    await renderFolded(rows, foldMobileNativeChatMessages(rows))
+    expect(endsTurn('a1')).toBe(true)
+    expect(rowOf('a1').props.copyTurnText?.('a1')).toBe('Only row.')
   })
 })

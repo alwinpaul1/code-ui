@@ -1,6 +1,6 @@
 import { memo, useContext, useState, type ReactNode } from 'react'
 import { Pressable, View, type StyleProp, type ViewStyle } from 'react-native'
-import { ArrowUp, Copy, Undo2 } from 'lucide-react-native'
+import { Copy, Undo2 } from 'lucide-react-native'
 import { splitNativeChatBlocks } from '../../../src/shared/native-chat-tool-fold'
 import { inFlightToolCall } from './mobile-native-chat-in-flight-call'
 import { isTextBlock } from '../../../src/shared/native-chat-types'
@@ -74,43 +74,33 @@ function Bubble({
   )
 }
 
-/** Subtle controls under the end of an agent turn: copy the reply's prose, or
- *  scroll so the reply's first row aligns to the top of the viewport (where a
- *  surface names no turns, the message's own). No Copy without prose to copy:
- *  under a message made only of tool calls a tap copied nothing and said
- *  nothing, a dead button (review, 2026-09-30). */
+/** Subtle controls under the end of an agent turn: copy the reply's prose. No
+ *  Copy without prose to copy: under a message made only of tool calls a tap
+ *  copied nothing and said nothing, a dead button (review, 2026-09-30).
+ *
+ *  No scroll-to-the-reply's-start arrow: the Claude app has none, under a
+ *  finished reply or a working turn (user, 2026-10-11, with a screenshot of
+ *  Claude: copy and read-aloud only). Ours blinked the jump control when tapped
+ *  under a working turn and, with replies a background task started read as one
+ *  turn, landed several replies up. */
 function AgentControls({
   onCopy,
-  onScrollToTop,
   styles
 }: {
-  onCopy?: () => void
-  onScrollToTop?: () => void
+  onCopy: () => void
   styles: ChatMessageStyles
 }) {
   const { colors } = useTheme()
   return (
     <View style={styles.controls}>
-      {onCopy ? (
-        <Pressable
-          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-          onPress={onCopy}
-          hitSlop={8}
-          accessibilityLabel="Copy message"
-        >
-          <Copy size={14} color={colors.textMuted} strokeWidth={2} />
-        </Pressable>
-      ) : null}
-      {onScrollToTop ? (
-        <Pressable
-          style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
-          onPress={onScrollToTop}
-          hitSlop={8}
-          accessibilityLabel="Scroll this message to top"
-        >
-          <ArrowUp size={14} color={colors.textMuted} strokeWidth={2} />
-        </Pressable>
-      ) : null}
+      <Pressable
+        style={({ pressed }) => [styles.controlButton, pressed && styles.controlPressed]}
+        onPress={onCopy}
+        hitSlop={8}
+        accessibilityLabel="Copy message"
+      >
+        <Copy size={14} color={colors.textMuted} strokeWidth={2} />
+      </Pressable>
     </View>
   )
 }
@@ -121,8 +111,6 @@ function MobileNativeChatMessageImpl({
   toolsExpanded = false,
   promptsAsMarkdown = false,
   fontScale = 1,
-  messageIndex,
-  onScrollToMessage,
   onOpenFile,
   onRevertHunk,
   focusView = false,
@@ -138,7 +126,6 @@ function MobileNativeChatMessageImpl({
   taskListPredecessors,
   endsTurn = true,
   turnHasProse,
-  turnStartIndex,
   copyTurnText,
   subagentGroupsOpen,
   onToggleSubagentGroup
@@ -158,10 +145,6 @@ function MobileNativeChatMessageImpl({
   onRewindToHere?: (messageId: string) => void
   /** Multiplies all chat text sizes for pinch-to-zoom (1 = no change). */
   fontScale?: number
-  /** This message's index in the list, paired with onScrollToMessage. */
-  messageIndex?: number
-  /** Ask the list to align this message's top to the top of the viewport. */
-  onScrollToMessage?: (index: number) => void
   onOpenFile?: (relativePath: string) => void
   /** Put one hunk of a landed edit back, from its diff card. */
   onRevertHunk?: MobileNativeChatRevertHunk
@@ -182,8 +165,8 @@ function MobileNativeChatMessageImpl({
   /** Structured lane only: live tool progress plus the turn-status disclosure. */
   structuredActivityUi?: boolean
   turnActivity?: { kind: 'description'; text: string } | null
-  /** Whether this is the last message of the agent's turn. Its actions (copy,
-   *  scroll to top) are drawn once, under the turn's end, as the Claude app
+  /** Whether this is the last message of the agent's turn. Its actions (copy)
+   *  are drawn once, under the turn's end, as the Claude app
    *  does, not under every message of it (2026-10-09). The list says it; a
    *  surface that does not (a subagent's transcript) keeps them on each. */
   endsTurn?: boolean
@@ -191,10 +174,6 @@ function MobileNativeChatMessageImpl({
    *  whole reply, so a turn end with none of its own still offers it. Absent,
    *  the row's own words decide. */
   turnHasProse?: boolean
-  /** The list index of the first row of the turn this row ends. The arrow
-   *  brings the start of the reply to the top, not this last row of it.
-   *  Absent, it brings this row. */
-  turnStartIndex?: number
   /** The whole reply this row ends, as Copy gives it, asked for only on a tap.
    *  Absent, Copy copies this row alone (a subagent's transcript). */
   copyTurnText?: (messageId: string) => string
@@ -300,13 +279,6 @@ function MobileNativeChatMessageImpl({
     }
     copy(text)
   }
-  // The start of the reply, as the arrow under each row once meant for its own
-  // row: now that only a turn's last row has the arrow, aiming at that row
-  // lined up its last words ("Done.") instead of where the reply began.
-  const scrollTarget = turnStartIndex ?? messageIndex
-  const scrollToTop =
-    onScrollToMessage && scrollTarget !== undefined ? () => onScrollToMessage(scrollTarget) : undefined
-
   // Only Rewind lives here now; with no lane to rewind, a tap discloses
   // nothing rather than an empty row.
   const sentPromptControls =
@@ -330,8 +302,8 @@ function MobileNativeChatMessageImpl({
     ) : null
 
   const controls =
-    isAgent && endsTurn && (copyable || scrollToTop) ? (
-      <AgentControls onCopy={copyable ? handleCopy : undefined} onScrollToTop={scrollToTop} styles={styles} />
+    isAgent && endsTurn && copyable ? (
+      <AgentControls onCopy={handleCopy} styles={styles} />
     ) : null
 
   return (

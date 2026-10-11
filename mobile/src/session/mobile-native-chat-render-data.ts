@@ -1,4 +1,5 @@
 import { isNoiseMessage } from '../../../src/shared/native-chat-noise'
+import { withoutHiddenTurns } from './mobile-native-chat-harness-turn-starts'
 import { surfaceCommandTurns } from './mobile-native-chat-command-turns'
 import { surfaceShellCommandTurns } from './mobile-native-chat-shell-command-turns'
 import {
@@ -114,7 +115,8 @@ export function foldMobileNativeChatMessages(
  *  ("Another Claude session sent a message"), and the filter is vendored.
  *  Keyed on a hint only this code writes, so nothing else slips through. */
 function stripNoise(messages: readonly NativeChatMessage[]): NativeChatMessage[] {
-  return messages.filter((message) => isPeerBoilerplateRow(message) || !isNoiseMessage(message))
+  // A hidden task notification starts a turn of its own (mobile-native-chat-harness-turn-starts.ts).
+  return withoutHiddenTurns(messages, (message) => !isPeerBoilerplateRow(message) && isNoiseMessage(message))
 }
 
 /** A Read's picture sits with the call: after the tool blocks, before any

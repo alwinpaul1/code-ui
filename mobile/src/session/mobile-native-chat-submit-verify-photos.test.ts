@@ -87,7 +87,7 @@ describe('checking that Claude took a photo send the host acked', () => {
   it('says sent for one photo and no text once the chip was seen in the input and the input is empty', async () => {
     const s = scene([holding(1, ''), empty])
 
-    await expect(verifyPhotos(s, '')).resolves.toEqual({ kind: 'sent' })
+    await expect(verifyPhotos(s, '')).resolves.toEqual({ kind: 'sent', inputOnly: true })
   })
 
   it('says unknown, not sent, for a photo-only send when the only sign is a chip-only prompt row: an earlier photo leaves the same row', async () => {

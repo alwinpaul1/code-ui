@@ -15,6 +15,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import type { RpcClient } from '../transport/rpc-client'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageAttachments } from './use-mobile-native-chat-image-attachments'
@@ -64,6 +65,7 @@ describe('a sent photo leaves the composer with the outbox mounted (terminal cha
   beforeEach(() => {
     pick.mockReset()
     errors.length = 0
+    copies.length = 0
     resetAppForegroundClockForTests()
     resetMobileNativeChatStaleInputForTests()
     resetMobileNativeChatTerminalWritesForTests()
@@ -84,6 +86,9 @@ describe('a sent photo leaves the composer with the outbox mounted (terminal cha
     await clearNativeChatDraftStores()
   })
 
+  /** Claude's prompt copies (Orca's UserPromptSubmit hook on the tab status), newest last, read by
+   *  the send through this same array. */
+  const copies: BeaconPromptReceipt[] = []
   function desktop(photos: number, accept = true, enterGate?: Promise<void>) {
     let uploads = 0
     let pasted = 0
@@ -102,6 +107,8 @@ describe('a sent photo leaves the composer with the outbox mounted (terminal cha
             }
             typed = params.text ?? ''
             entered = true
+            // Claude takes it, and its prompt hook leaves the copy the send is delivered on.
+            copies.push({ nonce: `status:s:${copies.length + 1}`, text: `[Image #1] ${typed}` })
           } else if ((params.text ?? '').includes('.png')) {
             pasted += 1
           }
@@ -142,7 +149,8 @@ describe('a sent photo leaves the composer with the outbox mounted (terminal cha
         showSendingEcho: drafts.showSendingEcho,
         acceptSend: drafts.acceptSend,
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
-        onSendError: (message) => errors.push(message)
+        onSendError: (message) => errors.push(message),
+        promptReceipts: copies
       })
       images = useMobileNativeChatImageAttachments(
         baseArgs({

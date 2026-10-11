@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import type { RpcClient } from '../transport/rpc-client'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
@@ -92,6 +93,9 @@ type Desktop = {
   submittedBodies: string[]
   /** Clear writes received. */
   clears: number
+  /** Claude's prompt copies (Orca's UserPromptSubmit hook on the tab status), newest last: one
+   *  lands when Claude draws a submitted prompt, read by the send through this same array. */
+  copies: BeaconPromptReceipt[]
 }
 
 /** A desktop Claude (or Codex) tab. `on` runs as each request arrives, after it is answered. */
@@ -108,7 +112,7 @@ function desktop(options: {
   let uploads = 0
   let latePaintPending = false
   const seen: Record<Step, number> = { look: 0, clear: 0, body: 0 }
-  const state: Desktop = { client: null as unknown as RpcClient, submittedBodies: [], clears: 0 }
+  const state: Desktop = { client: null as unknown as RpcClient, submittedBodies: [], clears: 0, copies: [] }
   const answered = <T,>(step: Step, value: T): T => {
     seen[step] += 1
     options.on?.(step, seen[step])
@@ -129,6 +133,9 @@ function desktop(options: {
         const tail =
           body === undefined || latePaintPending ? holding(latePaintPending ? body! : input) : submitted(body)
         latePaintPending = false
+        if (body !== undefined && !state.copies.some((copy) => copy.text === body) && tail.includes(`❯ ${body}`)) {
+          state.copies.push({ nonce: `status:s:${state.copies.length + 1}`, text: body })
+        }
         return answered('look', ok('r', { terminal: { source: 'screen', tail, draft: '' } }))
       }
       if (params.enter === true) {
@@ -186,7 +193,11 @@ describe('a chat send while the app leaves the foreground', () => {
     await clearNativeChatDraftStores()
   })
 
-  function mount(client: RpcClient, agent: 'claude' | 'codex' = 'claude'): void {
+  function mount(
+    client: RpcClient,
+    agent: 'claude' | 'codex' = 'claude',
+    promptReceipts: readonly BeaconPromptReceipt[] = []
+  ): void {
     function ChatScreen(): null {
       drafts = useMobileNativeChatDrafts({
         hostId: 'h',
@@ -209,7 +220,8 @@ describe('a chat send while the app leaves the foreground', () => {
         restoreRejectedDraft: drafts.restoreRejectedDraft,
         acceptSend: drafts.acceptSend,
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
-        onSendError: (message) => errors.push(message)
+        onSendError: (message) => errors.push(message),
+        promptReceipts
       })
       images = useMobileNativeChatImageAttachments(
         baseArgs({
@@ -318,12 +330,13 @@ describe('a chat send while the app leaves the foreground', () => {
   describe('left while it checks that Claude took the words', () => {
     it('looks again on the way back and shows the sent message, not "Delivery unconfirmed"', async () => {
       // The first look after the Enter finds the words still in the input; the app leaves
-      // before the next. Back a minute later, the screen draws the prompt above the composer.
+      // before the next. Back a minute later, the screen draws the prompt above the composer and
+      // Claude's prompt copy is in (a screen alone is held: midturn-send-never-taken.test.ts).
       const tab = desktop({
         paintsLate: true,
         on: (step, nth) => step === 'look' && nth === 3 && awayFor(AWAY_MS)
       })
-      mount(tab.client)
+      mount(tab.client, 'claude', tab.copies)
 
       expect(await typeAndSend(TEXT)).toBe(true)
 

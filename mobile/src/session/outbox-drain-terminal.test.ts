@@ -107,9 +107,17 @@ function desktop(submit: Submit = 'accepted'): Desktop {
     reads: 0,
     hookPrompt: null
   }
+  // What Claude does with a prompt it takes: its UserPromptSubmit hook puts it on the tab status,
+  // and with the agent idle it writes the prompt's row at once (a prompt taken mid-turn waits in
+  // the queue). These are Claude's record of it, which a send counts as delivered on
+  // (midturn-send-never-taken.test.ts); a tab that left neither would read as lost.
   const take = (text: string): void => {
     tab.submitted.push(text)
     input = ''
+    tab.hookPrompt = { prompt: text.trim(), at: Date.now() }
+    if (tab.agentState === 'done' && tab.submit !== 'landed-ack-lost') {
+      tab.transcript = [...tab.transcript, userRow(`u-taken-${tab.submitted.length}`, text.trim())]
+    }
   }
   tab.client = {
     getState: () => 'connected',
@@ -423,6 +431,10 @@ describe('a terminal chat message the phone could not confirm', () => {
 
     tab.agentState = 'done'
     await advance(90_000)
+    expect(tab.submitted).toEqual([TEXT])
+    // The send reads no prompt copy of its own here (the drainer's has none to read), so the entry
+    // leaves on Claude's row, at the drainer's next look, never on the phone's own look at the screen.
+    await advance(120_000)
     expect(tab.submitted).toEqual([TEXT])
     expect(nativeChatOutboxEntries()).toEqual([])
   })

@@ -291,20 +291,6 @@ describe('the chat transcript has one owner for its scroll position', () => {
     expect(list.scrollToOffset).not.toHaveBeenCalled()
     expect(latest!.showJumpToLatest).toBe(true)
   })
-
-  it('hands the list to the reader when they jump to one message, and back when they ask for the newest', () => {
-    render()
-
-    act(() => latest!.onScrollToMessage(3))
-    expect(list.scrollToIndex.mock.calls).toEqual([
-      [{ index: 3, viewPosition: 1, animated: true }]
-    ])
-    expect(latest!.showJumpToLatest).toBe(true)
-
-    act(() => latest!.jumpToTail(true))
-    expect(list.scrollToOffset.mock.calls).toEqual([[{ offset: 0, animated: true }]])
-    expect(latest!.showJumpToLatest).toBe(false)
-  })
 })
 
 // Three owners is how streaming came to jump in the first place: the view

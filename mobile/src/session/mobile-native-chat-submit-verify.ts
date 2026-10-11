@@ -17,8 +17,11 @@ import { appWasAwaySince } from './app-foreground-clock'
 
 /**
  * What the desktop did with a message the host took.
- *  - `sent`: the agent's own prompt copy (the hook beacon's `up=`) carried the
- *    words, or a look after the Enter found the words gone from the input.
+ *  - `sent`: the agent's own prompt copy (the hook beacon's `up=`, or the prompt
+ *    on the tab status) carried the words (`byReceipt`), or a look after the Enter
+ *    found the words gone from the input or drawn above it. Only the copy is
+ *    Claude's record; the caller holds a screen-only `sent` for it
+ *    (mobile-native-chat-send-write.ts chatSendOutcomeOfVerdict).
  *  - `not-sent`: Claude's own notice is on screen ("Removed N invisible
  *    characters · review and press Enter to send", or "· nothing left to
  *    send"). Only that proves it: the words still in the input could be a lost
@@ -27,11 +30,19 @@ import { appWasAwaySince } from './app-foreground-clock'
  *    place, the words still in the input after the whole window). The caller
  *    holds the send for the transcript or a beacon copy, as it does for an ack
  *    that never came; it never restores the draft or invites a resend.
- *  - `unverified`: no look could be had at all. The send is called sent, as it
- *    was before there were looks (see VerifiedClearResult).
+ *  - `unverified`: no look could be had at all. Until 2026-10-11 the send was
+ *    called sent, as it was before there were looks; it is now held like
+ *    `unknown` (chatSendOutcomeOfVerdict), since nothing of Claude's says it went.
  */
 export type SubmitVerdict =
-  | { kind: 'sent' }
+  /** `byReceipt`: the agent's own prompt copy carried the words (the hook beacon's `up=`, or the
+   *  prompt Orca's hook put on the tab status). Without it, `sent` is only what the phone's looks
+   *  at the screen saw, which is not Claude's record (mobile-native-chat-send-write.ts). */
+  /** `inputOnly`: the only sign was the words leaving the input after a look saw them there,
+   *  with nothing drawn above the box. Something other than Claude can take words out of its
+   *  input; only Claude draws a prompt it took above it (in the conversation, or in its queue
+   *  box, the same column-zero `❯ ` row since 2.1.277). */
+  | { kind: 'sent'; byReceipt?: true; inputOnly?: true }
   | { kind: 'not-sent'; message: string }
   /** `stillTyped`: the last look found the words still in Claude's input, never submitted. */
   | { kind: 'unknown'; stillTyped?: true }
@@ -69,25 +80,36 @@ const IMAGE_CHIP = /\[Image #\d+\]/g
 const folded = (text: string): string => text.replace(/\s+/g, ' ')
 const hasImageChip = (text: string): boolean => /\[Image #\d+\]/.test(folded(text))
 const withoutImageChips = (text: string): string => folded(text).replace(IMAGE_CHIP, '')
+/** Prompt rows that are photo chips and nothing else. */
+export const chipOnlyRows = (rows: readonly string[]): number =>
+  rows.filter((row) => hasImageChip(row) && withoutImageChips(row).trim() === '').length
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/** Whether one prompt copy carries these words. The hook cuts a long prompt (`cut`): its copy is
+ *  then a start of the words. */
+export function receiptCarriesWords(receipt: Pick<BeaconPromptReceipt, 'text' | 'cut'>, text: string): boolean {
+  const wanted = normalizeNativeChatUserText(text)
+  const heard = normalizeNativeChatUserText(receipt.text)
+  return wanted !== '' && heard !== '' && (receipt.cut ? wanted.startsWith(heard) : heard === wanted)
+}
+
+/** Whether a NEW copy (one the beacon did not hold before the send) is this send's. A photo send
+ *  with no caption has no words to match: its copy is one of chips alone (`[Image #N]`, which the
+ *  normalizer takes out), and Claude numbers every photo anew, so the tab status never repeats one. */
 function beaconHasWords(
   receipts: readonly BeaconPromptReceipt[],
   seen: ReadonlySet<string>,
-  text: string
+  text: string,
+  photos = false
 ): boolean {
-  const wanted = normalizeNativeChatUserText(text)
-  return (
-    wanted !== '' &&
-    receipts.some((receipt) => {
-      if (seen.has(receipt.nonce)) {
-        return false
-      }
-      const heard = normalizeNativeChatUserText(receipt.text)
-      // The hook cuts a long prompt (`cut`): its copy is then a start of the words.
-      return heard !== '' && (receipt.cut ? wanted.startsWith(heard) : heard === wanted)
-    })
+  const photoOnly = photos && normalizeNativeChatUserText(text) === ''
+  return receipts.some(
+    (receipt) =>
+      !seen.has(receipt.nonce) &&
+      (photoOnly
+        ? normalizeNativeChatUserText(receipt.text) === '' && hasImageChip(receipt.text)
+        : receiptCarriesWords(receipt, text))
   )
 }
 
@@ -124,6 +146,10 @@ export async function verifyClaudeSubmit(args: {
    *  as run only when the screen now holds more rows of it than it did then. `null`: no
    *  baseline could be had, so the echo row proves nothing (the bash box still does). */
   priorBashRows?: readonly string[] | null
+  /** A photo send with no caption: how many chips-only prompt rows the screen drew above the box
+   *  before it wrote anything. A new one is its row (Claude numbers each photo anew, but the
+   *  phone cannot know the number); `null` or absent, no baseline, so a chips row proves nothing. */
+  priorChipRows?: number | null
   /** The send's own budget: no look runs past it. */
   deadline?: number
   /** The words were seen in the input just before this check began (a second Return): their
@@ -145,7 +171,22 @@ export async function verifyClaudeSubmit(args: {
   // `! cmd` row, not a `❯` row, and fires no prompt hook (claudeSentBashTexts). Both the command
   // and the full text count as "the words", so a message that went as a plain prompt is seen too.
   const shell = shellCommandOfSend(args.text, 'claude')
-  const words = dense(args.text).slice(0, WORDS_PREFIX_CHARS)
+  const allWords = dense(args.text)
+  const words = allWords.slice(0, WORDS_PREFIX_CHARS)
+  /** A drawn prompt row is this send's when it holds the words whole, or is a start of them long
+   *  enough to tell (a row Claude cut): an earlier prompt that only shares the first stretch and
+   *  then says something else is not (Opus re-review of 05dd008f6). */
+  const rowIsTheWords = (row: string): boolean => {
+    const drawn = dense(row).replace(/…$/, '')
+    // A short send must be the whole row: "ok" is not `❯ okay let's go` (Opus review of 7adf67674).
+    // A long one may run on into rows the screen reader joined, or be cut.
+    return (
+      words !== '' &&
+      (drawn === allWords ||
+        (allWords.length >= WORDS_PREFIX_CHARS && drawn.startsWith(allWords)) ||
+        (drawn.length >= WORDS_PREFIX_CHARS && allWords.startsWith(drawn)))
+    )
+  }
   const commandWords = shell === null ? '' : dense(shell).slice(0, WORDS_PREFIX_CHARS)
   const photos = args.images === true
   // `typed` is the input or a drawn prompt row. A photo send's words come after its chips,
@@ -164,11 +205,14 @@ export async function verifyClaudeSubmit(args: {
   let sawWords = args.wordsSeenInInput === true
   /** The last look that read the input found the words there. */
   let stillTyped = false
-  /** The send drawn above the composer: its prompt row, or one more `! cmd` row than before. */
+  /** The send drawn above the composer: its prompt row, one more chips-only row than before for
+   *  a photo with no caption, or one more `! cmd` row than before. */
   const drawnAbove = (lines: readonly string[]): boolean =>
-    claudeSentPromptTexts(lines).some((row) =>
-      photos ? words !== '' && heard(row) : words !== '' && dense(row).startsWith(words)
-    ) ||
+    claudeSentPromptTexts(lines).some((row) => (photos ? words !== '' && heard(row) : rowIsTheWords(row))) ||
+    (photos &&
+      words === '' &&
+      typeof args.priorChipRows === 'number' &&
+      chipOnlyRows(claudeSentPromptTexts(lines)) > args.priorChipRows) ||
     (shell !== null &&
       args.priorBashRows !== null &&
       claudeSentBashTexts(lines).filter(heard).length > (args.priorBashRows ?? []).filter(heard).length)
@@ -198,17 +242,26 @@ export async function verifyClaudeSubmit(args: {
     // left in the input may be a placeholder (a prompt suggestion, the queue
     // hint, "Message @agent…") or text from the desk, neither of which is this
     // message.
-    return sawWords || drawnAbove(screen.lines) ? { kind: 'sent' } : null
+    if (drawnAbove(screen.lines)) {
+      return { kind: 'sent' }
+    }
+    return sawWords ? { kind: 'sent', inputOnly: true } : null
   }
   const beaconHeard = (): boolean =>
-    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text)
+    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text, photos)
+  const heardByReceipt: SubmitVerdict = { kind: 'sent', byReceipt: true }
+  /** The words left the input with nothing drawn: the looks go on, for Claude's copy or its row,
+   *  until the window ends (the caller does not count this alone as delivered). */
+  let leftInputOnly = false
+  /** Two failed reads and not one picture: no more reads, but a copy can still say it went. */
+  let unreadable = false
   while (now() - startedAt < window) {
     await wait(TICK_MS)
     if (beaconHeard()) {
-      return { kind: 'sent' }
+      return heardByReceipt
     }
     const elapsed = now() - startedAt
-    if (elapsed < SUBMIT_SETTLE_MS || elapsed - lastLookAt < SUBMIT_LOOK_GAP_MS) {
+    if (unreadable || elapsed < SUBMIT_SETTLE_MS || elapsed - lastLookAt < SUBMIT_LOOK_GAP_MS) {
       continue
     }
     lastLookAt = elapsed
@@ -219,17 +272,31 @@ export async function verifyClaudeSubmit(args: {
       ...(args.deadline === undefined ? {} : { deadline: Date.now() + (args.deadline - now()) })
     })
     if (!screen) {
-      // Two looks and not one picture of the screen: nothing here can be told,
-      // and waiting out the window would only delay a send that went.
+      // Two looks and not one picture of the screen: the screen can tell nothing. A shell
+      // command has no copy to wait for; anything else waits the window out for Claude's copy.
       failedLooks += 1
       if (!looked && failedLooks >= 2) {
-        return { kind: 'unverified' }
+        if (shell !== null || args.receipts === undefined) {
+          return { kind: 'unverified' }
+        }
+        unreadable = true
       }
       continue
     }
     const verdict = judge(screen)
+    // A copy that came in while the read was out settles it as Claude's record.
+    if (verdict?.kind === 'sent' && beaconHeard()) {
+      return heardByReceipt
+    }
+    if (verdict?.kind === 'sent' && verdict.inputOnly) {
+      leftInputOnly = true
+      continue
+    }
     if (verdict) {
       return verdict
+    }
+    if (stillTyped) {
+      leftInputOnly = false
     }
   }
   // The window ran out while the app was out of the foreground (2026-10-09): Android
@@ -238,7 +305,7 @@ export async function verifyClaudeSubmit(args: {
   // send's has gone the same way: Claude has had all that time to draw the prompt.
   if (appWasAwaySince(wallStartedAt)) {
     if (beaconHeard()) {
-      return { kind: 'sent' }
+      return heardByReceipt
     }
     const screen = await readMobileNativeChatScreen({
       client: args.client,
@@ -255,6 +322,17 @@ export async function verifyClaudeSubmit(args: {
     if (verdict) {
       return verdict
     }
+  }
+  // A copy that came in after the last tick still settles it: held instead, it would wait for a
+  // receipt the hold never sees again (it looks only when the copies change).
+  if (beaconHeard()) {
+    return heardByReceipt
+  }
+  if (leftInputOnly && !stillTyped) {
+    return { kind: 'sent', inputOnly: true }
+  }
+  if (unreadable && !looked) {
+    return { kind: 'unverified' }
   }
   return looked ? (stillTyped ? { kind: 'unknown', stillTyped: true } : { kind: 'unknown' }) : { kind: 'unverified' }
 }

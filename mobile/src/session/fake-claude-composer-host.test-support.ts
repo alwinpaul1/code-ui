@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 
 /**
  * A stand-in for the desktop side of one Claude Code tab: Orca's `terminal.send`
@@ -55,6 +56,10 @@ export type FakeComposerHostOptions = {
   placeholder?: string
   /** Rows above the rule: the conversation. */
   conversation?: readonly string[]
+  /** Claude's prompt hook is not heard: no copy of a submitted prompt reaches `receipts`. By
+   *  default every prompt Claude takes (never a `!` command, which fires no hook) leaves one, as
+   *  Orca's own UserPromptSubmit hook puts it on the tab status. */
+  noPromptHook?: boolean
 }
 
 type Send = { text: string; enter: boolean }
@@ -80,6 +85,9 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
   const sends: Send[] = []
   /** Every message Claude actually took as a turn. */
   const submitted: string[] = []
+  /** The prompt copies Claude's hook left, newest last: mutated in place, so a send that reads
+   *  them through the array it was handed sees each one as it lands. */
+  const receipts: BeaconPromptReceipt[] = []
   let lastWriteAt = -Infinity
   let reads = 0
   let enters = 0
@@ -147,6 +155,9 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     notice = null
     if (input.trim()) {
       submitted.push(input)
+      if (!options.noPromptHook && !input.startsWith('!')) {
+        receipts.push({ nonce: `status:fake:${submitted.length}`, text: input })
+      }
       // Claude draws a sent prompt in the conversation: `❯` and a PLAIN space (the
       // composer's is a no-break space), the first row of it.
       echoes.push(`❯ ${input.slice(0, width)}`)
@@ -241,6 +252,7 @@ export function createFakeComposerHost(options: FakeComposerHostOptions = {}) {
     handle,
     sends,
     submitted,
+    receipts,
     /** The composer's text as Claude holds it, control characters included. */
     get input() {
       return input

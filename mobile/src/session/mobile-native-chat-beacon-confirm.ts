@@ -47,6 +47,9 @@ export type BeaconPromptReceipt = {
  * order and each receipt is claimed once, so two identical prompts confirm one
  * send each rather than both confirming the first.
  */
+/** A photo chip as Claude Code draws it, `[Image #N]`. */
+const PHOTO_CHIP = /\[Image\s+#\d+\]/
+
 export function findBeaconConfirmedSends(
   receipts: readonly BeaconPromptReceipt[],
   entries: readonly UnconfirmedSend[]
@@ -57,7 +60,8 @@ export function findBeaconConfirmedSends(
   const normalized = receipts.map((receipt) => ({
     nonce: receipt.nonce,
     cut: receipt.cut === true,
-    text: normalizeNativeChatUserText(receipt.text)
+    text: normalizeNativeChatUserText(receipt.text),
+    chipsOnly: PHOTO_CHIP.test(receipt.text)
   }))
   // Keyed by nonce: a beacon repeats the same reading while it is the latest,
   // so the same submission must not confirm two different sends.
@@ -65,12 +69,22 @@ export function findBeaconConfirmedSends(
   const confirmed: UnconfirmedSend[] = []
   for (const entry of entries) {
     // An empty send has no text to match on, and an empty receipt would match
-    // everything by prefix. Neither is evidence of anything.
-    if (entry.normalizedText === '') {
+    // everything by prefix. The one empty send there is, a photo with no caption, is
+    // matched by a copy of chips alone (`[Image #N]`, which normalizing takes out): Claude
+    // numbers every photo anew, so such a copy the phone did not hold when it sent is a new
+    // photo prompt. Only with that list of held copies: without it an old one would do.
+    const photoOnly = entry.normalizedText === ''
+    if (photoOnly && !entry.knownReceiptNonces) {
       continue
     }
     const receipt = normalized.find((candidate) => {
-      if (candidate.text === '' || claimedNonces.has(candidate.nonce)) {
+      if (claimedNonces.has(candidate.nonce)) {
+        return false
+      }
+      if (photoOnly) {
+        return candidate.text === '' && candidate.chipsOnly && !entry.knownReceiptNonces!.has(candidate.nonce)
+      }
+      if (candidate.text === '') {
         return false
       }
       // Only a receipt the agent reported AFTER this send can be evidence of

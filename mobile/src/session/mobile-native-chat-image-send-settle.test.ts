@@ -86,6 +86,6 @@ describe('telling a four-photo send with a caption apart from a lost Enter when 
       client, terminal: 't', text: 'what is wrong here', images: true, seenNonces: new Set(),
       wait: async () => {}, now: () => (t += 700)
     })
-    expect(verdict).toEqual({ kind: 'sent' })
+    expect(verdict).toEqual({ kind: 'sent', inputOnly: true })
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatRole } from '../../../src/shared/native-chat-types'
 import { agentTurnPlainText, agentTurnsByEnd, messageIdsEndingATurn } from './mobile-native-chat-turn-end'
+import { foldMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 // The Claude app draws its copy and speak actions once, at the end of the
 // assistant's turn (2026-10-09 screenshot). Ours drew copy and the scroll-up
@@ -136,14 +137,14 @@ describe('the turn a turn-end row closes', () => {
       row('a2', 'assistant', [text('Done.')])
     ]
     const turns = agentTurnsByEnd(rows)
-    expect(turns.get('a2')!.firstIndex).toBe(3)
-    expect(turns.get('a0')!.firstIndex).toBe(1)
+    expect(turns.get('a2')!.replyRows.map((reply) => reply.id)).toEqual(['a1', 'a2'])
+    expect(turns.get('a0')!.replyRows.map((reply) => reply.id)).toEqual(['a0'])
   })
 
   it('is nothing for an empty list, one row for a turn of one, and no Copy for its wordless only row', () => {
     expect(agentTurnsByEnd([]).size).toBe(0)
     const one = agentTurnsByEnd([row('u1', 'user', [text('go')]), row('a1', 'assistant', [text('Done.')])]).get('a1')!
-    expect(one).toMatchObject({ firstIndex: 1, hasProse: true })
+    expect(one).toMatchObject({ hasProse: true })
     expect(agentTurnPlainText(one)).toBe('Done.')
     const wordless = agentTurnsByEnd([row('u1', 'user', [text('go')]), row('a1', 'assistant', bashCall)]).get('a1')!
     expect(wordless.hasProse).toBe(false)
@@ -189,5 +190,56 @@ describe('a turn ending on a subagent roster row', () => {
     }
     const turn = agentTurnsByEnd([user, childless]).get('spawn')
     expect(turn ? agentTurnPlainText(turn) : null).toBe('Kicked off 2 subagents')
+  })
+})
+
+// Rows the chat hides (src/shared/native-chat-noise.ts) and where a reply ends around them
+// (mobile-native-chat-harness-turn-starts.ts). A `<task-notification>` user turn opens a turn
+// Claude starts on (session 0954729d, 2026-10-11, Claude Code 2.1.296); any other hidden row can sit
+// inside a turn and must not cut it (Opus review of 0176d0563).
+describe('where a reply ends around a row the chat hides', () => {
+  const notification = (id: string) =>
+    row(id, 'user', [
+      text('<task-notification>\n<task-id>bq251ftrg</task-id>\n<status>completed</status>\n<summary>Background command "Build" completed (exit code 0)</summary>\n</task-notification>')
+    ])
+
+  it('starts a new reply after a hidden background-task notification', () => {
+    const folded = foldMobileNativeChatMessages([
+      row('u1', 'user', [text('build it')]),
+      row('a1', 'assistant', [text("It's building now.")]),
+      notification('n1'),
+      row('a2', 'assistant', [text('The build is ready.')])
+    ])
+    const turns = agentTurnsByEnd(folded)
+    expect([...turns.keys()]).toEqual(['a1', 'a2'])
+    expect(agentTurnPlainText(turns.get('a2')!)).toBe('The build is ready.')
+  })
+
+  it('does not cut a reply at a hidden system reminder inside it', () => {
+    const folded = foldMobileNativeChatMessages([
+      row('u1', 'user', [text('go')]),
+      row('a1', 'assistant', [text('Looking.')]),
+      row('s1', 'user', [text('<system-reminder>The task tools have not been used recently.</system-reminder>')]),
+      row('a2', 'assistant', [text('Done.')])
+    ])
+    const turns = agentTurnsByEnd(folded)
+    expect([...turns.keys()]).toEqual(['a2'])
+    expect(turns.get('a2')!.replyRows.map((reply) => reply.id)).toEqual(['a1', 'a2'])
+  })
+
+  it('does not let a row id seen after a notification in one transcript cut a turn in another', () => {
+    foldMobileNativeChatMessages([notification('n1'), row('m-3', 'assistant', [text('other session')])])
+    const turns = agentTurnsByEnd([
+      row('p', 'user', [text('go')]),
+      row('m-2', 'assistant', [text('First.')]),
+      row('m-3', 'assistant', [text('Second.')])
+    ])
+    expect([...turns.keys()]).toEqual(['m-3'])
+  })
+
+  it('degenerate: a notification with nothing after it yet marks nothing, and a lone reply after one is its own turn', () => {
+    expect(foldMobileNativeChatMessages([row('a1', 'assistant', [text('Only.')]), notification('n1')]).map((r) => r.id)).toEqual(['a1'])
+    const folded = foldMobileNativeChatMessages([notification('n1'), row('a1', 'assistant', [text('Only.')])])
+    expect([...agentTurnsByEnd(folded).keys()]).toEqual(['a1'])
   })
 })

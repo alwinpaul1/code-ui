@@ -21,6 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useNativeChatImageAttachmentsStore } from './mobile-native-chat-image-attachments-store'
 import type { RpcClient } from '../transport/rpc-client'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { resetMobileNativeChatStaleInputForTests } from './mobile-native-chat-stale-input'
 import { resetMobileNativeChatTerminalWritesForTests } from './mobile-native-chat-terminal-write-lock'
@@ -72,6 +73,13 @@ const submitted = (text: string): string[] => [
 
 const TEXT = 'is everything fixed and done'
 
+/** Claude's prompt copies (Orca's UserPromptSubmit hook on the tab status), one per prompt it took,
+ *  newest last: the chat's send reads them through this same array as they land. */
+let copies: BeaconPromptReceipt[] = []
+const leaveCopy = (text: string): void => {
+  copies.push({ nonce: `status:s:${copies.length + 1}`, text })
+}
+
 type BodyEnd = 'accepted' | 'hang' | 'lost' | 'deliveredHang'
 type Desktop = { client: RpcClient; submittedBodies: string[]; body: BodyEnd }
 
@@ -110,6 +118,7 @@ function desktop(body: BodyEnd = 'accepted'): Desktop {
           // The agent got it (submitted), but the answer never comes back.
           input = ''
           state.submittedBodies.push(params.text ?? '')
+          leaveCopy(params.text ?? '')
           return new Promise(() => {})
         }
         if (state.body === 'lost') {
@@ -117,6 +126,7 @@ function desktop(body: BodyEnd = 'accepted'): Desktop {
         }
         input = ''
         state.submittedBodies.push(params.text ?? '')
+        leaveCopy(params.text ?? '')
         return ok('s', { send: { accepted: true } })
       }
       input = ''
@@ -143,6 +153,7 @@ describe('outbox regressions found in review (2026-10-10) (terminal)', () => {
   beforeEach(() => {
     errors.length = 0
     messages = []
+    copies = []
     promptUp = false
     resetAppForegroundClockForTests()
     resetMobileNativeChatStaleInputForTests()
@@ -188,7 +199,8 @@ describe('outbox regressions found in review (2026-10-10) (terminal)', () => {
         showSendingEcho: drafts.showSendingEcho,
         acceptSend: drafts.acceptSend,
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
-        onSendError: (message) => errors.push(message)
+        onSendError: (message) => errors.push(message),
+        promptReceipts: copies
       })
       images = useMobileNativeChatImageAttachments(
         baseArgs({

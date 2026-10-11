@@ -8,7 +8,14 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
-import { claudeInputHoldsExactly, verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
+import {
+  chipOnlyRows,
+  claudeInputHoldsExactly,
+  receiptCarriesWords,
+  verifyClaudeSubmit,
+  type SubmitVerdict
+} from './mobile-native-chat-submit-verify'
+import { STATUS_PROMPT_NONCE_PREFIX } from './agent-status-prompts'
 import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
 import {
   acquireMobileNativeChatTerminalWrite,
@@ -17,7 +24,7 @@ import {
   releaseMobileNativeChatTerminalWriteForSend
 } from './mobile-native-chat-terminal-write-lock'
 import { timeSendStage } from './native-chat-send-timing'
-import { claudeSentBashTexts } from './claude-composer-screen'
+import { claudeSentBashTexts, claudeSentPromptTexts } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
 import { MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS } from './mobile-native-chat-send'
 import { shellCommandOfSend } from './mobile-native-chat-shell-command'
@@ -38,7 +45,8 @@ import {
  * (2026-10-01: a message went out as itself, 33 newlines and itself again, and
  * Claude declined to submit it). Claude's clear is sized from the screen and read
  * back before the body; its send stays pending until the agent's own prompt copy
- * or its screen says it took the words. Codex keeps the burst it always had: the
+ * says it took the words (the screen alone only for a `!` command or words the tab
+ * status cannot repeat: chatSendOutcomeOfVerdict). Codex keeps the burst it always had: the
  * 64-byte rule is Claude Code's.
  *
  * Limits. The clear is two passes of at most 16 rows (about 31 rows of input);
@@ -94,6 +102,66 @@ async function clearInputForSend(args: {
   return null
 }
 
+/**
+ * Whether a Claude send counts as delivered: only on Claude's own record of it.
+ *
+ * On 2026-10-11 (0.9.128) "Is all of asks done", sent while Claude worked, was drawn as sent and
+ * never reached Claude: not in its input (Orca's terminal-history log of the tab), not in its
+ * transcript, no queue-operation. The check had called it sent on the phone's own reading: no
+ * look at all (`unverified`), or the words leaving the input. Claude's record, as the phone reads
+ * it, is:
+ *  - its prompt copy (the hook beacon's `up=`, or the prompt Orca's own UserPromptSubmit hook puts
+ *    on the tab status, which a hand-started session has too; it fires at the enqueue mid-turn,
+ *    2.1.284, desk-prompt-row-owners.ts);
+ *  - the prompt drawn above its box, which only Claude draws: in the conversation or in its queue
+ *    box (the same column-zero `❯ ` row since 2.1.277), a new `! cmd` row, a new chips-only row;
+ *  - later, its transcript row.
+ * Anything less goes back as `unknown`: held for the copy or the row, as an ack that never came is,
+ * and seen through by the outbox (sent again once the agent is idle) when neither comes. The bubble
+ * looks the same either way (MobileNativeChatOutboxStatus.tsx draws nothing while a send is on its
+ * way).
+ *
+ * The words leaving the input with nothing drawn (`inputOnly`) still stand in one case, where no
+ * copy can come to settle a hold and holding would only get them typed twice: the same words as
+ * the last status copy on a tab with no beacon (no beacon copy, and no status copy twinned with
+ * one): the tab status repeats no prompt it already holds (agent-status-prompts.ts
+ * `text === state.last`), while the beacon gives each submission its own copy. An empty list of
+ * copies is NOT read as a tab with no hook (Opus re-review of 05dd008f6): a fresh session, a
+ * `/clear`, or the outbox's own resend (which reads none) has none either, and Orca installs its
+ * hook for every session. On a tab that truly has no hook, a held mid-turn message Claude took
+ * with nothing drawn can be typed again after the turn: a duplicate, never a loss.
+ * A `!` shell command keeps the rule it had (its `! cmd` row; no hook; `unverified` stands): a hold
+ * would end with the outbox running it again, since the drainer reads its row as no landing.
+ *
+ * KNOWN LIMIT: a prompt drawn above has no baseline, so an EARLIER row of the same words still on
+ * screen passes for this send's (claudeSentPromptTexts says so): repeating a message still in view
+ * can be called delivered before the second one landed. A row must hold the words whole, or be a
+ * start of them at least 40 characters long (a queue row Claude cut); an earlier row that only
+ * shares the first 40 characters and then differs does not pass (verifyClaudeSubmit).
+ */
+export function chatSendOutcomeOfVerdict(
+  verdict: Exclude<SubmitVerdict, { kind: 'not-sent' }>,
+  text: string,
+  receiptsBefore: readonly BeaconPromptReceipt[]
+): MobileNativeChatSendOutcome {
+  if (shellCommandOfSend(text, 'claude') !== null) {
+    return verdict.kind === 'unknown' ? 'unknown' : 'accepted'
+  }
+  if (verdict.kind !== 'sent') {
+    return 'unknown'
+  }
+  if (verdict.byReceipt || !verdict.inputOnly) {
+    return 'accepted'
+  }
+  // The merge folds a beacon copy into its status twin (desktop-prompt-merge.ts), so a beacon tab
+  // shows as twinned status copies as often as beacon nonces.
+  const beaconTab = receiptsBefore.some(
+    (receipt) => !receipt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX) || receipt.hookTwin !== undefined
+  )
+  const lastStatusCopy = receiptsBefore.findLast((receipt) => receipt.nonce.startsWith(STATUS_PROMPT_NONCE_PREFIX))
+  return !beaconTab && lastStatusCopy !== undefined && receiptCarriesWords(lastStatusCopy, text) ? 'accepted' : 'unknown'
+}
+
 /** How long the second Return and its check may take, past whatever the send's budget has left. */
 const SECOND_RETURN_BUDGET_MS = MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS + 4_500
 /** The two looks before a second Return are this far apart: one look can catch a frame mid-draw,
@@ -130,7 +198,9 @@ async function pressReturnAgain(args: {
   mobileClient?: MobileClient
   receipts: () => readonly BeaconPromptReceipt[]
   seenNonces: ReadonlySet<string>
+  receiptsBefore: readonly BeaconPromptReceipt[]
   priorBashRows: readonly string[] | null
+  priorChipRows: number | null
 }): Promise<ChatSendWrite> {
   const held: ChatSendWrite = { kind: 'written', outcome: 'unknown' }
   if (!acquireMobileNativeChatTerminalWrite(args.terminal)) {
@@ -174,13 +244,14 @@ async function pressReturnAgain(args: {
       receipts: args.receipts,
       seenNonces: args.seenNonces,
       priorBashRows: args.priorBashRows,
+      priorChipRows: args.priorChipRows,
       wordsSeenInInput: true,
       deadline
     })
     if (again.kind === 'not-sent') {
       return { kind: 'stopped', message: again.message }
     }
-    return { kind: 'written', outcome: again.kind === 'sent' || again.kind === 'unverified' ? 'accepted' : 'unknown' }
+    return { kind: 'written', outcome: chatSendOutcomeOfVerdict(again, args.text, args.receiptsBefore) }
   } finally {
     releaseMobileNativeChatTerminalWrite(args.terminal, owner)
   }
@@ -193,6 +264,11 @@ async function readBashRows(
 ): Promise<string[] | null> {
   const screen = await readMobileNativeChatScreen({ client, terminal, deadline })
   return screen ? claudeSentBashTexts(screen.lines) : null
+}
+
+async function readChipRows(client: RpcClient, terminal: string, deadline: number): Promise<number | null> {
+  const screen = await readMobileNativeChatScreen({ client, terminal, deadline })
+  return screen ? chipOnlyRows(claudeSentPromptTexts(screen.lines)) : null
 }
 
 export async function writeChatSend(args: {
@@ -240,7 +316,8 @@ export async function writeChatSend(args: {
     }
   }
   // Copies the beacon already holds: an older identical prompt proves nothing.
-  const seenNonces = new Set(args.receipts().map((receipt) => receipt.nonce))
+  const receiptsBefore = args.receipts()
+  const seenNonces = new Set(receiptsBefore.map((receipt) => receipt.nonce))
   // A Claude shell command's echo is a `! cmd` row in the scrollback, which keeps every one ever
   // run: the rows there now are the baseline a repeat has to exceed (verifyClaudeSubmit). Only
   // Claude's check uses it. The look is cut so the body keeps what it needs
@@ -250,6 +327,13 @@ export async function writeChatSend(args: {
     agent !== 'claude' || shellCommandOfSend(text, agent) === null
       ? []
       : await readBashRows(client, terminal, deadline - MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS)
+  // A photo with no caption has no words to find drawn above the box: its row is one more
+  // chips-only row than the screen held before (verifyClaudeSubmit `priorChipRows`), so a
+  // mid-turn photo Claude queued is told by Claude's own row, not held and pasted again.
+  const priorChipRows =
+    agent === 'claude' && args.hasImages && text.trim() === ''
+      ? await readChipRows(client, terminal, deadline - MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS)
+      : null
   const outcome = args.typesCodexCommand
     ? await typeMobileNativeChatCommandWithOutcome({
         client,
@@ -292,6 +376,7 @@ export async function writeChatSend(args: {
     receipts: args.receipts,
     seenNonces,
     priorBashRows,
+    priorChipRows,
     deadline
   }))
   if (verdict.kind === 'not-sent') {
@@ -299,10 +384,10 @@ export async function writeChatSend(args: {
     return { kind: 'stopped', message: verdict.message }
   }
   if (verdict.kind === 'unknown' && verdict.stillTyped) {
-    return pressReturnAgain({ ...args, ...(mobileClient ? { mobileClient } : {}), seenNonces, priorBashRows })
+    return pressReturnAgain({ ...args, ...(mobileClient ? { mobileClient } : {}), seenNonces, receiptsBefore, priorBashRows, priorChipRows })
   }
-  // `unknown`: looks were had and none settled it. Held for the transcript or a
-  // beacon copy like an ack that never came. `unverified`: no look could be had,
-  // so it stands as accepted, as it did before there were looks.
-  return { kind: 'written', outcome: verdict.kind === 'unknown' ? 'unknown' : 'accepted' }
+  // Delivered only on Claude's own record (chatSendOutcomeOfVerdict). Anything less, the looks
+  // settling nothing (`unknown`), no look at all (`unverified`) or a screen that only seemed to say
+  // so, is held for the transcript or a prompt copy like an ack that never came.
+  return { kind: 'written', outcome: chatSendOutcomeOfVerdict(verdict, text, receiptsBefore) }
 }

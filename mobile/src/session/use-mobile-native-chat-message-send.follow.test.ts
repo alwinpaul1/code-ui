@@ -22,8 +22,11 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
 vi.mock('./mobile-native-chat-screen-read', () => ({
   readMobileNativeChatScreen: vi.fn(() => Promise.resolve(null))
 }))
-vi.mock('./mobile-native-chat-submit-verify', () => ({
-  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+// Claude's own prompt copy says it took the words (with none, the send is held:
+// midturn-send-never-taken.test.ts).
+vi.mock('./mobile-native-chat-submit-verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-submit-verify')>()),
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'sent', byReceipt: true })
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'

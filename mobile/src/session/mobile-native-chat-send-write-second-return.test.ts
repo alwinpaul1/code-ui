@@ -14,6 +14,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { ok } from './use-mobile-native-chat-image-attachments.test-support'
 import { writeChatSend } from './mobile-native-chat-send-write'
 import {
@@ -76,7 +77,7 @@ function desk(after: (look: number) => Screen) {
   return { client, sends, bareReturns: () => sends.filter((send) => send.enter && send.text === '').length }
 }
 
-async function send(client: RpcClient) {
+async function send(client: RpcClient, receipts: () => readonly BeaconPromptReceipt[] = () => []) {
   const written = writeChatSend({
     agent: 'claude',
     client,
@@ -90,7 +91,7 @@ async function send(client: RpcClient) {
     residue: null,
     deadline: Date.now() + 15_000,
     deviceToken: null,
-    receipts: () => []
+    receipts
   })
   await vi.advanceTimersByTimeAsync(60_000)
   return written
@@ -115,7 +116,26 @@ describe('the second Return after a dropped one', () => {
       }
       return answer
     }) as never
-    await expect(send(d.client)).resolves.toEqual({ kind: 'written', outcome: 'accepted' })
+    // Claude takes it on that Return, and its prompt hook says so.
+    const copies = () => (pressed ? [{ nonce: 'status:s:1', text: TEXT }] : [])
+    await expect(send(d.client, copies)).resolves.toEqual({ kind: 'written', outcome: 'accepted' })
+    expect(d.bareReturns()).toBe(1)
+  })
+
+  it('goes once, and the send is held for Claude\'s record, when only the screen says it went', async () => {
+    vi.useFakeTimers()
+    let pressed = false
+    const d = desk(() => (pressed ? { lines: EMPTY_COMPOSER, draft: '' } : words()))
+    const original = d.client.sendRequest
+    d.client.sendRequest = vi.fn(async (method: string, params: { text?: string; enter?: boolean }) => {
+      const answer = await (original as (m: string, p: unknown) => Promise<unknown>)(method, params)
+      if (method === 'terminal.send' && params.enter === true && params.text === '') {
+        pressed = true
+      }
+      return answer
+    }) as never
+    // A tab whose hook is heard (it gave a copy before), and none comes for this send.
+    await expect(send(d.client, () => [{ nonce: 'status:s:0', text: 'earlier' }])).resolves.toEqual({ kind: 'written', outcome: 'unknown' })
     expect(d.bareReturns()).toBe(1)
   })
 
