@@ -1,12 +1,11 @@
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { ThemeColors } from '../theme/tokens'
-import { hudFieldsFromAgentStatus, shortTokenLabel } from './hud-agent-status-fields'
+import { shortTokenLabel } from './hud-agent-status-fields'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
 
 /**
- * What the session header draws, copied from the Claude app's top bar
- * (com.anthropic.claude 1.261009.20, `yv8` and `us8`): the title, a
- * "repo · branch" subtitle, and the context ring among the trailing actions.
+ * The session header's context ring, placed and stepped as the Claude app's top bar draws it
+ * (com.anthropic.claude 1.261009.20, `us8`/`d5a`), and the branch its menu copies. The header's
+ * own title and subline keep the app's existing look (the size changes were reverted 2026-10-11).
  */
 
 /** The Claude app's ring colour steps: blue under 75%, amber from 75 to 89,
@@ -48,29 +47,19 @@ export type SessionHeaderContextReading =
  */
 export function sessionHeaderContextReading(
   context: TerminalHudContextWindow | null,
-  agentStatus: AgentStatusEntry | null
+  usedTokens: number | null | undefined
 ): SessionHeaderContextReading {
   if (context && Number.isFinite(context.usedPercent)) {
     const percent = Math.round(Math.max(0, Math.min(100, context.usedPercent)))
     return { kind: 'ring', percent, step: contextRingStep(percent) }
   }
-  const used = hudFieldsFromAgentStatus(agentStatus).contextUsedTokens
-  return used === undefined ? null : { kind: 'tokens', usedLabel: shortTokenLabel(used) }
+  return typeof usedTokens === 'number' && Number.isFinite(usedTokens) && usedTokens >= 0
+    ? { kind: 'tokens', usedLabel: shortTokenLabel(usedTokens) }
+    : null
 }
 
 /** "feature/x" from "refs/heads/feature/x"; null for a detached HEAD or none. */
 export function displayBranchName(branch: string | null | undefined): string | null {
   const name = branch?.trim().replace(/^refs\/heads\//, '') ?? ''
   return name === '' ? null : name
-}
-
-/** "repo · branch", or whichever half is known, or null for neither. */
-export function sessionHeaderSubtitle(input: {
-  repoName: string | null | undefined
-  branch: string | null | undefined
-}): string | null {
-  const parts = [input.repoName?.trim() || null, displayBranchName(input.branch)].filter(
-    (part): part is string => part !== null
-  )
-  return parts.length === 0 ? null : parts.join(' · ')
 }

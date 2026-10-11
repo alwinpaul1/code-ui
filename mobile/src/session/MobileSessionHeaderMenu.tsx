@@ -39,7 +39,10 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
     clipboard,
     showToast
   })
-  const [renaming, setRenaming] = useState(false)
+  // The name the dialog opened with, held while it is up: the dialog resets
+  // what was typed whenever its default changes, and the live title can move
+  // under it (a first worktree.show, or a worktreesChanged event).
+  const [renaming, setRenaming] = useState<string | null>(null)
   return (
     <>
       <MobileSessionHeaderMoreActionsSheet
@@ -55,25 +58,25 @@ export function MobileSessionHeaderMenu({ controller }: { controller: MobileSess
         sessionEntries={sessionMenu.entries}
         onCopyBranch={() => void actions.copyBranch()}
         onOpenBackgroundTasks={() => sessionMenu.openBackgroundTasks?.()}
-        onRename={() => setRenaming(true)}
+        onRename={() => setRenaming(worktreeName)}
         onCopySessionId={() => void actions.copySessionId()}
         onClose={() => setShowHeaderMoreActions(false)}
       />
       {/* The Claude app's Rename dialog, in its words. The name is the
           workspace's own display name, which is the header's title. */}
       <TextInputModal
-        visible={renaming}
+        visible={renaming !== null}
         title="Rename session"
         message="Enter a new name for this session"
-        defaultValue={worktreeName}
+        defaultValue={renaming ?? worktreeName}
         placeholder="Enter session name"
         submitLabel="Save"
         selectTextOnFocus
         onSubmit={(value) => {
-          setRenaming(false)
+          setRenaming(null)
           void actions.renameSession(value)
         }}
-        onCancel={() => setRenaming(false)}
+        onCancel={() => setRenaming(null)}
       />
     </>
   )

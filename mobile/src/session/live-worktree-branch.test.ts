@@ -13,7 +13,7 @@ vi.mock('expo-router', async () => {
   }
 })
 
-// The header's "repo · branch" subtitle (parity gap G9) takes the branch from the same
+// The header menu's Copy branch (parity gap G35) takes the branch from the same
 // `worktree.show` record the title already comes from: Orca's record is a Worktree & GitWorktreeInfo,
 // so `branch` is the full ref, refreshed on the same `worktreesChanged` event as the name.
 
@@ -51,7 +51,7 @@ async function mount(sendRequest: ReturnType<typeof vi.fn>, worktreeId = 'repo-1
   return seen
 }
 
-describe('the live worktree record carries the branch for the header subtitle', () => {
+describe('the live worktree record carries the branch for the header menu', () => {
   it('reads the branch off the worktree.show record', async () => {
     const seen = await mount(vi.fn().mockResolvedValue(showReply({ id: 'repo-1::/worktree', displayName: 'Header', branch: 'refs/heads/feature/header' })))
     expect(seen.at(-1)?.branch).toBe('refs/heads/feature/header')

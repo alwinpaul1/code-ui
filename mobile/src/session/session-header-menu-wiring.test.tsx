@@ -196,6 +196,20 @@ describe('the header menu session entries, wired', () => {
     expect(showToast).not.toHaveBeenCalled()
   })
 
+  // TextInputModal resets what was typed whenever its defaultValue changes while open, and the
+  // live title can replace the route hint after the dialog opened (review, 2026-10-11).
+  it('keeps the name the dialog opened with when the live title changes under it', async () => {
+    const first = controller(vi.fn())
+    await mount(first)
+    await act(async () => menu().onRename?.())
+    const renamed = { ...first, worktreeName: 'Live name from the host' } as MobileSessionController
+    await act(async () => {
+      renderers[0]!.update(createElement(MobileSessionSheets, { controller: renamed }))
+    })
+    expect(renameInput()?.visible).toBe(true)
+    expect(renameInput()?.defaultValue).toBe('Header parity')
+  })
+
   it('says a refused rename did not happen', async () => {
     const showToast = vi.fn()
     await mount(controller(showToast, vi.fn(async () => ({ id: 'set', ok: false, error: { code: 'x', message: 'no' }, _meta: { runtimeId: 'r' } }))))

@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Pressable } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
-import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import { MobileContextWindowSheet } from './MobileContextWindowSheet'
@@ -94,13 +93,14 @@ export function MobileSessionHeaderContextRing({
  *  neither a figure nor its tokens (sessionHeaderContextReading says why). */
 export function MobileSessionHeaderContext({
   context,
-  agentStatus
+  usedTokens
 }: {
   context: TerminalHudContextWindow | null
-  agentStatus: AgentStatusEntry | null
+  /** Tokens the host counted, shown alone when no window was stated. */
+  usedTokens: number | null | undefined
 }) {
   const [open, setOpen] = useState(false)
-  const reading = sessionHeaderContextReading(context, agentStatus)
+  const reading = sessionHeaderContextReading(context, usedTokens)
   return (
     <>
       {reading ? <MobileSessionHeaderContextRing reading={reading} onOpen={() => setOpen(true)} /> : null}

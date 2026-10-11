@@ -83,7 +83,7 @@ export const terminalQuickCommandsSchema = z
  *
  * All five are optional: use-mobile-session-diff-comments.ts:42 reads `diffComments` through `?.`
  * and hands it to a normalizer that accepts anything, getLiveWorktreeDisplayName reads the
- * id and name members behind `??` and `?.trim()`, and the header's subtitle reads `branch` (the
+ * id and name members behind `??` and `?.trim()`, and the header menu's Copy branch reads `branch` (the
  * record's GitWorktreeInfo member, a full `refs/heads/…` ref, empty on a detached HEAD) as
  * "no branch" when it is missing. The member itself is salvaged rather than required because main
  * read a record it could not parse as no record at all.

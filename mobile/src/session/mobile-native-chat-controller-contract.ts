@@ -267,6 +267,10 @@ export type MobileNativeChatController = {
   nativeChatPromptHook: boolean | null
   /** Context window figure read from the desktop status line, or null. */
   nativeChatContextWindow: TerminalHudContextWindow | null
+  /** Context tokens the host counted for this session, from the same status the HUD merges
+   *  (`agentStatus.contextUsedTokens`); null when it sent none. With no window stated, the
+   *  header shows these alone and no percentage. */
+  nativeChatContextUsedTokens?: number | null
   /** The agent's own word about its model and effort — the status-line badge
    *  or the beacon — and nothing else. Null until it has spoken. This is what
    *  the header pill states; see session-model-pill.ts for why not the

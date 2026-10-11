@@ -3,10 +3,10 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 /**
- * The session header copied from the Claude app's top bar (com.anthropic.claude 1.261009.20,
- * `yv8`/`us8`, parity gap G9): the title in Sans 15 semibold (the app's 550; Instrument Sans has no
- * 550), a "repo · branch" subtitle, and the context ring among the trailing actions, blue under
- * 75%, amber to 89%, red from 90%. Light and dark are both required states.
+ * The session header's context ring, moved from the composer to where the Claude app's top bar
+ * draws it (com.anthropic.claude 1.261009.20, `us8`/`d5a`, parity gap G9): among the trailing
+ * actions, blue under 75%, amber to 89%, red from 90%. The title and subline keep their existing
+ * look: the user had the size changes reverted on 2026-10-11. Light and dark are both required.
  */
 
 vi.mock('react-native', async () => {
@@ -62,7 +62,7 @@ vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null })
 vi.mock('../components/AgentStateDot', () => ({ AgentStateDot: () => null }))
 
 import { ThemeProvider } from '../theme/theme-context'
-import { darkColors, fontFamily, lightColors, type ThemeColors } from '../theme/tokens'
+import { darkColors, fontFamily, lightColors, type, type ThemeColors } from '../theme/tokens'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
@@ -73,22 +73,9 @@ afterEach(() => {
   renderer = null
 })
 
-/** A host that answers `repo.list` with the workspace's repo, as Orca 1.4.205 does. */
-function repoListClient(displayName: string) {
-  return {
-    sendRequest: vi.fn(async (method: string) =>
-      method === 'repo.list'
-        ? { id: 'repos', ok: true, result: { repos: [{ id: 'repo-1', displayName }] }, _meta: { runtimeId: 'r' } }
-        : { id: 'x', ok: false, error: { code: 'method_not_found', message: method }, _meta: { runtimeId: 'r' } }
-    ),
-    subscribe: vi.fn(() => () => {}),
-    getState: () => 'connected'
-  }
-}
-
 function controller(overrides: {
   context?: TerminalHudContextWindow | null
-  agentStatus?: Record<string, unknown> | null
+  usedTokens?: number | null
   showNativeChat?: boolean
   branch?: string
   connState?: 'connected' | 'disconnected'
@@ -100,7 +87,7 @@ function controller(overrides: {
   return {
     hostId: 'host-1',
     worktreeId: 'repo-1::/work/header',
-    client: repoListClient('orca'),
+    client: { sendRequest: vi.fn(), subscribe: vi.fn(() => () => {}) },
     lastConnectedAt: 1,
     isFolderWorkspaceRoute: false,
     isFloatingWorkspaceRoute: overrides.floating ?? false,
@@ -142,7 +129,8 @@ function controller(overrides: {
       nativeChatLiveModel: null,
       nativeChatLeadTurnEnded: false,
       nativeChatContextWindow: overrides.context ?? null,
-      nativeChatAgentStatus: overrides.agentStatus ?? null,
+      nativeChatAgentStatus: null,
+      nativeChatContextUsedTokens: overrides.usedTokens ?? null,
       nativeChatSessionIdentity: { sessionId: null, transcriptPath: null, nestedSessionId: null }
     }
   } as unknown as MobileSessionController
@@ -156,7 +144,7 @@ async function mount(scheme: 'light' | 'dark', input: Parameters<typeof controll
       </ThemeProvider>
     )
   })
-  // The repo name arrives from the host's answer.
+  // Let any effects settle.
   await act(async () => {
     await Promise.resolve()
     await Promise.resolve()
@@ -185,24 +173,18 @@ describe.each([
   ['light', lightColors],
   ['dark', darkColors]
 ] as ['light' | 'dark', ThemeColors][])('the session header in %s mode', (scheme, palette) => {
-  it('draws the title in Sans 15 semibold, one line', async () => {
+  it('keeps the title and subline as they were: heading semibold, caption tab count', async () => {
     await mount(scheme, {})
     const title = textNode('Header parity')
     expect(title, 'the title').toBeDefined()
-    const style = flat(title!.props.style)
-    expect(style.fontSize).toBe(15)
-    expect(style.fontFamily).toBe(fontFamily.semibold)
-    expect(style.color).toBe(palette.text)
-    expect(title!.props.numberOfLines).toBe(1)
-  })
-
-  it('reads "repo · branch" under the title, in the secondary ink at 13', async () => {
-    await mount(scheme, {})
-    const subtitle = textNode('orca · feature/header')
-    expect(subtitle, `subtitle among ${texts().map(textOf).join(' | ')}`).toBeDefined()
-    const style = flat(subtitle!.props.style)
-    expect(style.fontSize).toBe(13)
-    expect(style.color).toBe(palette.textSecondary)
+    expect(flat(title!.props.style)).toMatchObject({
+      fontSize: type.heading.size,
+      fontFamily: fontFamily.semibold,
+      color: palette.text
+    })
+    const subline = textNode('1 tab')
+    expect(subline, `subline among ${texts().map(textOf).join(' | ')}`).toBeDefined()
+    expect(flat(subline!.props.style)).toMatchObject({ fontSize: type.caption.size, color: palette.textSecondary })
   })
 
   // Parity gap G35: the menu carries Copy branch and Rename now, so it is drawn for them alone.
@@ -220,18 +202,6 @@ describe.each([
       (node) => String(node.type) === 'IconButton' && node.props.accessibilityLabel === 'More session actions'
     )
     expect(more).toHaveLength(0)
-  })
-
-  it('says the connection state instead of "repo · branch" while the link is down', async () => {
-    await mount(scheme, { connState: 'disconnected', terminalSummary: 'Disconnected' })
-    expect(textNode('Disconnected')).toBeDefined()
-    expect(textNode('orca · feature/header')).toBeUndefined()
-  })
-
-  it('shows the repo alone on a detached HEAD', async () => {
-    await mount(scheme, { branch: '' })
-    // The repo still answers, so the repo half alone stands.
-    expect(textNode('orca')).toBeDefined()
   })
 
   it.each([
@@ -267,13 +237,13 @@ describe.each([
   })
 
   it('opens the sheet from the token count too, and the sheet says the window is unknown', async () => {
-    await mount(scheme, { agentStatus: { contextUsedTokens: 493_000 } })
+    await mount(scheme, { usedTokens: 493_000 })
     await act(async () => (ring()!.props.onPressIn as () => void)())
     expect(textNode('493k used')).toBeDefined()
   })
 
   it('shows the tokens and no ring or percentage when the session stated no window', async () => {
-    await mount(scheme, { agentStatus: { contextUsedTokens: 493_000 } })
+    await mount(scheme, { usedTokens: 493_000 })
     expect(renderer!.root.findAll((node) => String(node.type) === 'Circle')).toHaveLength(0)
     const tokens = textNode('493k')
     expect(tokens, `tokens among ${texts().map(textOf).join(' | ')}`).toBeDefined()

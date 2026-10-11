@@ -35,8 +35,6 @@ import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { sessionModelPillLabel } from './session-model-pill'
 import { MobileSessionHeaderContext } from './MobileSessionHeaderContextRing'
-import { sessionHeaderSubtitle } from './session-header-display'
-import { useSessionRepoName } from './use-session-repo-name'
 import { useSessionHeaderMenu } from './use-session-header-menu'
 import {
   nativeChatKeptSessionKey,
@@ -89,22 +87,12 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     showConnectionRetry,
     terminalSummary,
     handlePanelTap,
-    showHeaderMoreButton,
-    client,
-    worktreeId,
-    worktreeBranch,
-    lastConnectedAt
+    showHeaderMoreButton
   } = controller
   const modelLabel = resolveSessionModelLabel(controller)
   // Drawn for the Claude app's session entries too (G35), not only the project screens.
   const sessionMenu = useSessionHeaderMenu(controller)
   const showMoreButton = showHeaderMoreButton || sessionMenu.entries.length > 0
-  // The Claude app's "repo · branch"; the connection's own words while the link is down
-  // or struggling, and the tab count while neither half is known.
-  const repoName = useSessionRepoName({ client, connState, worktreeId, lastConnectedAt })
-  const subtitle = sessionHeaderSubtitle({ repoName, branch: worktreeBranch })
-  const subline =
-    connState === 'connected' && !showConnectionRetry && subtitle ? subtitle : terminalSummary
   // Why: chat and terminal are two views of the same agent session; the user
   // switches between them from the header instead of the tab long-press sheet.
   const { activeChatEligible, showNativeChat } = controller.nativeChatController
@@ -151,8 +139,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         />
 
         <View style={{ flex: 1, minWidth: 0, marginRight: space.xs }}>
-          {/* The Claude app's title is Sans 15/550; Instrument Sans has no 550, so 600. */}
-          <Txt variant="body" weight="semibold" numberOfLines={1}>
+          <Txt variant="heading" weight="semibold" numberOfLines={1}>
             {worktreeName || 'Terminal'}
           </Txt>
           <Pressable
@@ -167,8 +154,8 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             accessibilityLabel={showConnectionRetry ? 'Reconnect to desktop' : undefined}
           >
             <StatusDot state={connState} gap={false} size={7} />
-            <Txt variant="label" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
-              {subline}
+            <Txt variant="caption" tone="secondary" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {terminalSummary}
             </Txt>
             {modelLabel ? (
               <View
@@ -197,7 +184,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
         {showNativeChat ? (
           <MobileSessionHeaderContext
             context={controller.nativeChatController.nativeChatContextWindow}
-            agentStatus={controller.nativeChatController.nativeChatAgentStatus}
+            usedTokens={controller.nativeChatController.nativeChatContextUsedTokens}
           />
         ) : null}
         {viewToggle ? (
