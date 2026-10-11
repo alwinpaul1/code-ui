@@ -624,10 +624,11 @@ describe('a message the phone sent mid-turn', () => {
 // enqueue has no `content` and its photos are in the Remote Control upload
 // folder); these cases put a PHONE send in the same place. Orca's hook reports
 // every prompt, the phone's too, as a timed `agentStatus.prompt`.
-// The send is drawn where Claude took it, after the result 8617 its
-// `queued_command` follows and above the next reply 8637, the transcript's
-// order (mid-turn-take-point.ts, 2026-10-11). Until then these cases drew it
-// at its send, above 8614, as the Claude app draws a message it sent itself.
+// The send is drawn where it was sent, above 8614, as the Claude app draws a
+// message it sent itself (docs/claude-app-parity.md item 14). For a few hours
+// on 2026-10-11 these cases drew it where Claude took it, after the result
+// 8617 its `queued_command` follows; the take point is kept for messages sent
+// elsewhere (mid-turn-take-point.ts).
 describe('a message the phone sent mid-turn, beside the hook and queue copies of it', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -715,7 +716,7 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
   it.each([
     ['the hook timed at the submit', '23:19:27.700'],
     ['the hook timed at the take', '23:19:28.688']
-  ])('draws a text send once, as the phone sent it, where Claude took it, with %s', async (_label, clock) => {
+  ])('draws a text send once, as the phone sent it, above the rows written after it, with %s', async (_label, clock) => {
     const pending = [send]
     await play([
       { messages: held, pending },
@@ -724,11 +725,11 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
       { messages: [...held, ...afterSend, next], pending, desktopPrompts: [hook(clock)] }
     ])
     expect(bubbles()).toEqual(['bubble:phone-send'])
-    expect(before('8614', 'bubble:phone-send')).toBe(true)
-    expect(before('bubble:phone-send', '8637')).toBe(true)
+    expect(before('8608', 'bubble:phone-send')).toBe(true)
+    expect(before('bubble:phone-send', '8614')).toBe(true)
   })
 
-  it('draws a photo send once, with its photos, where Claude took it', async () => {
+  it('draws a photo send once, with its photos, above the rows written after it', async () => {
     const pending = [{ ...send, images: photos }]
     const prompts = [hook('23:19:27.700', `[Image #20] [Image #21] [Image #22] ${text}`)]
     await play([
@@ -737,11 +738,10 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
       { messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts }
     ])
     expect(bubbles()).toEqual(['bubble:phone-send+3'])
-    expect(before('8614', 'bubble:phone-send+3')).toBe(true)
-    expect(before('bubble:phone-send+3', '8637')).toBe(true)
+    expect(before('bubble:phone-send+3', '8614')).toBe(true)
   })
 
-  it('shows a send in the queue box alone while it waits, then as the phone sent it, where the agent took it', async () => {
+  it('shows a send in the queue box alone while it waits, then as the phone sent it once the agent takes it', async () => {
     const pending = [send]
     const prompts = [hook('23:19:27.700')]
     await play([
@@ -752,8 +752,7 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
     expect(bubbles()).toEqual([])
     await play([{ messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts, queued: [] }])
     expect(bubbles()).toEqual(['bubble:phone-send'])
-    expect(before('8614', 'bubble:phone-send')).toBe(true)
-    expect(before('bubble:phone-send', '8637')).toBe(true)
+    expect(before('bubble:phone-send', '8614')).toBe(true)
   })
 
   it('still draws a message typed elsewhere, which has no phone copy, from the hook alone', async () => {
@@ -766,8 +765,14 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
   })
 
   // Review, 2026-09-24: two mid-turn messages with no row written between
-  // them share an anchor, and draw in list order.
-  it('draws a message typed at the desk before a phone send above it when both follow the same row', async () => {
+  // them share an anchor. Since 2026-10-11 each is drawn as the Claude app
+  // would draw it (docs/claude-app-parity.md item 14), so sent first does not
+  // mean drawn first: the phone's own send stays where it was sent, above
+  // 8614, and the desk's, a message sent elsewhere, moves to where Claude
+  // took it, after the result 8617 and above the next reply 8637
+  // (mid-turn-take-point.ts). Until then both drew at the shared anchor, the
+  // desk's first.
+  it('draws a message typed at the desk before a phone send below it, where Claude took it, when both follow the same row', async () => {
     const desk = hook('23:19:20.000', 'first, from the desk')
     const own = hook('23:19:27.700')
     await play([
@@ -775,7 +780,11 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
       { messages: held, pending: [send], desktopPrompts: [desk, own] },
       { messages: [...held, ...afterSend, next], pending: [send], desktopPrompts: [desk, own] }
     ])
-    expect(bubbles()).toEqual(['bubble:hook', 'bubble:phone-send'])
+    expect(bubbles()).toEqual(['bubble:phone-send', 'bubble:hook'])
+    expect(before('8608', 'bubble:phone-send')).toBe(true)
+    expect(before('bubble:phone-send', '8614')).toBe(true)
+    expect(before('8614', 'bubble:hook')).toBe(true)
+    expect(before('bubble:hook', '8637')).toBe(true)
   })
 
   // Review, 2026-09-24: the phone's send hid every hook prompt with its text,

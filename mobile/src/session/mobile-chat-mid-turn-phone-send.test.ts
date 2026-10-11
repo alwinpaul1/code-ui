@@ -256,6 +256,20 @@ describe('a message the phone queues while the agent works', () => {
               : `kept:${message.id}`
       )
   }
+  /** Every drawn row in order: a transcript row by id, a bubble as bubbles() names it. */
+  function drawnRows(): string[] {
+    const props = view().props
+    const ids = new Set((props.pending as { id: string }[]).map((item) => item.id))
+    const { data } = buildMobileNativeChatTransientData({
+      messages: props.messages,
+      folded: props.folded,
+      streaming: null,
+      pending: props.pending
+    })
+    return data.map((message) =>
+      !ids.has(message.id) ? message.id : message.id.startsWith('pending-') ? 'phone' : message.id.startsWith('desk-') ? 'hook' : message.id
+    )
+  }
   function queueBox(): string[] {
     return ((view().props.queuedMessages ?? []) as MobileChatQueueEntry[]).map((entry) =>
       typeof entry === 'string' ? entry : entry.text
@@ -312,6 +326,13 @@ describe('a message the phone queues while the agent works', () => {
       expect(bubbles()).toEqual(['phone', 'phone'])
     })
 
+    // Both are kept, each where the Claude app would draw it
+    // (docs/claude-app-parity.md item 14): the phone's own send where it was
+    // sent, after 15570; the desk's, a message sent elsewhere, where Claude
+    // takes it. No tool result has been written and the agent still works,
+    // so it has not been taken yet and sits at the live end, under 15590
+    // (mid-turn-take-point.ts). Before 2026-10-11 both were drawn by their
+    // sends, the desk's first.
     it('still keeps an earlier message typed at the desk beside a later phone send of the same text', async () => {
       const desk = hookCopy('08:24:13.000', 'yes')
       await show('08:24:13.400', { messages: held, prompts: desk })
@@ -325,8 +346,32 @@ describe('a message the phone queues while the agent works', () => {
       await show('08:24:19.320', { messages: held, prompts: both })
       await ack('08:24:19.900', origin, 'yes')
       await show('08:24:52.500', { messages: afterTake, prompts: both })
-      expect(bubbles()).toEqual(['hook', 'phone'])
+      expect(bubbles()).toEqual(['phone', 'hook'])
+      expect(drawnRows()).toEqual(['15570', 'phone', '15583', '15590', 'hook'])
     })
+  })
+
+  // The Claude app draws a message it sent itself where it sent it, with the
+  // calls that ran while it waited below it, and one sent elsewhere where the
+  // agent took it (docs/claude-app-parity.md item 14). The phone does the same
+  // for its own sends: here a call starts and returns AFTER the send, with the
+  // agent working throughout, and once Claude takes the send it is drawn
+  // above that call, not after its result (2026-10-11, reversing the take
+  // point for the phone's own sends; mid-turn-take-point.ts keeps it for
+  // messages sent elsewhere).
+  it("keeps the phone's own mid-turn send where it was sent, as the Claude app draws its own sends", async () => {
+    const call: NativeChatMessage = { id: 'call', role: 'assistant', blocks: [{ type: 'tool-call', name: 'Bash', input: {} }], timestamp: at('08:24:25.000'), source: 'transcript' }
+    const result: NativeChatMessage = { id: 'result', role: 'tool', blocks: [{ type: 'tool-result', output: '' }], timestamp: at('08:24:30.000'), source: 'transcript' }
+    await show('08:24:18.500', { messages: held })
+    const origin = await tap('08:24:19.000')
+    await ack('08:24:19.300', origin)
+    await show('08:24:20.400', { messages: held, queued: queuedMessagesFromScreen(claudeScreen([TEXT])) })
+    await show('08:24:25.500', { messages: [...held, call], queued: queuedMessagesFromScreen(claudeScreen([TEXT])) })
+    // 08:24:30 the call returns and Claude takes the send; the box empties.
+    await show('08:24:30.500', { messages: [...held, call, result], queued: [] })
+    await show('08:24:52.500', { messages: [...held, call, result, ...afterTake.slice(1)], queued: [] })
+    // The call and its result fold into one row, drawn as the call's.
+    expect(drawnRows()).toEqual(['15570', 'phone', 'call', '15583', '15590'])
   })
 
   describe('in the queue box from the send until Claude takes it', () => {

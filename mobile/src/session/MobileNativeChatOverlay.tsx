@@ -5,7 +5,7 @@ import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
-import { placeWhereTaken } from './mid-turn-take-point'
+import { placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-point'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
@@ -197,9 +197,22 @@ export function MobileNativeChatOverlay({
   // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
   // Each of the phone's sends drawn after any row written before it, even one
   // that loaded after the send did (mid-turn-written-before.ts).
-  // …and, sent mid-turn, drawn where Claude took it (mid-turn-take-point.ts).
+  // Sent mid-turn, a phone send stays where it was SENT, with the calls that
+  // ran while it waited below it. The Claude app draws its own sends that way,
+  // and only a message sent elsewhere where the agent took it
+  // (docs/claude-app-parity.md item 14), so the take point
+  // (mid-turn-take-point.ts) moves only the copies of messages sent elsewhere:
+  // the desk copies and queue-box readings below, and the witnesses of them
+  // this store remembered (`desk-`/`absorbed-`). The phone drew its own sends
+  // at the take point too for a few hours on 2026-10-11, until the user asked
+  // for the Claude app's rule.
   const placedOwn = useMemo(
-    () => placeWhereTaken(placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages), session.messages, agentWorking),
+    () =>
+      placeSentElsewhereWhereTaken(
+        placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages),
+        session.messages,
+        agentWorking
+      ),
     [agentWorking, projectedQueue.pending, session.messages]
   )
   const baseFolded = useMemo(

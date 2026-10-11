@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pending-echo'
-import { drawnWhereTaken, placeWhereTaken } from './mid-turn-take-point'
+import { drawnWhereTaken, isSentElsewhere, placeSentElsewhereWhereTaken, placeWhereTaken } from './mid-turn-take-point'
 
 const at = (clock: string) => Date.parse(`2026-10-11T${clock}Z`)
 const row = (id: string, role: NativeChatMessage['role'], block: NativeChatMessage['blocks'][number], clock: string): NativeChatMessage => ({
@@ -141,11 +141,52 @@ describe('placeWhereTaken', () => {
     expect(placeWhereTaken(unsettled, [FIRST, BASH, BASH_RESULT], true)).toBe(unsettled)
   })
 
-  it('moves a queue-box reading and the phone’s own send as it moves a desk copy', () => {
+  // The primitive moves whatever it is given; the overlay hands the phone's
+  // own sends to placeSentElsewhereWhereTaken (below), which leaves them be.
+  it('moves a queue-box reading and any other echo it is given as it moves a desk copy', () => {
     const rows = [FIRST, BASH, BASH_RESULT, ANSWER]
     const [absorbed] = placeWhereTaken([echo({ id: `absorbed-3. Move Stop@${FIRST.id}` })], rows, true)
     expect(absorbed!.drawAfterId).toBe(BASH_RESULT.id)
     const [own] = placeWhereTaken([echo({ id: 'pending-7', sentAt: at('18:31:32.087') })], rows, true)
     expect(own!.drawAfterId).toBe(BASH_RESULT.id)
+  })
+})
+
+// The overlay's own-send pass: the pending store holds the phone's own sends
+// and the witnesses it remembered of messages sent elsewhere. Only the second
+// move to the take point; the Claude app draws its own sends where it sent
+// them (docs/claude-app-parity.md item 14, 2026-10-11).
+describe('placeSentElsewhereWhereTaken', () => {
+  const rows = [FIRST, BASH, BASH_RESULT, ANSWER]
+  const item = (id: string): MobileNativeChatPendingMessage => ({
+    id,
+    text: '3. Move Stop into the message box, as Claude does?',
+    expectedOccurrence: 0,
+    baselineTailMessageId: FIRST.id,
+    baselineResolved: true,
+    sentAt: at('18:31:32.087')
+  })
+
+  it('returns the same list when there is nothing in it', () => {
+    const none: MobileNativeChatPendingMessage[] = []
+    expect(placeSentElsewhereWhereTaken(none, rows, true)).toBe(none)
+  })
+
+  it('leaves a lone phone send where it was sent, the same list back', () => {
+    const own = [item('pending-7')]
+    expect(placeSentElsewhereWhereTaken(own, rows, true)).toBe(own)
+  })
+
+  it('moves a remembered desk copy and queue-box reading beside a phone send it leaves alone', () => {
+    const placed = placeSentElsewhereWhereTaken(
+      [item('desk-status:0954729d:1'), item('pending-7'), item(`absorbed-3. Move Stop@${FIRST.id}`), item('queued-0')],
+      rows,
+      true
+    )
+    expect(placed.map((entry) => entry.drawAfterId)).toEqual([BASH_RESULT.id, undefined, BASH_RESULT.id, BASH_RESULT.id])
+  })
+
+  it('names the copies of messages sent elsewhere by their ids', () => {
+    expect(['desk-x', 'absorbed-x', 'queued-x', 'pending-x', ''].map(isSentElsewhere)).toEqual([true, true, true, false, false])
   })
 })

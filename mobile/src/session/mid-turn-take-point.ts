@@ -13,16 +13,18 @@ import type { MobileNativeChatPendingMessage } from './mobile-native-chat-pendin
  * app drew "3. Move Stop…", typed at the desk, after "Ran Pull the phone's log
  * lines…", the call stamped ten seconds after the send; the phone drew it above
  * that call, next to the user's previous message, because its desk copy was
- * placed by the send and drawn there. Asked for the transcript's order, the
- * phone now draws every mid-turn message there: a desk copy, a queue-box
- * reading, and its own sends.
+ * placed by the send and drawn there. The phone now draws every mid-turn
+ * message sent ELSEWHERE there: a desk copy, a queue-box reading, and a
+ * witness remembered from either (placeSentElsewhereWhereTaken).
  *
- * This reverses 2026-09-23 (0db1384a4, the user's "where I sent it"), which
- * came from a screenshot of a message the Claude app had sent itself: the
- * Claude app draws its OWN send where it sent it and one sent elsewhere where
- * the agent took it (docs/claude-app-parity.md, item 14). Kept for the phone's
- * own sends alone, a desk message typed before a phone send drew below it
- * whenever both waited through the same call.
+ * Its own sends it draws where it sent them. The Claude app draws its OWN
+ * send where it sent it and one sent elsewhere where the agent took it
+ * (docs/claude-app-parity.md, item 14), and the user asked for exactly that
+ * ("do the same as Claude mobile", 2026-10-11, after a few hours of the
+ * phone's sends drawn at the take point too). One consequence is meant: a
+ * desk message typed before a phone send, both waiting through the same
+ * call, draws below the phone send, after the call's result, where the
+ * Claude app would draw it.
  *
  * Orca drops the record, so the phone never sees the take. What it sees is the
  * rows: the message goes after the first run of tool results written after
@@ -128,9 +130,37 @@ export function placeWhereTaken<T extends MobileNativeChatPendingMessage>(
   rawMessages: readonly NativeChatMessage[],
   agentWorking: boolean
 ): T[] {
+  return placeMatchingWhereTaken(pending, rawMessages, agentWorking, () => true)
+}
+
+/** Whether a pending copy is a message sent elsewhere that the phone drew and
+ *  remembered or read: a desk copy (`desk-`), a queue-box reading
+ *  (`absorbed-`, `queued-`). Anything else in the pending store is one of the
+ *  phone's own sends. */
+export function isSentElsewhere(id: string): boolean {
+  return id.startsWith('desk-') || id.startsWith('absorbed-') || id.startsWith('queued-')
+}
+
+/** placeWhereTaken for the copies of messages sent elsewhere only. The phone's
+ *  own sends, which share the pending store with the witnesses it remembered,
+ *  keep their place by the send, as the Claude app draws its own sends. */
+export function placeSentElsewhereWhereTaken<T extends MobileNativeChatPendingMessage>(
+  pending: readonly T[],
+  rawMessages: readonly NativeChatMessage[],
+  agentWorking: boolean
+): T[] {
+  return placeMatchingWhereTaken(pending, rawMessages, agentWorking, (item) => isSentElsewhere(item.id))
+}
+
+function placeMatchingWhereTaken<T extends MobileNativeChatPendingMessage>(
+  pending: readonly T[],
+  rawMessages: readonly NativeChatMessage[],
+  agentWorking: boolean,
+  moves: (item: T) => boolean
+): T[] {
   let changed = false
   const placed = pending.map((item) => {
-    if (item.baselineResolved === false) {
+    if (item.baselineResolved === false || !moves(item)) {
       return item
     }
     const anchor = pendingPlacementAnchorId(item)
