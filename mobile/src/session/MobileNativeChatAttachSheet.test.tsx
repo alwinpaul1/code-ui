@@ -137,4 +137,46 @@ describe('the Claude-style Add context sheet', () => {
         .some((node) => node.props.accessibilityLabel === 'Permission mode')
     ).toBe(false)
   })
+
+  // The Claude app's + sheet (`hta.a`, 1.261009.20): once a message holds 20
+  // attachments every source tile is off and one line under them says why.
+  const LIMIT_LINE = 'You can add at most 20 attachments to a message.'
+
+  function texts(root: ReturnType<typeof render>): string[] {
+    return root.findAllByType('Txt').map((node) => String(node.props.children))
+  }
+
+  it('turns every source off and says the limit once the message holds 20 attachments', () => {
+    const onCaptureImage = vi.fn()
+    const root = render({
+      visible: true,
+      onClose: vi.fn(),
+      onCaptureImage,
+      onAttachImage: vi.fn(),
+      onAttachFile: vi.fn(),
+      attachmentCount: 20
+    })
+    const cards = root
+      .findAllByType('Pressable')
+      .filter((node) => ['Camera', 'Photos', 'Files'].includes(node.props.accessibilityLabel))
+    expect(cards).toHaveLength(3)
+    expect(cards.every((card) => card.props.disabled === true)).toBe(true)
+    expect(texts(root)).toContain(LIMIT_LINE)
+  })
+
+  it('keeps every source on, with no limit line, at 19 attachments', () => {
+    const root = render({
+      visible: true,
+      onClose: vi.fn(),
+      onCaptureImage: vi.fn(),
+      onAttachImage: vi.fn(),
+      onAttachFile: vi.fn(),
+      attachmentCount: 19
+    })
+    const cards = root
+      .findAllByType('Pressable')
+      .filter((node) => ['Camera', 'Photos', 'Files'].includes(node.props.accessibilityLabel))
+    expect(cards.every((card) => card.props.disabled === false)).toBe(true)
+    expect(texts(root)).not.toContain(LIMIT_LINE)
+  })
 })

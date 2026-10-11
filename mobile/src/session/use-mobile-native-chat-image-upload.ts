@@ -12,6 +12,8 @@ import {
 // the media seam's contract has no member for either, so they stay on the phone's picker.
 import { pickMobileDocuments, pickMobileImageFiles } from './mobile-image-source-picker'
 import {
+  NATIVE_CHAT_ATTACHMENT_LIMIT,
+  NATIVE_CHAT_ATTACHMENT_LIMIT_LINE,
   uploadMobileNativeChatImages,
   type PendingNativeChatImage
 } from './mobile-native-chat-image-attachment'
@@ -19,6 +21,7 @@ import {
   cancelVideoFrameExtractionFor,
   clearVideoFrameExtractionController,
   registerVideoFrameExtractionController,
+  useNativeChatImageAttachmentsStore,
   videoFrameExtractionControllerFor,
   videoFrameExtractionState,
   type NativeChatVideoFrameExtractionState
@@ -171,6 +174,11 @@ export function useMobileNativeChatImageUpload(args: {
             ? (image, _error, retry) => onImageFailed(scope, { ...image, batch }, retry)
             : undefined,
           retryConnection: () => liveConnectionRef.current,
+          // Counted live, so two picks landing together still stop at the limit.
+          hasRoom: () =>
+            (useNativeChatImageAttachmentsStore.getState().byScope[scope]?.length ?? 0) <
+            NATIVE_CHAT_ATTACHMENT_LIMIT,
+          onLimitReached: () => showToast(NATIVE_CHAT_ATTACHMENT_LIMIT_LINE, 2500),
           onImageStart: (image) => onImageUploading?.(scope, { ...image, batch }),
           onUploadStart: () => {
             started = true

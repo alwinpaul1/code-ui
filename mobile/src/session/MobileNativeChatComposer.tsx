@@ -462,6 +462,7 @@ export function MobileNativeChatComposer({
                     ? () => setShowModeSheet(true)
                     : undefined
                 }
+                attachmentCount={attachments.length}
               />
             ) : null}
             {sessionOptions ? (
