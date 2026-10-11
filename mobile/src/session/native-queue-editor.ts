@@ -16,6 +16,7 @@ import {
   queueFromScreen,
   sameEntry,
   QueueMaybeDeliveredError,
+  QueueRecallTakesWholeQueueError,
   sameText,
   segmentRecalledQueue,
   submitInput,
@@ -95,7 +96,10 @@ export async function recallNativeQueue(
   /** The row the user actually tapped. The index came from a screen poll up to
    *  a second old; if the agent consumed a message in between, that index now
    *  addresses its neighbour — and Delete would silently take the wrong one. */
-  tapped?: string
+  tapped?: string,
+  /** 'one': refuse, before any key, a recall that would pull more than the
+   *  tapped message into the input (stock Claude with several queued). */
+  reach: 'one' | 'any' = 'any'
 ): Promise<QueueEdit> {
   const before = await io.read()
   checkScreen(agent, before)
@@ -133,6 +137,16 @@ export async function recallNativeQueue(
   // it back message by message rather than asking for a host-side flag, so the
   // rest of the queue must be recoverable from that draft before a key is sent.
   const rebuild = agent === 'claude' && !view!.selectable
+  if (rebuild && reach === 'one' && queue.length > 1) {
+    throw new QueueRecallTakesWholeQueueError()
+  }
+  // The composer can only take words: an attachment would arrive as its
+  // `[Image #1]` placeholder and the photo would be lost on the next send.
+  if (reach === 'one' && opaque(queue[target]!)) {
+    throw new Error(
+      'That message holds an attachment or collapsed paste the phone cannot load. Edit it on the desktop.'
+    )
+  }
   if (rebuild && queue.some(opaque)) {
     throw new Error(
       'A queued message holds an attachment or collapsed paste that Orca cannot retype.'

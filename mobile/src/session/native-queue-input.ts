@@ -342,3 +342,12 @@ export async function submitInput(
   }
   throw new Error('The agent finished working. Your edited message remains in its input, unsent.')
 }
+
+/** Raised before any key when a one-message recall was asked for and the
+ *  agent's recall would empty its whole queue into the input. */
+export class QueueRecallTakesWholeQueueError extends Error {
+  constructor() {
+    super('Claude would move its whole queue into the input.')
+    this.name = 'QueueRecallTakesWholeQueueError'
+  }
+}

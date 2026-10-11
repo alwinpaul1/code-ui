@@ -9,6 +9,7 @@ import {
   queueFooterIndex,
   SELECTED_HINT,
   SEND_NOW_HINT,
+  SLOT_TOGGLE_ROW,
   SPINNER_ROW,
   withComposerText
 } from './mobile-terminal-queue-block'
@@ -179,6 +180,17 @@ function sendNowHintAbove(lines: readonly string[], footer: number): number {
     if (SPINNER_ROW.test(line)) {
       details = 0
       continue
+    }
+    // A mod's band in the slot over the box (Claude Code 2.1.294 on), under
+    // Claude's own `[-]` toggle: skipped whole, toggle included, and only when
+    // that toggle bounds it within the window (captured 2.1.296, 2026-10-11). The
+    // toggle may be this very row, with the band folded away under it.
+    if (!SEND_NOW_HINT.test(line)) {
+      const toggle = lines.slice(Math.max(0, footer - 8), i + 1).findLastIndex((row) => SLOT_TOGGLE_ROW.test(row))
+      if (details === 0 && toggle !== -1) {
+        i = Math.max(0, footer - 8) + toggle
+        continue
+      }
     }
     return details === 0 && SEND_NOW_HINT.test(line) ? i : -1
   }

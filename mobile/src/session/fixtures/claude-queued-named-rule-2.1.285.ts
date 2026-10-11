@@ -30,7 +30,7 @@
 
 export const QUEUED_ROW_TEXT = 'Can we finish the paper by today ask fable'
 
-const TOOL_ROWS_ABOVE = [
+export const TOOL_ROWS_ABOVE = [
   '  Submitting walk task 1 on the admin\'s slice · 39s',
   "  ⎿  $ ssh -o ConnectTimeout=15 willi bash -s <<'EOF'",
   '     cd /scratch/paulalwi/Master_Thesis/hybrid_snn_ann && sbatch',

@@ -19,6 +19,12 @@ export type MobileNativeChatDraftMirror = {
   /** Drain in-flight echoes and forget the mirrored line. Called by the send
    *  path before its own clear + body, which replaces the line wholesale. */
   settleBeforeSend: () => Promise<void>
+  /** The agent's own recall key just put `text` in its input (a tapped queued
+   *  message), and the composer is about to take the same words. Call it before
+   *  setting the composer. One line becomes the mirrored line, edited in place
+   *  from here; several lines are left alone until the send replaces them, since
+   *  the mirror only ever holds one line. */
+  adoptRecalledInput: (handle: string, text: string) => void
 }
 
 /**
@@ -55,6 +61,10 @@ export function useMobileNativeChatDraftMirror(args: {
    *  (reported from the phone, 2026-09-13). */
   const baselineEditsRef = useRef<number | null>(null)
   const armedRef = useRef(false)
+  /** Several lines a recall left on the agent: no echo until the send replaces them.
+   *  Not cleared when the composer empties: the mirror's Ctrl+U clears one line of
+   *  the several, and the send's own clear is the one sized for them. */
+  const heldRef = useRef<string | null>(null)
 
   const forget = useCallback(() => {
     cancelTerminalLivePendingFlush(flushStateRef.current)
@@ -103,7 +113,7 @@ export function useMobileNativeChatDraftMirror(args: {
       armedRef.current = true
     }
     const handle = handleRef.current
-    if (!handle) {
+    if (!handle || heldRef.current === handle) {
       return
     }
     // A leading `!` arriving into the empty desktop input switches the agent to
@@ -142,7 +152,26 @@ export function useMobileNativeChatDraftMirror(args: {
     // the count here keeps it from being echoed as one.
     baselineEditsRef.current = null
     armedRef.current = false
+    heldRef.current = null
   }, [forget])
 
-  return { settleBeforeSend }
+  const adoptRecalledInput = useCallback(
+    (handle: string, recalled: string) => {
+      cancelTerminalLivePendingFlush(flushStateRef.current)
+      baselineEditsRef.current = getComposerEditGeneration()
+      armedRef.current = true
+      if (/[\r\n]/.test(recalled)) {
+        sentTextRef.current = ''
+        mirroredHandleRef.current = null
+        heldRef.current = handle
+        return
+      }
+      heldRef.current = null
+      sentTextRef.current = recalled
+      mirroredHandleRef.current = handle
+    },
+    [getComposerEditGeneration]
+  )
+
+  return { settleBeforeSend, adoptRecalledInput }
 }

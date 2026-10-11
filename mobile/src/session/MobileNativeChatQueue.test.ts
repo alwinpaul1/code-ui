@@ -252,3 +252,21 @@ it.each([
   })
   expect(sendNowButton(renderer!)).toBeUndefined()
 })
+
+// The Claude app (1.261009.20): the whole queued bubble is the button (hb20.e
+// makes the bubble clickable; z07 hands it dequeueToInput), not a small icon
+// beside it. A tap on the words themselves must start the edit.
+it.each(['claude', 'codex'] as const)('starts the edit from a tap on the %s queued words themselves', async (agent) => {
+  const onEdit = vi.fn().mockResolvedValue(undefined)
+  const projected = projectMobileChatQueue([], ['then also say goodbye in French'])
+  let renderer: ReturnType<typeof create>
+  await act(async () => {
+    renderer = create(createElement(MobileNativeChatQueue, { messages: projected.queue, agent, onEdit }))
+  })
+  const button = renderer!.root.findByProps({ accessibilityLabel: 'Edit queued message 1' })
+  const words = button.findAllByType('Text').map((node) => node.props.children)
+  expect(words).toContain('then also say goodbye in French')
+  await act(async () => button.props.onPress())
+  expect(onEdit).toHaveBeenCalledExactlyOnceWith(0, 'then also say goodbye in French')
+  await act(async () => renderer!.unmount())
+})

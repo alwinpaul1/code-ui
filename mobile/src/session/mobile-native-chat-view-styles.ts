@@ -21,15 +21,6 @@ export function makeChatViewStyles(theme: Theme) {
       alignItems: 'center',
       gap: space.sm
     },
-    stopButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: space.xs,
-      paddingHorizontal: space.sm,
-      paddingVertical: 4,
-      borderRadius: radius.pill,
-      backgroundColor: colors.dangerSoft
-    },
     sendError: {
       alignItems: 'center',
       paddingHorizontal: space.md,
