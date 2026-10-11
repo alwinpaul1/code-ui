@@ -7,9 +7,15 @@ import {
   typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
-import { releaseMobileNativeChatTerminalWriteForSend } from './mobile-native-chat-terminal-write-lock'
 import { clearMobileNativeChatInputResidue } from './mobile-native-chat-stale-input'
-import { verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
+import { claudeInputHoldsExactly, verifyClaudeSubmit } from './mobile-native-chat-submit-verify'
+import { terminalDialogOnScreen } from './mobile-native-chat-dialog-guard'
+import {
+  acquireMobileNativeChatTerminalWrite,
+  mobileNativeChatTerminalWriteOwner,
+  releaseMobileNativeChatTerminalWrite,
+  releaseMobileNativeChatTerminalWriteForSend
+} from './mobile-native-chat-terminal-write-lock'
 import { timeSendStage } from './native-chat-send-timing'
 import { claudeSentBashTexts } from './claude-composer-screen'
 import { readMobileNativeChatScreen } from './mobile-native-chat-screen-read'
@@ -86,6 +92,98 @@ async function clearInputForSend(args: {
   }
   clearMobileNativeChatInputResidue(args.terminal)
   return null
+}
+
+/** How long the second Return and its check may take, past whatever the send's budget has left. */
+const SECOND_RETURN_BUDGET_MS = MOBILE_NATIVE_CHAT_MIN_WRITE_TIMEOUT_MS + 4_500
+/** The two looks before a second Return are this far apart: one look can catch a frame mid-draw,
+ *  or a draft Orca is about to replace. */
+const SECOND_RETURN_LOOK_GAP_MS = 600
+
+/**
+ * The words are still in Claude's input at the end of the check: the Return never submitted
+ * them. Claude Code drops a Return that arrives while it is still reading a pasted image, and
+ * the end of that read clears the dropped Return without submitting (2.1.288, see
+ * mobile-native-chat-image-send-settle.ts). On 0.9.128 such a photo send sat on the desk's input
+ * line, the phone said "Delivery unconfirmed" and gave it up (2026-10-11: Image #57 pasted and
+ * never sent, its chip and bubble left on the phone). One more Return, alone, submits them.
+ *
+ * It goes only when it can only submit these words (Opus review of 7872fddf2): holding the
+ * terminal's write lock (so the draft mirror and a card answer stand aside), and only after two
+ * looks, SECOND_RETURN_LOOK_GAP_MS apart, each showing no dialog and the input holding exactly
+ * this send's words (claudeInputHoldsExactly). A dialog would take the Return as its answer; words
+ * typed after the send would be submitted glued to these. Anything less and it is not pressed:
+ * the send is held, and the outbox drainer clears and types it again once the agent is idle.
+ * What remains, not closed: the first Return landing in the instant between the last look and
+ * this one, and a draft-mirror batch queued just before the lock was taken landing after the
+ * last look (one write round trip). Either way this Return reaches an input the looks did not
+ * see. What a Return on an empty box does is not verified: docs/mobile-background-tasks.md says
+ * it submits a prompt suggestion Claude draws at a turn's end, and nothing here has observed it
+ * with messages queued.
+ */
+async function pressReturnAgain(args: {
+  client: RpcClient
+  terminal: string
+  text: string
+  hasImages: boolean
+  deadline: number
+  mobileClient?: MobileClient
+  receipts: () => readonly BeaconPromptReceipt[]
+  seenNonces: ReadonlySet<string>
+  priorBashRows: readonly string[] | null
+}): Promise<ChatSendWrite> {
+  const held: ChatSendWrite = { kind: 'written', outcome: 'unknown' }
+  if (!acquireMobileNativeChatTerminalWrite(args.terminal)) {
+    return held
+  }
+  const owner = mobileNativeChatTerminalWriteOwner(args.terminal)
+  try {
+    const deadline = Math.max(args.deadline, Date.now() + SECOND_RETURN_BUDGET_MS)
+    for (let look = 0; look < 2; look += 1) {
+      if (look > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, SECOND_RETURN_LOOK_GAP_MS))
+      }
+      const screen = await readMobileNativeChatScreen({ client: args.client, terminal: args.terminal, deadline })
+      if (
+        !screen ||
+        terminalDialogOnScreen(screen.lines, 'claude') ||
+        !claudeInputHoldsExactly(screen, args.text, args.hasImages)
+      ) {
+        return held
+      }
+    }
+    const pressed = await sendMobileNativeChatMessageWithOutcome({
+      client: args.client,
+      terminal: args.terminal,
+      text: '',
+      enter: true,
+      deadline,
+      ...(args.mobileClient ? { mobileClient: args.mobileClient } : {})
+    })
+    // From here the send only reads: the terminal goes back, so a permission tap or a pick during
+    // the check is not refused (the same release writeChatSend makes after the body).
+    releaseMobileNativeChatTerminalWrite(args.terminal, owner)
+    if (pressed !== 'accepted') {
+      return held
+    }
+    const again = await verifyClaudeSubmit({
+      client: args.client,
+      terminal: args.terminal,
+      text: args.text,
+      images: args.hasImages,
+      receipts: args.receipts,
+      seenNonces: args.seenNonces,
+      priorBashRows: args.priorBashRows,
+      wordsSeenInInput: true,
+      deadline
+    })
+    if (again.kind === 'not-sent') {
+      return { kind: 'stopped', message: again.message }
+    }
+    return { kind: 'written', outcome: again.kind === 'sent' || again.kind === 'unverified' ? 'accepted' : 'unknown' }
+  } finally {
+    releaseMobileNativeChatTerminalWrite(args.terminal, owner)
+  }
 }
 
 async function readBashRows(
@@ -199,6 +297,9 @@ export async function writeChatSend(args: {
   if (verdict.kind === 'not-sent') {
     // Claude asked the user to review it: nothing more is typed or submitted.
     return { kind: 'stopped', message: verdict.message }
+  }
+  if (verdict.kind === 'unknown' && verdict.stillTyped) {
+    return pressReturnAgain({ ...args, ...(mobileClient ? { mobileClient } : {}), seenNonces, priorBashRows })
   }
   // `unknown`: looks were had and none settled it. Held for the transcript or a
   // beacon copy like an ack that never came. `unverified`: no look could be had,

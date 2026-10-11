@@ -33,7 +33,8 @@ import { appWasAwaySince } from './app-foreground-clock'
 export type SubmitVerdict =
   | { kind: 'sent' }
   | { kind: 'not-sent'; message: string }
-  | { kind: 'unknown' }
+  /** `stillTyped`: the last look found the words still in Claude's input, never submitted. */
+  | { kind: 'unknown'; stillTyped?: true }
   | { kind: 'unverified' }
 
 /** Why a word-for-word match is not the test: the first stretch of the message
@@ -125,6 +126,9 @@ export async function verifyClaudeSubmit(args: {
   priorBashRows?: readonly string[] | null
   /** The send's own budget: no look runs past it. */
   deadline?: number
+  /** The words were seen in the input just before this check began (a second Return): their
+   *  leaving the input is then the submission. */
+  wordsSeenInInput?: boolean
   wait?: (ms: number) => Promise<void>
   now?: () => number
 }): Promise<SubmitVerdict> {
@@ -157,7 +161,9 @@ export async function verifyClaudeSubmit(args: {
   let looked = false
   let failedLooks = 0
   let lastLookAt = -Infinity
-  let sawWords = false
+  let sawWords = args.wordsSeenInInput === true
+  /** The last look that read the input found the words there. */
+  let stillTyped = false
   /** The send drawn above the composer: its prompt row, or one more `! cmd` row than before. */
   const drawnAbove = (lines: readonly string[]): boolean =>
     claudeSentPromptTexts(lines).some((row) =>
@@ -175,12 +181,17 @@ export async function verifyClaudeSubmit(args: {
     }
     const input = readClaudeInput(screen.lines, screen.draft)
     if (!input.located) {
+      // No input box on this look (a dialog over it, say): whatever an earlier look saw in the
+      // input says nothing about where a Return would go now.
+      stillTyped = false
       return null
     }
     if (heard(input.text)) {
       sawWords = true
+      stillTyped = true
       return null
     }
+    stillTyped = false
     // The words are not in the input. That is a submitted message, or a body
     // Claude has not read yet (see SUBMIT_SETTLE_MS): told apart by having seen
     // the words in the input, or the prompt drawn above the composer. What is
@@ -245,5 +256,33 @@ export async function verifyClaudeSubmit(args: {
       return verdict
     }
   }
-  return { kind: looked ? 'unknown' : 'unverified' }
+  return looked ? (stillTyped ? { kind: 'unknown', stillTyped: true } : { kind: 'unknown' }) : { kind: 'unverified' }
+}
+
+/**
+ * Whether one screen shows Claude's input holding exactly this send's words (photo chips aside)
+ * and nothing else, with no review notice: the only screen a second Return may go over
+ * (mobile-native-chat-send-write.ts pressReturnAgain). Words typed after the send, glued on by
+ * the draft mirror or at the desk, fail it (Opus review of 7872fddf2). Only words DRAWN in the
+ * located box count, never Orca's draft alone: a captured idle box is a bare `❯` as well as
+ * `❯ ` (claude-usage-band-fullscreen-126-agent-finished-2.1.295.txt), so a draft over either
+ * cannot be told from one Orca has not caught up on (re-review of a4ac1625a). A box whose words
+ * Orca's detector moved into the draft is therefore never pressed again: it is held, and the
+ * outbox drainer clears and types it once the agent is idle. A `!` bash box fails it too: a
+ * command is run by its own check, not by a Return pressed again.
+ */
+export function claudeInputHoldsExactly(screen: MobileNativeChatScreen, text: string, images: boolean): boolean {
+  if (claudeSubmitNotice(screen.lines)) {
+    return false
+  }
+  const drawn = readClaudeInput(screen.lines, '')
+  if (!drawn.located || drawn.mode === 'bash' || drawn.text === '') {
+    return false
+  }
+  if (images && !hasImageChip(drawn.text)) {
+    return false
+  }
+  const want = dense(text)
+  const got = dense(images ? withoutImageChips(drawn.text) : folded(drawn.text))
+  return got === want && (want !== '' || images)
 }
