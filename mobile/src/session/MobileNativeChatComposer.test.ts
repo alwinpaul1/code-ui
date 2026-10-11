@@ -878,6 +878,7 @@ describe('MobileNativeChatComposer', () => {
     props: { style: { maxHeight?: number; overflow?: string } | null }
   }
   expect(fold.props.style).toMatchObject({ maxHeight: 72, overflow: 'hidden' })
-  expect(input.props.style.maxHeight).toBe(150)
+  // Six whole lines and the padding (MobileNativeChatComposer.text-air.test.tsx).
+  expect(input.props.style.maxHeight).toBe(160)
 })
 })

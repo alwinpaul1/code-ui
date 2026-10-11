@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Pressable, TextInput, View } from 'react-native'
 import type { DictationPaint } from '../hooks/mobile-live-transcript'
-import { DictationComposerPaint } from './DictationComposerPaint'
 import { ContextWindowRing } from '../components/ContextWindowRing'
 import { ArrowUp, Mic, Square } from 'lucide-react-native'
 import { VoiceLevelBars } from '../components/VoiceLevelBars'
@@ -84,7 +83,7 @@ type Props = {
   micActive?: boolean
   /** Microphone level 0..1 while `micActive`; shows the voice bars. */
   micLevel?: number
-  /** Finished words in normal color, the open phrase lighter. */
+  /** What the app's own dictation last wrote; while `micActive` the caret follows its `caret`. */
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
   /** Context window figure from the desktop status line; shows the ring. */
@@ -124,8 +123,16 @@ type Props = {
 
 /** Claude-app style composer: a rounded card with the text field on top and a
  *  single action row beneath (attach, model, mic, send). */
-/** Two lines of draft plus padding. */
-const COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU = 72
+/** The input's padding. The bottom one is the air above the button row: with the 2 dp the row
+ *  leaves above a 36 dp button, 18 dp from the last line of text to the buttons, as the Claude app
+ *  leaves 16-20 (screenshots, 2026-10-11; it was 4 + 2, and a caret drag hit the buttons). */
+const COMPOSER_INPUT_PAD_TOP = 12
+const COMPOSER_INPUT_PAD_BOTTOM = 16
+/** Whole lines the input shows before it scrolls. Its height is padding plus whole lines, so a
+ *  full box never shows a cut line at its foot (the 150 dp cap fell 2 dp into a seventh). */
+const COMPOSER_INPUT_MAX_LINES = 6
+/** Lines of draft left in view while the `/` or `@` menu is up. */
+const COMPOSER_INPUT_LINES_WITH_MENU = 2
 
 export function MobileNativeChatComposer({
   value,
@@ -299,12 +306,20 @@ export function MobileNativeChatComposer({
     alignItems: 'center' as const,
     justifyContent: 'center' as const
   }
-  const showInterim = micActive && Boolean(dictationPaint?.interim)
   const composerType = {
     fontFamily: fonts.regular,
     fontSize: type.body.size + 1,
     lineHeight: type.body.lineHeight + 1
   }
+  const inputPads = COMPOSER_INPUT_PAD_TOP + COMPOSER_INPUT_PAD_BOTTOM
+  const inputMaxHeight = inputPads + COMPOSER_INPUT_MAX_LINES * composerType.lineHeight
+  const inputMaxHeightWithMenu = inputPads + COMPOSER_INPUT_LINES_WITH_MENU * composerType.lineHeight
+  // While the app dictates it writes `value` from JS on every partial result, and Android keeps
+  // the old selection across that write: the caret stayed where dictation began. So the caret is
+  // driven to the end of the spoken words then, and left alone otherwise: typing, and a keyboard's
+  // own dictation or suggestions composing in the field, keep the IME in charge of it.
+  const dictationSelection =
+    micActive && dictationPaint ? { start: dictationPaint.caret, end: dictationPaint.caret } : null
 
   return (
     <View>
@@ -358,27 +373,33 @@ export function MobileNativeChatComposer({
             collapsable={false}
             style={
               suggestions.length > 0
-                ? { maxHeight: COMPOSER_INPUT_MAX_HEIGHT_WITH_MENU, overflow: 'hidden', justifyContent: 'flex-end' }
+                ? { maxHeight: inputMaxHeightWithMenu, overflow: 'hidden', justifyContent: 'flex-end' }
                 : null
             }
             testID="native-chat-composer-input-fold"
           >
             <TextInput
               ref={textInputRef}
+              // One text layer, capped at whole lines and scrolling inside its box. Until
+              // 2026-10-11 dictation turned this text transparent and drew the words in an
+              // absolutely positioned Text over it, with no cap and no scroll: past the cap it
+              // ran over the button row and out of the composer, a line apart from the
+              // scrolled input's own copy (MobileNativeChatComposer.text-air.test.tsx).
               style={{
                 width: '100%',
-                maxHeight: 150,
-                minHeight: 44,
-                color: showInterim ? 'transparent' : colors.text,
+                maxHeight: inputMaxHeight,
+                minHeight: inputPads + composerType.lineHeight,
+                color: colors.text,
                 ...composerType,
                 paddingHorizontal: space.lg,
-                paddingTop: space.md,
-                paddingBottom: space.xs
+                paddingTop: COMPOSER_INPUT_PAD_TOP,
+                paddingBottom: COMPOSER_INPUT_PAD_BOTTOM
               }}
               value={value}
               onChangeText={onChangeText}
-              // Controlled only transiently right after an autocomplete insert.
-              selection={pendingSelection ?? undefined}
+              // Controlled only while the app dictates, and transiently right after an
+              // autocomplete insert.
+              selection={dictationSelection ?? pendingSelection ?? undefined}
               onSelectionChange={(e) => {
                 const next = e.nativeEvent.selection.end
                 setCursor(next)
@@ -396,7 +417,6 @@ export function MobileNativeChatComposer({
               // The lock gates sending; the draft survives and rides the next send.
               textAlignVertical="top"
             />
-            {showInterim && dictationPaint ? <DictationComposerPaint paint={dictationPaint} /> : null}
           </View>
           <View
             style={{
