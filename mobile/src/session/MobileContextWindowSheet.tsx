@@ -57,26 +57,38 @@ export function formatContextWindowFigure(context: TerminalHudContextWindow): st
 
 /** "Context window  537.2k / 1M (54%)" with a bar, as Claude Code shows it
  *  when the ring is tapped. The figure comes from the desktop's status line,
- *  so it refreshes with the terminal, a few seconds behind the agent. */
+ *  so it refreshes with the terminal, a few seconds behind the agent.
+ *
+ *  With no stated window there is no figure, only the tokens the host counted
+ *  (`usedTokensLabel`): the sheet shows those, no bar and no percentage, and
+ *  says the window is unknown rather than guessing one (CLAUDE.md). */
 export function MobileContextWindowSheet({
   visible,
   context,
+  usedTokensLabel = null,
   onClose
 }: {
   visible: boolean
   context: TerminalHudContextWindow | null
+  usedTokensLabel?: string | null
   onClose: () => void
 }) {
   return (
     <BottomDrawer visible={visible} onClose={onClose} dragContentToDismiss dismissKeyboardOnOpen>
-      <ContextWindowSheetBody context={context} />
+      <ContextWindowSheetBody context={context} usedTokensLabel={usedTokensLabel} />
     </BottomDrawer>
   )
 }
 
 /** The sheet's content, which the drawer mounts when it opens and unmounts
  *  once it has closed. */
-function ContextWindowSheetBody({ context }: { context: TerminalHudContextWindow | null }) {
+function ContextWindowSheetBody({
+  context,
+  usedTokensLabel
+}: {
+  context: TerminalHudContextWindow | null
+  usedTokensLabel: string | null
+}) {
   const { space } = useTheme()
   // Read once per opening, when the drawer mounts this body: a reset countdown
   // does not need to tick while the sheet is up, and calling the clock during
@@ -95,10 +107,20 @@ function ContextWindowSheetBody({ context }: { context: TerminalHudContextWindow
           Context window
         </Txt>
         <Txt variant="body" tone="secondary">
-          {context ? formatContextWindowFigure(context) : 'Not reported'}
+          {context
+            ? formatContextWindowFigure(context)
+            : usedTokensLabel
+              ? `${usedTokensLabel} used`
+              : 'Not reported'}
         </Txt>
       </View>
-      <UsageBar percent={pct} height={8} />
+      {context || !usedTokensLabel ? (
+        <UsageBar percent={pct} height={8} />
+      ) : (
+        <Txt variant="caption" tone="muted">
+          The session did not state its window size, so no percentage is shown.
+        </Txt>
+      )}
       {limits?.length ? (
         <View style={{ gap: space.sm, paddingTop: space.sm }}>
           {planType ? (

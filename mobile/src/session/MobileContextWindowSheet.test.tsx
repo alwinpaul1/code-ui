@@ -246,3 +246,37 @@ describe.each([
     expect(texts(renderer!.root)).toEqual(['Context window', '26%'])
   })
 })
+
+// The header shows the tokens alone when the session stated no window (parity gap G9), and its
+// sheet must say the same: the tokens, no bar, no percentage, and that the window is unknown.
+describe.each([
+  ['light', lightColors],
+  ['dark', darkColors]
+] as ['light' | 'dark', ThemeColors][])('the context sheet with tokens and no window, %s', (scheme, palette) => {
+  const tokensOnly = () => (
+    <ThemeProvider initialPreference={scheme}>
+      <MobileContextWindowSheet visible context={null} usedTokensLabel="493k" onClose={() => {}} />
+    </ThemeProvider>
+  )
+  const bars = (root: ReactTestInstance) =>
+    root.findAll((node) => String(node.type) === 'View' && flat(node.props.style).backgroundColor === palette.bgSunken)
+
+  it('shows the tokens used and no bar or percentage', () => {
+    act(() => {
+      renderer = create(tokensOnly())
+    })
+    const all = texts(renderer!.root)
+    expect(all).toContain('493k used')
+    expect(all.some((text) => text.includes('%'))).toBe(false)
+    expect(bars(renderer!.root)).toHaveLength(0)
+    expect(all.some((text) => /did not state its window size/.test(text))).toBe(true)
+  })
+
+  it('still says "Not reported" with a bar track when nothing is known', () => {
+    act(() => {
+      renderer = create(sheet(scheme, true, null))
+    })
+    expect(texts(renderer!.root)).toContain('Not reported')
+    expect(bars(renderer!.root)).toHaveLength(1)
+  })
+})
