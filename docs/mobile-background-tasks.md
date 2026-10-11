@@ -839,6 +839,36 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
   request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
   conversation) is a different surface and is unchanged.
 
+## Show output (2026-10-12, parity gap G27)
+
+The Claude app's finished shell row is tappable ("Show output", a chevron at
+its right) and asks Claude Code for the task's output (`get_task_output`).
+Code UI's finished shell card now opens a sheet too
+(`MobileBackgroundShellOutputSheet.tsx`), and the launching Bash call's own
+detail sheet gains a "Shell output" section with the same content. No other
+row is tappable: agents keep no card tap and no "View transcript" (above).
+
+**The output file is out of reach.** Claude Code writes it to
+`<session tmp>/tasks/<id>.output`. Orca's `files.read` is jailed to the
+worktree, and a read grant outside it is minted only for a path the terminal
+printed (`hasRecentTerminalOutputPath`) or one an assistant text block names
+(`nativeChatTranscriptIncludesPath`, Orca
+`src/main/native-chat/native-chat-file-provenance.ts`). The path is named only
+in the launch's tool result and the `<task-notification>`, a user row, and the
+TUI does not print it, so neither grant applies.
+
+**What the sheet shows** is the agent's own last read of that file
+(`mobile-background-shell-output.ts`): a TaskOutput result's `<output>` block
+(real record, Claude Code 2.1.275), a Read of exactly that file (2.1.283), or a
+Bash command that is nothing but `cat` of it (whole) or `tail`/`head` of it (a
+part). A command that also runs anything else is not read, because its result
+holds the other commands' output too; every read of the 7h gate in session
+0954729d was such a command, so that shell says "No output captured". A read
+is trusted only when it was the one read in flight (transcript results pair
+first in, first out). "Output truncated" marks a part, a ranged Read, or
+Orca's 4000-character wire cut; "Read while the shell was still running" marks
+a read with no end trailer.
+
 ## Stop all (2026-10-10, removed 2026-10-11)
 
 Removed at the user's request on 2026-10-11 ("stop all and view transcript remove those", beside

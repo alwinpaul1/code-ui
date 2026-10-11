@@ -1,5 +1,5 @@
-import { View } from 'react-native'
-import { Activity, Diamond, ListTree, SquareCode } from 'lucide-react-native'
+import { Pressable, View } from 'react-native'
+import { Activity, ChevronRight, Diamond, ListTree, SquareCode } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
@@ -17,17 +17,21 @@ import {
  * kind's glyph, a 14/19 semibold title (two lines at most), then the kind in the title's ink and its
  * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. No card carries a
  * Stop: the user asked for the round one at the right gone (2026-10-11, no-stop.test.tsx), though
- * the Claude app does draw one (docs/mobile-background-tasks.md, "No Stop on any row"). The card itself opens nothing: the fork's "View transcript" link is gone
- * (2026-10-10, not in Orca).
+ * the Claude app does draw one (docs/mobile-background-tasks.md, "No Stop on any row"). The fork's
+ * "View transcript" link is gone (2026-10-10, not in Orca). A finished shell given `onShowOutput`
+ * is tappable, with a chevron at its right, as the Claude app's "Show output" row is (parity G27).
  */
 export function MobileBackgroundTaskCard({
   task,
-  statusUnknown = false
+  statusUnknown = false,
+  onShowOutput
 }: {
   task: BackgroundTask
   /** No connection to the host: a running row cannot say it runs, so its time reads "Status
    *  unknown". */
   statusUnknown?: boolean
+  /** Opens a finished shell's output; ignored on any other row. */
+  onShowOutput?: (task: BackgroundTask) => void
 }) {
   const { colors, radius, space } = useTheme()
   if (task.workflow) {
@@ -35,7 +39,8 @@ export function MobileBackgroundTaskCard({
   }
   const elapsed = formatBackgroundTaskElapsed(task.elapsedMs)
   const running = task.status === 'running'
-  return (
+  const showOutput = onShowOutput && task.kind === 'shell' && !running ? () => onShowOutput(task) : null
+  const card = (
     <View
       testID="background-task-card"
       style={{
@@ -85,7 +90,24 @@ export function MobileBackgroundTaskCard({
           ) : null}
         </View>
       </View>
+      {showOutput ? (
+        <View style={{ height: TITLE_LINE, justifyContent: 'center' }}>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </View>
+      ) : null}
     </View>
+  )
+  return showOutput ? (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${task.title}, Show output`}
+      onPress={showOutput}
+      style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
+    >
+      {card}
+    </Pressable>
+  ) : (
+    card
   )
 }
 

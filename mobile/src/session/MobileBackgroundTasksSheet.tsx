@@ -7,7 +7,7 @@ import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import type { BackgroundTaskHostStatus } from './mobile-background-tasks'
+import type { BackgroundTask, BackgroundTaskHostStatus } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
@@ -37,6 +37,8 @@ export function MobileBackgroundTasksSheet({
   hostBackgroundTasks,
   connection,
   subagentSource = null,
+  onShowOutput,
+  onAfterClose,
   onClose
 }: {
   visible: boolean
@@ -48,6 +50,10 @@ export function MobileBackgroundTasksSheet({
   /** Where the running agents' own transcripts are (a Claude tab): read only
    *  while the sheet is open, for the shells and agents each agent launched. */
   subagentSource?: SubagentActivitySource | null
+  /** A finished shell's row was tapped: the caller closes this sheet and opens its output. */
+  onShowOutput?: (task: BackgroundTask) => void
+  /** Fires once the sheet has left the screen. */
+  onAfterClose?: () => void
   onClose: () => void
 }) {
   return (
@@ -57,6 +63,7 @@ export function MobileBackgroundTasksSheet({
     <BottomDrawer
       visible={visible}
       onClose={onClose}
+      onAfterClose={onAfterClose}
       dragContentToDismiss
       dismissKeyboardOnOpen
       expandable
@@ -69,6 +76,7 @@ export function MobileBackgroundTasksSheet({
         hostBackgroundTasks={hostBackgroundTasks}
         connection={connection}
         subagentSource={visible ? subagentSource : null}
+        onShowOutput={onShowOutput}
       />
     </BottomDrawer>
   )
@@ -93,7 +101,8 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport,
   hostBackgroundTasks,
   connection,
-  subagentSource = null
+  subagentSource = null,
+  onShowOutput
 }: {
   messages: readonly NativeChatMessage[]
   agentStatus?: BackgroundTaskHostStatus | null
@@ -104,6 +113,8 @@ export function MobileBackgroundTasksSheetBody({
   /** Read the running agents' transcripts while this is set (the sheet passes
    *  it only while open). Null reads nothing. */
   subagentSource?: SubagentActivitySource | null
+  /** Makes each finished shell's row open its output. */
+  onShowOutput?: (task: BackgroundTask) => void
 }) {
   const { space } = useTheme()
   const [now, setNow] = useState(() => Date.now())
@@ -190,7 +201,7 @@ export function MobileBackgroundTasksSheetBody({
           onToggle={() => setFinishedOpen((open) => !open)}
         >
           {finished.slice(0, finishedShown).map((task) => (
-            <BackgroundTaskCard key={task.id} task={task} />
+            <BackgroundTaskCard key={task.id} task={task} onShowOutput={onShowOutput} />
           ))}
           {finished.length > finishedShown ? (
             <LoadMoreFinished onPress={() => setFinishedShown((shown) => shown + FINISHED_PAGE)} />

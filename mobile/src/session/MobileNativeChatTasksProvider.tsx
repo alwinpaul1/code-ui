@@ -14,6 +14,9 @@ import { MobileNativeChatToolDetailSheet } from './MobileNativeChatToolDetailShe
 import { confirmedAgentDescriptions } from './mobile-background-task-agent-titles'
 import { subagentTranscriptTarget } from './mobile-subagent-transcript'
 import { MobileBackgroundTasksSheet, type BackgroundTasksConnection } from './MobileBackgroundTasksSheet'
+import { MobileBackgroundShellOutputSheet } from './MobileBackgroundShellOutputSheet'
+import type { BackgroundTask } from './mobile-background-tasks'
+import { NativeChatTranscriptProvider } from './native-chat-transcript-context'
 import {
   NativeChatAgentRunsContext,
   NativeChatRunSheetContext,
@@ -55,6 +58,10 @@ export function MobileNativeChatTasksProvider({
   children: ReactNode
 }) {
   const [sheetOpen, setSheetOpen] = useState(false)
+  // A finished shell's output (parity G27): chosen on the tasks sheet, opened
+  // once that sheet has left, so the two never overlap.
+  const [outputTask, setOutputTask] = useState<BackgroundTask | null>(null)
+  const chosenOutputTask = useRef<BackgroundTask | null>(null)
   // The run whose sheet is up, kept while the sheet leaves so its rows do not
   // blank mid-animation; cleared once it has gone (`finishRunSheet`).
   const [runSheet, setRunSheet] = useState<{ blocks: readonly NativeChatBlock[]; visible: boolean; owner: object } | null>(null)
@@ -113,6 +120,16 @@ export function MobileNativeChatTasksProvider({
     []
   )
   const openSheet = useCallback(() => setSheetOpen(true), [])
+  const showShellOutput = useCallback((task: BackgroundTask) => {
+    chosenOutputTask.current = task
+    setSheetOpen(false)
+  }, [])
+  const finishTasksSheet = useCallback(() => {
+    if (chosenOutputTask.current) {
+      setOutputTask(chosenOutputTask.current)
+      chosenOutputTask.current = null
+    }
+  }, [])
   // Re-read while open, so a row that finishes while its sheet is up says so.
   const openRun = openRunBlocks ? agentRunState(openRunBlocks, agentRuns) : null
   const rows = useMemo(
@@ -144,6 +161,7 @@ export function MobileNativeChatTasksProvider({
   // The header menu's Background tasks entry opens this same sheet (parity gap G35).
   useBridgeBackgroundTasksToHeader(running.length, openSheet)
   return (
+    <NativeChatTranscriptProvider messages={messages}>
     <NativeChatTasksContext.Provider value={tasks}>
       <NativeChatAgentRunsContext.Provider value={agentRuns}>
         <NativeChatRunSheetContext.Provider value={runSheetControl}>
@@ -167,10 +185,14 @@ export function MobileNativeChatTasksProvider({
           hostBackgroundTasks={hostBackgroundTasks}
           connection={hostConnection}
           subagentSource={subagentSource}
+          onShowOutput={showShellOutput}
+          onAfterClose={finishTasksSheet}
           onClose={() => setSheetOpen(false)}
         />
+        <MobileBackgroundShellOutputSheet task={outputTask} messages={messages} onClose={() => setOutputTask(null)} />
         </NativeChatRunSheetContext.Provider>
       </NativeChatAgentRunsContext.Provider>
     </NativeChatTasksContext.Provider>
+    </NativeChatTranscriptProvider>
   )
 }

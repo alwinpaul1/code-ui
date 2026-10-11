@@ -25,6 +25,10 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 import { readViewOf } from './mobile-native-chat-read-view'
 import { MobileNativeChatReadViewer } from './MobileNativeChatReadViewer'
 import { SelectableSheetText } from './SelectableSheetText'
+import { readLaunch } from './mobile-background-task-transcript'
+import { capturedShellOutput } from './mobile-background-shell-output'
+import { BackgroundShellOutputBody } from './MobileBackgroundShellOutputSheet'
+import { useNativeChatTranscript } from './native-chat-transcript-context'
 
 const STATUS_TONE: Record<ToolDetailStatus, 'secondary' | 'danger' | 'muted'> = {
   Completed: 'secondary',
@@ -121,6 +125,13 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
     () => (pair.call ? readViewOf(pair.call, output, pair.result?.isError === true) : null),
     [pair.call, output, pair.result?.isError]
   )
+  // A Bash call that left a shell running: the agent's later reads of that
+  // shell's output, as the Claude app's "Show output" (parity G27).
+  const transcript = useNativeChatTranscript()
+  const shellOutput = useMemo(() => {
+    const shell = pair.call && pair.result ? readLaunch({ name: pair.call.name, input: pair.call.input, startedAt: null }, pair.result.output) : null
+    return transcript && shell?.kind === 'shell' ? capturedShellOutput(transcript, shell.id) : null
+  }, [pair, transcript])
   return (
     <View style={{ gap: 20 }}>
       {sections.map((section, index) => (
@@ -148,6 +159,11 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
         />
       ) : output.trim().length > 0 ? (
         <OutputSection output={output} isError={pair.result?.isError === true} />
+      ) : null}
+      {shellOutput ? (
+        <Section label="Shell output">
+          <BackgroundShellOutputBody capture={shellOutput} />
+        </Section>
       ) : null}
     </View>
   )
