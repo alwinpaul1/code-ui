@@ -210,11 +210,12 @@ export function useDesktopPromptEchoes(
     ) {
       continue
     }
-    // Where it was SENT, never where the agent took it: the Claude app draws a
-    // mid-turn message at its send, with the calls that ran while it waited
-    // below it, and the user chose that order (2026-09-23). Between 2026-09-20
-    // and then the queue box's release moved it to the take, as the desk's
-    // terminal draws it.
+    // Placed where it was SENT, never where the agent took it: the send is
+    // what the chat can time, and the witness memory keeps it. It is DRAWN
+    // where the agent took it, after the results of the calls that ran while
+    // it waited (mid-turn-take-point.ts): the Claude app draws a message sent
+    // elsewhere there (2026-10-11). From 2026-09-23 to then it was drawn at
+    // the send, from a screenshot of a message the Claude app had sent itself.
     if (timedByNonce.has(prompt.nonce)) {
       const at = timedByNonce.get(prompt.nonce)!
       const current = rememberedAnchor(prompt.nonce) ?? null

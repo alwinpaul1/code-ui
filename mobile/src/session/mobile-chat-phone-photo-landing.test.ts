@@ -469,7 +469,10 @@ describe('a message the phone sent with photos, as its row lands', () => {
 
     // The companion is the last row for the seconds before the agent writes
     // anything (23624 at 07:00:19.716, the first reply row at 07:00:37.425).
-    it('draws a message sent just after a photo message under it, where it was sent', async () => {
+    // Placed after it, the message is drawn at the live end, under the agent's
+    // first words, until a tool result says Claude took it
+    // (mid-turn-take-point.ts, 2026-10-11).
+    it('draws a message sent just after a photo message under it, at the live end until Claude takes it', async () => {
       const TEXT5 = 'and check the queue box too'
       await show('07:00:00.000', { messages: before })
       await send('07:00:18.000', TEXT1, PHOTOS1)
@@ -490,8 +493,8 @@ describe('a message the phone sent with photos, as its row lands', () => {
       expect(data.map((message) => (message.id.startsWith('pending-') ? 'phone' : message.id))).toEqual([
         '94b09904',
         '40b55aba',
-        'phone',
-        '2af316a2'
+        '2af316a2',
+        'phone'
       ])
     })
 

@@ -624,6 +624,10 @@ describe('a message the phone sent mid-turn', () => {
 // enqueue has no `content` and its photos are in the Remote Control upload
 // folder); these cases put a PHONE send in the same place. Orca's hook reports
 // every prompt, the phone's too, as a timed `agentStatus.prompt`.
+// The send is drawn where Claude took it, after the result 8617 its
+// `queued_command` follows and above the next reply 8637, the transcript's
+// order (mid-turn-take-point.ts, 2026-10-11). Until then these cases drew it
+// at its send, above 8614, as the Claude app draws a message it sent itself.
 describe('a message the phone sent mid-turn, beside the hook and queue copies of it', () => {
   let renderer: ReactTestRenderer | null = null
   afterEach(() => {
@@ -711,7 +715,7 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
   it.each([
     ['the hook timed at the submit', '23:19:27.700'],
     ['the hook timed at the take', '23:19:28.688']
-  ])('draws a text send once, as the phone sent it, above the rows written after it, with %s', async (_label, clock) => {
+  ])('draws a text send once, as the phone sent it, where Claude took it, with %s', async (_label, clock) => {
     const pending = [send]
     await play([
       { messages: held, pending },
@@ -720,11 +724,11 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
       { messages: [...held, ...afterSend, next], pending, desktopPrompts: [hook(clock)] }
     ])
     expect(bubbles()).toEqual(['bubble:phone-send'])
-    expect(before('8608', 'bubble:phone-send')).toBe(true)
-    expect(before('bubble:phone-send', '8614')).toBe(true)
+    expect(before('8614', 'bubble:phone-send')).toBe(true)
+    expect(before('bubble:phone-send', '8637')).toBe(true)
   })
 
-  it('draws a photo send once, with its photos, above the rows written after it', async () => {
+  it('draws a photo send once, with its photos, where Claude took it', async () => {
     const pending = [{ ...send, images: photos }]
     const prompts = [hook('23:19:27.700', `[Image #20] [Image #21] [Image #22] ${text}`)]
     await play([
@@ -733,10 +737,11 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
       { messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts }
     ])
     expect(bubbles()).toEqual(['bubble:phone-send+3'])
-    expect(before('bubble:phone-send+3', '8614')).toBe(true)
+    expect(before('8614', 'bubble:phone-send+3')).toBe(true)
+    expect(before('bubble:phone-send+3', '8637')).toBe(true)
   })
 
-  it('shows a send in the queue box alone while it waits, then as the phone sent it once the agent takes it', async () => {
+  it('shows a send in the queue box alone while it waits, then as the phone sent it, where the agent took it', async () => {
     const pending = [send]
     const prompts = [hook('23:19:27.700')]
     await play([
@@ -747,7 +752,8 @@ describe('a message the phone sent mid-turn, beside the hook and queue copies of
     expect(bubbles()).toEqual([])
     await play([{ messages: [...held, ...afterSend, next], pending, desktopPrompts: prompts, queued: [] }])
     expect(bubbles()).toEqual(['bubble:phone-send'])
-    expect(before('bubble:phone-send', '8614')).toBe(true)
+    expect(before('8614', 'bubble:phone-send')).toBe(true)
+    expect(before('bubble:phone-send', '8637')).toBe(true)
   })
 
   it('still draws a message typed elsewhere, which has no phone copy, from the hook alone', async () => {

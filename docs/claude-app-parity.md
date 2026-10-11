@@ -304,7 +304,8 @@ Nothing here is built.
   (63b835a8) holds 190 attachments beside its 20 queued rows, so that was
   never the whole record. The report of 2026-09-25 (session da53d612, 2.1.282,
   lines 3321-3326) was the first shape: a phone send taken 31 s after it was
-  queued. The phone now keeps such a send where it was sent and stops waiting
+  queued. The phone now keeps such a send (drawn where Claude took it since
+  2026-10-11, item 14) and stops waiting
   for a row for it once the queue box lets it go (`isTakenSend`), still
   retiring it if a queued row does land. Codex writes every input as a row: a
   follow-up when it submits it at the end of the turn, a steer when it is
@@ -397,4 +398,19 @@ Nothing here is built.
   message (line 8371, a video and a photo) was a Claude app send too, and it
   landed as a user row, so what its bubble lacks comes from how a landed row
   draws, not from the phone's echo.
+  The second half of that rule was not what the phone drew until 2026-10-11:
+  every desk copy (the hook's or the tab status's) was drawn at its send. The
+  report that day (session 0954729d, Claude Code 2.1.296): "3. Move Stop…",
+  typed at the desk at 18:31:32 while the agent was still thinking about the
+  previous prompt, drew right under that prompt, above "Ran Pull the phone's
+  log lines…", a call stamped 18:31:42; the Claude app drew it after that
+  call, where its `queued_command` was written (after the result,
+  18:31:49). Asked for the transcript's order, the phone now draws every
+  mid-turn message after the results of the calls that ran while it waited,
+  and at the live end while the agent works and none has come
+  (`mid-turn-take-point.ts`): a desk copy, a queue-box reading, and its own
+  sends, which "where I sent it" kept at their send until then. Kept for its
+  own sends alone, a desk message typed before a phone send drew below it.
+  Of 669 human `queued_command` records in the 40 largest transcripts on the
+  desk, 661 follow a `tool_result` and 8 an `isMeta` row written with one.
 

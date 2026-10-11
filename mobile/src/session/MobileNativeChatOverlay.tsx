@@ -5,6 +5,7 @@ import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
 import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
+import { placeWhereTaken } from './mid-turn-take-point'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
 import { cloneElement, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
@@ -172,6 +173,7 @@ export function MobileNativeChatOverlay({
     }
   }, [])
 
+  const agentWorking = controller.nativeChatAgentWorking === true
   // A send made mid-turn is queued from the moment it exists, not from the
   // first screen read that finds it in the agent's box (2026-09-25).
   const projectedQueue = useQueuedOwnSends(
@@ -195,9 +197,10 @@ export function MobileNativeChatOverlay({
   // of stacking bare (2026-09-13, the Claude app's "Ran 2 commands").
   // Each of the phone's sends drawn after any row written before it, even one
   // that loaded after the send did (mid-turn-written-before.ts).
+  // …and, sent mid-turn, drawn where Claude took it (mid-turn-take-point.ts).
   const placedOwn = useMemo(
-    () => placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages),
-    [projectedQueue.pending, session.messages]
+    () => placeWhereTaken(placeOwnSendsAfterRowsWrittenBefore(projectedQueue.pending, session.messages), session.messages, agentWorking),
+    [agentWorking, projectedQueue.pending, session.messages]
   )
   const baseFolded = useMemo(
     () => foldMobileNativeChatMessages(session.messages, pendingFoldBoundaries(placedOwn)),
@@ -265,8 +268,8 @@ export function MobileNativeChatOverlay({
     ],
     [desktopPrompts, projectedQueue.pending, projectedQueue.unlisted]
   )
-  // Every mid-turn message is drawn where it was SENT, as the Claude app draws
-  // it, with the calls that ran while it waited below it (2026-09-23).
+  // Each desk copy is placed by its send here, and remembered there; it is
+  // drawn where Claude took it (takenDesktopEchoes below).
   const desktopEchoes = useDesktopPromptEchoes(
     unlandedPrompts,
     baseFolded,
@@ -288,6 +291,10 @@ export function MobileNativeChatOverlay({
     // A read that could not see the box is unknown, not an empty box.
     controller.nativeChatQueueReadable !== false
   )
+  // Drawn where Claude took it, at the live end until then (mid-turn-take-point.ts);
+  // the witness memory keeps the send's place, and drawing starts from there.
+  const takenDesktopEchoes = useMemo(() => placeWhereTaken(desktopEchoes, session.messages, agentWorking), [agentWorking, desktopEchoes, session.messages])
+  const takenAbsorbedEchoes = useMemo(() => placeWhereTaken(absorbedEchoes, session.messages, agentWorking), [absorbedEchoes, agentWorking, session.messages])
   // The pending copies drawn: a witness that gave way to a copy placed by the
   // desk's clock is not, and its old place must not break the tool fold
   // either, or the call written between that place and the message drew as a
@@ -298,13 +305,13 @@ export function MobileNativeChatOverlay({
   )
   const foldedWithoutPeers = useMemo(
     () =>
-      desktopEchoes.length > 0 || absorbedEchoes.length > 0
+      takenDesktopEchoes.length > 0 || takenAbsorbedEchoes.length > 0
         ? foldMobileNativeChatMessages(
             session.messages,
-            pendingFoldBoundaries([...drawnOwn, ...absorbedEchoes, ...desktopEchoes])
+            pendingFoldBoundaries([...drawnOwn, ...takenAbsorbedEchoes, ...takenDesktopEchoes])
           )
         : baseFolded,
-    [absorbedEchoes, baseFolded, desktopEchoes, drawnOwn, session.messages]
+    [takenAbsorbedEchoes, baseFolded, takenDesktopEchoes, drawnOwn, session.messages]
   )
   // A subagent's message never reaches the transcript the phone reads; the
   // prompt hook carries it, drawn as the TUI's folded row (2026-09-26). A
@@ -346,13 +353,13 @@ export function MobileNativeChatOverlay({
   )
   const pendingWithDesktopPrompts = useMemo(() => {
     const own = drawnOwn
-    if (desktopEchoes.length === 0 && absorbedEchoes.length === 0) {
+    if (takenDesktopEchoes.length === 0 && takenAbsorbedEchoes.length === 0) {
       return own
     }
     // Two bubbles after one row draw in list order, so in the order they were sent.
     const sentAt = new Map(desktopPrompts.map((prompt) => [deskEchoId(prompt.nonce), prompt.at]))
-    return inSendOrder([...own, ...absorbedEchoes], desktopEchoes, (echo) => sentAt.get(echo.id))
-  }, [absorbedEchoes, desktopEchoes, desktopPrompts, drawnOwn])
+    return inSendOrder([...own, ...takenAbsorbedEchoes], takenDesktopEchoes, (echo) => sentAt.get(echo.id))
+  }, [takenAbsorbedEchoes, takenDesktopEchoes, desktopPrompts, drawnOwn])
   // …and one the hook took after a subagent message at the same row is drawn
   // below that message's row, as it came (2026-09-26).
   const pendingInArrivalOrder = useMemo(
