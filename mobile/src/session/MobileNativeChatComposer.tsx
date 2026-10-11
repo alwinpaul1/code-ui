@@ -240,11 +240,16 @@ export function MobileNativeChatComposer({
   // markup's re-upload never marked its chip, and a send tapped just after
   // Done pasted the photo without its marks.
   const hasContent = trimmed.length > 0 || attachments.length > 0
+  // A chip whose upload failed turns Send off until it is retried or removed,
+  // as the Claude app's button goes Idle (yv8.i over j29.e, 1.261009.20): a
+  // tap could only refuse, and sending without it would drop the photo.
+  const hasFailedChip = attachments.some((attachment) => attachment.failed === true)
   // Send or Stop, never both; typed text brings Send back (MobileNativeChatSendSlot.tsx).
   // Not while dictating: the mic's own Stop dictation square sits beside the slot.
   const showStop = canStop && onStop !== undefined && !hasContent && !micActive
   const canSend =
     hasContent &&
+    !hasFailedChip &&
     !disabled &&
     !sending &&
     !sessionOptionDispatching
