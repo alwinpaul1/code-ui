@@ -3,9 +3,10 @@ import type { DictationPaint } from '../hooks/mobile-live-transcript'
 import { AppState } from 'react-native'
 import { clipboardHasImage } from './mobile-clipboard-image-reader'
 import { useNativeChatFrame } from './use-native-chat-frame'
+import { withLiveComposerInput, type HeldNativeChat } from './native-chat-held-frame'
 import { placeOwnSendsAfterRowsWrittenBefore } from './mid-turn-written-before'
 import { agentHasQueueReader, useQueuedOwnSends } from './use-queued-own-sends'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { cloneElement, useCallback, useEffect, useMemo, useState, type ComponentProps, type ReactElement } from 'react'
 import { usePendingImageHistory } from './use-pending-image-history'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatShellConfirmView, type MobileNativeChatInputLockReason } from './MobileNativeChatShellConfirmView'
@@ -383,21 +384,17 @@ export function MobileNativeChatOverlay({
     ? emptyReload
     : !controller.viewResolved ||
       (!controller.activeChatEligible && !controller.terminalPeekActive)
-  const { frame, held, remember } = useNativeChatFrame({
+  const { frame, held, remember } = useNativeChatFrame<HeldNativeChat>({
     blank,
     blink,
     showNativeChat: chatOn,
     hasTerminalUnderneath,
     surfaceId: sendSurfaceId
   })
-  if (frame === 'hold') {
-    return held
-  }
   if (frame === 'terminal') {
     return null
   }
-  const chat = (
-    <View style={styles.overlay}>
+  const chat: ReactElement<ComponentProps<typeof MobileNativeChatShellConfirmView>> = (
       <MobileNativeChatShellConfirmView
         messages={session.messages}
         folded={folded}
@@ -508,7 +505,6 @@ export function MobileNativeChatOverlay({
         keyboardInset={keyboardInset}
         keyStrip={keyStrip}
       />
-    </View>
   )
   // The loaded transcript says whether a later call touched a created file,
   // but only a settled read of the whole session can (holdsWholeSession): a
@@ -516,17 +512,19 @@ export function MobileNativeChatOverlay({
   // that starts after the first row can hide a background agent launched
   // before it that is still writing the file (review of 8b2ef369: +125 on a
   // 93-line create).
-  const drawn = (
-    <CreatedFileCountProvider
-      store={createdFileCounts}
-      messages={session.messages}
-      live={holdsWholeSession(session)}
-    >
-      {chat}
+  const live: HeldNativeChat = { chat: chat.props, messages: session.messages, wholeSession: holdsWholeSession(session) }
+  // A hold replays what the chat showed, with this render's composer input.
+  const shown = frame === 'hold' && held ? withLiveComposerInput(held, live) : live
+  if (frame === 'draw') {
+    remember(live)
+  }
+  return (
+    <CreatedFileCountProvider store={createdFileCounts} messages={shown.messages} live={shown.wholeSession}>
+      <View style={styles.overlay}>
+        {shown === live ? chat : cloneElement(chat, shown.chat)}
+      </View>
     </CreatedFileCountProvider>
   )
-  remember(drawn)
-  return drawn
 }
 
 const styles = StyleSheet.create({
