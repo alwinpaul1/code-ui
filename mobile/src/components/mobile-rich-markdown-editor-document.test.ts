@@ -31,7 +31,8 @@ const DARK = { colors: darkColors, scheme: 'dark' as const }
 // (upstream's shell is 5054e1d5…, also 5,621 bytes). Read the same two ways upstream read its
 // own: on this fork's document before #21969 (1150a4e0's string modules, script region emptied)
 // and on this one, and the two agreed.
-const DOCUMENT_SHELL_SHA256 = '1013420cca2711512e72aae504842c476234efa3269ca49ce6f5ddc3dc1da768'
+// Re-pinned 2026-10-11: dark `text` went #ECE9E2 -> #F8F8F6 (same length, colour only).
+const DOCUMENT_SHELL_SHA256 = '4c177f2c87890fbd26800ed7b65d2eae153da10e2ec259b282247d318b36d660'
 const DOCUMENT_SHELL_BYTES = 5621
 
 const SCRIPT_OPEN = '  <script>\n'

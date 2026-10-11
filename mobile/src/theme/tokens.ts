@@ -129,7 +129,9 @@ export const darkColors: ThemeColors = {
   bgPanelGlass: 'rgba(33, 31, 28, 1)',
   border: '#332F2A',
   borderStrong: '#45403A',
-  text: '#ECE9E2',
+  // Near-white as the Claude app draws it, sampled (248, 248, 246) from its
+  // dark chat (2026-10-11); it was the warmer #ECE9E2 before.
+  text: '#F8F8F6',
   textSecondary: '#B8B4AB',
   textMuted: '#9A968D',
   textInverse: '#1A1917',
@@ -149,7 +151,7 @@ export const darkColors: ThemeColors = {
   // it in dark (pinned by pr-sidebar-status-color.test.ts).
   mergedPurple: '#a78bfa',
   userBubble: '#100F0D',
-  userBubbleText: '#ECE9E2',
+  userBubbleText: '#F8F8F6',
   codeBg: '#26231F',
   codeSpanBg: 'rgba(138, 180, 248, 0.10)',
   codeSpanText: '#8AB4F8',

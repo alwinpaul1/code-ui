@@ -72,11 +72,11 @@ describe('onboarding stays readable in the theme the user chose', () => {
   })
 
   /** The measurement that made this a bug rather than a worry: the legacy
-   *  palette's text (#ECE9E2, the dark scheme's `text`) is fine on its own
+   *  palette's text (#ECE9E2 then; the dark scheme's `text` is #F8F8F6 now) is fine on its own
    *  surface and unusable on the light one, so any screen mixing a dark-only
    *  colour with the themed shell is broken in light mode. */
   it('records why a dark-only colour cannot be mixed with the themed shell', () => {
-    expect(darkColors.text).toBe('#ECE9E2')
+    expect(darkColors.text).toBe('#F8F8F6')
     expect(contrastRatio(darkColors.text, darkColors.bg)).toBeGreaterThan(WCAG_AA_BODY)
     expect(contrastRatio(darkColors.text, lightColors.bg)).toBeLessThan(2)
   })

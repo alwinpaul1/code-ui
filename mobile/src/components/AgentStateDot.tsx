@@ -27,7 +27,7 @@ const DONE_COLOR = '#10b981'
 const QUESTION_COLOR = '#f97316'
 // On a light surface the desktop's working, done and question tones fall to
 // 1.55–2.7:1. The tab pill has three: selected in dark mode (the theme's text
-// colour, #ECE9E2) and unselected in light mode (bgPanel #FBFAF6, bgRaised
+// colour, #F8F8F6) and unselected in light mode (bgPanel #FBFAF6, bgRaised
 // #EAE7DE while pressed). These are the same hues two Tailwind steps darker,
 // red one step (red-600), and they read 3.9:1 or better on all three
 // (tab-pill-surface.ts says which pill takes them;
