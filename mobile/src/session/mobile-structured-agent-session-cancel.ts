@@ -107,8 +107,9 @@ async function sendStop(input: {
   return false
 }
 
-/** Stops one background task, resolving true only on the host's `cancelled: true`: the
- *  tasks sheet holds that row's Stop until the row leaves (Orca #26780). An unknown
+/** Stops one background task, resolving true only on the host's `cancelled: true` (Orca #26780;
+ *  the tasks sheet that held its row's Stop on it draws no Stop since 2026-10-11, so nothing on
+ *  screen calls this today). An unknown
  *  outcome is said here or nowhere (2026-09-25). A host refusal is said by the shared mutation,
  *  through the same `onSendError`: the sheet's own reporter when it brought one,
  *  because the chat's banner draws under the sheet. The mutation's not-ready
@@ -131,6 +132,6 @@ export async function requestMobileStructuredBackgroundTaskStop(args: {
     args.onSendError('Stop unconfirmed — check chat before retrying')
   }
   // Confirmed only when the host says it stopped the task: an accepted answer with nothing
-  // stopped leaves the row's Stop pressable again (Orca #26780's hold).
+  // stopped is not a stop (Orca #26780).
   return result.status === 'accepted' && result.value.cancelled === true
 }

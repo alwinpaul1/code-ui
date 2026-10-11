@@ -14,6 +14,7 @@ import type {
 import { MobileNativeChatAttachmentChips } from './MobileNativeChatAttachmentChips'
 import type { NativeChatVideoFrameExtractionState } from './mobile-native-chat-image-attachments-store'
 import { useRichPasteInput } from './use-rich-paste-input'
+import { useDictationCaret } from './composer-input-box'
 import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
 import type { DiscoveredSkill } from '../../../src/shared/skills'
@@ -83,7 +84,8 @@ type Props = {
   micActive?: boolean
   /** Microphone level 0..1 while `micActive`; shows the voice bars. */
   micLevel?: number
-  /** What the app's own dictation last wrote; while `micActive` the caret follows its `caret`. */
+  /** What the app's own dictation last wrote. In the render that brings a new one, if `value` is
+   *  its text, the caret goes to its `caret`. */
   dictationPaint?: DictationPaint | null
   onComposerCursor?: (cursor: number) => void
   /** Context window figure from the desktop status line; shows the ring. */
@@ -317,12 +319,8 @@ export function MobileNativeChatComposer({
   const inputPads = COMPOSER_INPUT_PAD_TOP + COMPOSER_INPUT_PAD_BOTTOM
   const inputMaxHeight = inputPads + COMPOSER_INPUT_MAX_LINES * composerType.lineHeight
   const inputMaxHeightWithMenu = inputPads + COMPOSER_INPUT_LINES_WITH_MENU * composerType.lineHeight
-  // While the app dictates it writes `value` from JS on every partial result, and Android keeps
-  // the old selection across that write: the caret stayed where dictation began. So the caret is
-  // driven to the end of the spoken words then, and left alone otherwise: typing, and a keyboard's
-  // own dictation or suggestions composing in the field, keep the IME in charge of it.
-  const dictationSelection =
-    micActive && dictationPaint ? { start: dictationPaint.caret, end: dictationPaint.caret } : null
+  // Placed once per dictation result (composer-input-box.ts).
+  const dictationSelection = useDictationCaret(dictationPaint, value)
 
   return (
     <View>

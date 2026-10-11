@@ -46,7 +46,7 @@ export function MobileBackgroundTasksSheet({
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   connection?: BackgroundTasksConnection
   /** Where the running agents' own transcripts are (a Claude tab): read only
-   *  while the sheet is open, for each agent's latest step and its shells. */
+   *  while the sheet is open, for the shells and agents each agent launched. */
   subagentSource?: SubagentActivitySource | null
   onClose: () => void
 }) {

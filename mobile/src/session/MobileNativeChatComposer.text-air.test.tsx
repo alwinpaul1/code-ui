@@ -79,27 +79,38 @@ function flat(style: unknown): Record<string, unknown> {
 
 const num = (value: unknown): number => (typeof value === 'number' ? value : 0)
 
-async function render(
-  scheme: 'light' | 'dark',
-  value: string,
-  extra: { micActive?: boolean; dictationPaint?: DictationPaint | null } = {}
-): Promise<void> {
+type Extra = { micActive?: boolean; dictationPaint?: DictationPaint | null }
+
+function composer(scheme: 'light' | 'dark', value: string, extra: Extra) {
+  return (
+    <ThemeProvider initialPreference={scheme}>
+      <MobileNativeChatComposer
+        value={value}
+        onChangeText={vi.fn()}
+        onSend={vi.fn().mockResolvedValue(true)}
+        sendSurfaceId="tab-a"
+        getSendCompletionGeneration={() => 0}
+        getComposerEditGeneration={() => 0}
+        onAttachImage={vi.fn()}
+        onMicPress={vi.fn()}
+        {...extra}
+      />
+    </ThemeProvider>
+  )
+}
+
+/** A fresh composer. */
+async function render(scheme: 'light' | 'dark', value: string, extra: Extra = {}): Promise<void> {
+  act(() => renderer?.unmount())
   await act(async () => {
-    renderer = create(
-      <ThemeProvider initialPreference={scheme}>
-        <MobileNativeChatComposer
-          value={value}
-          onChangeText={vi.fn()}
-          onSend={vi.fn().mockResolvedValue(true)}
-          sendSurfaceId="tab-a"
-          getSendCompletionGeneration={() => 0}
-          getComposerEditGeneration={() => 0}
-          onAttachImage={vi.fn()}
-          onMicPress={vi.fn()}
-          {...extra}
-        />
-      </ThemeProvider>
-    )
+    renderer = create(composer(scheme, value, extra))
+  })
+}
+
+/** The same composer, re-rendered with new props, as the parent re-renders it. */
+async function rerender(scheme: 'light' | 'dark', value: string, extra: Extra = {}): Promise<void> {
+  await act(async () => {
+    renderer!.update(composer(scheme, value, extra))
   })
 }
 
@@ -169,23 +180,55 @@ for (const scheme of ['light', 'dark'] as const) {
       expect(absolute).toHaveLength(0)
     })
 
-    it('keeps the caret at the end of the dictated words, not where dictation began', async () => {
+    it('puts the caret at the end of the dictated words with each result, not where dictation began', async () => {
       await render(scheme, painted.text, { micActive: true, dictationPaint: painted })
       const caret = `${prefix} the video too`.length
       expect(painted.text.slice(0, caret)).toBe(`${prefix} the video too`)
       expect(input().props.selection).toEqual({ start: caret, end: caret })
       // The next partial result moves it on with the words.
       const next = paintSpokenAtCursor(prefix, suffix, 'the video too please', 'please')
-      await render(scheme, next.text, { micActive: true, dictationPaint: next })
+      await rerender(scheme, next.text, { micActive: true, dictationPaint: next })
       const nextCaret = `${prefix} the video too please`.length
       expect(input().props.selection).toEqual({ start: nextCaret, end: nextCaret })
     })
 
-    it('leaves the caret to the keyboard when the app is not dictating (typing, or the IME composing)', async () => {
-      await render(scheme, painted.text, { micActive: false, dictationPaint: painted })
+    it('places the final result too, which lands after the mic has stopped', async () => {
+      // Review, 2026-10-11: stop() sets 'processing' and the recogniser's last result and its
+      // 'end' transcript arrive after, with micActive false; a caret tied to micActive missed them.
+      const partial = paintSpokenAtCursor(prefix, suffix, 'the video too', 'the video too')
+      await render(scheme, partial.text, { micActive: true, dictationPaint: partial })
+      const final = paintSpokenAtCursor(prefix, suffix, 'the video too, please.', '')
+      await rerender(scheme, final.text, { micActive: false, dictationPaint: final })
+      const caret = `${prefix} the video too, please.`.length
+      expect(input().props.selection).toEqual({ start: caret, end: caret })
+    })
+
+    it('places the caret once per result, so a tap mid-dictation is not snapped back', async () => {
+      await render(scheme, painted.text, { micActive: true, dictationPaint: painted })
+      expect(input().props.selection).toBeDefined()
+      // Any later render with the same paint (a level tick, a tap's selection event) leaves it alone.
+      await act(async () => input().props.onSelectionChange({ nativeEvent: { selection: { start: 3, end: 3 } } }))
+      await rerender(scheme, painted.text, { micActive: true, dictationPaint: painted })
+      expect(input().props.selection).toBeUndefined()
+    })
+
+    it('places nothing from a paint for another draft: empty, typed over, or left from an earlier dictation', async () => {
+      await render(scheme, '', { micActive: true, dictationPaint: painted })
+      expect(input().props.selection).toBeUndefined()
+      await render(scheme, prefix, { micActive: true, dictationPaint: painted })
+      expect(input().props.selection).toBeUndefined()
+      await render(scheme, `${painted.text}!`, { micActive: false, dictationPaint: painted })
+      expect(input().props.selection).toBeUndefined()
+    })
+
+    it('leaves the caret to the keyboard with no dictation paint (typing, or the IME composing)', async () => {
+      await render(scheme, 'typed by hand', { micActive: false, dictationPaint: null })
+      expect(input().props.selection).toBeUndefined()
+      await rerender(scheme, 'typed by hand, more', { micActive: false, dictationPaint: null })
       expect(input().props.selection).toBeUndefined()
       await render(scheme, '', { micActive: true, dictationPaint: null })
       expect(input().props.selection).toBeUndefined()
     })
   })
 }
+
