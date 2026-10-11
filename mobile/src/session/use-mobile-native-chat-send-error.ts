@@ -6,6 +6,7 @@ import {
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../src/shared/structured-agent-session-composer'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
+import { dropSendErrorRetry, holdSendErrorRetry } from './native-chat-send-error-retry'
 
 /** What a send error says beyond its text (upstream's shape once #25704 and #26544 both landed).
  *  `refusedWhile`: a refused command's cause, whose line is said only while the chat shows it.
@@ -30,6 +31,8 @@ export type MobileNativeChatCommandRefusalCauses = Readonly<
 >
 
 const NATIVE_CHAT_SEND_ERROR_HOLD_MS = 4000
+/** A banner that offers Retry stays as long as an Android snackbar with an action (S5). */
+const NATIVE_CHAT_SEND_ERROR_RETRY_HOLD_MS = 8000
 const NATIVE_CHAT_SEND_ERROR_TOAST_MS = 1600
 
 /** Whether two facts are one failure. Upstream's `sameAgentSessionFailureFact`
@@ -114,7 +117,7 @@ export function useMobileNativeChatSendError(args: {
       return
     }
     clearTimer()
-    setHeld(null)
+    setHeld(null); dropSendErrorRetry()
   }, [clearTimer, scopeKey])
   const show = useCallback(
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
@@ -131,17 +134,20 @@ export function useMobileNativeChatSendError(args: {
         ...(details?.failure ? { failure: details.failure } : {}),
         ...(details?.refusedWhile !== undefined ? { refusedWhile: details.refusedWhile } : {})
       })
+      holdSendErrorRetry(next, details?.retry === true)
+      // A Retry needs time to be reached for: the keyboard may be up over it.
       timerRef.current = setTimeout(() => {
         timerRef.current = null
         setHeld(null)
-      }, NATIVE_CHAT_SEND_ERROR_HOLD_MS)
+        dropSendErrorRetry()
+      }, details?.retry ? NATIVE_CHAT_SEND_ERROR_RETRY_HOLD_MS : NATIVE_CHAT_SEND_ERROR_HOLD_MS)
     },
     [clearTimer, scopeKey]
   )
   // A held failure describes the scope it was raised on; drop it when that changes.
   useEffect(() => {
     clearTimer()
-    setHeld(null)
+    setHeld(null); dropSendErrorRetry()
   }, [clearTimer, scopeKey])
   useEffect(
     () => () => {
@@ -157,7 +163,7 @@ export function useMobileNativeChatSendError(args: {
     // Dropped, not hidden: the cause coming back later is not what this refusal was about.
     const refusedWhile = held?.refusedWhile
     if (refusedWhile !== undefined && causes?.[refusedWhile] === false) {
-      setHeld(null)
+      setHeld(null); dropSendErrorRetry()
     }
   }
   return {

@@ -1,8 +1,9 @@
-import { View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import { Txt } from '../ui/Txt'
 import { MobileNativeChatStatusLine } from './MobileNativeChatStatusLine'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import type { ChatViewStyles } from './mobile-native-chat-view-styles'
+import { useSendErrorRetryable } from './native-chat-send-error-retry'
 
 /** Chrome row above the composer: the status line (what the agent is doing,
  *  how many tasks run) and the send-failure banner beneath. It draws nothing,
@@ -14,6 +15,7 @@ export function MobileNativeChatChromeRow({
   showWorkingIndicator = true,
   spinner = null,
   sendErrorMessage,
+  onRetrySend,
   styles
 }: {
   agentWorking?: boolean
@@ -23,8 +25,11 @@ export function MobileNativeChatChromeRow({
   /** The agent's own spinner line, read off its screen, when one is up. */
   spinner?: ClaudeSpinner | null
   sendErrorMessage?: string | null
+  /** Sends the composer's words again; drawn only while the banner's failure offers Retry. */
+  onRetrySend?: () => void
   styles: ChatViewStyles
 }) {
+  const retryable = useSendErrorRetryable(sendErrorMessage) && onRetrySend !== undefined
   return (
     <>
       {/* The row passes touches through to the list beneath (see the dock in
@@ -42,10 +47,25 @@ export function MobileNativeChatChromeRow({
           accessibilityRole="alert"
           accessibilityLiveRegion="assertive"
         >
-          <View style={styles.sendErrorPill}>
-            <Txt variant="caption" weight="semibold" tone="danger">
+          <View style={[styles.sendErrorPill, retryable && styles.sendErrorPillWithAction]}>
+            <Txt variant="caption" weight="semibold" tone="danger" style={retryable ? styles.sendErrorText : undefined}>
               {sendErrorMessage}
             </Txt>
+            {retryable ? (
+              // S5: a send refused before anything was written, its words back in the
+              // composer, offers Retry, as the Claude app's snackbar does.
+              <Pressable
+                onPress={onRetrySend}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Retry sending the message"
+                style={({ pressed }) => pressed && styles.pressed}
+              >
+                <Txt variant="caption" weight="bold" tone="danger" style={styles.sendErrorAction}>
+                  Retry
+                </Txt>
+              </Pressable>
+            ) : null}
           </View>
         </View>
       ) : null}

@@ -29,7 +29,7 @@ import { useMobileNativeChatTailFollow } from './use-mobile-native-chat-tail-fol
 import { useMobileNativeChatRewind } from './use-mobile-native-chat-rewind'
 import { useChatScrollView } from './use-mobile-chat-scroll-view'
 import { ChatTextSelectableContext } from '../components/chat-text-selectable-context'
-import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'
+import { MobileNativeChatChromeRow } from './MobileNativeChatChromeRow'; import { retrySendFromComposer } from './native-chat-send-error-retry'
 import { chatTimeDividerLabels } from './mobile-native-chat-time-dividers'
 import { useMobileNativeChatTurnEnds } from './use-mobile-native-chat-turn-ends'
 import { useNow } from '../hooks/use-now'
@@ -441,7 +441,7 @@ export function MobileNativeChatView({
         // "Working" on the status line would report the same fact twice.
         showWorkingIndicator={!structuredActivityUi}
         spinner={spinner}
-        sendErrorMessage={sendErrorMessage}
+        sendErrorMessage={sendErrorMessage} onRetrySend={() => retrySendFromComposer(composerText, handleSend, onClearSendError)}
         styles={styles}
       />
       {keyStrip ? <MobileNativeChatKeyStrip {...keyStrip} /> : null}

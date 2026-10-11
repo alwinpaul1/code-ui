@@ -7,8 +7,11 @@ import {
   type MobileNativeChatCommandRefusalCauses
 } from './use-mobile-native-chat-send-error'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { sendErrorRetryMessage } from './native-chat-send-error-retry'
 
 type HookApi = ReturnType<typeof useMobileNativeChatSendError>
+
+const retryHeld = (message: string): boolean => sendErrorRetryMessage() === message
 
 describe('useMobileNativeChatSendError', () => {
   let renderer: ReactTestRenderer | null = null
@@ -124,6 +127,26 @@ describe('useMobileNativeChatSendError', () => {
 
   // Orca #26544, adapted: this build's failure fact has no `account`, and its generic rejection
   // notice is "Message was not sent." (upstream: "Your message was not sent.").
+  // S5: a refusal before any write offers Retry for longer than a plain failure stays, and only
+  // while it is the failure on the banner.
+  it('offers Retry with a refusal that asked for it, for 8 s, and drops it with the next failure', async () => {
+    await render()
+    await act(async () => api().show('Message not sent: not connected to your desktop', { retry: true }))
+    expect(retryHeld('Message not sent: not connected to your desktop')).toBe(true)
+    await act(async () => {
+      vi.advanceTimersByTime(4000)
+    })
+    expect(api().message).toBe('Message not sent: not connected to your desktop')
+    await act(async () => api().show('Stop failed'))
+    expect(retryHeld('Stop failed')).toBe(false)
+    await act(async () => api().show('Message not sent: not connected to your desktop', { retry: true }))
+    await act(async () => {
+      vi.advanceTimersByTime(8000)
+    })
+    expect(api().message).toBeNull()
+    expect(retryHeld('Message not sent: not connected to your desktop')).toBe(false)
+  })
+
   it('holds the fact with its message, and clears it on another failure or expiry', async () => {
     const fact = { kind: 'notSignedIn' } as const
     await render()
