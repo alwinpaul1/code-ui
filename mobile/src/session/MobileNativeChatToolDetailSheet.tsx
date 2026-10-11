@@ -25,7 +25,9 @@ import { editFilesForToolCall } from './mobile-native-chat-tool-run-diff-stat'
 import { readViewOf } from './mobile-native-chat-read-view'
 import { MobileNativeChatReadViewer } from './MobileNativeChatReadViewer'
 import { SelectableSheetText } from './SelectableSheetText'
-import { readLaunch } from './mobile-background-task-transcript'
+import { AGENT_LAUNCH_OPENING, agentTitle, readLaunch } from './mobile-background-task-transcript'
+import { useAgentToolCallsSlot } from './native-chat-agent-tool-calls-slot'
+import { toolCallKind } from './mobile-native-chat-tool-kind'
 import { capturedShellOutput } from './mobile-background-shell-output'
 import { BackgroundShellOutputBody } from './MobileBackgroundShellOutputSheet'
 import { useNativeChatTranscript } from './native-chat-transcript-context'
@@ -54,30 +56,34 @@ const styles = StyleSheet.create({
  *  Prettify toggle on an Output that parses as JSON. */
 export function MobileNativeChatToolDetailSheet({
   pair,
+  agentId = null,
   onClose
 }: {
   /** The call+result pair to show, or null when no sheet should be open. */
   pair: NativeChatToolPair | null
+  /** The agent an Agent call launched, where the opener knows it for certain
+   *  (a run sheet row): the sheet then lists that agent's own calls. */
+  agentId?: string | null
   onClose: () => void
 }) {
   // Why: the caller nulls `pair` the instant it asks to close — simplest
   // contract for it — but `DraggableDetailSheet` keeps this mounted through
   // its own exit animation. Without a cache the content would blank out a
   // beat before the sheet has actually left the screen.
-  const [shown, setShown] = useState(pair)
+  const [shown, setShown] = useState({ pair, agentId })
   useEffect(() => {
     if (pair !== null) {
-      setShown(pair)
+      setShown({ pair, agentId })
     }
-  }, [pair])
+  }, [pair, agentId])
 
   return (
     <DraggableDetailSheet
       visible={pair !== null}
       onClose={onClose}
-      header={shown ? <ToolDetailHeader pair={shown} /> : null}
+      header={shown.pair ? <ToolDetailHeader pair={shown.pair} /> : null}
     >
-      {shown ? <ToolDetailBody pair={shown} /> : null}
+      {shown.pair ? <ToolDetailBody pair={shown.pair} agentId={shown.agentId} /> : null}
     </DraggableDetailSheet>
   )
 }
@@ -111,14 +117,18 @@ export function ToolDetailHeader({ pair }: { pair: NativeChatToolPair }) {
   )
 }
 
-export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
+export function ToolDetailBody({ pair, agentId = null }: { pair: NativeChatToolPair; agentId?: string | null }) {
   const files = useMemo(() => {
     const found = pair.call ? editFilesForToolCall(pair.call, pair.result ?? null) : null
     return found && found.length > 0 ? found : null
   }, [pair])
   // Memoised on the pair: a running tool re-renders the sheet as it streams.
   const sections = useMemo(() => toolDetailSections(pair, { hasChanges: files !== null }), [pair, files])
-  const output = pair.result?.output ?? ''
+  const isAgent = pair.call !== undefined && toolCallKind(pair.call.name) === 'agent'
+  const renderAgentToolCalls = useAgentToolCallsSlot()
+  // A background launch's acknowledgement is metadata Claude Code tells the
+  // agent never to quote: the Claude app's Agent sheet has no result for it.
+  const output = isAgent && AGENT_LAUNCH_OPENING.test(pair.result?.output ?? '') ? '' : (pair.result?.output ?? '')
   // A Claude Read's result is the file's numbered lines: drawn as the Claude
   // app's Read viewer, with Load full file, instead of the raw Output box.
   const readView = useMemo(
@@ -147,6 +157,13 @@ export function ToolDetailBody({ pair }: { pair: NativeChatToolPair }) {
           )}
         </Section>
       ))}
+      {isAgent && agentId && renderAgentToolCalls
+        ? renderAgentToolCalls({
+            agentId,
+            title: agentTitle(pair.call?.input),
+            inSection: (label, body) => <Section label={label}>{body}</Section>
+          })
+        : null}
       {readView ? (
         <MobileNativeChatReadViewer
           view={readView}

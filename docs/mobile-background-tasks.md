@@ -836,8 +836,10 @@ From the user's screenshot of the Claude Android app's Background tasks sheet (d
   does draw one ("No Stop on any row" below).
 - **No "View transcript".** The link, and the tap on a card that opened a subagent's transcript
   (with the chevron on a finished one), were this fork's own addition and are gone at the user's
-  request: Orca has neither. The run sheet's own transcript row (a run of Agent calls in the
-  conversation) is a different surface and is unchanged.
+  request: Orca has neither. The run sheet's agent row (a run of Agent calls in the conversation)
+  is a different surface: since 2026-10-12 (parity gap G29) it opens the Agent call's own sheet,
+  which lists the agent's calls under "Tool calls (N)", read from its transcript, and keeps the
+  subagent viewer behind "View transcript".
 
 ## Show output (2026-10-12, parity gap G27)
 

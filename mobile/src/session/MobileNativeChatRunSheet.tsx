@@ -45,15 +45,14 @@ const RUN_SHEET_OPENING_SHARE = 0.5
  * description, the way the Claude app draws it (2026-10-01 screenshots; the
  * agent-only form of 2026-09-24). It opens part way and drags up to full
  * screen, like the Background tasks sheet. A row opens that call's detail
- * sheet, or, for an agent whose id the phone knows, that agent's transcript.
+ * sheet; an agent's row hands over the agent's id too, so its sheet can list
+ * the agent's own calls (parity G29), as the Claude app's Agent sheet does.
  */
 export function MobileNativeChatRunSheet({
   visible,
   title,
   rows,
-  running,
   onSelectPair,
-  onOpenTranscript,
   onAfterClose,
   onClose
 }: {
@@ -61,11 +60,7 @@ export function MobileNativeChatRunSheet({
   /** The run's past-tense sentence: "Used a tool, ran 3 commands, ran an agent". */
   title: string
   rows: readonly RunSheetRow[]
-  /** The background-task reader counts an agent of the run as running
-   *  (`agentsRunning`, not the row's sweep); handed to its transcript viewer. */
-  running: boolean
-  onSelectPair: (pair: NativeChatToolPair) => void
-  onOpenTranscript?: (agentId: string, title: string, running: boolean) => void
+  onSelectPair: (pair: NativeChatToolPair, agentId: string | null) => void
   /** Fires once the sheet has left the screen, which is when a detail sheet
    *  chosen from it may open without the two overlapping. */
   onAfterClose?: () => void
@@ -86,16 +81,7 @@ export function MobileNativeChatRunSheet({
       <View style={{ paddingBottom: space.md, paddingLeft: ROW_ICON_INSET - space.md }} testID="run-sheet">
         {rows.map((row, index) => (
           <View key={index}>
-            <RunSheetRowView
-              row={row}
-              onPress={() => {
-                if (row.agentId && onOpenTranscript) {
-                  onOpenTranscript(row.agentId, row.detail ?? 'Agent', running)
-                } else {
-                  onSelectPair(row.pair)
-                }
-              }}
-            />
+            <RunSheetRowView row={row} onPress={() => onSelectPair(row.pair, row.agentId)} />
             {index < rows.length - 1 ? (
               <>
                 <View style={{ height: ROW_GAP }} />
@@ -165,7 +151,16 @@ const ROW_HEIGHT = 34
 const ROW_GAP = 10
 const ROW_HIT_SLOP = { top: 5, bottom: 5 } as const
 
-function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => void }) {
+/** One call's row. Also drawn, inert, in an agent's sheet under "Tool calls". */
+export function RunSheetRowView({
+  row,
+  onPress,
+  testID = 'run-sheet-row'
+}: {
+  row: RunSheetRow
+  onPress?: () => void
+  testID?: string
+}) {
   const { colors, fonts, space, type } = useTheme()
   const Icon = row.glyph === 'toolbox' ? Briefcase : ICON_BY_KIND[row.kind]
   const word = { fontSize: ROW_TEXT.fontSize, lineHeight: ROW_TEXT.lineHeight }
@@ -178,7 +173,7 @@ function RunSheetRowView({ row, onPress }: { row: RunSheetRow; onPress: () => vo
       disabled={!row.opens}
       accessibilityLabel={`${row.detail ? `${row.verb} ${row.detail}` : row.verb}${row.failed ? '. Failed' : ''}`}
       accessibilityHint={row.opens ? (row.agentId ? 'Shows what this agent did' : 'Shows this call') : undefined}
-      testID="run-sheet-row"
+      testID={testID}
       onPress={row.opens ? onPress : undefined}
       hitSlop={ROW_HIT_SLOP}
       style={({ pressed }) => ({

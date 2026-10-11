@@ -56,7 +56,7 @@ export type RunSheetRow = {
    *  inert, as the agent-only sheet's rows were. */
   opens: boolean
   /** The agent this call launched, where the phone knows which one; a row
-   *  with one opens that agent's transcript. */
+   *  with one opens the Agent call's sheet, which lists that agent's calls. */
   agentId: string | null
 }
 

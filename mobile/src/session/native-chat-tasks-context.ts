@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import type { NativeChatBlock } from '../../../src/shared/native-chat-types'
 import type { NativeChatAgentRunInputs } from './mobile-native-chat-agent-run'
+import type { SubagentTranscriptTarget } from './mobile-subagent-transcript'
 
 // What the chat's rows and its status line read about the tab's background
 // work, handed down by `MobileNativeChatTasksProvider`. Context, not props:
@@ -13,6 +14,9 @@ export type NativeChatAgentRuns = NativeChatAgentRunInputs & {
   /** Opens one subagent's transcript, or undefined where there is none to
    *  open (a Codex tab, or no chat around the row). */
   openTranscript?: (agentId: string, title: string, running: boolean) => void
+  /** Where one subagent's own transcript is read from, or undefined where
+   *  there is none (a Codex tab, or no chat around the sheet). */
+  transcriptTarget?: (agentId: string, title: string) => SubagentTranscriptTarget | null
 }
 
 /** Opens the run sheet for one run. In a context of its own, stable for the

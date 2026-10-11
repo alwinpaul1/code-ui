@@ -405,7 +405,7 @@ describe('the subagent transcript viewer', () => {
 
   it('closes from the header', async () => {
     await mount()
-    await press(renderer!, 'Back to background tasks')
+    await press(renderer!, 'Back to the agent')
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
