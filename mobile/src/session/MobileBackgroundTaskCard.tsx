@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { Activity, Diamond, ListTree, SquareTerminal } from 'lucide-react-native'
+import { Activity, Diamond, ListTree, SquareCode } from 'lucide-react-native'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { BackgroundTask, BackgroundTaskKind } from './mobile-background-tasks'
@@ -13,11 +13,13 @@ import {
 } from './mobile-background-task-labels'
 
 /**
- * One task, as the Claude Android app's Background tasks sheet draws it (screenshot, 2026-10-10): a
- * card darker than the sheet with the kind's glyph, the title in body text (two lines at most), then
- * the kind and its live time ("Shell  41s") or how it ended ("Shell  Completed"). A running card
- * carries a round Stop at its top right where the host takes one; a finished card has none. The card
- * itself opens nothing: the fork's "View transcript" link is gone (2026-10-10, not in Orca).
+ * One task, as the Claude Android app's Background tasks sheet draws it (screenshot, 2026-10-10;
+ * re-measured beside Code UI on the same phone, 2026-10-11): a card darker than the sheet with the
+ * kind's glyph, a 14/19 semibold title (two lines at most), then the kind in the title's ink and its
+ * live time ("Shell  41s") or how it ended ("Shell  Completed") in the muted ink. A running card
+ * carries a small round Stop level with the title's first line where the host takes one; a finished
+ * card has none. The card itself opens nothing: the fork's "View transcript" link is gone
+ * (2026-10-10, not in Orca).
  */
 export function MobileBackgroundTaskCard({
   task,
@@ -46,13 +48,16 @@ export function MobileBackgroundTaskCard({
         flexDirection: 'row',
         alignItems: 'flex-start',
         gap: space.md,
-        paddingVertical: space.md,
-        paddingHorizontal: space.md,
-        borderRadius: radius.lg,
+        // Claude's card: 16 dp above, below and before the glyph, 24 dp after the Stop.
+        paddingTop: space.lg,
+        paddingBottom: space.lg,
+        paddingLeft: space.lg,
+        paddingRight: space.xl,
+        borderRadius: radius.md,
         backgroundColor: colors.bgSunken
       }}
     >
-      <View style={{ height: 22, justifyContent: 'center' }}>
+      <View style={{ height: TITLE_LINE, width: 16, alignItems: 'center', justifyContent: 'center' }}>
         <BackgroundTaskGlyph kind={task.kind} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
@@ -60,17 +65,16 @@ export function MobileBackgroundTaskCard({
             rows read ("Running cd /private/tmp/…"); the spawn description
             stays in what a screen reader says, and on the Stop. */}
         <Txt
-          variant="body"
-          weight="medium"
+          variant="label"
+          weight="semibold"
           numberOfLines={2}
           accessibilityLabel={task.latestStep ? `${task.title}, ${task.latestStep}` : undefined}
+          style={{ fontSize: 14, lineHeight: TITLE_LINE }}
         >
           {task.latestStep ?? task.title}
         </Txt>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-          <Txt variant="caption" tone="secondary">
-            {backgroundTaskKindLabel(task.kind)}
-          </Txt>
+          <Txt variant="caption">{backgroundTaskKindLabel(task.kind)}</Txt>
           {running && statusUnknown ? (
             <Txt variant="caption" tone="muted">
               Status unknown
@@ -94,27 +98,34 @@ export function MobileBackgroundTaskCard({
         </View>
       </View>
       {onStop && running && !statusUnknown && task.stoppable !== false ? (
-        <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
+        <View style={{ height: TITLE_LINE, justifyContent: 'center' }}>
+          <MobileBackgroundTaskStopButton title={task.title} held={stopHeld} onPress={() => onStop(task.id)} />
+        </View>
       ) : null}
     </View>
   )
 }
 
-/** One glyph per kind: a terminal window for a shell (Claude's own sheet draws a small window, not
- *  a bare prompt, the user's screenshots of 2026-10-11), the hollow diamond for an agent, and their
- *  own for a monitor and a workflow, so neither reads as a shell. Plain markers in the secondary ink. */
+/** The title's line height: the glyph and the Stop are centred on its first line, as in Claude's. */
+const TITLE_LINE = 19
+
+/** One glyph per kind: for a shell, Claude's sheet draws an open window whose top edge is broken by
+ *  a `</>` mark (the user's screenshots of 2026-10-11); lucide has no such glyph, and SquareCode, a
+ *  window holding a code mark, is the nearest (SquareTerminal's prompt, AppWindow's dots and the
+ *  bare CodeXml are each further off). The hollow diamond for an agent, and their own for a monitor
+ *  and a workflow, so neither reads as a shell. Plain markers in the secondary ink. */
 function BackgroundTaskGlyph({ kind }: { kind: BackgroundTaskKind }) {
   const { colors } = useTheme()
   switch (kind) {
     case 'agent':
-      return <Diamond size={12} color={colors.textSecondary} />
+      return <Diamond size={11} color={colors.textSecondary} />
     case 'monitor':
       return <Activity size={16} color={colors.textSecondary} />
     case 'workflow':
       return <ListTree size={16} color={colors.textSecondary} />
     case 'shell':
     case 'unknown':
-      return <SquareTerminal size={16} color={colors.textSecondary} />
+      return <SquareCode size={16} color={colors.textSecondary} />
     default: {
       const exhaustive: never = kind
       return exhaustive

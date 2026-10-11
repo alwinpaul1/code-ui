@@ -9,7 +9,6 @@ import type { AgentSessionBackgroundTaskState } from '../../../src/shared/agent-
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { BackgroundTaskHostStatus } from './mobile-background-tasks'
 import { deriveReportedBackgroundTasks } from './mobile-reported-background-tasks'
-import { subagentShellsLabel } from './mobile-background-task-footer'
 import { MobileBackgroundTaskCard as BackgroundTaskCard } from './MobileBackgroundTaskCard'
 import { MobileSheetTitleBar } from './MobileSheetTitleBar'
 import { useSubagentRunClock } from './use-subagent-run-clock'
@@ -19,7 +18,6 @@ import { SheetFailureLine } from './SheetFailureLine'
 import { useSheetFailure, type SheetFailureReport } from './use-sheet-failure'
 import { useSubagentActivityWatch, type SubagentActivitySource } from './use-subagent-activity-watch'
 import { useMobileBackgroundTaskStops } from './use-mobile-background-task-stops'
-import { stopAllTargets, useMobileBackgroundTasksStopAll } from './use-mobile-background-tasks-stop-all'
 import type { ClaudeBackgroundStopTarget } from './claude-background-dialog'
 import { terminalStopTargets } from './terminal-background-task-stops'
 
@@ -95,13 +93,6 @@ export function MobileBackgroundTasksSheet({
           return onStopTask(taskId, report ?? failure.reporter(), target)
         }
       : onStopTask
-  // Stop all names every task that did not stop on the sheet's own line.
-  const reportStopAll = reportStopFailure
-    ? (text: string) => {
-        failure.clear()
-        failure.reporter()(text)
-      }
-    : undefined
   return (
     // Opens part way and drags up to full screen, as the Claude app's does.
     // The title rides above the list rather than in it, so it stays in view
@@ -120,7 +111,6 @@ export function MobileBackgroundTasksSheet({
         backgroundTaskReport={backgroundTaskReport}
         hostBackgroundTasks={hostBackgroundTasks}
         onStopTask={stop}
-        onStopAllFailed={reportStopAll}
         connection={connection}
         subagentSource={visible ? subagentSource : null}
       />
@@ -142,7 +132,8 @@ export function MobileBackgroundTasksSheetHeader({
 }) {
   const { space } = useTheme()
   return (
-    <View style={{ gap: space.sm, paddingBottom: space.sm }}>
+    // Claude's close cross and title sit 8 dp further in than the drawer's edge.
+    <View style={{ gap: space.sm, paddingHorizontal: space.sm }}>
       <MobileSheetTitleBar title="Background tasks" onClose={onClose} />
       {stopFailure ? <SheetFailureLine>{stopFailure}</SheetFailureLine> : null}
     </View>
@@ -157,7 +148,6 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport,
   hostBackgroundTasks,
   onStopTask,
-  onStopAllFailed,
   connection,
   subagentSource = null
 }: {
@@ -166,8 +156,6 @@ export function MobileBackgroundTasksSheetBody({
   backgroundTaskReport?: ActiveTabBackgroundTaskReport
   hostBackgroundTasks?: AgentSessionBackgroundTaskState | null
   onStopTask?: BackgroundTaskStopHandler
-  /** Where a Stop all names the tasks that did not stop: the sheet's failure line. */
-  onStopAllFailed?: (text: string) => void
   /** The host connection. Absent reads as connected (a caller that cannot tell). */
   connection?: BackgroundTasksConnection
   /** Read the running agents' transcripts while this is set (the sheet passes
@@ -198,10 +186,14 @@ export function MobileBackgroundTasksSheetBody({
   }, [agentStatus, backgroundTaskReport, hostBackgroundTasks, messages, now, subagentRuns])
   // A structured lane has the provider's own roster; only a transcript-read
   // (terminal) lane gets its agents' steps and shells from their transcripts.
+  // An agent a read subagent launched is listed while the host's roster holds
+  // it (the Claude app lists them; `mobile-subagent-activity.ts`).
+  const hostSubagents = (agentStatus ?? backgroundTaskReport?.heldAgentStatus ?? null)?.subagents ?? null
   const watched = useSubagentActivityWatch({
     tasks: lane.tasks,
     source: lane.structured ? null : subagentSource,
     report: backgroundTaskReport,
+    hostSubagents,
     now
   })
   // A terminal tab's Stop goes through Claude's own Background dialog, which
@@ -212,7 +204,7 @@ export function MobileBackgroundTasksSheetBody({
     () => (!lane.structured && onStopTask ? terminalStopTargets(watched, footerShells) : null),
     [footerShells, lane.structured, onStopTask, watched]
   )
-  const { running, finished, shellsInSubagents } = terminalStops?.tasks ?? watched
+  const { running, finished } = terminalStops?.tasks ?? watched
   const targets = terminalStops?.targets ?? null
   const runningIds = useMemo(() => running.map((task) => task.id), [running])
   const stopOne = useMemo(
@@ -224,17 +216,6 @@ export function MobileBackgroundTasksSheetBody({
     [onStopTask, targets]
   )
   const stops = useMobileBackgroundTaskStops({ runningIds, stop: stopOne, connection: connectedAt })
-  // On a terminal tab the agents go first: an agent's Stop needs the shells pill
-  // that a running shell keeps on Claude's footer (terminal-background-task-stops.ts).
-  const stopAllTasks = useMemo(() => {
-    const all = stopAllTargets(running, stops.holding)
-    return targets ? [...all.filter((task) => task.kind === 'agent'), ...all.filter((task) => task.kind !== 'agent')] : all
-  }, [running, stops.holding, targets])
-  const stopAll = useMobileBackgroundTasksStopAll({
-    targets: stopAllTasks,
-    onStop: stops.onStop,
-    onFailed: onStopAllFailed
-  })
   const ticking = running.some((task) => task.startedAt !== null)
   useEffect(() => {
     if (!ticking) {
@@ -245,13 +226,12 @@ export function MobileBackgroundTasksSheetBody({
   }, [ticking])
 
   return (
-    <View style={{ paddingBottom: space.md, gap: space.sm }}>
-      <BackgroundTasksSection
-        title="Running"
-        open={runningOpen}
-        onToggle={() => setRunningOpen((open) => !open)}
-        action={stopOne && !disconnected && stopAllTasks.length > 0 ? <StopAllButton onPress={stopAll} /> : null}
-      >
+    // Claude's list sits 24 dp in from the screen's edges, 12 dp further than
+    // the drawer's own padding, and leaves 24 dp between Running and Finished.
+    // No Stop all at Running's right: the Claude app has none, and the user
+    // asked for it gone (2026-10-11). Each running row keeps its own Stop.
+    <View style={{ paddingBottom: space.md, paddingHorizontal: space.md, gap: space.xl }}>
+      <BackgroundTasksSection title="Running" open={runningOpen} onToggle={() => setRunningOpen((open) => !open)}>
         {disconnected && running.length > 0 ? (
           <Txt variant="caption" tone="muted">
             Status unknown — reconnecting
@@ -272,19 +252,16 @@ export function MobileBackgroundTasksSheetBody({
               statusUnknown={disconnected}
             />
           ))
-        ) : shellsInSubagents ? null : (
+        ) : (
           <Txt variant="caption" tone="muted">
             Nothing running.
           </Txt>
         )}
-        {/* What the footer counts beyond the lead and the listed subagent
-            shells: shells no transcript the phone reads names
-            (docs/subagent-task-visibility.md). */}
-        {shellsInSubagents ? (
-          <Txt variant="caption" tone="muted">
-            {subagentShellsLabel(shellsInSubagents)}
-          </Txt>
-        ) : null}
+        {/* No "+N shells in subagents" line (2026-10-11): the footer's count
+            it came from also holds shells finished subagents left running,
+            which the Claude app does not list, and the user asked for it
+            gone. A subagent's shells are rows of their own while the sheet
+            reads its transcript (mobile-subagent-activity.ts). */}
       </BackgroundTasksSection>
       {finished.length > 0 ? (
         <BackgroundTasksSection
@@ -305,64 +282,43 @@ export function MobileBackgroundTasksSheetBody({
   )
 }
 
+/** A section as Claude heads it: "Running ⌄", "Finished 74 ⌄" in the caption size and the muted
+ *  ink, with a thin chevron 6 dp after the word, and its cards 16 dp apart under it. */
 function BackgroundTasksSection({
   title,
   count,
   open,
   onToggle,
-  action = null,
   children
 }: {
   title: string
   count?: number
   open: boolean
   onToggle: () => void
-  /** Drawn at the header's right, beside the title row (Running's Stop all). */
-  action?: ReactNode
   children: ReactNode
 }) {
   const { colors, space } = useTheme()
   const heading = count === undefined ? title : `${title} ${count}`
   return (
-    <View style={{ gap: space.sm, paddingTop: space.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
-          onPress={onToggle}
-          hitSlop={10}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 28 }}
-        >
-          <Txt variant="label" tone="muted">
-            {heading}
-          </Txt>
-          {open ? (
-            <ChevronDown size={16} color={colors.textMuted} />
-          ) : (
-            <ChevronRight size={16} color={colors.textMuted} />
-          )}
-        </Pressable>
-        {action}
-      </View>
-      {open ? <View style={{ gap: space.sm }}>{children}</View> : null}
+    <View style={{ gap: space.lg }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${heading}, ${open ? 'collapse' : 'expand'}`}
+        onPress={onToggle}
+        hitSlop={10}
+        style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, minHeight: 24 }}
+      >
+        <Txt variant="caption" tone="muted">
+          {heading}
+        </Txt>
+        {open ? (
+          <ChevronDown size={16} strokeWidth={1.5} color={colors.textMuted} />
+        ) : (
+          <ChevronRight size={16} strokeWidth={1.5} color={colors.textMuted} />
+        )}
+      </Pressable>
+      {open ? <View style={{ gap: space.lg }}>{children}</View> : null}
     </View>
-  )
-}
-
-/** Running's "Stop all", a quiet text button at the header's right so the cards keep their look. */
-function StopAllButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Stop all running tasks"
-      onPress={onPress}
-      hitSlop={10}
-      style={({ pressed }) => ({ minHeight: 28, justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
-    >
-      <Txt variant="caption" weight="semibold" tone="secondary">
-        Stop all
-      </Txt>
-    </Pressable>
   )
 }
 

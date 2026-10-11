@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
 import { deriveBackgroundTasks, type BackgroundTaskHostStatus } from './mobile-background-tasks'
-import { subagentShellsLabel } from './mobile-background-task-footer'
 import { APPROVAL_0158, IDLE_AFTER_TURN_0158, WORKING_0158 } from './fixtures/codex-composer-screens'
 import {
   PROBE_A,
@@ -17,20 +16,25 @@ import {
 
 // Claude Code 2.1.296, 2026-10-10 (fixtures/claude-subagent-shells-2.1.296.ts).
 // A shell a background subagent starts is recorded only in that subagent's
-// transcript, which the phone may not read, and Orca's roster carries no
-// tool or step for a subagent. The one place the lead's screen says it exists
-// is the footer's "· N shells", which counts every shell in the process. The
-// phone may say how many of those are not the lead's, and nothing more.
+// transcript, and Orca's roster carries no tool or step for a subagent. The
+// footer's "· N shells" counts every shell in the process. From 2026-10-10 the
+// sheet drew what it counted beyond the lead as "+2 shells in subagents"; on
+// 2026-10-11 the user asked for that line gone, and the count was found to hold
+// shells finished subagents had left running too (session 0954729d), which the
+// Claude app does not list. The lead's reader now makes nothing of the
+// surplus: a subagent's shells are rows only where its own transcript is read
+// (`mobile-subagent-activity.ts`).
 
 const pane = (...rows: ReturnType<typeof workingRow>[]): BackgroundTaskHostStatus => ({ state: 'working', subagents: rows })
+const shells = (tasks: ReturnType<typeof deriveBackgroundTasks>) => tasks.running.filter((task) => task.kind === 'shell')
 
-describe("shells started inside the lead's subagents", () => {
+describe("shells started inside the lead's subagents, on the lead's own reader", () => {
   it('reads the footer count off the real screen while two subagents each run a shell', () => {
     expect(parseClaudeRunningShellCount(screenRows(TWO_SUBAGENT_SHELLS_SCREEN))).toBe(2)
     expect(parseClaudeRunningShellCount(screenRows(SUBAGENT_SHELL_SCREEN))).toBe(1)
   })
 
-  it('says two shells run in subagents when the lead started none and the footer counts two', () => {
+  it('lists the two agents and makes up no shell row or count when the lead started none and the footer counts two', () => {
     const now = Date.parse('2026-10-10T16:24:07.000Z')
     const tasks = deriveBackgroundTasks(
       twoAgentLaunches(),
@@ -39,68 +43,42 @@ describe("shells started inside the lead's subagents", () => {
       { onScreenShellCount: parseClaudeRunningShellCount(screenRows(TWO_SUBAGENT_SHELLS_SCREEN)) }
     )
 
-    // The agents keep their own rows; no shell row is made up for what the
-    // subagents run, because nothing names those shells.
     expect(tasks.running.map((task) => [task.kind, task.title])).toEqual([
       ['agent', 'Sleep probe A'],
       ['agent', 'Sleep probe B']
     ])
-    expect(tasks.shellsInSubagents).toBe(2)
+    expect(Object.keys(tasks).sort()).toEqual(['finished', 'running'])
   })
 
-  it("says one shell runs in a subagent after the lead's own shell has reported", () => {
+  it("lists only Probe D after the lead's own shell has reported, with the footer counting D's shell", () => {
     const now = Date.parse('2026-10-10T16:29:15.000Z')
     const tasks = deriveBackgroundTasks(probeDLaunch(), now, pane(workingRow(PROBE_D, '2026-10-10T16:28:37.000Z')), {
       onScreenShellCount: parseClaudeRunningShellCount(screenRows(SUBAGENT_SHELL_SCREEN))
     })
 
     expect(tasks.running.map((task) => task.title)).toEqual(['Probe D'])
-    expect(tasks.shellsInSubagents).toBe(1)
+    expect(Object.keys(tasks).sort()).toEqual(['finished', 'running'])
   })
 
-  it('says nothing while no subagent runs: then every shell the footer counts is listed as the lead\'s', () => {
-    // The fit pads unnamed lead shells up to the footer's count when no
-    // subagent can own any of them, so nothing is left over to attribute.
-    const tasks = deriveBackgroundTasks(twoAgentLaunches(), Date.parse('2026-10-10T16:25:00.000Z'), { state: 'working', subagents: [] }, {
+  it('makes up no shell row while no subagent runs, nor with the footer off screen, nor on an empty window', () => {
+    const idle = deriveBackgroundTasks(twoAgentLaunches(), Date.parse('2026-10-10T16:25:00.000Z'), { state: 'working', subagents: [] }, {
       onScreenShellCount: 2
     })
-
-    expect(tasks.shellsInSubagents).toBeUndefined()
-  })
-
-  it('says nothing when the footer is off screen, even with a count held from before', () => {
-    const tasks = deriveBackgroundTasks(
-      twoAgentLaunches(),
-      Date.parse('2026-10-10T16:24:07.000Z'),
-      pane(workingRow(PROBE_A, '2026-10-10T16:23:43.000Z')),
-      { onScreenShellCount: null, heldOnScreenShellCount: { count: 2, at: Date.parse('2026-10-10T16:24:00.000Z') } }
-    )
-
-    expect(tasks.shellsInSubagents).toBeUndefined()
-  })
-
-  it('says nothing when the footer counts no more shells than the lead has named', () => {
-    const tasks = deriveBackgroundTasks(probeDLaunch(), Date.parse('2026-10-10T16:29:15.000Z'), pane(workingRow(PROBE_D, '2026-10-10T16:28:37.000Z')), {
-      onScreenShellCount: 0
+    const held = deriveBackgroundTasks(twoAgentLaunches(), Date.parse('2026-10-10T16:24:07.000Z'), pane(workingRow(PROBE_A, '2026-10-10T16:23:43.000Z')), {
+      onScreenShellCount: null,
+      heldOnScreenShellCount: { count: 2, at: Date.parse('2026-10-10T16:24:00.000Z') }
     })
 
-    expect(tasks.shellsInSubagents).toBeUndefined()
-  })
-
-  it('says nothing on an empty window with no roster', () => {
-    expect(deriveBackgroundTasks([], 0, null, { onScreenShellCount: null }).shellsInSubagents).toBeUndefined()
+    expect(shells(idle)).toEqual([])
+    expect(shells(held)).toEqual([])
+    expect(deriveBackgroundTasks([], 0, null, { onScreenShellCount: null })).toEqual({ running: [], finished: [] })
   })
 
   it('never reads a count off a Codex screen, which paints no shell count', () => {
     for (const screen of [WORKING_0158, IDLE_AFTER_TURN_0158, APPROVAL_0158]) {
       const count = parseClaudeRunningShellCount(screen)
       expect(count).toBeNull()
-      expect(deriveBackgroundTasks([], 0, { state: 'working', subagents: [] }, { onScreenShellCount: count }).shellsInSubagents).toBeUndefined()
+      expect(deriveBackgroundTasks([], 0, { state: 'working', subagents: [] }, { onScreenShellCount: count })).toEqual({ running: [], finished: [] })
     }
-  })
-
-  it('words the line by its count', () => {
-    expect(subagentShellsLabel(1)).toBe('+1 shell in subagents')
-    expect(subagentShellsLabel(2)).toBe('+2 shells in subagents')
   })
 })

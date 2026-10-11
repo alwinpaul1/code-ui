@@ -46,6 +46,8 @@ import {
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
 import { COUNT_RETIRE_GRACE_MS, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
 import { foldWhitespace, readString } from './mobile-background-task-transcript'
+import { readTaskEvidence } from './mobile-background-task-evidence'
+import { isTeammateLifecycleId, type RosterRow } from './mobile-background-task-roster'
 import { subagentTranscriptTarget, type SubagentTranscriptTarget } from './mobile-subagent-transcript'
 
 /** How many running agents the sheet reads at once. Each is one host
@@ -148,11 +150,20 @@ export type SubagentActivityContext = {
    *  heartbeat. The footer's zero says it too, but only while the footer is
    *  on screen and wide enough to draw its hint. */
   finishedTaskIds?: readonly string[]
+  /** The host's roster (`agentStatus.subagents`): what says whether an agent a
+   *  read subagent launched is still running. Null or absent lists no such
+   *  agent, since its end is written to its parent as a record Orca's reader
+   *  drops, and nothing else could ever end its row. */
+  hostSubagents?: readonly RosterRow[] | null
 }
 
 /** The sheet's tasks with each read agent's in-flight step on its row and the
- *  shells its transcript shows as rows of their own: running ones right
- *  under their agent, finished ones at the head of Finished. With no feed it
+ *  shells and agents its transcript shows launched as rows of their own:
+ *  running ones right under their agent, finished ones at the head of
+ *  Finished. An agent a subagent launched ("Opus regression review of outbox
+ *  drainer", started by "Reliable sends, never dropped" in session 0954729d)
+ *  is listed the way the Claude app lists it: running while the host's roster
+ *  holds its row, finished once the roster drops it. With no feed it
  *  returns `tasks` itself. Whether a row takes a Stop is decided after, by
  *  what Claude's own Background dialog can select (terminal-background-task-stops.ts):
  *  it lists a subagent's shells beside the lead's. */
@@ -176,12 +187,14 @@ export function mergeSubagentActivity(
     }
     const step = subagentStepInFlight(messages)
     running.push(step ? { ...task, latestStep: step } : task)
-    const shells = subagentShells(messages, context)
+    const shells = subagentWork(messages, context)
     for (const shell of shells.running) {
       if (!listed.has(shell.id)) {
         listed.add(shell.id)
         running.push(shell)
-        shellRows.push(shell)
+        if (shell.kind === 'shell') {
+          shellRows.push(shell)
+        }
       }
     }
     for (const shell of shells.finished) {
@@ -191,7 +204,11 @@ export function mergeSubagentActivity(
       }
     }
   }
-  if (shellRows.length === 0 && finishedShells.length === 0 && running.every((task, index) => task === tasks.running[index])) {
+  if (
+    running.length === tasks.running.length &&
+    finishedShells.length === 0 &&
+    running.every((task, index) => task === tasks.running[index])
+  ) {
     return tasks
   }
   const retired = retiredByFooter(tasks, shellRows, context)
@@ -200,29 +217,49 @@ export function mergeSubagentActivity(
     .filter((task) => retired.has(task.id))
     .map((task): BackgroundTask => ({ ...task, status: 'finished', elapsedMs: null }))
     .toReversed()
-  const stillRunning = shellRows.length - retired.size
-  const { shellsInSubagents, ...rest } = tasks
-  const unlisted = (shellsInSubagents ?? 0) - stillRunning
   return {
-    ...rest,
+    ...tasks,
     running: keptRunning,
-    finished: [...retiredRows, ...finishedShells, ...tasks.finished],
-    ...(unlisted > 0 ? { shellsInSubagents: unlisted } : {})
+    finished: [...retiredRows, ...finishedShells, ...tasks.finished]
   }
 }
 
 /** One subagent's shells, judged by its own transcript (launches, TaskStop
- *  answers), by the lead's Stop-hook list, and by the ids the lead's status
- *  line reports finished. */
-function subagentShells(messages: readonly NativeChatMessage[], context: SubagentActivityContext): BackgroundTasks {
+ *  answers, a read of an output file's end trailer), by the lead's Stop-hook
+ *  list, and by the ids the lead's status line reports finished; and, given
+ *  the host's roster, the agents it launched, judged by that roster alone. */
+function subagentWork(messages: readonly NativeChatMessage[], context: SubagentActivityContext): BackgroundTasks {
   const stop = context.stopRunning ?? null
-  const derived = deriveBackgroundTasks(messages, context.now, null, {
+  const options = {
     runningTaskIds: stop?.ids ?? null,
     runningTaskIdsAt: stop?.at ?? null,
     ...(context.finishedTaskIds ? { finishedTaskIds: context.finishedTaskIds } : {})
-  })
+  }
   const shell = (task: BackgroundTask) => task.kind === 'shell'
-  return { running: derived.running.filter(shell), finished: derived.finished.filter(shell) }
+  const derived = deriveBackgroundTasks(messages, context.now, null, options)
+  const roster = context.hostSubagents ?? null
+  if (roster === null) {
+    return { running: derived.running.filter(shell), finished: derived.finished.filter(shell) }
+  }
+  // The same transcript read against the roster, for its agents only. The
+  // roster stands in as a `working` pane with no start, so no shell rule
+  // reads it; an empty provenance keeps the roster's other rows (the lead's
+  // agents, other reviewers) off this agent's list, and only an agent this
+  // transcript launched is taken, so a teammate row the provenance would let
+  // through is not.
+  const launched = new Set(readTaskEvidence(messages).ownAgentIds)
+  const judged = deriveBackgroundTasks(messages, context.now, { state: 'working', subagents: [...roster] }, {
+    ...options,
+    agentProvenance: { ownAgentIds: [], preexistingAgentIds: [] }
+  })
+  // A teammate's id (`a<name>-<hex>`) is never a subagent's: Claude Code
+  // refuses a teammate spawned from inside one, and a SendMessage to one puts
+  // its id in `launched`.
+  const nested = (task: BackgroundTask) => task.kind === 'agent' && launched.has(task.id) && !isTeammateLifecycleId(task.id)
+  return {
+    running: [...derived.running.filter(shell), ...judged.running.filter(nested)],
+    finished: [...derived.finished.filter(shell), ...judged.finished.filter(nested)]
+  }
 }
 
 /** The listed subagent shells the footer says are over: beyond what it counts

@@ -35,6 +35,7 @@ import {
 import {
   INTERRUPTED,
   foldWhitespace,
+  outputReadEnding,
   readLaunch,
   readNotifications,
   stoppedTaskId,
@@ -48,7 +49,7 @@ import { settleAgentLaunches } from './mobile-background-task-agent-titles'
 import { applyAgentResumes, createResumeTracker, trackCall, trackMessage, trackResult } from './mobile-background-task-resumes'
 import { captionOf, elapsedSince, isFailureStatus } from './mobile-background-task-captions'
 import { foldWorkflowAgents, oldestTimestamp, verdictFor, type WorkflowDetail } from './mobile-background-task-workflows'
-import { fitToOnScreenShellCount, shellsOutsideLead, type HeldShellCount } from './mobile-background-task-footer'
+import { fitToOnScreenShellCount, type HeldShellCount } from './mobile-background-task-footer'
 import {
   createRosterOwnership,
   isTeammateLifecycleId,
@@ -126,16 +127,13 @@ export type BackgroundTaskDeriveOptions = {
   screenCompletions?: readonly ScreenTaskCompletion[]
   /** How many background shells the agent's OWN footer says are running, read
    *  off the screen (`parseClaudeRunningShellCount`). It counts every shell
-   *  in the process, a subagent's too, so it caps the lead's named shells
-   *  and pads unnamed ones only up to what the lead can have
+   *  in the process, a subagent's too (and shells a finished subagent left
+   *  running), so it only caps the lead's named shells, never adds a row
    *  (`mobile-background-task-footer.ts`). Null when no footer count is on
    *  screen. */
   onScreenShellCount?: number | null
   /** The last footer count, kept while the footer is off screen. */
   heldOnScreenShellCount?: HeldShellCount | null
-  /** The last footer count read while no subagent ran: then every shell in
-   *  it was the lead's, and those can only finish. */
-  leadOnlyShellCount?: HeldShellCount | null
   /** The start of the working run that followed the pane's last `done`, as
    *  the phone watched it (`mobile-background-task-memory.ts`). A question
    *  or a permission prompt moves `stateStartedAt` without ending the work
@@ -201,16 +199,7 @@ export type BackgroundTask = Pick<Launch, 'stopLabel'> & {
 export type BackgroundTasks = {
   running: BackgroundTask[]
   finished: BackgroundTask[]
-  /** Shells the agent's footer counts beyond the lead's own: running inside
-   *  its subagents, where nothing the phone receives names them
-   *  (`shellsOutsideLead`). Absent when there are none or it cannot tell. */
-  shellsInSubagents?: number
 }
-
-/** How long the desk's bare `monitoring` state may stand in for a shell the
- *  agent has not named; its beacons arrive within seconds of a live pane. */
-const MONITORING_PLACEHOLDER_MAX_AGE_MS = 30 * 60_000
-
 
 /** Split the transcript's background work into what is still running and what
  *  has reported back. Pure: `now` is the only clock, so tests set it. The one
@@ -258,6 +247,14 @@ export function deriveBackgroundTasks(
         const known = stoppedId ? notifications.get(stoppedId) : undefined
         if (call && stoppedId && (known?.at ?? 0) <= call.at) {
           notifications.set(stoppedId, { status: 'stopped', summary: null, at: call.at, timestamp: call.startedAt })
+        }
+        // A read of a task's own output file that shows Claude Code's end
+        // trailer: on a tab with no beacon, often the only sign the phone gets
+        // that a shell ended mid-turn (`outputReadEnding`). A notification
+        // already in hand keeps its own status and summary.
+        const ended = call ? outputReadEnding(call, block) : null
+        if (ended && launches.get(ended.id)?.kind !== 'agent' && !notifications.has(ended.id)) {
+          notifications.set(ended.id, { status: ended.status, summary: null, at: position, timestamp: message.timestamp })
         }
         // A SendMessage that resumed a stopped agent starts a new run of it.
         // Read off whichever result names the agent a waiting SendMessage of
@@ -319,9 +316,6 @@ export function deriveBackgroundTasks(
   const live = options.onScreenShellCount ?? null
   const held = options.heldOnScreenShellCount ?? null
   const roster = liveSubagentRoster(hostStatus)
-  // While any subagent runs, the footer holds shells the phone cannot name.
-  const agentLaunchUnsettled = [...launches.values()].some((launch) => launch.kind === 'agent' && !notifications.has(launch.id))
-  const subagentRunning = roster === null ? agentLaunchUnsettled : roster.size > 0
   const working = hostStatus?.state === 'working'
   const stateStart = working && typeof hostStatus.stateStartedAt === 'number' ? hostStatus.stateStartedAt : null
   const tasks = splitByStatus({
@@ -337,20 +331,17 @@ export function deriveBackgroundTasks(
     stopRunning: options.stopRunningTaskIds ?? null,
     stopRunningAt: options.stopRunningTaskIdsAt ?? null,
     subagentRuns: options.subagentRuns ?? null,
-    stateStart,
     runBoundary: options.runBoundaryAt === undefined ? stateStart : working ? options.runBoundaryAt : null,
     ownedByLead: createRosterOwnership(options.agentProvenance ?? null)
   })
-  const fitted = fitToOnScreenShellCount(tasks, now, { live, held, subagentRunning, leadOnly: options.leadOnlyShellCount ?? null })
-  const shellsInSubagents = shellsOutsideLead(fitted, live)
-  const folded = foldWorkflowAgents(fitted, hostStatus?.subagents, {
+  const fitted = fitToOnScreenShellCount(tasks, now, { live, held })
+  return foldWorkflowAgents(fitted, hostStatus?.subagents, {
     hostDone: hostStatus?.state === 'done',
     beaconRunning: options.stopRunningTaskIds ?? null,
     beaconAt: options.stopRunningTaskIdsAt ?? null,
     windowOldestAt: oldestTimestamp(messages),
     launchedIds: new Set(launches.keys())
   })
-  return shellsInSubagents > 0 ? { ...folded, shellsInSubagents } : folded
 }
 
 type SplitContext = {
@@ -367,9 +358,6 @@ type SplitContext = {
   stopRunning: readonly string[] | null
   stopRunningAt: number | null
   subagentRuns: SubagentRunClock | null
-  /** When the pane's current `working` state began; null when it is not
-   *  working. What the desk's `monitoring` placeholder is aged by. */
-  stateStart: number | null
   /** Launches before this are known to have finished, when nothing else can
    *  speak for them; null retires nothing. */
   runBoundary: number | null
@@ -511,33 +499,11 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       })
     }
   }
-  // The host has already said shells are running — Orca keeps a pane
-  // `working` in `monitoring` mode exactly while Claude's Stop hook lists
-  // background tasks — but the loaded window shows no launch and the agent has
-  // not yet named them (its `run=` beacon comes with its next Stop hook; a big
-  // transcript's launches sit far above the tail the phone holds). Show one
-  // running shell rather than an empty row until either source arrives.
-  // Age-capped: a `monitoring` state hours old with no beacon is a pane whose
-  // Stop hook never finished (2026-09-11: a turn died on an expired OAuth
-  // token and the phone read "1 running task" for a day), not a shell.
-  const monitoringAgeMs = context.stateStart === null ? null : now - context.stateStart
-  if (
-    running.length === 0 &&
-    agentSaysRunning === null &&
-    hostStatus?.state === 'working' &&
-    hostStatus.workingMode === 'monitoring' &&
-    monitoringAgeMs !== null &&
-    monitoringAgeMs < MONITORING_PLACEHOLDER_MAX_AGE_MS
-  ) {
-    running.push({
-      id: 'host-monitoring',
-      kind: 'shell',
-      title: 'Background shell the desk is still tracking',
-      status: 'running',
-      startedAt: context.stateStart,
-      elapsedMs: elapsedSince(context.stateStart, now)
-    })
-  }
+  // No nameless "Background shell the desk is still tracking" row for a pane
+  // in `monitoring` with nothing named (2026-09 to 2026-10-11): Orca holds the
+  // pane there while the lead's Stop lists ANY running non-agent task, and
+  // shells a finished subagent left running keep it listed for hours (session
+  // 0954729d), so the state proves no shell the sheet could name or stop.
   // Running stays in launch order (the oldest job is the one people look for);
   // finished is newest-first, by when its notification landed.
   finished.sort((left, right) => right.at - left.at)

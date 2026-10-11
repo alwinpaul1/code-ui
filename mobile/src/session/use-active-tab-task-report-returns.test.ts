@@ -148,7 +148,11 @@ describe('the running-task count when the user leaves the chat and comes back', 
     expect(fresh.sort()).toEqual(rows.map((row) => row.id).sort())
   })
 
-  it("keeps the lead's unnamed shells in the count through a snapshot without a status", () => {
+  // Until 2026-10-11 this kept four unnamed "Background shell" rows padded from
+  // the footer's "· 4 shells" (5 with the agent). The pill also counts shells
+  // finished subagents leave running (session 0954729d), so nothing is padded:
+  // the count is the agent alone, steady through the snapshot with no status.
+  it('keeps the count steady through a snapshot without a status, with no rows padded from the footer', () => {
     const messages = ownAgentLaunch(OWN_AGENTS.abe6)
     const abe6 = rosterRow(OWN_AGENTS.abe6.id, Date.parse(OWN_AGENTS.abe6.result))
     show('2026-09-26T00:00:00.000Z', { messages, agentStatus: pane([], 'working', '2026-09-25T22:00:00.000Z', 'monitoring'), onScreenShellCount: 4 })
@@ -158,7 +162,7 @@ describe('the running-task count when the user leaves the chat and comes back', 
       show('2026-09-26T00:01:10.000Z', { messages, agentStatus: pane([abe6], 'working', '2026-09-25T22:00:00.000Z', 'monitoring'), onScreenShellCount: 4 })
     ].map((running) => running.length)
 
-    expect(counts).toEqual([5, 5, 5])
+    expect(counts).toEqual([1, 1, 1])
   })
 })
 

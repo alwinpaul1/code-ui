@@ -156,17 +156,15 @@ describe('shells started inside subagents are listed as their own rows', () => {
     expect(stale.running.map((task) => task.id)).toContain(PROBE_B_SHELL)
   })
 
-  it('takes listed shells out of the "+N shells in subagents" count, and drops the line when all are listed', () => {
+  it('lists both agents\' running shells as rows and carries no "+N shells in subagents" count, read or not', () => {
     const now = Date.parse('2026-10-10T18:45:29.000Z')
     const both = feeds([[PROBE_A_AGENT, aMidCommand()], [PROBE_B_AGENT, bAfterStop()]])
-    const all = mergeSubagentActivity(leadTasks(now, { shellsInSubagents: 2 }), both, { now, liveShellCount: 2 })
+    const all = mergeSubagentActivity(leadTasks(now), both, { now, liveShellCount: 2 })
     expect(all.running.filter((task) => task.kind === 'shell')).toHaveLength(2)
-    expect(all.shellsInSubagents).toBeUndefined()
-    const one = mergeSubagentActivity(leadTasks(now, { shellsInSubagents: 2 }), feeds([[PROBE_A_AGENT, aMidCommand()]]), {
-      now,
-      liveShellCount: 2
-    })
-    expect(one.shellsInSubagents).toBe(1)
+    expect(Object.keys(all).sort()).toEqual(['finished', 'running'])
+    const one = mergeSubagentActivity(leadTasks(now), feeds([[PROBE_A_AGENT, aMidCommand()]]), { now, liveShellCount: 2 })
+    expect(one.running.filter((task) => task.kind === 'shell')).toHaveLength(1)
+    expect(Object.keys(one).sort()).toEqual(['finished', 'running'])
   })
 
   it('never lists a shell twice when the lead already lists that id', () => {

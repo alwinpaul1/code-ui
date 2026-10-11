@@ -28,6 +28,7 @@ vi.mock('lucide-react-native', () => ({
   CircleStop: 'CircleStop',
   Diamond: 'Diamond',
   ListTree: 'ListTree',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
@@ -93,7 +94,8 @@ describe("a terminal Claude tab's Background tasks sheet offers Claude's own Sto
   it('puts a Stop on every running shell and agent while the footer shows its shells pill', () => {
     const tree = mount(3)
     expect(stopLabels(tree)).toEqual(['Stop Busy lead shell A', 'Stop Busy lead shell B', 'Stop Busy probe quick', 'Stop Busy probe slow'])
-    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Stop all running tasks')).toHaveLength(1)
+    // No Stop all (the user, 2026-10-11): each row keeps its own.
+    expect(tree.root.findAll((node) => node.props.accessibilityLabel === 'Stop all running tasks')).toHaveLength(0)
   })
 
   it("hands the row's dialog label to the stop: a shell's command, an agent's description", async () => {
@@ -123,9 +125,9 @@ describe("a terminal Claude tab's Background tasks sheet offers Claude's own Sto
   it.each([
     ['light', lightColors],
     ['dark', darkColors]
-  ] as const)("draws a shell with Claude's terminal-window glyph, in %s ink", (scheme, palette) => {
+  ] as const)("draws a shell with Claude's window-with-a-code-mark glyph (lucide SquareCode), in %s ink", (scheme, palette) => {
     const tree = mount(3, scheme)
-    const shells = tree.root.findAll((node) => node.type === ('SquareTerminal' as never))
+    const shells = tree.root.findAll((node) => node.type === ('SquareCode' as never))
     expect(shells).toHaveLength(2)
     expect(shells.every((node) => node.props.color === palette.textSecondary)).toBe(true)
     expect(tree.root.findAll((node) => node.type === ('Terminal' as never))).toHaveLength(0)

@@ -85,8 +85,6 @@ export type ActiveTabBackgroundTaskReport = {
   agentProvenance?: AgentProvenance | null
   /** The session's last host status, for a moment the tab's is missing. */
   heldAgentStatus?: AgentStatusEntry | null
-  /** The last footer count read while no subagent ran. */
-  leadOnlyShellCount?: HeldShellCount | null
   /** The start of the working run after the pane's last `done`, as the phone
    *  watched it; absent until it has seen the pane working. */
   runBoundaryAt?: number | null

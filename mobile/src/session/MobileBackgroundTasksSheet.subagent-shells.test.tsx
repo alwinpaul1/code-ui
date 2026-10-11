@@ -45,6 +45,7 @@ vi.mock('lucide-react-native', () => ({
   ListTree: 'ListTree',
   Sparkles: 'Sparkles',
   Square: 'Square',
+  SquareCode: 'SquareCode',
   SquareTerminal: 'SquareTerminal',
   Terminal: 'Terminal',
   X: 'X'
@@ -81,7 +82,7 @@ function readTree(renderer: ReactTestRenderer): Rendered {
   return { texts, colorsByText }
 }
 
-describe("the sheet's line for shells running inside subagents", () => {
+describe('the sheet draws no "+N shells in subagents" line (the user, 2026-10-11)', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
@@ -95,16 +96,16 @@ describe("the sheet's line for shells running inside subagents", () => {
     vi.useRealTimers()
   })
 
-  async function renderSheet(scheme: 'light' | 'dark', footerCount: number | null): Promise<Rendered> {
+  async function renderSheet(scheme: 'light' | 'dark', footerCount: number | null, withAgents = true): Promise<Rendered> {
     const agentStatus = {
       state: 'working' as const,
-      subagents: [workingRow(PROBE_A, '2026-10-10T16:23:43.000Z'), workingRow(PROBE_B, '2026-10-10T16:23:43.000Z')]
+      subagents: withAgents ? [workingRow(PROBE_A, '2026-10-10T16:23:43.000Z'), workingRow(PROBE_B, '2026-10-10T16:23:43.000Z')] : []
     }
     await act(async () => {
       renderer = create(
         <ThemeProvider initialPreference={scheme}>
           <MobileBackgroundTasksSheetBody
-            messages={twoAgentLaunches()}
+            messages={withAgents ? twoAgentLaunches() : []}
             agentStatus={agentStatus}
             backgroundTaskReport={report(footerCount)}
           />
@@ -114,25 +115,19 @@ describe("the sheet's line for shells running inside subagents", () => {
     return readTree(renderer!)
   }
 
-  it('shows "+2 shells in subagents" under the two agents, read from the real footer', async () => {
-    const { texts } = await renderSheet('light', parseClaudeRunningShellCount(screenRows(TWO_SUBAGENT_SHELLS_SCREEN)))
-    expect(texts).toContain('Sleep probe A')
-    expect(texts).toContain('Sleep probe B')
-    expect(texts).toContain('+2 shells in subagents')
-    expect(texts.indexOf('+2 shells in subagents')).toBeGreaterThan(texts.indexOf('Sleep probe B'))
-  })
+  for (const scheme of ['light', 'dark'] as const) {
+    it(`lists the two agents and no count line under them, with the real footer's "· 2 shells" (${scheme})`, async () => {
+      const { texts, colorsByText } = await renderSheet(scheme, parseClaudeRunningShellCount(screenRows(TWO_SUBAGENT_SHELLS_SCREEN)))
+      expect(texts).toContain('Sleep probe A')
+      expect(texts).toContain('Sleep probe B')
+      expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
+      expect(colorsByText.get('Sleep probe A')).toBe((scheme === 'dark' ? darkColors : lightColors).text)
+    })
+  }
 
-  it('shows no such line when the footer is not on screen', async () => {
-    const { texts } = await renderSheet('light', null)
-    expect(texts.some((text) => text.includes('in subagents'))).toBe(false)
-  })
-
-  it('paints the line in the muted tone of the active theme, light and dark', async () => {
-    const light = await renderSheet('light', 2)
-    expect(light.colorsByText.get('+2 shells in subagents')).toBe(lightColors.textMuted)
-    act(() => renderer?.unmount())
-    renderer = null
-    const dark = await renderSheet('dark', 2)
-    expect(dark.colorsByText.get('+2 shells in subagents')).toBe(darkColors.textMuted)
+  it('says "Nothing running." when only the footer counts shells, with no subagent and nothing named', async () => {
+    const { texts } = await renderSheet('light', 4, false)
+    expect(texts).toContain('Nothing running.')
+    expect(texts.some((text) => text.includes('in subagents') || text === 'Background shell')).toBe(false)
   })
 })

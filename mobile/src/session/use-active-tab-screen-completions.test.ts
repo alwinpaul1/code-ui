@@ -130,8 +130,8 @@ describe('a completion row the screen showed once, and a relaunch under its desc
 
   it('keeps counting the relaunch as running after the first run’s row scrolled away', () => {
     const firstRun = [...gateLaunch('bgate0001', T), gateNotification('bgate0001', T + 60_000)]
-    expect(show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })).toEqual(['host-monitoring'])
-    expect(show(T + 62_000, { messages: firstRun, screen: [] })).toEqual(['host-monitoring'])
+    expect(show(T + 61_000, { messages: firstRun, screen: [GATE_ROW] })).toEqual([])
+    expect(show(T + 62_000, { messages: firstRun, screen: [] })).toEqual([])
 
     const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
     expect(show(T + 121_000, { messages: relaunched, screen: [] })).toEqual(['bgate0002'])
@@ -146,7 +146,7 @@ describe('a completion row the screen showed once, and a relaunch under its desc
 
     // Its completion lands mid-turn: no transcript notification, only a
     // second row painted under the first.
-    expect(show(T + 200_000, { messages: relaunched, screen: [GATE_ROW, GATE_ROW] })).toEqual(['host-monitoring'])
+    expect(show(T + 200_000, { messages: relaunched, screen: [GATE_ROW, GATE_ROW] })).toEqual([])
   })
 
   // The chat unmounts for the Files tab and mounts again on the way back, and
@@ -196,7 +196,7 @@ describe('a completion row the screen showed once, and a relaunch under its desc
 
     // Run 2 ends mid-turn: no notification, only its own row, word for word
     // the first run's.
-    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['host-monitoring'])
+    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual([])
   })
 
   it('retires the relaunch by its own row when the first run’s row was still up as it launched', () => {
@@ -205,7 +205,7 @@ describe('a completion row the screen showed once, and a relaunch under its desc
     const relaunched = [...firstRun, ...gateLaunch('bgate0002', T + 120_000)]
     expect(show(T + 121_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['bgate0002'])
     expect(show(T + 150_000, { messages: relaunched, screen: [] })).toEqual(['bgate0002'])
-    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual(['host-monitoring'])
+    expect(show(T + 300_000, { messages: relaunched, screen: [GATE_ROW] })).toEqual([])
   })
 
   // A blank repaint, a dialog or a scroll can hide a row and show it again.
@@ -253,16 +253,16 @@ describe('a short shell’s completion row, on a phone whose clock is not the de
   const quick = shellLaunch('bquick001', { command: 'npm run lint', description: 'Quick check' }, H)
 
   it('shows the short shell finished when the phone clock is 5 s behind the desk', () => {
-    expect(show(H + 1_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+    expect(show(H + 1_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual([])
   })
 
   it('shows the short shell finished when the phone clock is 5 s ahead of the desk', () => {
-    expect(show(H + 1_500 + 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+    expect(show(H + 1_500 + 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual([])
   })
 
   it('shows the short shell finished when its row was on screen before the transcript read held its launch', () => {
-    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
-    expect(show(H + 2_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
+    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual([])
+    expect(show(H + 2_500 - 5_000, { messages: quick, screen: [QUICK_ROW] })).toEqual([])
   })
 
   // The window a chat opens with is 40 records, so a long shell's launch can
@@ -278,8 +278,8 @@ describe('a short shell’s completion row, on a phone whose clock is not the de
   })
 
   it('shows it finished when the row had already scrolled away by the time the launch arrived', () => {
-    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual(['host-monitoring'])
-    expect(show(H + 2_500 - 5_000, { messages: [], screen: [] })).toEqual(['host-monitoring'])
-    expect(show(H + 3_500 - 5_000, { messages: quick, screen: [] })).toEqual(['host-monitoring'])
+    expect(show(H + 1_500 - 5_000, { messages: [], screen: [QUICK_ROW] })).toEqual([])
+    expect(show(H + 2_500 - 5_000, { messages: [], screen: [] })).toEqual([])
+    expect(show(H + 3_500 - 5_000, { messages: quick, screen: [] })).toEqual([])
   })
 })

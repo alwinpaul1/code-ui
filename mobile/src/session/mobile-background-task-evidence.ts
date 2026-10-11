@@ -6,6 +6,7 @@ import {
 } from '../../../src/shared/native-chat-types'
 import {
   INTERRUPTED,
+  outputReadEnding,
   readLaunch,
   readNotifications,
   readString,
@@ -96,6 +97,11 @@ export function readTaskEvidence(messages: readonly NativeChatMessage[]): Window
         const stopped = call ? stoppedTaskId(call, block) : null
         if (stopped) {
           retiredTaskIds.push(stopped)
+        }
+        // So does a read of its output that shows the end trailer.
+        const ended = call ? outputReadEnding(call, block) : null
+        if (ended) {
+          retiredTaskIds.push(ended.id)
         }
         const launch = call ? readLaunch(call, block.output) : null
         const launched = launch?.kind === 'agent' ? launch.id : ASYNC_AGENT_LAUNCHED.exec(block.output)?.[1]

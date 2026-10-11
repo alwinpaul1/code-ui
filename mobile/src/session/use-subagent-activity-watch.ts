@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import type { BackgroundTasks } from './mobile-background-tasks'
+import type { RosterRow } from './mobile-background-task-roster'
+import { EMPTY_FINISHED_SUBAGENT_ROWS, keepFinishedSubagentRows, type FinishedSubagentRows } from './subagent-finished-rows'
 import { mergeSubagentActivity, subagentWatchTargets } from './mobile-subagent-activity'
 import {
   stopWatchingSubagentActivity,
@@ -21,9 +23,13 @@ export function useSubagentActivityWatch(args: {
   tasks: BackgroundTasks
   source: SubagentActivitySource | null
   report: ActiveTabBackgroundTaskReport | undefined
+  /** The host's roster, which says whether an agent a read subagent launched
+   *  still runs. Null: none such is listed. */
+  hostSubagents?: readonly RosterRow[] | null
   now: number
 }): BackgroundTasks {
   const { tasks, source, report, now } = args
+  const hostSubagents = args.hostSubagents ?? null
   const [owner] = useState(() => ({}))
   const agent = source?.agent ?? null
   const parentTranscriptPath = source?.parentTranscriptPath ?? null
@@ -52,15 +58,44 @@ export function useSubagentActivityWatch(args: {
   const liveShellCount = report?.onScreenShellCount ?? null
   const heldShellCount = report?.heldOnScreenShellCount ?? null
   const finishedTaskIds = report?.finishedTaskIds
-  return useMemo(
+  const merged = useMemo(
     () =>
       mergeSubagentActivity(tasks, feeds, {
         now,
         liveShellCount,
         heldShellCount,
         stopRunning: stopIds === null ? null : { ids: stopIds, at: stopAt },
+        hostSubagents,
         ...(finishedTaskIds ? { finishedTaskIds } : {})
       }),
-    [feeds, finishedTaskIds, heldShellCount, liveShellCount, now, stopAt, stopIds, tasks]
+    [feeds, finishedTaskIds, heldShellCount, hostSubagents, liveShellCount, now, stopAt, stopIds, tasks]
   )
+  return useMemo(() => (watching ? recallFinishedRows(parentTranscriptPath, tasks, merged) : merged), [merged, parentTranscriptPath, tasks, watching])
+}
+
+/** Per session (its transcript path), for as long as the app runs: the sheet
+ *  unmounts when it closes, and a subagent that handed back while it was
+ *  closed must still find its finished rows (`subagent-finished-rows.ts`).
+ *  Bounded like the other session memories here. */
+const finishedRowMemories = new Map<string, FinishedSubagentRows>()
+const FINISHED_ROW_SESSIONS_MAX = 8
+
+function recallFinishedRows(key: string | null, lane: BackgroundTasks, merged: BackgroundTasks): BackgroundTasks {
+  if (key === null) {
+    return merged
+  }
+  const kept = keepFinishedSubagentRows(finishedRowMemories.get(key) ?? EMPTY_FINISHED_SUBAGENT_ROWS, lane, merged)
+  finishedRowMemories.delete(key)
+  finishedRowMemories.set(key, kept.memory)
+  if (finishedRowMemories.size > FINISHED_ROW_SESSIONS_MAX) {
+    const oldest = finishedRowMemories.keys().next().value
+    if (oldest !== undefined) {
+      finishedRowMemories.delete(oldest)
+    }
+  }
+  return kept.tasks
+}
+
+export function resetFinishedSubagentRowsForTests(): void {
+  finishedRowMemories.clear()
 }
