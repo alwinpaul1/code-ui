@@ -124,9 +124,13 @@ export function UpdateStatusHeader({
     muted: { fill: colors.bgRaised, ink: colors.textSecondary }
   }
   const well = wells[tone]
+  // A state that is only a spinner and a title (checking, installing) sits in
+  // the middle of the dialog; icon-and-message states stay left-aligned.
+  const centered = accessory != null
   return (
     <View
       style={{
+        ...(centered ? { alignItems: 'center' as const } : null),
         paddingHorizontal: UPDATE_CARD_INSET,
         paddingTop: UPDATE_CARD_INSET,
         paddingBottom: space.lg + 4,
@@ -149,11 +153,16 @@ export function UpdateStatusHeader({
       >
         {accessory ?? (Icon ? <Icon size={22} color={well.ink} strokeWidth={2} /> : null)}
       </View>
-      <Txt variant="title" weight="semibold" accessibilityRole="header">
+      <Txt
+        variant="title"
+        weight="semibold"
+        accessibilityRole="header"
+        style={centered ? { textAlign: 'center' } : undefined}
+      >
         {title}
       </Txt>
       {message ? (
-        <Txt variant="body" tone="secondary">
+        <Txt variant="body" tone="secondary" style={centered ? { textAlign: 'center' } : undefined}>
           {message}
         </Txt>
       ) : null}
