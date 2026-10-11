@@ -16,7 +16,7 @@ import { useNow } from '../hooks/use-now'
 import { useThemedStyles, type Theme } from '../theme/theme-context'
 import type { ThemeColors } from '../theme/tokens'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
-import { TOOL_RUN_CHEVRON_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
+import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 
 // Desktop's StatusDot tones: the working and failed states speak; every settled one stays muted.
@@ -129,7 +129,7 @@ export function MobileNativeChatSubagentGroup({
             {header.tokens !== null ? ` · ${header.tokens}` : null}
           </Text>
           <View style={open ? own.caretOpen : undefined}>
-            <ChevronRight size={TOOL_RUN_CHEVRON_SIZE} color={own.mark.color} strokeWidth={2} />
+            <ChevronRight size={14} color={own.mark.color} strokeWidth={2} />
           </View>
         </Pressable>
       </View>

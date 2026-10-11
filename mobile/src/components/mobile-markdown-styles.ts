@@ -5,10 +5,13 @@ import { useTheme, type Theme } from '../theme/theme-context'
 
 /** Base prose size; the chat view passes a textScale above 1 on top of it. */
 import {
+  MARKDOWN_BASE_SIZE,
+  MARKDOWN_CHIP_BORDER_WIDTH,
   MARKDOWN_CHIP_FONT_SIZE,
   MARKDOWN_CHIP_LINE_HEIGHT,
   MARKDOWN_CHIP_PADDING_HORIZONTAL,
   MARKDOWN_CHIP_PADDING_VERTICAL,
+  MARKDOWN_CHIP_RADIUS,
   MARKDOWN_TABLE_CELL_PADDING_BOTTOM,
   DEFAULT_MARKDOWN_TYPOGRAPHY,
   markdownChipBaselineShift,
@@ -59,7 +62,7 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
   const chipShift =
     typography === DEFAULT_MARKDOWN_TYPOGRAPHY
       ? MARKDOWN_INLINE_CHIP_BASELINE_SHIFT
-      : markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography), chip.borderWidth)
+      : markdownChipBaselineShift(chip.fontSize, chip.lineHeight, markdownChipFace(typography))
   // Tall enough for "Copied" at this phone's font size, which grows with it
   // while the icon does not: a fixed 18 dp let a block grow for the 1.5 s the
   // label shows and shrink back under the reader (review, 2026-09-29).
@@ -131,9 +134,9 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
     // paragraph's own space character, as around a word.
     inlineCodeChip: {
       backgroundColor: colors.codeSpanBg,
-      borderWidth: chip.borderWidth,
+      borderWidth: MARKDOWN_CHIP_BORDER_WIDTH,
       borderColor: colors.codeSpanBorder,
-      borderRadius: chip.radius,
+      borderRadius: MARKDOWN_CHIP_RADIUS,
       paddingHorizontal: MARKDOWN_CHIP_PADDING_HORIZONTAL,
       paddingVertical: MARKDOWN_CHIP_PADDING_VERTICAL,
       // Android hangs an inline View's bottom on the baseline, which left the
@@ -196,8 +199,8 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
       backgroundColor: colors.codeBg,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: typography.codeBlock.radius,
-      padding: typography.codeBlock.padding
+      borderRadius: radius.md,
+      padding: space.md
     },
     /** A fence's language and its Copy button (MobileMarkdownCodeHeader). As
      *  tall as the button at its tallest, with or without a language beside
@@ -246,16 +249,16 @@ export function makeMarkdownStyles(theme: Theme, typography: MarkdownTypography 
     },
     codeText: {
       fontFamily: fonts.mono,
-      fontSize: typography.code.fontSize,
-      lineHeight: typography.code.lineHeight,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.text
     },
     /** The line number beside a fence: dim, so the gutter reads as chrome and
      *  the eye stays on the code. Same weight the file reader's gutter uses. */
     codeGutter: {
       fontFamily: fonts.mono,
-      fontSize: typography.code.fontSize,
-      lineHeight: typography.code.lineHeight,
+      fontSize: MARKDOWN_BASE_SIZE - 2,
+      lineHeight: MARKDOWN_BASE_SIZE + 5,
       color: colors.textMuted
     },
     codeTruncated: {

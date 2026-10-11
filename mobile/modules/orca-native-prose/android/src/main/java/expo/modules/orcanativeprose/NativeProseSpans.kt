@@ -15,7 +15,7 @@ import kotlin.math.ceil
 /**
  * Every line of one paragraph exactly [lineHeight] pixels tall, its type centred in the line as a
  * React Native Text centres it (CustomLineHeightSpan), and [spaceAfter] pixels added below the
- * paragraph's LAST line only: the air between two bullets and the 8 dp blank line between blocks.
+ * paragraph's LAST line only: the air between two bullets and the 7 dp blank line between blocks.
  *
  * The span covers the paragraph and the newline that ends it, so a line whose end reaches the
  * span's end is the paragraph's last. StaticLayout sets [fm] from the line's own type before

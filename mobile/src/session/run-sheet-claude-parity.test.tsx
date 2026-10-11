@@ -212,17 +212,13 @@ describe('the run sheet, the Claude app way', () => {
       expect(detail.props.numberOfLines).toBe(1)
     })
 
-    // The Claude app's tool-step style, 15 on 1.6 em (`zv.f`,
-    // docs/claude-app-typography.md, 2026-10-11): a step under its 17 sp
-    // transcript body, and still over the label size these first had.
-    it("sets the words at the app's tool-step size, 15 on 24", () => {
+    it("sets the words at the transcript's prose size, which the label size sat under", () => {
       const { verb, detail } = words(firstRow(render(scheme)))
       for (const word of [verb, detail]) {
-        expect(styleOf(word).fontSize).toBe(15)
-        expect(styleOf(word).lineHeight).toBe(24)
+        expect(styleOf(word).fontSize).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize)
+        expect(styleOf(word).lineHeight).toBe(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.lineHeight)
       }
-      expect(type.label.size).toBeLessThan(15)
-      expect(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize).toBeGreaterThan(15)
+      expect(type.label.size).toBeLessThan(TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize)
     })
 
     // Yoga's rule for a row of fixed-basis items that overflow it: each shrinks

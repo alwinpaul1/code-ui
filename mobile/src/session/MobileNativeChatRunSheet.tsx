@@ -14,6 +14,7 @@ import {
   type LucideIcon
 } from 'lucide-react-native'
 import { BottomDrawer } from '../components/BottomDrawer'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
 import type { NativeChatToolPair } from '../../../src/shared/native-chat-tool-fold'
@@ -126,11 +127,10 @@ const ROW_VERB_TO_DETAIL = 11
  *  much more willing to shrink takes the overflow before a verb loses even a
  *  dp (the verb loses well under a tenth of a dp, which layout rounds off). */
 const DETAIL_SHRINK = 1000
-/** The row's words: the Claude app's tool-step style, 15 on 1.6 em (`zv.f`,
- *  docs/claude-app-typography.md, 2026-10-11), a step under its 17 sp
- *  transcript body. They were the transcript's prose size from screenshots,
- *  and the label size (13) before that. */
-const ROW_TEXT = { fontSize: 15, lineHeight: 24 }
+/** The row's words are the transcript's prose size, as the Claude app's are
+ *  (its row glyphs measure the same as its transcript text). The label size
+ *  (13) these had sat under the 15 prose above the sheet. */
+const ROW_TEXT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose
 
 /** The line between two icons, as the Claude app draws it (2026-10-11, 2.57
  *  px/dp): 15 dp long and centred in the 28 dp between one icon's foot (25 dp

@@ -22,10 +22,7 @@ describe('the rich Markdown editor document in the theme in use', () => {
     const style = richMarkdownEditorStyle(DARK)
     expect(style).toContain('color-scheme: dark;')
     expect(style).toContain(`--background: ${darkColors.bg};`)
-    // Not as a surface. The Claude app's dark text is its light page's colour
-    // (#F9F9F7), so that value is drawn in dark, as the words.
-    expect(style).not.toContain(`--background: ${lightColors.bg};`)
-    expect(style).not.toContain(`--editor-surface: ${lightColors.bg};`)
+    expect(style).not.toContain(lightColors.bg)
   })
 
   it('writes every theme variable the live switch sets, and nothing the switch misses', () => {

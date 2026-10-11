@@ -134,13 +134,12 @@ describe('MobileMarkdown in the chat transcript', () => {
     }
   })
 
-  // 8 since 2026-10-11: the Claude app's paragraph spacing, read from its code.
-  it('sets the blocks a Claude-sized 8 dp apart: the blank line between them is 8 dp tall', () => {
+  it('sets the blocks a Claude-sized 7 dp apart: the blank line between them is 7 dp tall', () => {
     const root = render({ content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY })
     const run = blockTexts(root)[0]!
     const gaps = run.findAll((node) => String(node.type) === 'Text' && words(node) === '\n' && node.children.length === 1)
     // Between paragraph 1 and 2, 2 and the list, the list and the heading.
-    expect(gaps.map((gap) => flat(gap.props.style).lineHeight)).toEqual([8, 8, 8])
+    expect(gaps.map((gap) => flat(gap.props.style).lineHeight)).toEqual([7, 7, 7])
     // At a pinch the gap grows with the type.
     act(() => {
       renderer!.update(createElement(MobileMarkdown, { content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY, textScale: 1.5 }))
@@ -148,7 +147,7 @@ describe('MobileMarkdown in the chat transcript', () => {
     const zoomed = blockTexts(renderer!.root)[0]!.findAll(
       (node) => String(node.type) === 'Text' && words(node) === '\n' && node.children.length === 1
     )
-    expect(zoomed.map((gap) => flat(gap.props.style).lineHeight)).toEqual([12, 12, 12])
+    expect(zoomed.map((gap) => flat(gap.props.style).lineHeight)).toEqual([10.5, 10.5, 10.5])
   })
 
   // 2026-10-09, the user: a copied selection must read as the reply reads,
@@ -170,22 +169,21 @@ describe('MobileMarkdown in the chat transcript', () => {
     )
   })
 
-  // The Claude app's Code-session body and inline code (2026-10-11).
-  it('draws the prose at 17 on 25.5 and its pill in JetBrains Mono at 15', () => {
+  it('draws the prose at 15 on 22 and its pill in JetBrains Mono', () => {
     const root = render({ content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY })
     const run = blockTexts(root)[0]!
-    expect(flat(run.props.style)).toMatchObject({ fontSize: 17, lineHeight: 25.5 })
+    expect(flat(run.props.style)).toMatchObject({ fontSize: 15, lineHeight: 22 })
     const pill = root.findAll((node) => String(node.type) === 'Text' && words(node) === 'code')[0]!
     expect(flat(pill.props.style).fontFamily).toBe(fontFamily.mono)
-    expect(flat(pill.props.style).fontSize).toBe(15)
+    expect(flat(pill.props.style).fontSize).toBe(12)
   })
 
   it('follows the pinch zoom from the transcript’s own size', () => {
     const root = render({ content: CONTENT, typography: TRANSCRIPT_MARKDOWN_TYPOGRAPHY, textScale: 1.5 })
     const run = blockTexts(root)[0]!
-    expect(flat(run.props.style)).toMatchObject({ fontSize: 25.5, lineHeight: 25.5 * 1.5 + 2 })
+    expect(flat(run.props.style)).toMatchObject({ fontSize: 22.5, lineHeight: 22 * 1.5 + 2 })
     const pill = root.findAll((node) => String(node.type) === 'Text' && words(node) === 'code')[0]!
-    expect(flat(pill.props.style)).toMatchObject({ fontSize: 22.5, lineHeight: 17.5 * 1.5 })
+    expect(flat(pill.props.style)).toMatchObject({ fontSize: 18, lineHeight: 21 })
   })
 
   it('keeps the reply’s Text mounted across a pinch step', () => {

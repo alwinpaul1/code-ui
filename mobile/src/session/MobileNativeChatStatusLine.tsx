@@ -3,7 +3,6 @@ import { useTheme } from '../theme/theme-context'
 import { formatRunningTaskCount } from './mobile-background-task-labels'
 import type { ClaudeSpinner } from './mobile-terminal-spinner-line'
 import { MobileBackgroundTasksPulse } from './MobileBackgroundTasksPulse'
-import { CHAT_LABEL_LINE_HEIGHT, CHAT_LABEL_SIZE } from './mobile-native-chat-message-styles'
 import { useNativeChatTasks } from './native-chat-tasks-context'
 
 /**
@@ -30,14 +29,12 @@ export function MobileNativeChatStatusLine({
   working: boolean
   spinner: ClaudeSpinner | null
 }) {
-  const { colors, fonts, space } = useTheme()
+  const { colors, fonts, space, type } = useTheme()
   const { runningCount, openSheet } = useNativeChatTasks()
   if (!working && runningCount <= 0) {
     return null
   }
-  // The Claude app's status line: 15 on 1.4 em (`nl7.b`,
-  // docs/claude-app-typography.md, 2026-10-11).
-  const text = { fontFamily: fonts.regular, fontSize: CHAT_LABEL_SIZE, lineHeight: CHAT_LABEL_LINE_HEIGHT }
+  const text = { fontFamily: fonts.regular, fontSize: type.label.size, lineHeight: type.label.lineHeight }
   // The dot alone, spaced by margin: the font's spaces are a few dp at this
   // size, and ' · ' in muted read as "Working…·7 running tasks" on the phone
   // (2026-09-26). Secondary, so it reads against the page in both themes.
@@ -68,15 +65,14 @@ export function MobileNativeChatStatusLine({
               onPress={openSheet}
               hitSlop={10}
             >
-              {/* The app's link blue for "N running tasks", at the line's own 400. */}
-              <Text style={[text, { color: colors.chatLink }]}>{count}</Text>
+              <Text style={[text, { fontFamily: fonts.medium, color: colors.info }]}>{count}</Text>
             </Pressable>
           </>
         ) : null}
         {working && spinner?.thinking ? (
           <>
             {dot}
-            <Text style={[text, { color: colors.chatMuted, flexShrink: 1 }]} numberOfLines={1}>
+            <Text style={[text, { color: colors.textMuted, flexShrink: 1 }]} numberOfLines={1}>
               {`${spinner.thinking}…`}
             </Text>
           </>

@@ -203,9 +203,8 @@ describe('a file the agent sent with SendUserFile', () => {
       (node) => (node.type as unknown) === 'View' && String(node.props.accessibilityLabel ?? '').startsWith('Image on Desktop: where.png')
     )
     const style = Object.assign({}, ...[chip!.props.style].flat(3).filter(Boolean)) as Record<string, unknown>
-    // bgPanel since 2026-10-11: bgRaised became the sent prompt's card colour.
-    expect(style.backgroundColor).toBe(colorsForScheme('dark').bgPanel)
-    expect(style.backgroundColor).not.toBe(colorsForScheme('light').bgPanel)
+    expect(style.backgroundColor).toBe(colorsForScheme('dark').bgRaised)
+    expect(style.backgroundColor).not.toBe(colorsForScheme('light').bgRaised)
   })
 
   it('sends nothing to draw for an empty file list: the caption alone, no picture, no crash', () => {

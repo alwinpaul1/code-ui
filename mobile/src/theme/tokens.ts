@@ -34,15 +34,6 @@ export type ThemeColors = {
   text: string
   textSecondary: string
   textMuted: string
-  /** Muted words in the chat transcript, exactly the Claude app's (`pl7.Q`,
-   *  docs/claude-app-typography.md): a tool row's label and the thinking word
-   *  on the status line. Light is 4.13:1 on `bg`, under the 4.5 `textMuted`
-   *  keeps everywhere else; it is the app's own value, at 15 sp, beside the
-   *  run's body text and never alone on a surface. */
-  chatMuted: string
-  /** The status line's "N running tasks" link, the Claude app's (`ad5.C0()`),
-   *  the same blue as inline code. */
-  chatLink: string
   textInverse: string
   /** Brand accent (terracotta). Fills, icons, focus. */
   accent: string
@@ -66,8 +57,7 @@ export type ThemeColors = {
    *  `bg` and `bgPanel` (mobile-theme-contrast-equivalent assertion in
    *  pr-sidebar-status-color.test.ts). */
   mergedPurple: string
-  /** A sent prompt's card, as the Claude app fills it in a Code session
-   *  (`pl7.w0`). */
+  /** The user's own message bubble. */
   userBubble: string
   userBubbleText: string
   codeBg: string
@@ -79,9 +69,6 @@ export type ThemeColors = {
   /** Inline `code` chip: text, fill and hairline border, after the Claude app. */
   codeSpanText: string
   codeSpanBorder: string
-  /** The Claude app's hairline (`pl7.x`): the user card's border and the
-   *  inline code chip's. */
-  hairline: string
   diffAddBg: string
   diffAddText: string
   diffDelBg: string
@@ -97,30 +84,22 @@ export type ThemeColors = {
 }
 
 export const lightColors: ThemeColors = {
-  // The Claude app's light scheme (com.anthropic.claude 1.261009.20,
-  // docs/claude-app-typography.md): page #F9F9F7, surface #FFFFFF, the user
-  // card's #F0EFEC as the raised fill, the code body #F3F3F0 as the sunken
-  // one. It was the warmer #F3F1EA family before 2026-10-11.
-  bg: '#F9F9F7',
-  bgPanel: '#FFFFFF',
-  bgRaised: '#F0EFEC',
-  bgSunken: '#F3F3F0',
+  bg: '#F3F1EA',
+  bgPanel: '#FBFAF6',
+  bgRaised: '#EAE7DE',
+  bgSunken: '#ECE9E1',
   bgOverlay: 'rgba(30, 28, 25, 0.42)',
-  bgDock: 'rgba(249, 249, 247, 0.72)',
-  bgPanelGlass: 'rgba(255, 255, 255, 1)',
+  bgDock: 'rgba(243, 241, 234, 0.72)',
+  bgPanelGlass: 'rgba(251, 250, 246, 1)',
   composerFill: 'rgba(255, 255, 255, 0.96)',
   composerBorder: 'rgba(30, 30, 29, 0.15)',
   composerPlaceholder: '#7B7974',
-  border: '#E2E1DC',
-  borderStrong: '#CBCAC4',
-  text: '#131313',
-  textSecondary: '#383835',
-  // The app's muted (#7B7974) is 4.13:1 on its page; this is its hue taken
-  // down to 4.5:1 or better on every surface (chatMuted keeps the app's own).
-  textMuted: '#6B6965',
-  chatMuted: '#7B7974',
-  chatLink: '#184F95',
-  textInverse: '#F9F9F7',
+  border: '#E1DDD2',
+  borderStrong: '#CCC7BB',
+  text: '#1E1C19',
+  textSecondary: '#55514A',
+  textMuted: '#67625A',
+  textInverse: '#F7F5EF',
   accent: '#C96442',
   accentText: '#A5482A',
   accentSoft: '#F4E3DA',
@@ -134,13 +113,12 @@ export const lightColors: ThemeColors = {
   dangerSoft: 'rgba(192, 57, 43, 0.12)',
   info: '#3B6FB6',
   mergedPurple: '#7C3AED',
-  userBubble: '#F0EFEC',
-  userBubbleText: '#131313',
-  codeBg: '#F3F3F0',
-  codeSpanBg: 'rgba(11, 11, 11, 0.05)',
-  codeSpanText: '#184F95',
-  codeSpanBorder: 'rgba(30, 30, 29, 0.15)',
-  hairline: 'rgba(30, 30, 29, 0.15)',
+  userBubble: '#E6E2D7',
+  userBubbleText: '#1E1C19',
+  codeBg: '#ECE9E0',
+  codeSpanBg: 'rgba(37, 99, 235, 0.08)',
+  codeSpanText: '#1D4ED8',
+  codeSpanBorder: 'rgba(37, 99, 235, 0.22)',
   diffAddBg: 'rgba(59, 138, 90, 0.14)',
   diffAddText: '#276640',
   diffDelBg: 'rgba(192, 57, 43, 0.12)',
@@ -151,52 +129,45 @@ export const lightColors: ThemeColors = {
 }
 
 export const darkColors: ThemeColors = {
-  // The Claude app's dark scheme (docs/claude-app-typography.md): page
-  // #151515, surface #20201F, the user card's #2C2C2A as the raised fill, the
-  // code body #111111 as the sunken one. It was the warm #1A1917 family
-  // before 2026-10-11.
-  bg: '#151515',
-  bgPanel: '#20201F',
-  bgRaised: '#2C2C2A',
-  bgSunken: '#111111',
+  bg: '#1A1917',
+  bgPanel: '#211F1C',
+  bgRaised: '#2B2925',
+  bgSunken: '#161513',
   bgOverlay: 'rgba(0, 0, 0, 0.55)',
-  bgDock: 'rgba(21, 21, 21, 0.72)',
-  bgPanelGlass: 'rgba(32, 32, 31, 1)',
+  bgDock: 'rgba(26, 25, 23, 0.72)',
+  bgPanelGlass: 'rgba(33, 31, 28, 1)',
   composerFill: 'rgba(32, 32, 31, 0.96)',
   composerBorder: 'rgba(225, 224, 217, 0.15)',
   composerPlaceholder: '#97958D',
-  border: '#343432',
-  borderStrong: '#474744',
-  // The Claude app's primary text (`pl7.O`), read from its code; the earlier
-  // screenshot sample (248, 248, 246) was this less a step of anti-aliasing.
-  text: '#F9F9F7',
-  textSecondary: '#C3C2B7',
-  textMuted: '#97958D',
-  chatMuted: '#97958D',
-  chatLink: '#6DA7EC',
-  textInverse: '#151515',
+  border: '#332F2A',
+  borderStrong: '#45403A',
+  // Near-white as the Claude app draws it, sampled (248, 248, 246) from its
+  // dark chat (2026-10-11); it was the warmer #ECE9E2 before.
+  text: '#F8F8F6',
+  textSecondary: '#B8B4AB',
+  textMuted: '#9A968D',
+  textInverse: '#1A1917',
   accent: '#D9825F',
   accentText: '#E39274',
   accentSoft: '#3A2A22',
-  onAccent: '#151515',
+  onAccent: '#1A1917',
   success: '#5FB57F',
   successSoft: 'rgba(95, 181, 127, 0.16)',
   warning: '#D9A441',
   warningSoft: 'rgba(217, 164, 65, 0.16)',
   danger: '#E06C5B',
-  onDanger: '#151515',
+  onDanger: '#1A1917',
   dangerSoft: 'rgba(224, 108, 91, 0.16)',
   info: '#7FA7E0',
   // Violet-400, the desktop ReviewIcon's tone, exactly as the sidebar always drew
   // it in dark (pinned by pr-sidebar-status-color.test.ts).
   mergedPurple: '#a78bfa',
-  userBubble: '#2C2C2A',
-  userBubbleText: '#F9F9F7',
-  codeBg: '#111111',
-  codeSpanBg: 'rgba(255, 255, 255, 0.075)',
-  codeSpanText: '#6DA7EC',
-  codeSpanBorder: 'rgba(225, 224, 217, 0.15)',
-  hairline: 'rgba(225, 224, 217, 0.15)',
+  userBubble: '#100F0D',
+  userBubbleText: '#F8F8F6',
+  codeBg: '#26231F',
+  codeSpanBg: 'rgba(138, 180, 248, 0.10)',
+  codeSpanText: '#8AB4F8',
+  codeSpanBorder: 'rgba(138, 180, 248, 0.28)',
   diffAddBg: 'rgba(95, 181, 127, 0.14)',
   diffAddText: '#7FCB9B',
   diffDelBg: 'rgba(224, 108, 91, 0.14)',

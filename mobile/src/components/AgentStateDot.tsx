@@ -27,10 +27,9 @@ const DONE_COLOR = '#10b981'
 const QUESTION_COLOR = '#f97316'
 // On a light surface the desktop's working, done and question tones fall to
 // 1.55–2.7:1. The tab pill has three: selected in dark mode (the theme's text
-// colour, #F9F9F7) and unselected in light mode (bgPanel #FFFFFF, bgRaised
-// #F0EFEC while pressed; #F8F8F6, #FBFAF6 and #EAE7DE when this was
-// measured). These are the same hues two Tailwind steps darker, red one step
-// (red-600), and they read 3.9:1 or better on all three
+// colour, #F8F8F6) and unselected in light mode (bgPanel #FBFAF6, bgRaised
+// #EAE7DE while pressed). These are the same hues two Tailwind steps darker,
+// red one step (red-600), and they read 3.9:1 or better on all three
 // (tab-pill-surface.ts says which pill takes them;
 // AgentStateDot.verdict-tones.test.tsx measures each).
 // Reviewed 2026-09-11; interrupted and unconfirmed added 2026-10-04, then the
@@ -44,11 +43,11 @@ const ON_LIGHT = {
   fault: '#dc2626'
 }
 // On a dark surface (the selected tab pill in light mode is the theme's text
-// colour, #131313 since 2026-10-11, #1E1C19 then) the desktop tones and the
-// light theme's amber read 4.5:1 or better, but its muted tone (#67625A then)
-// drew a Stop's dot at 2.81:1. This is the dark theme's muted tone as it was,
-// made for that near-black (5.8:1). 2026-10-04. The dark scheme's unselected
-// pill (#20201F, #2C2C2A pressed) is a dark surface too.
+// colour, #1E1C19) the desktop tones and the light theme's amber read 4.5:1 or
+// better, but its muted tone (#67625A) drew a Stop's dot at 2.81:1. This is the
+// dark theme's muted tone, made for that near-black (5.8:1). 2026-10-04. The
+// dark scheme's unselected pill (#211F1C, #2B2925 pressed) is a dark surface
+// too, and its own muted tone is this one.
 const ON_DARK = {
   interrupted: '#9A968D'
 }

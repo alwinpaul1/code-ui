@@ -223,11 +223,10 @@ describe('a tool row still running', () => {
         const tree = render(blocks, runs, scheme)
         expect(shimmer(tree)).toBeDefined()
         const drawn = colorsOf(tree)
-        // The label and chevron take the Claude app's tool-row muted colour
-        // (chatMuted) since the typography merge of 2026-10-11.
-        expect(drawn).toContain(colors.chatMuted)
-        if (other.chatMuted !== colors.chatMuted) {
-          expect(drawn).not.toContain(other.chatMuted)
+        expect(drawn).toContain(colors.textSecondary)
+        expect(drawn).toContain(colors.textMuted)
+        if (other.textSecondary !== colors.textSecondary) {
+          expect(drawn).not.toContain(other.textSecondary)
         }
       }
     })

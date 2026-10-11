@@ -5,7 +5,7 @@ import { MobileMarkdown } from '../components/MobileMarkdown'
 import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { TOOL_RUN_CHEVRON_SIZE, type ChatMessageStyles } from './mobile-native-chat-message-styles'
+import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 
 /** What an opened row says when only the TUI's row reached the phone: the
  *  sender, and no words (a tab launched without the prompt hook). */
@@ -59,9 +59,9 @@ export function MobileNativeChatAgentMessageRow({
           {title}
         </Text>
         {open ? (
-          <ChevronDown size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
+          <ChevronDown size={14} color={colors.textMuted} strokeWidth={2} />
         ) : (
-          <ChevronRight size={TOOL_RUN_CHEVRON_SIZE} color={colors.chatMuted} strokeWidth={2} />
+          <ChevronRight size={14} color={colors.textMuted} strokeWidth={2} />
         )}
       </Pressable>
       {open ? (

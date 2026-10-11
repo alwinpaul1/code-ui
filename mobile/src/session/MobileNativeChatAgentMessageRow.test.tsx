@@ -173,11 +173,10 @@ describe("a subagent's message in the chat", () => {
   ] as const)('paints its title, chevron and note from the %s theme', (scheme, palette) => {
     const root = render('', scheme)
     const title = root.find((node) => (node.type as unknown) === 'Text' && [node.props.children].flat().join('') === 'Message from general-purpose')
-    // A tool row's label and chevron: the Claude app's muted (2026-10-11).
-    expect(colorOf(title.props.style)).toBe(palette.chatMuted)
-    expect(root.find((node) => (node.type as unknown) === 'ChevronRight').props.color).toBe(palette.chatMuted)
+    expect(colorOf(title.props.style)).toBe(palette.textSecondary)
+    expect(root.find((node) => (node.type as unknown) === 'ChevronRight').props.color).toBe(palette.textMuted)
     act(() => toggle(root).props.onPress())
-    expect(root.find((node) => (node.type as unknown) === 'ChevronDown').props.color).toBe(palette.chatMuted)
+    expect(root.find((node) => (node.type as unknown) === 'ChevronDown').props.color).toBe(palette.textMuted)
     const note = root.find((node) => (node.type as unknown) === 'Text' && [node.props.children].flat().join('') === AGENT_MESSAGE_UNREAD_NOTE)
     expect(colorOf(note.props.style)).toBe(palette.textMuted)
   })

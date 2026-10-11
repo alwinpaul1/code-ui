@@ -4,7 +4,7 @@ import type { MobileSyntaxSegment } from '../session/mobile-file-syntax'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 import { MarkdownCodeHeader } from './MobileMarkdownCodeHeader'
 import { MobileSyntaxLine } from './MobileSyntaxSegments'
-import { gutterCharWidth, gutterWidthForLines } from './mobile-syntax-lines'
+import { gutterWidthForLines } from './mobile-syntax-lines'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMarkdownCodeLines } from './mobile-markdown-code-lines'
 import type { MobileMarkdownBlock } from './mobile-markdown-parser'
@@ -47,11 +47,7 @@ export function renderMarkdownCodeBlock({
             )
           }
           const code = mobileMarkdownCodeLines(block.text, block.language)
-          // Priced at the fence's own code size, which the transcript sets at 15.
-          const gutterWidth = gutterWidthForLines(
-            code.lines.length,
-            gutterCharWidth(Number(styles.codeGutter.fontSize))
-          )
+          const gutterWidth = gutterWidthForLines(code.lines.length)
           return inQuote(
             block,
             styles,

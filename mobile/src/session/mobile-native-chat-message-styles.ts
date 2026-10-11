@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
 import { useTheme, type Theme } from '../theme/theme-context'
+import { TRANSCRIPT_MARKDOWN_TYPOGRAPHY } from '../components/mobile-markdown-prose-scale'
 
 /** User bubble text size; agent prose is set by MobileMarkdown. */
 /** The Claude app's 96 dp chat tile (MobileNativeChatImageStrip.tsx). */
@@ -8,17 +9,10 @@ const IMAGE_TILE_HEIGHT = 96
 
 export const TEXT_SIZE = 15
 export const MONO_SIZE = 12
-/** A sent prompt's words, as the Claude app sets a user message in a Code
- *  session: 15 on 1.4 em, a step under the replies' 17 (`jn7.E`,
- *  docs/claude-app-typography.md, 2026-10-11). */
-export const USER_TEXT_SIZE = 15
-export const USER_TEXT_LINE_HEIGHT = 21
-/** A tool row's label and the status line: the app's most used style, 15 on
- *  1.4 em. */
-export const CHAT_LABEL_SIZE = 15
-export const CHAT_LABEL_LINE_HEIGHT = 21
-/** The chevron at a tool row's end, in dp (the app's 16 dp `caretRight`). */
-export const TOOL_RUN_CHEVRON_SIZE = 16
+/** A sent prompt's words, at the replies' size: the transcript's prose
+ *  (TRANSCRIPT_MARKDOWN_TYPOGRAPHY, the Claude app's "Small", 2026-10-09). */
+export const USER_TEXT_SIZE = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.fontSize
+export const USER_TEXT_LINE_HEIGHT = TRANSCRIPT_MARKDOWN_TYPOGRAPHY.prose.lineHeight
 
 export function makeChatMessageStyles(theme: Theme) {
   const { colors, fonts, radius, space } = theme
@@ -34,19 +28,16 @@ export function makeChatMessageStyles(theme: Theme) {
       maxWidth: '100%',
       gap: space.sm
     },
-    // A Claude Code session draws a sent prompt as a card, not a bubble: 12
-    // dp corners all round, a hairline, 12 dp by 14 dp of padding (`w030.b`,
-    // docs/claude-app-typography.md, 2026-10-11). It was a bubble with a tail
-    // corner from screenshots before.
     userBubble: {
       maxWidth: '86%',
       flexShrink: 1,
       backgroundColor: colors.userBubble,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.hairline,
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 14
+      // Taller and a little rounder than it was (radius.lg, space.sm + 2): the
+      // Claude app's one-line bubble is 106 px against our 91, 3 dp each side.
+      borderRadius: radius.lg + 2,
+      borderBottomRightRadius: radius.xs,
+      paddingHorizontal: space.md + 2,
+      paddingVertical: space.sm + 5
     },
     userText: {
       fontFamily: fonts.regular,
@@ -105,16 +96,12 @@ export function makeChatMessageStyles(theme: Theme) {
       alignItems: 'center',
       gap: space.sm
     },
-    // The Claude app's tool-run row: 12 dp corners, 8 dp in at the sides and
-    // 6 dp above and below its label (`w55.b`).
     toolRunToggle: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: space.sm,
-      borderRadius: 12,
-      paddingHorizontal: 8,
-      paddingVertical: 6
+      paddingVertical: 4
     },
     controlsRow: {
       flexDirection: 'row',
@@ -128,13 +115,11 @@ export function makeChatMessageStyles(theme: Theme) {
       marginTop: space.xs,
       marginLeft: -space.xs
     },
-    // The app's label: 15 on 21 at 400, in its muted colour (`da20.a`).
     toolRunLabel: {
       flex: 1,
-      fontFamily: fonts.regular,
-      color: colors.chatMuted,
-      fontSize: CHAT_LABEL_SIZE,
-      lineHeight: CHAT_LABEL_LINE_HEIGHT
+      fontFamily: fonts.medium,
+      color: colors.textSecondary,
+      fontSize: 13
     },
     // A batch of calls reads as a list only if something marks where one member
     // ends. The tone step from name to argument is that mark: punctuation
@@ -142,12 +127,12 @@ export function makeChatMessageStyles(theme: Theme) {
     toolRunMemberName: {
       color: colors.text,
       fontFamily: fonts.medium,
-      fontSize: CHAT_LABEL_SIZE
+      fontSize: 13
     },
     toolRunMemberArg: {
-      color: colors.chatMuted,
+      color: colors.textMuted,
       fontFamily: fonts.regular,
-      fontSize: CHAT_LABEL_SIZE
+      fontSize: 13
     },
     toolRunBody: {
       paddingLeft: space.sm + 2,
@@ -209,9 +194,7 @@ export function makeChatMessageStyles(theme: Theme) {
       paddingHorizontal: 10,
       paddingVertical: 6,
       borderRadius: radius.md,
-      // The panel, not bgRaised: bgRaised is the sent prompt's card colour,
-      // and a chip inside the card vanished into it (review, 2026-10-11).
-      backgroundColor: colors.bgPanel,
+      backgroundColor: colors.bgRaised,
       borderWidth: 1,
       borderColor: colors.border
     },
