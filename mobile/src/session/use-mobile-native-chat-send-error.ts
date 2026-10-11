@@ -15,8 +15,10 @@ import { dropSendErrorRetry, holdSendErrorRetry } from './native-chat-send-error
 export type MobileNativeChatSendErrorDetails = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
   failure?: AgentSessionFailureFact
-  /** A send refused before anything was written, its words back in the composer: the banner
-   *  offers Retry, which sends them again (S5, the Claude app's snackbar). */
+  /** A send refused with its words back in the composer: before anything was written (S5), or
+   *  its body write refused by the desktop (S2). The banner offers Retry, which sends them again
+   *  as a new press, whose clear takes any of them a refused write left on the line (the Claude
+   *  app's snackbar). */
   retry?: true
 }
 

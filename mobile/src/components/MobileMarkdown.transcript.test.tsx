@@ -23,7 +23,9 @@ vi.mock('react-native', () => ({
   ScrollView: 'ScrollView',
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Text: 'Text',
-  View: 'View'
+  View: 'View',
+  // The document's selection colours (markdown-selection-copy.android.tsx); any colour int will do.
+  processColor: () => 0
 }))
 vi.mock('./pr-sidebar/MermaidDiagram', () => ({ MermaidDiagram: 'MermaidDiagram' }))
 // Android as Metro resolves it: each pill's View carries the span a Copy

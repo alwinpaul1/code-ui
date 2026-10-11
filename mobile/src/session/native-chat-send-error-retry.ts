@@ -2,8 +2,9 @@ import { useSyncExternalStore } from 'react'
 
 /**
  * Whether the send failure the chat's banner holds offers Retry (S5 of
- * docs/claude-app-parity-gaps.md): a send refused before anything was written, whose words are
- * back in the composer, as the Claude app's snackbar does.
+ * docs/claude-app-parity-gaps.md): a send whose words are back in the composer, refused before
+ * anything was written or with its body write refused by the desktop, as the Claude app's snackbar
+ * does.
  *
  * Held beside the banner's message rather than threaded through the route, overlay and view with
  * it: only one banner is up at a time (the send-error hook scopes it to the tab on screen), and

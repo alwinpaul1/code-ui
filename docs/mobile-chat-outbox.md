@@ -143,7 +143,9 @@ write (`terminal.send`; `writeChatSend` reports it before Claude's check, and th
 this the dim lasted until Claude had the message on record, which on a send whose check could not
 settle was the whole 20 s hold. Only the look moved: the entry still waits for Claude's record
 before it leaves the outbox, and "Not sent" still comes only from the outbox giving up. A send
-whose ack never came, and one waiting in the outbox for the desktop, stay dimmed. A body write the
+whose ack never came, and one waiting in the outbox for the desktop, stay dimmed, and every new
+attempt (a Retry, a resend by the chat's recovery or the drainer) is dimmed again until its own
+write is answered. A body write the
 desktop refused puts the words back in the composer with a Retry on the banner, as the Claude
 app's snackbar does (not for a photo send, whose undo is its own, or a recovery resend, whose
 bubble says "Not sent").

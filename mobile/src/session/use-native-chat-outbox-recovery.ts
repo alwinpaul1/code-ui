@@ -176,7 +176,9 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
         !(await patchOutboxEntry(entry.id, {
           autoAttempts: entry.autoAttempts + 1,
           lastAttemptAt: Date.now(),
-          failed: undefined
+          failed: undefined,
+          // A new attempt is on its way again: dimmed until its own write is answered (S2).
+          hostAcked: undefined
         }))
       ) {
         void patchOutboxEntry(entry.id, { failed: true })
@@ -310,7 +312,8 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
         failed: undefined,
         failedReason: undefined,
         operationId: structuredSessionOperationId(),
-        autoAttempts: 0
+        autoAttempts: 0,
+        hostAcked: undefined
       }).then(() => wantOutboxDrain())
     }
   }, [])

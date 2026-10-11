@@ -200,7 +200,8 @@ export function createOutboxDrainer(deps: OutboxDrainDeps): OutboxDrainer {
     if (
       !(await patchOutboxEntry(current.id, {
         autoAttempts: current.autoAttempts + 1,
-        lastAttemptAt: attemptAt
+        lastAttemptAt: attemptAt,
+        hostAcked: undefined // dimmed again until this attempt's write is answered (S2)
       }))
     ) {
       backOff(state)
