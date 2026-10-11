@@ -53,6 +53,31 @@ export function MobileNativeChatImageThumb({
   )
 }
 
+/** The Claude app's thumbnail of a picture the agent read or sent (the
+ *  user's screenshots of 2026-10-11): a 250 dp square with 16 dp corners,
+ *  left-aligned, the picture cropped to fill it, no frame or label. A tap
+ *  opens the whole picture full-screen. */
+export const AGENT_IMAGE_TILE_SIZE = 250
+export const AGENT_IMAGE_TILE_RADIUS = 16
+
+export function MobileNativeChatAgentImageTile({ uri, label }: { uri: string; label: string }) {
+  return (
+    <Pressable
+      onPress={() => openImagePreview(uri, label)}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={label}
+      style={{ alignSelf: 'flex-start', maxWidth: '100%' }}
+    >
+      <Image
+        source={{ uri }}
+        style={{ width: AGENT_IMAGE_TILE_SIZE, height: AGENT_IMAGE_TILE_SIZE, borderRadius: AGENT_IMAGE_TILE_RADIUS }}
+        resizeMode="cover"
+        accessibilityLabel={label}
+      />
+    </Pressable>
+  )
+}
+
 /** Several images in one message, side by side and scrollable sideways, the
  *  way the Claude app lays out a multi-image upload or the screenshots an
  *  agent read. A tap opens the viewer on that image, paging through the rest. */

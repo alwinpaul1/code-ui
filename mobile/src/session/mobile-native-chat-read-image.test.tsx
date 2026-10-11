@@ -131,9 +131,16 @@ describe('an image the agent read', () => {
     expect(peekImagePreview()).toMatchObject({ uri: SECOND_URI, uris: [FIRST_URI, SECOND_URI], index: 1 })
   })
 
-  it('leaves the step as it was while the host has not sent the picture', () => {
-    const step = stepOf([BEFORE, ...READ_IMAGE_ROWS, AFTER], {})
-    expect(step.blocks.some((block) => block.type === 'image-ref')).toBe(false)
-    expect(imageButtons(render(step))).toHaveLength(0)
+  // Until 2026-10-11 the step stayed as it was, so a picture the host never
+  // shared left no trace at all ("I don't see any images in my chat"). Now
+  // its slot names the file, with nothing to tap.
+  it('names the file in its place while the host has not sent the picture, with nothing to tap', () => {
+    const step = stepOf([BEFORE, ...READ_IMAGE_ROWS, AFTER], { [READ_IMAGE_CALL_ID]: [''] }) // asked, no answer yet
+    expect(step.blocks.filter((block) => block.type === 'image-ref')).toEqual([
+      { type: 'image-ref', path: READ_IMAGE_PATH, alt: 'Image the agent read' }
+    ])
+    const root = render(step)
+    expect(imageButtons(root)).toHaveLength(0)
+    expect(root.findAll((node) => node.props.accessibilityLabel === 'Image on Desktop: img39_1.jpeg. Preview unavailable.')).not.toHaveLength(0)
   })
 })

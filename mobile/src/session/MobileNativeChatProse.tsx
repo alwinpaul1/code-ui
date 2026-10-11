@@ -1,4 +1,4 @@
-import { Pressable, Text } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { Image as ImageIcon } from 'lucide-react-native'
 import { isImageRefBlock, isTextBlock, type NativeChatBlock } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
@@ -8,7 +8,8 @@ import {
 } from '../components/mobile-markdown-prose-scale'
 import { isDesktopImageRef } from './mobile-desktop-prompt-images'
 import { isRenderableImageUri } from './mobile-native-chat-image-preview'
-import { MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
+import { MobileNativeChatAgentImageTile, MobileNativeChatImageThumb } from './MobileNativeChatImageStrip'
+import { isAgentImageAlt } from './mobile-native-chat-agent-images'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../src/shared/native-chat-visual-directive'
 import type { MobileNativeChatVisualRender } from './mobile-native-chat-visual-context'
 import {
@@ -86,6 +87,29 @@ export function Prose({
     // A local preview (composer echo) or real URL renders as a thumbnail; a bare
     // host path (not loadable on the device) falls back to a text placeholder.
     const uri = block.url ?? block.path
+    // A picture the agent read or sent: a square tile, as the Claude app
+    // draws it, or, until the host sends it (or when it will not), a
+    // placeholder naming the file. Nothing to tap there: opening the path
+    // asks the same host the same question.
+    if (!invert && isAgentImageAlt(block.alt)) {
+      if (isRenderableImageUri(block.url)) {
+        return <MobileNativeChatAgentImageTile uri={block.url} label={block.alt ?? 'Image'} />
+      }
+      const name = fileName(block.path)
+      return (
+        <View
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel={`Image on Desktop: ${name}. Preview unavailable.`}
+          style={styles.imageChip}
+        >
+          <ImageIcon size={14} color={styles.imageRef.color as string} strokeWidth={2} />
+          <Text numberOfLines={1} style={[styles.imageRef, { fontSize: (TEXT_SIZE - 2) * fontScale, flexShrink: 1 }]}>
+            {name}
+          </Text>
+        </View>
+      )
+    }
     if (isRenderableImageUri(uri)) {
       // Why: the picture is already on the phone (a local upload, or a host
       // thumbnail fetched earlier), so tapping opens it full-screen at once —
@@ -118,3 +142,10 @@ export function Prose({
   return null
 }
 
+function fileName(path: string | undefined): string {
+  if (!path) {
+    return 'Image'
+  }
+  const segments = path.split(/[\\/]/)
+  return segments[segments.length - 1] || path
+}

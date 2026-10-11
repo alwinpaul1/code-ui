@@ -40,7 +40,7 @@ export function renderProseGroup(
         <MobileNativeChatImageStrip uris={group.uris} label={group.alt} styles={options.styles} />
       )
     case 'file-cards':
-      return <MobileNativeChatFileCardRow cards={group.cards} />
+      return <MobileNativeChatFileCardRow cards={group.cards} sent={group.sent === true} />
     case 'block':
       // A spawn group's roster draws as its live row (its frozen sentence is dropped upstream of
       // here, withoutSubagentGroupTwins); a childless one draws nothing, as Prose would.

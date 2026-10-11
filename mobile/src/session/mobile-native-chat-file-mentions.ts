@@ -50,6 +50,14 @@ function splitExtension(name: string): { stem: string; ext: string } {
   return { stem: name.slice(0, dot), ext: name.slice(dot + 1).toUpperCase() }
 }
 
+/** A card for a file the agent sent (SendUserFile): its own name, kept
+ *  whole. The upload-id rule above is for Claude Code's copies of a dropped
+ *  file, and a sent file is the agent's own. */
+export function sentFileCard(path: string): FileMentionCard {
+  const { stem, ext } = splitExtension(baseName(path))
+  return { path, name: stem, ext }
+}
+
 function fileMentionCard(path: string): FileMentionCard {
   const named = baseName(path).replace(UPLOAD_ID_PREFIX, '')
   const { stem, ext } = splitExtension(named)

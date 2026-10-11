@@ -545,7 +545,8 @@ describe('agent-read thumbnails across a mid-turn split', () => {
     } as NativeChatMessage
   ]
   const previews = { a2: ['data:image/png;base64,AAAA'] }
-  const thumbnail = { type: 'image-ref', url: 'data:image/png;base64,AAAA', alt: 'Image the agent read' }
+  // The slot names its file too, so a picture the host never sends still says what it was.
+  const thumbnail = { type: 'image-ref', path: '/repo/shot.png', url: 'data:image/png;base64,AAAA', alt: 'Image the agent read' }
 
   it('keeps the words before a read image ahead of it, and the words after it behind', () => {
     const message = {

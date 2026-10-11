@@ -524,6 +524,14 @@ export function useMobileNativeChatController(
   // A terminal Claude tab's Stop drives Claude's own Background dialog (claude-background-task-stop.ts); the structured lane asks its host.
   const structuredCancelPrompt = useNativeChatAcceptedAction(activeChatStructured ? structuredNativeChat.cancelPrompt : async () => false, onSendResolved); const terminalTaskStop = useClaudeTerminalTaskStop({ client, handleRef: activeHandleRef, deviceTokenRef, enabled: !activeChatStructured && activeChatResolution?.agent === 'claude' && connState === 'connected', onDriven: refreshTerminalHud })
 
+  // Held across renders: a fresh map each render re-ran the chat's whole
+  // render-data pass, and an agent's pictures now keep a host entry even
+  // before any has loaded (use-host-image-previews.ts).
+  const chatImagePreviewsByMessageId = useMemo(
+    () => mergeImagePreviews(chatImagePreviewsByMessageIdLocal, hostImagePreviews),
+    [chatImagePreviewsByMessageIdLocal, hostImagePreviews]
+  )
+
   return {
     isTabChatView,
     toggleTabChatView,
@@ -538,10 +546,7 @@ export function useMobileNativeChatController(
     getChatComposerEditGeneration,
     chatPending, chatWaitingPhotoSends, rememberEcho, takeOwnSends: takeSends, nativeChatOutboxDeliveries: outbox.deliveries, retryNativeChatOutbox: outbox.retry, editNativeChatOutbox: outbox.edit,
     nativeChatQueuedMessages: activeChatStructured || connState !== 'connected' ? [] : visibleQueuedMessages, nativeChatQueueReadable: !activeChatStructured && connState === 'connected' && screenQueueReadable, nativeChatQueueEditable: !activeChatStructured && connState === 'connected' && screenQueueEditable,
-    chatImagePreviewsByMessageId: mergeImagePreviews(
-      chatImagePreviewsByMessageIdLocal,
-      hostImagePreviews
-    ),
+    chatImagePreviewsByMessageId,
     nativeChatSession,
     nativeChatStructured: activeChatStructured,
     nativeChatVisualSource: activeChatStructured ? structuredNativeChat.visualSource : null,
