@@ -121,6 +121,23 @@ export const RPC_SUBSCRIPTION_SITES: readonly RpcSubscriptionSite[] = [
     release: 'params',
     coverage: { kind: 'unwritten-scenario' }
   },
+  // The app-wide outbox drainer's one-shot reads: one snapshot of a session's transcript before a
+  // terminal message is typed again (native-chat-outbox-headless.ts), and one event of a
+  // structured session's feed for its fence before a resend (native-chat-outbox-session-send.ts).
+  // Each closes on its first answer. Plain functions over a client, so the recorder could drive
+  // them; nobody has written the scenario.
+  {
+    file: 'src/session/native-chat-outbox-headless.ts',
+    method: 'nativeChat.subscribe',
+    release: 'params',
+    coverage: { kind: 'unwritten-scenario' }
+  },
+  {
+    file: 'src/session/native-chat-outbox-session-send.ts',
+    method: 'agentSession.subscribe',
+    release: 'params',
+    coverage: { kind: 'unwritten-scenario' }
+  },
   {
     file: 'src/worktree/host-worktree-refresh.ts',
     method: 'runtime.clientEvents.subscribe',

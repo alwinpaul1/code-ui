@@ -2,8 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 
 const OUTBOX_KEY = 'orca:chatOutbox'
 
-/** An entry no chat has come back for in this long is dropped when the store is read: the tab it
- *  was for is gone, or nobody opened it for a week. */
+/** An entry still here this long after it was written is dropped when the store is read. The
+ *  app-wide drainer sends or gives up on an entry long before (it gives up on any entry over a
+ *  day old, which then waits in its chat as "Not sent"), so what is left this late is one whose
+ *  tab is gone or that nobody opened for a week. */
 const OUTBOX_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 /**
@@ -45,7 +47,38 @@ export type NativeChatOutboxEntry = {
   autoAttempts: number
   /** An automatic resend could not deliver it: the bubble says "Not sent" and offers Retry. */
   failed?: true
+  /** Why the app-wide drainer stopped trying (native-chat-outbox-drainer.ts), for the notice the
+   *  chat gives when it is next opened. Absent when a chat's own recovery marked it. */
+  failedReason?: NativeChatOutboxFailReason
+  /** Where it goes, stamped from the chat that sent it, so the app-wide drainer can send it with
+   *  no chat on screen. Absent on entries written by 0.9.128 and earlier: those wait for their chat. */
+  route?: NativeChatOutboxRoute
+  /** Photos and files: the desktop paths they were uploaded to, with the phone's previews, so a
+   *  resend carries them again. Absent on photo entries from 0.9.128 and earlier, which cannot be
+   *  resent and go back into the composer. */
+  attachments?: NativeChatOutboxAttachment[]
+  /** When the last automatic send of it started, by the phone's clock. */
+  lastAttemptAt?: number
 }
+
+export type NativeChatOutboxRoute = {
+  hostId: string
+  worktreeId: string
+  tabId: string
+  lane: 'terminal' | 'session'
+  /** The tab's agent (claude, codex, …) when the phone knew it. */
+  agent: string | null
+  /** The agent's session the message was written for. */
+  sessionId: string | null
+  /** The terminal it was typed into (terminal lane only). */
+  terminal: string | null
+  /** The transcript file the chat read, when the host named one (terminal lane). */
+  transcriptPath: string | null
+}
+
+export type NativeChatOutboxAttachment = { path: string; previewUri: string }
+
+export type NativeChatOutboxFailReason = 'tooOld' | 'session' | 'tabClosed' | 'unsure' | 'attempts'
 
 let entries: NativeChatOutboxEntry[] = []
 let hydration: Promise<void> | null = null
@@ -53,6 +86,48 @@ let hydration: Promise<void> | null = null
 let readRefused = false
 let writes: Promise<void> = Promise.resolve()
 const listeners = new Set<() => void>()
+
+function isRoute(value: unknown): value is NativeChatOutboxRoute {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const route = value as Partial<NativeChatOutboxRoute>
+  const optionalString = (field: unknown) => field === null || typeof field === 'string'
+  return (
+    typeof route.hostId === 'string' &&
+    typeof route.worktreeId === 'string' &&
+    typeof route.tabId === 'string' &&
+    (route.lane === 'terminal' || route.lane === 'session') &&
+    optionalString(route.agent) &&
+    optionalString(route.sessionId) &&
+    optionalString(route.terminal) &&
+    optionalString(route.transcriptPath)
+  )
+}
+
+function isAttachmentList(value: unknown): value is NativeChatOutboxAttachment[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        typeof (item as NativeChatOutboxAttachment).path === 'string' &&
+        typeof (item as NativeChatOutboxAttachment).previewUri === 'string'
+    )
+  )
+}
+
+/** A stored route or attachment list that does not read is dropped, not the entry: the entry then
+ *  waits for its chat, as one from an older build does. */
+function withReadableExtras(entry: NativeChatOutboxEntry): NativeChatOutboxEntry {
+  const { route, attachments, ...rest } = entry
+  return {
+    ...rest,
+    ...(isRoute(route) ? { route } : {}),
+    ...(isAttachmentList(attachments) && attachments.length > 0 ? { attachments } : {})
+  }
+}
 
 function isEntry(value: unknown): value is NativeChatOutboxEntry {
   if (typeof value !== 'object' || value === null) {
@@ -77,7 +152,10 @@ function parseStored(raw: string | null, now: number): NativeChatOutboxEntry[] {
   try {
     const parsed: unknown = JSON.parse(raw)
     return Array.isArray(parsed)
-      ? parsed.filter(isEntry).filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS)
+      ? parsed
+          .filter(isEntry)
+          .filter((entry) => now - entry.createdAt < OUTBOX_PRUNE_AGE_MS)
+          .map(withReadableExtras)
       : []
   } catch {
     // A list that will not parse is no list: it is written over by the next change.

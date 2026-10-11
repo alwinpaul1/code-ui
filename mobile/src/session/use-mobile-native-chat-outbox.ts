@@ -1,4 +1,4 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import { readNativeChatDraft } from '../storage/native-chat-drafts'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { appendReturnedDraftText } from '../../../src/shared/returned-draft-text'
@@ -8,6 +8,7 @@ import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { stripMobileNativeChatAttachmentNotes } from './mobile-native-chat-video-frames-attachment'
 import { useNativeChatOutboxRecovery, type OutboxDelivery } from './use-native-chat-outbox-recovery'
+import { publishOutboxChatRoute } from './native-chat-outbox-sends'
 
 export type { OutboxDelivery }
 
@@ -26,6 +27,11 @@ export function useMobileNativeChatOutbox(input: {
   structured: boolean
   /** A terminal chat whose agent is resolved (Claude Code, Codex, …). */
   terminalChat: boolean
+  /** The chat's agent, its terminal and its transcript file: stamped on every message this chat
+   *  writes to the outbox, so the app-wide drainer can send it with the chat closed. */
+  agent?: string | null
+  terminal?: string | null
+  transcriptPath?: string | null
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
   receipts: readonly BeaconPromptReceipt[]
@@ -63,6 +69,27 @@ export function useMobileNativeChatOutbox(input: {
     )
     return true
   }, [])
+  const routeLane = structured ? 'session' : input.terminalChat ? 'terminal' : null
+  const { hostId, worktreeId, tabId, sessionId } = input
+  const routeAgent = input.agent ?? null
+  const routeTerminal = structured ? null : (input.terminal ?? null)
+  const routeTranscriptPath = structured ? null : (input.transcriptPath ?? null)
+  useEffect(
+    () =>
+      draftKey && tabId && routeLane
+        ? publishOutboxChatRoute(draftKey, {
+            hostId,
+            worktreeId,
+            tabId,
+            lane: routeLane,
+            agent: routeAgent,
+            sessionId,
+            terminal: routeTerminal,
+            transcriptPath: routeTranscriptPath
+          })
+        : undefined,
+    [draftKey, hostId, routeAgent, routeLane, routeTerminal, routeTranscriptPath, sessionId, tabId, worktreeId]
+  )
   const send = useCallback(
     (text: string) => (structured ? sendStructured(text) : sendTerminal(text)),
     [sendStructured, sendTerminal, structured]

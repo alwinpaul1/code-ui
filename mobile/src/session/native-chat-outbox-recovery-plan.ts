@@ -12,8 +12,9 @@ export const OUTBOX_SAFE_WAIT_MS = 10 * 60 * 1000
 /** The agent must have been safe to type into this long, unbroken, before a resend types:
  *  a queued message the agent takes as its turn ends draws its row in that moment. */
 export const OUTBOX_IDLE_SETTLE_MS = 2_000
-/** Automatic sends a structured entry gets. Each carries the entry's one operation id, so a
- *  second one can only replay the first's answer, never post the message twice. */
+/** Automatic sends a structured entry gets from its chat's recovery. Each carries the entry's one
+ *  operation id, so a second one can only replay the first's answer, never post the message
+ *  twice. (The app-wide drainer gives one up to OUTBOX_DRAIN_SESSION_ATTEMPTS, under the same id.) */
 export const OUTBOX_SESSION_AUTO_ATTEMPTS = 2
 
 export type OutboxLane = 'terminal' | 'session'
@@ -56,6 +57,7 @@ export function outboxEntryLanding(
 /** Why an entry goes back into the composer, in the notice's words. */
 export const OUTBOX_GIVE_BACK = {
   attachments: 'the app closed before it reached your desktop. Attach the files again and send it',
+  undelivered: 'it could not be delivered to your desktop. Attach the files again and send it',
   tooOld: 'the app closed before it reached your desktop, more than a day ago. Send it again',
   busy: 'the agent on your desktop stayed busy for 10 minutes after the app came back. Send it again',
   session: 'the session on this tab changed before it reached your desktop. Send it again'
@@ -76,7 +78,10 @@ export type OutboxStep =
  * - The tab's session changed: the words go back (they were meant for the old one).
  * - Not until the transcript is this session's settled read can anything be told.
  * - Landed (its row, or the agent's receipt): retired, nothing sent.
- * - Over a day old, or carrying files: back into the composer.
+ * - Over a day old: back into the composer.
+ * - Carrying files: the app-wide drainer's to send (native-chat-outbox-drainer.ts), which knows
+ *   the desktop paths they were uploaded to. One it gave up on, or one written by 0.9.128 or
+ *   earlier (no paths kept), goes back into the composer.
  * - A terminal entry a previous automatic send already went out for, or one whose boundary
  *   the read no longer reaches, is never typed again by itself: there is no server id to
  *   dedupe on, so it says "Not sent" and waits for Retry. A structured one is resent under
@@ -113,6 +118,9 @@ export function planOutboxEntry(input: {
     return { kind: 'give-back', reason: 'tooOld' }
   }
   if (entry.hasAttachments) {
+    if (entry.route && entry.attachments?.length) {
+      return entry.failed ? { kind: 'give-back', reason: 'undelivered' } : { kind: 'wait' }
+    }
     return { kind: 'give-back', reason: 'attachments' }
   }
   if (!userRetry) {

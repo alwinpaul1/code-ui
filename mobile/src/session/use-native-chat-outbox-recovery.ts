@@ -10,14 +10,18 @@ import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { outboxEchoId, outboxEntryIdOfEcho } from './mobile-native-chat-outbox-drafts'
 import {
+  claimOutboxSend,
   isOutboxSendLive,
   offerOutboxAdoption,
   outboxReleasedThisRun,
   patchOutboxEntry,
   mountOutboxRecovery,
+  publishOutboxChatIdle,
   registerOutboxRecovery,
   retireOutboxSend,
-  takeOutboxAdoption
+  takeOutboxAdoption,
+  unclaimOutboxSend,
+  wantOutboxDrain
 } from './native-chat-outbox-sends'
 import { beginNativeChatSendTiming, finishNativeChatSendTiming } from './native-chat-send-timing'
 import { structuredSessionOperationId } from './structured-session-operation-id'
@@ -59,7 +63,7 @@ export type NativeChatOutboxRecoveryArgs = {
   removeEcho: (id: string) => void
   /** Puts words back after whatever the composer of `draftKey` holds, its stored draft included
    *  when it has not been read back yet. Resolves false when that tab is no longer the one on
-   *  screen: the entry then stays for the next chat of its tab. */
+   *  screen: the entry then stays in the outbox for that tab's chat. */
   restoreToComposer: (draftKey: string, text: string) => Promise<boolean>
   onNotice: (message: string) => void
 }
@@ -72,8 +76,10 @@ export type NativeChatOutboxRecoveryArgs = {
  * A resend the desktop refuses leaves its bubble saying "Not sent", with Retry and Edit.
  *
  * It runs while the chat of the entry's tab is on screen: the safety of a terminal resend is
- * read off that chat's screen (the cards, the dialog guard, the queue box), so with no chat
- * mounted nothing is resent, and the entry waits for the tab to be opened.
+ * read off that chat's screen (the cards, the dialog guard, the queue box). Every entry it does
+ * not see through (its chat not on screen, its transcript not settled, a photo) is the app-wide
+ * drainer's (native-chat-outbox-drainer.ts), which sends it whatever is on screen. The two never
+ * carry one entry at once: each send claims it (claimOutboxSend).
  */
 export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs): {
   deliveries: Readonly<Record<string, OutboxDelivery>>
@@ -112,6 +118,10 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
     () => (draftKey && lane && transcriptSettled ? registerOutboxRecovery(draftKey, true) : undefined),
     [draftKey, lane, transcriptSettled]
   )
+  // The drainer types a photo entry into this chat's terminal only when this says it is safe:
+  // the phone's composer mirrors into the same input line.
+  const { idle } = args
+  useEffect(() => (draftKey && lane ? publishOutboxChatIdle(draftKey, idle) : undefined), [draftKey, lane, idle])
 
   const givingBack = useRef(new Set<string>())
   const giveBack = useCallback(async (entry: NativeChatOutboxEntry, reason: OutboxGiveBack | null) => {
@@ -141,12 +151,26 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
   }, [])
 
   const resend = useCallback(async (entry: NativeChatOutboxEntry) => {
+    // The drainer may be carrying it: one send at a time per entry.
+    if (!claimOutboxSend(entry.id)) {
+      return
+    }
     inFlight.current = entry.id
     userRetry.current.delete(entry.id)
+    // An 'unknown' send stays claimed: its hold carries it now and lets it go when it runs out
+    // (releaseOutboxSend). Any other end frees it, so a Retry on a refused resend can send again.
+    let keepClaim = false
     try {
       // Counted on disk BEFORE it goes: a process that dies now leaves the next one knowing a
-      // copy may be out. A count that cannot be written sends nothing.
-      if (!(await patchOutboxEntry(entry.id, { autoAttempts: entry.autoAttempts + 1, failed: undefined }))) {
+      // copy may be out, and when (the drainer's confirm wait runs from it). A count that cannot
+      // be written sends nothing.
+      if (
+        !(await patchOutboxEntry(entry.id, {
+          autoAttempts: entry.autoAttempts + 1,
+          lastAttemptAt: Date.now(),
+          failed: undefined
+        }))
+      ) {
         void patchOutboxEntry(entry.id, { failed: true })
         return
       }
@@ -167,8 +191,13 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
         void retireOutboxSend(entry.id)
       } else if (outcome === 'rejected') {
         void patchOutboxEntry(entry.id, { failed: true })
+      } else {
+        keepClaim = true
       }
     } finally {
+      if (!keepClaim) {
+        unclaimOutboxSend(entry.id)
+      }
       inFlight.current = null
       setVersion((n) => n + 1)
     }
@@ -259,7 +288,12 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
       userRetry.current.add(id)
       // A tap on Retry is a new press (#26392): a new operation id, so a ledger row the earlier
       // attempts left unresolved or refused cannot answer it. Its own automatic attempts share it.
-      void patchOutboxEntry(id, { failed: undefined, operationId: structuredSessionOperationId(), autoAttempts: 0 })
+      void patchOutboxEntry(id, {
+        failed: undefined,
+        failedReason: undefined,
+        operationId: structuredSessionOperationId(),
+        autoAttempts: 0
+      }).then(() => wantOutboxDrain())
     }
   }, [])
   const edit = useCallback(
