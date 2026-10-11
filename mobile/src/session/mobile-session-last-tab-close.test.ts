@@ -19,17 +19,17 @@ describe('mobile session last-tab close', () => {
     const block = sessionRouteSource.slice(start, end)
 
     expect(block).toContain('planSessionTabClose')
-    expect(block).toContain('handleCloseTerminal(target)')
     // A second terminal.close on the same, now-dead handle makes the host close
     // the whole TAB — verified against a live host. Any loop here is that bug.
+    expect(block.split('await closeTerminalOptimistically(')).toHaveLength(2)
     expect(block).not.toContain('plan.repeats')
     expect(block).not.toMatch(/for \(let index = 0/)
     expect(block).not.toContain('if (!closed)')
   })
 
   it('clears stale active identity when closing leaves no tabs', () => {
-    const start = sessionRouteSource.indexOf('async function handleCloseSessionTab')
-    const end = sessionRouteSource.indexOf('const bulkCloseActions', start)
+    const start = sessionRouteSource.indexOf('function selectAfterClose')
+    const end = sessionRouteSource.indexOf('async function handleCloseSessionTab', start)
     const block = sessionRouteSource.slice(start, end)
 
     expect(block).toContain(
@@ -37,8 +37,13 @@ describe('mobile session last-tab close', () => {
     )
     expect(block).toContain('activeSessionTabIdRef.current = null')
     expect(block).toContain('activeHandleRef.current = null')
-    expect(block).toContain(
-      'reconcileBufferedDraftsRef.current(sessionTabsRef.current, remainingTabs)'
+    const close = sessionRouteSource.slice(
+      end,
+      sessionRouteSource.indexOf('const bulkCloseActions', end)
+    )
+    expect(close).toContain('selectAfterClose(tab, remainingTabs)')
+    expect(close).toContain(
+      'reconcileBufferedDraftsRef.current([...sessionTabsRef.current, tab], sessionTabsRef.current)'
     )
   })
 

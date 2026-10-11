@@ -43,9 +43,10 @@ export function createBulkCloseSheetActions(deps: BulkCloseSheetDeps) {
     if (activeWasTargeted) {
       deps.switchSessionTab(anchor)
     }
-    for (const target of targets) {
-      await deps.closeSessionTab(target)
-    }
+    // Why: every close takes its tab off the strip before it waits on the desktop, so starting
+    // them together clears the strip at once. Awaiting each in turn left the rest drawn for one
+    // relay round trip plus one desktop close transaction apiece (2026-10-11).
+    await Promise.all(targets.map((target) => deps.closeSessionTab(target)))
   }
 
   return (anchorTabId: string | null | undefined, dismiss: () => void): ActionSheetAction[] => {

@@ -154,7 +154,10 @@ export function sessionScreenTabMountAdapters(
             fetchTerminals: () => {
               effect('fetch-terminals', {})
               return Promise.resolve(true)
-            }
+            },
+            visitedSessionTabIdsRef: { current: [] },
+            switchSessionTabRef: { current: null },
+            showToast: (message: string) => effect('toast', { message })
           })
         )
       })

@@ -322,8 +322,11 @@ const HEAD_CONTENT_HOOK_SHA256 = '94c9cd0019cba558ea4415f7769527e1f2e7840977eed1
 // Same 13 functions. The #24655 follow-up adds the read cache's forget to the same body.
 // 2026-10-10 (Orca #26159 ported): the same body also deletes an accepted Markdown tab's clean
 // document. Same 13 functions.
+// 16 since 2026-10-11 (slow tab close): a tab close is optimistic, so the close actions gain
+// sendClose, closeTerminalOptimistically and selectAfterClose, and handleCloseSessionTab's body
+// takes the tab off the strip before it sends.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '9e3c043a52efdeb7ac0cb76087ac3f191b82a83cc63642d6d050d60b6989a58f'
+  '7a93536432f3ad1d19e1dbfa91afcfd3dc3666a3c15036735e5b48245fe0ff52'
 // 7 since 2026-09-22: AppState.addEventListener stops a dictation take when a call backgrounds the app.
 // 5 since 2026-09-24 (Orca #22252): the route's Keyboard.addListener pair is gone; the
 // keyboard state now reads useSoftKeyboard from the platform seam.
@@ -430,7 +433,7 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // 666 since 2026-10-11 (parity gap G35): the header menu moved out of the sheets into
 // MobileSessionHeaderMenu.tsx, outside this family, taking handlePanelTap('pr')'s 'pr' with it.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '0c423dbf7e4d26fdf5c007366d6fb16be5e3648f57e653aac27d467e512e5958'
+  '560c8ea86ab2cf932cf2521f7e3284ba75cc4dcae0210e2d2dd5d2a4d24d5937'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -1036,7 +1039,7 @@ describe('mobile session route extraction parity', () => {
     expect(contentBindings).toHaveLength(22)
     expect(hash(contentBindings)).toBe(HEAD_CONTENT_HOOK_SHA256)
     const nestedFunctions = readNestedFunctions(definitions)
-    expect(nestedFunctions).toHaveLength(13)
+    expect(nestedFunctions).toHaveLength(16)
     expect(hash(nestedFunctions)).toBe(HEAD_NESTED_FUNCTION_SHA256)
   })
 
@@ -1142,7 +1145,9 @@ describe('mobile session route extraction parity', () => {
     // context ring and its sheet, and the Rename dialog's strings, live outside the family too.
     // 661 later on 2026-10-11: the header's model pill ("Model …", its styles) is gone; the user
     // asked for the model and effort to show only in the composer.
-    expect(strings).toHaveLength(661)
+    // 670 later on 2026-10-11: the optimistic tab close's verdict literals ('closed', 'refused',
+    // 'not connected', 'the desktop refused') and its 'terminal-handle' check.
+    expect(strings).toHaveLength(670)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
