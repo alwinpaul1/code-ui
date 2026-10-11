@@ -32,7 +32,7 @@ import {
   MobileNativeChatSessionOptionPickers,
   type MobileNativeChatSessionOptionPickersProps
 } from './MobileNativeChatSessionOptionPickers'
-import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
+import { nativeChatAttachmentCount, type PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 
 const NO_FILE_PATHS: string[] = []
 const NO_SKILLS: DiscoveredSkill[] = []
@@ -246,12 +246,7 @@ export function MobileNativeChatComposer({
   // Not while dictating: the mic's own Stop dictation square sits beside the slot.
   // A failed chip alone sends nothing, so it does not hold the slot from Stop.
   const showStop = canStop && onStop !== undefined && (!hasContent || (hasFailedChip && !trimmed)) && !micActive
-  const canSend =
-    hasContent &&
-    !hasFailedChip &&
-    !disabled &&
-    !sending &&
-    !sessionOptionDispatching
+  const canSend = hasContent && !hasFailedChip && !disabled && !sending && !sessionOptionDispatching
 
   const { trigger, suggestions, popoverMaxHeight, onPopoverLayout } = useComposerSuggestions({
     value,
@@ -466,7 +461,7 @@ export function MobileNativeChatComposer({
                     ? () => setShowModeSheet(true)
                     : undefined
                 }
-                attachmentCount={attachments.length}
+                attachmentCount={nativeChatAttachmentCount(attachments)}
               />
             ) : null}
             {sessionOptions ? (
