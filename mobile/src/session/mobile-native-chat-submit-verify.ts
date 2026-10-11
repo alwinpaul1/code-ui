@@ -263,30 +263,26 @@ export async function verifyClaudeSubmit(args: {
  * Whether one screen shows Claude's input holding exactly this send's words (photo chips aside)
  * and nothing else, with no review notice: the only screen a second Return may go over
  * (mobile-native-chat-send-write.ts pressReturnAgain). Words typed after the send, glued on by
- * the draft mirror or at the desk, fail it. Words Orca publishes as the draft count only over a
- * bare `❯` row, which is how the box looks when Orca's detector took it; over the `❯ ` of an empty
- * box they are a draft Orca has not caught up on (Opus review of 7872fddf2). A `!` bash box fails
- * it too: a command is run by its own check, not by a Return pressed again.
+ * the draft mirror or at the desk, fail it (Opus review of 7872fddf2). Only words DRAWN in the
+ * located box count, never Orca's draft alone: a captured idle box is a bare `❯` as well as
+ * `❯ ` (claude-usage-band-fullscreen-126-agent-finished-2.1.295.txt), so a draft over either
+ * cannot be told from one Orca has not caught up on (re-review of a4ac1625a). A box whose words
+ * Orca's detector moved into the draft is therefore never pressed again: it is held, and the
+ * outbox drainer clears and types it once the agent is idle. A `!` bash box fails it too: a
+ * command is run by its own check, not by a Return pressed again.
  */
 export function claudeInputHoldsExactly(screen: MobileNativeChatScreen, text: string, images: boolean): boolean {
   if (claudeSubmitNotice(screen.lines)) {
     return false
   }
   const drawn = readClaudeInput(screen.lines, '')
-  if (!drawn.located || drawn.mode === 'bash') {
+  if (!drawn.located || drawn.mode === 'bash' || drawn.text === '') {
     return false
   }
-  let typed = drawn.text
-  if (typed === '') {
-    if (!screen.lines.some((line) => line === '❯')) {
-      return false
-    }
-    typed = screen.draft.trim()
-  }
-  if (images && !hasImageChip(typed)) {
+  if (images && !hasImageChip(drawn.text)) {
     return false
   }
   const want = dense(text)
-  const got = dense(images ? withoutImageChips(typed) : folded(typed))
+  const got = dense(images ? withoutImageChips(drawn.text) : folded(drawn.text))
   return got === want && (want !== '' || images)
 }

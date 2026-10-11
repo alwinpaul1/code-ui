@@ -35,6 +35,14 @@ const PERMISSION = readFileSync(
   .split('\n')
   .filter((line) => !line.startsWith('# '))
 
+/** Claude Code 2.1.295's idle box as captured (Orca's detector drew it bare), with its rules. */
+const CAPTURED_IDLE = readFileSync(
+  fileURLToPath(new URL('./fixtures/claude-usage-band-fullscreen-126-agent-finished-2.1.295.txt', import.meta.url)),
+  'utf8'
+)
+  .split('\n')
+  .filter((line) => !line.startsWith('# '))
+
 const TEXT = 'deploy the build when the tests pass'
 type Screen = { lines: string[]; draft: string }
 const words = (text = TEXT): Screen => ({ lines: composerWithTextInRows(text), draft: '' })
@@ -141,20 +149,51 @@ describe('the second Return after a dropped one', () => {
     expect(d.bareReturns()).toBe(0)
   })
 
-  it('goes for words Orca publishes as the draft over a bare prompt, as it does when its detector takes the box', async () => {
+  // Re-review of a4ac1625a: the bare-prompt-plus-draft shape is MODELLED, and a captured idle
+  // box draws a bare "❯" too (claude-usage-band-fullscreen-126-agent-finished-2.1.295.txt), so a
+  // draft alone cannot tell words in the box from a draft Orca has not caught up on.
+  it('does not go on words that are only in the draft, even over a bare prompt', async () => {
     vi.useFakeTimers()
-    let pressed = false
-    const d = desk(() => (pressed ? { lines: EMPTY_COMPOSER, draft: '' } : { lines: composerWithTextInDraft(), draft: TEXT }))
+    const d = desk(() => ({ lines: composerWithTextInDraft(), draft: TEXT }))
+    await send(d.client)
+    expect(d.bareReturns()).toBe(0)
+  })
+
+  it('does not go on a lagging draft over the captured idle box', async () => {
+    vi.useFakeTimers()
+    const d = desk(() => ({ lines: CAPTURED_IDLE, draft: TEXT }))
+    await send(d.client)
+    expect(d.bareReturns()).toBe(0)
+  })
+
+  it('does not take a stray bare prompt elsewhere on the screen for the box', async () => {
+    vi.useFakeTimers()
+    const d = desk(() => ({ lines: ['❯', ...EMPTY_COMPOSER], draft: TEXT }))
+    await send(d.client)
+    expect(d.bareReturns()).toBe(0)
+  })
+
+  it('lets the terminal go once its Return is taken, so a permission tap during its check is not refused', async () => {
+    vi.useFakeTimers()
+    let pressedAt: number | null = null
+    let freeDuringCheck: boolean | null = null
+    const d = desk(() => {
+      if (pressedAt !== null && freeDuringCheck === null) {
+        freeDuringCheck = acquireMobileNativeChatTerminalWrite('term-1')
+      }
+      return pressedAt !== null ? { lines: EMPTY_COMPOSER, draft: '' } : words()
+    })
     const original = d.client.sendRequest
     d.client.sendRequest = vi.fn(async (method: string, params: { text?: string; enter?: boolean }) => {
       const answer = await (original as (m: string, p: unknown) => Promise<unknown>)(method, params)
       if (method === 'terminal.send' && params.enter === true && params.text === '') {
-        pressed = true
+        pressedAt = Date.now()
       }
       return answer
     }) as never
-    await expect(send(d.client)).resolves.toEqual({ kind: 'written', outcome: 'accepted' })
+    await send(d.client)
     expect(d.bareReturns()).toBe(1)
+    expect(freeDuringCheck).toBe(true)
   })
 
   it('does not go while another input holds the terminal', async () => {

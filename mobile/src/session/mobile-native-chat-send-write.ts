@@ -114,8 +114,12 @@ const SECOND_RETURN_LOOK_GAP_MS = 600
  * this send's words (claudeInputHoldsExactly). A dialog would take the Return as its answer; words
  * typed after the send would be submitted glued to these. Anything less and it is not pressed:
  * the send is held, and the outbox drainer clears and types it again once the agent is idle.
- * What remains: the first Return landing in the instant between the last look and this one, on
- * a working Claude whose input it has just emptied, where a Return on the empty box does nothing.
+ * What remains, not closed: the first Return landing in the instant between the last look and
+ * this one, and a draft-mirror batch queued just before the lock was taken landing after the
+ * last look (one write round trip). Either way this Return reaches an input the looks did not
+ * see. What a Return on an empty box does is not verified: docs/mobile-background-tasks.md says
+ * it submits a prompt suggestion Claude draws at a turn's end, and nothing here has observed it
+ * with messages queued.
  */
 async function pressReturnAgain(args: {
   client: RpcClient
@@ -156,6 +160,9 @@ async function pressReturnAgain(args: {
       deadline,
       ...(args.mobileClient ? { mobileClient: args.mobileClient } : {})
     })
+    // From here the send only reads: the terminal goes back, so a permission tap or a pick during
+    // the check is not refused (the same release writeChatSend makes after the body).
+    releaseMobileNativeChatTerminalWrite(args.terminal, owner)
     if (pressed !== 'accepted') {
       return held
     }
