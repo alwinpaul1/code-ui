@@ -38,7 +38,7 @@ function plugin(name: string): Record<string, unknown> {
 
 const WHITE = '255,255,255'
 /** The launcher icon's tile (2026-10-11, the user picked option "E" from a
- *  sheet of premium mockups): near-black, lit from the top left, with the white
+ *  sheet of premium mockups): near-black, a gradient lighter at the top left, with the white
  *  knot at 80% and a soft shadow under it. The adaptive icon carries that tile
  *  as a background IMAGE; this flat colour is only the fallback under it. The
  *  splash and the in-app mark stay red, since a black tile vanishes on the
@@ -115,6 +115,18 @@ describe('the launcher icon', () => {
     expect(alphaRange(png)).toEqual({ min: 255, max: 255 })
     const off = [...opaqueColours(png).keys()].filter((key) => !isDarkTilePixel(key))
     expect(off.slice(0, 5), 'pixels that are not the dark tile').toEqual([])
+  })
+
+  // Reported 2026-10-11: "there is a white shade on the top of the logo" in the
+  // app drawer. A white sheen lit the top left of the tile up to (84, 84,
+  // 84). The tile is now its gradient alone, so nothing in the background is
+  // lighter than the gradient's top stop, #2A2A2A.
+  it('has no white shade at the top of the app drawer tile', () => {
+    const png = asset(expo.android.adaptiveIcon.backgroundImage)
+    const lightest = Math.max(
+      ...[...opaqueColours(png).keys()].flatMap((key) => key.split(',').map(Number))
+    )
+    expect(lightest, 'lightest channel anywhere in the tile').toBeLessThanOrEqual(0x2a)
   })
 
   /**

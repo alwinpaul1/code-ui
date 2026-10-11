@@ -59,8 +59,10 @@ import tempfile
 MOBILE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RED = "#F11924"  # the art's dominant colour, sampled (241, 25, 36)
 # The app icon's tile (2026-10-11, the user picked option "E" from a sheet of
-# premium mockups): near-black, lit from the top left by a gradient and a faint
-# sheen, the white knot at 80% so it has room, with a soft shadow under it.
+# premium mockups): near-black, a gradient lighter at the top left, the white
+# knot at 80% so it has room, with a soft shadow under it. A white sheen at the
+# top left was dropped the same day: the user saw it as a white shade on the
+# icon in the app drawer.
 # The splash and the in-app mark stay the red cut-out tile: one splash asset
 # serves both splash backgrounds, where black would vanish on the dark one.
 ICON_TILE = "#141414"  # the adaptive icon's flat fallback under its image
@@ -196,9 +198,6 @@ def icon_defs() -> str:
     return (
         f'<linearGradient id="tile" x1="0" y1="0" x2="0.6" y2="1">'
         f'<stop offset="0" stop-color="{ICON_TOP}"/><stop offset="1" stop-color="{ICON_BOTTOM}"/></linearGradient>'
-        '<radialGradient id="sheen" cx="0.3" cy="0.05" r="0.9">'
-        '<stop offset="0" stop-color="#fff" stop-opacity="0.22"/>'
-        '<stop offset="0.6" stop-color="#fff" stop-opacity="0"/></radialGradient>'
         '<filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">'
         '<feGaussianBlur stdDeviation="14"/><feOffset dy="10"/>'
         '<feComponentTransfer><feFuncA type="linear" slope="0.28"/></feComponentTransfer></filter>'
@@ -216,7 +215,7 @@ def icon_ground(y: float, size: float, extend: float, x: float = 0.0) -> str:
     """The lit tile over a size x size square at (x, y), and the knot's shadow."""
     box = f'x="{x:.2f}" y="{y:.2f}" width="{size:.2f}" height="{size:.2f}"'
     return (
-        f'<rect {box} fill="url(#tile)"/><rect {box} fill="url(#sheen)"/>'
+        f'<rect {box} fill="url(#tile)"/>'
         + scaled_knot(extend, "#000", ' filter="url(#shadow)"')
     )
 
