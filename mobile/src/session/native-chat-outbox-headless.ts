@@ -24,7 +24,7 @@ import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route
 import { sessionTabsListRead } from './mobile-session-read-operations'
 import { queueBoxReadFromScreen } from './mobile-terminal-queue-read'
 import { queueRowIsPendingSend } from './mobile-terminal-queued-messages'
-import { outboxEntryLanding } from './native-chat-outbox-recovery-plan'
+import { outboxEntryLanding } from './native-chat-outbox-recovery-plan'; import { noteOutboxSendAcked } from './native-chat-outbox-sends'
 import type { OutboxDrainObservation, OutboxSendOutcome } from './native-chat-outbox-drain-plan'
 import { INPUT_STILL_HOLDS_TEXT } from './mobile-native-chat-verified-clear'
 
@@ -364,7 +364,7 @@ export async function sendTerminalOutboxEntry(
       deadline,
       deviceToken: null,
       receipts: () => [],
-      sendId: entry.id
+      sendId: entry.id, onBodyAcked: () => noteOutboxSendAcked(entry.id) // its bubble's dim ends at the desktop's ack (S2)
     })
     if (written.kind === 'stopped') {
       // A clear that did not go typed none of the words; Claude declining them did.

@@ -111,7 +111,8 @@ describe('a body write that failed after Claude already had it', () => {
       })
       expect(outcome).toBe('rejected')
       expect(restoreRejectedDraft).toHaveBeenCalledWith(origin, 'deploy it')
-      expect(onSendError).toHaveBeenCalledWith('Message not sent')
+      // With a Retry, as the Claude app's snackbar offers (pending-dim-ends-at-send-ack.test.ts).
+      expect(onSendError).toHaveBeenCalledWith('Message not sent', { retry: true })
     })
   }
 })

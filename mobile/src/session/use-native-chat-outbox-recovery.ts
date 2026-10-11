@@ -33,8 +33,16 @@ import {
   type OutboxLane
 } from './native-chat-outbox-recovery-plan'
 
-/** What an outbox bubble says under it. */
-export type OutboxDelivery = 'sending' | 'failed'
+/**
+ * Where an outbox bubble's send stands: `sending` until the desktop answers its write (the bubble
+ * is dimmed), `taken` once it has and Claude's record of it is still out (drawn as sent), and
+ * `failed` when the outbox gave up ("Not sent" with Retry and Edit under it).
+ */
+export type OutboxDelivery = 'sending' | 'taken' | 'failed'
+
+export function outboxDeliveryOf(entry: NativeChatOutboxEntry): OutboxDelivery {
+  return entry.failed ? 'failed' : entry.hostAcked ? 'taken' : 'sending'
+}
 
 const NO_RECEIPTS: readonly BeaconPromptReceipt[] = []
 /** A photo send this run lost track of: it may have arrived, so the chat is the place to look. */
@@ -284,7 +292,7 @@ export function useNativeChatOutboxRecovery(args: NativeChatOutboxRecoveryArgs):
     const map: Record<string, OutboxDelivery> = {}
     for (const entry of nativeChatOutboxEntries()) {
       if (entry.draftKey === draftKey) {
-        map[outboxEchoId(entry.id)] = entry.failed ? 'failed' : 'sending'
+        map[outboxEchoId(entry.id)] = outboxDeliveryOf(entry)
       }
     }
     return map

@@ -134,6 +134,20 @@ words take rows in the order they left the phone, and a bubble still waiting for
 with a later ack-lost send (`landedHeldSends`), so the second "yes" is no longer proved delivered
 by the first one's row.
 
+### How the bubble looks on its way (S2, 2026-10-12)
+
+The bubble is dimmed to 50% until the desktop acks the send, then drawn as sent, as the Claude
+app draws its pending row until its POST's 2xx. The phone's ack is the desktop answering the body
+write (`terminal.send`; `writeChatSend` reports it before Claude's check, and the entry is marked
+`hostAcked`) or accepting the structured operation (the entry leaves the outbox there). Before
+this the dim lasted until Claude had the message on record, which on a send whose check could not
+settle was the whole 20 s hold. Only the look moved: the entry still waits for Claude's record
+before it leaves the outbox, and "Not sent" still comes only from the outbox giving up. A send
+whose ack never came, and one waiting in the outbox for the desktop, stay dimmed. A body write the
+desktop refused puts the words back in the composer with a Retry on the banner, as the Claude
+app's snackbar does (not for a photo send, whose undo is its own, or a recovery resend, whose
+bubble says "Not sent").
+
 ### When it gives up
 
 The entry stays in the outbox, marked failed with a reason (`failedReason`), and nothing is said

@@ -198,7 +198,7 @@ export type MobileNativeChatViewProps = {
   /** Drop one message Claude Code has queued behind the running turn. */
   onCancelQueued?: (id: string) => Promise<boolean>
   /** The line under each recovered outbox bubble, by row id (use-native-chat-outbox-recovery.ts). */
-  outboxDeliveries?: Readonly<Record<string, 'sending' | 'failed'>>
+  outboxDeliveries?: Readonly<Record<string, 'sending' | 'taken' | 'failed'>>
   onRetryOutbox?: (rowId: string) => void
   onEditOutbox?: (rowId: string) => void
   /** Rewind the conversation to before a sent prompt (structured lane, on a host

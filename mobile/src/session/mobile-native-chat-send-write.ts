@@ -295,6 +295,9 @@ export async function writeChatSend(args: {
   receipts: () => readonly BeaconPromptReceipt[]
   /** The send's one id (its outbox entry's), which Claude's check keys its copy by (S1). */
   sendId?: string
+  /** The desktop answered the body write: the phone's ack, where a bubble's dim ends (S2). Called
+   *  before Claude's check, which can take seconds and still not settle. */
+  onBodyAcked?: () => void
 }): Promise<ChatSendWrite> {
   const { agent, client, terminal, text, deadline } = args
   const mobileClient = args.deviceToken
@@ -358,6 +361,9 @@ export async function writeChatSend(args: {
         deadline,
         ...(mobileClient ? { mobileClient } : {})
       })
+  if (outcome === 'accepted') {
+    args.onBodyAcked?.()
+  }
   if (
     outcome !== 'accepted' ||
     agent !== 'claude' ||

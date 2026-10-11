@@ -11,7 +11,8 @@ export const OUTBOX_STATUS_COPY = {
 /**
  * The line under a message the outbox is still seeing through
  * (use-native-chat-outbox-recovery.ts): "Not sent" with Retry and Edit when the resend could not
- * deliver it, and nothing at all while it is on its way. A "Sending…" label drew there until
+ * deliver it, and nothing at all while it is on its way (dimmed until the desktop takes its
+ * write, then as sent while Claude's record of it is still out). A "Sending…" label drew there until
  * 2026-10-10 and the user did not want it ("why showing sending, that's not good"): the bubble
  * alone says the message went, as a normal sent message does. Colours come from the theme's
  * tones, so it follows Light, Dark and System.
@@ -25,7 +26,7 @@ export function MobileNativeChatOutboxStatus({
   onRetry?: () => void
   onEdit?: () => void
 }): React.JSX.Element | null {
-  if (delivery === 'sending') {
+  if (delivery !== 'failed') {
     return null
   }
   return (
