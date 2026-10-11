@@ -4,6 +4,7 @@ import {
 } from './mobile-native-chat-draft-reconcile'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import { findBeaconConfirmedSends, type BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import { appForegroundSince } from './app-foreground-clock'
 import { releaseOutboxSend, retireOutboxSend } from './native-chat-outbox-sends'
 
@@ -30,6 +31,10 @@ export function parkUnconfirmedSend(args: {
   origin: MobileNativeChatSendOrigin
   text: string
   messages: readonly NativeChatMessage[]
+  /** The agent's prompt copies as they are now. One that already carries the send (taken after
+   *  it left, by nonce) settles it here: the confirm effect looks only when the copies change, so
+   *  a copy that came in before the hold was parked would otherwise never be seen by it. */
+  receipts?: readonly BeaconPromptReceipt[]
   /** The transcript on screen is this send's own, so its echo is admissible. */
   isActiveTranscript: boolean
   onUnconfirmed: () => void
@@ -46,8 +51,13 @@ export function parkUnconfirmedSend(args: {
     ...(origin.knownReceiptNonces ? { knownReceiptNonces: origin.knownReceiptNonces } : {}),
     ...(origin.outboxId ? { outboxId: origin.outboxId } : {})
   }
-  // Why: the transcript event can beat the lost RPC acknowledgement.
-  if (isActiveTranscript && findLandedUnconfirmedSends(messages, [entry]).length > 0) {
+  // Why: the transcript event can beat the lost RPC acknowledgement, and so can the prompt copy.
+  // Both only from this send's own chat: the copies are the active tab's.
+  if (
+    isActiveTranscript &&
+    (findLandedUnconfirmedSends(messages, [entry]).length > 0 ||
+      findBeaconConfirmedSends(args.receipts ?? [], [entry]).length > 0)
+  ) {
     void retireOutboxSend(entry.outboxId)
     return null
   }

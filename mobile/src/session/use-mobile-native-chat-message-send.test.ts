@@ -23,13 +23,15 @@ vi.mock('./mobile-native-chat-stale-input', async (importOriginal) => ({
   healMobileNativeChatStaleInput: () => Promise.resolve(true)
 }))
 // This suite's client has no screen, so the looks a Claude send takes are mocked
-// away: the clear goes out unverified and the body is called sent. The looks
-// themselves are driven against a stand-in Claude input in
+// away: the clear goes out unverified and the body is called sent on Claude's own
+// prompt copy (a send with no such copy is held: midturn-send-never-taken.test.ts).
+// The looks themselves are driven against a stand-in Claude input in
 // native-chat-send-verified-clear.test.ts.
 const readScreen = vi.hoisted(() => vi.fn(() => Promise.resolve(null)))
 vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: readScreen }))
-vi.mock('./mobile-native-chat-submit-verify', () => ({
-  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+vi.mock('./mobile-native-chat-submit-verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-submit-verify')>()),
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'sent', byReceipt: true })
 }))
 
 import { useMobileNativeChatMessageSend } from './use-mobile-native-chat-message-send'

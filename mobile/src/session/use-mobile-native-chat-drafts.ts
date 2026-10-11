@@ -258,6 +258,7 @@ export function useMobileNativeChatDrafts(args: {
   // not re-create the send callback on every prompt the agent reports.
   const receiptNoncesRef = useRef<readonly string[]>([])
   receiptNoncesRef.current = (args.beaconPromptReceipts ?? []).map((receipt) => receipt.nonce)
+  const receiptsRef = useRef(args.beaconPromptReceipts); receiptsRef.current = args.beaconPromptReceipts // the copies a hold parks against
   const unconfirmedRef = useRef<UnconfirmedSend[]>([])
   const holdUnconfirmedSend = useCallback(
     (origin: MobileNativeChatSendOrigin, text: string, onUnconfirmed: () => void) => {
@@ -265,7 +266,7 @@ export function useMobileNativeChatDrafts(args: {
       const entry = parkUnconfirmedSend({
         origin,
         text,
-        messages: messagesRef.current,
+        messages: messagesRef.current, receipts: receiptsRef.current ?? [],
         isActiveTranscript:
           activeDraftKeyRef.current === origin.draftKey &&
           (origin.pendingKey === null || activePendingKeyRef.current === origin.pendingKey),

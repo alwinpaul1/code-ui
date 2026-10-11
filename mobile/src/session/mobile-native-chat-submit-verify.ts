@@ -17,8 +17,11 @@ import { appWasAwaySince } from './app-foreground-clock'
 
 /**
  * What the desktop did with a message the host took.
- *  - `sent`: the agent's own prompt copy (the hook beacon's `up=`) carried the
- *    words, or a look after the Enter found the words gone from the input.
+ *  - `sent`: the agent's own prompt copy (the hook beacon's `up=`, or the prompt
+ *    on the tab status) carried the words (`byReceipt`), or a look after the Enter
+ *    found the words gone from the input or drawn above it. Only the copy is
+ *    Claude's record; the caller holds a screen-only `sent` for it
+ *    (mobile-native-chat-send-write.ts chatSendOutcomeOfVerdict).
  *  - `not-sent`: Claude's own notice is on screen ("Removed N invisible
  *    characters · review and press Enter to send", or "· nothing left to
  *    send"). Only that proves it: the words still in the input could be a lost
@@ -27,11 +30,15 @@ import { appWasAwaySince } from './app-foreground-clock'
  *    place, the words still in the input after the whole window). The caller
  *    holds the send for the transcript or a beacon copy, as it does for an ack
  *    that never came; it never restores the draft or invites a resend.
- *  - `unverified`: no look could be had at all. The send is called sent, as it
- *    was before there were looks (see VerifiedClearResult).
+ *  - `unverified`: no look could be had at all. Until 2026-10-11 the send was
+ *    called sent, as it was before there were looks; it is now held like
+ *    `unknown` (chatSendOutcomeOfVerdict), since nothing of Claude's says it went.
  */
 export type SubmitVerdict =
-  | { kind: 'sent' }
+  /** `byReceipt`: the agent's own prompt copy carried the words (the hook beacon's `up=`, or the
+   *  prompt Orca's hook put on the tab status). Without it, `sent` is only what the phone's looks
+   *  at the screen saw, which is not Claude's record (mobile-native-chat-send-write.ts). */
+  | { kind: 'sent'; byReceipt?: true }
   | { kind: 'not-sent'; message: string }
   /** `stillTyped`: the last look found the words still in Claude's input, never submitted. */
   | { kind: 'unknown'; stillTyped?: true }
@@ -72,22 +79,30 @@ const withoutImageChips = (text: string): string => folded(text).replace(IMAGE_C
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/** Whether one prompt copy carries these words. The hook cuts a long prompt (`cut`): its copy is
+ *  then a start of the words. */
+export function receiptCarriesWords(receipt: Pick<BeaconPromptReceipt, 'text' | 'cut'>, text: string): boolean {
+  const wanted = normalizeNativeChatUserText(text)
+  const heard = normalizeNativeChatUserText(receipt.text)
+  return wanted !== '' && heard !== '' && (receipt.cut ? wanted.startsWith(heard) : heard === wanted)
+}
+
+/** Whether a NEW copy (one the beacon did not hold before the send) is this send's. A photo send
+ *  with no caption has no words to match: its copy is one of chips alone (`[Image #N]`, which the
+ *  normalizer takes out), and Claude numbers every photo anew, so the tab status never repeats one. */
 function beaconHasWords(
   receipts: readonly BeaconPromptReceipt[],
   seen: ReadonlySet<string>,
-  text: string
+  text: string,
+  photos = false
 ): boolean {
-  const wanted = normalizeNativeChatUserText(text)
-  return (
-    wanted !== '' &&
-    receipts.some((receipt) => {
-      if (seen.has(receipt.nonce)) {
-        return false
-      }
-      const heard = normalizeNativeChatUserText(receipt.text)
-      // The hook cuts a long prompt (`cut`): its copy is then a start of the words.
-      return heard !== '' && (receipt.cut ? wanted.startsWith(heard) : heard === wanted)
-    })
+  const photoOnly = photos && normalizeNativeChatUserText(text) === ''
+  return receipts.some(
+    (receipt) =>
+      !seen.has(receipt.nonce) &&
+      (photoOnly
+        ? normalizeNativeChatUserText(receipt.text) === '' && hasImageChip(receipt.text)
+        : receiptCarriesWords(receipt, text))
   )
 }
 
@@ -201,11 +216,12 @@ export async function verifyClaudeSubmit(args: {
     return sawWords || drawnAbove(screen.lines) ? { kind: 'sent' } : null
   }
   const beaconHeard = (): boolean =>
-    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text)
+    shell === null && args.receipts !== undefined && beaconHasWords(args.receipts(), args.seenNonces, args.text, photos)
+  const heardByReceipt: SubmitVerdict = { kind: 'sent', byReceipt: true }
   while (now() - startedAt < window) {
     await wait(TICK_MS)
     if (beaconHeard()) {
-      return { kind: 'sent' }
+      return heardByReceipt
     }
     const elapsed = now() - startedAt
     if (elapsed < SUBMIT_SETTLE_MS || elapsed - lastLookAt < SUBMIT_LOOK_GAP_MS) {
@@ -238,7 +254,7 @@ export async function verifyClaudeSubmit(args: {
   // send's has gone the same way: Claude has had all that time to draw the prompt.
   if (appWasAwaySince(wallStartedAt)) {
     if (beaconHeard()) {
-      return { kind: 'sent' }
+      return heardByReceipt
     }
     const screen = await readMobileNativeChatScreen({
       client: args.client,
@@ -255,6 +271,11 @@ export async function verifyClaudeSubmit(args: {
     if (verdict) {
       return verdict
     }
+  }
+  // A copy that came in after the last tick still settles it: held instead, it would wait for a
+  // receipt the hold never sees again (it looks only when the copies change).
+  if (beaconHeard()) {
+    return heardByReceipt
   }
   return looked ? (stillTyped ? { kind: 'unknown', stillTyped: true } : { kind: 'unknown' }) : { kind: 'unverified' }
 }

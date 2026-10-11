@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import { createFakeComposerHost } from './fake-claude-composer-host.test-support'
@@ -255,7 +256,12 @@ describe('the real send onto a terminal with no Claude input box', () => {
   const restoreRejectedDraft = vi.fn()
   const report = vi.fn()
 
-  const mount = (handle: ReturnType<typeof vi.fn>, agent: string | null = 'claude'): void => {
+  const mount = (
+    handle: ReturnType<typeof vi.fn>,
+    agent: string | null = 'claude',
+    // Claude's prompt copies as its hook leaves them (a fake host's), read as they land.
+    promptReceipts: readonly BeaconPromptReceipt[] = []
+  ): void => {
     const client = {
       sendRequest: handle,
       getState: () => 'connected',
@@ -275,7 +281,8 @@ describe('the real send onto a terminal with no Claude input box', () => {
         restoreRejectedDraft,
         acceptSend,
         holdUnconfirmedSend: vi.fn(),
-        onSendError: report
+        onSendError: report,
+        promptReceipts
       })
       return null
     }
@@ -363,7 +370,7 @@ describe('the real send onto a terminal with no Claude input box', () => {
 
   it('still sends to a live Claude box', async () => {
     const host = createFakeComposerHost()
-    mount(host.handle)
+    mount(host.handle, 'claude', host.receipts)
 
     const outcome = await run(() => api!.sendWithOutcome('check the build'))
 
@@ -386,7 +393,7 @@ describe('the real send onto a terminal with no Claude input box', () => {
       }
       return response
     })
-    mount(footerless)
+    mount(footerless, 'claude', host.receipts)
 
     const outcome = await run(() => api!.sendWithOutcome('check the build'))
 

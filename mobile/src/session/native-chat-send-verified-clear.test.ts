@@ -63,7 +63,8 @@ describe('a message sent from the chat while the desktop input holds a copy of i
   const mount = (
     host: FakeComposerHost,
     agent: string | null = 'claude',
-    promptReceipts: readonly BeaconPromptReceipt[] = []
+    // Claude's prompt copies as its hook leaves them: the send reads them as they land.
+    promptReceipts: readonly BeaconPromptReceipt[] = host.receipts
   ): void => {
     function Probe(): null {
       api = useMobileNativeChatMessageSend({
@@ -226,8 +227,8 @@ describe('a message sent from the chat while the desktop input holds a copy of i
 
   it('holds the send for the transcript, and draws no bubble, when the screen cannot say either way', async () => {
     // A dialog took the composer's place after the Enter: looks were had, none
-    // settled it, the message may well have gone.
-    const host = createFakeComposerHost({ dialogAfterEnter: true })
+    // settled it, the message may well have gone. No prompt copy is heard either.
+    const host = createFakeComposerHost({ dialogAfterEnter: true, noPromptHook: true })
     mount(host)
 
     const outcome = await sendMessage('run the tests')
@@ -258,8 +259,11 @@ describe('a message sent from the chat while the desktop input holds a copy of i
 
     expect(host.submitted).toEqual([MESSAGE])
     expect(host.notice).toBeNull()
-    expect(outcome).toBe('accepted')
-    expect(acceptSend).toHaveBeenCalledTimes(1)
+    // No look, and a `!` command leaves no prompt copy: nothing of Claude's says it ran, so it is
+    // held for its transcript row, never called delivered (midturn-send-never-taken.test.ts).
+    expect(outcome).toBe('unknown')
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
   })
 
   it('keeps a Codex tab on its own send: one look at its composer, no Claude clear-and-verify, the same bytes', async () => {
@@ -442,8 +446,8 @@ describe('a message sent from the chat while the desktop input holds a copy of i
   it('lets a permission tap take the terminal while the send only reads', async () => {
     // The composer send runs under its caller's write lock. Once the body is
     // written the send only looks, so it must not hold the terminal against a
-    // card tap ("Another input is still being sent").
-    const host = createFakeComposerHost()
+    // card tap ("Another input is still being sent"). No prompt copy, so it does look.
+    const host = createFakeComposerHost({ noPromptHook: true })
     const owner = acquireMobileNativeChatTerminalWriteForSend('term')!
     const base = host.handle.getMockImplementation()!
     let tapTook: boolean | null = null

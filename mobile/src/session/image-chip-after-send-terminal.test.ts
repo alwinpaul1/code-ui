@@ -36,6 +36,7 @@ import { createOutboxDrainer, type OutboxDrainer } from './native-chat-outbox-dr
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { nativeChatOutboxDrainDeps } from './native-chat-outbox-drain-deps'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
+import type { BeaconPromptReceipt } from './mobile-native-chat-beacon-confirm'
 
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => ({ pickImages: vi.fn() }) }))
 vi.mock('./mobile-image-source-picker', () => ({ pickMobileDocuments: vi.fn(), pickMobileImageFiles: vi.fn() }))
@@ -87,6 +88,9 @@ type Desk = {
   refusePaste: boolean
   /** Claude takes the message and the link drops before the answer comes back. */
   loseAnswer: boolean
+  /** The prompt copies Orca's UserPromptSubmit hook put on the tab status, one per submission,
+   *  newest last; the chat reads them through this same array as they land. */
+  copies: BeaconPromptReceipt[]
 }
 
 function userRow(id: string, text: string): NativeChatMessage {
@@ -103,6 +107,7 @@ function desktop(): Desk {
     working: true,
     refusePaste: false,
     loseAnswer: false,
+    copies: [],
     transcript: [userRow('u-0', 'earlier'), { id: 'a-0', role: 'assistant', blocks: [{ type: 'text', text: 'ok' }], timestamp: null, source: 'transcript' }]
   }
   desk.client = {
@@ -176,6 +181,7 @@ function desktop(): Desk {
             const taken = input.trim()
             desk.submitted.push(taken)
             const n = desk.submitted.length
+            desk.copies.push({ nonce: `status:session-1:${n}`, text: taken })
             // The rows as Claude Code writes them (this session's own transcript, 2026-10-11):
             // the prompt " [Image #58] Image staying", then its companion naming the pasted file.
             desk.transcript = [
@@ -270,7 +276,8 @@ describe('a pasted screenshot sent to a busy Claude tab', () => {
         showSendingEcho: drafts.showSendingEcho,
         acceptSend: drafts.acceptSend,
         holdUnconfirmedSend: drafts.holdUnconfirmedSend,
-        onSendError: (message) => errors.push(message)
+        onSendError: (message) => errors.push(message),
+        promptReceipts: desk.copies
       })
       images = useMobileNativeChatImageAttachments(
         baseArgs({

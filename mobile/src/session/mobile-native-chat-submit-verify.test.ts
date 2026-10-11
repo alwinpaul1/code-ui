@@ -222,7 +222,7 @@ describe('checking that Claude took a message the host acked', () => {
 
       await expect(
         verify(s, 'hello', { receipts: () => [receipt('n2', 'hello')] })
-      ).resolves.toEqual({ kind: 'sent' })
+      ).resolves.toEqual({ kind: 'sent', byReceipt: true })
 
       expect(s.sendRequest).not.toHaveBeenCalled()
     })
@@ -252,7 +252,7 @@ describe('checking that Claude took a message the host acked', () => {
 
       await expect(
         verify(s, long, { receipts: () => [receipt('n2', long.slice(0, 200), { cut: true })] })
-      ).resolves.toEqual({ kind: 'sent' })
+      ).resolves.toEqual({ kind: 'sent', byReceipt: true })
     })
 
     it('reads the beacon as it is when the look comes, not as it was at the start', async () => {
@@ -266,7 +266,8 @@ describe('checking that Claude took a message the host acked', () => {
       }
 
       await expect(verify(s, 'hello', { receipts: () => seen, wait })).resolves.toEqual({
-        kind: 'sent'
+        kind: 'sent',
+        byReceipt: true
       })
     })
   })

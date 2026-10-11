@@ -41,7 +41,9 @@ function host(screens: readonly string[][]) {
 const sendPhotos = (
   h: ReturnType<typeof host>,
   text: string,
-  agent: 'claude' | 'codex' = 'claude'
+  agent: 'claude' | 'codex' = 'claude',
+  /** Claude's prompt copy of the send once its Enter has gone (Orca's hook on the tab status). */
+  copy?: string
 ) =>
   writeChatSend({
     agent,
@@ -56,7 +58,7 @@ const sendPhotos = (
     residue: null,
     deadline: Date.now() + 20_000,
     deviceToken: null,
-    receipts: () => []
+    receipts: () => (copy !== undefined && h.sends.some((sent) => sent.enter) ? [{ nonce: 'status:s:1', text: copy }] : [])
   })
 
 describe('a photo send is checked after its Enter, like a text send', () => {
@@ -97,18 +99,45 @@ describe('a photo send is checked after its Enter, like a text send', () => {
     expect(result).toEqual({ kind: 'written', outcome: 'unknown' })
   })
 
-  it('reports it sent for one photo and no text once the chip left the input', async () => {
+  it('reports it sent for one photo and no text on Claude\'s copy of the chip', async () => {
     const h = host([withChips(1, ''), [...EMPTY_COMPOSER]])
-    const result = await run(sendPhotos(h, ''))
+    const result = await run(sendPhotos(h, '', 'claude', '[Image #1]'))
 
     expect(result).toEqual({ kind: 'written', outcome: 'accepted' })
   })
 
-  it('reports it sent for three photos and a caption once the prompt is drawn above an empty input', async () => {
+  it('reports it sent for three photos and a caption on Claude\'s copy of the prompt', async () => {
+    const h = host([[`❯ [Image #1][Image #2][Image #3] ${CAPTION}`, ...EMPTY_COMPOSER]])
+    const result = await run(sendPhotos(h, CAPTION, 'claude', `[Image #1][Image #2][Image #3] ${CAPTION}`))
+
+    expect(result).toEqual({ kind: 'written', outcome: 'accepted' })
+  })
+
+  // The screen alone is the phone's reading, not Claude's record (midturn-send-never-taken.test.ts):
+  // held for the copy or the row, and the outbox sees it through.
+  it('reports it held, not sent, when only the screen says the chip left the input', async () => {
+    const h = host([withChips(1, ''), [...EMPTY_COMPOSER]])
+    const result = await run(sendPhotos(h, ''))
+
+    expect(result).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('reports it held, not sent, when only the screen draws the prompt above an empty input', async () => {
     const h = host([[`❯ [Image #1][Image #2][Image #3] ${CAPTION}`, ...EMPTY_COMPOSER]])
     const result = await run(sendPhotos(h, CAPTION))
 
-    expect(result).toEqual({ kind: 'written', outcome: 'accepted' })
+    expect(result).toEqual({ kind: 'written', outcome: 'unknown' })
+  })
+
+  it('takes an older photo\'s copy for no copy of this one', async () => {
+    const h = host([withChips(1, ''), [...EMPTY_COMPOSER]])
+    const sending = writeChatSend({
+      agent: 'claude', client: h.client, terminal: 'term', text: '', hasImages: true, syncComposer: true,
+      classification: 'chat', typesCodexCommand: false, seed: null, residue: null,
+      deadline: Date.now() + 20_000, deviceToken: null,
+      receipts: () => [{ nonce: 'status:s:0', text: '[Image #1]' }]
+    })
+    expect(await run(sending)).toEqual({ kind: 'written', outcome: 'unknown' })
   })
 
   it('claims no more for Codex than the host ack: it has no submit check and reads no screen', async () => {

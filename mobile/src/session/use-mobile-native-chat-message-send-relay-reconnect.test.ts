@@ -17,8 +17,11 @@ vi.mock('../transport/mobile-relay-e2ee-link', async (importOriginal) => ({
 // the body is called sent). They are driven against a stand-in Claude input in
 // native-chat-send-verified-clear.test.ts.
 vi.mock('./mobile-native-chat-screen-read', () => ({ readMobileNativeChatScreen: () => Promise.resolve(null) }))
-vi.mock('./mobile-native-chat-submit-verify', () => ({
-  verifyClaudeSubmit: () => Promise.resolve({ kind: 'unverified' })
+// Claude's own prompt copy says it took the words (with none, the send is held:
+// midturn-send-never-taken.test.ts).
+vi.mock('./mobile-native-chat-submit-verify', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./mobile-native-chat-submit-verify')>()),
+  verifyClaudeSubmit: () => Promise.resolve({ kind: 'sent', byReceipt: true })
 }))
 
 import {
