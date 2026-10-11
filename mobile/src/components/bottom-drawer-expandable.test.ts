@@ -56,3 +56,11 @@ describe('a sheet that opens part way and drags up to full screen', () => {
     expect(settleExpandableSheet({ offset: OPENING + 30, velocityY: 0 }, HEIGHTS)).toBe('collapsed')
   })
 })
+
+describe('a sheet that opens at its own share of the screen', () => {
+  it('opens at half the screen when asked, and at 62% when not', () => {
+    const base = { screenHeight: 2000, topInset: 36, topGap: 16 }
+    expect(expandableSheetHeights({ ...base, openingShare: 0.5 }).collapsed).toBe(1000)
+    expect(expandableSheetHeights(base).collapsed).toBe(1240)
+  })
+})

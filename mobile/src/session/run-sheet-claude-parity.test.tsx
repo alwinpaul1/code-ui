@@ -38,6 +38,7 @@ vi.mock('lucide-react-native', () =>
       'Search',
       'Sparkles',
       'SquareTerminal',
+      'TextCursorInput',
       'TriangleAlert',
       'Wrench',
       'X'
@@ -125,11 +126,11 @@ describe('the run sheet, the Claude app way', () => {
       expect(styleOf(title!).textAlign).toBe('center')
     })
 
-    it('draws it bold and larger than the heading face, with the close cross kept at the left', () => {
+    it('draws it in the heading size (2026-10-11: smaller than the 1.25x bold it was), with the close cross kept at the left', () => {
       const tree = render('light', RUN, 'Ran a command')
       const title = textNodes(tree.root).find((node) => node.props.children === 'Ran a command')!
-      expect(styleOf(title).fontFamily).toBe(fontFamily.bold)
-      expect(styleOf(title).fontSize as number).toBeGreaterThan(type.heading.size)
+      expect(styleOf(title).fontFamily).toBe(fontFamily.semibold)
+      expect(styleOf(title).fontSize as number).toBe(type.heading.size)
       const close = tree.root.findAll(
         (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Close'
       )
@@ -180,7 +181,7 @@ describe('the run sheet, the Claude app way', () => {
       const content = tree.root.find((node) => node.props.testID === 'run-sheet')
       // The drawer itself pads its content by space.md; the sheet adds the rest.
       expect((styleOf(content).paddingLeft as number) + space.md).toBe(27)
-      const icon = firstRow(tree).find((node) => String(node.type) === 'SquareTerminal')
+      const icon = firstRow(tree).find((node) => String(node.type) === 'TextCursorInput')
       expect(icon.props.size).toBe(16)
       expect(icon.props.color).toBe(own(scheme).textMuted)
     })
@@ -188,13 +189,13 @@ describe('the run sheet, the Claude app way', () => {
     it('keeps the connector centred under the icon', () => {
       const tree = render(scheme)
       const connectors = tree.root.findAll(
-        (node) => String(node.type) === 'View' && styleOf(node).width === 1 && styleOf(node).height === 10
+        (node) => String(node.type) === 'View' && node.props.testID === 'run-sheet-connector'
       )
       // Six rows, five joints.
       expect(connectors).toHaveLength(5)
       // The line is 1 dp wide, so its left edge sits half a dp before the icon's centre.
-      expect((styleOf(connectors[0]!).marginLeft as number) + 0.5).toBe(8)
-      expect(styleOf(connectors[0]!).backgroundColor).toBe(own(scheme).border)
+      expect((styleOf(connectors[0]!).left as number) + 0.5).toBe(8)
+      expect(styleOf(connectors[0]!).backgroundColor).toBe(own(scheme).textMuted)
     })
 
     it('draws the verb in the regular weight and the main colour, 15 dp after the icon', () => {
@@ -316,8 +317,8 @@ describe('the run sheet, the Claude app way', () => {
       const verb = textNodes(failed).find((node) => node.props.children === 'Ran')!
       expect(styleOf(verb).color).toBe(own(scheme).danger)
       // The triangle comes after the tool icon, before the words.
-      const order = failed.findAll((node) => ['SquareTerminal', 'TriangleAlert'].includes(String(node.type)))
-      expect(order.map((node) => String(node.type))).toEqual(['SquareTerminal', 'TriangleAlert'])
+      const order = failed.findAll((node) => ['TextCursorInput', 'TriangleAlert'].includes(String(node.type)))
+      expect(order.map((node) => String(node.type))).toEqual(['TextCursorInput', 'TriangleAlert'])
     })
 
     it('writes no "Failed" at the right edge, and still says the step failed to a screen reader', () => {

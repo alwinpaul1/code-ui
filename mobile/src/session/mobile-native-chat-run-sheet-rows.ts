@@ -154,7 +154,10 @@ function rowOf(pair: NativeChatToolPair): RowFacts {
   switch (kind) {
     case 'command': {
       const description = readString(call.input, 'description')
-      return plain('Ran', description ? description.replace(/\s+/g, ' ').trim() : inputLabel(call.input))
+      // The command itself is code and is drawn in the monospace face; a
+      // description of it is prose.
+      const row = plain('Ran', description ? description.replace(/\s+/g, ' ').trim() : inputLabel(call.input))
+      return description ? row : { ...row, detailMono: row.detail !== null }
     }
     case 'agent':
       return plain('Ran agent', agentTitle(call.input))

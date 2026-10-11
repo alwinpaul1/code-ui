@@ -22,13 +22,14 @@ export function useExpandableBottomDrawer(args: {
   expandable: boolean
   screenHeight: number
   topInset: number
+  openingShare?: number
   translateY: SharedValue<number>
   progress: SharedValue<number>
   /** Stable for the drawer's life: the gestures are built once around it. */
   close: () => void
 }) {
   const { expandable, screenHeight, translateY, progress, close } = args
-  const { collapsed, full } = expandableSheetHeights({ screenHeight, topInset: args.topInset, topGap: spacing.lg })
+  const { collapsed, full } = expandableSheetHeights({ screenHeight, topInset: args.topInset, topGap: spacing.lg, openingShare: args.openingShare })
   const openingOffset = expandable ? expandableSheetOpeningOffset({ collapsed, full }) : 0
   const dragStartOffset = useSharedValue(0)
   // Why a shared value beside `expanded`: the gestures read it on the UI thread
