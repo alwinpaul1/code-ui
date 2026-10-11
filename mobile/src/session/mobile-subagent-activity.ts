@@ -82,28 +82,27 @@ export function subagentStepLabel(call: NativeChatToolCallBlock): string {
  *  agents "Running cd /private/tmp/…", calls that had answered minutes before,
  *  and they read as finished work.
  *
- *  Orca's transcript rows carry no id on a result, so calls and results pair
- *  first in, first out (`pairToolBlocks`): walking back from the end, each
- *  result answers the nearest unanswered call before it, and the newest call
- *  left over is the one in flight. A result whose call sits above the loaded
- *  window answers nothing here. */
+ *  Calls and results pair first in, first out, as `pairToolBlocks` pairs them:
+ *  a result that names its call (`callId`, a structured chat's) answers that call,
+ *  one that names none (Orca's transcript rows) the oldest call still waiting. The
+ *  newest call left waiting is the one in flight. A result with no call waiting
+ *  (its call above the loaded window) answers nothing. */
 export function subagentStepInFlight(messages: readonly NativeChatMessage[]): string | null {
-  let unclaimedResults = 0
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const blocks = messages[index]!.blocks
-    for (let at = blocks.length - 1; at >= 0; at -= 1) {
-      const block = blocks[at]!
-      if (isToolResultBlock(block)) {
-        unclaimedResults += 1
-      } else if (isToolCallBlock(block)) {
-        if (unclaimedResults === 0) {
-          return subagentStepLabel(block)
+  const waiting: NativeChatToolCallBlock[] = []
+  for (const message of messages) {
+    for (const block of message.blocks) {
+      if (isToolCallBlock(block)) {
+        waiting.push(block)
+      } else if (isToolResultBlock(block) && waiting.length > 0) {
+        const at = block.callId ? waiting.findIndex((call) => call.callId === block.callId) : 0
+        if (at !== -1) {
+          waiting.splice(at, 1)
         }
-        unclaimedResults -= 1
       }
     }
   }
-  return null
+  const inFlight = waiting.at(-1)
+  return inFlight ? subagentStepLabel(inFlight) : null
 }
 
 /** The running Claude subagents whose transcripts the open sheet reads, at

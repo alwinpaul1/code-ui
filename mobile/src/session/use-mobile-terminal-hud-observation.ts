@@ -286,6 +286,13 @@ export function useMobileTerminalHudObservation(args: {
           setObservation((current) =>
             JSON.stringify(current) === JSON.stringify(next) ? current : next
           )
+        } else if (lines.some((line) => line.trim() !== '')) {
+          // A screen with no footer (a dialog over it) keeps the badge, but not
+          // the shell count: kept, the idle footer's zero read as LIVE under the
+          // dialog and retired a shell launched just before it. The task report
+          // holds the last reading with its time instead. An empty read says
+          // nothing about the screen and changes nothing.
+          setObservation((current) => (current?.runningShellCount === undefined ? current : { ...current, runningShellCount: undefined }))
         }
         return next
       } catch {

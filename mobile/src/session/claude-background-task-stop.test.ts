@@ -19,17 +19,35 @@ type Step = { key: string; screen: string[] }
 
 /** The desktop as the drive sees it: each expected key moves to the next captured
  *  screen; any other key is recorded and changes nothing. */
-function desktop(initial: string[], steps: Step[]) {
+function desktop(initial: string[], steps: Step[], options: { lateReads?: number } = {}) {
   let screen = initial
+  let pending: string[] | null = null
+  let readsLeft = 0
   let next = 0
   const keys: string[] = []
   let clock = 0
   const io: ClaudeBackgroundStopIo = {
-    readScreen: async () => screen,
+    // `lateReads`: a key's repaint shows only after that many more reads (a relay's
+    // round trip, a busy lead painting late).
+    readScreen: async () => {
+      if (pending && readsLeft-- <= 0) {
+        screen = pending
+        pending = null
+      }
+      return screen
+    },
     sendKey: async (key) => {
       keys.push(key)
       if (steps[next]?.key === key) {
-        screen = steps[next]!.screen
+        if (options.lateReads) {
+          if (pending) {
+            screen = pending
+          }
+          pending = steps[next]!.screen
+          readsLeft = options.lateReads
+        } else {
+          screen = steps[next]!.screen
+        }
         next += 1
       }
       return true
@@ -204,6 +222,37 @@ describe('stopping one background task through that dialog', () => {
     io.readScreen = async () => null
     expect(await stopClaudeBackgroundTask(io, { kind: 'shell', label: 'sleep 240' })).toMatchObject({ ok: false, reason: 'unreadable' })
     expect(keys).toEqual([])
+  })
+})
+
+describe('a desktop that repaints late', () => {
+  it('sends one Esc to close the dialog, never a second onto the input box', async () => {
+    // Review, 2026-10-11: the close re-read the screen 120 ms after its Esc, still saw the
+    // dialog over a slow link, and sent another Esc, which lands on the input box once the
+    // dialog has closed and interrupts a working lead.
+    const { io, keys } = desktop(
+      before,
+      [
+        { key: DOWN, screen: pillFocused },
+        { key: ENTER, screen: dialog },
+        { key: 'x', screen: afterStop },
+        { key: ESC, screen: closed }
+      ],
+      { lateReads: 3 }
+    )
+    expect(await stopClaudeBackgroundTask(io, { kind: 'shell', label: 'sleep 240' })).toEqual({ ok: true })
+    expect(keys).toEqual([DOWN, ENTER, 'x', ESC])
+  })
+
+  it('sends no Enter on one read that lacks the hint: the focus must hold on two reads in a row', async () => {
+    // A frame torn mid-repaint can show the pill without its hint; Enter on the input box
+    // would submit what is in it.
+    const torn = before.map((line) => line.replace(' · ← for agents', ''))
+    let reads = 0
+    const { io, keys } = desktop(before, [])
+    io.readScreen = async () => (++reads === 2 ? torn : before)
+    expect(await stopClaudeBackgroundTask(io, { kind: 'shell', label: 'sleep 240' })).toMatchObject({ ok: false, reason: 'not-focused' })
+    expect(keys).toEqual([DOWN])
   })
 })
 

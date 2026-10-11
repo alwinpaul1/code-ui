@@ -103,14 +103,18 @@ function agentPanelFocused(lines: readonly string[]): boolean {
   return tail.some((line) => /^ {2}↑\/↓ to select\s*$/.test(line)) && tail.some((line) => /^❯ (?: {2})*(?:[├└] )?[◯⏺●⏸]/.test(line))
 }
 
-async function waitFor<T>(io: ClaudeBackgroundStopIo, read: (lines: string[]) => T | null): Promise<T | null> {
+/** Polls until `read` finds what it wants. `twice`: on two reads in a row, so a frame
+ *  torn mid-repaint cannot pass for it. */
+async function waitFor<T>(io: ClaudeBackgroundStopIo, read: (lines: string[]) => T | null, twice = false): Promise<T | null> {
   const deadline = io.now() + STEP_TIMEOUT_MS
+  let seen = false
   for (;;) {
     const lines = await io.readScreen()
     const value = lines ? read(lines) : null
-    if (value !== null) {
+    if (value !== null && (!twice || seen)) {
       return value
     }
+    seen = value !== null
     if (io.now() >= deadline) {
       return null
     }
@@ -118,23 +122,26 @@ async function waitFor<T>(io: ClaudeBackgroundStopIo, read: (lines: string[]) =>
   }
 }
 
-/** Closes what this drive opened: Esc while the dialog, the focused pill or the
- *  agent panel is on screen, never on the input box. */
+/** Something this drive opened is on screen: the dialog, the details view, the
+ *  focused pill or the agent panel. */
+function openedByUs(lines: readonly string[]): boolean {
+  const footer = readClaudeFooterFocus(lines)
+  const pillFocused = footer !== null && footer.pill && !footer.inputFocused
+  return parseClaudeBackgroundDialog(lines) !== null || parseClaudeShellDetails(lines) !== null || pillFocused || agentPanelFocused(lines)
+}
+
+/** Closes what this drive opened with ONE Esc, then waits for it to go. Never a
+ *  second: over a slow link the next read can still show the dialog Esc already
+ *  closed, and a second Esc lands on the input box, where it interrupts a working
+ *  lead (review, 2026-10-11). Whatever is still open after the wait is left for the
+ *  user. */
 async function closeWhatWeOpened(io: ClaudeBackgroundStopIo): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const lines = await io.readScreen()
-    if (!lines) {
-      return
-    }
-    const footer = readClaudeFooterFocus(lines)
-    const pillFocused = footer !== null && footer.pill && !footer.inputFocused
-    const ours = parseClaudeBackgroundDialog(lines) ?? parseClaudeShellDetails(lines)
-    if (!ours && !pillFocused && !agentPanelFocused(lines)) {
-      return
-    }
-    await io.sendKey(KEY_ESC)
-    await io.sleep(POLL_MS)
+  const lines = await io.readScreen()
+  if (!lines || !openedByUs(lines)) {
+    return
   }
+  await io.sendKey(KEY_ESC)
+  await waitFor(io, (now) => (openedByUs(now) ? null : true))
 }
 
 export async function stopClaudeBackgroundTask(
@@ -158,10 +165,14 @@ export async function stopClaudeBackgroundTask(
   if (!(await io.sendKey(KEY_DOWN))) {
     return fail('send-failed')
   }
-  const focused = await waitFor(io, (lines) => {
-    const now = readClaudeFooterFocus(lines)
-    return now?.pill && !now.inputFocused ? true : null
-  })
+  const focused = await waitFor(
+    io,
+    (lines) => {
+      const now = readClaudeFooterFocus(lines)
+      return now?.pill && !now.inputFocused ? true : null
+    },
+    true
+  )
   if (!focused) {
     await closeWhatWeOpened(io)
     return fail('not-focused')

@@ -411,7 +411,7 @@ function splitByStatus(context: SplitContext): BackgroundTasks {
       row !== undefined && !isTeammateLifecycleId(launch.id) && notification?.timestamp != null && row.startedAt <= notification.timestamp
     const rosterSaysRunning = launch.kind === 'agent' && roster !== null ? row !== undefined && !endedThisRun : null
     if (rosterSaysRunning === true) {
-      running.push({ ...launch, ...currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id), now), status: 'running' })
+      running.push({ ...launch, ...currentRunStart(launch.startedAt, context.subagentRuns?.get(launch.id), row?.startedAt, now), status: 'running' })
       continue
     }
     if (notification) {

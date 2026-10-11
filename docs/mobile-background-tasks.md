@@ -885,16 +885,22 @@ What changed:
 
 - An agent row's title is the description unless a tool call is in flight
   (`subagentStepInFlight`, `mobile-subagent-activity.ts`).
-- A launched agent the run clock (`mobile-subagent-runs.ts`) saw stop and come back more than
-  10 s after its launch is timed from the comeback (`currentRunStart`, `mobile-background-tasks.ts`).
-  Cost: the run clock's known false comebacks (a nested `claude -p` making Orca re-create rows the
-  phone saw leave) now shorten a launched agent's time too, not only a roster-only row's.
+- A launched agent is timed from its comeback when Orca's row started more than 10 s after the
+  launch (Orca drops a stopped one-shot agent's row and stamps its return anew) and the run clock
+  (`mobile-subagent-runs.ts`) places the run there (`currentRunStart`). The clock alone is not
+  enough: it stamps a row it first sees late with that moment, which read "0s" for an agent
+  launched while the chat was closed (review). Cost: Orca's re-creation of rows around a nested
+  `claude -p` now shortens a launched agent's time too, not only a roster-only row's.
 - The footer's zero: Claude Code 2.1.296 draws "(shift+tab to cycle)" on the mode row only while
   the row holds no task pill, and puts it back within a second of the last shell's end (every
   capture of 2026-10-10 and 2026-10-11). That row is now read as zero shells
   (`claude-footer-shell-count.ts`), which retires every listed shell launched more than 10 s
   before, the lead's and the subagents'. At 40 columns and under the hint is gone even with no
   pill (and at 28 the pill is gone with two shells running), so a row without either says nothing.
+  A screen with no footer (a dialog over it) now drops the observation's count instead of keeping
+  the last one (`use-mobile-terminal-hud-observation.ts`): kept, the idle zero read as live under
+  a permission dialog and retired a shell launched just before it (review). The task report's held
+  reading, which caps only shells launched before it, speaks under the dialog.
 
 Recorded live: a throwaway Claude Code 2.1.296 session in `tmux -L cuitasks`, `env -i`, the
 phone's real `--settings` flag with `CUIHUD_TTY` on a scratch file, a lead busy in a 75 s
@@ -921,8 +927,10 @@ verified live against Claude Code 2.1.296, idle and with the lead working:
 4. Esc, which closes the dialog onto the input box. In the details view `x` closes it by itself,
    and no Esc follows.
 
-Every key is sent on a screen that says where it lands. Esc goes only to the dialog, the details
-view, the focused pill or the agent panel, never to the input box (there it interrupts a working
+Every key is sent on a screen that says where it lands. Enter waits for the pill's focus on two
+reads in a row (a frame torn mid-repaint can lack the hint). Esc goes only to the dialog, the
+details view, the focused pill or the agent panel, and only once per drive (a second Esc after a
+slow repaint would land on the input box; review), never to the input box (there it interrupts a working
 lead; in the dialog and on the pill it does not, checked live). Enter never goes to the input box
 (it would submit what is in it, a prompt suggestion included). Two rows that could both be the
 target (the same command twice, labels cut to one prefix) are refused. A drive holds the chat's
@@ -931,7 +939,9 @@ together, agents first, since an agent's Stop needs the pill a running shell kee
 
 Which rows draw a Stop (`terminal-background-task-stops.ts`): every running shell, the lead's and
 the subagents' (the dialog lists both), and every running agent while the footer shows a shells
-pill. With no pill there is no Background dialog to open from the footer: ↓ then focuses the
+pill; none for a row whose command or description another phone row shares while that row could
+still run (running, or retired by the footer count, which picks the oldest), since the dialog
+would show one row for both. With no pill there is no Background dialog to open from the footer: ↓ then focuses the
 agent panel, whose rows Claude retitles with its own summaries ("Running background sleep
 command"), so nothing could select an agent by its description and no Stop is drawn.
 

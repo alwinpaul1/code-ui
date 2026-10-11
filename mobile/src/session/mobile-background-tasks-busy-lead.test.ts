@@ -3,7 +3,7 @@ import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { parseAgentHudBeaconPayload } from './agent-hud-beacon'
 import { parseClaudeRunningShellCount } from './claude-footer-shell-count'
 import { deriveBackgroundTasks, type BackgroundTask, type BackgroundTasks } from './mobile-background-tasks'
-import { mergeSubagentActivity } from './mobile-subagent-activity'
+import { mergeSubagentActivity, subagentStepInFlight } from './mobile-subagent-activity'
 import { orcaTranscriptRows, recordsThrough } from './fixtures/claude-subagent-transcripts-2.1.296'
 import {
   BUSY_LAUNCHED_AT,
@@ -80,6 +80,30 @@ describe("a background agent's row reads its description unless a tool call is i
   })
 })
 
+describe('which of two parallel calls is still in flight', () => {
+  it('pairs results first in, first out: the second call waits when one result came back', () => {
+    // Review, 2026-10-11: the walk back paired the result with the NEAREST call, so the
+    // row named the call that had already answered.
+    const rows = [
+      {
+        id: 'calls',
+        role: 'assistant' as const,
+        timestamp: 1,
+        source: 'transcript' as const,
+        blocks: [
+          { type: 'tool-call' as const, name: 'Bash', input: { command: 'echo A' } },
+          { type: 'tool-call' as const, name: 'Bash', input: { command: 'sleep 99' } }
+        ]
+      },
+      { id: 'result', role: 'tool' as const, timestamp: 2, source: 'transcript' as const, blocks: [{ type: 'tool-result' as const, output: 'A' }] }
+    ]
+    expect(subagentStepInFlight(rows)).toBe('Running sleep 99')
+    expect(subagentStepInFlight(rows.slice(0, 1))).toBe('Running sleep 99')
+    // A result whose call sits above the loaded window answers nothing here.
+    expect(subagentStepInFlight([rows[1]!, ...rows])).toBe('Running sleep 99')
+  })
+})
+
 describe('an agent resumed after it handed back is timed from its current run', () => {
   it('times the quick agent from its resume at 23:04:37, not from its launch at 23:04:09', () => {
     // Its shell's end resumed it (SubagentStart again at 23:04:37.182); Orca drops a
@@ -97,6 +121,20 @@ describe('an agent resumed after it handed back is timed from its current run', 
     const quick = tasks.running.find((task) => task.id === QUICK_AGENT)!
     expect(quick.elapsedMs).toBe(now - resumedAt)
     // A run the clock cannot place keeps its launch time.
+    const slow = tasks.running.find((task) => task.id === SLOW_AGENT)!
+    expect(slow.startedAt).toBe(at('2026-10-10T23:04:10.513Z'))
+  })
+})
+
+describe('an agent the phone first saw late is not taken for a woken one', () => {
+  it('times the slow agent from its launch when the run clock first saw it minutes later', () => {
+    // Review, 2026-10-11: the chat closed when the agent launched and opened three minutes
+    // later; the run clock stamps a row it first sees late with that moment, and the row
+    // read "0s". Orca's own start for the row is still its launch: it never stopped.
+    const now = at('2026-10-10T23:07:10.000Z')
+    const tasks = deriveBackgroundTasks(lead(), now, working([row(SLOW_AGENT, '2026-10-10T23:04:10.685Z')]), {
+      subagentRuns: new Map([[SLOW_AGENT, now]])
+    })
     const slow = tasks.running.find((task) => task.id === SLOW_AGENT)!
     expect(slow.startedAt).toBe(at('2026-10-10T23:04:10.513Z'))
   })
