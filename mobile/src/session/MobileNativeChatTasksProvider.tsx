@@ -23,6 +23,7 @@ import {
 import { followSubagentTranscriptRunning, openSubagentTranscript } from './subagent-transcript-store'
 import type { ActiveTabBackgroundTaskReport } from './use-active-tab-finished-task-ids'
 import { useMobileRunningTasks } from './use-mobile-running-task-count'
+import { useBridgeBackgroundTasksToHeader } from './session-header-tasks-bridge'
 
 /** The tab's background work, read once and handed to everything that shows
  *  it: the status line's count, the conversation's agent rows, and the
@@ -140,6 +141,8 @@ export function MobileNativeChatTasksProvider({
     }
   }, [])
   const tasks = useMemo(() => ({ runningCount: running.length, openSheet }), [openSheet, running.length])
+  // The header menu's Background tasks entry opens this same sheet (parity gap G35).
+  useBridgeBackgroundTasksToHeader(running.length, openSheet)
   return (
     <NativeChatTasksContext.Provider value={tasks}>
       <NativeChatAgentRunsContext.Provider value={agentRuns}>

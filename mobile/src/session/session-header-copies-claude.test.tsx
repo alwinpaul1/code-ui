@@ -92,6 +92,8 @@ function controller(overrides: {
   showNativeChat?: boolean
   branch?: string
   connState?: 'connected' | 'disconnected'
+  showHeaderMoreButton?: boolean
+  floating?: boolean
   terminalSummary?: string
 }): MobileSessionController {
   const ref = <T,>(current: T) => ({ current })
@@ -101,7 +103,7 @@ function controller(overrides: {
     client: repoListClient('orca'),
     lastConnectedAt: 1,
     isFolderWorkspaceRoute: false,
-    isFloatingWorkspaceRoute: false,
+    isFloatingWorkspaceRoute: overrides.floating ?? false,
     connState: overrides.connState ?? 'connected',
     forceReconnectHost: null,
     worktreeName: 'Header parity',
@@ -131,7 +133,7 @@ function controller(overrides: {
     showConnectionRetry: false,
     terminalSummary: overrides.terminalSummary ?? '1 tab',
     handlePanelTap: () => {},
-    showHeaderMoreButton: true,
+    showHeaderMoreButton: overrides.showHeaderMoreButton ?? true,
     terminalsLoaded: true,
     switchTabView: async () => {},
     nativeChatController: {
@@ -201,6 +203,23 @@ describe.each([
     const style = flat(subtitle!.props.style)
     expect(style.fontSize).toBe(13)
     expect(style.color).toBe(palette.textSecondary)
+  })
+
+  // Parity gap G35: the menu carries Copy branch and Rename now, so it is drawn for them alone.
+  it('draws the session menu for its session entries even with no project screens to offer', async () => {
+    await mount(scheme, { showHeaderMoreButton: false })
+    const more = renderer!.root.findAll(
+      (node) => String(node.type) === 'IconButton' && node.props.accessibilityLabel === 'More session actions'
+    )
+    expect(more).toHaveLength(1)
+  })
+
+  it('draws no menu when nothing in it applies', async () => {
+    await mount(scheme, { showHeaderMoreButton: false, floating: true, branch: '' })
+    const more = renderer!.root.findAll(
+      (node) => String(node.type) === 'IconButton' && node.props.accessibilityLabel === 'More session actions'
+    )
+    expect(more).toHaveLength(0)
   })
 
   it('says the connection state instead of "repo · branch" while the link is down', async () => {

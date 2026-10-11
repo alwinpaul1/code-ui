@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { View, ScrollView, Pressable } from 'react-native'
 import { tapTargetHitSlop } from '../ui/tap-target'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -35,10 +34,10 @@ import { Txt } from '../ui/Txt'
 import { QuickCommandsTabButton } from './QuickCommandsTabButton'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { sessionModelPillLabel } from './session-model-pill'
-import { MobileContextWindowSheet } from './MobileContextWindowSheet'
-import { MobileSessionHeaderContextRing } from './MobileSessionHeaderContextRing'
-import { sessionHeaderContextReading, sessionHeaderSubtitle } from './session-header-display'
+import { MobileSessionHeaderContext } from './MobileSessionHeaderContextRing'
+import { sessionHeaderSubtitle } from './session-header-display'
 import { useSessionRepoName } from './use-session-repo-name'
+import { useSessionHeaderMenu } from './use-session-header-menu'
 import {
   nativeChatKeptSessionKey,
   ownTabStatus,
@@ -97,9 +96,11 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
     lastConnectedAt
   } = controller
   const modelLabel = resolveSessionModelLabel(controller)
-  // The Claude app's subtitle: "repo · branch". The connection's own words
-  // replace it while the link is down or struggling, since that is what the
-  // user needs to see then; with neither half known the tab count stands in.
+  // Drawn for the Claude app's session entries too (G35), not only the project screens.
+  const sessionMenu = useSessionHeaderMenu(controller)
+  const showMoreButton = showHeaderMoreButton || sessionMenu.entries.length > 0
+  // The Claude app's "repo · branch"; the connection's own words while the link is down
+  // or struggling, and the tab count while neither half is known.
   const repoName = useSessionRepoName({ client, connState, worktreeId, lastConnectedAt })
   const subtitle = sessionHeaderSubtitle({ repoName, branch: worktreeBranch })
   const subline =
@@ -107,16 +108,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
   // Why: chat and terminal are two views of the same agent session; the user
   // switches between them from the header instead of the tab long-press sheet.
   const { activeChatEligible, showNativeChat } = controller.nativeChatController
-  // The context ring, moved here from the composer as the Claude app places
-  // it. Only over the chat, whose HUD is what reads the figure; and only from
-  // what the session stated (session-header-display.ts says why).
-  const contextReading = showNativeChat
-    ? sessionHeaderContextReading(
-        controller.nativeChatController.nativeChatContextWindow,
-        controller.nativeChatController.nativeChatAgentStatus
-      )
-    : null
-  const [contextSheetOpen, setContextSheetOpen] = useState(false)
   const { switchTabView } = controller
   const viewToggle = mobileSessionChatViewToggle({
     eligible: activeChatEligible,
@@ -202,10 +193,11 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             ) : null}
           </Pressable>
         </View>
-        {contextReading ? (
-          <MobileSessionHeaderContextRing
-            reading={contextReading}
-            onOpen={() => setContextSheetOpen(true)}
+        {/* The context ring, where the Claude app places it: only over the chat, whose HUD reads it. */}
+        {showNativeChat ? (
+          <MobileSessionHeaderContext
+            context={controller.nativeChatController.nativeChatContextWindow}
+            agentStatus={controller.nativeChatController.nativeChatAgentStatus}
           />
         ) : null}
         {viewToggle ? (
@@ -231,7 +223,7 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
             onPress={() => handlePanelTap('sourceControl')}
           />
         )}
-        {showHeaderMoreButton ? (
+        {showMoreButton ? (
           <MobileSessionHeaderIconButton
             active={activePanel === 'pr'}
             accessibilityLabel="More session actions"
@@ -240,12 +232,6 @@ export function MobileSessionHeader({ controller }: { controller: MobileSessionC
           />
         ) : null}
       </View>
-      <MobileContextWindowSheet
-        visible={contextSheetOpen}
-        context={controller.nativeChatController.nativeChatContextWindow}
-        usedTokensLabel={contextReading?.kind === 'tokens' ? contextReading.usedLabel : null}
-        onClose={() => setContextSheetOpen(false)}
-      />
 
       {visibleTabs.length > 0 && (
         <View

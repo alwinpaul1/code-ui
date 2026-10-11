@@ -78,7 +78,9 @@ async function mountComposer(scheme: 'light' | 'dark'): Promise<void> {
           getSendCompletionGeneration: () => 0,
           getComposerEditGeneration: () => 0,
           agent: 'claude',
-          contextWindow: { usedPercent: 42 } as never
+          // The prop the composer used to draw its ring from, handed in anyway: a stray one must
+          // draw nothing now.
+          ...({ contextWindow: { usedPercent: 42 } } as object)
         })}
       </ThemeProvider>,
       { createNodeMock: () => ({ focus: () => {}, blur: () => {}, isFocused: () => true }) }

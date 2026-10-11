@@ -1,8 +1,16 @@
+import { useState } from 'react'
 import { Pressable } from 'react-native'
 import Svg, { Circle } from 'react-native-svg'
+import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { useTheme } from '../theme/theme-context'
 import { Txt } from '../ui/Txt'
-import { contextRingColor, type SessionHeaderContextReading } from './session-header-display'
+import { MobileContextWindowSheet } from './MobileContextWindowSheet'
+import type { TerminalHudContextWindow } from './mobile-terminal-hud-parse'
+import {
+  contextRingColor,
+  sessionHeaderContextReading,
+  type SessionHeaderContextReading
+} from './session-header-display'
 
 /** The Claude app's XSmall circular progress: 18 dp across, a 2 dp stroke. */
 const RING_SIZE = 18
@@ -79,5 +87,29 @@ export function MobileSessionHeaderContextRing({
         />
       </Svg>
     </Pressable>
+  )
+}
+
+/** The header's context reading and the sheet it opens. Draws nothing when the session stated
+ *  neither a figure nor its tokens (sessionHeaderContextReading says why). */
+export function MobileSessionHeaderContext({
+  context,
+  agentStatus
+}: {
+  context: TerminalHudContextWindow | null
+  agentStatus: AgentStatusEntry | null
+}) {
+  const [open, setOpen] = useState(false)
+  const reading = sessionHeaderContextReading(context, agentStatus)
+  return (
+    <>
+      {reading ? <MobileSessionHeaderContextRing reading={reading} onOpen={() => setOpen(true)} /> : null}
+      <MobileContextWindowSheet
+        visible={open}
+        context={context}
+        usedTokensLabel={reading?.kind === 'tokens' ? reading.usedLabel : null}
+        onClose={() => setOpen(false)}
+      />
+    </>
   )
 }

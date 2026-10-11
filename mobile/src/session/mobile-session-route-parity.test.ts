@@ -427,10 +427,11 @@ const HEAD_TIMER_CLEANUP_SHA256 = '1fe4ac8e695b6da1f471d7546d79ee62a27b9a582eb1e
 // identity and adds no literal. No other literal moved.
 // 674 since 2026-10-10 (Orca #26148 ported): FileReader's `doc.kind === 'media'` arm, which plays a
 // video or music tab through MobileFileMediaPreview; no other literal moved.
-// 669 since 2026-10-11 (parity gap G9): the header's 'connected' gate on its "repo · branch"
-// subline and the 'tokens' kind check that hands the context sheet a token count.
+// 2026-10-11 (parity gaps G9, G35), still 667: the header's 'connected' gate on its
+// "repo · branch" subline in, the menu's 'pr' (handlePanelTap('pr')) out with the menu to
+// MobileSessionHeaderMenu.tsx, outside this family.
 const HEAD_RUNTIME_STRING_SHA256 =
-  '9b27abab090fb3e83b3b8e9b004676875e49afff6e4a06f93a89743c4fef6d35'
+  '374319b6afa08c0564b8c0bd3070d11b0f1c32e7d516b9eb8b44bb41aa458d2a'
 // 2026-09-17 (0.6.7): tap targets. Five session-route FILES, six sites (the key
 // strip has two Pressables), drawn at 40 dp or less: the header's 32 dp tabs,
 // the dock's 36 dp button, the key strip's 30 dp keys, the ask sheet's 30 dp
@@ -568,10 +569,11 @@ const HEAD_HOST_JSX_SHA256 = 'a2aeb7b7c4b1c693e5f2c3d19576f1d07eb076d1a0c522daa4
 // 2026-10-10 (Orca #26148 ported): one new leaf record, <MobileFileMediaPreview media client title /> in FileReader's media arm.
 // 2026-10-10 (later): one new leaf record, <MobileSubagentActivityFeeds hostId worktreeId /> beside the
 // subagent transcript modal in the session content.
-// 2026-10-11 (parity gap G9): two new leaf records in the header, <MobileSessionHeaderContextRing>
-// and <MobileContextWindowSheet>; the title Txt is variant body (15) and the subline Txt is variant
-// label (13) reading `subline`.
-const HEAD_LEAF_JSX_SHA256 = '2bc1dcc204fa92c42088e88b6d81b0b307fc2bf4aa62e3b2f0c2560384845bb8'
+// 2026-10-11 (parity gaps G9, G35): one new leaf record in the header, <MobileSessionHeaderContext
+// context agentStatus /> (the ring and its sheet); the title Txt is variant body (15) and the
+// subline Txt is variant label (13) reading `subline`. The sheets' more-actions record is now
+// <MobileSessionHeaderMenu controller />.
+const HEAD_LEAF_JSX_SHA256 = '02d159e49334ab82cece76e8e74028bfe974c8eea40e5a2ad43ecd056c4a4713'
 // 85 since 2026-09-26: the same move takes the old reader's seven style
 // references (markdownEditor, filePreviewScroll/Content, filePreviewText and
 // filePreviewGutter twice each).
@@ -1136,10 +1138,12 @@ describe('mobile session route extraction parity', () => {
     // 674 since 2026-10-10: FileReader's 'media' arm (Orca #26148).
     // 667 since 2026-10-10 (later): the create-tab and send-notes drawers' no-agent rows moved to
     // mobile-new-tab-agent-status-rows.ts (Orca #27196), taking their literals with them.
-    // 669 since 2026-10-11 (parity gap G9): the header's subline shows "repo · branch" only while
-    // `connState === 'connected'`, and hands the context sheet the tokens when the reading's kind
-    // is 'tokens'. Those two literals and no other.
-    expect(strings).toHaveLength(669)
+    // Still 667 since 2026-10-11 (parity gaps G9, G35), with one literal in and one out: the
+    // header's subline shows "repo · branch" only while `connState === 'connected'` (+1), and the
+    // header menu moved out of the sheets into MobileSessionHeaderMenu.tsx, outside this family,
+    // taking `handlePanelTap('pr')` with it (-1). The context ring and its sheet, and the Rename
+    // dialog's strings, live in components outside the family too.
+    expect(strings).toHaveLength(667)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     // 95 since 2026-09-15: the markdown preview's own host element.
@@ -1163,9 +1167,11 @@ describe('mobile session route extraction parity', () => {
     // 74 since 2026-10-10: FileReader mounts MobileFileMediaPreview for a video or music tab (Orca #26148).
     // 75 since 2026-10-10 (later): the session content mounts MobileSubagentActivityFeeds, the
     // Background tasks sheet's reads of its running agents' transcripts.
-    // 77 since 2026-10-11 (parity gap G9): the header mounts the context ring and its sheet, moved
-    // from the composer; the title and subline Txt records changed variant (body, label).
-    expect(jsx.leaf).toHaveLength(77)
+    // 76 since 2026-10-11 (parity gaps G9, G35): the header mounts <MobileSessionHeaderContext>,
+    // the context ring and its sheet moved from the composer; the title and subline Txt records
+    // changed variant (body, label). The sheets' <MobileSessionHeaderMoreActionsSheet> became
+    // <MobileSessionHeaderMenu controller />, which owns it and the Rename dialog: same count.
+    expect(jsx.leaf).toHaveLength(76)
     expect(hash(jsx.leaf)).toBe(HEAD_LEAF_JSX_SHA256)
     // 92 since 2026-09-15: the markdown preview's own style reference.
     // 85 since 2026-09-26: its seven style references moved out with it.
