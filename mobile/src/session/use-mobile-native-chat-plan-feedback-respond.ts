@@ -8,7 +8,7 @@ import { useNativeChatAcceptedAction } from './use-native-chat-action-outcomes'
  * for the controller's `handleNativeChatRespondPermissionWithComment`.
  *
  * TUI lane only. `structured` disables the underlying send and the exposed
- * value is undefined, so the comment sheet's "Send back" button never
+ * value is undefined, so the card's "Suggest Edits" button never
  * appears in the structured (native chat) lane — see
  * use-mobile-native-chat-plan-feedback-send.ts for why that lane has no
  * verified way to identify or carry the comment.

@@ -8,7 +8,12 @@ import { Txt } from '../ui/Txt'
 import { TextInputModal } from '../components/TextInputModal'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { formatPreviewByteLength } from '../files/mobile-file-preview-response'
-import { isClaudePlanFeedbackOptionLabel } from './claude-plan-permission'
+import {
+  claudePlanApprovalLabel,
+  isClaudePlanFeedbackOptionLabel,
+  PLAN_SUGGEST_EDITS_LABEL,
+  PLAN_SUGGEST_EDITS_PLACEHOLDER
+} from './claude-plan-permission'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import { MAX_DIFF_CARD_ROWS, MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import {
@@ -106,6 +111,8 @@ function MobileNativeChatPermissionImpl({
     (option) => !/^Yes, and switch to auto mode\b/i.test(option.label)
   )
   const choices = withoutAutoMode.length > 0 ? withoutAutoMode : permission.options
+  // Claude Code's plan review, named the Claude app's way (G11).
+  const planReview = choices.some((option) => isClaudePlanFeedbackOptionLabel(option.label))
   const [accepted, setAccepted] = useState(false)
   const [submittingIndex, setSubmittingIndex] = useState<number | null>(null)
   const submitting = submittingIndex !== null
@@ -329,8 +336,8 @@ function MobileNativeChatPermissionImpl({
             : /^No$/i.test(option.label)
               ? 'Deny'
               : opensCommentSheet
-                ? 'Send back'
-                : option.label
+                ? PLAN_SUGGEST_EDITS_LABEL
+                : ((planReview ? claudePlanApprovalLabel(option.label) : null) ?? option.label)
           return (
             <View key={`${option.send}:${option.label}`} style={{ gap: space.sm }}>
               {submittingIndex === index ? (
@@ -380,9 +387,9 @@ function MobileNativeChatPermissionImpl({
           this one card. */}
       <TextInputModal
         visible={commentTarget != null}
-        title="Tell Claude what to change"
-        placeholder="What should Claude do differently?"
-        submitLabel="Send back"
+        title={PLAN_SUGGEST_EDITS_LABEL}
+        placeholder={PLAN_SUGGEST_EDITS_PLACEHOLDER}
+        submitLabel="Send"
         allowEmpty
         onCancel={() => setCommentTarget(null)}
         onSubmit={(comment) => {
