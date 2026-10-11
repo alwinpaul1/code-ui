@@ -21,6 +21,8 @@ import {
   proposedEditPreview,
   type ProposedEditPreview
 } from './mobile-permission-proposed-edit'
+import { permissionRawArgs } from './mobile-permission-raw-args'
+import { MobileNativeChatPermissionRawArgs } from './MobileNativeChatPermissionRawArgs'
 
 /** Rows a proposed change opens with. Past this the user asks for the rest,
  *  so a 2,000-row write does not mount 2,000 rows into the dock unasked. */
@@ -93,6 +95,12 @@ function MobileNativeChatPermissionImpl({
   const preview = useMemo(
     () => (plan ? null : proposedEditPreview(permission.title, permission.detail)),
     [permission.title, permission.detail, plan]
+  )
+  // Any other tool input the host sent whole is listed argument by argument,
+  // the Claude app's raw-input face; a clipped one or the TUI's words stay text.
+  const rawArgs = useMemo(
+    () => (plan || (preview !== null && preview.kind !== 'none') ? null : permissionRawArgs(permission.detail)),
+    [plan, preview, permission.detail]
   )
   const [showAllRows, setShowAllRows] = useState(false)
   const folded = useMemo(
@@ -282,7 +290,8 @@ function MobileNativeChatPermissionImpl({
           {truncatedNotice(preview)}
         </Txt>
       ) : null}
-      {!folded && (description || command) ? (
+      {rawArgs ? <MobileNativeChatPermissionRawArgs raw={rawArgs} maxHeight={diffMaxHeight} /> : null}
+      {!folded && !rawArgs && (description || command) ? (
         <ScrollView
           style={{ maxHeight: readingMaxHeight, flexShrink: 1 }}
           nestedScrollEnabled
