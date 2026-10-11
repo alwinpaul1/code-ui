@@ -671,7 +671,12 @@
             // branches off the same 330 baseline; only the import line
             // actually conflicted (one name each, now both kept), so the
             // combined file counts to 360, not 330+15+15.
-            "max": 360,
+            // 2026-10-11: +2 for `attachImageBase64`, the composer's way in
+            // for a picture from the chat marked up in the viewer
+            // (chat-image-markup-target.ts). The attach itself lives in
+            // use-mobile-native-chat-image-upload.ts; this file only threads
+            // it through (its type's field, the destructure and the return).
+            "max": 362,
             "skipBlankLines": true,
             "skipComments": true
           }
