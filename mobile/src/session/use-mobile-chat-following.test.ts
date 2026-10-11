@@ -98,7 +98,7 @@ describe('chat text selection around a scroll', () => {
     })
     act(() => latest!.beginScroll())
     expect(latest!.followingRef.current).toBe(false)
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detached).toBe(true)
   })
 })
 
@@ -124,14 +124,14 @@ describe('a finger on the list', () => {
     act(() => latest!.touchEnd())
     expect(latest!.holdingRef.current).toBe(false)
     expect(latest!.followingRef.current).toBe(false)
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detached).toBe(true)
   })
 
   // 2026-09-15, reported from the phone: "when i click and hold to copy a
   // sentence or paragraph it moves down or drifts away".
   //
   // Releasing is too late to matter. The list's native scroll anchoring is
-  // configured `{ disabled: !showJumpToLatest }`, so while the reader still
+  // configured `{ disabled: !detached }`, so while the reader still
   // counts as following, nothing holds the content still — and the whole
   // press-and-hold ran as "following", because intent only flipped at
   // `touchEnd`. By then the selection has already slid off under the stream.
@@ -147,10 +147,10 @@ describe('a finger on the list', () => {
       vi.advanceTimersByTime(450)
     })
     // Still holding — no touchEnd yet — and the list must already be the
-    // reader's, so the anchoring the jump flag drives is on for the selection.
+    // reader's, so the anchoring the detached flag drives is on for the selection.
     expect(latest!.holdingRef.current).toBe(true)
     expect(latest!.followingRef.current).toBe(false)
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detached).toBe(true)
   })
 
   it('does not take control from a finger that lifts before the long-press', () => {
@@ -168,7 +168,7 @@ describe('a finger on the list', () => {
       vi.advanceTimersByTime(600)
     })
     expect(latest!.followingRef.current).toBe(true)
-    expect(latest!.showJumpToLatest).toBe(false)
+    expect(latest!.detached).toBe(false)
   })
 
   it('leaves following alone after a tap', () => {

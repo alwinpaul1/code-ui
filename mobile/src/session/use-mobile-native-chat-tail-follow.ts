@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native'
 import type { FlashListRef } from '@shopify/flash-list'
 import { useMobileChatFollowing } from './use-mobile-chat-following'
@@ -31,7 +31,15 @@ function isAtHistoryStart(metrics: NativeScrollEvent): boolean {
 export type MobileNativeChatTailFollow<TItem> = {
   /** Attach to the transcript list; the hook scrolls through this ref alone. */
   listRef: RefObject<FlashListRef<TItem> | null>
-  /** Render flag for the jump-to-latest control, and for history anchoring. */
+  /** The reader has the list (a drag, a fling, a long-press, a jump away):
+   *  what turns the native scroll anchoring on. Intent alone, so it flips on
+   *  the drag's first frame, before the list has moved. */
+  detachedFromTail: boolean
+  /** Render flag for the jump-to-latest control: detached AND content below
+   *  the viewport. Intent alone raised the ↓ at the very end of a
+   *  conversation, where a drag toward the newest message (or a finger held on
+   *  it) has nothing to scroll to (2026-10-11, against the Claude app, which
+   *  shows none there). */
   showJumpToLatest: boolean
   /** Off while a scroll is in flight, so Android cannot arm a text-selection
    *  long-press under the moving rows. */
@@ -81,8 +89,9 @@ export type MobileNativeChatTailFollow<TItem> = {
  *  What this fork keeps that upstream has no counterpart for: the reader's hold
  *  and long-press ownership and the text-selection flag that rides with it (see
  *  `use-mobile-chat-following.ts`), the new-data-only follow gate (see
- *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises the
- *  instant a drag starts rather than waiting for the list to leave the tail,
+ *  `mobile-chat-follow-gate.ts`), a jump-to-latest control that rises as soon
+ *  as a drag has left the tail (intent plus geometry: intent alone raised it
+ *  at the very end, with nothing below to jump to),
  *  and putting the view back where FlashList drew once a pushed route stops
  *  covering the screen (`onScreenFocus` below). */
 export function useMobileNativeChatTailFollow<TItem>(input: {
@@ -97,9 +106,13 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   const hasItems = rows.length > 0
   const listRef = useRef<FlashListRef<TItem>>(null)
   const jumpingRef = useRef(false)
-  // Geometry. A ref, not state: this fork raises the jump-to-latest control on
-  // intent alone, so nothing renders off where the list happens to sit.
+  // Geometry. The ref is what the handlers read; `contentBelow` is the same
+  // fact as a render flag, for the jump control alone. It flips only when the
+  // list crosses the tail slop, so it costs a render per crossing, not per
+  // sample. An empty list, one row, content shorter than the screen and an
+  // over-scroll past the end all sit at offset <= 0, inside the slop.
   const atTailRef = useRef(true)
+  const [contentBelow, setContentBelow] = useState(false)
   const settleFrameRef = useRef<number | null>(null)
   // Intent is a ref as well as a render flag, and the handlers read the ref:
   // a content-size change arrives before React commits the flag, and reading
@@ -115,7 +128,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
     touchEnd,
     followGate,
     textSelectable,
-    showJumpToLatest,
+    detached,
     setFollowing,
     beginScroll,
     endDrag,
@@ -128,6 +141,7 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
   // Single writer for geometry, as `setFollowing` is for intent.
   const setAtTail = useCallback((next: boolean) => {
     atTailRef.current = next
+    setContentBelow(!next)
   }, [])
 
   const cancelSettle = useCallback(() => {
@@ -395,7 +409,8 @@ export function useMobileNativeChatTailFollow<TItem>(input: {
 
   return {
     listRef,
-    showJumpToLatest,
+    detachedFromTail: detached,
+    showJumpToLatest: detached && contentBelow,
     textSelectable,
     touchStart,
     touchEnd,

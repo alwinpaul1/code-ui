@@ -27,11 +27,14 @@ export function useMobileChatFollowing() {
   const followGate = useRef(createChatFollowGate()).current
   const holdingRef = useRef(false)
   const touchStartedAt = useRef(0)
-  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
+  // Intent as a render flag: the reader has the list. It drives the native
+  // scroll anchoring, not the jump button, which also needs content below the
+  // viewport (use-mobile-native-chat-tail-follow.ts).
+  const [detached, setDetached] = useState(false)
   const [textSelectable, setTextSelectable] = useState(true)
   const setFollowing = useCallback((next: boolean) => {
     followingRef.current = next
-    setShowJumpToLatest((visible) => (visible === !next ? visible : !next))
+    setDetached((current) => (current === !next ? current : !next))
   }, [])
   // The END events are not enough to bring selection back. A fling that a
   // re-anchor or a nested scroll view interrupts sends no momentum-end, and
@@ -122,7 +125,7 @@ export function useMobileChatFollowing() {
   //
   // Waiting for the lift was the whole press-and-hold drift bug (reported
   // 2026-09-15). The list's native scroll anchoring is configured from the jump
-  // flag — `{ disabled: !showJumpToLatest }` in `mobile-native-chat-list-extra-
+  // flag — `{ disabled: !detached }` in `mobile-native-chat-list-extra-
   // data.ts` — so for as long as the reader still counts as following, nothing
   // holds the content still. The reader holds a word to select it, the agent
   // streams underneath, and the selection slides off the screen before the
@@ -201,7 +204,7 @@ export function useMobileChatFollowing() {
     scrollSample,
     followGate,
     textSelectable,
-    showJumpToLatest,
+    detached,
     setFollowing,
     beginScroll,
     endDrag,

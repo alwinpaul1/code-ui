@@ -110,7 +110,7 @@ export function MobileSubagentTranscriptScreen({
     loadingEarlier: session.loadingEarlier,
     onLoadEarlier: session.loadEarlier
   })
-  const contentPosition = useChatListContentPosition(tail.showJumpToLatest)
+  const contentPosition = useChatListContentPosition(tail.detachedFromTail)
   const body = subagentTranscriptBodyState({
     status: session.status,
     messageCount: folded.length,

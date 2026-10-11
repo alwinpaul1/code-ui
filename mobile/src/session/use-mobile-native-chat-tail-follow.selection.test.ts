@@ -44,7 +44,7 @@ vi.mock('react-native', () => ({ AppState: { addEventListener: appState.addEvent
 //   up to twenty times a second.
 // - While the reader is off the live edge and the streaming reply is wholly
 //   past them, FlashList holds their place (`maintainVisibleContentPosition`,
-//   on whenever the jump control shows): its ScrollAnchor moves by exactly
+//   on whenever the reader is detached from the tail): its ScrollAnchor moves by exactly
 //   what the rows above grew, and the native helper scrolls by the same
 //   amount. The list sends an `onScroll` for each correction, with the
 //   offset AND the content height moved by that growth. While the reply is
@@ -163,7 +163,7 @@ function streamTick(): void {
     world.replyEnd += LINE_DP
     // FlashList's onContentSizeChange: the only NEW-data follow path.
     latest!.pinToTailAfterContentResize(400, world.height)
-    if (latest!.showJumpToLatest && replyPastReader) {
+    if (latest!.detachedFromTail && replyPastReader) {
       world.y += LINE_DP
       if (!(world.coalesce && world.streamed % 2 === 0)) {
         latest!.evaluateEdge(sample(world.y, world.height))
@@ -495,13 +495,13 @@ describe('holding the agent’s reply to copy it while the reply streams in', ()
     runFor(600)
     // Handed over at the long-press mark, finger still down: nothing re-pins
     // under it, and a sample at the live edge does not hand the list back.
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detachedFromTail).toBe(true)
     expect(pins.length - pinsBefore).toBe(0)
     act(() => {
       world.y = 2
       latest!.evaluateEdge(sample(world.y, world.height))
     })
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detachedFromTail).toBe(true)
     expect(latest!.textSelectable).toBe(true)
     act(() => latest!.touchEnd())
   })
@@ -574,7 +574,7 @@ describe('holding the agent’s reply to copy it while the reply streams in', ()
     // reader owns the list: the anchoring is on, so the selection stays
     // where it was made.
     expect(list.scrollToOffset).not.toHaveBeenCalled()
-    expect(latest!.showJumpToLatest).toBe(true)
+    expect(latest!.detachedFromTail).toBe(true)
     act(() => latest!.touchEnd())
     runFor(300)
     expect(latest!.textSelectable).toBe(true)

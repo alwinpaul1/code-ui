@@ -105,8 +105,8 @@ export function useNativeChatListHeaderExtraData(inputs: {
  * being reconfigured under an active scroll, which is where the jitter came
  * from. Memoised, it changes only when the flag actually flips.
  */
-export function useChatListContentPosition(showJumpToLatest: boolean): { disabled: boolean } {
-  return useMemo(() => ({ disabled: !showJumpToLatest }), [showJumpToLatest])
+export function useChatListContentPosition(detachedFromTail: boolean): { disabled: boolean } {
+  return useMemo(() => ({ disabled: !detachedFromTail }), [detachedFromTail])
 }
 
 /** Both markers the chat list needs to stay still: what wakes its header, and
@@ -118,10 +118,11 @@ export function useChatListRenderStability(inputs: {
   queuedMessages: unknown
   unanchoredTurnStatus: unknown
   turnActivity: unknown
-  showJumpToLatest: boolean
+  /** The reader has the list (`detachedFromTail`), not the jump button's flag. */
+  detachedFromTail: boolean
 }): { headerExtraData: readonly unknown[]; contentPosition: { disabled: boolean } } {
   return {
     headerExtraData: useNativeChatListHeaderExtraData(inputs),
-    contentPosition: useChatListContentPosition(inputs.showJumpToLatest)
+    contentPosition: useChatListContentPosition(inputs.detachedFromTail)
   }
 }

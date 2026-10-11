@@ -183,6 +183,7 @@ export function MobileNativeChatView({
   const {
     listRef,
     showJumpToLatest,
+    detachedFromTail,
     textSelectable,
     touchStart,
     touchEnd,
@@ -240,7 +241,7 @@ export function MobileNativeChatView({
     hostBackgroundTasks,
     queuedMessages,
     turnActivity,
-    showJumpToLatest,
+    detachedFromTail,
     unanchoredTurnStatus: turns.activeTurnIsUnanchored ? turns.active : null
   })
 
