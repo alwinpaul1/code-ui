@@ -22,9 +22,9 @@ import { useShimmerHeldForAccessibility } from './native-chat-shimmer-accessibil
 import { useChatRowOnScreen } from './native-chat-row-visibility'
 
 /**
- * A still-running row's label with the Claude app's shimmer: a darker band
- * sweeps across it once every 1.5 s while the rest of the word keeps its
- * colour (the numbers are in mobile-native-chat-shimmer.ts). It replaced a
+ * A still-running row's label with the Claude app's shimmer: a dimming band,
+ * half the label wide, sweeps across it once every 1.5 s while the rest of the
+ * word keeps its colour (the app's own numbers, in mobile-native-chat-shimmer.ts). It replaced a
  * breath that faded the icon and the whole label together (2026-09-26).
  *
  * One text, one span per character, each span's colour driven from one shared
@@ -58,7 +58,7 @@ export function ShimmerText({
   text: string
   /** Whether the row is still running. */
   active: boolean
-  /** The label's colour; the band is this sunk into the page. */
+  /** The label's colour; the band is this at 10% alpha over the page. */
   color: string
   style?: StyleProp<TextStyle>
   numberOfLines?: number

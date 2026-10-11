@@ -30,7 +30,10 @@ import {
 
 export type ToolRunProgress =
   | { kind: 'agent'; subject: string | null }
-  | { kind: 'call'; call: NativeChatToolCallBlock }
+  /** `background`: a task the call launched still runs (the Claude app then
+   *  draws the task's icon); otherwise the call itself has no answer yet,
+   *  which the app draws with no icon. */
+  | { kind: 'call'; call: NativeChatToolCallBlock; background: boolean }
   | null
 
 /** A call whose order-paired slot is empty, or holds an agent's launch text. */
@@ -117,7 +120,7 @@ export function toolRunProgress(
     const open = openNonAgentCall(pairs)
     // Stateless calls only: a call the structured lane marks is its `activeCall`'s.
     if (open && open.state == null) {
-      return { kind: 'call', call: open }
+      return { kind: 'call', call: open, background: false }
     }
   }
   const live = inputs.liveTaskIds
@@ -125,7 +128,7 @@ export function toolRunProgress(
     for (const pair of others) {
       const id = launchedTaskId(pair)
       if (id !== null && live.has(id) && pair.call) {
-        return { kind: 'call', call: pair.call }
+        return { kind: 'call', call: pair.call, background: true }
       }
     }
   }

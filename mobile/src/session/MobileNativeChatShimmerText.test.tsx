@@ -2,7 +2,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { darkColors, lightColors, type ThemeColors } from '../theme/tokens'
 import { ThemeProvider } from '../theme/theme-context'
-import { SHIMMER_HALF_BAND, shimmerBandColor } from './mobile-native-chat-shimmer'
+import { SHIMMER_SWEEP_FROM, SHIMMER_SWEEP_TO, shimmerBandColor } from './mobile-native-chat-shimmer'
 import { ChatRowOnScreenScope, createChatRowVisibility } from './native-chat-row-visibility'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 
@@ -68,7 +68,7 @@ const LABEL = 'Running agent'
 
 /** The phase at which the band's centre sits on character `index`. */
 function centredOn(index: number, count = LABEL.length): number {
-  return (index + 0.5 + SHIMMER_HALF_BAND) / (count + 2 * SHIMMER_HALF_BAND)
+  return ((index + 0.5) / count - SHIMMER_SWEEP_FROM) / (SHIMMER_SWEEP_TO - SHIMMER_SWEEP_FROM)
 }
 
 type Glyph = { text: string; color: string | undefined }

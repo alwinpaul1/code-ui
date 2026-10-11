@@ -32,6 +32,7 @@ import type { ChatMessageStyles } from './mobile-native-chat-message-styles'
 import { ShimmerText } from './MobileNativeChatShimmerText'
 import { AgentRunGlyph } from './MobileNativeChatAgentRunGlyph'
 import { runningAgentText } from './mobile-native-chat-agent-run'
+import { runningCallVerb } from './mobile-native-chat-running-verb'
 import { toolRunMayBeRunning, toolRunProgress, type ToolRunProgress } from './mobile-native-chat-tool-run-progress'
 import { runningCallAccessibilityLabel } from './mobile-native-chat-running-call-label'
 import { runSheetRows } from './mobile-native-chat-run-sheet-rows'
@@ -231,14 +232,17 @@ function ToolRunView({
   const detailSheet = (
     <MobileNativeChatToolDetailSheet pair={detailPair} onClose={() => setDetailPair(null)} />
   )
-  // The "Running" header, for the structured lane's live call or a call the
-  // run itself shows still going (RunProgressGate): a terminal glyph and
-  // "Running" with the shimmer, as the Claude app draws a running command.
-  const renderActiveHeader = (call: NativeChatToolCallBlock): React.JSX.Element => {
+  // The running header, for the structured lane's live call or a call the run
+  // itself shows still going (RunProgressGate), as the Claude app draws it
+  // (1.261009.20, decompiled): the last running call's present-tense verb
+  // ("Running", "Reading", "Using <tool>") with the shimmer, and no icon while
+  // the call is being made; a task the call launched in the background shows
+  // its icon (a terminal for a shell).
+  const renderActiveHeader = (call: NativeChatToolCallBlock, background: boolean): React.JSX.Element => {
     // The call's input, not its word: Codex names a classified shell row
     // `read`/`search`/`list` and keeps the command it ran, while Claude's `Read`
     // shares that word and ran none.
-    const ActiveToolIcon = isShellActivityToolCall(call) ? SquareTerminal : Wrench
+    const ActiveToolIcon = background ? (isShellActivityToolCall(call) ? SquareTerminal : Wrench) : null
     return (
       <View style={styles.toolRunHeader}>
         <Pressable
@@ -251,9 +255,9 @@ function ToolRunView({
           accessibilityLabel={focusView ? undefined : runningCallAccessibilityLabel(call)}
           accessibilityLiveRegion="polite"
         >
-          <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} />
+          {ActiveToolIcon ? <ActiveToolIcon size={14} color={colors.textMuted} strokeWidth={2} /> : null}
           <ShimmerText
-            text={focusView ? countLabel : 'Running'}
+            text={focusView ? countLabel : runningCallVerb(call)}
             active
             color={colors.textSecondary}
             style={[styles.toolRunLabel, { flex: 0, flexShrink: 1 }]}
@@ -268,7 +272,7 @@ function ToolRunView({
   if (activeCall) {
     return (
       <View style={styles.toolRun}>
-        {renderActiveHeader(activeCall)}
+        {renderActiveHeader(activeCall, false)}
         {open ? renderBody() : null}
         {detailSheet}
       </View>
@@ -294,7 +298,7 @@ function ToolRunView({
       <RunProgressGate blocks={blocks} enabled={mayBeRunning} inNewestReply={inNewestReply}>
         {(progress) => {
           if (progress?.kind === 'call') {
-            return renderActiveHeader(progress.call)
+            return renderActiveHeader(progress.call, progress.background)
           }
           const runningAgent = progress?.kind === 'agent'
           const agentSubject = runningAgent ? progress.subject : null
